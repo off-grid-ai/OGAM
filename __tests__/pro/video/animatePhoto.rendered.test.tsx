@@ -33,7 +33,9 @@ async function pictureInViewer(): Promise<StudioApp> {
   rtl.fireEvent.press(await view.findByTestId('generated-image-content', {}, { timeout: 15_000 }));
   const animate = await view.findByTestId('animate-photo', {}, { timeout: 10_000 });
   expect(view.queryByTestId('start-picture-sheet')).toBeNull();
-  expect(animate.props.accessibilityState?.disabled).toBe(true);
+  // It needs a model, and says so; it never reads as disabled, since a tap explains how to get one.
+  expect(animate.props.accessibilityHint).toMatch(/^Needs /);
+  expect(animate.props.accessibilityState?.disabled).toBeFalsy();
   return app;
 }
 
@@ -112,7 +114,7 @@ it('the Gallery\'s full-screen picture offers the same muted Animate and sheet',
   rtl.fireEvent.press(await view.findByTestId('home-gallery-card', {}, { timeout: 10_000 }));
   rtl.fireEvent.press((await view.findAllByTestId(/^gallery-image-/, {}, { timeout: 10_000 }))[0]);
   const animate = (await view.findAllByTestId('animate-photo', {}, { timeout: 10_000 })).pop()!;
-  expect(animate.props.accessibilityState?.disabled).toBe(true);
+  expect(animate.props.accessibilityHint).toMatch(/^Needs /);
   rtl.fireEvent.press(animate);
   await view.findByText('Animate needs Wan 2.2 (5B), Light, a 7.9 GB download.', {}, { timeout: 10_000 });
 }, 90_000);

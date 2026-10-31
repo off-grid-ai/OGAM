@@ -73,7 +73,7 @@ it('Make it real while the stills are drawn waits for them, then makes the film'
   await rtl.waitFor(() => expect(require('../../../src/stores').useAppStore.getState().activeImageModelId).toBe(IMAGE_ID));
   rtl.fireEvent.press(await view.findByTestId('home-tab'));
   rtl.fireEvent.press(await view.findByTestId('model-summary-video-open'));
-  rtl.fireEvent.press(await view.findByTestId(`video-model-row-${VIDEO.id}-select`, {}, { timeout: 5000 }));
+  rtl.fireEvent.press(await view.findByTestId(`video-model-row-${VIDEO.id}`, {}, { timeout: 5000 }));
 
   // A clip in a chat in video mode, then Make it a story.
   rtl.fireEvent.press(await view.findByTestId('new-chat-button', {}, { timeout: 5000 }));

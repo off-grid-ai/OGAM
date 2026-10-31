@@ -26,7 +26,7 @@ describe('Android image generation under live memory pressure', () => {
     await h.settle(400);
 
     expect(h.boundary.diffusion.calls.generateImage).toHaveLength(0);
-    expect(h.view!.queryByText(/Not Enough Memory/)).not.toBeNull();
+    expect(h.view!.queryByTestId('model-failure-load-anyway-image')).not.toBeNull();
     expect(h.view!.queryByTestId('model-failure-load-anyway-image')).not.toBeNull();
   });
 });

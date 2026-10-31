@@ -23,7 +23,8 @@ describe('slow remote reply in the chat UI', () => {
     });
 
     await h.settle(50);
-    upstream.release();
+    // The model's stream ends here: await its last chunk and done, then the reply leaves its in-progress state.
+    await h.rtl.act(() => upstream.release());
     await h.rtl.waitFor(() => {
       expect(h.view!.queryByText(/Still working — finished\./)).not.toBeNull();
       expect(h.view!.queryByTestId('stop-button')).toBeNull();

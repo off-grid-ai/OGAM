@@ -60,3 +60,15 @@ it('Wan 2.2 Turbo is offered from 11 GB on iPhones, not on an 11 GB Android phon
   expect(ids(videoPacksForPhone(24, 'android'))).toContain('off-grid-ai/Wan2.2-TI2V-5B-GGUF');
   expect(ids(videoPacksForPhone(128, 'ios')).filter(id => id.startsWith('off-grid-ai/Wan2.2'))).toEqual([]);
 });
+
+describe('the default video model, of those installed', () => {
+  const { bestInstalledVideoModel } = require('../../../../src/services/phoneVideoPacks');
+  const pack = (id: string) => CATALOG.find(model => model.id === id)!;
+  it('is Turbo, then one that starts from a picture, then the first', () => {
+    const [light21, light22, turbo] = LIGHT.map(pack);
+    expect(bestInstalledVideoModel([light21, light22, turbo]).id).toBe(turbo.id);
+    expect(bestInstalledVideoModel([light21, light22]).id).toBe(light22.id);
+    expect(bestInstalledVideoModel([light21]).id).toBe(light21.id);
+    expect(bestInstalledVideoModel([])).toBeUndefined();
+  });
+});

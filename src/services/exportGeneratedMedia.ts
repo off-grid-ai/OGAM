@@ -40,3 +40,16 @@ export async function exportGeneratedMedia(
   }
   await RNFS.copyFile(source, `${RNFS.DownloadDirectoryPath}/${fileName}`);
 }
+
+/**
+ * Share app-owned generated media through the system share sheet: iOS shares the file URL, Android
+ * hands it to other apps through MediaShareModule's FileProvider (a one-time read grant).
+ */
+export async function shareGeneratedMedia(path: string, mime: string): Promise<void> {
+  const source = resolveDocumentPath(path);
+  if (Platform.OS === 'ios') {
+    await Share.share({ url: `file://${source}` });
+    return;
+  }
+  await NativeModules.MediaShareModule.shareFile(source, mime);
+}

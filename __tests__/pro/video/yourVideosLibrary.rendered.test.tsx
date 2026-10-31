@@ -45,8 +45,13 @@ it('lists the clip under All and Clips, not Stories, and plays it full screen', 
 
   const item = view.getAllByTestId(/^library-item-/);
   expect(item).toHaveLength(1);
-  rtl.fireEvent.press(item[0]);
+  // A tap plays it in the tile; expand opens it full screen.
+  rtl.fireEvent.press(view.getAllByTestId(/^expand-library-item-/)[0]);
   await view.findByTestId('video-viewer', {}, { timeout: 10_000 });
+  // The black viewer asks for light status icons, so the clock and battery stay readable.
+  // (Matched by name: the harness loads its own module registry, so the stub's identity differs.)
+  const bars = view.UNSAFE_root.findAll(node => (node.type as { name?: string })?.name === 'SystemBars');
+  expect(bars.some(node => node.props.style === 'light')).toBe(true);
   expect(view.getByTestId('viewer-continue')).toBeTruthy();
   expect(view.queryByTestId('viewer-new-shot')).toBeNull();
 }, 60_000);
@@ -56,7 +61,7 @@ it('Delete asks first, then removes the clip; + opens a chat', async () => {
   const { view, rtl } = app;
   await makeClipInChat(app, CLIP);
   await openLibrary(app);
-  rtl.fireEvent.press(view.getAllByTestId(/^library-item-/)[0]);
+  rtl.fireEvent.press(view.getAllByTestId(/^expand-library-item-/)[0]);
   rtl.fireEvent.press(await view.findByTestId('viewer-delete', {}, { timeout: 10_000 }));
   expect(app.dialog()?.title).toBe('Delete this video?');
   await app.answer('Delete');
@@ -80,11 +85,11 @@ it('the viewer pauses on a tap and saves the clip to Downloads', async () => {
   };
   await makeClipInChat(app, CLIP);
   await openLibrary(app);
-  rtl.fireEvent.press(view.getAllByTestId(/^library-item-/)[0]);
-  const toggle = await view.findByTestId('viewer-toggle', {}, { timeout: 10_000 });
+  rtl.fireEvent.press(view.getAllByTestId(/^expand-library-item-/)[0]);
+  const toggle = await view.findByTestId('play-viewer', {}, { timeout: 10_000 });
   expect(toggle.props.accessibilityLabel).toBe('Pause');
   rtl.fireEvent.press(toggle);
-  await rtl.waitFor(() => expect(view.getByTestId('viewer-toggle').props.accessibilityLabel).toBe('Play'));
+  await rtl.waitFor(() => expect(view.getByTestId('play-viewer').props.accessibilityLabel).toBe('Play'));
 
   expect(saved).toHaveLength(0);
   rtl.fireEvent.press(view.getByTestId('viewer-save'));

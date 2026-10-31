@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { CATALOG, isVideoWeightAvailableOn, videoPackError, type ModelEntry } from '@offgrid/models';
+import { CATALOG, isVideoWeightAvailableOn, videoPackError, videoTakesStartImage, type ModelEntry } from '@offgrid/models';
 
 /** Light and Turbo builds: offered on 11 GB+ phones, below the packs' desktop minimum. */
 const LIGHT_BUILDS_ON_11GB = new Set([
@@ -35,4 +35,17 @@ export function videoPacksForPhone(ramGB: number, os: string = Platform.OS): Mod
     model.minRamGb! <= ramGB ||
     (ramGB >= 11 && (LIGHT_BUILDS_ON_11GB.has(model.id) || (os === 'ios' && model.id === TURBO_ON_11GB_IPHONE))),
   );
+}
+
+/**
+ * The video model this phone should use by default, of those installed: Turbo first (fewest steps), then
+ * one that also starts from a picture, then the first installed. The default follows the best one.
+ */
+export function bestInstalledVideoModel<T extends Pick<ModelEntry, 'id' | 'files'>>(installed: readonly T[]): T | undefined {
+  const rank = (model: T) => {
+    const weight = model.files.find(file => file.role === 'primary')?.name ?? '';
+    if (/turbo/i.test(model.id)) return 0;
+    return videoTakesStartImage(weight) ? 1 : 2;
+  };
+  return [...installed].sort((a, b) => rank(a) - rank(b))[0];
 }

@@ -9,7 +9,7 @@ export type ActiveTextModelResult = {
   model: DownloadedModel | RemoteModel | null;
   /** The model ID suitable for creating conversations */
   modelId: string | null;
-  /** Display name */
+  /** Display name; empty when no model is chosen */
   modelName: string;
   /** Whether the active model is remote */
   isRemote: boolean;
@@ -57,7 +57,7 @@ export function useActiveTextModel(): ActiveTextModelResult {
         isRemote: false,
       };
     }
-    return { model: null, modelId: null, modelName: 'Unknown', isRemote: false };
+    return { model: null, modelId: null, modelName: '', isRemote: false };
     // activeModelId and downloadedModels look unused now that the service resolves the local model,
     // but they are exactly what makes this hook REACTIVE: the service reads them imperatively, so
     // without them here a selection or a rescan would not re-render anything.

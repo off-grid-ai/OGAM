@@ -81,11 +81,12 @@ async function clipInChat(computer: Parameters<typeof serveDesktopModelPulls>[0]
   return app;
 }
 
-/** Continue is on screen but off; a tap opens the sheet. */
+/** Extend needs a model and says so, but never reads as disabled: a tap opens the sheet. */
 async function tapMutedContinue(current: AnalyticsApp) {
   const { view, rtl } = current;
   const continueChip = await view.findByTestId('video-continue');
-  expect(continueChip.props.accessibilityState?.disabled).toBe(true);
+  expect(continueChip.props.accessibilityHint).toMatch(/^Needs /);
+  expect(continueChip.props.accessibilityState?.disabled).toBe(false);
   expect(view.queryByTestId('start-picture-sheet')).toBeNull();
   rtl.fireEvent.press(continueChip);
   await view.findByTestId('start-picture-sheet');
@@ -106,9 +107,7 @@ it('follows the download already running on the computer, then Continue turns on
   expect(models!.activations).toEqual([DESKTOP_VIDEO_MODEL.id, LIGHT]);
   rtl.fireEvent.press(view.getByTestId('start-picture-carry-on'));
   await view.findByTestId('extend-sheet', {}, { timeout: 10_000 });
-  await rtl.waitFor(() =>
-    expect(view.getAllByTestId('video-continue')[0].props.accessibilityState?.disabled).toBe(false),
-  );
+  await rtl.waitFor(() => expect(view.getAllByTestId('video-continue')[0].props.accessibilityHint).toBeUndefined());
 }, 60_000);
 
 it('stops waiting on a computer that stopped answering, and follows the download again once it answers', async () => {
@@ -179,14 +178,11 @@ it('uses a start-picture build installed on the computer since the phone last lo
   await tapMutedContinue(current);
   await view.findByText('Extend needs Wan 2.2 (5B), Light. It is on your computer.', {}, { timeout: 10_000 });
   rtl.fireEvent.press(view.getByTestId('start-picture-use'));
-  await view.findByText('Wan 2.2 (5B), Light is ready.', {}, { timeout: 15_000 });
+  // One tap: once the computer switched, Extend asks what happens next by itself.
+  await view.findByTestId('extend-sheet', {}, { timeout: 15_000 });
   expect(models!.pulls).toEqual([]);
   expect(models!.activations).toEqual([DESKTOP_VIDEO_MODEL.id, LIGHT]);
-  rtl.fireEvent.press(view.getByTestId('start-picture-carry-on'));
-  await view.findByTestId('extend-sheet', {}, { timeout: 10_000 });
-  await rtl.waitFor(() =>
-    expect(view.getAllByTestId('video-continue')[0].props.accessibilityState?.disabled).toBe(false),
-  );
+  await rtl.waitFor(() => expect(view.getAllByTestId('video-continue')[0].props.accessibilityHint).toBeUndefined());
 }, 60_000);
 
 it('the storyboard\'s muted Start from a photo opens the sheet, with the shot kept from its description', async () => {
@@ -194,7 +190,8 @@ it('the storyboard\'s muted Start from a photo opens the sheet, with the shot ke
   const { view, rtl } = current;
   rtl.fireEvent.press(await view.findByTestId('video-make-story'));
   const photo = await view.findByTestId('shot-photo-0', {}, { timeout: 15_000 });
-  expect(photo.props.accessibilityState?.disabled).toBe(true);
+  expect(photo.props.accessibilityHint).toMatch(/^Needs /);
+  expect(photo.props.accessibilityState?.disabled).toBe(false);
   expect(view.queryByTestId('start-picture-sheet')).toBeNull();
   rtl.fireEvent.press(photo);
   await view.findByText(
@@ -208,9 +205,10 @@ it('the storyboard\'s muted Start from a photo opens the sheet, with the shot ke
 it('the viewer\'s muted Continue opens the same sheet', async () => {
   const current = await clipInChat({ memoryGb: 34 });
   const { view, rtl } = current;
-  rtl.fireEvent.press(view.getByTestId('chat-clip-card'));
+  rtl.fireEvent.press(view.getByTestId('expand-chat-clip-card'));
   const continueAction = await view.findByTestId('viewer-continue', {}, { timeout: 10_000 });
-  expect(continueAction.props.accessibilityState?.disabled).toBe(true);
+  expect(continueAction.props.accessibilityHint).toMatch(/^Needs /);
+  expect(continueAction.props.accessibilityState?.disabled).toBe(false);
   expect(view.queryByTestId('start-picture-sheet')).toBeNull();
   rtl.fireEvent.press(continueAction);
   await view.findByText('Extend needs Wan 2.2 (5B), Light, a 7.9 GB download.', {}, { timeout: 10_000 });

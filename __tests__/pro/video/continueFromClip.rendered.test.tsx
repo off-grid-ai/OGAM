@@ -27,8 +27,7 @@ it('Extend asks what happens next, sends the clip\'s last frame with those words
   rtl.fireEvent.press(await view.findByTestId('video-continue'));
   app.stories.hold();
   rtl.fireEvent.press(await view.findByTestId('start-picture-use', {}, { timeout: 10_000 }));
-  // Ready: a tap on Extend asks what happens next before anything starts.
-  rtl.fireEvent.press(await view.findByTestId('start-picture-carry-on', {}, { timeout: 15_000 }));
+  // "Extend on your computer" carries on by itself once the computer switched: it asks what happens next.
   rtl.fireEvent.changeText(await view.findByTestId('extend-prompt', {}, { timeout: 15_000 }), 'the fox leaps over a log');
   expect(app.stories.submissions).toHaveLength(0);
   rtl.fireEvent.press(view.getByTestId('extend-go'));
@@ -44,13 +43,26 @@ it('Extend asks what happens next, sends the clip\'s last frame with those words
   expect(sent.story.shots[0].prompt).toContain(CLIP);
   expect(sent.story.shots[0].prompt).toContain('the fox leaps over a log');
 
+  // It is named after its source and its place in line, not the source's words run into the next ones.
+  const { useStudioStore } = require('../../../pro/video/studio/studioStore');
+  const titles = () => (Object.values(useStudioStore.getState().stories) as Array<{ title: string }>).map(story => story.title);
+  expect(titles()).toContain(`${CLIP} · 2`);
+  expect(await view.findByText(`${CLIP} · 2`)).toBeTruthy();
+  expect(titles().some((title: string) => title.includes('the fox leaps'))).toBe(false);
+
   app.stories.release();
   // The next clip is ready in the chat, with its own Extend under it.
   expect(view.getAllByTestId('video-continue')).toHaveLength(1);
   await rtl.waitFor(() => expect(view.getAllByTestId('video-continue')).toHaveLength(2), { timeout: 30_000 });
+
+  // Extend the first clip again: the next place in line, never a second "· 2".
+  rtl.fireEvent.press(view.getAllByTestId('video-continue')[0]);
+  rtl.fireEvent.press(await view.findByTestId('extend-go', {}, { timeout: 10_000 }));
+  await rtl.waitFor(() => expect(app.stories.submissions).toHaveLength(2), { timeout: 15_000 });
+  expect(titles()).toContain(`${CLIP} · 3`);
 }, 90_000);
 
-it('Extend uses a model on this phone that starts from a picture, when the computer has none', async () => {
+it('Extend uses a model on this phone that starts from a picture with no question, when the computer has none', async () => {
   const app = await launchStudioApp(undefined, { phoneEngine: true });
   const { view, rtl } = app;
   await makeClipInChat(app, CLIP);
@@ -61,10 +73,14 @@ it('Extend uses a model on this phone that starts from a picture, when the compu
   rtl.act(() => {
     useAppStore.setState({ downloadedVideoModels: [...useAppStore.getState().downloadedVideoModels, turbo] });
   });
+  const before = useAppStore.getState().activeVideoModelId;
+  // Extend is on: it asks what happens next straight away, with no sheet to pick a model it already has.
   rtl.fireEvent.press(await view.findByTestId('video-continue'));
-  rtl.fireEvent.press(await view.findByTestId('start-picture-use-phone', {}, { timeout: 10_000 }));
-  // The phone's model is now the one in use, and Extend asks what happens next before anything starts.
-  expect(useAppStore.getState().activeVideoModelId).toBe(turbo.id);
-  await view.findByTestId('extend-prompt', {}, { timeout: 10_000 });
+  rtl.fireEvent.changeText(await view.findByTestId('extend-prompt', {}, { timeout: 10_000 }), 'the fox leaps over a log');
+  expect(view.queryByTestId('start-picture-sheet')).toBeNull();
+  expect(useAppStore.getState().activeVideoModelId).toBe(before);
+  rtl.fireEvent.press(view.getByTestId('extend-go'));
+  // The clip renders on this phone with the model that starts from a picture.
+  await rtl.waitFor(() => expect(useAppStore.getState().activeVideoModelId).toBe(turbo.id), { timeout: 10_000 });
   expect(app.stories.submissions).toHaveLength(0);
 }, 90_000);

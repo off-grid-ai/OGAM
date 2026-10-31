@@ -115,7 +115,7 @@ async function describeClipOnPhone(current: PhoneVideoApp, prompt: string): Prom
   const { view, rtl } = current;
   rtl.fireEvent.press(await view.findByTestId('home-tab'));
   rtl.fireEvent.press(await view.findByTestId('model-summary-video-open'));
-  rtl.fireEvent.press(await view.findByTestId(`video-model-row-${MODEL.id}-select`, {}, { timeout: 5000 }));
+  rtl.fireEvent.press(await view.findByTestId(`video-model-row-${MODEL.id}`, {}, { timeout: 5000 }));
   rtl.fireEvent.press(await view.findByTestId('new-chat-button', {}, { timeout: 5000 }));
   await view.findByTestId('chat-input');
   rtl.fireEvent.press(view.getByTestId('quick-settings-button'));
@@ -311,6 +311,9 @@ it('on a phone short of free memory, says so before it starts, and Run anyway ma
   await downloadVideoModel(current);
   await describeClipOnPhone(current, 'a hummingbird hovering over a red flower');
   const runAnyway = await view.findByTestId('model-failure-load-anyway-video', {}, { timeout: 15_000 });
+  // The refusal quotes the numbers the gate compared: what it needs is more than what it can spare.
+  const [, need, spare] = view.getByText(/needs about/).props.children.match(/needs about ([\d.]+) GB.*spare about ([\d.]+) GB/);
+  expect(Number(need)).toBeGreaterThan(Number(spare));
   expect(current.engine.generations).toHaveLength(0);
   current.rtl.fireEvent.press(runAnyway);
   await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
@@ -560,7 +563,10 @@ it('a clip lost with the app (the phone stopped the worker) says so, and Retry m
   const { view, rtl } = current;
   rtl.fireEvent.press(await view.findByTestId('chats-tab'));
   await openOnlyChat(current, 'a paper plane over the rooftops');
-  await view.findByText(/Video generation was interrupted\. Retry to start it again\./, {}, { timeout: 10_000 });
+  await view.findByText(/The app closed before the clip was done\./, {}, { timeout: 10_000 });
+  // Titled as an interrupted clip, never as a model that failed to load.
+  expect(view.queryByText(/Video generation interrupted/)).not.toBeNull();
+  expect(view.queryByText(/Failed to load model/)).toBeNull();
   expect(current.engine.generations).toHaveLength(0);
   rtl.fireEvent.press(view.getByTestId('model-failure-retry-video'));
   await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });

@@ -1364,6 +1364,11 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   // Both platform names point at the same fake; localDreamGenerator's Platform.select picks one.
   RN.NativeModules.LocalDreamModule = diffusion.module;
   RN.NativeModules.CoreMLDiffusionModule = diffusion.module;
+  // The video player's commands (seek, pause, volume) go to the native player: they resolve, and the
+  // player's props (paused, muted) stay observable.
+  RN.NativeModules.VideoManager = new Proxy({}, { get: () => jest.fn(() => Promise.resolve()) });
+  // The system share sheet: what was handed to it (a file path and its type).
+  RN.NativeModules.MediaShareModule = { shareFile: jest.fn(async () => true) };
   if (opts.socModel) {
     const socModel = opts.socModel;
     diffusion.module.getSoCModel = jest.fn(async () => socModel);

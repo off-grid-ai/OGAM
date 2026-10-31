@@ -147,7 +147,7 @@ class ImageGenerationService {
       previewPath: null,
       error,
     });
-    // On a memory-pressure failure the card offers "Free memory & Retry" — so the retry
+    // On a memory-pressure failure the card offers "Free memory & retry" — so the retry
     // must ACTUALLY free memory (eject resident models) before re-running, not just
     // re-run into the same wall. Derive memory-pressure from the SAME single source the
     // card's label uses (reasonFromLoadError) so the label and the eject can never

@@ -161,5 +161,13 @@
       <service android:name=".video.VideoGenerationService" android:exported="false" android:foregroundServiceType="mediaProcessing|specialUse">
         <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started local video generation" />
       </service>
+      <!-- Share a clip or image the app made: a one-time read grant, the file stays in app storage. -->
+      <provider
+        android:name=".mediashare.MediaShareFileProvider"
+        android:authorities="${applicationId}.mediashare"
+        android:exported="false"
+        android:grantUriPermissions="true">
+        <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/media_share_paths" />
+      </provider>
     </application>
 </manifest>

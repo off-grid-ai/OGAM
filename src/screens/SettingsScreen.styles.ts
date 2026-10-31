@@ -126,6 +126,9 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   sectionLabel: {
     ...TYPOGRAPHY.label,
+    // DESIGN_PHILOSOPHY_SYSTEM.md, Labels & Headers: uppercase, +0.3 spacing.
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.3,
     color: colors.textMuted,
     marginBottom: SPACING.sm,
     marginLeft: SPACING.xs,

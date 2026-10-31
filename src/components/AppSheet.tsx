@@ -132,6 +132,46 @@ function useSheetAnalytics(visible: boolean, sheet: string | undefined): void {
   }, [visible, sheet]);
 }
 
+/**
+ * The keyboard's height, so the sheet lifts above it. The slide-in runs on the native driver: a render
+ * during it commits the slide's start value (off-screen) over the native position, and nothing renders
+ * the sheet again when the slide ends. An input that focused as the sheet opened left the sheet below
+ * the screen, behind its keyboard (iOS, Extend's "What happens next?"). A change during the slide waits
+ * for it to land.
+ */
+function useKeyboardHeight() {
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const slidingIn = useRef(false);
+  const held = useRef<number | null>(null);
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent =
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const follow = (height: number) => {
+      if (slidingIn.current) held.current = height;
+      else setKeyboardHeight(height);
+    };
+    const showSub = Keyboard.addListener(showEvent, e =>
+      follow(e.endCoordinates.height),
+    );
+    const hideSub = Keyboard.addListener(hideEvent, () => follow(0));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+  const slideStarted = useCallback(() => {
+    slidingIn.current = true;
+  }, []);
+  const slideLanded = useCallback(() => {
+    slidingIn.current = false;
+    if (held.current !== null) setKeyboardHeight(held.current);
+    held.current = null;
+  }, []);
+  return { keyboardHeight, slideStarted, slideLanded };
+}
+
 export const AppSheet: React.FC<AppSheetProps> = ({
   visible,
   onClose,
@@ -155,7 +195,7 @@ export const AppSheet: React.FC<AppSheetProps> = ({
   const { bottom: bottomInset } = useSafeAreaInsets();
 
   const [modalVisible, setModalVisible] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const { keyboardHeight, slideStarted, slideLanded } = useKeyboardHeight();
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
@@ -198,6 +238,7 @@ export const AppSheet: React.FC<AppSheetProps> = ({
   const animateIn = useCallback(() => {
     if (!mounted.current) return;
     backdropEnabled.current = false;
+    slideStarted();
     Animated.parallel([
       Animated.timing(translateY, {
         toValue: 0,
@@ -212,8 +253,9 @@ export const AppSheet: React.FC<AppSheetProps> = ({
       }),
     ]).start(() => {
       backdropEnabled.current = true;
+      if (mounted.current) slideLanded();
     });
-  }, [translateY, backdropOpacity]);
+  }, [translateY, backdropOpacity, slideStarted, slideLanded]);
 
   // Animate out then callback
   const animateOut = useCallback(
@@ -311,22 +353,6 @@ export const AppSheet: React.FC<AppSheetProps> = ({
       onClosedRef.current?.();
     }
   }, [modalVisible, showModal, visible]);
-
-  // Track keyboard height so the sheet lifts above the keyboard
-  useEffect(() => {
-    const showEvent =
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent =
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSub = Keyboard.addListener(showEvent, e =>
-      setKeyboardHeight(e.endCoordinates.height),
-    );
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
 
   // Called by Modal when the Dialog is fully rendered and ready for touch
   const handleModalShow = useCallback(() => {

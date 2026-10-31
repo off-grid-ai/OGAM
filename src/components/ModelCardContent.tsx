@@ -433,7 +433,9 @@ function DownloadedActions({ isActive, testID, colors, styles, onSelect, onDelet
       ) : (
         onRepairVision && <ActionButton icon="tool" color={colors.warning} haptic="impactLight" onPress={onRepairVision} testID={tid('repair-vision')} styles={styles} />
       )}
-      {!isActive && onSelect && <ActionButton icon="check-circle" color={colors.primary} haptic="selection" onPress={onSelect} testID={tid('select')} styles={styles} />}
+      {/* A radio: the model in use shows a check; any other shows an empty circle that picks it. */}
+      {isActive && onSelect && <View style={styles.iconButton} accessibilityLabel="In use" testID={tid('in-use')}><Icon name="check-circle" size={16} color={colors.primary} /></View>}
+      {!isActive && onSelect && <ActionButton icon="circle" color={colors.textMuted} haptic="selection" onPress={onSelect} testID={tid('select')} accessibilityLabel="Use this model" styles={styles} />}
       {onDelete && <ActionButton icon="trash-2" color={colors.error} haptic="notificationWarning" onPress={onDelete} testID={tid('delete') ?? 'delete-model-button'} accessibilityLabel="Delete model" styles={styles} />}
     </>
   );

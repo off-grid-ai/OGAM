@@ -5,7 +5,7 @@
  * Android device with only ~3GB truly free, sending an image request with a 9GB dirty (CoreML/ONNX) image
  * model gets it ADMITTED — the model becomes resident — because Android's reclaimable-aware budget credits
  * the physical ceiling to a dirty load whose GPU/anonymous pages zram cannot back. The correct behavior is
- * to REFUSE it (a graceful "Not Enough Memory" card, nothing resident), exactly as balanced/iOS already do.
+ * to REFUSE it (a graceful "Not enough memory" card, nothing resident), exactly as balanced/iOS already do.
  *
  * Device ground truth (M6, docs/DEVICE_TEST_LOG.md:43): "aggressive (0.88 Android / 0.92 iOS) admits a 9GB
  * dirty model on 12GB at 3GB free; zram/dirty pages can't back it." The gate-verdict twin is
@@ -23,7 +23,7 @@
  * RAM: 12GB total / 3GB free. Policy: aggressive (via the real toggle). These recreate the exact M6 cell.
  *
  * RED (HEAD): the aggressive gate ADMITS the 9GB dirty image model → after send, the In Memory section lists
- * models-row-image-ram (~9.0 GB) and NO "Not Enough Memory" card renders. On HEAD the load is not even
+ * models-row-image-ram (~9.0 GB) and NO "Not enough memory" card renders. On HEAD the load is not even
  * refused first, so no "Load Anyway" prompt appears — aggressive silently over-commits (see the split note).
  * GREEN (after the fix): aggressive must refuse a dirty model that can't be physically backed → the image
  * model is NOT resident (models-row-image-ram absent) and the graceful memory card renders instead.
@@ -107,12 +107,12 @@ describe('T103 / M6 (rendered) — aggressive policy over-commits a 9GB dirty im
     await h.settle(400);
 
     // ASSERT on the terminal UI artifact. CORRECT (green after fix): the load is refused → nothing resident
-    // for image, and the graceful "Not Enough Memory" card renders. BUG (red on HEAD): the 9GB dirty model is
+    // for image, and the graceful "Not enough memory" card renders. BUG (red on HEAD): the 9GB dirty model is
     // admitted → the In Memory section lists models-row-image-ram (~9.0 GB) and no card appears.
     const after = openSelector();
     await h.settle(400); // let the section's poll pick up residency
     expect(after.queryByTestId('models-row-image-ram')).toBeNull();       // admitted on HEAD → RED here
-    expect(h.view!.queryByText(/Not Enough Memory/)).not.toBeNull();      // no card on HEAD → RED here too
+    expect(h.view!.queryByTestId('model-failure-load-anyway-image')).not.toBeNull();      // no card on HEAD → RED here too
     after.unmount();
 
     // NO DEAD-END: a refusal must ALWAYS offer "Load Anyway" (we don't recommend it, but the user can

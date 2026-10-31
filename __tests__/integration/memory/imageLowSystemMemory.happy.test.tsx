@@ -1,7 +1,7 @@
 /**
  * HAPPY-PATH (UI, BEHAVIORAL — iPhone short of pages) — the phone can be short of memory while this
  * app's own headroom still looks large. The OS then kills the app in the middle of the load. The
- * memory guard must go by the smaller of the two, so the person sees the "Not Enough Memory" card
+ * memory guard must go by the smaller of the two, so the person sees the "Not enough memory" card
  * and no crash.
  *
  * Device evidence: jetsam reports from the iPhone 17 Pro Max (docs/pr-screenshots/release-analytics-video/
@@ -36,13 +36,13 @@ async function sendImagePromptOnPhoneWith(systemAvailBytes: number) {
 describe('happy — an iPhone short of pages is refused with the card, not killed mid-load', () => {
   it('the app has headroom but the phone has 100 MB free: the card shows and no image is made', async () => {
     const h = await sendImagePromptOnPhoneWith(100 * 1024 * 1024);
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/Not Enough Memory/)).not.toBeNull(); });
+    await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('model-failure-load-anyway-image')).not.toBeNull(); });
     expect(h.boundary.diffusion.calls.generateImage.length).toBe(0);
   });
 
   it('control: the same phone with 8 GB free generates the image', async () => {
     const h = await sendImagePromptOnPhoneWith(8 * GB);
     await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); });
-    expect(h.view!.queryByText(/Not Enough Memory/)).toBeNull();
+    expect(h.view!.queryByTestId('model-failure-load-anyway-image')).toBeNull();
   });
 });

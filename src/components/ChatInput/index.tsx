@@ -26,7 +26,7 @@ import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import { videoSeam } from '../../bootstrap/videoSeam';
 import { hardwareService } from '../../services/hardware';
-import { videoPacksForPhone } from '../../services/phoneVideoPacks';
+import { bestInstalledVideoModel, videoPacksForPhone } from '../../services/phoneVideoPacks';
 import { AppSheet } from '../AppSheet';
 import { Button } from '../Button';
 
@@ -414,7 +414,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             return;
           }
         } else {
-          setActiveVideoModelId(downloadedVideoModels[0].id);
+          setActiveVideoModelId(bestInstalledVideoModel(downloadedVideoModels)!.id);
         }
       }
     }
