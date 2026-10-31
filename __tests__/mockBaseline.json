@@ -295,7 +295,6 @@
   "__tests__/unit/services/modelManager/scan.test.ts": 2,
   "__tests__/unit/services/modelResidency.test.ts": 35,
   "__tests__/unit/services/parallelMmproj.test.ts": 3,
-  "__tests__/unit/services/proPrompt.test.ts": 1,
   "__tests__/unit/services/providers/localProvider.test.ts": 1,
   "__tests__/unit/services/providers/openAICompatibleProvider.test.ts": 2,
   "__tests__/unit/services/providers/openAICompatibleStream.test.ts": 2,

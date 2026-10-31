@@ -1,10 +1,10 @@
 /**
  * Unit tests for proPrompt.ts
+ *
+ * The real app store runs: generation counts rise through the store's own increment actions,
+ * Pro access is set through its own actions, and the test reads the stored "offered" marker and
+ * the prompt the listeners receive.
  */
-
-jest.mock('../../../src/stores/appStore', () => ({
-  useAppStore: { getState: jest.fn() },
-}));
 
 import {
   shouldShowProAha,
@@ -15,18 +15,17 @@ import {
 } from '../../../src/services/proPrompt';
 import { useAppStore } from '../../../src/stores/appStore';
 
-const mockedGetState = useAppStore.getState as jest.Mock;
-
-function makeStore(overrides: any = {}) {
-  return {
-    hasRegisteredPro: false,
-    isProActive: false,
-    proAhaTriggeredBy: null,
-    textGenerationCount: 10,
-    imageGenerationCount: 10,
-    setProAhaTriggeredBy: jest.fn(),
-    ...overrides,
-  };
+/** A free install that has completed `text` replies and `image` images, as the app counts them. */
+function install({ text = 0, image = 0 } = {}) {
+  const app = useAppStore.getState();
+  app.setHasRegisteredPro(false);
+  app.setHasSavedProCredential(false);
+  app.setProActive(false);
+  app.setProDeviceAdmission('unknown');
+  app.setProAhaTriggeredBy(null);
+  useAppStore.setState({ textGenerationCount: 0, imageGenerationCount: 0 });
+  for (let i = 0; i < text; i += 1) app.incrementTextGenerationCount();
+  for (let i = 0; i < image; i += 1) app.incrementImageGenerationCount();
 }
 
 describe('shouldShowProAha', () => {
@@ -74,39 +73,46 @@ describe('checkProPromptForText', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
 
-  it('skips when hasRegisteredPro=true', () => {
-    const store = makeStore({ hasRegisteredPro: true });
-    mockedGetState.mockReturnValue(store);
+  /** Check after a reply; return what was marked and what the user saw. */
+  function afterReply() {
+    const seen: string[] = [];
+    const unsub = subscribeProPrompt(variant => seen.push(variant));
     checkProPromptForText(0);
-    expect(store.setProAhaTriggeredBy).not.toHaveBeenCalled();
+    jest.runAllTimers();
+    unsub();
+    return { marked: useAppStore.getState().proAhaTriggeredBy, seen };
+  }
+
+  it('skips when hasRegisteredPro=true', () => {
+    install({ text: 10 });
+    useAppStore.getState().setHasRegisteredPro(true);
+    useAppStore.getState().setHasSavedProCredential(true);
+    useAppStore.getState().setProActive(true);
+    useAppStore.getState().setProDeviceAdmission('active');
+    expect(afterReply()).toEqual({ marked: null, seen: [] });
   });
 
   it('skips when isProActive=true (keychain/dev-unlocked Pro user, never registered)', () => {
-    const store = makeStore({ hasRegisteredPro: false, isProActive: true });
-    mockedGetState.mockReturnValue(store);
-    checkProPromptForText(0);
-    expect(store.setProAhaTriggeredBy).not.toHaveBeenCalled();
+    install({ text: 10 });
+    useAppStore.getState().setProActive(true);
+    useAppStore.getState().setProDeviceAdmission('active');
+    expect(afterReply()).toEqual({ marked: null, seen: [] });
   });
 
-  it('skips when proAhaTriggeredBy is already set', () => {
-    const store = makeStore({ proAhaTriggeredBy: 'text' });
-    mockedGetState.mockReturnValue(store);
-    checkProPromptForText(0);
-    expect(store.setProAhaTriggeredBy).not.toHaveBeenCalled();
+  it('skips when the offer was already made', () => {
+    install({ text: 10 });
+    useAppStore.getState().setProAhaTriggeredBy('image');
+    expect(afterReply()).toEqual({ marked: 'image', seen: [] });
   });
 
   it('skips when count does not meet threshold', () => {
-    const store = makeStore({ textGenerationCount: 1 });
-    mockedGetState.mockReturnValue(store);
-    checkProPromptForText(0);
-    expect(store.setProAhaTriggeredBy).not.toHaveBeenCalled();
+    install({ text: 1 });
+    expect(afterReply()).toEqual({ marked: null, seen: [] });
   });
 
   it('triggers when all conditions met', () => {
-    const store = makeStore({ textGenerationCount: 10 });
-    mockedGetState.mockReturnValue(store);
-    checkProPromptForText(0);
-    expect(store.setProAhaTriggeredBy).toHaveBeenCalledWith('text');
+    install({ text: 10 });
+    expect(afterReply()).toEqual({ marked: 'text', seen: ['text'] });
   });
 });
 
@@ -114,17 +120,26 @@ describe('checkProPromptForImage', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
 
-  it('triggers for image when count meets threshold', () => {
-    const store = makeStore({ imageGenerationCount: 10 });
-    mockedGetState.mockReturnValue(store);
+  function afterImage() {
+    const seen: string[] = [];
+    const unsub = subscribeProPrompt(variant => seen.push(variant));
     checkProPromptForImage(0);
-    expect(store.setProAhaTriggeredBy).toHaveBeenCalledWith('image');
+    jest.runAllTimers();
+    unsub();
+    return { marked: useAppStore.getState().proAhaTriggeredBy, seen };
+  }
+
+  it('triggers for image when count meets threshold', () => {
+    install({ image: 10 });
+    expect(afterImage()).toEqual({ marked: 'image', seen: ['image'] });
   });
 
   it('skips when hasRegisteredPro=true', () => {
-    const store = makeStore({ hasRegisteredPro: true, imageGenerationCount: 10 });
-    mockedGetState.mockReturnValue(store);
-    checkProPromptForImage(0);
-    expect(store.setProAhaTriggeredBy).not.toHaveBeenCalled();
+    install({ image: 10 });
+    useAppStore.getState().setHasRegisteredPro(true);
+    useAppStore.getState().setHasSavedProCredential(true);
+    useAppStore.getState().setProActive(true);
+    useAppStore.getState().setProDeviceAdmission('active');
+    expect(afterImage()).toEqual({ marked: null, seen: [] });
   });
 });
