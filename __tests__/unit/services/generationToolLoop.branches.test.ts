@@ -142,6 +142,16 @@ describe('runToolLoop — Gemma text tool calls (llama)', () => {
     expect(search!.queries).toEqual(['Hello']);
   });
 
+  it('hands the answer to the caller as the final reply when the caller does not stream', async () => {
+    textThenFinal('<|tool_call>call:web_search{"query":"quiet"}<tool_call|>');
+
+    const { finals, streamed } = await runTurn({ messages: [msg()], enabledToolIds: ['web_search'], onStream: undefined });
+
+    expect(search!.queries).toEqual(['quiet']);
+    expect(streamed).toEqual([]);
+    expect(finals).toEqual(['Final.']);
+  });
+
   it('ignores a tool-call body with no tool name', async () => {
     d.boundary.llama!.scriptCompletions([{ text: '<|tool_call>   {"query":"x"}<tool_call|>' }]);
 
@@ -293,6 +303,34 @@ describe('runToolLoop — date/time context (llama)', () => {
     const sys = text(sentMessages().find(m => m.role === 'system')!.content);
     expect(sys).toContain('current date is');
     expect(sys).not.toContain('current date and time is');
+  });
+});
+
+describe('runToolLoop — a llama model without native tool calling', () => {
+  it('on an iPhone, puts the tool extension hints in the system prompt for the model to follow as text', async () => {
+    d = await launchGeneration({ load: false, ram: { platform: 'ios', totalBytes: 8 * 1024 ** 3, availBytes: 4 * 1024 ** 3 } });
+    // This model's chat template has no tool use (llama.rn reports no Jinja tool caps).
+    const initLlama = d.boundary.llama!.module.initLlama;
+    const open = initLlama.getMockImplementation()!;
+    initLlama.mockImplementation(async (params: unknown) => {
+      const ctx = await open(params);
+      ctx.model = { ...ctx.model, chatTemplates: { jinja: { defaultCaps: { toolCalls: false }, toolUse: false, toolUseCaps: { toolCalls: false } } } };
+      return ctx;
+    });
+    await d.activeModelService.loadTextModel('m');
+    expect(d.llmService.supportsToolCalling()).toBe(false);
+    const { registerToolExtension } = require('../../../src/services/tools/extensions');
+    unregister = registerToolExtension({
+      id: 'hinted', canHandle: () => false, execute: async () => ({}), enabledToolCount: () => 0,
+      getSystemPromptHint: () => ' Call server tools as <mcp_tool_call>{json}</mcp_tool_call>.',
+      parseToolCalls: () => [], stripFromVisibleText: (t: string) => t,
+    });
+    d.boundary.llama!.scriptCompletion({ text: 'ok' });
+
+    await runTurn({ enabledToolIds: ['web_search'], messages: [msg({ role: 'system', content: 'You are helpful.' }), msg({ role: 'user', content: 'hi' })] });
+
+    const sent = (d.boundary.llama!.calls.completion[0][0] as any).messages as Array<{ role: string; content: any }>;
+    expect(String(sent.find(m => m.role === 'system')!.content)).toContain('<mcp_tool_call>');
   });
 });
 
