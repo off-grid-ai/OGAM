@@ -1,17 +1,8 @@
 import type { SyncedTaskRun } from '@offgrid/sync';
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: () => {},
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 jest.mock('react-native-tcp-socket', () => {
   const {
@@ -36,7 +27,7 @@ describe('Desktop task card Stop', () => {
   });
 
   it('ends the Mobile generation that is waiting for the Desktop task', async () => {
-    const h = await setupChatScreen({ engine: 'litert', pro: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', pro: true });
     const { syncService } = require('../../../pro/sync/syncService');
     const { chatStreamService } = require('../../../pro/sync/chatStreamService');
     stopSync = async () => {

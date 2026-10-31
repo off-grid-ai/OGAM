@@ -17,16 +17,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('N3 (guard) — draw request with no image model routes safely', () => {
   it('renders a text answer and leaks NO image marker into the text the model receives', async () => {
-    const h = await setupChatScreen({ engine: 'litert' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
     h.render();
 
     // No image model is downloaded/active → "draw …" must route to the text model.

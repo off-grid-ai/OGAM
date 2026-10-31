@@ -16,16 +16,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('tapping send again mid-stream', () => {
   it('does not start a second generation, and the first reply still finishes intact', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     h.render();
 
     // Hold the engine mid-stream: tokens have started arriving and the completion is still in flight, which is

@@ -20,16 +20,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('two attached images in one turn', () => {
   it('sends BOTH image uris to the engine, not just the first', async () => {
-    const h = await setupChatScreen({ engine: 'litert', vision: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', vision: true });
     h.render();
 
     // Two real attach gestures, two different sources - so the uris differ and "both arrived" is checkable.

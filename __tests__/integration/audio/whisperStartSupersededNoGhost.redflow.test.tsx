@@ -15,15 +15,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('realtime dictation: releasing the mic during model load starts NO ghost recording (#558)', () => {
   it('aborts the superseded start — no realtime session after release-during-load', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android', whisper: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android', whisper: true });
     const { useWhisperStore } = require('../../../src/stores/whisperStore');
 
     // Whisper downloaded-not-loaded, so the mic press must load it (the async gap the race lives in).

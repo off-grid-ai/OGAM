@@ -15,15 +15,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('T062 (llama) — resend of an image request re-draws on the llama engine (DEV-B33)', () => {
   it('re-runs the IMAGE pipeline on resend of "draw a dog" with a llama (GGUF) model active', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.render();
     await h.placeImageModel({ backend: 'coreml' });
      

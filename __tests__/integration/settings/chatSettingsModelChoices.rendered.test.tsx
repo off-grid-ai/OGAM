@@ -1,15 +1,11 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('Chat Settings model choices', () => {
   it('keeps chat controls but leaves Image, STT, and TTS model choice to Models', async () => {
-    const h = await setupChatScreen({ engine: 'llama', pro: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', pro: true });
     h.render();
 
     h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByTestId('chat-settings-icon')));

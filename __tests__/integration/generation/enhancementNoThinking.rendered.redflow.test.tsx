@@ -19,18 +19,15 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const isEnhancementRequest = (p: { messages?: Array<{ role: string; content?: string }> }) =>
   !!p.messages?.some(m => m.role === 'system' && /image generation prompt/i.test(m.content || ''));
 
 describe('T071 (rendered) — prompt enhancement must not think (DEV-B30)', () => {
   it('sends the enhancement request with enable_thinking !== true even when thinking is ON globally', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.render();
 
     await h.placeImageModel({ backend: 'coreml' });

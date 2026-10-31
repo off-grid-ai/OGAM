@@ -1,12 +1,8 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { installRemoteStream } from '../../harness/remoteHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('Remote image prompt enhancement in Chat', () => {
   const originalFetch = globalThis.fetch;
@@ -17,7 +13,7 @@ describe('Remote image prompt enhancement in Chat', () => {
   });
 
   it('sends the enhanced prompt to the selected remote image model', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     const { remoteServerManager } = require('../../../src/services/remoteServerManager');
     const server = await remoteServerManager.addServer({
       name: 'Desktop image server',
@@ -66,7 +62,7 @@ describe('Remote image prompt enhancement in Chat', () => {
   });
 
   it('shows a remote text-model rejection and uses the original image prompt', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     const { remoteServerManager } = require('../../../src/services/remoteServerManager');
     const { activeModelService } = require('../../../src/services/activeModelService');
     await activeModelService.ejectAll();

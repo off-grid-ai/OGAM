@@ -14,15 +14,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('T057 (rendered) — tapping a pre-send image thumbnail opens a preview (DEV-B19)', () => {
   it('opens a fullscreen preview when the attached thumbnail is tapped', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android', vision: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android', vision: true });
     h.render();
 
     // Real gesture: attach a photo via the real attach popover → the thumbnail renders in the composer.

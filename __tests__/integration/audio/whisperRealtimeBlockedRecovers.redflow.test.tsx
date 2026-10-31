@@ -30,15 +30,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('realtime hold-to-talk dictation recovers when whisper load is blocked (free→retry) — device', () => {
   it('frees the generation model, loads whisper, and the transcript lands in the composer', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android', whisper: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android', whisper: true });
     const { useWhisperStore } = require('../../../src/stores/whisperStore');
     const { modelResidencyManager } = require('../../../src/services/modelResidency');
 

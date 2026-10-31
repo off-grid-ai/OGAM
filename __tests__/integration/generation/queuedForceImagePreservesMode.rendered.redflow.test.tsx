@@ -30,18 +30,15 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const QUEUED_TEXT_LEAK = 'Cats are small domesticated carnivorous mammals.';
 
 describe('#510 (rendered) — a queued force-image send preserves its force flag on drain', () => {
   it('draws an image (not a text reply) when a force-image send queued behind an in-flight turn drains', async () => {
     // llama engine so we can HOLD turn #1 in prefill (holdBeforeStream) → generation stays in-flight.
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.render();
     const { rtl } = h;
     const view = h.view!;
@@ -83,7 +80,7 @@ describe('#510 (rendered) — a queued force-image send preserves its force flag
     // Exercises the multi-message branch (all.length > 1) where imageMode = all.some(force) ? force : all[0].
     // My single-message test above only hits the all[0] shortcut; this pins the coalesce force-merge so a
     // regression to `all[0].imageMode` (dropping the .some) is caught.
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.render();
     const { rtl } = h;
     const view = h.view!;
