@@ -59,6 +59,11 @@ class ActiveModelService {
     this.loadedTextModelId = id;
     useAppStore.getState().setLoadedTextModelId(id);
   }
+  /** The SINGLE writer for the loaded-image-model id, kept in lockstep with its store projection. */
+  private setLoadedImage(id: string | null): void {
+    this.loadedImageModelId = id;
+    useAppStore.getState().setLoadedImageModelId(id);
+  }
   /**
    * The selected text model, resolved. The ONE answer to "which text model is chosen", so no surface
    * repeats the lookup and none of them can disagree about it.
@@ -366,7 +371,7 @@ class ActiveModelService {
       timeoutMs,
       loadedImageModelId: this.loadedImageModelId,
       onLoaded: (id, threads) => {
-        this.loadedImageModelId = id;
+        this.setLoadedImage(id);
         this.loadedImageModelThreads = threads;
         modelResidencyManager.register(
           // dirtyMemory: a resident CoreML/ONNX image model's working set can't be paged
@@ -379,7 +384,7 @@ class ActiveModelService {
         );
       },
       onError: () => {
-        this.loadedImageModelId = null;
+        this.setLoadedImage(null);
         this.loadedImageModelThreads = null;
       },
       onFinally: () => {
@@ -421,7 +426,7 @@ class ActiveModelService {
           throw new Error('The image model is still in use and could not be unloaded.');
         }
       }
-      this.loadedImageModelId = null;
+      this.setLoadedImage(null);
       this.loadedImageModelThreads = null;
       if (!keepSelection) {
         store.setActiveImageModelId(null);
@@ -524,7 +529,7 @@ class ActiveModelService {
         this.setLoadedText(id);
       },
       setLoadedImageModelId: id => {
-        this.loadedImageModelId = id;
+        this.setLoadedImage(id);
       },
       setLoadedImageModelThreads: n => {
         this.loadedImageModelThreads = n;
