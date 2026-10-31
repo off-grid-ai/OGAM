@@ -283,7 +283,7 @@ class ModelResidencyManager {
   async makeRoomFor(
     spec: ResidentSpec,
     opts?: { override?: boolean },
-  ): Promise<{ evicted: string[]; fits: boolean }> {
+  ): Promise<{ evicted: string[]; fits: boolean; budgetMB: number }> {
     // Re-read real free RAM so the decision reflects current pressure, not a stale
     // boot-time snapshot (other apps may have grabbed memory since).
     await hardwareService.refreshMemoryInfo().catch(() => {});
@@ -332,7 +332,7 @@ class ModelResidencyManager {
     if ((!plan.fits || dirtyCeilingExceeded) && !override) {
       // Won't fit even after the planned evictions (total budget OR the dirty ceiling) - DON'T
       // evict (otherwise we'd strand the device with nothing). The caller blocks the load (overridable).
-      return { evicted: [], fits: false };
+      return { evicted: [], fits: false, budgetMB };
     }
     // Override ("Load Anyway"): the user explicitly accepted the risk (this call or
     // earlier this session). planEviction already collected every evictable resident
@@ -364,7 +364,7 @@ class ModelResidencyManager {
       }
     }
     if (unloadFailed) {
-      return { evicted: actuallyEvicted, fits: false };
+      return { evicted: actuallyEvicted, fits: false, budgetMB };
     }
     // Survival floor: even an override can't cross physics. Now that the evictions have
     // ACTUALLY happened (iOS has reclaimed the unloaded pages), re-read real free RAM and
@@ -378,7 +378,7 @@ class ModelResidencyManager {
       // floor, NO refusal. The UI frames it as "not recommended, but you can try".
       logger.log(formatOverrideForcedLine(spec.key, plan.evict));
     }
-    return { evicted: actuallyEvicted, fits: true };
+    return { evicted: actuallyEvicted, fits: true, budgetMB };
   }
 
   async ensureResident(
