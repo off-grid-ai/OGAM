@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text } from 'react-native';
+import { TouchableOpacity } from '../components/Touchable';
 import { LoadingDots } from '../components/LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import { Card } from '../components';

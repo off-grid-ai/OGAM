@@ -8,12 +8,12 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
   Clipboard,
   Share,
   SafeAreaView,
   Modal,
 } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';

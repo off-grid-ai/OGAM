@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   TextInput,
   Linking,
   ScrollView,
 } from 'react-native';
+import { TouchableOpacity } from '../../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import {
   projectPersonalMeshActivationFailure,
@@ -122,6 +122,7 @@ export const ProUnlockModal: React.FC<Props> = ({
 
   return (
     <AppSheet
+      sheet="pro-activate"
       visible={sheetVisible}
       onClose={success ? finishSuccess : close}
       onHeaderClosePress={success ? finishSuccess : close}
@@ -192,6 +193,7 @@ export const ProUnlockModal: React.FC<Props> = ({
               ]}
               onPress={handleActivate}
               disabled={loading || !hasInput}
+              aria-busy={loading}
               activeOpacity={0.85}
             >
               <Text style={styles.primaryBtnText}>

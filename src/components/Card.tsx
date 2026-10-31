@@ -2,9 +2,9 @@ import React from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   ViewStyle,
 } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import type { ThemeColors, ThemeShadows } from '../theme';
 

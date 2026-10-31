@@ -70,6 +70,7 @@ export const WhisperPickerSheet: React.FC<Props> = ({
   return (
     <>
     <AppSheet
+      sheet="whisper-picker"
       visible={visible}
       onClose={onClose}
       onClosed={onClosed}

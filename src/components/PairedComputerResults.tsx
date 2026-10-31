@@ -1,5 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { withoutChatsOnDevice, type RemoteSearchOutcome, type RemoteSearchResult } from '@offgrid/rag';
 import { Button } from './Button';

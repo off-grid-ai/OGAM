@@ -1,6 +1,7 @@
 import { deleteChatImages, imagesNotDeletedAlert } from '../services/chatImageCleanup';
 import React, { useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, FlatList } from 'react-native';
+import { View, Text, FlatList } from 'react-native';
+import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -26,6 +27,7 @@ import { formatWhen } from '../utils/localTime';
 import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
 import { PROJECT_DELETE_FALLBACK_REASON } from '../stores/projectDeleteOutcome';
 import { byRecentActivity } from '../utils/conversationOrdering';
+import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProjectDetail'>;
@@ -328,6 +330,7 @@ export const ProjectDetailScreen: React.FC = () => {
             </View>
           ) : (
             <FlatList
+              {...SCROLL_DEPTH_PROPS}
               style={styles.sectionList}
               data={projectChats}
               keyExtractor={item => item.id}

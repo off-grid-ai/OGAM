@@ -2,11 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
-  Switch,
   FlatList,
   Platform,
 } from 'react-native';
+import { TouchableOpacity, Switch } from '../components/Touchable';
 import { useFocusEffect } from '@react-navigation/native';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { LoadingDots } from '../components/LoadingDots';
@@ -279,7 +278,7 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
       )}
 
       {addingFile && (
-        <View style={styles.kbIndexing}>
+        <View style={styles.kbIndexing} aria-busy>
           <LoadingDots color={colors.primary} />
           <Text style={styles.kbIndexingText} numberOfLines={1}>
             Adding {addingFile}...

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, Pressable } from 'react-native';
+import { Modal, View, Text } from 'react-native';
+import { TouchableOpacity, Pressable } from './Touchable';
 import { useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { SPACING, TYPOGRAPHY } from '../constants';

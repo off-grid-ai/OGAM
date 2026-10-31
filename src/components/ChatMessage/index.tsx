@@ -1,7 +1,8 @@
 import { useAppStore } from '../../stores';
 import { videoGenerationMeta } from '../../utils/modelHelpers';
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Clipboard } from 'react-native';
+import { View, Text, Clipboard } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
@@ -36,6 +37,7 @@ import type { ChatMessageProps } from './types';
 import type { Message } from '../../types';
 import { isSupportingChatContext } from '@offgrid/sync';
 import { VersionSwitcher } from './components/VersionSwitcher';
+import { messageAction } from '../../services/analytics/analytics';
 
 type MetaRowProps = {
   message: Message;
@@ -492,6 +494,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const handleCopy = () => {
     Clipboard.setString(displayContent);
+    messageAction('copy');
     triggerHaptic('notificationSuccess');
     onCopy?.(displayContent);
     setShowActionMenu(false);
@@ -510,8 +513,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const handleSaveEdit = (text: string) => {
     const trimmed = text.trim();
-    if (trimmed !== (isUser ? message.content : displayContent))
-      onEdit?.(message, trimmed);
+    if (trimmed !== (isUser ? message.content : displayContent) && onEdit) {
+      messageAction('edit');
+      onEdit(message, trimmed);
+    }
     setIsEditing(false);
   };
 

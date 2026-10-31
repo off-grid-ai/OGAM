@@ -44,6 +44,7 @@ export function ActionMenuSheet({
 
   return (
     <AppSheet
+      sheet="message-actions"
       visible={visible}
       onClose={onClose}
       enableDynamicSizing
@@ -153,6 +154,7 @@ export function EditSheet({
   }, [visible, defaultValue]);
   return (
     <AppSheet
+      sheet="message-edit"
       visible={visible}
       onClose={onClose}
       title="EDIT MESSAGE"

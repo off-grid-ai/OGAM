@@ -4,10 +4,9 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   Alert,
-  Switch,
 } from 'react-native';
+import { TouchableOpacity, Switch } from '../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -41,6 +40,7 @@ import { useOpenSync } from '../hooks/useOpenSync';
 import { appBuildLabel, appVersion } from '../utils/appVersion';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { openSupportEmail } from '../utils/supportEmail';
+import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
 
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'SettingsTab'>,
@@ -168,6 +168,7 @@ export const SettingsScreen: React.FC = () => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader title="Settings" variant="tab" />
       <ScrollView
+        {...SCROLL_DEPTH_PROPS}
         style={styles.scrollView}
         contentContainerStyle={styles.content}
       >

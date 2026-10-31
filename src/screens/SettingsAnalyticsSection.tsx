@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { Switch, TouchableOpacity } from '../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedEntry } from '../components/AnimatedEntry';
 import { DebugLogsScreen } from '../components/DebugLogsScreen';

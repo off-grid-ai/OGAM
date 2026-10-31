@@ -82,8 +82,26 @@ module.exports = {
           'Spread {...LIST_CLIPPING_PROPS} (src/constants/listClipping.ts) on every list: Android clipping crashes Fabric.',
       },
     ],
+    // Every tap is counted by testID (docs/ANALYTICS.md, session_summary.actions) through the app's own
+    // touchables. Importing react-native's directly would leave that button uncounted.
+    'no-restricted-imports': [
+      'error',
+      {
+        paths: [
+          {
+            name: 'react-native',
+            importNames: ['TouchableOpacity', 'Pressable', 'Switch'],
+            message: 'Import TouchableOpacity, Pressable and Switch from src/components/Touchable (@offgrid/core/components/Touchable in pro): they count the tap.',
+          },
+        ],
+      },
+    ],
   },
   overrides: [
+    {
+      files: ['src/components/Touchable.tsx'],
+      rules: { 'no-restricted-imports': 'off' },
+    },
     {
       files: ['scripts/physical-sync/**/*.mjs'],
       parserOptions: {
@@ -113,6 +131,7 @@ module.exports = {
         // stay ON for tests — they caught a tautology assertion + a dead collection here.
         'sonarjs/no-identical-functions': 'off',
         'sonarjs/cognitive-complexity': 'off',
+        'no-restricted-imports': 'off',
       },
     },
   ],

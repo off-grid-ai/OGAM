@@ -20,14 +20,20 @@ import { analyticsBuildAllowed, createAnalyticsClient, type AnalyticsClient } fr
 import { scrubExceptionProperties } from './scrub';
 import { markForeground, markStageEnded, markStageStarted, takeUncleanExit } from './uncleanExit';
 import { maybePromptAfterFailure, maybePromptAfterFirstChat } from './consentPrompt';
+import { SessionTally, type ScrollBucket, type SummaryCounter } from './sessionTally';
+import { setInteractionSink, setScreenSink } from './interactions';
 import {
   batteryPct,
   bytesToGb,
   contextBucket,
   errorCode,
   ignore,
+  modelRef,
+  screenName,
+  settingChangeKey,
   languageOnly,
   ms,
+  msSince,
   oneDecimal,
   releaseChannel,
   sizeBucket,
@@ -73,6 +79,10 @@ export interface ModelFacts {
 
 const CRASH_EVENTS = new Set(['$exception', 'unclean_exit']);
 const SNAPSHOT_DAY_KEY = 'offgrid.analytics.snapshotDay';
+const PENDING_SESSION_KEY = 'offgrid.analytics.pendingSession';
+const FIRST_MESSAGE_KEY = 'offgrid.analytics.firstMessageSent';
+/** The open session's counters reach the disk this long after a change, so a crash loses at most this much. */
+const PERSIST_DELAY_MS = 1_000;
 const GB = 1024 * 1024 * 1024;
 const MB = 1024 * 1024;
 const moduleLoadedAt = Date.now();
@@ -84,6 +94,7 @@ let consentChain: Promise<void> = Promise.resolve();
 let stopListening: (() => void) | null = null;
 /** Set by startAnalytics, before any snapshot can run. */
 let featureSnapshot: () => Record<string, boolean>;
+let usageSnapshot: (() => Promise<Properties>) | undefined;
 let foregroundAt = Date.now();
 let ramGb: number | undefined;
 
@@ -151,7 +162,10 @@ async function applyConsent(): Promise<void> {
 
 /** Bring the client in line with the stored consent. Calls run one at a time, in order. */
 function syncClient(): Promise<void> {
-  consentChain = consentChain.then(applyConsent).catch(ignore);
+  consentChain = consentChain
+    .then(applyConsent)
+    .then(refreshSession)
+    .catch(ignore);
   return consentChain;
 }
 
@@ -185,14 +199,21 @@ export function setAnalyticsConsent(
   // Never rejects: a consent change must not surface as an error in the UI that made it.
   return syncClient()
     .then(() => {
-      if (!before.usage && after.usage) capture('analytics_opted_in', { source });
+      if (before.usage || !after.usage) return;
+      capture('analytics_opted_in', { source });
+      // Auto Setup was shown before the person could opt in, so its start was not sent then.
+      if (source === 'setup') replayFlowStart('onboarding');
     })
     .catch(ignore);
 }
 
 /** Called once the app has finished starting and its settings are hydrated. */
-export function startAnalytics(features: () => Record<string, boolean>): () => void {
+export function startAnalytics(
+  features: () => Record<string, boolean>,
+  usage?: () => Promise<Properties>,
+): () => void {
   featureSnapshot = features;
+  usageSnapshot = usage;
   stopListening?.();
   stopListening = useAppStore.subscribe((state, prev) => {
     const now = state.settings;
@@ -202,13 +223,24 @@ export function startAnalytics(features: () => Record<string, boolean>): () => v
     }
     const pro = selectHasProAccess(state);
     if (pro !== selectHasProAccess(prev)) client?.register({ pro });
+    if (now !== was) countSettingChanges(now as unknown as Properties, was as unknown as Properties);
+    if (state.themeMode !== prev.themeMode) countSetting(settingChangeKey('theme', state.themeMode));
+    if (state.activeImageModelId && state.activeImageModelId !== prev.activeImageModelId) {
+      modelSelected('image', state.activeImageModelId);
+    }
+    if (state.activeVideoModelId && state.activeVideoModelId !== prev.activeVideoModelId) {
+      modelSelected('video', state.activeVideoModelId);
+    }
   });
+  setScreenSink({ subScreen: trackSubScreen, sheetShown, sheetHidden });
   foregroundAt = Date.now();
   stopAppState?.();
   const appStateSubscription = AppState.addEventListener('change', onAppStateChange);
   stopAppState = () => appStateSubscription.remove();
+  session = SessionTally.start(Date.now());
   syncClient()
     .then(async () => {
+      await reportPreviousSession();
       capture('app_opened', { cold_start_ms: ms(Date.now() - moduleLoadedAt) });
       const unclean = await takeUncleanExit(appVersion());
       if (unclean) {
@@ -230,6 +262,9 @@ export function startAnalytics(features: () => Record<string, boolean>): () => v
     stopListening = null;
     stopAppState?.();
     stopAppState = null;
+    setInteractionSink(null);
+    setScreenSink(null);
+    cancelPersist();
     const previous = client;
     client = null;
     previous?.close().catch(ignore);
@@ -261,6 +296,8 @@ function onAppStateChange(next: AppStateStatus): void {
 
 function appForegrounded(): void {
   foregroundAt = Date.now();
+  session = SessionTally.start(foregroundAt);
+  if (currentScreen) session.screenViewed(currentScreen, foregroundAt);
   markForeground(true);
   if (currentScreen) screenShownAt = Date.now();
   capture('app_opened');
@@ -272,18 +309,152 @@ function appBackgrounded(): void {
   if (screenShownAt !== null) screenElapsed += Date.now() - screenShownAt;
   screenShownAt = null;
   capture('app_backgrounded', { session_ms: ms(Date.now() - foregroundAt) });
+  endSession();
 }
 
-/** A route name only (never params). */
-export function trackScreen(name: string | undefined): void {
-  if (!name || name === currentScreen) return;
+/** Show a view: the route, a tab inside it (`models:text`) or a sheet over it (`chat:model-selector`). */
+function showView(name: string): void {
+  if (name === currentScreen) return;
   const now = Date.now();
   const shownMs = screenShownAt === null ? 0 : now - screenShownAt;
   const prevMs = currentScreen ? screenElapsed + shownMs : undefined;
   client?.screen(name, { screen: name, prev_screen: currentScreen ?? undefined, prev_ms: ms(prevMs) });
+  if (usageOn()) {
+    session?.screenViewed(name, now);
+    persistSoon();
+  }
   currentScreen = name;
   screenShownAt = now;
   screenElapsed = 0;
+}
+
+/** The route the person is on (never params), in the spec's form: `ProjectDetail` → `project-detail`. */
+let routeScreen: string | null = null;
+/** The route, or the tab shown inside it. */
+let routeView: string | null = null;
+const openSheets: string[] = [];
+
+/** A route name only (never params). */
+export function trackScreen(name: string | undefined): void {
+  const screen = screenName(name);
+  if (!screen || screen === routeScreen) return;
+  routeScreen = screen;
+  routeView = screen;
+  openSheets.length = 0;
+  showView(screen);
+}
+
+/** A tab inside the current route, e.g. the Models screen's tabs: `models:<tab>`. */
+function trackSubScreen(sub: string): void {
+  const part = screenName(sub);
+  if (!routeScreen || !part) return;
+  routeView = `${routeScreen}:${part}`;
+  if (openSheets.length === 0) showView(routeView);
+}
+
+/** A sheet or modal over the current route: `<screen>:<sheet>`. */
+function sheetShown(sheet: string): void {
+  const part = screenName(sheet);
+  if (!routeScreen || !part) return;
+  openSheets.push(part);
+  showView(`${routeScreen}:${part}`);
+}
+
+function sheetHidden(sheet: string): void {
+  const part = screenName(sheet);
+  const index = part ? openSheets.lastIndexOf(part) : -1;
+  if (index < 0) return;
+  openSheets.splice(index, 1);
+  // A sheet opens only over a route, so the route and its view are known here.
+  const top = openSheets[openSheets.length - 1];
+  showView(top ? `${routeScreen}:${top}` : (routeView as string));
+}
+
+// ── session summary ────────────────────────────────────────────────────────────
+
+let session: SessionTally | null = null;
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+function usageOn(): boolean {
+  return client !== null && consent().usage;
+}
+
+/** Taps, long-presses and errors are counted per screen: `<screen>:<id>`. */
+const SCREEN_SCOPED = new Set<SummaryCounter>(['actions', 'long_press', 'errors_shown']);
+
+const sink = {
+  count(counter: SummaryCounter, key: string): void {
+    if (!session) return;
+    const scoped = SCREEN_SCOPED.has(counter) ? `${routeScreen ?? 'app'}:${key}` : key;
+    session.count(counter, scoped, Date.now());
+    persistSoon();
+  },
+  scrolled(pct: ScrollBucket): void {
+    if (session && currentScreen && session.scrolled(currentScreen, pct, Date.now())) persistSoon();
+  },
+};
+
+/** Counters run only while Anonymous stats is on; turning it off forgets the open session's. */
+function refreshSession(): void {
+  if (usageOn()) {
+    setInteractionSink(sink);
+    return;
+  }
+  setInteractionSink(null);
+  if (session) session = SessionTally.start(Date.now());
+  AsyncStorage.removeItem(PENDING_SESSION_KEY).catch(ignore);
+}
+
+function persist(): void {
+  persistTimer = null;
+  if (!session || !usageOn()) return;
+  AsyncStorage.setItem(PENDING_SESSION_KEY, JSON.stringify(session.toJSON())).catch(ignore);
+}
+
+/** One disk write per burst of interactions, not one per tap. */
+function persistSoon(): void {
+  if (persistTimer) return;
+  persistTimer = setTimeout(persist, PERSIST_DELAY_MS);
+}
+
+function cancelPersist(): void {
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = null;
+}
+
+/** The trip to the background closes the session: one `session_summary`, then its counters go. */
+function endSession(): void {
+  const ended = session;
+  session = null;
+  if (ended && usageOn()) capture('session_summary', ended.summary(Date.now()));
+  AsyncStorage.removeItem(PENDING_SESSION_KEY).catch(ignore);
+}
+
+/** On launch: a session the previous launch never closed (it was killed or crashed) is sent now. */
+async function reportPreviousSession(): Promise<void> {
+  const raw = await AsyncStorage.getItem(PENDING_SESSION_KEY).catch(ignore);
+  if (!raw) return;
+  await AsyncStorage.removeItem(PENDING_SESSION_KEY).catch(ignore);
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  const previous = SessionTally.restore(parsed);
+  if (previous && usageOn()) {
+    capture('session_summary', { ...previous.summary(previous.state.lastAt), recovered: true });
+  }
+}
+
+function countSetting(key: string | null): void {
+  if (key && usageOn()) sink.count('settings_changed', key);
+}
+
+function countSettingChanges(now: Properties, was: Properties): void {
+  for (const key of Object.keys(now)) {
+    if (now[key] !== was[key]) countSetting(settingChangeKey(key, now[key]));
+  }
 }
 
 async function snapshotFeaturesDaily(): Promise<void> {
@@ -293,6 +464,9 @@ async function snapshotFeaturesDaily(): Promise<void> {
   if (last === today) return;
   await AsyncStorage.setItem(SNAPSHOT_DAY_KEY, today).catch(ignore);
   capture('features_snapshot', featureSnapshot());
+  // A snapshot that cannot be read is skipped, not sent empty.
+  const usage = usageSnapshot ? await usageSnapshot().catch(ignore) : undefined;
+  if (usage) capture('usage_snapshot', usage);
 }
 
 // ── flows ──────────────────────────────────────────────────────────────────────
@@ -303,6 +477,14 @@ export function flowStarted(flow: Flow, firstStep?: string, properties?: Propert
   flows.set(flow, { startedAt: Date.now() });
   capture('flow_started', { flow });
   if (firstStep) flowStep(flow, firstStep, properties);
+}
+
+/** Send a flow's start again, keeping its clock: it began before the person opted in. */
+function replayFlowStart(flow: Flow): void {
+  const state = flows.get(flow);
+  if (!state) return;
+  capture('flow_started', { flow });
+  if (state.lastStep) capture('flow_step', { flow, step: state.lastStep });
 }
 
 /** A step counts only inside a flow that started. */
@@ -360,8 +542,76 @@ export function messageSent(facts: { hasImage: boolean; hasDocument: boolean; to
     has_document: facts.hasDocument,
     tools_enabled: facts.toolsEnabled,
   });
+  noteFirstMessage();
   flowStep('onboarding', 'first_message');
   flowFinished('onboarding', 'done');
+}
+
+let firstMessageNoted = false;
+
+/** `first_message`: once per launch, the time from launch, and from install for the first ever. */
+function noteFirstMessage(): void {
+  if (firstMessageNoted || !usageOn()) return;
+  firstMessageNoted = true;
+  const now = Date.now();
+  (async () => {
+    const before = await AsyncStorage.getItem(FIRST_MESSAGE_KEY).catch(ignore);
+    const firstEver = !before;
+    if (firstEver) await AsyncStorage.setItem(FIRST_MESSAGE_KEY, '1').catch(ignore);
+    const installedAt = firstEver
+      ? await Promise.resolve()
+          .then(() => DeviceInfo.getFirstInstallTime())
+          .catch(ignore)
+      : undefined;
+    capture('first_message', {
+      since_launch_ms: ms(now - moduleLoadedAt),
+      first_ever: firstEver,
+      since_install_ms: msSince(installedAt, now),
+    });
+  })().catch(ignore);
+}
+
+export type MessageAction = 'copy' | 'edit' | 'delete';
+export type DeletedItem = 'chat' | 'project' | 'document';
+export type VideoAction = 'extend' | 'make_story' | 'save';
+type ModelPickSource =
+  | 'model_picker'
+  | 'models_screen'
+  | 'setup'
+  | 'chat'
+  | 'home'
+  | 'settings'
+  | 'video'
+  | 'unknown';
+
+export function messageAction(action: MessageAction): void {
+  capture('message_action', { action });
+}
+
+export function itemDeleted(item: DeletedItem): void {
+  capture('item_deleted', { item });
+}
+
+/** A video clip's follow-on: Extend, Make it a story, Save. */
+export function videoAction(action: VideoAction): void {
+  capture('video_action', { action });
+}
+
+/** Where the person was when they picked a model, from the screen and any sheet over it. */
+function pickSource(): ModelPickSource {
+  if (openSheets.includes('model-selector')) return 'model_picker';
+  const screen = routeScreen ?? '';
+  if (screen === 'models') return 'models_screen';
+  if (screen === 'onboarding' || screen === 'auto-setup' || screen === 'advanced-setup') return 'setup';
+  if (screen === 'chat' || screen === 'home') return screen;
+  if (screen.startsWith('settings') || screen === 'model-settings') return 'settings';
+  if (screen.startsWith('video') || screen.startsWith('studio')) return 'video';
+  return 'unknown';
+}
+
+/** A model was picked (switched to). Image and video picks are seen on the store; text through here. */
+export function modelSelected(modality: 'text' | 'image' | 'video', modelId: string): void {
+  capture('model_selected', { modality, model: modelRef(modelId), source: pickSource() });
 }
 
 export function documentAdded(extension: string | undefined, sizeBytes: number | undefined): void {

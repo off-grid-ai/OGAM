@@ -1,7 +1,8 @@
 import { videoModelDisplayName } from '../../utils/modelHelpers';
 import { useAppStore } from '../../stores/appStore';
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, ScrollView, Image } from 'react-native';
+import { TouchableOpacity } from '../../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Button,
@@ -40,6 +41,7 @@ import { useHasRegisteredScreen } from '../../navigation/screenRegistry';
 import { useOpenSync } from '../../hooks/useOpenSync';
 import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabels';
 import { openSupportEmail } from '../../utils/supportEmail';
+import { SCROLL_DEPTH_PROPS } from '../../constants/scrollDepth';
 
 type HomeScreenProps = {
   navigation: HomeScreenNavigationProp;
@@ -190,6 +192,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View testID="home-screen" style={styles.scrollView}>
         <ScrollView
+          {...SCROLL_DEPTH_PROPS}
           style={styles.scrollView}
           contentContainerStyle={styles.content}
         >

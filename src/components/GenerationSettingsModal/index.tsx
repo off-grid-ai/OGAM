@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../AppSheet';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -64,6 +65,7 @@ export const GenerationSettingsModal: React.FC<
 
   return (
     <AppSheet
+      sheet="generation-settings"
       visible={visible}
       onClose={onClose}
       snapPoints={['50%', '90%']}

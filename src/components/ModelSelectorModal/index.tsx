@@ -5,7 +5,8 @@ import { SearchTab } from './SearchTab';
 import { proGateShown } from '../../services/analytics/analytics';
 import { ModelSwitchStopped } from '../../services/remoteServerManager';
 import React, { useEffect, useState, useMemo } from 'react';
-import { Text, ScrollView, TouchableOpacity } from 'react-native';
+import { Text, ScrollView } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../AppSheet';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -297,6 +298,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
     isLoading || isLoadingImage || loadingRemoteTextModelKey !== null;
   return (
     <AppSheet
+      sheet="model-selector"
       visible={visible}
       onClose={onClose}
       onClosed={onClosed}

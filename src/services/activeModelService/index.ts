@@ -30,7 +30,7 @@ import {
   estimateTextModelMemoryMB,
 } from './memory';
 import { doLoadTextModel, doLoadImageModel, checkImageModelCanLoad } from './loaders';
-import { trackModelLoad } from '../analytics/analytics';
+import { modelSelected, trackModelLoad } from '../analytics/analytics';
 import { downloadedModelFacts, imageModelFacts } from '../analytics/modelFacts';
 import {
   getResourceUsage as _getResourceUsage,
@@ -113,7 +113,7 @@ class ActiveModelService {
    */
   keepLoadedTextModelSelected(): void {
     const loaded = this.loadedTextModelId;
-    if (loaded && useAppStore.getState().activeModelId !== loaded) this.selectTextModel(loaded);
+    if (loaded && useAppStore.getState().activeModelId !== loaded) this.markSelected(loaded);
   }
   getLoadedModelIds(): {
     textModelId: string | null;
@@ -245,6 +245,11 @@ class ActiveModelService {
    * load-success (loaders), and cleared on load-failure/unload — so it can never drift from reality.
    */
   selectTextModel(modelId: string): void {
+    if (useAppStore.getState().activeModelId !== modelId) modelSelected('text', modelId);
+    this.markSelected(modelId);
+  }
+  /** Record the selection without reporting it: a cancelled switch going back is not a pick. */
+  private markSelected(modelId: string): void {
     const store = useAppStore.getState();
     store.setActiveModelId(modelId);
     store.setLastTextModelId(modelId); // remembered choice → routing reloads it on demand after eviction

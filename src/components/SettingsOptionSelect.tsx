@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from './AppSheet';
 import { SPACING, TYPOGRAPHY } from '../constants';
@@ -47,7 +48,7 @@ export const SettingsOptionSelect: React.FC<SettingsOptionSelectProps> = ({
       </TouchableOpacity>
       {description ? <Text style={styles.description}>{description}</Text> : null}
 
-      <AppSheet visible={open} onClose={() => setOpen(false)} title={`Select ${label}`} enableDynamicSizing>
+      <AppSheet sheet="option-select" visible={open} onClose={() => setOpen(false)} title={`Select ${label}`} enableDynamicSizing>
         <ScrollView contentContainerStyle={styles.options} keyboardShouldPersistTaps="handled">
           {options.map((option) => {
             const active = option.value === value;

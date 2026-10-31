@@ -6,9 +6,9 @@ import {
   FlatList,
   Dimensions,
   Animated,
-  TouchableOpacity,
   Linking,
 } from 'react-native';
+import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import ReanimatedAnimated, {
   useSharedValue,

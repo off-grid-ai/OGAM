@@ -3,11 +3,11 @@ import {
   InputAccessoryView,
   Keyboard,
   Platform,
-  Pressable,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Pressable } from '../Touchable';
 import { AppSheet } from '../AppSheet';
 import { Button } from '../Button';
 import { SPACING, TYPOGRAPHY } from '../../constants';
@@ -83,6 +83,7 @@ export const PasteNoteSheet: React.FC<PasteNoteSheetProps> = ({
 
   return (
     <AppSheet
+      sheet="paste-note"
       visible={visible}
       onClose={close}
       onHeaderClosePress={close}

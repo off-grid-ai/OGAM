@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Image, TouchableOpacity } from 'react-native';
+import { View, Text, Image } from 'react-native';
+import { TouchableOpacity } from '../../components/Touchable';
 import { Button } from '../../components/Button';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedEntry } from '../../components/AnimatedEntry';

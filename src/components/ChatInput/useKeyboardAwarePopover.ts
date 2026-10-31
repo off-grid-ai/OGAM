@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { Keyboard, Dimensions, Platform, StatusBar, TouchableOpacity } from 'react-native';
+import { Keyboard, Dimensions, Platform, StatusBar } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 
 /**
  * Hook that manages keyboard-aware popover positioning.

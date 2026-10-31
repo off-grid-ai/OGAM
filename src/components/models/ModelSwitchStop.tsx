@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import { LoadingDots } from '../LoadingDots';
 import { SPACING, TYPOGRAPHY } from '../../constants';
 import { remoteServerManager } from '../../services/remoteServerManager';

@@ -3,11 +3,10 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
-  Switch,
   Alert,
   Platform,
 } from 'react-native';
+import { TouchableOpacity, Switch } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { LoadingDots } from '../components/LoadingDots';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,6 +35,7 @@ import {
 } from '../services/sync/knowledgeDocumentTransfer';
 import { openDocumentPage } from '../components/ChatDocumentsSheet';
 import { isPickerStuck } from '../utils/pickerErrorUtils';
+import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'KnowledgeBase'>;
@@ -103,7 +103,9 @@ export const KnowledgeBaseScreen: React.FC = () => {
         logger.log('[KnowledgeBase] picker returned empty result');
         return;
       }
-      logger.log(`[KnowledgeBase] picker returned ${files.length} file(s): ${files.map(f => `${f.name} (${f.size}b)`).join(', ')}`);
+      const describe = (f: (typeof files)[number]) => `${f.name} (${f.size}b)`;
+      const picked = files.map(describe).join(', ');
+      logger.log(`[KnowledgeBase] picker returned ${files.length} file(s): ${picked}`);
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -304,7 +306,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
       )}
 
       {isLoading ? (
-        <View style={styles.centered}>
+        <View style={styles.centered} aria-busy>
           <LoadingDots color={colors.primary} size={8} />
         </View>
       ) : kbDocs.length === 0 && arriving.length === 0 ? (
@@ -318,6 +320,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
         </View>
       ) : (
         <FlatList
+          {...SCROLL_DEPTH_PROPS}
           {...LIST_CLIPPING_PROPS}
           data={kbDocs}
           renderItem={renderDoc}

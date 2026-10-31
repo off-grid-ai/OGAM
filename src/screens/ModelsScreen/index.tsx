@@ -1,7 +1,8 @@
 import { EmbeddingModelsTab } from './EmbeddingModelsTab';
 import type { HFSearchResult } from '@offgrid/models';
 import React, { useCallback, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { TouchableOpacity } from '../../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
 import { MainTabParamList } from '../../navigation/types';
@@ -22,6 +23,7 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { checkForNewModels, useModelCatalogStore, withRemoteCatalog, type CatalogCheckResult } from '../../stores/modelCatalogStore';
 import { CatalogCheckSheet } from '../../components/models/CatalogCheckSheet';
 import { proGateShown } from '../../services/analytics/analytics';
+import { SCROLL_DEPTH_PROPS } from '../../constants/scrollDepth';
 
 const MODEL_TABS: ReadonlyArray<{
   key: ModelTab;
@@ -186,6 +188,7 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({
 
         {/* Tab Bar (horizontally scrollable — four tabs don't fit on a phone) */}
         <ScrollView
+          {...SCROLL_DEPTH_PROPS}
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.tabScroller}

@@ -5,7 +5,8 @@
 
 import 'react-native-gesture-handler';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, Pressable, StyleSheet, LogBox } from 'react-native';
+import { View, Text, StyleSheet, LogBox } from 'react-native';
+import { Pressable } from './src/components/Touchable';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -46,6 +47,7 @@ import {
   trackScreen,
 } from './src/services/analytics/analytics';
 import { featureSnapshot } from './src/services/analytics/featureSnapshot';
+import { usageSnapshot } from './src/services/analytics/usageSnapshot';
 
 LogBox.ignoreAllLogs(); // Suppress all logs
 
@@ -385,7 +387,7 @@ function App() {
       setIsInitializing(false);
 
       // Settings are hydrated: analytics starts only now, and only if the person opted in.
-      stopAnalytics = startAnalytics(featureSnapshot);
+      stopAnalytics = startAnalytics(featureSnapshot, usageSnapshot);
 
       // Reconcile downloaded Whisper models against disk at startup. presentModelIds
       // isn't persisted (the filesystem is the source of truth), so it rehydrates

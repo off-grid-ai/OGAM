@@ -47,6 +47,7 @@ export const VoiceModelsSheet: React.FC<Props> = ({
 
   return (
     <AppSheet
+      sheet="voice-models"
       visible={visible}
       onClose={onClose}
       onClosed={onClosed}

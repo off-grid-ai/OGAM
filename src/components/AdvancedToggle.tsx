@@ -1,5 +1,6 @@
 import React from 'react';
-import { TouchableOpacity, Text } from 'react-native';
+import { Text } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
