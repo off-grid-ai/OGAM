@@ -267,7 +267,6 @@
   "__tests__/unit/hooks/useChatModelActions.test.ts": 5,
   "__tests__/unit/hooks/useChatModelStateSync.test.ts": 2,
   "__tests__/unit/hooks/useDownloads.test.ts": 3,
-  "__tests__/unit/hooks/useEjectAllModels.test.ts": 1,
   "__tests__/unit/hooks/useImageGenerationSettings.test.ts": 2,
   "__tests__/unit/hooks/useModelLoading.test.ts": 3,
   "__tests__/unit/hooks/useVoiceRecording.test.ts": 1,

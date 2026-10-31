@@ -21,18 +21,15 @@
  * button appears the moment a model becomes active, which is the entire point of a reactive derivation. Zustand
  * needs no native module (its persistence goes through AsyncStorage, stood in for at the boundary already).
  *
- * The user ejection coordinator is still stood in for: it owns the stop-and-unload journey, and this hook's
- * contract is that it DELEGATES there. Performing native unloads is outside this hook fixture.
+ * The eject itself runs for real: a model is loaded through activeModelService on the phone's fake native engine
+ * (harness/generationDevice), and the hook's eject unloads it through the one owner of that journey.
  */
 import { renderHook, act } from '@testing-library/react-native';
 import { useAppStore, useRemoteServerStore } from '../../../src/stores';
 
-const mockEjectAll = jest.fn(async () => ({ count: 2 }));
-jest.mock('../../../src/services/userModelEjection', () => ({
-  ejectAllModelsForUser: () => mockEjectAll(),
-}));
-
 import { useEjectAllModels } from '../../../src/hooks/useEjectAllModels';
+import { launchGeneration } from '../../harness/generationDevice';
+import { requireRTL } from '../../harness/nativeBoundary';
 
 /** Nothing loaded anywhere - the state a fresh install is in, reached the way the app reaches it. */
 const nothingActive = (): void => {
@@ -45,7 +42,6 @@ const nothingActive = (): void => {
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
   nothingActive();
 });
 
@@ -99,18 +95,38 @@ describe('useEjectAllModels', () => {
     expect(result.current.hasActiveModel).toBe(false);
   });
 
-  it('delegates the unload and reports how many were ejected', async () => {
-    useAppStore.getState().setActiveModelId('gemma');
-    const { result } = renderHook(() => useEjectAllModels());
+  it('ejects what is loaded and reports how many were ejected', async () => {
+    // A model really loaded on the phone, through the app's own load path.
+    const device = await launchGeneration();
+    expect(device.llmService.isModelLoaded()).toBe(true);
+    // The launch started a fresh module graph: render with its React.
+    const rtl = requireRTL();
+    const { useEjectAllModels: useEject } = require('../../../src/hooks/useEjectAllModels');
+    const { result } = rtl.renderHook(() => useEject());
+    expect(result.current.hasActiveModel).toBe(true);
 
     let count = -1;
-    await act(async () => {
+    await rtl.act(async () => {
       count = await result.current.ejectAll();
     });
 
-    // Delegated, not reimplemented: the service owns the unload sequence, and the count shown to the user has to
-    // be the one it reports rather than a guess made here.
-    expect(mockEjectAll).toHaveBeenCalled();
-    expect(count).toBe(2);
+    // The count shown to the user is the number the owner of the unload actually ejected.
+    expect(count).toBe(1);
+    expect(device.llmService.isModelLoaded()).toBe(false);
+  });
+
+  // FINDING (2026-11-01): eject keeps the user's selection by design, but this hook offers Eject All from the
+  // selection, so after everything is ejected the button stays and a second press ejects nothing. The hook should
+  // read what is loaded (the store's loadedTextModelId, plus a loaded-image projection activeModelService does not
+  // publish yet). Marked failing so it turns red, and must be flipped to `it`, when that is fixed.
+  it.failing('stops offering Eject All once everything is really ejected', async () => {
+    await launchGeneration();
+    const rtl = requireRTL();
+    const { useEjectAllModels: useEject } = require('../../../src/hooks/useEjectAllModels');
+    const { result } = rtl.renderHook(() => useEject());
+    await rtl.act(async () => {
+      await result.current.ejectAll();
+    });
+    expect(result.current.hasActiveModel).toBe(false);
   });
 });
