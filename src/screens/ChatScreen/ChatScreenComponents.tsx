@@ -161,8 +161,11 @@ export const EmptyChat: React.FC<{
       <Text style={styles.emptyChatTitle}>Start a Conversation</Text>
     </AnimatedEntry>
     <AnimatedEntry index={2} staggerMs={60}>
-      <Text style={styles.emptyChatText}>
-        Type a message below to begin chatting with {activeModelName || activeModel?.name || 'Unknown'}.
+      <Text style={styles.emptyChatText} testID="empty-chat-hint">
+        {/* With no model chosen yet, no name: never "Unknown". */}
+        {activeModelName || activeModel?.name
+          ? `Type a message below to begin chatting with ${activeModelName || activeModel?.name}.`
+          : 'Type a message below to begin.'}
       </Text>
     </AnimatedEntry>
     <AnimatedEntry index={3} staggerMs={60}>

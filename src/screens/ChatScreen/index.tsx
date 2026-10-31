@@ -94,7 +94,7 @@ export const ChatScreen: React.FC = () => {
   const modelLabels: ModelRowLabels = {
     search: searchLabel,
     video: remoteLabels.video ?? videoLabel,
-    text: chat.activeModelName ?? chat.activeModel?.name ?? '—',
+    text: chat.activeModelName || chat.activeModel?.name || '—',
     image: remoteLabels.image ?? chat.activeImageModel?.name ?? '—',
     voice: remoteLabels.voice ?? voiceSummary ?? '—',
     speech:
