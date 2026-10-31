@@ -23,7 +23,8 @@ export type ZipEntries = Record<string, number>;
 export interface ServedDownload {
   /** The completed file is a zip holding these entries. */
   zip?: ZipEntries;
-  /** The completed file is this many bytes (default: the size the download was started with). */
+  /** The completed file is this many bytes (default: the size the download was started with). For a
+   *  zip or text answer, the size the file system reports for it. */
   bytes?: number;
   /** The completed file is this text (e.g. a zip with a bad header). */
   text?: string;
@@ -36,8 +37,11 @@ export interface ServedDownload {
 export interface ImageDownloadDevice {
   /** Answer downloads of `url` with `served`. */
   serve(url: string, served: ServedDownload): void;
-  /** Write a fake zip holding `entries` at `path`. */
-  seedZip(path: string, entries: ZipEntries): void;
+  /** Write a fake zip holding `entries` at `path` (`reportedSize`: the size the file system reports). */
+  seedZip(path: string, entries: ZipEntries, reportedSize?: number): void;
+  /** A download that finished natively before the app restarted: its row is in the native set as
+   *  completed, and moving it out writes `served`. */
+  seedCompleted(row: { downloadId: string; fileName?: string; modelId?: string }, served: ServedDownload): void;
   /** URLs of every native download started, in start order. */
   startedUrls(): string[];
   /** Finish a held download now (DownloadComplete). */
@@ -65,7 +69,8 @@ export function installImageDownloadDevice(boundary: NativeBoundary): ImageDownl
   const sizeOf = new Map<string, number>();
   const finished = new Set<string>();
 
-  const seedZip = (path: string, entries: ZipEntries) => fs.seedTextFile(path, zipBody(entries));
+  const seedZip = (path: string, entries: ZipEntries, reportedSize?: number) =>
+    fs.seedTextFile(path, zipBody(entries), reportedSize);
 
   const { unzip } = require('react-native-zip-archive') as { unzip: jest.Mock };
   unzip.mockImplementation(async (zipPath: string, destination: string) => {
@@ -117,8 +122,8 @@ export function installImageDownloadDevice(boundary: NativeBoundary): ImageDownl
   download.module.moveCompletedDownload.mockImplementation(async (id: string, target: string) => {
     const answer = served.get(urlOf.get(id) ?? '');
     if (!finished.has(id) || answer?.failReason) throw new Error(`No completed download ${id}`);
-    if (answer?.zip) seedZip(target, answer.zip);
-    else if (answer?.text !== undefined) fs.seedTextFile(target, answer.text);
+    if (answer?.zip) seedZip(target, answer.zip, answer.bytes);
+    else if (answer?.text !== undefined) fs.seedTextFile(target, answer.text, answer.bytes);
     else fs.seedFile(target, answer?.bytes ?? sizeOf.get(id) ?? 1024);
     return target;
   });
@@ -128,6 +133,13 @@ export function installImageDownloadDevice(boundary: NativeBoundary): ImageDownl
       served.set(url, answer);
     },
     seedZip,
+    seedCompleted: (row, answer) => {
+      const url = `native-row:${row.downloadId}`;
+      served.set(url, answer);
+      urlOf.set(row.downloadId, url);
+      finished.add(row.downloadId);
+      download.seedActive({ ...row, status: 'completed' });
+    },
     startedUrls: () => [...started],
     finish: async downloadId => {
       served.set(urlOf.get(downloadId) ?? '', { ...served.get(urlOf.get(downloadId) ?? ''), failReason: undefined });
