@@ -322,7 +322,6 @@
   "__tests__/unit/services/generationToolLoop.branches.test.ts": 7,
   "__tests__/unit/services/hardware.test.ts": 4,
   "__tests__/unit/services/imageDownloadProvider.test.ts": 4,
-  "__tests__/unit/services/imageGenerationHelpers.test.ts": 1,
   "__tests__/unit/services/intentClassifier.test.ts": 2,
   "__tests__/unit/services/liteRTCompaction.test.ts": 3,
   "__tests__/unit/services/litertToolSelector.test.ts": 1,
