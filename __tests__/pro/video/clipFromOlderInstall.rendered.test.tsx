@@ -52,8 +52,7 @@ it('after an update, Extend starts from the clip\'s last frame and Save saves th
   app.models.install(LIGHT);
   rtl.fireEvent.press(await view.findByTestId('video-continue', {}, { timeout: 10_000 }));
   rtl.fireEvent.press(await view.findByTestId('start-picture-use', {}, { timeout: 10_000 }));
-  rtl.fireEvent.press(await view.findByTestId('start-picture-carry-on', {}, { timeout: 15_000 }));
-  rtl.fireEvent.press(await view.findByTestId('extend-go', {}, { timeout: 10_000 }));
+  rtl.fireEvent.press(await view.findByTestId('extend-go', {}, { timeout: 15_000 }));
   await rtl.waitFor(() => expect(app.stories.submissions).toHaveLength(1), { timeout: 15_000 });
   const sent = app.stories.submissions[0] as { init_images: Record<string, string> };
   expect(Object.values(sent.init_images)[0]).toMatch(/^data:image\/png;base64,/);

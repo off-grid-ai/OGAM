@@ -179,11 +179,10 @@ it('uses a start-picture build installed on the computer since the phone last lo
   await tapMutedContinue(current);
   await view.findByText('Extend needs Wan 2.2 (5B), Light. It is on your computer.', {}, { timeout: 10_000 });
   rtl.fireEvent.press(view.getByTestId('start-picture-use'));
-  await view.findByText('Wan 2.2 (5B), Light is ready.', {}, { timeout: 15_000 });
+  // One tap: once the computer switched, Extend asks what happens next by itself.
+  await view.findByTestId('extend-sheet', {}, { timeout: 15_000 });
   expect(models!.pulls).toEqual([]);
   expect(models!.activations).toEqual([DESKTOP_VIDEO_MODEL.id, LIGHT]);
-  rtl.fireEvent.press(view.getByTestId('start-picture-carry-on'));
-  await view.findByTestId('extend-sheet', {}, { timeout: 10_000 });
   await rtl.waitFor(() =>
     expect(view.getAllByTestId('video-continue')[0].props.accessibilityState?.disabled).toBe(false),
   );

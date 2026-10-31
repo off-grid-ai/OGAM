@@ -85,10 +85,13 @@ export async function launchStudioApp(
     imageModel?: boolean;
     /** The phone's native video engine and film composer (a phone build that has them). */
     phoneEngine?: boolean;
+    /** The phone's native background downloader, for a download started on the phone. */
+    download?: boolean;
   } = {},
 ): Promise<StudioApp> {
   const app = await launchApp({
     release: false,
+    download: options.download,
     beforeApp: boundary => {
       if (options.imageModel) placeImageModel(boundary);
       if (options.phoneEngine) require('./nativeVideoEngine').installNativeVideoEngine(boundary);

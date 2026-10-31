@@ -27,8 +27,7 @@ it('Extend asks what happens next, sends the clip\'s last frame with those words
   rtl.fireEvent.press(await view.findByTestId('video-continue'));
   app.stories.hold();
   rtl.fireEvent.press(await view.findByTestId('start-picture-use', {}, { timeout: 10_000 }));
-  // Ready: a tap on Extend asks what happens next before anything starts.
-  rtl.fireEvent.press(await view.findByTestId('start-picture-carry-on', {}, { timeout: 15_000 }));
+  // "Extend on your computer" carries on by itself once the computer switched: it asks what happens next.
   rtl.fireEvent.changeText(await view.findByTestId('extend-prompt', {}, { timeout: 15_000 }), 'the fox leaps over a log');
   expect(app.stories.submissions).toHaveLength(0);
   rtl.fireEvent.press(view.getByTestId('extend-go'));
