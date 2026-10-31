@@ -9,12 +9,9 @@
  * Projects are made the way the user makes them, through the real ProjectEditScreen form, and listed by
  * the real ProjectsScreen over the real persisted store. Only native leaves are faked.
  */
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => ({ params: {} }), // new project (no projectId)
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
+import { withNavigator } from '../../harness/realNavigation';
 
 type Node = { parent?: Node | null; props?: Record<string, unknown> };
 const isInside = (node: Node, ancestor: Node) => {
@@ -33,7 +30,7 @@ describe('projects list search field', () => {
 
     const { ProjectEditScreen } = require('../../../src/screens/ProjectEditScreen');
     for (const name of ['Trip Planning', 'Grocery Lists', 'Reading Notes']) {
-      const form = rtl.render(React.createElement(ProjectEditScreen, {}));
+      const form = rtl.render(withNavigator(React.createElement(ProjectEditScreen, {})));
       rtl.fireEvent.changeText(form.getByPlaceholderText('e.g., Spanish Learning, Code Review'), name);
       rtl.fireEvent.changeText(form.getByPlaceholderText('Enter the instructions or context for the AI...'), `Instructions for ${name}.`);
       rtl.fireEvent.press(form.getByText('Save'));
@@ -41,7 +38,7 @@ describe('projects list search field', () => {
     }
 
     const { ProjectsScreen } = require('../../../src/screens/ProjectsScreen');
-    const list = rtl.render(React.createElement(ProjectsScreen, {}));
+    const list = rtl.render(withNavigator(React.createElement(ProjectsScreen, {})));
     await rtl.waitFor(() => expect(list.getByText('Grocery Lists')).toBeTruthy());
 
     // The field is a bar fixed above the list, not part of what scrolls.

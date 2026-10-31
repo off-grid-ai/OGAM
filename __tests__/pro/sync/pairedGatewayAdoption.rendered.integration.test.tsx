@@ -7,6 +7,7 @@ import { createSyncRuntimeCallbacks } from '../../../pro/sync/syncRuntimeCallbac
 import { SyncEventRegistry } from '../../../pro/sync/syncEventRegistry';
 import { startPairedGatewayAdoption } from '../../../pro/sync/pairedGatewayAdoption';
 import { useSyncStore } from '../../../pro/sync/syncStore';
+import { withNavigator } from '../../harness/realNavigation';
 
 jest.mock('react-native-keychain', () => ({
   ACCESSIBLE: { AFTER_FIRST_UNLOCK: 'AfterFirstUnlock' },
@@ -23,11 +24,8 @@ jest.mock('react-native-keychain', () => ({
     return true;
   },
 }));
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {} }),
-  useIsFocused: () => true,
-  useFocusEffect: () => {},
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 jest.mock('react-native-tcp-socket', () => {
   const { createNativeTcpBoundary } = require('../../utils/nativeSyncBoundaries');
   return { __esModule: true, default: createNativeTcpBoundary() };
@@ -84,7 +82,7 @@ describe('paired Desktop gateway adoption', () => {
       announceLocalRoutes: async () => {},
       clearCredentialAfterRemoteRevocation: async () => {},
     });
-    const view = render(<RemoteServersScreen />);
+    const view = render(withNavigator(<RemoteServersScreen />));
     const stop = startPairedGatewayAdoption();
     try {
       callbacks.onPaired?.(desktop);
