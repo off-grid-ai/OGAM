@@ -942,6 +942,18 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       return this.view;
     },
 
+    /**
+     * Real navigation only: go to one of the app's routes (ModelSettings, StorageSettings, ...) in the
+     * mounted app, as a tap that navigates there does, and return the app's view.
+     */
+    async openScreen(name: string, params?: Record<string, unknown>) {
+      if (!realNav) throw new Error("openScreen needs setupChatScreen({ navigation: 'real' })");
+      await rtl.act(async () => navRef.navigate(name, params));
+      await rtl.waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe(name));
+      this.view = home;
+      return home;
+    },
+
     /** The mounted tree: ChatScreen, plus the app.root slot when pro is active. Fresh elements each call. */
     screenTree(): React.ReactElement {
       const { ChatScreen } = require('../../src/screens/ChatScreen');
@@ -988,8 +1000,9 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
      */
     async newChatViaHome() {
       if (realNav) {
-        // Back to Home in the same app, then its real New Chat button.
-        await rtl.act(async () => navRef.navigate('Main'));
+        // Back to Home with the chat's own Back button, then Home's real New Chat button.
+        rtl.fireEvent.press(home.getByLabelText('Back'));
+        await rtl.waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('HomeTab'));
         rtl.fireEvent.press(await rtl.waitFor(() => home.getByTestId('new-chat-button')));
         await rtl.waitFor(() => {
           expect(navRef.getCurrentRoute()?.name).toBe('Chat');
