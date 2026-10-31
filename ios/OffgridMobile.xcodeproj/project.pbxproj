@@ -22,8 +22,6 @@
 		0ADE3D152F3A0B1200CC5FA1 /* ProblemReportModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0ADE3D112F3A0B1200CC5FA1 /* ProblemReportModule.m */; };
 		0C1A00012F44000100C11A00 /* SyncClipboardModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0C1A00032F44000100C11A00 /* SyncClipboardModule.m */; };
 		0C1A00022F44000100C11A00 /* SyncClipboardModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1A00042F44000100C11A00 /* SyncClipboardModule.swift */; };
-		5C1B00012F44000100C11A00 /* ScribeEntryModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 5C1B00032F44000100C11A00 /* ScribeEntryModule.m */; };
-		5C1B00022F44000100C11A00 /* ScribeEntryModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C1B00042F44000100C11A00 /* ScribeEntryModule.swift */; };
 		0D2B00012F45000100C11A00 /* SyncProximityModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0D2B00032F45000100C11A00 /* SyncProximityModule.m */; };
 		0D2B00022F45000100C11A00 /* SyncProximityModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D2B00042F45000100C11A00 /* SyncProximityModule.swift */; };
 		0E3C00012F46000100C11A00 /* SyncScreenshotModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0E3C00032F46000100C11A00 /* SyncScreenshotModule.m */; };
@@ -41,15 +39,27 @@
 		116F00012F49000100C11A00 /* StreamingHashModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 116F00032F49000100C11A00 /* StreamingHashModule.m */; };
 		116F00022F49000100C11A00 /* StreamingHashModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116F00042F49000100C11A00 /* StreamingHashModule.swift */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		3D7B94A7348783D1DE952D66 /* ImproveShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1EEF614BDEED275300A3DD6D /* ImproveShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		553E18B7CCC207C0885499E4 /* libPods-OffgridMobileTests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D1B1541769AADA563D6CC44E /* libPods-OffgridMobileTests.a */; };
+		5C1B00012F44000100C11A00 /* ScribeEntryModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 5C1B00032F44000100C11A00 /* ScribeEntryModule.m */; };
+		5C1B00022F44000100C11A00 /* ScribeEntryModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C1B00042F44000100C11A00 /* ScribeEntryModule.swift */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		80EE15520A374D84DFA0E523 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		9494970CEC0FCB84321E0E30 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16E1E3F243F209A852249C0E /* ShareViewController.swift */; };
+		97DD2D1E2098E2A67897A8BD /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 89A9465C6CE2C9FA4CF5E01B /* Foundation.framework */; };
 		A084C602C3B4A415DC74D43F /* libPods-OffgridMobile.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3A3BA1A946E10FA48AA4C0EB /* libPods-OffgridMobile.a */; };
 		AABB000100000000000001AA /* OffgridMobileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB000200000000000002AA /* OffgridMobileTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		56E12DDA6CF558090D957E38 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 25FE75D44CAFB00491050598;
+			remoteInfo = ImproveShare;
+		};
 		AABB00010000000000001004 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
@@ -58,6 +68,20 @@
 			remoteInfo = OffgridMobile;
 		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		ABBDDFB99247F86B6ADD6F64 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				3D7B94A7348783D1DE952D66 /* ImproveShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		049521632F390D4500AA4EB4 /* CoreMLDiffusionModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CoreMLDiffusionModule.m; sourceTree = "<group>"; };
@@ -74,8 +98,6 @@
 		0ADE3D112F3A0B1200CC5FA1 /* ProblemReportModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ProblemReportModule.m; sourceTree = "<group>"; };
 		0C1A00032F44000100C11A00 /* SyncClipboardModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SyncClipboardModule.m; sourceTree = "<group>"; };
 		0C1A00042F44000100C11A00 /* SyncClipboardModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncClipboardModule.swift; sourceTree = "<group>"; };
-		5C1B00032F44000100C11A00 /* ScribeEntryModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ScribeEntryModule.m; sourceTree = "<group>"; };
-		5C1B00042F44000100C11A00 /* ScribeEntryModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScribeEntryModule.swift; sourceTree = "<group>"; };
 		0D2B00032F45000100C11A00 /* SyncProximityModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SyncProximityModule.m; sourceTree = "<group>"; };
 		0D2B00042F45000100C11A00 /* SyncProximityModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncProximityModule.swift; sourceTree = "<group>"; };
 		0E3C00032F46000100C11A00 /* SyncScreenshotModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SyncScreenshotModule.m; sourceTree = "<group>"; };
@@ -96,11 +118,17 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = OffgridMobile/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = OffgridMobile/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = OffgridMobile/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		16E1E3F243F209A852249C0E /* ShareViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		1E81136746EFB32307BF8F4D /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		1EEF614BDEED275300A3DD6D /* ImproveShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ImproveShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2BD3167161334CCC189096E3 /* Pods-OffgridMobile.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OffgridMobile.debug.xcconfig"; path = "Target Support Files/Pods-OffgridMobile/Pods-OffgridMobile.debug.xcconfig"; sourceTree = "<group>"; };
 		37BD4C6C3858A907C678B5B4 /* Pods-OffgridMobile.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OffgridMobile.release.xcconfig"; path = "Target Support Files/Pods-OffgridMobile/Pods-OffgridMobile.release.xcconfig"; sourceTree = "<group>"; };
 		3A3BA1A946E10FA48AA4C0EB /* libPods-OffgridMobile.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-OffgridMobile.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		5C1B00032F44000100C11A00 /* ScribeEntryModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ScribeEntryModule.m; sourceTree = "<group>"; };
+		5C1B00042F44000100C11A00 /* ScribeEntryModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScribeEntryModule.swift; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = OffgridMobile/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = OffgridMobile/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		89A9465C6CE2C9FA4CF5E01B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		AABB000200000000000002AA /* OffgridMobileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OffgridMobileTests.swift; sourceTree = "<group>"; };
 		AABB000400000000000004AA /* OffgridMobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OffgridMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B9DE36A1FFE10AF8CD81DBD2 /* Pods-OffgridMobileTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OffgridMobileTests.release.xcconfig"; path = "Target Support Files/Pods-OffgridMobileTests/Pods-OffgridMobileTests.release.xcconfig"; sourceTree = "<group>"; };
@@ -116,6 +144,14 @@
 			files = (
 				04B9D63D2F38E6C400F1A435 /* StableDiffusion in Frameworks */,
 				A084C602C3B4A415DC74D43F /* libPods-OffgridMobile.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2B13E96E1164BA9ACE6D3244 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				97DD2D1E2098E2A67897A8BD /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -179,8 +215,17 @@
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
 				3A3BA1A946E10FA48AA4C0EB /* libPods-OffgridMobile.a */,
 				D1B1541769AADA563D6CC44E /* libPods-OffgridMobileTests.a */,
+				4908E046D3EA7BAF51F2FB88 /* iOS */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		4908E046D3EA7BAF51F2FB88 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				89A9465C6CE2C9FA4CF5E01B /* Foundation.framework */,
+			);
+			name = iOS;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -199,6 +244,7 @@
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				BBD78D7AC51CEA395F1C20DB /* Pods */,
+				EF6C75DA23AE56C384E3038B /* ImproveShare */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -210,6 +256,7 @@
 			children = (
 				13B07F961A680F5B00A75B9A /* OffgridMobile.app */,
 				AABB000400000000000004AA /* OffgridMobileTests.xctest */,
+				1EEF614BDEED275300A3DD6D /* ImproveShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -232,6 +279,16 @@
 				B9DE36A1FFE10AF8CD81DBD2 /* Pods-OffgridMobileTests.release.xcconfig */,
 			);
 			path = Pods;
+			sourceTree = "<group>";
+		};
+		EF6C75DA23AE56C384E3038B /* ImproveShare */ = {
+			isa = PBXGroup;
+			children = (
+				16E1E3F243F209A852249C0E /* ShareViewController.swift */,
+				1E81136746EFB32307BF8F4D /* Info.plist */,
+			);
+			name = ImproveShare;
+			path = ImproveShare;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -264,6 +321,7 @@
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
+				ABBDDFB99247F86B6ADD6F64 /* Embed Foundation Extensions */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				2D83A9C9D5ACE879F7072709 /* [CP] Embed Pods Frameworks */,
 				DADC570D62064073AFEE927B /* [CP] Copy Pods Resources */,
@@ -271,11 +329,29 @@
 			buildRules = (
 			);
 			dependencies = (
+				E2CDAE8CE437AA3F81D3BBEC /* PBXTargetDependency */,
 			);
 			name = OffgridMobile;
 			productName = OffgridMobile;
 			productReference = 13B07F961A680F5B00A75B9A /* OffgridMobile.app */;
 			productType = "com.apple.product-type.application";
+		};
+		25FE75D44CAFB00491050598 /* ImproveShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 615568B97EC6D81297FC09A9 /* Build configuration list for PBXNativeTarget "ImproveShare" */;
+			buildPhases = (
+				E0E86F31742216D82D9B65C7 /* Sources */,
+				2B13E96E1164BA9ACE6D3244 /* Frameworks */,
+				CFB8827C2E64EB3DE97C3E5C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ImproveShare;
+			productName = ImproveShare;
+			productReference = 1EEF614BDEED275300A3DD6D /* ImproveShare.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -311,6 +387,7 @@
 			targets = (
 				13B07F861A680F5B00A75B9A /* OffgridMobile */,
 				00E356ED1AD99517003FC87E /* OffgridMobileTests */,
+				25FE75D44CAFB00491050598 /* ImproveShare */,
 			);
 		};
 /* End PBXProject section */
@@ -329,6 +406,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		AABB000900000000000009AA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CFB8827C2E64EB3DE97C3E5C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -481,6 +565,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E0E86F31742216D82D9B65C7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9494970CEC0FCB84321E0E30 /* ShareViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -488,6 +580,12 @@
 			isa = PBXTargetDependency;
 			target = 13B07F861A680F5B00A75B9A /* OffgridMobile */;
 			targetProxy = AABB00010000000000001004 /* PBXContainerItemProxy */;
+		};
+		E2CDAE8CE437AA3F81D3BBEC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ImproveShare;
+			target = 25FE75D44CAFB00491050598 /* ImproveShare */;
+			targetProxy = 56E12DDA6CF558090D957E38 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -555,6 +653,27 @@
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
+		};
+		5573C75EC953DD322B62FA12 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1793102561;
+				DEVELOPMENT_TEAM = 84V6KCAC49;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ImproveShare/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.0.119;
+				PRODUCT_BUNDLE_IDENTIFIER = ai.offgridmobile.dev.ImproveShare;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
 		};
 		83CBBA201A601CBA00E9B192 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -730,6 +849,28 @@
 			};
 			name = Release;
 		};
+		BC84512968B1B06F02F66948 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1793102561;
+				DEVELOPMENT_TEAM = 84V6KCAC49;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ImproveShare/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.0.119;
+				PRODUCT_BUNDLE_IDENTIFIER = ai.offgridmobile.ImproveShare;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -738,6 +879,15 @@
 			buildConfigurations = (
 				13B07F941A680F5B00A75B9A /* Debug */,
 				13B07F951A680F5B00A75B9A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		615568B97EC6D81297FC09A9 /* Build configuration list for PBXNativeTarget "ImproveShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BC84512968B1B06F02F66948 /* Release */,
+				5573C75EC953DD322B62FA12 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
