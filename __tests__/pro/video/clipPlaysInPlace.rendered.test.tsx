@@ -22,7 +22,7 @@ const CARD = 'chat-clip-card';
 /** A Text's words, whether one string or several parts. */
 const textOf = (text: ReactTestInstance) => ([] as unknown[]).concat(text.props.children).join('');
 
-it('plays in the card with pause, time, scrubber and mute; full screen opens at the same second', async () => {
+it('plays in the card with pause, time, scrubber and mute; full screen opens at the same second, muted as the card was', async () => {
   const app = await launchStudioApp();
   const { view, rtl } = app;
   await makeClipInChat(app, 'a paper boat drifting on a pond');
@@ -58,9 +58,11 @@ it('plays in the card with pause, time, scrubber and mute; full screen opens at 
   rtl.fireEvent(view.getByTestId(`scrubber-${CARD}`), 'onSlidingComplete', 1);
   expect(textOf(view.getByTestId(`time-${CARD}`))).toMatch(/^0:01 \/ /);
 
-  // Full screen opens at that second, and the card stops so the clip does not play twice.
+  // Full screen opens at that second, muted as the card was, and the card stops so the clip does not play twice.
+  rtl.fireEvent.press(view.getByTestId(`mute-${CARD}`));
   rtl.fireEvent.press(view.getByTestId(`expand-${CARD}`));
   await view.findByTestId('video-viewer', {}, { timeout: 10_000 });
+  expect(view.getByTestId('clip-viewer').props.muted).toBe(true);
   expect(textOf(view.getByTestId('time-viewer'))).toMatch(/^0:01 \/ /);
   // The chat sits under full screen, hidden from the reader, still mounted.
   await rtl.waitFor(() =>
@@ -68,15 +70,31 @@ it('plays in the card with pause, time, scrubber and mute; full screen opens at 
   );
 }, 60_000);
 
-it("More on the card offers what full screen offers: Extend, Save and Delete", async () => {
+it('More on the card is a list of what full screen offers: Extend, Save, Share, then Delete', async () => {
   const app = await launchStudioApp();
   const { view, rtl } = app;
   await makeClipInChat(app, 'a paper boat drifting on a pond');
 
   rtl.fireEvent.press(view.getByTestId(`more-${CARD}`));
-  const sheet = await view.findByTestId('app-alert');
-  for (const action of ['Extend', 'Save', 'Delete']) expect(rtl.within(sheet).getByText(action)).toBeTruthy();
+  const sheet = await view.findByTestId('clip-actions');
+  const rows = rtl.within(sheet).getAllByRole('button').map(row => row.props.testID);
+  expect(rows).toEqual(['continue', 'save', 'share', 'delete'].map(action => `sheet-card-${CARD}-${action}`));
   expect(view.queryByTestId('video-viewer')).toBeNull();
+
+  // Share hands the clip's own file to the system share sheet, once the sheet has closed.
+  rtl.fireEvent.press(view.getByTestId(`sheet-card-${CARD}-share`));
+  const { NativeModules } = require('react-native');
+  await rtl.waitFor(() => expect(NativeModules.MediaShareModule.shareFile).toHaveBeenCalledTimes(1));
+  const [path, mime] = NativeModules.MediaShareModule.shareFile.mock.calls[0];
+  const { useAppStore } = require('../../../src/stores');
+  expect(path.endsWith(useAppStore.getState().generatedVideos[0].videoPath.split('/').pop())).toBe(true);
+  expect(mime).toBe('video/mp4');
+
+  // A row runs once the sheet has closed: Delete asks first.
+  rtl.fireEvent.press(view.getByTestId(`more-${CARD}`));
+  await view.findByTestId('clip-actions');
+  rtl.fireEvent.press(view.getByTestId(`sheet-card-${CARD}-delete`));
+  await rtl.waitFor(() => expect(app.dialog()?.title).toBe('Delete this video?'));
 }, 60_000);
 
 it('one clip plays at a time: starting the second card pauses the first', async () => {
