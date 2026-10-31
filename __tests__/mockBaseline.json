@@ -181,7 +181,6 @@
   "__tests__/rntl/screens/DeviceInfoScreen.test.tsx": 6,
   "__tests__/rntl/screens/DownloadManagerScreen.test.tsx": 9,
   "__tests__/rntl/screens/GalleryScreen.test.tsx": 8,
-  "__tests__/rntl/screens/LockScreen.test.tsx": 8,
   "__tests__/rntl/screens/ModelDownloadHelpers.test.tsx": 6,
   "__tests__/rntl/screens/NoModelScreen.test.tsx": 2,
   "__tests__/rntl/screens/OnboardingScreen.test.tsx": 7,
