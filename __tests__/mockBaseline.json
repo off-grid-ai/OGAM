@@ -312,7 +312,6 @@
   "__tests__/unit/services/providers/openAICompatibleStream.test.ts": 2,
   "__tests__/unit/services/providers/registry.test.ts": 2,
   "__tests__/unit/services/remoteServerManager.test.ts": 3,
-  "__tests__/unit/services/repairVisionProgress.test.ts": 1,
   "__tests__/unit/services/startModelDownload.test.ts": 4,
   "__tests__/unit/services/sttDownloadProvider.test.ts": 3,
   "__tests__/unit/services/tools/EmailCalendarExtension.test.ts": 1,
