@@ -18,15 +18,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('T062 (voice-mode) — resend of an image request re-draws, not text (DEV-B33)', () => {
   it('re-runs the IMAGE pipeline on resend of a VOICE-sent "draw a dog" (does not load the text model)', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android', whisper: true, pro: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android', whisper: true, pro: true });
 
     // Download + select an STT model (via its real screen) BEFORE mounting ChatScreen so the audio-mode mic
     // is available. Done pre-mount because it renders its own throwaway screen.

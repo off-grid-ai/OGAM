@@ -19,18 +19,15 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const REASONING = 'The user said Hi, a simple greeting, so I should respond in a friendly manner.';
 const ANSWER = 'Hello! How can I help you today?';
 
 describe('tool turn reasoning renders (rendered) — device log 21:11', () => {
   it('shows gemma reasoning in the thinking block, with NO <|channel> leak into the answer', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.enableToolViaUI('calculator');                              // real toggle → the turn runs the TOOL loop
     h.useAppStore.getState().updateSettings({ thinkingEnabled: true });
     h.render();

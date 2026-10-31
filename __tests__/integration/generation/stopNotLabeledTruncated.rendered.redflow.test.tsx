@@ -12,17 +12,14 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const CUTOFF = /Reply cut off at the token limit/i;
 
 describe('stop is not labeled "cut off at the token limit" (rendered) — device IMG_0162', () => {
   it('a STOPPED turn shows NO truncation warning', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.enableGenerationDetailsViaUI(); // meta + truncation warning render (details were ON on device)
     h.render();
     const { rtl } = h;
@@ -43,7 +40,7 @@ describe('stop is not labeled "cut off at the token limit" (rendered) — device
   });
 
   it('falsify: a genuine n_predict cap-hit IS labeled "cut off at the token limit"', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.enableGenerationDetailsViaUI();
     h.render();
     const { rtl } = h;

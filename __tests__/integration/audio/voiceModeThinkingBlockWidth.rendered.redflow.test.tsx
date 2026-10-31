@@ -6,15 +6,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('T086 (rendered) — voice-mode reasoning belongs to one completed Work parent', () => {
   it('opens one Work parent to show reasoning beside the final voice note', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android', whisper: true, pro: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android', whisper: true, pro: true });
     await h.setupWhisperModel();
     h.render();
     await h.enterVoiceMode();

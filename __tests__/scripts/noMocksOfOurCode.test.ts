@@ -1,7 +1,7 @@
 /**
  * Tests run our own code for real; only the device boundary is faked.
  *
- * SPEC (docs/test-audit/mobile-a.md): a test file may not `jest.mock` / `jest.doMock` a module of ours,
+ * SPEC (docs/test-audit/mobile-a.md): no test file, harness, helper, fixture or Jest setup file may `jest.mock` / `jest.doMock` a module of ours,
  * nor `jest.spyOn` one. "Ours" is any relative path, `@/…`, a `src/…` path, `@offgrid/…` (core, pro,
  * the shared packages), and `@react-navigation/native` (stubbing it fakes our navigation: routes, focus,
  * navigate). Everything else is the device boundary and may be faked: native modules (llama.rn,
@@ -31,8 +31,14 @@ export function isOurs(specifier: string): boolean {
   );
 }
 
+/** Source with its comments removed: a usage example in a doc comment mocks nothing. */
+function withoutComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+}
+
 /** Each mock or spy of our code in one test file's source, as `mock <specifier>` / `spyOn <name>`. */
-export function mocksOfOurs(source: string): string[] {
+export function mocksOfOurs(text: string): string[] {
+  const source = withoutComments(text);
   const found: string[] = [];
   for (const match of source.matchAll(/jest\.(?:mock|doMock)\(\s*(['"`])([^'"`]+)\1/g)) {
     if (isOurs(match[2])) found.push(`mock ${match[2]}`);
@@ -62,13 +68,15 @@ function testFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) return entry.name === 'node_modules' ? [] : testFiles(full);
-    return /\.test\.(ts|tsx)$/.test(entry.name) ? [full] : [];
+    return /\.(ts|tsx|js|mjs)$/.test(entry.name) ? [full] : [];
   });
 }
 
 function scan(): Record<string, number> {
   const counts: Record<string, number> = {};
-  for (const file of testFiles(path.join(ROOT, '__tests__'))) {
+  // Every file a test runs: the tests, their harnesses, helpers and fixtures, and Jest's setup file. A
+  // harness that mocks our code makes every test that uses it a mockist test.
+  for (const file of [...testFiles(path.join(ROOT, '__tests__')), path.join(ROOT, 'jest.setup.ts')]) {
     const relative = path.relative(ROOT, file);
     // This file names the rule's patterns in its own source; it mocks nothing.
     if (relative === path.relative(ROOT, __filename)) continue;

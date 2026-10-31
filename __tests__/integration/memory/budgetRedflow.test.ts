@@ -15,7 +15,7 @@ describe('memory budget — red-flow (correct behavior; currently RED due to the
   // M1 — with only 640MB free, a DIRTY image load must first evict the clean
   // text model. Co-residency is safe only when live RAM supports the allocation.
   it('M1: image generation evicts text before allocating dirty memory at 640MB free', async () => {
-    setDeviceMemory({ platform: 'android', totalGB: 12, availGB: gbOf(640) });
+    await setDeviceMemory({ platform: 'android', totalGB: 12, availGB: gbOf(640) });
     makeResident({ key: 'text', type: 'text', modelId: 'gemma', sizeMB: 5235, dirtyMemory: false });
 
     const { fits, evicted } = await modelResidencyManager.makeRoomFor({
@@ -38,7 +38,7 @@ describe('memory budget — red-flow (correct behavior; currently RED due to the
   // we evict everything else and load, with NO survival floor and NO refusal. The UI frames
   // it as "not recommended, but you can try" — if the user wants to load anyway, we let them.
   it('M3: Load-Anyway a 7900MB dirty model with 665MB truly free on Android LOADS (override never refuses)', async () => {
-    setDeviceMemory({ platform: 'android', totalGB: 12, availGB: gbOf(665) });
+    await setDeviceMemory({ platform: 'android', totalGB: 12, availGB: gbOf(665) });
 
     const { fits } = await modelResidencyManager.makeRoomFor(
       { key: 'text', type: 'text', modelId: 'big', sizeMB: 7900, dirtyMemory: true },
@@ -50,7 +50,7 @@ describe('memory budget — red-flow (correct behavior; currently RED due to the
 
   // Q15 — ensureResident must HONOR the fits verdict, not load anyway (the STT/OOM bug class).
   it('Q15: ensureResident does NOT call load() when the model does not fit', async () => {
-    setDeviceMemory({ platform: 'ios', totalGB: 12, availGB: gbOf(500) });
+    await setDeviceMemory({ platform: 'ios', totalGB: 12, availGB: gbOf(500) });
     modelResidencyManager.setBudgetOverrideMB(1000); // force a tiny budget → nothing big fits
     const load = jest.fn().mockResolvedValue(undefined);
     const unload = jest.fn().mockResolvedValue(undefined);
