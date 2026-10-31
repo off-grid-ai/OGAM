@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What MediaShareModule may hand to another app: files the app made, in its own files directory. -->
+<paths>
+  <files-path name="media" path="." />
+</paths>
