@@ -360,7 +360,7 @@ class LLMService {
     return { lastTruncated: end === 'token-limit', lastEndedEarly: end === 'ended-early' };
   }
   getLoadedModelPath(): string | null { return this.currentModelPath; }
-  async generateResponse(messages: Message[], options?: { onStream?: StreamCallback; onComplete?: CompleteCallback; disableThinking?: boolean }): Promise<string> {
+  async generateResponse(messages: Message[], options?: { onStream?: StreamCallback; onComplete?: CompleteCallback; disableThinking?: boolean; maxTokens?: number }): Promise<string> {
     const { onStream, onComplete, ...opts } = options ?? {};
     const ctx = this.usableContext();
     if (this.isGenerating) throw new Error('Generation already in progress');
@@ -381,7 +381,9 @@ class LLMService {
       // regardless of the global thinkingEnabled — a rewrite is not a reasoning task, and
       // letting it think leaked "Thinking Process:..." into the enhanced prompt (B30).
       const thinkingOn = this.isThinkingEnabled() && !opts?.disableThinking;
-      const completionParams = { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift() }), ...buildThinkingCompletionParams(thinkingOn, this.isGemma4Model(), settings.reasoningBudget) };
+      // A utility caller may need more room than the chat setting (a model that thinks before a rewrite).
+      const completionSettings = opts?.maxTokens ? { ...settings, maxTokens: opts.maxTokens } : settings;
+      const completionParams = { messages: oaiMessages, ...buildCompletionParams(completionSettings, { disableCtxShift: this.shouldDisableCtxShift() }), ...buildThinkingCompletionParams(thinkingOn, this.isGemma4Model(), settings.reasoningBudget) };
       logger.log(`[LLM][THINKING] thinkingSupported=${this.thinkingSupported}, thinkingEnabled=${useAppStore.getState().settings.thinkingEnabled}, isThinkingEnabled=${this.isThinkingEnabled()}, enable_thinking=${(completionParams as any).enable_thinking}, reasoning_format=${(completionParams as any).reasoning_format}`);
       logger.log(`[WIRE-LLAMA-PARAMS] ${JSON.stringify({ model: this.currentModelPath, params: { ...completionParams, messages: undefined } })}`); // [WIRE] settings→native params (temp/thinking/etc), messages elided
       const completionResult = await safeCompletion(ctx, () => ctx.completion(completionParams, (data: any) => {
