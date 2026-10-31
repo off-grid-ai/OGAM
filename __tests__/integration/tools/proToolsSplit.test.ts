@@ -31,10 +31,6 @@ import {
   _clearScreensForTesting,
 } from '../../../src/navigation/screenRegistry';
 
-let mockEnabledTools: string[] = [];
-jest.mock('@offgrid/core/stores', () => ({
-  useAppStore: { getState: () => ({ settings: { enabledTools: mockEnabledTools } }) },
-}));
 jest.mock('react-native-calendar-events', () => ({
   __esModule: true,
   default: { saveEvent: jest.fn(), requestPermissions: jest.fn(), fetchAllEvents: jest.fn() },
@@ -71,7 +67,6 @@ maybe('free vs pro tool split (integration)', () => {
   beforeEach(() => {
     _clearExtensionsForTesting();
     _clearScreensForTesting();
-    mockEnabledTools = [];
   });
   afterEach(() => {
     _clearExtensionsForTesting();

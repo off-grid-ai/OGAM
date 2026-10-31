@@ -30,9 +30,6 @@ import {
 
 // The file player decodes real audio files off a native module — a genuine
 // native/IO boundary. Return a stable empty waveform so decode never runs.
-jest.mock('@offgrid/pro/audio/audioFilePlayer', () => ({
-  decodeFileWaveform: jest.fn(async () => [] as number[]),
-}));
 
 const baseProps: Omit<MessageAudioModeProps, 'msg'> = {
   isStreamingThis: false,
