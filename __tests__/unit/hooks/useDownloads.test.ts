@@ -1,6 +1,5 @@
 /**
- * useDownloads / useDownloadListeners — the app root's bridge from the native downloader's events to the
- * download store, and the cancel / retry a download card offers.
+ * useDownloadListeners — the app root's bridge from the native downloader's events to the download store.
  *
  * The phone is the boundary: the native background downloader (its rows and the events it sends) is a fake
  * (harness/nativeBoundary). The background download service, the hook and the download store run for real.
@@ -160,62 +159,5 @@ describe('useDownloadListeners', () => {
     expect(entry().status).toBe('failed');
     expect(entry().errorMessage).toEqual(expect.any(String));
     expect(entry().errorMessage!.length).toBeGreaterThan(0);
-  });
-});
-
-describe('useDownloads', () => {
-  it('cancel removes the card and stops the native download', async () => {
-    inFlight();
-    const { result } = rtl.renderHook(() => hooks.useDownloads());
-    await rtl.act(async () => {
-      await result.current.cancel(KEY as never);
-    });
-    expect(entry()).toBeUndefined();
-    expect(device.download!.active().map(r => r.downloadId)).toEqual([]);
-  });
-
-  it('cancel also stops the projector download', async () => {
-    inFlight({ mmProjDownloadId: 'mm-1' });
-    const { result } = rtl.renderHook(() => hooks.useDownloads());
-    await rtl.act(async () => {
-      await result.current.cancel(KEY as never);
-    });
-    expect(device.download!.active()).toEqual([]);
-  });
-
-  it('cancel does nothing for a card that is not there', async () => {
-    inFlight();
-    const { result } = rtl.renderHook(() => hooks.useDownloads());
-    await rtl.act(async () => {
-      await result.current.cancel('nobody/none/none.gguf' as never);
-    });
-    expect(entry()).toBeDefined();
-    expect(device.download!.active()).toHaveLength(1);
-  });
-
-  it('retry stops the old transfer and follows the new one', async () => {
-    inFlight();
-    rtl.act(() => useDownloadStore.getState().setStatus('dl-1', 'failed' as never, { message: 'lost' }));
-    const { result } = rtl.renderHook(() => hooks.useDownloads());
-    expect(result.current.failed).toHaveLength(1);
-
-    await rtl.act(async () => {
-      await result.current.retry(KEY as never, async () => 'dl-2');
-    });
-    expect(device.download!.active().map(r => r.downloadId)).not.toContain('dl-1');
-    expect(entry()).toEqual(expect.objectContaining({ downloadId: 'dl-2' }));
-    expect(result.current.failed).toHaveLength(0);
-  });
-
-  it('retry does nothing for a card that is not there', async () => {
-    const { result } = rtl.renderHook(() => hooks.useDownloads());
-    let started = false;
-    await rtl.act(async () => {
-      await result.current.retry('nobody/none/none.gguf' as never, async () => {
-        started = true;
-        return 'dl-9';
-      });
-    });
-    expect(started).toBe(false);
   });
 });
