@@ -343,6 +343,9 @@ export interface LlamaCompletionScript {
   thinkingText?: string;
   reasoning?: string;
   completionMeta?: CompletionMeta;
+  /** Model the n_predict cap: the output stops after n_predict × charsPerToken characters, without
+   *  EOS, as a device does when the budget runs out. Unset: the whole text comes back. */
+  charsPerToken?: number;
 }
 
 /** The backend a context was initialised on, read off the initLlama params as llama.rn reads them:
@@ -563,10 +566,14 @@ function makeLlamaFake(
         // Device-faithful: a reasoning model emits its reasoning-style output when thinking is on. If the
         // caller left enable_thinking on for a request that shouldn't reason (B30 enhancement), it gets the
         // reasoning dump; disabling thinking yields the clean text. Emergent from the caller's own decision.
-        const outText =
+        const fullText =
           wantsThinking && scripted.thinkingText != null
             ? scripted.thinkingText
             : scripted.text;
+        const nPredict = (params as { n_predict?: number })?.n_predict;
+        const cap = scripted.charsPerToken && nPredict ? nPredict * scripted.charsPerToken : Infinity;
+        const hitCap = !!fullText && [...fullText].length > cap;
+        const outText = hitCap ? [...fullText!].slice(0, cap).join('') : fullText;
         let streamed = '';
         if (outText && typeof onToken === 'function') {
           // Char-by-char streaming so a pauseAfter lands EXACTLY (never spanning a delimiter like </think>).
@@ -604,7 +611,9 @@ function makeLlamaFake(
         if (scripted.throwAfter) throw new Error(scripted.throwAfter);
         // Defaults model a NORMAL complete turn (stopped on EOS, under the cap); a scripted completionMeta
         // overrides them to model a truncated turn (B15: stopped_eos=false, stopped_limit=1 at n_predict).
-        const meta = scripted.completionMeta ?? {};
+        const meta: CompletionMeta = hitCap
+          ? { stopped_eos: false, stopped_limit: 1, truncated: true, tokens_predicted: nPredict, ...scripted.completionMeta }
+          : scripted.completionMeta ?? {};
         // An aborted completion carries the device wire shape: interrupted=true, no EOS, and only
         // what streamed before the stop (tool_calls are dropped — the turn never finished them).
         if (stopRequested) {

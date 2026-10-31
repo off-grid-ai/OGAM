@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">Off Grid AI</string>
     <string name="process_text_action_label">Copy to Off Grid AI</string>
+    <string name="improve_text_action_label">Improve</string>
 </resources>

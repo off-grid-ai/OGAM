@@ -318,6 +318,7 @@ export async function stopStandalone(): Promise<void> {
 export async function generateStandalone(
   messages: Message[],
   onToken?: (token: string) => void,
+  options: { maxTokens?: number } = {},
 ): Promise<string> {
   // Remote/gateway text model active with no local engine loaded: enhancement used to
   // fall through to the (unloaded) local llama and throw, so it was silently skipped
@@ -336,7 +337,7 @@ export async function generateStandalone(
       let content = '';
       await provider.generate(
         messages,
-        { enableThinking: false },
+        { enableThinking: false, maxTokens: options.maxTokens },
         {
           onToken: (t: string) => { content += t; onToken?.(t); },
           onComplete: (result) => { if (result?.content) content = result.content; },
@@ -370,5 +371,6 @@ export async function generateStandalone(
   return trackStandalone(() => llmService.stopGeneration(), () => llmService.generateResponse(messages, {
     onStream: onToken ? (data) => { if (typeof (data as { content?: string })?.content === 'string') onToken((data as { content: string }).content); } : () => {},
     disableThinking: true,
+    maxTokens: options.maxTokens,
   }));
 }

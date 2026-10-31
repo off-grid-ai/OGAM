@@ -406,6 +406,14 @@ const MIC_GRANT = {
 
 const WAIT = { timeout: 8000 };
 
+/** What the composer shows: its value, or (with Scribe's underlines) the text of its children. */
+function composerText(node: { props: { value?: string }; children: unknown[] }): string {
+  if (typeof node.props.value === 'string') return node.props.value;
+  return node.children
+    .map(child => (typeof child === 'string' ? child : composerText(child as typeof node)))
+    .join('');
+}
+
 describe('an install upgraded from v0.0.119', () => {
   let databases: string;
   beforeEach(() => {
@@ -532,7 +540,7 @@ describe('an install upgraded from v0.0.119', () => {
 
     // ── The old Whisper model still loads and transcribes: hold the mic, speak, the words land in the box.
     const input = await view.findByTestId('chat-input', {}, WAIT);
-    expect(input.props.value ?? '').toBe('');
+    expect(composerText(input)).toBe('');
     const mic = await waitFor(() => view.getByTestId('voice-record-button'), WAIT);
     expect(mic.props.accessibilityLabel).toBe('Start voice recording');
     fireEvent(mic, 'responderGrant', MIC_GRANT);
@@ -544,7 +552,7 @@ describe('an install upgraded from v0.0.119', () => {
     await rtl.act(async () => {
       boundary.whisper!.emitRealtime({ text: SPOKEN, isCapturing: false });
     });
-    await waitFor(() => expect(view.getByTestId('chat-input').props.value ?? '').toContain(SPOKEN), WAIT);
+    await waitFor(() => expect(composerText(view.getByTestId('chat-input'))).toContain(SPOKEN), WAIT);
     expect(view.queryByTestId('voice-record-button-unavailable')).toBeNull();
     noCrash();
 

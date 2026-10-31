@@ -11,6 +11,7 @@ import { SystemBars } from 'react-native-edge-to-edge';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
+import { openPendingImprove, startScribeEntry } from './src/services/scribeEntry';
 import { AppNavigator } from './src/navigation';
 import {
   appNavigationRef,
@@ -152,6 +153,11 @@ function App() {
   // it live — no restart needed.
   const AppRoot = useSlot(SLOTS.appRoot);
   const applyPendingProRedirect = useProExpiryRedirect();
+  // "Improve" from another app's selection menu or Share sheet.
+  useEffect(
+    () => startScribeEntry(appNavigationRef as unknown as Parameters<typeof startScribeEntry>[0]),
+    [],
+  );
   const [isInitializing, setIsInitializing] = useState(true);
   const startupGeneration = useRef(0);
   const showSyncStatusBar = useAppStore(s => s.showSyncStatusBar);
@@ -464,6 +470,7 @@ function App() {
           ref={appNavigationRef}
           onReady={() => {
             applyPendingProRedirect();
+            openPendingImprove().catch(() => undefined);
             trackScreen(appNavigationRef.getCurrentRoute()?.name);
           }}
           onStateChange={() => {

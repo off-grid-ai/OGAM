@@ -2,6 +2,7 @@ import { VIDEO_SETTING_KEYS, acceptsVideoSetting } from '@offgrid/models';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import {
   KNOWLEDGE_DOCUMENT_ENTITY,
+  NOTE_FILE_ENTITY,
   SHARED_FILE_ENTITY,
   TASK_LAUNCH_ENTITY,
   TASK_CONTROL_ENTITY,
@@ -23,6 +24,8 @@ export const CORE_SYNC_ENTITIES = {
   message: 'message',
   knowledgeDocument: KNOWLEDGE_DOCUMENT_ENTITY,
   sharedFile: SHARED_FILE_ENTITY,
+  // Notes vault revisions (Pro). Immutable records with no parent in this list.
+  noteFile: NOTE_FILE_ENTITY,
   modelSetting: 'model_setting',
   taskLaunch: TASK_LAUNCH_ENTITY,
   taskRun: TASK_RUN_ENTITY,
