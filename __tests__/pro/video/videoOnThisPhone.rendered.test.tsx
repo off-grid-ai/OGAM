@@ -311,6 +311,9 @@ it('on a phone short of free memory, says so before it starts, and Run anyway ma
   await downloadVideoModel(current);
   await describeClipOnPhone(current, 'a hummingbird hovering over a red flower');
   const runAnyway = await view.findByTestId('model-failure-load-anyway-video', {}, { timeout: 15_000 });
+  // The refusal quotes the numbers the gate compared: what it needs is more than what it can spare.
+  const [, need, spare] = view.getByText(/needs about/).props.children.match(/needs about ([\d.]+) GB.*spare about ([\d.]+) GB/);
+  expect(Number(need)).toBeGreaterThan(Number(spare));
   expect(current.engine.generations).toHaveLength(0);
   current.rtl.fireEvent.press(runAnyway);
   await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
