@@ -1000,6 +1000,9 @@ export interface DownloadRow {
   modelKey?: string;
   combinedTotalBytes?: number;
   createdAt?: number;
+  /** The native row's v3 columns the app stores with a download. */
+  quantization?: string;
+  mmProjDownloadId?: string;
 }
 
 export interface DownloadFake {

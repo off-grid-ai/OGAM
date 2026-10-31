@@ -4,26 +4,25 @@
  * Tools screen is registered (the same signal as useIsProActive):
  *   - free (screen not registered) -> ProDetail upsell
  *   - pro  (screen registered)     -> the Pro Tools screen
+ *
+ * The real navigator runs; the test reads which screen the app is on after the tap.
  */
+jest.unmock('@react-navigation/native');
 
-import React from 'react';
 import { Text, TouchableOpacity } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useOpenProTools } from '../../../src/hooks/useOpenProTools';
 import { registerScreen, _clearScreensForTesting } from '../../../src/navigation/screenRegistry';
 import { PRO_TOOLS_SCREEN } from '../../../src/hooks/useIsProActive';
 import { useAppStore } from '../../../src/stores/appStore';
 
-const mockNavigate = jest.fn();
-jest.mock('@react-navigation/native', () => {
-  const actual = jest.requireActual('@react-navigation/native');
-  return {
-    ...actual,
-    useNavigation: () => ({ navigate: mockNavigate }),
-  };
-});
+const Stack = createNativeStackNavigator();
+const navigation = createNavigationContainerRef<Record<string, undefined>>();
+const Blank = () => null;
 
-const Probe = () => {
+const Opener = () => {
   const open = useOpenProTools();
   return (
     <TouchableOpacity testID="open" onPress={open}>
@@ -31,6 +30,19 @@ const Probe = () => {
     </TouchableOpacity>
   );
 };
+
+/** The opener on a stack that also has the upsell and the Pro Tools screen. */
+const Probe = () => (
+  <NavigationContainer ref={navigation}>
+    <Stack.Navigator>
+      <Stack.Screen name="Home" component={Opener} />
+      <Stack.Screen name="ProDetail" component={Blank} />
+      <Stack.Screen name={PRO_TOOLS_SCREEN} component={Blank} />
+    </Stack.Navigator>
+  </NavigationContainer>
+);
+/** The screen the app is on now. */
+const onScreen = () => navigation.getCurrentRoute()?.name;
 
 describe('useOpenProTools', () => {
   beforeEach(() => {
@@ -50,7 +62,7 @@ describe('useOpenProTools', () => {
   it('routes a free user to the Pro upsell', () => {
     const { getByTestId } = render(<Probe />);
     fireEvent.press(getByTestId('open'));
-    expect(mockNavigate).toHaveBeenCalledWith('ProDetail');
+    expect(onScreen()).toBe('ProDetail');
   });
 
   it('routes a pro user to the Pro Tools screen once it is registered', () => {
@@ -63,7 +75,7 @@ describe('useOpenProTools', () => {
     registerScreen({ name: PRO_TOOLS_SCREEN, component: () => null });
     const { getByTestId } = render(<Probe />);
     fireEvent.press(getByTestId('open'));
-    expect(mockNavigate).toHaveBeenCalledWith(PRO_TOOLS_SCREEN);
+    expect(onScreen()).toBe(PRO_TOOLS_SCREEN);
   });
 
   it('routes to the purchase screen as soon as live access is removed', () => {
@@ -78,6 +90,6 @@ describe('useOpenProTools', () => {
     const { getByTestId } = render(<Probe />);
     fireEvent.press(getByTestId('open'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('ProDetail');
+    expect(onScreen()).toBe('ProDetail');
   });
 });

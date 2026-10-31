@@ -3,82 +3,37 @@
  *
  * The curated and trending lists in useTextModels offer a model when it loads on the phone by the
  * shared fit rule: its download against the phone budget, not a parameter count.
+ *
+ * Only the device boundary is faked: the phone's platform and RAM reading, the disk and async-storage.
+ * The hook runs on the real navigation stack with the real hardwareService, stores and services.
  */
+import { installNativeBoundary, GB, type RamProfile } from '../../../harness/nativeBoundary';
+import { renderHookInNavigator, type NavigatorHook } from '../../../harness/navigatorHook';
 
-import { renderHook } from '@testing-library/react-native';
-import { useTextModels } from '../../../../src/screens/ModelsScreen/useTextModels';
+jest.unmock('@react-navigation/native');
 
-// ── Navigation (required by useFocusEffect) ─────────────────────────
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn(), setOptions: jest.fn(), addListener: jest.fn(() => jest.fn()) }),
-  useFocusEffect: jest.fn((cb: () => () => void) => { cb(); }),
-}));
+type TextModels = ReturnType<typeof import('../../../../src/screens/ModelsScreen/useTextModels').useTextModels>;
 
-// ── App store ────────────────────────────────────────────────────────
-jest.mock('../../../../src/stores', () => ({
-  useAppStore: jest.fn(() => ({
-    downloadedModels: [],
-    setDownloadedModels: jest.fn(),
-    downloadProgress: {},
-    setDownloadProgress: jest.fn(),
-    addDownloadedModel: jest.fn(),
-    removeDownloadedModel: jest.fn(),
-    activeModelId: null,
-  })),
-}));
+let view: NavigatorHook<TextModels> | undefined;
+afterEach(() => { view?.unmount(); view = undefined; });
 
-// ── Services ─────────────────────────────────────────────────────────
-const mockGetTotalMemoryGB = jest.fn(() => 8);
-const mockGetModelRecommendation = jest.fn(() => ({ recommendedQuantization: 'Q4_K_M', recommendedModels: [] }));
-
-jest.mock('../../../../src/services', () => ({
-  huggingFaceService: {
-    searchModels: jest.fn(() => Promise.resolve([])),
-    getModelDetails: jest.fn(() => Promise.reject(new Error('not found'))),
-    getModelFiles: jest.fn(() => Promise.resolve([])),
-  },
-  modelManager: {
-    getDownloadedModels: jest.fn(() => Promise.resolve([])),
-    downloadModelBackground: jest.fn(),
-    watchDownload: jest.fn(),
-    cancelBackgroundDownload: jest.fn(),
-    repairMmProj: jest.fn(),
-    deleteModel: jest.fn(),
-  },
-  hardwareService: {
-    getTotalMemoryGB: () => mockGetTotalMemoryGB(),
-    getModelRecommendation: () => mockGetModelRecommendation(),
-  },
-  activeModelService: {
-    // The model-selection seam, from the one place it is defined.
-    ...require('../../../utils/activeModelServiceStub').activeModelSelectionStub(),
-    unloadTextModel: jest.fn(() => Promise.resolve()),
-  },
-}));
-
-// ── Alert component ───────────────────────────────────────────────────
-jest.mock('../../../../src/components/CustomAlert', () => ({
-  showAlert: jest.fn((title: string, message: string) => ({ title, message, visible: true })),
-  initialAlertState: { title: '', message: '', visible: false },
-}));
-
-// ─────────────────────────────────────────────────────────────────────
-
-const setAlertState = jest.fn();
+/** The Models screen's text list on a phone whose OS reports `totalGB` of RAM. */
+async function textModelsOn(platform: RamProfile['platform'], totalGB: number) {
+  installNativeBoundary({ fs: true, ram: { platform, totalBytes: totalGB * GB, availBytes: (totalGB / 2) * GB } });
+  await require('@react-native-async-storage/async-storage').clear();
+  // The app reads the device once at boot; the lists read that reading.
+  await require('../../../../src/services').hardwareService.getDeviceInfo();
+  const { useTextModels } = require('../../../../src/screens/ModelsScreen/useTextModels');
+  view = await renderHookInNavigator<TextModels>(() => useTextModels(() => {}), { screen: 'Models' });
+  return view.result.current;
+}
 
 describe('curated models offered by what loads on the phone', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
   // A 12 GB iPhone reports about 11.2 GB. The shared iPhone budget loads a download up to 0.70 of it.
   const TWELVE_GB_IPHONE = 11.2;
 
-  it('offers a 12 GB iPhone the 9B class it loads, above any parameter cap, and hides what it cannot', () => {
-    mockGetTotalMemoryGB.mockReturnValue(TWELVE_GB_IPHONE);
-
-    const { result } = renderHook(() => useTextModels(setAlertState));
-    const offered = result.current.recommendedAsModelInfo.map(m => m.id);
+  it('offers a 12 GB iPhone the 9B class it loads, above any parameter cap, and hides what it cannot', async () => {
+    const offered = (await textModelsOn('ios', TWELVE_GB_IPHONE)).recommendedAsModelInfo.map(m => m.id);
 
     // Measured on a 12 GB iPhone 17 Pro Max: a 9B Q4_K_M and Gemma 4 E4B load (mapped weights).
     expect(offered).toContain('unsloth/Qwen3.5-9B-GGUF');
@@ -90,32 +45,24 @@ describe('curated models offered by what loads on the phone', () => {
     expect(offered).not.toContain('unsloth/gemma-4-26B-A4B-it-GGUF');
   });
 
-  it('picks the trending model per family from what loads on a 12 GB iPhone', () => {
-    mockGetTotalMemoryGB.mockReturnValue(TWELVE_GB_IPHONE);
-
-    const { result } = renderHook(() => useTextModels(setAlertState));
-    const trending = result.current.trendingAsModelInfo.map(m => m.id);
+  it('picks the trending model per family from what loads on a 12 GB iPhone', async () => {
+    const trending = (await textModelsOn('ios', TWELVE_GB_IPHONE)).trendingAsModelInfo.map(m => m.id);
 
     expect(trending).toContain('unsloth/gemma-4-E2B-it-GGUF');
     expect(trending).toHaveLength(3);
   });
 
-  it('offers a 16 GB phone the larger models it can load', () => {
-    mockGetTotalMemoryGB.mockReturnValue(15);
-
-    const { result } = renderHook(() => useTextModels(setAlertState));
-    const offered = result.current.recommendedAsModelInfo.map(m => m.id);
+  it('offers a 16 GB phone the larger models it can load', async () => {
+    const offered = (await textModelsOn('ios', 15)).recommendedAsModelInfo.map(m => m.id);
 
     expect(offered).toContain('unsloth/Qwen3.5-9B-GGUF');
     expect(offered).toContain('unsloth/gemma-4-E4B-it-GGUF');
   });
 
-  it('offers nothing to a phone too small to load any model', () => {
-    mockGetTotalMemoryGB.mockReturnValue(1);
+  it('offers nothing to a phone too small to load any model', async () => {
+    const lists = await textModelsOn('ios', 1);
 
-    const { result } = renderHook(() => useTextModels(setAlertState));
-
-    expect(result.current.recommendedAsModelInfo).toHaveLength(0);
-    expect(result.current.trendingAsModelInfo).toHaveLength(0);
+    expect(lists.recommendedAsModelInfo).toHaveLength(0);
+    expect(lists.trendingAsModelInfo).toHaveLength(0);
   });
 });

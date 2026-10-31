@@ -1,45 +1,54 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { hydrateDownloadStore, isMmProjFileName } from '../../../src/services/downloadHydration';
-import { saveActiveDownloads } from '../../../src/services/activeDownloadPersistence';
-import { useDownloadStore } from '../../../src/stores/downloadStore';
+/**
+ * Relaunch hydration of the download store. The phone is the boundary: the native background
+ * downloader's rows (its database, v3 columns included), async-storage and the disk are fakes.
+ * The hydration, the background download service and the stores run for real.
+ */
+import { installNativeBoundary, type DownloadRow } from '../../harness/nativeBoundary';
 
-jest.mock('../../../src/services/backgroundDownloadService', () => ({
-  backgroundDownloadService: {
-    isAvailable: jest.fn(),
-    getActiveDownloads: jest.fn(),
-  },
-}));
+type Hydration = typeof import('../../../src/services/downloadHydration');
+type Persistence = typeof import('../../../src/services/activeDownloadPersistence');
+type Stores = typeof import('../../../src/stores/downloadStore');
 
-const { backgroundDownloadService } = jest.requireMock('../../../src/services/backgroundDownloadService');
+let hydrateDownloadStore: Hydration['hydrateDownloadStore'];
+let saveActiveDownloads: Persistence['saveActiveDownloads'];
+let useDownloadStore: Stores['useDownloadStore'];
 
-beforeEach(async () => {
-  jest.clearAllMocks();
-  useDownloadStore.setState({ downloads: {}, downloadIdIndex: {} });
-  await AsyncStorage.clear(); // reset the persisted in-flight snapshot between tests
-});
+/** A relaunch: the native downloader holds `rows` (or the platform has none), the app starts. */
+async function relaunch(rows: DownloadRow[] | 'no downloader' = []) {
+  const boundary = installNativeBoundary({ fs: true, download: rows !== 'no downloader' });
+  if (rows !== 'no downloader') rows.forEach(row => boundary.download!.seedActive(row));
+  ({ hydrateDownloadStore } = require('../../../src/services/downloadHydration'));
+  ({ saveActiveDownloads } = require('../../../src/services/activeDownloadPersistence'));
+  ({ useDownloadStore } = require('../../../src/stores/downloadStore'));
+  return boundary;
+}
+
+// The phone's storage outlives a relaunch; each test starts from an empty phone.
+beforeEach(() => require('@react-native-async-storage/async-storage').clear());
 
 describe('isMmProjFileName', () => {
+  beforeEach(() => relaunch());
+
   it('returns true for mmproj filenames', () => {
-    expect(isMmProjFileName('llava-v1.5-mmproj.gguf')).toBe(true);
-    expect(isMmProjFileName('model-mmproj.gguf')).toBe(true);
+    expect((require('../../../src/services/downloadHydration') as Hydration).isMmProjFileName('llava-v1.5-mmproj.gguf')).toBe(true);
+    expect((require('../../../src/services/downloadHydration') as Hydration).isMmProjFileName('model-mmproj.gguf')).toBe(true);
   });
 
   it('returns false for regular filenames', () => {
-    expect(isMmProjFileName('model-Q4_K_M.gguf')).toBe(false);
-    expect(isMmProjFileName('plain-model.gguf')).toBe(false);
+    expect((require('../../../src/services/downloadHydration') as Hydration).isMmProjFileName('model-Q4_K_M.gguf')).toBe(false);
+    expect((require('../../../src/services/downloadHydration') as Hydration).isMmProjFileName('plain-model.gguf')).toBe(false);
   });
 });
 
 describe('hydrateDownloadStore', () => {
-  it('does nothing when service is unavailable', async () => {
-    backgroundDownloadService.isAvailable.mockReturnValue(false);
+  it('does nothing when the platform has no background downloader', async () => {
+    await relaunch('no downloader');
     await hydrateDownloadStore();
-    expect(backgroundDownloadService.getActiveDownloads).not.toHaveBeenCalled();
+    expect(useDownloadStore.getState().downloads).toEqual({});
   });
 
   it('hydrates store with active text downloads', async () => {
-    backgroundDownloadService.isAvailable.mockReturnValue(true);
-    backgroundDownloadService.getActiveDownloads.mockResolvedValue([
+    await relaunch([
       {
         downloadId: 'dl-1',
         modelId: 'author/model',
@@ -65,8 +74,7 @@ describe('hydrateDownloadStore', () => {
   });
 
   it('skips mmproj rows (they appear as child of parent)', async () => {
-    backgroundDownloadService.isAvailable.mockReturnValue(true);
-    backgroundDownloadService.getActiveDownloads.mockResolvedValue([
+    await relaunch([
       {
         downloadId: 'dl-parent',
         modelId: 'author/model',
@@ -100,8 +108,7 @@ describe('hydrateDownloadStore', () => {
   });
 
   it('skips cancelled and completed downloads', async () => {
-    backgroundDownloadService.isAvailable.mockReturnValue(true);
-    backgroundDownloadService.getActiveDownloads.mockResolvedValue([
+    await relaunch([
       {
         downloadId: 'dl-done',
         modelId: 'a/b',
@@ -127,8 +134,7 @@ describe('hydrateDownloadStore', () => {
   });
 
   it('keeps latest entry when duplicate keys exist', async () => {
-    backgroundDownloadService.isAvailable.mockReturnValue(true);
-    backgroundDownloadService.getActiveDownloads.mockResolvedValue([
+    await relaunch([
       {
         downloadId: 'dl-old',
         modelId: 'author/model',
@@ -177,9 +183,10 @@ describe('hydrateDownloadStore', () => {
   it('strands a persisted in-flight download as failed when the native row is gone (cold app-kill)', async () => {
     // Cold kill: in-memory store empty (beforeEach), native snapshot empty (task dropped), but the
     // in-flight download survives in the durable snapshot loadActiveDownloads() reads.
+    // The last run saved its in-flight download; the kill dropped the native task.
+    await relaunch();
     await saveActiveDownloads([inflight]);
-    backgroundDownloadService.isAvailable.mockReturnValue(true);
-    backgroundDownloadService.getActiveDownloads.mockResolvedValue([]);
+    await relaunch([]);
 
     await hydrateDownloadStore();
 
@@ -192,9 +199,9 @@ describe('hydrateDownloadStore', () => {
   it('does NOT strand when the native snapshot still reports the row (Android survives a kill)', async () => {
     // Android WorkManager survives a kill → the row reappears in the native snapshot → the persisted
     // snapshot must be ignored for that key, never flip a live download to a false "failed".
+    await relaunch();
     await saveActiveDownloads([inflight]);
-    backgroundDownloadService.isAvailable.mockReturnValue(true);
-    backgroundDownloadService.getActiveDownloads.mockResolvedValue([{ ...inflight, bytesDownloaded: 2_000_000_000 }]);
+    await relaunch([{ ...inflight, bytesDownloaded: 2_000_000_000 }]);
 
     await hydrateDownloadStore();
 

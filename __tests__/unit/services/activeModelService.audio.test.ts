@@ -1,97 +1,108 @@
 /**
- * Unit tests for activeModelService.supportsAudioInput().
- * This is the engine-agnostic dispatch point that decides whether the active
- * model accepts audio directly (LiteRT audio model, or llama.cpp audio mmproj),
- * letting Audio Mode skip Whisper STT without UI/hooks branching on engine type.
+ * activeModelService.supportsAudioInput — whether the active model takes audio directly, so Audio Mode can
+ * skip Whisper without the UI branching on the engine.
+ *
+ * Each case loads a real model through activeModelService (the residency lock) and reads the answer:
+ *  - LiteRT: the model's audio flag goes to native with the load; the engine answers from what it loaded.
+ *  - llama: the projector native started reports whether it takes audio.
+ *
+ * Real: activeModelService, its loaders, llmService, liteRTService, the residency manager, the stores.
+ * Faked (device, harness/nativeBoundary): llama.rn (and the projector's reported support), the LiteRT
+ * native module, the filesystem, RAM.
  */
+import { installNativeBoundary, GB, type NativeBoundary } from '../../harness/nativeBoundary';
+import { createDownloadedModel } from '../../utils/factories';
 
-jest.mock('../../../src/stores', () => ({
-  useAppStore: { getState: jest.fn() },
-}));
-jest.mock('../../../src/stores/debugLogsStore', () => ({
-  useDebugLogsStore: { getState: jest.fn(() => ({ addLog: jest.fn() })) },
-}));
-jest.mock('../../../src/services/llm', () => ({
-  llmService: {
-    isModelLoaded: jest.fn(() => false),
-    getMultimodalSupport: jest.fn(() => null),
-    getPerformanceStats: jest.fn(() => undefined),
-  },
-}));
-jest.mock('../../../src/services/litert', () => ({
-  liteRTService: {
-    isModelLoaded: jest.fn(() => false),
-    supportsAudio: jest.fn(() => false),
-  },
-}));
-jest.mock('../../../src/services/localDreamGenerator', () => ({
-  localDreamGeneratorService: {},
-}));
-jest.mock('../../../src/services/hardware', () => ({
-  hardwareService: {},
-}));
-jest.mock('../../../src/services/modelResidency', () => ({
-  modelResidencyManager: { runExclusive: jest.fn() },
-}));
-jest.mock('../../../src/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+beforeEach(async () => {
+  const mod = require('@react-native-async-storage/async-storage');
+  await (mod.default ?? mod).clear(); // each test is a fresh install
+});
 
-import { activeModelService } from '../../../src/services/activeModelService';
-import { liteRTService } from '../../../src/services/litert';
-import { llmService } from '../../../src/services/llm';
-import { useAppStore } from '../../../src/stores';
+interface Phone {
+  boundary: NativeBoundary;
+  activeModelService: any;
+  useAppStore: any;
+}
 
-const mockedGetState = useAppStore.getState as jest.Mock;
-const mockedLiteRT = liteRTService as jest.Mocked<typeof liteRTService>;
-const mockedLlm = llmService as jest.Mocked<typeof llmService>;
-
-function setActiveModel(model: any) {
-  mockedGetState.mockReturnValue({
-    activeModelId: model?.id ?? null,
-    downloadedModels: model ? [model] : [],
+/** A phone with one downloaded model on disk (and, for llama, an audio/vision projector beside it). */
+function phone(model: { engine: 'llama' | 'litert'; liteRTAudio?: boolean; projector?: 'audio' | 'vision' }): Phone {
+  const boundary = installNativeBoundary({
+    llama: true,
+    fs: true,
+    llamaVision: model.projector === 'vision',
+    llamaAudio: model.projector === 'audio',
+    ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB },
   });
+  const dir = `${boundary.fs!.DocumentDirectoryPath}/models`;
+  const fileName = model.engine === 'llama' ? 'm.gguf' : 'm.litertlm';
+  boundary.fs!.seedFile(`${dir}/${fileName}`, 500 * 1024 * 1024);
+  const projector = model.projector ? `${dir}/m-mmproj-f16.gguf` : undefined;
+  if (projector) boundary.fs!.seedFile(projector, 80 * 1024 * 1024);
+  const { useAppStore } = require('../../../src/stores');
+  const { activeModelService } = require('../../../src/services/activeModelService');
+  useAppStore.getState().addDownloadedModel(createDownloadedModel({
+    id: 'm',
+    name: 'Model',
+    engine: model.engine,
+    filePath: `${dir}/${fileName}`,
+    fileName,
+    fileSize: 2 * GB,
+    liteRTAudio: model.liteRTAudio,
+    ...(projector ? { mmProjPath: projector, mmProjFileName: 'm-mmproj-f16.gguf', isVisionModel: true } : {}),
+  }));
+  activeModelService.selectTextModel('m');
+  return { boundary, activeModelService, useAppStore };
 }
 
 describe('activeModelService.supportsAudioInput', () => {
-  beforeEach(() => jest.clearAllMocks());
+  it('is false when no model is chosen', () => {
+    const p = phone({ engine: 'llama' });
+    p.useAppStore.getState().setActiveModelId(null);
 
-  it('returns false when there is no active model', () => {
-    setActiveModel(null);
-    expect(activeModelService.supportsAudioInput()).toBe(false);
+    expect(p.activeModelService.supportsAudioInput()).toBe(false);
   });
 
-  it('returns true for a LiteRT model that reports audio support', () => {
-    setActiveModel({ id: 'm', engine: 'litert', liteRTAudio: true });
-    mockedLiteRT.supportsAudio.mockReturnValue(true);
-    expect(activeModelService.supportsAudioInput()).toBe(true);
+  it('is true once a LiteRT model that carries audio has loaded, and native was told it takes audio', async () => {
+    const p = phone({ engine: 'litert', liteRTAudio: true });
+    expect(p.activeModelService.supportsAudioInput()).toBe(false); // chosen, not loaded yet
+
+    await p.activeModelService.loadTextModel('m');
+
+    expect(p.boundary.litert.calls.loadModel[0][3]).toBe(true);
+    expect(p.activeModelService.supportsAudioInput()).toBe(true);
   });
 
-  it('returns false for a LiteRT model without audio support', () => {
-    setActiveModel({ id: 'm', engine: 'litert', liteRTAudio: false });
-    mockedLiteRT.supportsAudio.mockReturnValue(false);
-    expect(activeModelService.supportsAudioInput()).toBe(false);
+  it('is false for a loaded LiteRT model without audio', async () => {
+    const p = phone({ engine: 'litert', liteRTAudio: false });
+
+    await p.activeModelService.loadTextModel('m');
+
+    expect(p.boundary.litert.calls.loadModel[0][3]).toBe(false);
+    expect(p.activeModelService.supportsAudioInput()).toBe(false);
   });
 
-  it('returns true for a llama.cpp model whose mmproj reports audio', () => {
-    setActiveModel({ id: 'm', engine: 'llama' });
-    mockedLlm.isModelLoaded.mockReturnValue(true);
-    mockedLlm.getMultimodalSupport.mockReturnValue({ vision: true, audio: true });
-    expect(activeModelService.supportsAudioInput()).toBe(true);
+  it('is true for a loaded llama model whose projector reports audio', async () => {
+    const p = phone({ engine: 'llama', projector: 'audio' });
+
+    await p.activeModelService.loadTextModel('m');
+
+    expect(p.activeModelService.supportsAudioInput()).toBe(true);
   });
 
-  it('returns false for a llama.cpp vision-only model (no audio in mmproj)', () => {
-    setActiveModel({ id: 'm', engine: 'llama' });
-    mockedLlm.isModelLoaded.mockReturnValue(true);
-    mockedLlm.getMultimodalSupport.mockReturnValue({ vision: true, audio: false });
-    expect(activeModelService.supportsAudioInput()).toBe(false);
+  it('is false for a loaded llama model whose projector is vision-only', async () => {
+    const p = phone({ engine: 'llama', projector: 'vision' });
+
+    await p.activeModelService.loadTextModel('m');
+
+    expect(p.activeModelService.getActiveModels().text.isLoaded).toBe(true);
+    expect(p.activeModelService.supportsAudioInput()).toBe(false);
   });
 
-  it('returns false for a llama.cpp model that is not loaded yet', () => {
-    setActiveModel({ id: 'm', engine: 'llama' });
-    mockedLlm.isModelLoaded.mockReturnValue(false);
-    mockedLlm.getMultimodalSupport.mockReturnValue({ vision: true, audio: true });
-    expect(activeModelService.supportsAudioInput()).toBe(false);
+  it('is false for a llama model with an audio projector that has not loaded yet, and true once it has', async () => {
+    const p = phone({ engine: 'llama', projector: 'audio' });
+
+    expect(p.activeModelService.supportsAudioInput()).toBe(false);
+    await p.activeModelService.loadTextModel('m');
+    expect(p.activeModelService.supportsAudioInput()).toBe(true);
   });
 });
