@@ -27,7 +27,7 @@ beforeEach(async () => {
 });
 
 /** A screen using the hook, under the app root that listens to the native downloader. */
-const screen = (): Row[] => {
+const useScreen = (): Row[] => {
   useDownloadListeners();
   return useModelDownloads();
 };
@@ -47,7 +47,7 @@ async function startDownload() {
 describe('useModelDownloads', () => {
   it('lists on mount', async () => {
     await startDownload();
-    const { result } = rtl.renderHook(screen);
+    const { result } = rtl.renderHook(useScreen);
     await rtl.waitFor(() => expect(result.current).toHaveLength(1));
     // Started, no bytes yet: it waits in the queue.
     expect(result.current[0]).toEqual(
@@ -57,7 +57,7 @@ describe('useModelDownloads', () => {
 
   it('re-lists when the service notifies, rapid ticks included', async () => {
     const row = await startDownload();
-    const { result } = rtl.renderHook(screen);
+    const { result } = rtl.renderHook(useScreen);
     await rtl.waitFor(() => expect(result.current).toHaveLength(1));
 
     // Bytes arrive in quick succession; the hook ends up showing the latest.
@@ -72,7 +72,7 @@ describe('useModelDownloads', () => {
 
   it('stops listening on unmount', async () => {
     const row = await startDownload();
-    const { result, unmount } = rtl.renderHook(screen);
+    const { result, unmount } = rtl.renderHook(useScreen);
     await rtl.waitFor(() => expect(result.current).toHaveLength(1));
     const shown = result.current;
     unmount();
