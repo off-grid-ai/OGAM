@@ -22,6 +22,8 @@ import {
   Modal,
   TouchableWithoutFeedback,
   View,
+  Animated,
+  StyleSheet,
 } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { AppSheet } from '../../../src/components/AppSheet';
@@ -1079,6 +1081,77 @@ describe('AppSheet', () => {
       expect(springToZero).toBeFalsy();
 
       jest.restoreAllMocks();
+    });
+  });
+  // ============================================================================
+  // Keyboard during the slide-in
+  // ============================================================================
+  describe('keyboard during the slide-in', () => {
+    // The slide's end is the device boundary here: the test decides when it lands.
+    function openWithControlledSlide() {
+      const listeners: Record<string, (e?: any) => void> = {};
+      jest.spyOn(Keyboard, 'addListener').mockImplementation(((event: string, cb: (e?: any) => void) => {
+        listeners[event] = cb;
+        return { remove: jest.fn() };
+      }) as any);
+      let landSlide: (() => void) | undefined;
+      const realParallel = Animated.parallel;
+      jest.spyOn(Animated, 'parallel').mockImplementation(((animations: any) => {
+        const composite = realParallel(animations);
+        return {
+          ...composite,
+          start: (cb?: (r: { finished: boolean }) => void) => {
+            landSlide ??= () => cb?.({ finished: true });
+          },
+        };
+      }) as any);
+      const view = render(
+        <AppSheet visible onClose={jest.fn()} title="Extend">
+          <Text>Content</Text>
+        </AppSheet>,
+      );
+      act(() => {
+        view.UNSAFE_getByType(Modal).props.onShow();
+      });
+      const underlayHeight = () => {
+        const underlay = view.queryByTestId('app-sheet-keyboard-underlay');
+        return underlay ? StyleSheet.flatten(underlay.props.style).height : 0;
+      };
+      return { listeners, land: () => act(() => landSlide!()), underlayHeight };
+    }
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('lifts the sheet above a keyboard that opened during the slide-in once the slide lands', () => {
+      const { listeners, land, underlayHeight } = openWithControlledSlide();
+
+      act(() => listeners.keyboardWillShow({ endCoordinates: { height: 300 } }));
+      expect(underlayHeight()).toBe(0);
+
+      land();
+      expect(underlayHeight()).toBe(300);
+    });
+
+    it('stays down when the keyboard opened and closed during the slide-in', () => {
+      const { listeners, land, underlayHeight } = openWithControlledSlide();
+
+      act(() => listeners.keyboardWillShow({ endCoordinates: { height: 300 } }));
+      act(() => listeners.keyboardWillHide());
+      land();
+
+      expect(underlayHeight()).toBe(0);
+    });
+
+    it('follows the keyboard at once after the slide-in', () => {
+      const { listeners, land, underlayHeight } = openWithControlledSlide();
+      land();
+
+      act(() => listeners.keyboardWillShow({ endCoordinates: { height: 280 } }));
+      expect(underlayHeight()).toBe(280);
+      act(() => listeners.keyboardWillHide());
+      expect(underlayHeight()).toBe(0);
     });
   });
 });
