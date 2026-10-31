@@ -47,6 +47,10 @@ it('lists the clip under All and Clips, not Stories, and plays it full screen', 
   expect(item).toHaveLength(1);
   rtl.fireEvent.press(item[0]);
   await view.findByTestId('video-viewer', {}, { timeout: 10_000 });
+  // The black viewer asks for light status icons, so the clock and battery stay readable.
+  // (Matched by name: the harness loads its own module registry, so the stub's identity differs.)
+  const bars = view.UNSAFE_root.findAll(node => (node.type as { name?: string })?.name === 'SystemBars');
+  expect(bars.some(node => node.props.style === 'light')).toBe(true);
   expect(view.getByTestId('viewer-continue')).toBeTruthy();
   expect(view.queryByTestId('viewer-new-shot')).toBeNull();
 }, 60_000);
