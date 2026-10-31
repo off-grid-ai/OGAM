@@ -285,7 +285,6 @@
   "__tests__/unit/services/activeModelService.audio.test.ts": 8,
   "__tests__/unit/services/activeModelService.imageOverridable.test.ts": 4,
   "__tests__/unit/services/activeModelService.loaders.branches.test.ts": 7,
-  "__tests__/unit/services/activeModelService.loaders.test.ts": 7,
   "__tests__/unit/services/activeModelService.utils.test.ts": 5,
   "__tests__/unit/services/classifierProvisioning.test.ts": 4,
   "__tests__/unit/services/contextCompaction.test.ts": 2,
