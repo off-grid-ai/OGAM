@@ -116,3 +116,20 @@ it('offers the phone download at once while a saved computer never answers, and 
   expect(view.queryByTestId('start-picture-get-phone')).toBeNull();
   expect(app.models.pulls).toEqual([]);
 }, 90_000);
+
+it('on Android, a Turbo already on the phone is named as too slow here, beside the download that runs', async () => {
+  // A OnePlus Nord 5: 12 GB, reported as about 11.
+  const app = await launchStudioApp({ memoryGb: 34 }, { phoneEngine: true, download: true, phoneRamGb: 11.2 });
+  const { view, rtl } = app;
+  await makeClipInChat(app, CLIP);
+  // Turbo on the phone (from a sync, say): Android runs Wan on the CPU, where Turbo is far too slow.
+  const { CATALOG } = require('@offgrid/models');
+  const { useAppStore } = require('../../../src/stores');
+  const turbo = CATALOG.find((model: { id: string }) => model.id === 'hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF');
+  rtl.act(() => {
+    useAppStore.setState({ downloadedVideoModels: [...useAppStore.getState().downloadedVideoModels, { ...turbo, kind: 'video' }] });
+  });
+  await tapMutedExtend(app);
+  await view.findByTestId('start-picture-get-phone', {}, { timeout: 10_000 });
+  expect(view.getByText(/^Wan 2\.2 \(5B\), Turbo is on this phone, but it is too slow here\. It runs on this phone\./)).toBeTruthy();
+}, 90_000);

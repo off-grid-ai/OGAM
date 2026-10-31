@@ -87,12 +87,15 @@ export async function launchStudioApp(
     phoneEngine?: boolean;
     /** The phone's native background downloader, for a download started on the phone. */
     download?: boolean;
+    /** The phone's memory as the OS reports it, in GB (a 12 GB OnePlus Nord 5 reports a little under 12). */
+    phoneRamGb?: number;
   } = {},
 ): Promise<StudioApp> {
   const app = await launchApp({
     release: false,
     download: options.download,
     beforeApp: boundary => {
+      if (options.phoneRamGb) boundary.setRam({ platform: 'android', totalBytes: options.phoneRamGb * 1024 ** 3, availBytes: 8 * 1024 ** 3 });
       if (options.imageModel) placeImageModel(boundary);
       if (options.phoneEngine) require('./nativeVideoEngine').installNativeVideoEngine(boundary);
     },
