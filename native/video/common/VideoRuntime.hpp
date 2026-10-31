@@ -172,6 +172,10 @@ class VideoRuntime {
       // the decode ran under critical memory warnings, two clips ended with no frames and a third
       // took 798 s to decode. Within the budget the model manager releases it once it is used.
       if (!image) config.max_vram = "MTL0=4";
+      // The tiny decoder (taew2_2) decodes on the CPU; the diffusion model stays on Metal. On Metal it
+      // decoded Wan 2.2 Turbo into colour noise (iPhone 17 Pro Max, sd.cpp master-1024); on the CPU the
+      // same clip is correct and decodes in about 30 s, where the full VAE at 832x480 takes over an hour.
+      if (!image && !request.taesd.empty()) config.backend = "MTL0,vae=cpu";
 #endif
       config.n_threads = request.threads;
 #ifdef __ANDROID__

@@ -1,9 +1,9 @@
 /**
  * Which decoder a phone clip uses.
  *
- * SPEC (OGAM): a pack's tiny decoder, when it is on disk, decodes a clip in seconds on Android. On iOS
- * the full VAE decodes: the Metal build turned Wan 2.2 Turbo's taew2_2 decode into colour noise on an
- * iPhone 17 Pro Max, where the full VAE gives a clean clip.
+ * SPEC (OGAM): a pack's tiny decoder, when it is on disk, decodes a clip in seconds; otherwise the full VAE
+ * decodes. On iOS the native engine runs that tiny decoder on the CPU (on Metal it decoded Wan 2.2 Turbo
+ * into colour noise), so iOS and Android both pick it the same way here.
  *
  * The disk is the boundary: RNFS answers whether the file is there.
  */
@@ -18,18 +18,12 @@ const TURBO = {
 
 afterEach(() => jest.restoreAllMocks());
 
-it('Android decodes with the pack\'s tiny decoder when it is on disk', async () => {
+it('decodes with the pack\'s tiny decoder when it is on disk', async () => {
   jest.spyOn(RNFS, 'exists').mockResolvedValue(true);
-  expect(await tinyDecoderPath(TURBO, 'android')).toBe('/docs/video-models/turbo/taew2_2.safetensors');
+  expect(await tinyDecoderPath(TURBO)).toBe('/docs/video-models/turbo/taew2_2.safetensors');
 });
 
-it('Android uses the full VAE when the tiny decoder is not on disk', async () => {
+it('uses the full VAE when the tiny decoder is not on disk', async () => {
   jest.spyOn(RNFS, 'exists').mockResolvedValue(false);
-  expect(await tinyDecoderPath(TURBO, 'android')).toBeUndefined();
-});
-
-it('iOS always decodes with the full VAE, even with the tiny decoder on disk', async () => {
-  const exists = jest.spyOn(RNFS, 'exists').mockResolvedValue(true);
-  expect(await tinyDecoderPath(TURBO, 'ios')).toBeUndefined();
-  expect(exists).not.toHaveBeenCalled();
+  expect(await tinyDecoderPath(TURBO)).toBeUndefined();
 });
