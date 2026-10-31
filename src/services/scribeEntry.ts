@@ -6,7 +6,6 @@ import {
   Platform,
 } from 'react-native';
 import { getRegisteredScreens } from '../navigation/screenRegistry';
-import { appNavigationRef } from '../navigation/useProExpiryRedirect';
 import logger from '../utils/logger';
 
 /**
@@ -26,18 +25,25 @@ interface ScribeEntryNative {
   finish(id: string, text: string | null): Promise<boolean>;
 }
 
+/** The app's navigator, handed in by App so this service never imports the navigation tree. */
+export interface ImproveNavigator {
+  isReady(): boolean;
+  navigate(name: string, params?: object): void;
+}
+
 const native: ScribeEntryNative | undefined = NativeModules.ScribeEntryModule;
 const IMPROVE_URL = 'offgrid://improve';
 let current: string | null = null;
+let navigator: ImproveNavigator | null = null;
 
 /** Show the waiting request, if any. Safe to call often: each request is taken once. */
 export async function openPendingImprove(): Promise<void> {
-  if (!native || !appNavigationRef.isReady()) return;
+  if (!native || !navigator?.isReady()) return;
   const request = await native.takePending();
   if (!request) return;
   // A request still open on screen is answered with nothing, so its caller is never left waiting.
   if (current) await finishImprove(null);
-  const navigate = appNavigationRef.navigate as unknown as (name: string, params?: object) => void;
+  const navigate = navigator.navigate.bind(navigator);
   if (!getRegisteredScreens().some(s => s.name === 'ScribeImprove')) {
     await native.finish(request.id, null);
     navigate('ProDetail');
@@ -58,8 +64,9 @@ export async function finishImprove(text: string | null): Promise<void> {
 }
 
 /** Watch for requests: on start, when Android offers one, and when iOS opens offgrid://improve. */
-export function startScribeEntry(): () => void {
+export function startScribeEntry(appNavigator: ImproveNavigator): () => void {
   if (!native) return () => undefined;
+  navigator = appNavigator;
   const open = (): void => {
     openPendingImprove().catch(cause => logger.warn('[Scribe] Improve did not open', cause));
   };

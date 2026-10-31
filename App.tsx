@@ -154,7 +154,10 @@ function App() {
   const AppRoot = useSlot(SLOTS.appRoot);
   const applyPendingProRedirect = useProExpiryRedirect();
   // "Improve" from another app's selection menu or Share sheet.
-  useEffect(() => startScribeEntry(), []);
+  useEffect(
+    () => startScribeEntry(appNavigationRef as unknown as Parameters<typeof startScribeEntry>[0]),
+    [],
+  );
   const [isInitializing, setIsInitializing] = useState(true);
   const startupGeneration = useRef(0);
   const showSyncStatusBar = useAppStore(s => s.showSyncStatusBar);
