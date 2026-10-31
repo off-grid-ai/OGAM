@@ -298,7 +298,6 @@
   "__tests__/unit/screens/modelReadiness.test.ts": 2,
   "__tests__/unit/screens/ModelsScreen/imageDownloadActions.test.ts": 5,
   "__tests__/unit/screens/ModelsScreen/imageDownloadQnn.test.ts": 1,
-  "__tests__/unit/screens/ModelsScreen/imageDownloadResume.test.ts": 4,
   "__tests__/unit/screens/ModelsScreen/importHelpers.test.ts": 2,
   "__tests__/unit/screens/ModelsScreen/trendingSelection.test.ts": 4,
   "__tests__/unit/screens/ModelsScreen/useModelsScreen.test.ts": 10,
