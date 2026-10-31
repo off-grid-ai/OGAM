@@ -278,7 +278,7 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
       )}
 
       {addingFile && (
-        <View style={styles.kbIndexing}>
+        <View style={styles.kbIndexing} aria-busy>
           <LoadingDots color={colors.primary} />
           <Text style={styles.kbIndexingText} numberOfLines={1}>
             Adding {addingFile}...

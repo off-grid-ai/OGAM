@@ -134,7 +134,7 @@ export const EmbeddingModelsTab: React.FC = () => {
       {!!status.message && <Text style={embeddingStyles.status} accessibilityLiveRegion="polite" testID="embedding-index-progress">{status.message}</Text>}
       {!!(status.error || error) && <Text style={embeddingStyles.error} accessibilityRole="alert">{status.error || error}</Text>}
       {status.busy && <Button title="Cancel model change" onPress={embeddingModelChanger.cancel} />}
-      {loading && <Text style={embeddingStyles.status}>Searching...</Text>}
+      {loading && <Text style={embeddingStyles.status} aria-busy>Searching...</Text>}
       {!loading && query.trim() !== '' && !error && results.length === 0 && <Text style={embeddingStyles.status}>No models found. Try another name.</Text>}
       <Text style={embeddingStyles.sectionLabel}>{query.trim() ? 'MODELS' : 'RECOMMENDED MODELS'}</Text>
       <ModelCard compact

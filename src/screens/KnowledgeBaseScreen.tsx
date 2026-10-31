@@ -103,7 +103,9 @@ export const KnowledgeBaseScreen: React.FC = () => {
         logger.log('[KnowledgeBase] picker returned empty result');
         return;
       }
-      logger.log(`[KnowledgeBase] picker returned ${files.length} file(s): ${files.map(f => `${f.name} (${f.size}b)`).join(', ')}`);
+      const describe = (f: (typeof files)[number]) => `${f.name} (${f.size}b)`;
+      const picked = files.map(describe).join(', ');
+      logger.log(`[KnowledgeBase] picker returned ${files.length} file(s): ${picked}`);
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -304,7 +306,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
       )}
 
       {isLoading ? (
-        <View style={styles.centered}>
+        <View style={styles.centered} aria-busy>
           <LoadingDots color={colors.primary} size={8} />
         </View>
       ) : kbDocs.length === 0 && arriving.length === 0 ? (
