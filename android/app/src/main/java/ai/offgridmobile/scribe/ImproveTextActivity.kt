@@ -20,12 +20,13 @@ class ImproveTextActivity : Activity() {
             return
         }
         val readOnly = intent.getBooleanExtra(Intent.EXTRA_PROCESS_TEXT_READONLY, false)
-        ScribeImproveRequests.offer(text, if (readOnly) null else this)
+        val replace = ScribeImproveRequests.canReplaceInPlace(readOnly, callingPackage, packageName)
+        ScribeImproveRequests.offer(text, if (replace) this else null)
         packageManager.getLaunchIntentForPackage(packageName)?.let {
             startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
         opened = true
-        if (readOnly) finish()
+        if (!replace) finish()
     }
 
     override fun onRestart() {

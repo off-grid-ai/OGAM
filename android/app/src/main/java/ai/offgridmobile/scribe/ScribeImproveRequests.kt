@@ -36,6 +36,13 @@ internal object ScribeImproveRequests {
         return true
     }
 
+    /**
+     * Replace works only for editable text in another app. A selection in this app's own field has
+     * no caller left to answer: opening the app's single task clears this activity. So it copies.
+     */
+    fun canReplaceInPlace(readOnly: Boolean, callingPackage: String?, ownPackage: String): Boolean =
+        !readOnly && callingPackage != ownPackage
+
     fun release(activity: ImproveTextActivity) {
         if (current?.caller?.get() === activity) current = null
         if (pending?.caller?.get() === activity) pending = pending?.copy(caller = null)
