@@ -43,10 +43,23 @@ it('Extend asks what happens next, sends the clip\'s last frame with those words
   expect(sent.story.shots[0].prompt).toContain(CLIP);
   expect(sent.story.shots[0].prompt).toContain('the fox leaps over a log');
 
+  // It is named after its source and its place in line, not the source's words run into the next ones.
+  const { useStudioStore } = require('../../../pro/video/studio/studioStore');
+  const titles = () => (Object.values(useStudioStore.getState().stories) as Array<{ title: string }>).map(story => story.title);
+  expect(titles()).toContain(`${CLIP} · 2`);
+  expect(await view.findByText(`${CLIP} · 2`)).toBeTruthy();
+  expect(titles().some((title: string) => title.includes('the fox leaps'))).toBe(false);
+
   app.stories.release();
   // The next clip is ready in the chat, with its own Extend under it.
   expect(view.getAllByTestId('video-continue')).toHaveLength(1);
   await rtl.waitFor(() => expect(view.getAllByTestId('video-continue')).toHaveLength(2), { timeout: 30_000 });
+
+  // Extend the first clip again: the next place in line, never a second "· 2".
+  rtl.fireEvent.press(view.getAllByTestId('video-continue')[0]);
+  rtl.fireEvent.press(await view.findByTestId('extend-go', {}, { timeout: 10_000 }));
+  await rtl.waitFor(() => expect(app.stories.submissions).toHaveLength(2), { timeout: 15_000 });
+  expect(titles()).toContain(`${CLIP} · 3`);
 }, 90_000);
 
 it('Extend uses a model on this phone that starts from a picture, when the computer has none', async () => {
