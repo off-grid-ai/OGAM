@@ -15,15 +15,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('LiteRT chat-mode STT lands in the input box (like llama), not a voice note — device 2026-07-14', () => {
   it('recording a voice note in chat mode puts the transcript in the composer and sends nothing', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android', whisper: true, audio: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android', whisper: true, audio: true });
     await h.setupWhisperModel('tiny.en'); // downloaded + selected + resident via the real select gesture
     h.render();
     const view = h.view!;

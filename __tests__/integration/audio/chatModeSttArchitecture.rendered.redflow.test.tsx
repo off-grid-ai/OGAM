@@ -18,15 +18,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('T080/T075 (rendered) — chat-mode STT must transcribe the recording to TEXT (DEV-B26/B28)', () => {
   it('lands the spoken transcript in the input when realtime captured nothing but the recording has it', async () => {
-    const h = await setupChatScreen({ engine: 'llama', whisper: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', whisper: true });
     await h.setupWhisperModel('tiny.en'); // downloaded + selected + resident, via the real select gesture
     h.render();
 

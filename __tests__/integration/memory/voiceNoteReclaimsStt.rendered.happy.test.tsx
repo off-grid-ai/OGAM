@@ -16,15 +16,12 @@ import { setupChatScreen } from '../../harness/chatHarness';
 
 const GB = 1024 * 1024 * 1024;
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('T115 (rendered) — voice-note send reclaims idle STT on a tight device (In Memory UI)', () => {
   it('frees whisper after a voice-note turn on a ≤6GB device, and still renders the reply', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'litert',
       platform: 'android',
       whisper: true,
@@ -64,7 +61,7 @@ describe('T115 (rendered) — voice-note send reclaims idle STT on a tight devic
 
     // Result via the In Memory UI (the selector is rendered AFTER the voice turn): the idle whisper was
     // reclaimed for the generation working set; the text model stays.
-    const sel = h.rtl.render(React.createElement(ModelsManagerSheet, {
+    const sel = h.renderAside(React.createElement(ModelsManagerSheet, {
       visible: true, onClose: () => {}, labels: { text: '—', image: '—', voice: '—', speech: '—' },
       loadingState: { isLoading: false }, isEjecting: false, hasActiveModel: false,
       onOpenRow: () => {}, onEject: () => {},
