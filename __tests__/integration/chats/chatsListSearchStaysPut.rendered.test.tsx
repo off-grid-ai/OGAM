@@ -11,17 +11,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: () => {},
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 type Node = { parent?: Node | null; props?: Record<string, unknown> };
 const isInside = (node: Node, ancestor: Node) => {
@@ -31,7 +22,7 @@ const isInside = (node: Node, ancestor: Node) => {
 
 describe('chats list search field', () => {
   it('stays put above the chats and filters as I type without being rebuilt', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     h.render();
     const prompts = ['first trip plan', 'second grocery list', 'third reading notes'];
     for (const [index, prompt] of prompts.entries()) {
@@ -43,7 +34,7 @@ describe('chats list search field', () => {
 
     const React = require('react');
     const { ChatsListScreen } = require('../../../src/screens/ChatsListScreen');
-    const list = h.rtl.render(React.createElement(ChatsListScreen));
+    const list = h.rtl.render(h.inNavigator(React.createElement(ChatsListScreen)));
     for (const prompt of prompts) expect(list.getByText(prompt)).toBeTruthy();
 
     // The field is a bar fixed above the list, not part of what scrolls.

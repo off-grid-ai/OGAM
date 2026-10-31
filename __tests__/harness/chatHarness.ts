@@ -349,6 +349,25 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       React.createElement(nav.NavigationContainer, { ref: navRef }, React.createElement(AppNavigator)),
     );
   };
+  /**
+   * Real navigation: a screen or section rendered on its own (the tools list, a settings section) sits as
+   * the one screen of a real React Navigation stack, so its useNavigation / useFocusEffect are the
+   * library's own, not a stub. Without real navigation it renders as before.
+   */
+  const inNavigator = (element: React.ReactElement): React.ReactElement => {
+    if (!realNav) return element;
+    const { createNativeStackNavigator } = require('@react-navigation/native-stack');
+    const Stack = createNativeStackNavigator();
+    return React.createElement(
+      nav.NavigationContainer,
+      null,
+      React.createElement(
+        Stack.Navigator,
+        { screenOptions: { headerShown: false } },
+        React.createElement(Stack.Screen, { name: 'Host' }, () => element),
+      ),
+    );
+  };
   if (realNav) {
     const { modelManager } = require('../../src/services');
     useAppStore.getState().setDownloadedModels(await modelManager.getDownloadedModels());
@@ -447,7 +466,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       const { ToolsScreen } = require('../../src/screens/ToolsScreen');
       const { Switch } = require('react-native');
 
-      const tools = rtl.render(React.createElement(ToolsScreen, {}));
+      const tools = rtl.render(inNavigator(React.createElement(ToolsScreen, {})));
       const row = tools.getByTestId(`tool-picker-row-${toolId}`);
       // The RN Switch toggles via onValueChange (not press) — locate it in the row and flip it.
       rtl.fireEvent(
@@ -466,7 +485,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       const {
         TextGenerationSection,
       } = require('../../src/components/GenerationSettingsModal/TextGenerationSection');
-      const s = rtl.render(React.createElement(TextGenerationSection, {}));
+      const s = rtl.render(inNavigator(React.createElement(TextGenerationSection, {})));
       if (!s.queryByTestId(`setting-${key}-value-button`)) {
         rtl.fireEvent.press(s.getByTestId('modal-text-advanced-toggle'));
       }
@@ -719,9 +738,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       const {
         ShowGenerationDetailsToggle,
       } = require('../../src/components/settings/textGenAdvancedSections');
-      const s = rtl.render(
-        React.createElement(ShowGenerationDetailsToggle, {}),
-      );
+      const s = rtl.render(inNavigator(React.createElement(ShowGenerationDetailsToggle, {})));
       rtl.fireEvent.press(s.getByTestId('show-gen-details-on-button'));
       s.unmount();
     },
@@ -743,7 +760,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
         75 * 1024 * 1024,
       );
       await useWhisperStore.getState().refreshPresentModels(); // real disk scan → present
-      const t = rtl.render(React.createElement(TranscriptionModelsTab, {}));
+      const t = rtl.render(inNavigator(React.createElement(TranscriptionModelsTab, {})));
       await rtl.waitFor(
         () => {
           expect(useWhisperStore.getState().presentModelIds).toContain(modelId);
@@ -930,6 +947,9 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
 
     /** Mount the real ChatScreen (plus the real app.root slot when pro is active, so the TTS EngineBridge
      *  mounts and the voice engine can load over the executorch fake — the same slot App.tsx renders). */
+    /** Wrap an element rendered on its own so it has real navigation (see inNavigator above). */
+    inNavigator,
+
     render() {
       if (realNav) {
         // The app is already mounted on Chat (New Chat opened it); a chat chosen by the test opens there.

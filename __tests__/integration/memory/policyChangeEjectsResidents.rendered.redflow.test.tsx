@@ -15,15 +15,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('policy change ejects every resident (device 2026-07-14) — Lean with models loaded frees them', () => {
   it('selecting Lean while text + image + whisper are resident ejects them all', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android', whisper: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android', whisper: true });
     h.render();
     await h.placeImageModel({ backend: 'mnn' });
      

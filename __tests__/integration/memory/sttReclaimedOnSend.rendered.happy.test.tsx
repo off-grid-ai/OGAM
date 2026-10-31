@@ -2,15 +2,12 @@ import { setupChatScreen } from '../../harness/chatHarness';
 
 const GB = 1024 * 1024 * 1024;
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('STT reclaim on send (memory-tight) — rendered characterization', () => {
   it('frees the idle whisper sidecar when a text turn is sent on a tight device, and still renders the reply', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       platform: 'android',
       whisper: true,
@@ -39,11 +36,11 @@ describe('STT reclaim on send (memory-tight) — rendered characterization', () 
     const React = require('react');
     const { ModelsManagerSheet } = require('../../../src/components/models/ModelsManagerSheet');
      
-    const sel = h.rtl.render(React.createElement(ModelsManagerSheet, {
+    const sel = h.rtl.render(h.inNavigator(React.createElement(ModelsManagerSheet, {
       visible: true, onClose: () => {}, labels: { text: '—', image: '—', voice: '—', speech: '—' },
       loadingState: { isLoading: false }, isEjecting: false, hasActiveModel: false,
       onOpenRow: () => {}, onEject: () => {},
-    }));
+    })));
     await h.rtl.waitFor(() => { expect(sel.queryByTestId('models-row-text-ram')).not.toBeNull(); }, { timeout: 4000 });
     // Reclaimed: whisper no longer listed as in-memory; the text model still is.
     await h.rtl.waitFor(() => { expect(sel.queryByTestId('models-row-speech-ram')).toBeNull(); }, { timeout: 4000 });

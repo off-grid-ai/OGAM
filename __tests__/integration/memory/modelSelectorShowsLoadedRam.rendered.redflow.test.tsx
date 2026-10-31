@@ -9,15 +9,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('residency visibility — model selector shows the loaded model + its RAM', () => {
   it('renders the currently-loaded model name and its RAM consumption', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
      
     const React = require('react');
     const { ModelSelectorModal } = require('../../../src/components/ModelSelectorModal');
@@ -25,10 +22,10 @@ describe('residency visibility — model selector shows the loaded model + its R
      
 
     // The real UI, wired with the real loaded path the screen passes in.
-    const v = h.rtl.render(React.createElement(ModelSelectorModal, {
+    const v = h.rtl.render(h.inNavigator(React.createElement(ModelSelectorModal, {
       visible: true, onClose: () => {}, onSelectModel: () => {}, onUnloadModel: () => {}, isLoading: false,
       currentModelPath: llmService.getLoadedModelPath(),
-    }));
+    })));
 
     // The selector indicates WHAT is loaded...
     expect(String(v.getByTestId('currently-loaded-model-name').props.children)).toContain('Test Model');

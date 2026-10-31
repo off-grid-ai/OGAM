@@ -12,25 +12,22 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('T117 (rendered) — OS memory warning reclaims idle sidecars (In Memory UI)', () => {
   it('drops the idle whisper sidecar on a memory warning while the text model stays', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android', whisper: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android', whisper: true });
     h.render();
      
     const React = require('react');
     const { ModelsManagerSheet } = require('../../../src/components/models/ModelsManagerSheet');
      
-    const openSelector = () => h.rtl.render(React.createElement(ModelsManagerSheet, {
+    const openSelector = () => h.rtl.render(h.inNavigator(React.createElement(ModelsManagerSheet, {
       visible: true, onClose: () => {}, labels: { text: '—', image: '—', voice: '—', speech: '—' },
       loadingState: { isLoading: false }, isEjecting: false, hasActiveModel: false,
       onOpenRow: () => {}, onEject: () => {},
-    }));
+    })));
 
     // Text model + whisper sidecar both resident (real load + real STT select).
     await h.setupWhisperModel();

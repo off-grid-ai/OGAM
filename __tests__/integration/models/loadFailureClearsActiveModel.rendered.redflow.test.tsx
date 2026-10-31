@@ -10,15 +10,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('load failure clears the active model (rendered) — device 2026-07-14', () => {
   it('a text model that fails to load leaves activeModelId null and the selector showing no loaded model', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' }); // model 'm' loaded, active
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' }); // model 'm' loaded, active
      
     const React = require('react');
     const { activeModelService } = require('../../../src/services/activeModelService');
@@ -38,10 +35,10 @@ describe('load failure clears the active model (rendered) — device 2026-07-14'
     expect(h.useAppStore.getState().activeModelId).toBeNull();
 
     // UI outcome: the selector shows NO currently-loaded model (the user sees no active model).
-    const v = h.rtl.render(React.createElement(ModelSelectorModal, {
+    const v = h.rtl.render(h.inNavigator(React.createElement(ModelSelectorModal, {
       visible: true, onClose: () => {}, onSelectModel: () => {}, onUnloadModel: () => {},
       isLoading: false, currentModelPath: llmService.getLoadedModelPath(),
-    }));
+    })));
     await h.rtl.waitFor(() => { expect(v.queryAllByTestId('model-item').length).toBeGreaterThanOrEqual(0); });
     expect(v.queryByTestId('currently-loaded-model')).toBeNull();
   }, 30000);
