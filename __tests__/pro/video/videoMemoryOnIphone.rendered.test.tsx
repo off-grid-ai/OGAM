@@ -54,7 +54,7 @@ it('an iPhone with 5.9 GB free makes a clip without asking to run anyway', async
   // Home › the video model, a new chat in video mode, Send.
   rtl.fireEvent.press(await view.findByTestId('home-tab'));
   rtl.fireEvent.press(await view.findByTestId('model-summary-video-open'));
-  rtl.fireEvent.press(await view.findByTestId(`video-model-row-${MODEL.id}-select`, {}, { timeout: 5000 }));
+  rtl.fireEvent.press(await view.findByTestId(`video-model-row-${MODEL.id}`, {}, { timeout: 5000 }));
   rtl.fireEvent.press(await view.findByTestId('new-chat-button', {}, { timeout: 5000 }));
   await view.findByTestId('chat-input');
   rtl.fireEvent.press(view.getByTestId('quick-settings-button'));
