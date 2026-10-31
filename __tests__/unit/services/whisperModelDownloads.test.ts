@@ -1,266 +1,115 @@
-import RNFS from 'react-native-fs';
-import { backgroundDownloadService } from '../../../src/services/backgroundDownloadService';
-import { WhisperModelDownloads } from '../../../src/services/whisperModelDownloads';
-import * as whisperModelFiles from '../../../src/services/whisperModelFiles';
+/**
+ * WhisperModelDownloads: who owns a transcription model's download when deletes and new downloads overlap.
+ *
+ * The phone is the boundary: the native background downloader (its rows; a cancel removes one), the disk
+ * and storage (harness/modelManagerDevice). The transcription downloads, the background download service and
+ * the download store run for real. Ownership shows in what the phone is left with: which native transfers are
+ * still running and which files are on disk.
+ */
+import { installModelManagerDevice, type ModelManagerDevice } from '../../harness/modelManagerDevice';
 
-jest.mock('../../../src/services/backgroundDownloadService', () => ({
-  backgroundDownloadService: {
-    downloadFileTo: jest.fn(),
-    cancelDownload: jest.fn(async () => {}),
-  },
-}));
+let device: ModelManagerDevice;
+let downloads: import('../../../src/services/whisperModelDownloads').WhisperModelDownloads;
+const SIZE = 75 * 1024 * 1024;
 
-const mockAdd = jest.fn();
-const mockRemove = jest.fn();
-const mockRetryEntry = jest.fn();
-jest.mock('../../../src/stores/downloadStore', () => ({
-  useDownloadStore: {
-    getState: () => ({
-      add: mockAdd,
-      remove: mockRemove,
-      retryEntry: mockRetryEntry,
-    }),
-  },
-}));
+beforeEach(async () => {
+  device = await installModelManagerDevice();
+  const { WhisperModelDownloads } = require('../../../src/services/whisperModelDownloads');
+  downloads = new WhisperModelDownloads();
+});
 
-function deferred(): {
-  promise: Promise<void>;
-  resolve: () => void;
-  reject: (error: Error) => void;
-} {
-  let resolve = () => {};
-  let reject = (_error: Error) => {};
-  const promise = new Promise<void>((done, fail) => {
-    resolve = done;
-    reject = fail;
-  });
-  return { promise, resolve, reject };
-}
-
-function deferredDownloadId(): {
-  promise: Promise<string>;
-  resolve: (id: string) => void;
-  reject: (error: Error) => void;
-} {
-  let resolve = (_id: string) => {};
-  let reject = (_error: Error) => {};
-  const promise = new Promise<string>((done, fail) => {
-    resolve = done;
-    reject = fail;
-  });
-  return { promise, resolve, reject };
-}
+const path = (model: string) =>
+  require('../../../src/services/whisperModelFiles').getModelPath(model) as string;
+/** The native transfers running for `model`, oldest first. */
+const transfers = (model: string) => device.nativeRows().filter(r => r.modelId === `whisper-${model}`);
+/** A download's outcome, held from the start: null when it finished, else the error. */
+const outcome = (p: Promise<unknown>) => p.then(() => null, (e: Error & { cancelled?: boolean }) => e);
 
 describe('WhisperModelDownloads concurrent ownership', () => {
-  beforeEach(() => jest.clearAllMocks());
-  afterEach(() => jest.restoreAllMocks());
-
   it('cancels the deleted model without disturbing another active download', async () => {
-    const first = deferred();
-    const second = deferred();
-    jest.spyOn(whisperModelFiles, 'ensureModelsDirExists').mockResolvedValue();
-    jest.spyOn(whisperModelFiles, 'validateModelFile').mockResolvedValue();
-    jest.spyOn(RNFS, 'exists').mockResolvedValue(false);
-    const downloadFileTo =
-      backgroundDownloadService.downloadFileTo as jest.Mock;
-    downloadFileTo
-      .mockReturnValueOnce({
-        downloadIdPromise: Promise.resolve(11),
-        promise: first.promise,
-      })
-      .mockReturnValueOnce({
-        downloadIdPromise: Promise.resolve(22),
-        promise: second.promise,
-      });
-
-    const downloads = new WhisperModelDownloads();
-    const tiny = downloads.downloadModel('tiny.en');
-    const base = downloads.downloadModel('base.en');
-    await new Promise<void>(resolve => setImmediate(resolve));
+    const tiny = outcome(downloads.downloadModel('tiny.en'));
+    const base = outcome(downloads.downloadModel('base.en'));
+    await device.settle();
+    expect(transfers('tiny.en')).toHaveLength(1);
+    expect(transfers('base.en')).toHaveLength(1);
 
     await downloads.deleteModel('tiny.en');
-    expect(backgroundDownloadService.cancelDownload).toHaveBeenCalledWith(11);
-    expect(backgroundDownloadService.cancelDownload).not.toHaveBeenCalledWith(
-      22,
-    );
+    expect(transfers('tiny.en')).toEqual([]);
+    expect(transfers('base.en')).toHaveLength(1);
 
-    first.resolve();
-    second.resolve();
-    await Promise.all([tiny, base]);
-    await downloads.deleteModel('base.en');
-    expect(backgroundDownloadService.cancelDownload).not.toHaveBeenCalledWith(
-      22,
-    );
+    await device.finishDownload(transfers('base.en')[0].downloadId, SIZE);
+    expect(await base).toBeNull();
+    expect((await tiny)?.cancelled).toBe(true);
+    expect(await device.fs.exists(path('base.en'))).toBe(true);
   });
 
   it('does not let an older same-model completion erase the newer download owner', async () => {
-    const older = deferred();
-    const newer = deferred();
-    jest.spyOn(whisperModelFiles, 'ensureModelsDirExists').mockResolvedValue();
-    jest.spyOn(whisperModelFiles, 'validateModelFile').mockResolvedValue();
-    jest.spyOn(RNFS, 'exists').mockResolvedValue(false);
-    const downloadFileTo =
-      backgroundDownloadService.downloadFileTo as jest.Mock;
-    downloadFileTo
-      .mockReturnValueOnce({
-        downloadIdPromise: Promise.resolve(31),
-        promise: older.promise,
-      })
-      .mockReturnValueOnce({
-        downloadIdPromise: Promise.resolve(32),
-        promise: newer.promise,
-      });
+    const first = outcome(downloads.downloadModel('tiny.en'));
+    await device.settle();
+    const second = outcome(downloads.downloadModel('tiny.en'));
+    await device.settle();
+    const [older, newer] = transfers('tiny.en');
 
-    const downloads = new WhisperModelDownloads();
-    const first = downloads.downloadModel('tiny.en');
-    const second = downloads.downloadModel('tiny.en');
-    await new Promise<void>(resolve => setImmediate(resolve));
-    older.resolve();
-    await first;
+    await device.finishDownload(older.downloadId, SIZE);
+    expect(await first).toBeNull();
 
+    // A delete now reaches the newer download, which still owns the model.
     await downloads.deleteModel('tiny.en');
-    expect(backgroundDownloadService.cancelDownload).toHaveBeenCalledWith(32);
-    expect(backgroundDownloadService.cancelDownload).not.toHaveBeenCalledWith(
-      31,
-    );
-    newer.resolve();
-    await second;
+    expect(transfers('tiny.en').map(r => r.downloadId)).not.toContain(newer.downloadId);
+    expect((await second)?.cancelled).toBe(true);
   });
 
-  it('cancels a queued model deleted before its native download id resolves', async () => {
-    const id = deferredDownloadId();
-    const file = deferred();
-    jest.spyOn(whisperModelFiles, 'ensureModelsDirExists').mockResolvedValue();
-    jest.spyOn(whisperModelFiles, 'validateModelFile').mockResolvedValue();
-    jest.spyOn(RNFS, 'exists').mockResolvedValue(false);
-    (backgroundDownloadService.downloadFileTo as jest.Mock).mockReturnValueOnce(
-      { downloadIdPromise: id.promise, promise: file.promise },
-    );
+  it('cancels a model deleted before its native download has started', async () => {
+    const downloading = outcome(downloads.downloadModel('tiny.en'));
+    await downloads.deleteModel('tiny.en');
+    await device.settle();
 
-    const downloads = new WhisperModelDownloads();
-    const downloading = downloads.downloadModel('tiny.en');
-    await new Promise<void>(resolve => setImmediate(resolve));
-
-    const cancelled = new Error('Download cancelled') as Error & {
-      cancelled?: boolean;
-    };
-    cancelled.cancelled = true;
-    (
-      backgroundDownloadService.cancelDownload as jest.Mock
-    ).mockImplementationOnce(async downloadId => {
-      expect(downloadId).toBe('queued:whisper-tiny.en/ggml-tiny.en.bin');
-      id.reject(cancelled);
-    });
-    const deleting = downloads.deleteModel('tiny.en');
-    await deleting;
-
-    expect(backgroundDownloadService.cancelDownload).toHaveBeenCalledWith(
-      'queued:whisper-tiny.en/ggml-tiny.en.bin',
-    );
-    await expect(downloading).rejects.toMatchObject({ cancelled: true });
-    expect(mockRemove).toHaveBeenCalledWith('whisper-tiny.en/ggml-tiny.en.bin');
+    expect((await downloading)?.cancelled).toBe(true);
+    expect(transfers('tiny.en')).toEqual([]);
+    const { useDownloadStore } = require('../../../src/stores/downloadStore');
+    expect(Object.keys(useDownloadStore.getState().downloads)).toEqual([]);
   });
 
-  it('keeps replacement ownership when an older queued delete settles', async () => {
-    const olderId = deferredDownloadId();
-    const olderFile = deferred();
-    const newerFile = deferred();
-    jest.spyOn(whisperModelFiles, 'ensureModelsDirExists').mockResolvedValue();
-    jest.spyOn(whisperModelFiles, 'validateModelFile').mockResolvedValue();
-    jest.spyOn(RNFS, 'exists').mockResolvedValue(false);
-    const downloadFileTo =
-      backgroundDownloadService.downloadFileTo as jest.Mock;
-    downloadFileTo
-      .mockReturnValueOnce({
-        downloadIdPromise: olderId.promise,
-        promise: olderFile.promise,
-      })
-      .mockReturnValueOnce({
-        downloadIdPromise: Promise.resolve('replacement-52'),
-        promise: newerFile.promise,
-      });
-
-    const downloads = new WhisperModelDownloads();
-    const older = downloads.downloadModel('tiny.en');
-    await new Promise<void>(resolve => setImmediate(resolve));
+  it('keeps replacement ownership when an older delete settles', async () => {
+    const older = outcome(downloads.downloadModel('tiny.en'));
+    await device.settle();
     const staleDelete = downloads.deleteModel('tiny.en');
-    const replacement = downloads.downloadModel('tiny.en');
-    await new Promise<void>(resolve => setImmediate(resolve));
-
-    olderId.resolve('older-51');
+    const replacement = outcome(downloads.downloadModel('tiny.en'));
     await staleDelete;
-    expect(backgroundDownloadService.cancelDownload).toHaveBeenCalledWith(
-      'older-51',
-    );
-    expect(backgroundDownloadService.cancelDownload).not.toHaveBeenCalledWith(
-      'replacement-52',
-    );
+    await device.settle();
 
-    olderFile.resolve();
-    await older;
-    expect(mockRemove).not.toHaveBeenCalled();
+    expect((await older)?.cancelled).toBe(true);
+    // The replacement's transfer runs on, untouched by the older delete.
+    expect(transfers('tiny.en')).toHaveLength(1);
 
     await downloads.deleteModel('tiny.en');
-    expect(backgroundDownloadService.cancelDownload).toHaveBeenCalledWith(
-      'replacement-52',
-    );
-    newerFile.resolve();
-    await replacement;
+    expect(transfers('tiny.en')).toEqual([]);
+    expect((await replacement)?.cancelled).toBe(true);
   });
 
   it('does not let an older failed owner unlink a replacement file', async () => {
-    const olderFile = deferred();
-    const replacementFile = deferred();
-    jest.spyOn(whisperModelFiles, 'ensureModelsDirExists').mockResolvedValue();
-    jest.spyOn(whisperModelFiles, 'validateModelFile').mockResolvedValue();
-    jest.spyOn(RNFS, 'exists').mockResolvedValue(false);
-    const unlink = jest.spyOn(RNFS, 'unlink').mockResolvedValue();
-    const downloadFileTo =
-      backgroundDownloadService.downloadFileTo as jest.Mock;
-    downloadFileTo
-      .mockReturnValueOnce({
-        downloadIdPromise: Promise.resolve('older-61'),
-        promise: olderFile.promise,
-      })
-      .mockReturnValueOnce({
-        downloadIdPromise: Promise.resolve('replacement-62'),
-        promise: replacementFile.promise,
-      });
+    const older = outcome(downloads.downloadModel('tiny.en'));
+    await device.settle();
+    const replacement = outcome(downloads.downloadModel('tiny.en'));
+    await device.settle();
+    const [olderTransfer, replacementTransfer] = transfers('tiny.en');
 
-    const downloads = new WhisperModelDownloads();
-    const older = downloads.downloadModel('tiny.en');
-    const replacement = downloads.downloadModel('tiny.en');
-    await new Promise<void>(resolve => setImmediate(resolve));
+    await device.finishDownload(replacementTransfer.downloadId, SIZE);
+    expect(await replacement).toBeNull();
+    await device.failDownload(olderTransfer.downloadId, 'Older download failed');
 
-    olderFile.reject(new Error('Older download failed'));
-    await expect(older).rejects.toThrow('Older download failed');
-    expect(unlink).not.toHaveBeenCalled();
-
-    replacementFile.resolve();
-    await replacement;
+    expect((await older)?.message).toBeTruthy();
+    expect(await device.fs.exists(path('tiny.en'))).toBe(true);
   });
 
   it('removes a failed partial file when the failing download still owns it', async () => {
-    const file = deferred();
-    jest.spyOn(whisperModelFiles, 'ensureModelsDirExists').mockResolvedValue();
-    jest.spyOn(whisperModelFiles, 'validateModelFile').mockResolvedValue();
-    jest.spyOn(RNFS, 'exists').mockResolvedValue(false);
-    const unlink = jest.spyOn(RNFS, 'unlink').mockResolvedValue();
-    (backgroundDownloadService.downloadFileTo as jest.Mock).mockReturnValueOnce(
-      {
-        downloadIdPromise: Promise.resolve('current-71'),
-        promise: file.promise,
-      },
-    );
+    const downloading = outcome(downloads.downloadModel('tiny.en'));
+    await device.settle();
+    // Part of the file reached the disk before the transfer failed.
+    device.fs.seedFile(path('tiny.en'), 1024);
+    await device.failDownload(transfers('tiny.en')[0].downloadId, 'Current download failed');
 
-    const downloads = new WhisperModelDownloads();
-    const downloading = downloads.downloadModel('tiny.en');
-    await new Promise<void>(resolve => setImmediate(resolve));
-    file.reject(new Error('Current download failed'));
-
-    await expect(downloading).rejects.toThrow('Current download failed');
-    expect(unlink).toHaveBeenCalledWith(
-      whisperModelFiles.getModelPath('tiny.en'),
-    );
+    expect((await downloading)?.message).toBeTruthy();
+    expect(await device.fs.exists(path('tiny.en'))).toBe(false);
   });
 });
