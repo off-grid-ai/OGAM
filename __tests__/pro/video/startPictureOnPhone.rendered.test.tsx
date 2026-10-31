@@ -95,3 +95,24 @@ it('offers the phone download, not Connect, when no computer is paired', async (
   await view.findByTestId('start-picture-get-phone', {}, { timeout: 10_000 });
   expect(view.queryByTestId('start-picture-connect')).toBeNull();
 }, 90_000);
+
+it('offers the phone download at once while a saved computer never answers, and the computer\'s own takes its place once it does', async () => {
+  const app = await launchStudioApp({ memoryGb: 34 }, { phoneEngine: true, download: true });
+  const { view, rtl } = app;
+  await makeClipInChat(app, CLIP);
+  // Saved but asleep: the computer takes the request and never answers.
+  app.models.goSilent();
+  app.models.install(LIGHT);
+  await tapMutedExtend(app);
+  // No wait on the computer: the phone's own step shows straight away.
+  expect(await view.findByTestId('start-picture-get-phone', {}, { timeout: 2_000 })).toBeTruthy();
+  expect(view.queryByTestId('start-picture-checking')).toBeNull();
+  // The computer wakes and has one: the next opening asks it again, and "Extend on your computer" takes
+  // the download's place.
+  app.models.answer();
+  rtl.fireEvent.press(view.getByTestId('start-picture-describe'));
+  await tapMutedExtend(app);
+  await view.findByTestId('start-picture-use', {}, { timeout: 10_000 });
+  expect(view.queryByTestId('start-picture-get-phone')).toBeNull();
+  expect(app.models.pulls).toEqual([]);
+}, 90_000);
