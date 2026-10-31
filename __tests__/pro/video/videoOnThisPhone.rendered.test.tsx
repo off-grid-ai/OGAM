@@ -561,6 +561,9 @@ it('a clip lost with the app (the phone stopped the worker) says so, and Retry m
   rtl.fireEvent.press(await view.findByTestId('chats-tab'));
   await openOnlyChat(current, 'a paper plane over the rooftops');
   await view.findByText(/Video generation was interrupted\. Retry to start it again\./, {}, { timeout: 10_000 });
+  // Titled as an interrupted clip, never as a model that failed to load.
+  expect(view.queryByText(/Video generation interrupted/)).not.toBeNull();
+  expect(view.queryByText(/Failed to Load Model/)).toBeNull();
   expect(current.engine.generations).toHaveLength(0);
   rtl.fireEvent.press(view.getByTestId('model-failure-retry-video'));
   await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
