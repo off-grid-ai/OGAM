@@ -235,7 +235,6 @@
   "__tests__/rntl/components/ChatInputModeToggle.test.tsx": 3,
   "__tests__/rntl/components/GenerationSettingsModal.test.tsx": 3,
   "__tests__/rntl/components/McpServersScreen.test.tsx": 6,
-  "__tests__/rntl/components/ModelCard.test.tsx": 1,
   "__tests__/rntl/components/ModelsManagerSheet.test.tsx": 2,
   "__tests__/rntl/components/ModelsSummaryRow.test.tsx": 1,
   "__tests__/rntl/components/pairingCodeSheet.test.tsx": 2,
