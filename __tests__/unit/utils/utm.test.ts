@@ -20,7 +20,7 @@ describe('withUtm', () => {
   });
 
   it('honors a custom campaign', () => {
-    expect(withUtm('https://x.co/pay', 'pro-checkout', 'launch-2026')).toContain(
+    expect(withUtm('https://x.co/pro', 'pro-checkout', 'launch-2026')).toContain(
       'utm_campaign=launch-2026',
     );
   });
