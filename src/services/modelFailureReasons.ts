@@ -30,15 +30,15 @@ export function modelNotReadyAlert(
 ): { title: string; message: string } {
   switch (reason) {
     case 'no-model-selected':
-      return { title: 'No Model Selected', message: 'Choose a text model to start chatting.' };
+      return { title: 'No model selected', message: 'Choose a text model to start chatting.' };
     case 'not-downloaded':
       return {
-        title: 'Model Not Downloaded',
+        title: 'Model not downloaded',
         message: "That model isn't on your device yet. Download it from the Models screen.",
       };
     case 'insufficient-memory':
       return {
-        title: 'Not Enough Memory',
+        title: 'Not enough memory',
         message:
           `${detail ? `${detail}\n\n` : ''}` +
           // The card's own button frees our models; no button is named here, because its label differs.
@@ -46,13 +46,13 @@ export function modelNotReadyAlert(
       };
     case 'load-in-progress':
       return {
-        title: 'Still Loading',
+        title: 'Still loading',
         message: 'The model is still loading. Give it a moment, then try again.',
       };
     case 'load-threw':
     default:
       return {
-        title: 'Failed to Load Model',
+        title: 'Failed to load model',
         message: detail
           ? `The model failed to load: ${detail}`
           : 'The model failed to load. Please try again.',

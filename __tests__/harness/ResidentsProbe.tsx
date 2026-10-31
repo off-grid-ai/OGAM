@@ -2,7 +2,7 @@
  * ResidentsProbe — a TEST-ONLY UI surface for the model residency set.
  *
  * The resident set (`modelResidencyManager.getResidents()` — what is actually in RAM) has no prod UI
- * surface: the user perceives it only indirectly (memory pressure, a wrong "Not Enough Memory" card).
+ * surface: the user perceives it only indirectly (memory pressure, a wrong "Not enough memory" card).
  * Residency-invariant reds (T022/T023/T025/T026/T030) need to ASSERT ON THE UI what is resident, so this
  * renders the real residency projection as a queryable `testID="probe-residents"` string.
  *

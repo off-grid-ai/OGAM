@@ -63,7 +63,7 @@ function FailureRow({ failure, onDismiss }: { failure: ModelFailure; onDismiss: 
             <ActionButton
               icon="refresh-cw"
               color={colors.primary}
-              label={failure.memoryPressure ? 'Free memory & Retry' : 'Retry'}
+              label={failure.memoryPressure ? 'Free memory & retry' : 'Retry'}
               testID={`model-failure-retry-${failure.modelType}`}
               onPress={() => { onDismiss(); failure.onRetry?.(); }}
               styles={styles}

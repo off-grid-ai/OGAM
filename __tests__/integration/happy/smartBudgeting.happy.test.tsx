@@ -1,6 +1,6 @@
 /**
  * HAPPY-PATH (UI, BEHAVIORAL) — smart budgeting: a fittable image model, generated via the real force-mode +
- * send gesture on the ChatScreen, produces an image, becomes resident, and shows NO "Not Enough Memory"
+ * send gesture on the ChatScreen, produces an image, becomes resident, and shows NO "Not enough memory"
  * card. GREEN counterpart to the M-series over-admit/over-refuse reds.
  *
  * REAL modelResidencyManager + memoryBudget + imageGenerationService over the seeded native RAM leaf (no
@@ -32,7 +32,7 @@ describe('happy — a fittable image gen succeeds with no failure card (heavy en
     const { modelResidencyManager } = require('../../../src/services/modelResidency');
     expect(modelResidencyManager.isResident('image')).toBe(true);
 
-    // ...and the user sees NO "Not Enough Memory" card anywhere on the chat screen.
-    expect(h.view!.queryByText(/Not Enough Memory/)).toBeNull();
+    // ...and the user sees NO "Not enough memory" card anywhere on the chat screen.
+    expect(h.view!.queryByText(/Not enough memory/)).toBeNull();
   });
 });
