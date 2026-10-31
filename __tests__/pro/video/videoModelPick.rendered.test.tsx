@@ -50,7 +50,7 @@ it('lists the models on this phone first, the one in use on top, with no repeate
   await view.findByTestId(`video-model-row-${TURBO}`);
   const rows = view.UNSAFE_root
     .findAll((node: { props: { testID?: unknown } }) => [LIGHT21, TURBO].some(id => node.props.testID === `video-model-row-${id}`))
-    .map((node: { props: { testID: string } }) => node.props.testID)
+    .map(node => String(node.props.testID))
     .filter((id: string, index: number, all: string[]) => all.indexOf(id) === index);
   expect(rows).toEqual([`video-model-row-${TURBO}`, `video-model-row-${LIGHT21}`]);
   expect(view.queryByText(/Loads when generation starts/)).toBeNull();
