@@ -368,6 +368,24 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       ),
     );
   };
+  /**
+   * Real navigation: RNTL fires events only into its current screen, the last render. A section rendered
+   * in its own root (renderAside) takes that over, so when it is unmounted the app shell is the screen again;
+   * otherwise every later tap on the app would be dropped without a word.
+   */
+  let shell: ReturnType<typeof rtl.render> | undefined;
+  const backToShell = () => {
+    if (shell) require('@testing-library/react-native/build/screen').setRenderResult(shell);
+  };
+  const renderAside = (element: React.ReactElement) => {
+    const aside = rtl.render(inNavigator(element));
+    const unmount = aside.unmount;
+    aside.unmount = () => {
+      unmount();
+      backToShell();
+    };
+    return aside;
+  };
   if (realNav) {
     const { modelManager } = require('../../src/services');
     useAppStore.getState().setDownloadedModels(await modelManager.getDownloadedModels());
@@ -377,7 +395,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
   // GESTURE: mount the real Home screen — its REAL hydration loads the record — then open the picker and TAP
   // the model row. The real handleSelectTextModel sets it active (no setState activeModelId shortcut).
   const home = realNav
-    ? rtl.render(appShell())
+    ? (shell = rtl.render(appShell()))
     : rtl.render(
         React.createElement(HomeScreen, {
           navigation: {
@@ -466,7 +484,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       const { ToolsScreen } = require('../../src/screens/ToolsScreen');
       const { Switch } = require('react-native');
 
-      const tools = rtl.render(inNavigator(React.createElement(ToolsScreen, {})));
+      const tools = renderAside(React.createElement(ToolsScreen, {}));
       const row = tools.getByTestId(`tool-picker-row-${toolId}`);
       // The RN Switch toggles via onValueChange (not press) — locate it in the row and flip it.
       rtl.fireEvent(
@@ -485,7 +503,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       const {
         TextGenerationSection,
       } = require('../../src/components/GenerationSettingsModal/TextGenerationSection');
-      const s = rtl.render(inNavigator(React.createElement(TextGenerationSection, {})));
+      const s = renderAside(React.createElement(TextGenerationSection, {}));
       if (!s.queryByTestId(`setting-${key}-value-button`)) {
         rtl.fireEvent.press(s.getByTestId('modal-text-advanced-toggle'));
       }
@@ -738,7 +756,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       const {
         ShowGenerationDetailsToggle,
       } = require('../../src/components/settings/textGenAdvancedSections');
-      const s = rtl.render(inNavigator(React.createElement(ShowGenerationDetailsToggle, {})));
+      const s = renderAside(React.createElement(ShowGenerationDetailsToggle, {}));
       rtl.fireEvent.press(s.getByTestId('show-gen-details-on-button'));
       s.unmount();
     },
@@ -760,7 +778,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
         75 * 1024 * 1024,
       );
       await useWhisperStore.getState().refreshPresentModels(); // real disk scan → present
-      const t = rtl.render(inNavigator(React.createElement(TranscriptionModelsTab, {})));
+      const t = renderAside(React.createElement(TranscriptionModelsTab, {}));
       await rtl.waitFor(
         () => {
           expect(useWhisperStore.getState().presentModelIds).toContain(modelId);
@@ -949,10 +967,13 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
      *  mounts and the voice engine can load over the executorch fake — the same slot App.tsx renders). */
     /** Wrap an element rendered on its own so it has real navigation (see inNavigator above). */
     inNavigator,
+    /** Render a section on its own, with real navigation; unmounting it makes the app the screen again. */
+    renderAside,
 
     render() {
       if (realNav) {
         // The app is already mounted on Chat (New Chat opened it); a chat chosen by the test opens there.
+        backToShell();
         this.view = home;
         const params = require('./chatHarness').routeHolder.params;
         if (Object.keys(params).length) rtl.act(() => navRef.navigate('Chat', params));
