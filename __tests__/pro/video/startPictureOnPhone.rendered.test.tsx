@@ -27,7 +27,7 @@ const GB = 1024 ** 3;
 async function tapMutedExtend(app: StudioApp) {
   const { view, rtl } = app;
   const extend = await view.findByTestId('video-continue');
-  expect(extend.props.accessibilityState?.disabled).toBe(true);
+  expect(extend.props.accessibilityHint).toMatch(/^Needs /);
   rtl.fireEvent.press(extend);
   await view.findByTestId('start-picture-sheet');
 }
