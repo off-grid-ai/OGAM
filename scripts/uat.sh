@@ -22,10 +22,21 @@ set -euo pipefail
 #   * Release notes are generated FROM THE COMMITS by `claude -p` (falls back to a grouped
 #     commit list), and pushed to TestFlight (What to Test) + Play open testing + the GH release.
 #
-# Usage: scripts/uat.sh [--ios|--android|--resume-ios]   (no arg = both)
+# Usage: scripts/uat.sh [--ios|--android|--resume-ios] [--plan|--build-only|--upload-only|--finalize]
+#   (no arg = both platforms, every stage, exactly as before)
 # --resume-ios reuses the already-built AAB/APK/IPA after a failed Play
 # upload that was completed manually. It uploads only the IPA, then commits,
 # tags, pushes, and creates the GitHub prerelease.
+#
+# Stages, so CI can build Android and iOS in parallel (.github/workflows/uat-dev.yml) and still
+# publish nothing until every build exists, and tag nothing until every upload shipped:
+#   --plan         compute the beta version, its number and the store build number, write the notes;
+#                  print them as KEY=VALUE (and to $GITHUB_OUTPUT when set). Builds nothing.
+#   --build-only   apply the bump in the working tree and build; no upload, commit or tag.
+#   --upload-only  upload the artifacts a --build-only left in place; no commit or tag.
+#   --finalize     apply the bump, commit it, tag, push, create the GitHub prerelease, tell Slack.
+# Every stage after --plan takes the plan as UAT_VERSION, UAT_BETA_N, UAT_BUILD_NUMBER and
+# UAT_SHARED_SHA (and the notes as UAT_NOTES), so all of them ship the same version and build.
 #
 # By default HEAD must equal origin/main. Set RELEASE_BRANCH explicitly to use another ref.
 # ../shared must be clean and at origin/main; its commit is recorded in the beta tag.
@@ -42,21 +53,34 @@ info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
-DO_IOS=1; DO_ANDROID=1; RESUME_IOS=0
-case "${1:-}" in
-  --ios) DO_ANDROID=0 ;; --android) DO_IOS=0 ;; --resume-ios) RESUME_IOS=1 ;; "" ) ;;
-  * ) error "Unknown arg '$1'. Use --ios, --android, --resume-ios, or no arg for both." ;;
-esac
+DO_IOS=1; DO_ANDROID=1; RESUME_IOS=0; MODE=all
+for arg in "$@"; do
+  case "$arg" in
+    --ios) DO_ANDROID=0 ;; --android) DO_IOS=0 ;; --resume-ios) RESUME_IOS=1 ;;
+    --plan) MODE=plan ;; --build-only) MODE=build ;; --upload-only) MODE=upload ;; --finalize) MODE=finalize ;;
+    * ) error "Unknown arg '$arg'. Use --ios, --android, --resume-ios, --plan, --build-only, --upload-only, --finalize, or no arg for both." ;;
+  esac
+done
+[ "$MODE" = all ] || [ "$RESUME_IOS" = 0 ] || error "--resume-ios runs every stage itself; it cannot be combined with a stage."
+# A stage after --plan ships the plan's numbers, never its own: the platforms run on separate machines.
+if [ "$MODE" = build ] || [ "$MODE" = upload ] || [ "$MODE" = finalize ]; then
+  for name in UAT_VERSION UAT_BETA_N UAT_BUILD_NUMBER UAT_SHARED_SHA; do
+    [ -n "${!name:-}" ] || error "$name is not set. Run scripts/uat.sh --plan first and pass its values."
+  done
+fi
+stage() { for wanted in "$@"; do [ "$MODE" = "$wanted" ] && return 0; done; return 1; }
+# GNU sed (Linux runners) and BSD sed (macOS) spell in-place editing differently.
+sed_in_place() { if sed --version >/dev/null 2>&1; then sed -i "$@"; else sed -i '' "$@"; fi; }
 
 # ── pre-flight ─────────────────────────────────────────────────────
 command -v node   >/dev/null || error "node not installed"
-command -v gh     >/dev/null || error "gh CLI not installed"
-command -v bundle >/dev/null || error "bundler not installed (bundle install)"
-[ -f fastlane/Fastfile ]     || error "fastlane/Fastfile not found"
+! stage all finalize || command -v gh >/dev/null || error "gh CLI not installed"
+! stage all build upload || command -v bundle >/dev/null || error "bundler not installed (bundle install)"
+! stage all build upload || [ -f fastlane/Fastfile ] || error "fastlane/Fastfile not found"
 # iOS betas go to the TestFlight external groups this names. Check it now: a missing value found at
 # upload time would come after the Play upload already shipped.
 # Same rule as the Fastfile's testflight_external_groups: at least one non-empty name between commas.
-if [ "$DO_IOS" = 1 ]; then
+if [ "$DO_IOS" = 1 ] && stage all plan upload; then
   groups="${TESTFLIGHT_EXTERNAL_GROUPS:-$( (sed -n 's/^TESTFLIGHT_EXTERNAL_GROUPS=//p' fastlane/.env 2>/dev/null || true) | tail -1)}"
   groups="${groups%\"}"; groups="${groups#\"}"
   [ -n "$(printf '%s' "$groups" | tr ',' '\n' | tr -d '[:space:]')" ] || \
@@ -70,21 +94,33 @@ if [ -z "${RELEASE_BRANCH:-}" ]; then
   [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || error "HEAD must equal origin/main. Set RELEASE_BRANCH explicitly to build another release branch."
 fi
 SHARED_DIR="$ROOT_DIR/../shared"
+if [ -n "${UAT_SHARED_SHA:-}" ] && ! stage all plan; then
+  # The plan pinned ../shared: a build checks it is at that commit, and the tag records it.
+  SHARED_SHA="$UAT_SHARED_SHA"
+  if stage build; then
+    [ -z "$(git -C "$SHARED_DIR" status --porcelain)" ] || error "../shared is dirty. Commit or stash its changes first."
+    [ "$(git -C "$SHARED_DIR" rev-parse HEAD)" = "$SHARED_SHA" ] || error "../shared must be at the plan's commit $SHARED_SHA."
+  fi
+else
 [ -d "$SHARED_DIR/.git" ] || [ -f "$SHARED_DIR/.git" ] || error "Shared repository not found at ../shared"
 [ -z "$(git -C "$SHARED_DIR" status --porcelain)" ] || error "../shared is dirty. Commit or stash its changes first."
 git -C "$SHARED_DIR" fetch --no-recurse-submodules --quiet origin main || error "Could not refresh ../shared origin/main"
 SHARED_SHA=$(git -C "$SHARED_DIR" rev-parse HEAD)
 [ "$SHARED_SHA" = "$(git -C "$SHARED_DIR" rev-parse origin/main)" ] || error "../shared HEAD must equal origin/main. Update ../shared before building."
+fi
 # A beta should ship the newest engines (an app cannot download new native code, so a release is
 # the only way one reaches people). Warn, never block: the weekly engine PR is where they move.
-if ENGINE_REPORT=$(node scripts/update-engines.js --check 2>/dev/null); then
+if ! stage all plan; then :
+elif ENGINE_REPORT=$(node scripts/update-engines.js --check 2>/dev/null); then
   NEWER=$(node -e 'const r=JSON.parse(process.argv[1]);console.log([...r.changed,...r.held].map(c=>`${c.id} ${c.from} → ${c.to}`).join(", "))' "$ENGINE_REPORT")
   [ -z "$NEWER" ] || warn "Newer engines exist and are not in this beta: $NEWER (see scripts/update-engines.js)"
 else
   warn "Could not check for newer engines"
 fi
-[ "$DO_ANDROID" = 0 ] || { [ -f android/gradlew ] || error "android/gradlew not found"; [ -n "${ANDROID_HOME:-}" ] || error "ANDROID_HOME not set"; }
-[ "$DO_IOS" = 0 ]     || command -v xcodebuild >/dev/null || error "xcodebuild not installed"
+if stage all build; then
+  [ "$DO_ANDROID" = 0 ] || { [ -f android/gradlew ] || error "android/gradlew not found"; [ -n "${ANDROID_HOME:-}" ] || error "ANDROID_HOME not set"; }
+  [ "$DO_IOS" = 0 ]     || command -v xcodebuild >/dev/null || error "xcodebuild not installed"
+fi
 
 # ── compute the beta version ───────────────────────────────────────
 # A beta targets the NEXT version, not the live one (the live train is closed - see header).
@@ -92,6 +128,17 @@ fi
 # shows on both stores. package.json is bumped to it below and committed with the build, which is what
 # makes the next cut compute the next version rather than rebuilding 0.0.103 four times.
 CURRENT_VERSION=$(node -p "require('./package.json').version")
+if [ -n "${UAT_VERSION:-}" ] && ! stage all plan; then
+TARGET_VERSION="$UAT_VERSION"
+N="$UAT_BETA_N"
+BUILD_NUMBER="$UAT_BUILD_NUMBER"
+BETA_VERSION="${TARGET_VERSION}-beta.${N}"
+TAG="v${BETA_VERSION}"
+# Nothing is tagged twice: a tag already on the remote means this plan shipped (or was taken) before.
+if stage finalize && git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+  error "Tag $TAG is already on origin. Run a new --plan."
+fi
+else
 TARGET_VERSION=$(node -e "const [a,b,c]=require('./package.json').version.split('.').map(Number); console.log(a+'.'+b+'.'+(c+1))")
 # --no-recurse-submodules: this fetch only needs CORE tags to pick the next beta number. Recursing
 # into the pro submodule made it try to fetch pro commits referenced by old tag history that are no
@@ -119,28 +166,32 @@ if [ "$RESUME_IOS" = 1 ]; then
 else
   BUILD_NUMBER=$(date +%s)
 fi
+fi
 info "Beta build: ${BOLD}${BETA_VERSION}${NC} (build ${BUILD_NUMBER}) - the app will report ${TARGET_VERSION} on both stores (previous cut: ${CURRENT_VERSION})"
 
 # ── apply the version / build-number bump (working tree; committed only on success) ──
 # package.json first, and for BOTH platforms: it is the base the next cut reads, so a cut that moved
 # only the native files would hand the same version to every later build. npm owns package-lock's
 # copy of the number, which is why this is `npm version` and not a sed.
+# A plan changes nothing: it only names the version.
+if ! stage plan; then
 npm version "$TARGET_VERSION" --no-git-tag-version --allow-same-version >/dev/null || error "Could not set package.json to ${TARGET_VERSION}"
 if [ "$DO_ANDROID" = 1 ]; then
-  sed -i '' "s/versionCode .*/versionCode $BUILD_NUMBER/" android/app/build.gradle
+  sed_in_place "s/versionCode .*/versionCode $BUILD_NUMBER/" android/app/build.gradle
   # versionName = this cut's own version, no "-beta" suffix, matching iOS's MARKETING_VERSION
   # below. versionName is frozen into the AAB and is what the app displays, so a "-beta" suffix
   # here would ride the exact tested bytes to production forever and block Play's promote-as-is
   # (open testing -> production, same AAB). Because every cut now takes the NEXT version, this number
   # is unique per build on its own: the GitHub release, both stores and the app all read 0.0.104.
   # The "-beta.N" label stays in the git tag, the GitHub prerelease, and the store release notes.
-  sed -i '' "s/versionName .*/versionName \"$TARGET_VERSION\"/" android/app/build.gradle
+  sed_in_place "s/versionName .*/versionName \"$TARGET_VERSION\"/" android/app/build.gradle
 fi
 if [ "$DO_IOS" = 1 ]; then
   # iOS marketing version = NEXT plain numeric version (App Store rejects "-beta", and this
   # opens a fresh TestFlight train since the live version's train is closed); build no. bumps.
-  sed -i '' "s/MARKETING_VERSION = .*/MARKETING_VERSION = $TARGET_VERSION;/" ios/OffgridMobile.xcodeproj/project.pbxproj
-  sed -i '' "s/CURRENT_PROJECT_VERSION = .*/CURRENT_PROJECT_VERSION = $BUILD_NUMBER;/" ios/OffgridMobile.xcodeproj/project.pbxproj
+  sed_in_place "s/MARKETING_VERSION = .*/MARKETING_VERSION = $TARGET_VERSION;/" ios/OffgridMobile.xcodeproj/project.pbxproj
+  sed_in_place "s/CURRENT_PROJECT_VERSION = .*/CURRENT_PROJECT_VERSION = $BUILD_NUMBER;/" ios/OffgridMobile.xcodeproj/project.pbxproj
+fi
 fi
 cleanup() {
   git checkout -- package.json package-lock.json android/app/build.gradle ios/OffgridMobile.xcodeproj/project.pbxproj 2>/dev/null || true
@@ -165,7 +216,12 @@ gen_notes_with_claude() {
     2>/dev/null
 }
 
-if NOTES=$(gen_notes_with_claude) && [ -n "$NOTES" ]; then
+if [ -n "${UAT_NOTES:-}" ] && ! stage all plan; then
+  # The plan wrote the notes once, so both stores and the GitHub release carry the same words.
+  [ -f "$UAT_NOTES" ] || error "UAT_NOTES names no file: $UAT_NOTES"
+  cp "$UAT_NOTES" "$NOTES_FILE"
+  info "Release notes from the plan"
+elif NOTES=$(gen_notes_with_claude) && [ -n "$NOTES" ]; then
   printf '%s\n' "$NOTES" > "$NOTES_FILE"
   info "Release notes generated by claude -p"
 else
@@ -182,13 +238,25 @@ fi
 export UAT_CHANGELOG_PATH="$NOTES_FILE"
 info "Notes:"; sed 's/^/    /' "$NOTES_FILE"; echo ""
 
+if stage plan; then
+  # The values every later stage takes; CI reads them from $GITHUB_OUTPUT.
+  PLAN="UAT_VERSION=${TARGET_VERSION}
+UAT_BETA_N=${N}
+UAT_BUILD_NUMBER=${BUILD_NUMBER}
+UAT_SHARED_SHA=${SHARED_SHA}"
+  printf '%s\n' "$PLAN"
+  [ -z "${GITHUB_OUTPUT:-}" ] || printf '%s\n' "$PLAN" >> "$GITHUB_OUTPUT"
+  [ -z "${UAT_NOTES_OUT:-}" ] || cp "$NOTES_FILE" "$UAT_NOTES_OUT"
+  exit 0
+fi
+
 # ── BUILD everything first, publish nothing yet ────────────────────
 # Singular creation: a build/signing failure must NEVER leave a half-published beta (e.g. an
 # Android bundle already on Play with no matching TestFlight build, which then piles up on
 # every retry). So we build ALL artifacts up front - the steps that actually fail (compile,
 # signing, export) happen before a single upload - and only publish once every artifact
 # exists. The fastlane beta lanes read UAT_CHANGELOG_PATH at upload time.
-if [ "$DO_ANDROID" = 1 ] && [ "$RESUME_IOS" = 0 ]; then
+if stage all build && [ "$DO_ANDROID" = 1 ] && [ "$RESUME_IOS" = 0 ]; then
   info "Android → building signed AAB…"; bundle exec fastlane android build
   # Also build the sideloadable APK for the GitHub prerelease (the AAB isn't installable;
   # testers grabbing the build off GitHub need the APK - same as scripts/release.sh).
@@ -198,14 +266,23 @@ if [ "$DO_ANDROID" = 1 ] && [ "$RESUME_IOS" = 0 ]; then
   [ -f "$AAB_SRC" ] || error "AAB not found at $AAB_SRC"
   [ -f "$APK_SRC" ] || error "APK not found at $APK_SRC"
 fi
-if [ "$DO_IOS" = 1 ] && [ "$RESUME_IOS" = 0 ]; then
+if stage all build && [ "$DO_IOS" = 1 ] && [ "$RESUME_IOS" = 0 ]; then
   info "iOS → building signed IPA…"; bundle exec fastlane ios build
   [ -f build/OffgridMobile.ipa ] || error "IPA not found at build/OffgridMobile.ipa"
 fi
 
+if stage build; then info "Built; the upload waits for every platform's build (--upload-only)."; exit 0; fi
+
 # ── PUBLISH - reached only if every build above succeeded ───────────
+if stage upload; then
+  [ "$DO_ANDROID" = 0 ] || [ -f android/app/build/outputs/bundle/release/app-release.aab ] || error "AAB not found: run --build-only first"
+  [ "$DO_IOS" = 0 ] || [ -f build/OffgridMobile.ipa ] || error "IPA not found: run --build-only first"
+fi
+if stage all upload; then
 if [ "$DO_ANDROID" = 1 ] && [ "$RESUME_IOS" = 0 ]; then info "Android → Play open testing (AAB)…"; bundle exec fastlane android upload_beta; fi
 if [ "$DO_IOS" = 1 ];     then info "iOS → TestFlight external…";     bundle exec fastlane ios upload_beta;     fi
+fi
+if stage upload; then info "Uploaded; the tag and the GitHub prerelease wait for every platform (--finalize)."; exit 0; fi
 
 # ── success → commit the bump, cut the PRERELEASE tag, GH prerelease ──
 trap - EXIT   # keep the bump now that the build shipped

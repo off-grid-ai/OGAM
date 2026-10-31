@@ -16,7 +16,7 @@ import {
 } from '../../../src/constants';
 import { withUtm } from '../../../src/utils/utm';
 
-const PAY_URL = 'https://offgridmobileai.co/pay';
+const PAY_URL = 'https://getoffgridai.co/pro/#buy';
 const mockActivateProByKey = jest.fn();
 const mockGetProLicenseInfo = jest.fn();
 const mockListProDevices = jest.fn();
@@ -33,7 +33,8 @@ jest.mock('../../../src/services/proLicenseService', () => ({
     lifetime: { label: 'Lifetime', renews: false },
     yearly: { label: 'Yearly', renews: true },
   },
-  PRO_PAY_PAGE_URL: 'https://offgridmobileai.co/pay',
+  // The real link, so the Get Pro assertions check where the app actually sends buyers.
+  PRO_PAY_PAGE_URL: jest.requireActual('../../../src/services/proLicenseService').PRO_PAY_PAGE_URL,
 }));
 
 import { ProDetailScreen } from '../../../src/screens/ProDetailScreen';
@@ -86,6 +87,9 @@ describe('ProDetailScreen', () => {
     const { getAllByText, queryByText } = render(<ProDetailScreen />);
     fireEvent.press(getAllByText('Get Pro')[0]);
     expect(linkingSpy).toHaveBeenCalledWith(withUtm(PAY_URL, 'pro-detail'));
+    expect(linkingSpy).toHaveBeenCalledWith(
+      'https://getoffgridai.co/pro/?utm_source=off-grid-mobile-app&utm_medium=pro-detail&utm_campaign=in-app#buy',
+    );
     // No in-app activation step for paying.
     expect(queryByText('Enter your license key')).toBeNull();
   });

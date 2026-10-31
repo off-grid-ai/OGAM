@@ -1,5 +1,7 @@
 #!/bin/bash
 set -euo pipefail
+# Gradle shows only the exit code, so name the command that failed.
+trap 'echo "prepare-video-runtime.sh: line $LINENO failed: $BASH_COMMAND" >&2' ERR
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SOURCE="$ROOT/.video-build/source"
 REVISION="$(cat "$ROOT/scripts/video/revision")"
