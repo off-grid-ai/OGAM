@@ -35,11 +35,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 // The clean enhanced rewrite. The paused stream will have emitted the leading fragment below by the time we
 // inspect the screen — a fix that streams the enhancement makes that partial text visible mid-flight.
@@ -48,7 +45,7 @@ const PARTIAL_FRAGMENT = 'a photorealistic'; // pauseAfter lands exactly here, m
 
 describe('T073 (rendered) — enhancement must stream / show live progress (DEV-B30b)', () => {
   it('shows the partial enhanced text streaming while the enhancement is mid-generation, not a frozen static "Enhancing…"', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.render();
 
     await h.placeImageModel({ backend: 'coreml' });

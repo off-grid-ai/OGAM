@@ -14,16 +14,13 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('T020 (rendered) — LiteRT select is lazy (no eager warm), loads on first send', () => {
   it('is NOT in memory after select, and IS in memory after the first send', async () => {
     // deferInitialLoad: leave the model in the real select-but-not-loaded state (no forced pre-load).
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android', deferInitialLoad: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android', deferInitialLoad: true });
     h.render();
      
     const React = require('react');

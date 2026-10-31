@@ -22,12 +22,8 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { GB } from '../../harness/nativeBoundary';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('memory refusal shows "Load Anyway" on the rendered alert, not a dead-end (red-flow)', () => {
   it('tapping send when the pre-load context gate refuses surfaces a "Load Anyway" override the user can tap', async () => {
@@ -36,7 +32,7 @@ describe('memory refusal shows "Load Anyway" on the rendered alert, not a dead-e
     // survives on iOS (no reclaim credit — the gate reads raw). residency still admits (3.5GB record);
     // resolveSafeContext refuses the 8GB on-disk file (past the iPhone fit rule). deferInitialLoad → first send
     // triggers the real lazy load. This is why the two memory tests don't contradict each other.
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       platform: 'ios',
       modelFileSizeBytes: 3.5 * GB,

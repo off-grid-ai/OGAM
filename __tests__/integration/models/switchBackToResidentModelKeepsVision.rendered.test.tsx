@@ -16,16 +16,12 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { GB } from '../../harness/nativeBoundary';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('model sheet: switching back to the loaded model', () => {
   it('A → B → A selects A again, and a photo goes to A', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       platform: 'android',
       vision: true,

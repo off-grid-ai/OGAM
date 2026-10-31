@@ -17,11 +17,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 // The exact device shape (part37): the model answers with its reasoning instead of a prompt. No <think>
 // tags, so cleanEnhancedPrompt cannot strip it — it flows straight into the image request as the prompt.
@@ -33,7 +30,7 @@ const CLEAN_PROMPT = 'a photorealistic tabby cat sitting in a sunlit garden, sha
 
 describe('T072 (rendered) — enhancement reasoning must not become the image prompt (DEV-B30)', () => {
   it('shows the clean rewrite as the enhanced prompt, not the model reasoning chain', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.render();
 
     await h.placeImageModel({ backend: 'coreml' });

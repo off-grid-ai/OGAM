@@ -16,11 +16,8 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { installRemoteModel, installRemoteStream } from '../../harness/remoteHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 // Ollama native /api/chat NDJSON: reasoning streams in message.thinking (ungated → shown), PAUSE mid-stream
 // (no content yet), then the answer, then done.
@@ -33,7 +30,7 @@ const OLLAMA_PAUSED =
 
 describe('T035 (rendered) — thinking-box header while reasoning still streams (Q6)', () => {
   it('reads "Thinking..." while the reasoning is still streaming (RED: reads the DONE label)', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     await installRemoteModel({ name: 'Ollama', endpoint: 'http://localhost:11434', caps: { supportsThinking: false } });
     const stream = installRemoteStream(OLLAMA_PAUSED);
     h.render();

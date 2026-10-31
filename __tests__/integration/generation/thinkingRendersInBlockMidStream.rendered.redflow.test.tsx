@@ -13,17 +13,14 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const REASON = 'Step one: consider six groups of seven. Step two: add them up carefully to reach the total.';
 
 describe('T033 (rendered) — <think> reasoning renders in the thinking block mid-stream, not the answer (DEV-B14)', () => {
   it('shows the reasoning in the thinking block (not the answer) while <think> is still open', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.useAppStore.getState().updateSettings({ thinkingEnabled: true });
     h.render();
 

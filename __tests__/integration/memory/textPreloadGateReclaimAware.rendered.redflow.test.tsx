@@ -32,18 +32,14 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { GB } from '../../harness/nativeBoundary';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('text pre-load gate reads reclaim-aware available (rendered, red-flow)', () => {
   it('ANDROID Aggressive: residency admits and the reclaim-aware pre-load gate loads the model (raw gate would refuse)', async () => {
     // declared 3.5GB → residency (aggressive) admits (sizeMB 5376 < budget 10813). deferInitialLoad → the
     // first send triggers the real lazy load. android + 12GB total / 5GB raw-avail = the qwythos profile.
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       platform: 'android',
       modelFileSizeBytes: 3.5 * GB,
@@ -94,7 +90,7 @@ describe('text pre-load gate reads reclaim-aware available (rendered, red-flow)'
     // iOS gives no reclaim credit (the raw snapshot stays), but every iPhone load maps its weights: they page in
     // from the file and are bounded by the fit rule against total RAM, not by free memory. Measured on a 12 GB
     // iPhone 17 Pro Max: Gemma 4 E4B (5.0 GB) and a 9B Q4_K_M (5.6 GB) load with ~6 GB free.
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       platform: 'ios',
       modelFileSizeBytes: 3.5 * GB,
@@ -133,7 +129,7 @@ describe('text pre-load gate reads reclaim-aware available (rendered, red-flow)'
 
   it('iOS: a model past the fit rule for this RAM is still refused (8 GB on a 12 GB iPhone)', async () => {
     // Mapped weights are bounded by the shared iPhone fit budget: 8 GB is past 0.62 of 12 GB, so the gate refuses.
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       platform: 'ios',
       modelFileSizeBytes: 3.5 * GB,

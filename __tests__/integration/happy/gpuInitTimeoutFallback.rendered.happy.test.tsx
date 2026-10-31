@@ -15,11 +15,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 function pressByWalkingUp(node: unknown): void {
   type N = { props?: Record<string, unknown>; parent?: N | null } | null;
@@ -52,7 +49,7 @@ async function reloadOnOpenCL(h: Awaited<ReturnType<typeof setupChatScreen>>) {
 
 describe('T016 (rendered) — GPU init timeout falls back to CPU gracefully (DEV-B24)', () => {
   it('still renders a reply on CPU when the GPU/OpenCL init times out', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.enableGenerationDetailsViaUI();
     h.render();
 
@@ -73,7 +70,7 @@ describe('T016 (rendered) — GPU init timeout falls back to CPU gracefully (DEV
   }, 60000); // reload now includes the device-critical memory-reclaim wait — allow for it under load
 
   it('falsify: without the GPU init failure, OpenCL keeps the GPU offload', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.enableGenerationDetailsViaUI();
     h.render();
 

@@ -9,16 +9,12 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import type { Message } from '../../../src/types';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('happy — attach a photo and a vision model answers about it (heavy entry point)', () => {
   it('includes the attached image at the native boundary and renders the answer', async () => {
-    const h = await setupChatScreen({ engine: 'litert', vision: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', vision: true });
     h.render();
 
     // Real attach-photo gesture (the faked native picker returns an image), then type + send.

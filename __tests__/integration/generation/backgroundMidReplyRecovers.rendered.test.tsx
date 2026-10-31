@@ -19,18 +19,15 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const STOPPED_EARLY = /Reply stopped early\. Retry to continue\./;
 const NO_RESPONSE = /The model returned nothing/;
 
 describe('switching apps during a reply (iOS Metal, rendered)', () => {
   it('marks the cut reply as stopped early, and the next send answers in this chat and a new one', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'ios' });
     h.render();
     const { rtl } = h;
     const llama = h.boundary.llama!;
@@ -76,7 +73,7 @@ describe('switching apps during a reply (iOS Metal, rendered)', () => {
   });
 
   it('a normal reply, an inactive blip, and a Stop are unchanged (no note, no reload)', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'ios' });
     h.render();
     const { rtl } = h;
     const llama = h.boundary.llama!;
