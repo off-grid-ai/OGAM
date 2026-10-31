@@ -57,16 +57,6 @@ jest.mock('react-native-vector-icons/MaterialCommunityIcons', () => {
   return ({ name, ...props }: any) => <Text {...props}>{name}</Text>;
 });
 
-jest.mock('../../../src/theme', () => {
-  const mockColors = {
-    text: '#000', textMuted: '#999', textSecondary: '#666',
-    primary: '#007AFF', background: '#FFF', surface: '#F5F5F5', border: '#E0E0E0',
-  };
-  return {
-    useTheme: () => ({ colors: mockColors, shadows: {} }),
-    useThemedStyles: (createStyles: Function) => createStyles(mockColors, {}),
-  };
-});
 
 describe('ToolsScreen', () => {
   beforeEach(() => {

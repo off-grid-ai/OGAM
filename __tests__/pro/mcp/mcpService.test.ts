@@ -10,10 +10,6 @@
  * the real `schemaTrim.truncateDescription`. Deleting the implementation must fail these.
  */
 
-jest.mock('@offgrid/core/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
 // --- McpClient boundary (network transport). A dumb fake that returns plain data. ---
 // `mock`-prefixed so the hoisted jest.mock factory may reference them. The fake reads its

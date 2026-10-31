@@ -80,30 +80,11 @@ jest.mock('../src/screens', () => ({
   LockScreen: () => null,
 }));
 
-jest.mock('../src/theme', () => ({
-  useTheme: () => ({
-    colors: { background: '#fff', primary: '#000' },
-    isDark: false,
-  }),
-  // ErrorBoundary's fallback calls useThemedStyles(createStyles); without it the
-  // fallback itself throws ("useThemedStyles is not a function"), masking any real
-  // startup error behind a secondary crash.
-  useThemedStyles: (fn: (colors: any, shadows: any) => any) =>
-    fn({ background: '#fff', primary: '#000', text: '#000', textSecondary: '#666', textMuted: '#999', surface: '#eee', border: '#ccc' }, {}),
-}));
 
 jest.mock('../src/hooks/useAppState', () => ({
   useAppState: jest.fn(),
 }));
 
-jest.mock('../src/utils/logger', () => ({
-  __esModule: true,
-  default: {
-    log: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-}));
 
 const mockUseWhisperStore = Object.assign(
   () => ({}),

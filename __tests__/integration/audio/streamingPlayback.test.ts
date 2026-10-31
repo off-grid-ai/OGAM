@@ -14,10 +14,6 @@
  */
 import logger from '@offgrid/core/utils/logger';
 
-jest.mock('@offgrid/core/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
 // A controllable "slow" engine: speak() blocks until we release it, so we can
 // build a backlog mid-stream the way a real synthesizer does.

@@ -11,10 +11,6 @@
  */
 import logger from '@offgrid/core/utils/logger';
 
-jest.mock('@offgrid/core/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
 // Controllable engine: each test sets how speak() behaves (resolve / hang / throw).
 type SpeakMode = 'resolve' | 'hang' | 'throw';

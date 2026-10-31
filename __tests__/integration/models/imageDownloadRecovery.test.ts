@@ -31,10 +31,6 @@ jest.mock('../../../src/services', () => ({
   backgroundDownloadService: mockBackgroundDownloadService,
 }));
 
-jest.mock('../../../src/components/CustomAlert', () => ({
-  showAlert: jest.fn((title: string, message: string) => ({ visible: true, title, message })),
-  hideAlert: jest.fn(() => ({ visible: false })),
-}));
 
 const { hydrateDownloadStore } = require('../../../src/services/downloadHydration');
 const { resumeImageDownload } = require('../../../src/screens/ModelsScreen/imageDownloadResume');

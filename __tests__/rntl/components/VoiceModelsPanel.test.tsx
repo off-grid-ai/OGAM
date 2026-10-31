@@ -13,24 +13,7 @@ jest.mock('@offgrid/core/services/hardware', () => ({
   hardwareService: { getTotalMemoryGB: jest.fn(() => 8) },
 }));
 
-jest.mock('@offgrid/core/components/CustomAlert', () => {
-  const { View } = require('react-native');
-  return {
-    CustomAlert: () => <View testID="custom-alert" />,
-    showAlert: (title: string, message: string, buttons: any[]) => ({ visible: true, title, message, buttons }),
-    hideAlert: () => ({ visible: false }),
-    initialAlertState: { visible: false },
-  };
-});
 
-jest.mock('@offgrid/core/components/AnimatedPressable', () => {
-  const { TouchableOpacity } = require('react-native');
-  return {
-    AnimatedPressable: ({ children, onPress, disabled, testID }: any) => (
-      <TouchableOpacity testID={testID} onPress={onPress} disabled={disabled}>{children}</TouchableOpacity>
-    ),
-  };
-});
 
 const mockEngine = {
   id: 'kokoro',

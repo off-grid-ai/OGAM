@@ -27,7 +27,6 @@ jest.mock('react-native-vector-icons/Feather', () => {
 });
 
 // Haptics is a genuine native boundary — stub it so presses don't call into the device.
-jest.mock('@offgrid/core/utils/haptics', () => ({ triggerHaptic: jest.fn() }));
 
 import { AudioModeLayout } from '@offgrid/pro/audio/ui/AudioModeLayout';
 import { useTTSStore } from '@offgrid/pro/audio/ttsStore';

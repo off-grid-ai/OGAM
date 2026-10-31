@@ -8,10 +8,6 @@
  */
 
 // Mock logger before imports
-jest.mock('../../../src/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
 // Mock remoteServerManager to prevent initialization side effects
 jest.mock('../../../src/services/remoteServerManager', () => ({

@@ -83,10 +83,6 @@ jest.mock('../../../pro/audio/engine', () => ({
   },
 }));
 
-jest.mock('@offgrid/core/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), error: jest.fn(), warn: jest.fn() },
-}));
 
 import { useTTSStore } from '@offgrid/pro/audio/ttsStore';
 import { modelResidencyManager } from '@offgrid/core/services/modelResidency';

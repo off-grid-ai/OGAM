@@ -16,9 +16,6 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
 }));
 
-jest.mock('@offgrid/core/utils/haptics', () => ({
-  triggerHaptic: jest.fn(),
-}));
 
 // Render shim for the vector-icon so we can read the icon name the user sees.
 jest.mock('react-native-vector-icons/Feather', () => {

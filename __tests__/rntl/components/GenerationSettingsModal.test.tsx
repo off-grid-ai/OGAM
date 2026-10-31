@@ -21,18 +21,6 @@ import { render, fireEvent } from '@testing-library/react-native';
 import { GenerationSettingsModal } from '../../../src/components/GenerationSettingsModal';
 
 // Mock AppSheet
-jest.mock('../../../src/components/AppSheet', () => ({
-  AppSheet: ({ visible, children, title }: any) => {
-    if (!visible) return null;
-    const { View, Text } = require('react-native');
-    return (
-      <View testID="app-sheet">
-        <Text>{title}</Text>
-        {children}
-      </View>
-    );
-  },
-}));
 
 // Mock action fns defined outside factory for access in tests
 const mockUpdateSettings = jest.fn();

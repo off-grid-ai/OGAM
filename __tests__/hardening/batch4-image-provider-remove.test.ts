@@ -30,9 +30,6 @@ jest.mock('../../src/services/backgroundDownloadService', () => ({
     startProgressPolling: jest.fn(),
   },
 }));
-jest.mock('../../src/utils/logger', () => ({
-  __esModule: true, default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
 import { imageProvider } from '../../src/services/modelDownloadService/providers/imageProvider';
 import { useDownloadStore } from '../../src/stores/downloadStore';

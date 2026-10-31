@@ -23,10 +23,6 @@ jest.mock('@offgrid/core/bootstrap/hookRegistry', () => ({
     clipboardRecordLocalText: 'clipboard.recordLocalText',
   },
 }));
-jest.mock('@offgrid/core/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn() },
-}));
 
 jest.mock('../../pro/mcp/McpToolExtension', () => ({
   McpToolExtension: { id: 'mcp' },

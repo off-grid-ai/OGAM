@@ -37,10 +37,6 @@ jest.mock('react-native-zip-archive', () => ({
   unzip: jest.fn(() => Promise.resolve('/unzipped')),
 }));
 
-jest.mock('../../../src/components/CustomAlert', () => ({
-  showAlert: jest.fn((title: string, message: string, buttons?: any) => ({ visible: true, title, message, buttons })),
-  hideAlert: jest.fn(() => ({ visible: false })),
-}));
 
 // A never-resolving native start === a download sitting in the queue waiting for a slot.
 // The store row must appear BEFORE this promise settles, which is the whole fix.
