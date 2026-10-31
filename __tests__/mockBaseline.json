@@ -278,7 +278,6 @@
   "__tests__/unit/screens/ChatScreen/useSaveImage.test.ts": 2,
   "__tests__/unit/screens/DownloadManager/useVoiceDownloadItems.test.ts": 4,
   "__tests__/unit/screens/ModelsScreen/importHelpers.test.ts": 2,
-  "__tests__/unit/screens/ModelsScreen/trendingSelection.test.ts": 4,
   "__tests__/unit/screens/ModelsScreen/useModelsScreen.test.ts": 10,
   "__tests__/unit/screens/ModelsScreen/utils.test.ts": 1,
   "__tests__/unit/services/activeModelService.audio.test.ts": 8,
