@@ -17,18 +17,6 @@ import { render, fireEvent } from '@testing-library/react-native';
 import { ProjectSelectorSheet } from '../../../src/components/ProjectSelectorSheet';
 import type { Project } from '../../../src/types';
 
-jest.mock('../../../src/components/AppSheet', () => ({
-  AppSheet: ({ visible, children, title }: any) => {
-    if (!visible) return null;
-    const { View, Text } = require('react-native');
-    return (
-      <View testID="app-sheet">
-        <Text>{title}</Text>
-        {children}
-      </View>
-    );
-  },
-}));
 
 const mockProjects: Project[] = [
   {

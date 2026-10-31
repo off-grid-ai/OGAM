@@ -25,14 +25,6 @@ jest.mock('react-native-svg', () => ({
   SvgXml: () => null,
 }));
 
-jest.mock('../../../src/theme', () => {
-  const colors = {
-    text: '#000', textMuted: '#999', textSecondary: '#666', textDisabled: '#bbb',
-    primary: '#1DB954', background: '#FFF', surface: '#F5F5F5', surfaceLight: '#EEE',
-    border: '#E0E0E0', overlay: 'rgba(0,0,0,0.4)',
-  };
-  return { useTheme: () => ({ colors, shadows: { small: {} } }) };
-});
 
 type SheetModule = typeof import('../../../pro/ui/McpAddServerSheet');
 type StoreModule = typeof import('../../../pro/mcp/mcpStore');

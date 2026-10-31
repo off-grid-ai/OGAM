@@ -24,29 +24,6 @@ import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import { VoiceRecordButton } from '../../../src/components/VoiceRecordButton';
 
-const mockShowAlert = jest.fn((_title: string, _message: string, _buttons?: any[]) => ({
-  visible: true,
-  title: _title,
-  message: _message,
-  buttons: _buttons || [],
-}));
-
-jest.mock('../../../src/components/CustomAlert', () => ({
-  CustomAlert: ({ visible, title, message }: any) => {
-    if (!visible) return null;
-    const { View, Text } = require('react-native');
-    return (
-      <View testID="custom-alert">
-        <Text testID="alert-title">{title}</Text>
-        <Text testID="alert-message">{message}</Text>
-      </View>
-    );
-  },
-  showAlert: (...args: any[]) => (mockShowAlert as any)(...args),
-  hideAlert: jest.fn(() => ({ visible: false, title: '', message: '', buttons: [] })),
-  AlertState: {},
-  initialAlertState: { visible: false, title: '', message: '', buttons: [] },
-}));
 
 describe('VoiceRecordButton', () => {
   const defaultProps = {
@@ -169,7 +146,7 @@ describe('VoiceRecordButton', () => {
     });
 
     it('taps unavailable button and triggers download prompt alert', () => {
-      const { UNSAFE_getAllByType } = render(
+      const { UNSAFE_getAllByType, getByTestId, getByText } = render(
         <VoiceRecordButton
           {...defaultProps}
           isAvailable={false}
@@ -182,15 +159,13 @@ describe('VoiceRecordButton', () => {
       // Press the unavailable button
       fireEvent.press(touchables[0]);
 
-      expect(mockShowAlert).toHaveBeenCalledWith(
-        'Download Voice Model',
-        expect.stringContaining('Download Whisper Base'),
-        expect.any(Array)
-      );
+      expect(getByTestId('app-alert')).toBeTruthy();
+      expect(getByText('Download Voice Model')).toBeTruthy();
+      expect(getByTestId('app-alert-message').props.children).toContain('Download Whisper Base');
     });
 
     it('taps unavailable button shows download prompt with size', () => {
-      const { UNSAFE_getAllByType } = render(
+      const { UNSAFE_getAllByType, getByTestId, getByText } = render(
         <VoiceRecordButton
           {...defaultProps}
           isAvailable={false}
@@ -201,15 +176,12 @@ describe('VoiceRecordButton', () => {
       const touchables = UNSAFE_getAllByType(TouchableOpacity);
       fireEvent.press(touchables[0]);
 
-      expect(mockShowAlert).toHaveBeenCalledWith(
-        'Download Voice Model',
-        expect.stringContaining('142 MB'),
-        expect.any(Array)
-      );
+      expect(getByText('Download Voice Model')).toBeTruthy();
+      expect(getByTestId('app-alert-message').props.children).toContain('142 MB');
     });
 
     it('alert message includes Download and Cancel buttons', () => {
-      const { UNSAFE_getAllByType } = render(
+      const { UNSAFE_getAllByType, getByText } = render(
         <VoiceRecordButton
           {...defaultProps}
           isAvailable={false}
@@ -220,14 +192,9 @@ describe('VoiceRecordButton', () => {
       const touchables = UNSAFE_getAllByType(TouchableOpacity);
       fireEvent.press(touchables[0]);
 
-      expect(mockShowAlert).toHaveBeenCalledWith(
-        'Download Voice Model',
-        expect.any(String),
-        expect.arrayContaining([
-          expect.objectContaining({ text: 'Cancel' }),
-          expect.objectContaining({ text: 'Download' }),
-        ])
-      );
+      expect(getByText('Download Voice Model')).toBeTruthy();
+      expect(getByText('Cancel')).toBeTruthy();
+      expect(getByText('Download')).toBeTruthy();
     });
   });
 
