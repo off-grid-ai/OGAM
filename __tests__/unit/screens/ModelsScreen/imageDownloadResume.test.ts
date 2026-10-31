@@ -1,79 +1,28 @@
-import RNFS from 'react-native-fs';
-import { unzip } from 'react-native-zip-archive';
-import { backgroundDownloadService, modelManager } from '../../../../src/services';
-import { registerAndNotify } from '../../../../src/services/imageDownloadActions';
-import { resumeImageDownload } from '../../../../src/screens/ModelsScreen/imageDownloadResume';
+/**
+ * Resuming an image download after a restart (resumeImageDownload).
+ *
+ * The real resume code, integrity check, image download actions, model manager and stores run on top
+ * of the device boundary only: the in-memory file system, the native download module (a download that
+ * finished before the restart) and the native unzip. Outcomes are read from the fake disk, the model
+ * list the app stores, the download store row and the alert the user sees.
+ */
+import { installNativeBoundary, type NativeBoundary } from '../../../harness/nativeBoundary';
+import { installImageDownloadDevice, type ImageDownloadDevice, type ZipEntries } from '../../../harness/imageDownloadDevice';
+import { SD_MNN_PACKAGE_FILES } from '../../../harness/imageModelPackage';
 
-jest.mock('react-native-fs', () => ({
-  exists: jest.fn(),
-  readDir: jest.fn(),
-  stat: jest.fn(),
-  read: jest.fn(),
-  mkdir: jest.fn(),
-  unlink: jest.fn(),
-  writeFile: jest.fn(() => Promise.resolve()),
-}));
+const COMPLETE_MNN: ZipEntries = Object.fromEntries(SD_MNN_PACKAGE_FILES.map(name => [name, 1024]));
+const ZIP_BYTES = 1000;
 
-jest.mock('react-native-zip-archive', () => ({
-  unzip: jest.fn(),
-}));
-
-// Integrity is a boundary here (resume orchestration is under test, not the completeness
-// rule). Default to "complete" so mocked RNFS fixtures don't trip the post-unzip gate.
-jest.mock('../../../../src/services/imageModelIntegrity', () => ({
-  ...jest.requireActual('../../../../src/services/imageModelIntegrity'),
-  validateImageModelDir: jest.fn(async () => ({ complete: true, missing: [] })),
-  ensureImageExtractionComplete: jest.fn(async () => {}),
-}));
-
-jest.mock('../../../../src/services', () => ({
-  modelManager: {
-    getImageModelsDirectory: jest.fn(),
-    getDownloadedImageModels: jest.fn(() => Promise.resolve([])),
-  },
-  backgroundDownloadService: {
-    moveCompletedDownload: jest.fn(),
-  },
-}));
-
-const mockSetStatus = jest.fn();
-jest.mock('../../../../src/stores/downloadStore', () => ({
-  useDownloadStore: {
-    getState: () => ({
-      setStatus: mockSetStatus,
-    }),
-  },
-}));
-
-jest.mock('../../../../src/services/imageDownloadActions', () => ({
-  registerAndNotify: jest.fn(),
-  // No download is running in this process, so resume owns the model.
-  isMultifileImageDownloadActive: () => false,
-  validateMultifileComplete: jest.requireActual('../../../../src/services/imageModelIntegrity').validateMultifileComplete,
-}));
-
-const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
-const mockUnzip = unzip as jest.MockedFunction<typeof unzip>;
-const mockMoveCompletedDownload = backgroundDownloadService.moveCompletedDownload as jest.MockedFunction<typeof backgroundDownloadService.moveCompletedDownload>;
-const mockRegisterAndNotify = registerAndNotify as jest.MockedFunction<typeof registerAndNotify>;
-const mockGetImageModelsDirectory = modelManager.getImageModelsDirectory as jest.MockedFunction<typeof modelManager.getImageModelsDirectory>;
-
-type DirItem = RNFS.ReadDirResItemT;
-
-const imageModelsDir = '/mock/image_models';
-
-function makeFileItem(path: string): DirItem {
-  const name = path.split('/').pop() || path;
-  return {
-    ctime: new Date(0),
-    mtime: new Date(0),
-    name,
-    path,
-    size: 1,
-    isFile: () => true,
-    isDirectory: () => false,
-  };
-}
+let boundary: NativeBoundary;
+let device: ImageDownloadDevice;
+let imageModelsDir: string;
+let modelDir: string;
+let zipPath: string;
+let alertTitle: string | undefined;
+let resumeImageDownload: typeof import('../../../../src/screens/ModelsScreen/imageDownloadResume').resumeImageDownload;
+let useDownloadStore: typeof import('../../../../src/stores/downloadStore').useDownloadStore;
+let useAppStore: typeof import('../../../../src/stores').useAppStore;
+let modelManager: typeof import('../../../../src/services').modelManager;
 
 function makeEntry(overrides: Record<string, unknown> = {}) {
   return {
@@ -84,174 +33,142 @@ function makeEntry(overrides: Record<string, unknown> = {}) {
     quantization: '',
     modelType: 'image',
     status: 'processing',
-    bytesDownloaded: 1000,
-    totalBytes: 1000,
-    combinedTotalBytes: 1000,
+    bytesDownloaded: ZIP_BYTES,
+    totalBytes: ZIP_BYTES,
+    combinedTotalBytes: ZIP_BYTES,
     progress: 1,
     createdAt: Date.now(),
     metadataJson: JSON.stringify({
       imageDownloadType: 'zip',
       imageModelName: 'Test Model',
       imageModelDescription: 'desc',
-      imageModelSize: 1000,
+      imageModelSize: ZIP_BYTES,
       imageModelBackend: 'mnn',
     }),
     ...overrides,
   } as any;
 }
 
-function makeDeps() {
-  return {
-    addDownloadedImageModel: jest.fn(),
-    activeImageModelId: null,
-    setActiveImageModelId: jest.fn(),
-    setAlertState: jest.fn(),
+/** The persisted download row the app holds after a restart, then the resume over it. */
+async function resume(entry = makeEntry()) {
+  useDownloadStore.getState().add(entry);
+  const app = useAppStore.getState();
+  await resumeImageDownload(entry, {
+    addDownloadedImageModel: app.addDownloadedImageModel,
+    activeImageModelId: app.activeImageModelId,
+    setActiveImageModelId: app.setActiveImageModelId,
+    setAlertState: state => { alertTitle = state.title; },
     triedImageGen: true,
-  };
+  });
 }
 
+function seedModelDir(entries: ZipEntries) {
+  for (const [name, size] of Object.entries(entries)) boundary.fs!.seedFile(`${modelDir}/${name}`, size);
+}
+
+async function expectRegistered() {
+  expect((await modelManager.getDownloadedImageModels()).map(m => m.id)).toEqual(['test-model']);
+  expect(useAppStore.getState().downloadedImageModels.map(m => m.id)).toEqual(['test-model']);
+  expect(useAppStore.getState().activeImageModelId).toBe('test-model');
+  expect(useDownloadStore.getState().downloads['image:test-model']).toBeUndefined();
+  expect(alertTitle).toBe('Test Model is ready');
+}
+
+const nativeMoves = () => boundary.download!.module.moveCompletedDownload.mock.calls.length;
+
+beforeEach(async () => {
+  boundary = installNativeBoundary({ fs: true, download: true });
+  device = installImageDownloadDevice(boundary);
+  await require('@react-native-async-storage/async-storage').clear();
+  alertTitle = undefined;
+  ({ resumeImageDownload } = require('../../../../src/screens/ModelsScreen/imageDownloadResume'));
+  ({ useDownloadStore } = require('../../../../src/stores/downloadStore'));
+  ({ useAppStore } = require('../../../../src/stores'));
+  ({ modelManager } = require('../../../../src/services'));
+  imageModelsDir = modelManager.getImageModelsDirectory();
+  modelDir = `${imageModelsDir}/test-model`;
+  zipPath = `${imageModelsDir}/test-model.zip`;
+});
+
 describe('resumeImageDownload', () => {
-  let existingPaths: Set<string>;
-  let dirEntries: Record<string, DirItem[]>;
-  let statSizes: Record<string, number>;
-  let headers: Record<string, string>;
+  it('registers immediately when modelDir already holds a complete model', async () => {
+    seedModelDir(COMPLETE_MNN);
 
-  const modelDir = `${imageModelsDir}/test-model`;
-  const zipPath = `${imageModelsDir}/test-model.zip`;
+    await resume();
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    existingPaths = new Set<string>();
-    dirEntries = {};
-    statSizes = {};
-    headers = {};
-
-    mockGetImageModelsDirectory.mockReturnValue(imageModelsDir);
-    mockedRNFS.exists.mockImplementation(async (path: string) => existingPaths.has(path));
-    mockedRNFS.readDir.mockImplementation(async (path: string) => {
-      if (dirEntries[path]) return dirEntries[path];
-      return [...existingPaths]
-        .filter(candidate => candidate.substring(0, candidate.lastIndexOf('/')) === path)
-        .map(candidate => ({
-          ...makeFileItem(candidate),
-          size: statSizes[candidate] ?? 1,
-        }));
-    });
-    mockedRNFS.stat.mockImplementation(async (path: string) => ({ size: statSizes[path] ?? 0 } as any));
-    mockedRNFS.read.mockImplementation(async (path: string) => headers[path] ?? '');
-    mockedRNFS.mkdir.mockImplementation(async (path: string) => {
-      existingPaths.add(path);
-    });
-    mockedRNFS.unlink.mockImplementation(async (path: string) => {
-      existingPaths.delete(path);
-      delete dirEntries[path];
-      delete statSizes[path];
-      delete headers[path];
-    });
-    mockUnzip.mockResolvedValue('/unzipped');
-    mockMoveCompletedDownload.mockResolvedValue(zipPath);
+    await expectRegistered();
+    expect(nativeMoves()).toBe(0);
+    expect(boundary.fs!.listFiles(modelDir).sort()).toEqual(SD_MNN_PACKAGE_FILES.map(f => `${modelDir}/${f}`).sort());
   });
 
-  it('registers immediately when modelDir already contains files', async () => {
-    existingPaths.add(modelDir);
-    dirEntries[modelDir] = [makeFileItem(`${modelDir}/weights.bin`)];
+  it('deletes an invalid destination zip and recovers the finished download from the native module', async () => {
+    boundary.fs!.seedTextFile(zipPath, 'NOPE', 128);
+    device.seedCompleted({ downloadId: 'dl-1', fileName: 'test-model.zip' }, { zip: COMPLETE_MNN, bytes: ZIP_BYTES });
 
-    await resumeImageDownload(makeEntry(), makeDeps() as any);
+    await resume();
 
-    expect(mockRegisterAndNotify).toHaveBeenCalledTimes(1);
-    expect(mockMoveCompletedDownload).not.toHaveBeenCalled();
-    expect(mockUnzip).not.toHaveBeenCalled();
-    expect(mockSetStatus).not.toHaveBeenCalled();
+    await expectRegistered();
+    expect(nativeMoves()).toBe(1);
+    expect(await boundary.fs!.exists(zipPath)).toBe(false); // the extracted zip is cleaned up
+    expect(await boundary.fs!.exists(`${modelDir}/unet.mnn`)).toBe(true);
+    expect(await boundary.fs!.exists(`${modelDir}/_ready`)).toBe(true);
   });
 
-  it('deletes invalid destination zip and falls back to moveCompletedDownload', async () => {
-    existingPaths.add(zipPath);
-    statSizes[zipPath] = 128;
-    headers[zipPath] = 'NOPE';
+  it('cleans an empty modelDir and a failed zip before recovering', async () => {
+    boundary.fs!.seedDir(modelDir);
+    boundary.fs!.seedTextFile(zipPath, 'BAD!', 64);
+    device.seedCompleted({ downloadId: 'dl-1', fileName: 'test-model.zip' }, { zip: COMPLETE_MNN, bytes: ZIP_BYTES });
 
-    mockMoveCompletedDownload.mockImplementation(async () => {
-      existingPaths.add(zipPath);
-      statSizes[zipPath] = 1000;
-      headers[zipPath] = 'PK34';
-      return zipPath;
-    });
+    await resume();
 
-    await resumeImageDownload(makeEntry(), makeDeps() as any);
-
-    expect(mockedRNFS.unlink).toHaveBeenCalledWith(zipPath);
-    expect(mockMoveCompletedDownload).toHaveBeenCalledWith('dl-1', zipPath);
-    expect(mockUnzip).toHaveBeenCalledWith(zipPath, modelDir);
-    expect(mockRegisterAndNotify).toHaveBeenCalledTimes(1);
+    await expectRegistered();
+    expect(nativeMoves()).toBe(1);
+    expect(await boundary.fs!.exists(zipPath)).toBe(false);
+    expect((await modelManager.getDownloadedImageModels())[0].modelPath).toBe(modelDir);
   });
 
-  it('cleans empty modelDir and failed zip before recovering', async () => {
-    existingPaths.add(modelDir);
-    existingPaths.add(zipPath);
-    dirEntries[modelDir] = [];
-    statSizes[zipPath] = 64;
-    headers[zipPath] = 'BAD!';
+  it('marks the entry failed and removes the partial modelDir when unzip fails after move recovery', async () => {
+    // The native module hands back a file with a zip header whose body is not a readable archive.
+    device.seedCompleted({ downloadId: 'dl-1', fileName: 'test-model.zip' }, { text: 'PK\u0003\u0004garbage', bytes: ZIP_BYTES });
 
-    mockMoveCompletedDownload.mockImplementation(async () => {
-      existingPaths.add(zipPath);
-      statSizes[zipPath] = 1000;
-      headers[zipPath] = 'PK34';
-      return zipPath;
-    });
+    await resume();
 
-    await resumeImageDownload(makeEntry(), makeDeps() as any);
-
-    expect(mockedRNFS.unlink).toHaveBeenCalledWith(modelDir);
-    expect(mockedRNFS.unlink).toHaveBeenCalledWith(zipPath);
-    expect(mockMoveCompletedDownload).toHaveBeenCalledTimes(1);
-    expect(mockRegisterAndNotify).toHaveBeenCalledTimes(1);
+    expect(await boundary.fs!.exists(modelDir)).toBe(false);
+    const row = useDownloadStore.getState().downloads['image:test-model'];
+    expect(row.status).toBe('failed');
+    expect(row.errorMessage).toBe('corrupt zip');
+    expect(await modelManager.getDownloadedImageModels()).toEqual([]);
+    expect(alertTitle).toBeUndefined();
   });
 
-  it('marks the entry failed and removes partial modelDir when unzip fails after move recovery', async () => {
-    mockMoveCompletedDownload.mockImplementation(async () => {
-      existingPaths.add(zipPath);
-      statSizes[zipPath] = 1000;
-      headers[zipPath] = 'PK34';
-      return zipPath;
-    });
-    mockUnzip.mockRejectedValue(new Error('corrupt zip'));
+  it('unzips a valid zip already on disk without asking the native module', async () => {
+    device.seedZip(zipPath, COMPLETE_MNN, ZIP_BYTES);
 
-    await resumeImageDownload(makeEntry(), makeDeps() as any);
+    await resume();
 
-    expect(mockedRNFS.unlink).toHaveBeenCalledWith(modelDir);
-    expect(mockSetStatus).toHaveBeenCalledWith('dl-1', 'failed', { message: 'corrupt zip' });
-    expect(mockRegisterAndNotify).not.toHaveBeenCalled();
+    await expectRegistered();
+    expect(nativeMoves()).toBe(0);
+    expect(await boundary.fs!.exists(zipPath)).toBe(false);
+    expect(await boundary.fs!.exists(`${modelDir}/vae_decoder.mnn.weight`)).toBe(true);
   });
 
-  it('unzips valid zip directly without calling moveCompletedDownload', async () => {
-    existingPaths.add(zipPath);
-    statSizes[zipPath] = 1000;
-    headers[zipPath] = 'PK34';
-
-    await resumeImageDownload(makeEntry(), makeDeps() as any);
-
-    expect(mockMoveCompletedDownload).not.toHaveBeenCalled();
-    expect(mockUnzip).toHaveBeenCalledWith(zipPath, modelDir);
-    expect(mockRegisterAndNotify).toHaveBeenCalledTimes(1);
-  });
-
-  it('registers multifile model when modelDir exists', async () => {
+  it('registers a multifile model whose files are all on disk', async () => {
     const entry = makeEntry({
       metadataJson: JSON.stringify({
         imageDownloadType: 'multifile',
         imageModelName: 'Test Model',
         imageModelDescription: 'desc',
-        imageModelSize: 1000,
+        imageModelSize: ZIP_BYTES,
         imageModelBackend: 'mnn',
-        imageModelHuggingFaceFiles: [{ path: 'unet.mnn', size: 1000 }],
+        imageModelHuggingFaceFiles: [{ path: 'unet.mnn', size: ZIP_BYTES }],
       }),
     });
-    existingPaths.add(modelDir);
-    existingPaths.add(`${modelDir}/unet.mnn`);
-    statSizes[`${modelDir}/unet.mnn`] = 1000;
+    boundary.fs!.seedFile(`${modelDir}/unet.mnn`, ZIP_BYTES);
 
-    await resumeImageDownload(entry, makeDeps() as any);
+    await resume(entry);
 
-    expect(mockRegisterAndNotify).toHaveBeenCalledTimes(1);
-    expect(mockMoveCompletedDownload).not.toHaveBeenCalled();
+    await expectRegistered();
+    expect(nativeMoves()).toBe(0);
+    expect(await boundary.fs!.exists(`${modelDir}/_ready`)).toBe(true);
   });
 });
