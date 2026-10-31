@@ -3,7 +3,9 @@
  *
  * SPEC: Improve needs a text model and says so when there is none. With one loaded, a single
  * completion gives up to three versions; one equal to what I wrote is not a version, and a
- * reasoning model's think block is never shown as one. The live checks flag a misspelt word with a
+ * reasoning model's think block is never shown as one. A model that thinks even with thinking off
+ * still has room to answer after a long think block; one that thinks past the whole budget says so,
+ * with another text model on the phone to try. The live checks flag a misspelt word with a
  * fix, Fix all applies the fixes, a word I add to the dictionary is never flagged again, and an
  * issue I ignore stays hidden.
  *
@@ -97,6 +99,45 @@ describePro('Improve rewrites from the phone\'s model', () => {
     for (const partial of progress) {
       for (const option of partial) expect(option).not.toMatch(/think|clearer|Maybe shorter/i);
     }
+  });
+
+  /** A model that ignores thinking-off: ~1,500 tokens of reasoning (4 characters each) first. */
+  const LONG_THINKING = `<think>${'The person wants it clearer, so I weigh each word. '.repeat(118)}</think>\n`;
+
+  it('a model that thinks for longer than a chat reply still gives the versions after it', async () => {
+    const boundary = installPhone();
+    await loadTextModel(boundary);
+    const service = rewrites();
+
+    boundary.llama!.scriptCompletion({ text: `${LONG_THINKING}One\n---\nTwo\n---\nThree`, charsPerToken: 4 });
+    const options = await service.rewriteOptions('a draft', 'improve', () => undefined);
+
+    expect(options).toEqual(['One', 'Two', 'Three']);
+  });
+
+  it('a model that thinks past the whole budget says so and names another model to try', async () => {
+    const boundary = installPhone();
+    await loadTextModel(boundary);
+    const { useAppStore } = require('../../../src/stores');
+    useAppStore.setState({
+      downloadedModels: [
+        createDownloadedModel({ id: 'llm', name: 'Thinker 8B', engine: 'llama', filePath: MODEL_PATH }),
+        createDownloadedModel({ id: 'small', name: 'Qwen 3.5 0.8B', engine: 'llama', filePath: '/models/q.gguf' }),
+      ],
+    });
+    const service = rewrites();
+
+    const endless = `<think>${'I weigh one more word. '.repeat(800)}</think>\nOne`;
+    boundary.llama!.scriptCompletion({ text: endless, charsPerToken: 4 });
+    await expect(service.rewriteOptions('a draft', 'improve', () => undefined)).rejects.toBeInstanceOf(
+      service.ThinkingOnlyError,
+    );
+    expect(service.thinkingOnlyReadiness()).toEqual({
+      ready: false,
+      blocker: 'thinking-only',
+      modelName: 'Thinker 8B',
+      alternative: { id: 'small', name: 'Qwen 3.5 0.8B' },
+    });
   });
 });
 

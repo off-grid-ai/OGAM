@@ -2,8 +2,9 @@
  * The Improve screen, as the person meets it from another app's selection.
  *
  * SPEC: with no text model, Improve says rewrites need one; when I come back with a model picked,
- * the versions fill in without another tap. A model that only thinks gives no version, never its
- * reasoning. With the phone's model, three versions
+ * the versions fill in without another tap. A model that only thinks shows no reasoning; the
+ * screen says it spent its answer thinking and offers another model on the phone, and using that
+ * model fills in the versions. With the phone's model, three versions
  * fill in; I pick one and Copy puts exactly that text on the clipboard and says it was copied. When
  * the Android selection menu opened Improve (a native entry injected how to give text back), Replace
  * hands exactly the picked text back to the app it came from.
@@ -109,16 +110,33 @@ describePro('Improve screen', () => {
     expect(view.getByTestId('improve-option-0')).toHaveTextContent('Could you send the report today?');
   });
 
-  it('a model that runs out of tokens while thinking shows no reasoning as a version', async () => {
+  it('a model that only thinks says so, and using another model on the phone fills in the versions', async () => {
     const boundary = installPhone();
     await loadTextModel(boundary);
-    boundary.llama!.scriptCompletion({ text: '<think>\nWe need to rewrite the text in three versions' });
+    const { useAppStore } = require('../../../src/stores');
+    boundary.fs!.seedFile('/models/q.gguf', 300 * 1024 * 1024);
+    useAppStore.setState({
+      downloadedModels: [
+        createDownloadedModel({ id: 'llm', name: 'Thinker 8B', engine: 'llama', filePath: MODEL_PATH }),
+        createDownloadedModel({ id: 'small', name: 'Qwen 3.5 0.8B', engine: 'llama', filePath: '/models/q.gguf' }),
+      ],
+    });
+    boundary.llama!.scriptCompletions([
+      { text: `<think>${'I weigh one more word. '.repeat(800)}`, charsPerToken: 4 },
+      { text: VERSIONS },
+    ]);
 
-    const { view } = openImprove({ text: DRAFT, apply: 'copy' });
+    const { rtl, view } = openImprove({ text: DRAFT, apply: 'copy' });
 
-    expect(await view.findByTestId('improve-failed')).toBeTruthy();
-    expect(view.queryByText(/We need to rewrite/)).toBeNull();
-    expect(view.queryByTestId('improve-option-0')).toBeNull();
+    expect(await view.findByText('Thinker 8B spent its answer thinking.')).toBeTruthy();
+    expect(view.queryByText(/I weigh one more word/)).toBeNull();
+    rtl.fireEvent.press(view.getByText('Use Qwen 3.5 0.8B'));
+
+    await rtl.waitFor(() =>
+      expect(view.getByTestId('improve-option-0').props.accessibilityState?.busy).toBe(false),
+    );
+    expect(view.getByTestId('improve-option-0')).toHaveTextContent('Could you send the report today?');
+    expect(useAppStore.getState().activeModelId).toBe('small');
   });
 
   it('Copy puts the version I picked on the clipboard and says so', async () => {
