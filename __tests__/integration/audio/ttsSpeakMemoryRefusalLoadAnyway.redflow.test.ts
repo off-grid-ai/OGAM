@@ -68,7 +68,7 @@ describe('TTS speak-path memory refusal is overridable (Load Anyway) — red-flo
   it('surfaces a dismissible tts failure card with Load Anyway (not a silent bail)', async () => {
     // 12GB device. The voice model is a sidecar; the evict-everything force (override → singleModel)
     // evicts every evictable PEER sidecar to free maximum RAM before loading.
-    setDeviceMemory({ platform: 'ios', totalGB: 12, availGB: 0.2, policy: 'balanced' });
+    await setDeviceMemory({ platform: 'ios', totalGB: 12, availGB: 0.2, policy: 'balanced' });
     useModelFailureStore.getState().clear();
 
     // A resident peer sidecar (whisper) whose NATIVE unload REJECTS — the override force tries to evict it

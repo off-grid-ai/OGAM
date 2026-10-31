@@ -13,12 +13,8 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { REMOTE_IMAGE_URL, chooseRemoteImageModel, serveImageGeneration } from '../../harness/remoteImageServer';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 type Harness = Awaited<ReturnType<typeof setupChatScreen>>;
 
@@ -28,7 +24,7 @@ describe('remote image formats', () => {
   const imagesDir = () => `${h.boundary.fs!.DocumentDirectoryPath}/generated_images`;
 
   beforeEach(async () => {
-    h = await setupChatScreen({ engine: 'llama' });
+    h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     server = serveImageGeneration();
   });
 
@@ -39,7 +35,7 @@ describe('remote image formats', () => {
 
   function openGallery() {
     const { GalleryScreen } = require('../../../src/screens/GalleryScreen');
-    return h.rtl.render(h.React.createElement(GalleryScreen));
+    return h.renderAside(h.React.createElement(GalleryScreen));
   }
 
   it('an empty image from the server fails in the chat and leaves no image, no Gallery entry and no file', async () => {

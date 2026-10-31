@@ -26,10 +26,6 @@ import { ChatMessage } from '../../../src/components/ChatMessage';
 import { createToolResultMessage } from '../../utils/factories';
 import { useAccordionStore, useAccordionExpanded } from '../../../src/stores/accordionStore';
 
-jest.mock('../../../src/utils/messageContent', () => ({
-  ...jest.requireActual('../../../src/utils/messageContent'),
-  stripControlTokens: (content: string) => content,
-}));
 
 describe('BUG #37 — tool accordion is tappable during active streaming', () => {
   beforeEach(() => {

@@ -24,10 +24,6 @@ import { useAccordionStore } from '../../../src/stores';
 import { createMessage } from '../../utils/factories';
 import type { Message } from '../../../src/types';
 
-jest.mock('../../../src/utils/messageContent', () => ({
-  ...jest.requireActual('../../../src/utils/messageContent'),
-  stripControlTokens: (content: string) => content,
-}));
 
 const makeToolResult = (overrides: Partial<Message>): Message =>
   createMessage({

@@ -5,16 +5,6 @@
  * buildEnhancementMessages, getConversationContext, cleanEnhancedPrompt, buildImageGenMeta.
  */
 
-jest.mock('react-native', () => ({
-  Platform: { OS: 'ios' },
-}));
-
-jest.mock('../../../src/stores', () => ({
-  useChatStore: {
-    getState: jest.fn(),
-  },
-}));
-
 import { Platform } from 'react-native';
 import { useChatStore } from '../../../src/stores';
 import {
@@ -24,7 +14,26 @@ import {
   buildImageGenMeta,
 } from '../../../src/services/imageGenerationHelpers';
 
-const mockGetState = useChatStore.getState as jest.Mock;
+const originalOS = Platform.OS;
+/** The platform the app runs on is the device, not our code: set it the way the runtime reports it. */
+function runOn(os: 'ios' | 'android'): void {
+  Object.defineProperty(Platform, 'OS', { value: os, configurable: true });
+}
+afterAll(() => runOn(originalOS as 'ios' | 'android'));
+
+/** A real conversation in the real chat store, written through the store's own actions. */
+function conversationWith(
+  messages: Array<{ role: 'user' | 'assistant' | 'system' | 'tool'; content: string }>,
+): { id: string; ids: string[] } {
+  const store = useChatStore.getState();
+  const id = store.createConversation('model-1', 'Chat');
+  const ids = messages.map(m => useChatStore.getState().addMessage(id, m).id);
+  return { id, ids };
+}
+
+beforeEach(() => {
+  useChatStore.getState().clearAllConversations();
+});
 
 describe('buildEnhancementMessages', () => {
   it('returns system + user message when no context', () => {
@@ -67,66 +76,51 @@ describe('buildEnhancementMessages', () => {
 
 describe('getConversationContext', () => {
   it('returns empty array when conversation not found', () => {
-    mockGetState.mockReturnValue({ conversations: [] });
+    conversationWith([{ role: 'user', content: 'hello' }]);
     expect(getConversationContext('missing-id')).toEqual([]);
   });
 
   it('returns empty array when conversation has no messages', () => {
-    mockGetState.mockReturnValue({
-      conversations: [{ id: 'c1', messages: null }],
-    });
-    expect(getConversationContext('c1')).toEqual([]);
+    const { id } = conversationWith([]);
+    expect(useChatStore.getState().conversations.find(c => c.id === id)).toBeDefined();
+    expect(getConversationContext(id)).toEqual([]);
   });
 
   it('filters to only user and assistant messages', () => {
-    mockGetState.mockReturnValue({
-      conversations: [{
-        id: 'c1',
-        messages: [
-          { id: 'm1', role: 'user', content: 'hello', timestamp: 1 },
-          { id: 'm2', role: 'system', content: 'sys', timestamp: 2 },
-          { id: 'm3', role: 'assistant', content: 'hi', timestamp: 3 },
-          { id: 'm4', role: 'tool', content: 'result', timestamp: 4 },
-        ],
-      }],
-    });
-    const ctx = getConversationContext('c1');
-    expect(ctx).toHaveLength(2);
-    expect(ctx[0].role).toBe('user');
-    expect(ctx[1].role).toBe('assistant');
+    const { id } = conversationWith([
+      { role: 'user', content: 'hello' },
+      { role: 'system', content: 'sys' },
+      { role: 'assistant', content: 'hi' },
+      { role: 'tool', content: 'result' },
+    ]);
+    expect(useChatStore.getState().getConversationMessages(id)).toHaveLength(4);
+    const ctx = getConversationContext(id);
+    expect(ctx.map(m => [m.role, m.content])).toEqual([
+      ['user', 'hello'],
+      ['assistant', 'hi'],
+    ]);
   });
 
   it('takes last 10 messages', () => {
-    const messages = Array.from({ length: 15 }, (_, i) => ({
-      id: `m${i}`, role: 'user' as const, content: `msg${i}`, timestamp: i,
-    }));
-    mockGetState.mockReturnValue({ conversations: [{ id: 'c1', messages }] });
-    const ctx = getConversationContext('c1');
+    const { id } = conversationWith(
+      Array.from({ length: 15 }, (_, i) => ({ role: 'user' as const, content: `msg${i}` })),
+    );
+    const ctx = getConversationContext(id);
     expect(ctx).toHaveLength(10);
     expect(ctx[0].content).toBe('msg5'); // last 10 start at index 5
+    expect(ctx[9].content).toBe('msg14');
   });
 
   it('truncates content to 500 chars', () => {
-    const longContent = 'x'.repeat(600);
-    mockGetState.mockReturnValue({
-      conversations: [{
-        id: 'c1',
-        messages: [{ id: 'm1', role: 'user', content: longContent, timestamp: 1 }],
-      }],
-    });
-    const ctx = getConversationContext('c1');
+    const { id } = conversationWith([{ role: 'user', content: 'x'.repeat(600) }]);
+    const ctx = getConversationContext(id);
     expect(ctx[0].content).toHaveLength(500);
   });
 
   it('prefixes context message ids with ctx-', () => {
-    mockGetState.mockReturnValue({
-      conversations: [{
-        id: 'c1',
-        messages: [{ id: 'abc', role: 'user', content: 'hi', timestamp: 1 }],
-      }],
-    });
-    const ctx = getConversationContext('c1');
-    expect(ctx[0].id).toBe('ctx-abc');
+    const { id, ids } = conversationWith([{ role: 'user', content: 'hi' }]);
+    const ctx = getConversationContext(id);
+    expect(ctx[0].id).toBe(`ctx-${ids[0]}`);
   });
 });
 
@@ -165,13 +159,14 @@ describe('buildImageGenMeta', () => {
   const baseOpts = { steps: 8, guidanceScale: 2.5, result: { width: 512, height: 512 } as any, useOpenCL: false };
 
   it('returns Core ML backend on iOS', () => {
-    (Platform as any).OS = 'ios';
+    runOn('ios');
     const meta = buildImageGenMeta(baseModel, baseOpts);
     expect(meta.gpu).toBe(true);
     expect(meta.gpuBackend).toBe('Core ML');
   });
 
   it('includes model name, steps, guidanceScale, resolution', () => {
+    runOn('ios');
     const meta = buildImageGenMeta(baseModel, baseOpts);
     expect(meta.modelName).toBe('TestModel');
     expect(meta.steps).toBe(8);
@@ -180,28 +175,28 @@ describe('buildImageGenMeta', () => {
   });
 
   it('returns QNN backend for qnn backend on android', () => {
-    (Platform as any).OS = 'android';
+    runOn('android');
     const meta = buildImageGenMeta({ ...baseModel, backend: 'qnn' }, baseOpts);
     expect(meta.gpu).toBe(true);
     expect(meta.gpuBackend).toBe('QNN (NPU)');
   });
 
   it('returns MNN GPU when useOpenCL is true on android', () => {
-    (Platform as any).OS = 'android';
+    runOn('android');
     const meta = buildImageGenMeta({ ...baseModel, backend: 'mnn' }, { ...baseOpts, useOpenCL: true });
     expect(meta.gpu).toBe(true);
     expect(meta.gpuBackend).toBe('MNN (GPU)');
   });
 
   it('returns MNN CPU when useOpenCL is false and backend is mnn on android', () => {
-    (Platform as any).OS = 'android';
+    runOn('android');
     const meta = buildImageGenMeta({ ...baseModel, backend: 'mnn' }, { ...baseOpts, useOpenCL: false });
     expect(meta.gpu).toBe(false);
     expect(meta.gpuBackend).toBe('MNN (CPU)');
   });
 
   it('defaults backend to mnn when not specified', () => {
-    (Platform as any).OS = 'android';
+    runOn('android');
     const meta = buildImageGenMeta(baseModel, { ...baseOpts, useOpenCL: false });
     expect(meta.gpuBackend).toBe('MNN (CPU)');
   });

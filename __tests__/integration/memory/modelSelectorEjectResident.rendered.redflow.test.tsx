@@ -14,17 +14,14 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('per-model eject (TDD) — model selector In Memory section', () => {
   it('lists every resident with RAM and ejects one individually, leaving the others', async () => {
     // Heavy (4GB) text model so the image load EVICTS it (one heavy at a time) → residents = image +
     // whisper. The harness default is a lighter 2GB model (fits chat-flow budgets) which would co-reside.
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android', whisper: true, modelFileSizeBytes: 4 * 1024 * 1024 * 1024 });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android', whisper: true, modelFileSizeBytes: 4 * 1024 * 1024 * 1024 });
     h.render();
     // Real interactions to reach image + whisper resident.
     await h.placeImageModel({ backend: 'mnn' });
@@ -41,11 +38,11 @@ describe('per-model eject (TDD) — model selector In Memory section', () => {
     const types = () => (modelResidencyManager.getResidents() as Array<{ type: string }>).map(r => r.type).sort();
     expect(types()).toEqual(['image', 'whisper']);
 
-    const v = h.rtl.render(React.createElement(ModelsManagerSheet, {
+    const v = h.rtl.render(h.inNavigator(React.createElement(ModelsManagerSheet, {
       visible: true, onClose: () => {}, labels: { text: '—', image: '—', voice: '—', speech: '—' },
       loadingState: { isLoading: false }, isEjecting: false, hasActiveModel: false,
       onOpenRow: () => {}, onEject: () => {},
-    }));
+    })));
 
     // The manager sheet marks each RESIDENT row with a RAM chip: image + whisper(→speech) are resident,
     // text is not (it was evicted by the image load — one heavy at a time).

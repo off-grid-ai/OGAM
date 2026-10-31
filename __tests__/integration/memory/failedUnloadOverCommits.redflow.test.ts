@@ -14,7 +14,7 @@ afterEach(() => resetDeviceMemory());
 
 describe('PR#454 — failed eviction unload over-commits memory (red-flow)', () => {
   it('keeps the victim resident and reports fits=false when its unload rejects', async () => {
-    setDeviceMemory({ platform: 'android', totalGB: 12, availGB: gbOf(4000) });
+    await setDeviceMemory({ platform: 'android', totalGB: 12, availGB: gbOf(4000) });
     // A normal SWAP: a resident text model must be evicted to fit a large incoming image they can't
     // co-reside with (5000 + 6500 = 11500 > the ~8600 budget) — but the text's native unload FAILS.
     const unload = makeResident({ key: 'text', type: 'text', modelId: 'gemma', sizeMB: 5000, dirtyMemory: false });

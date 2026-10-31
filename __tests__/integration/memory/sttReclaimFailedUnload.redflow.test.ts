@@ -16,7 +16,7 @@ afterEach(() => resetDeviceMemory());
 
 describe('STT reclaim — failed whisper unload over-commits (red-flow)', () => {
   it('keeps whisper resident when its unload rejects (does not count it as freed)', async () => {
-    setDeviceMemory({ platform: 'android', totalGB: 4, availGB: gbOf(500) }); // ≤6GB → reclaim path active
+    await setDeviceMemory({ platform: 'android', totalGB: 4, availGB: gbOf(500) }); // ≤6GB → reclaim path active
     const unload = makeResident({ key: 'whisper', type: 'stt', modelId: 'base.en', sizeMB: 320, canEvict: () => true });
     unload.mockRejectedValue(new Error('native whisper unload failed'));
 

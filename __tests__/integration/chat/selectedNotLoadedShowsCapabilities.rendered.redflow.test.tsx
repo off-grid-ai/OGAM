@@ -18,15 +18,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('selected-but-not-loaded GGUF shows its real capability settings (rendered)', () => {
   it('Gemma 4 selected (NOT loaded): the quick-settings popover shows the Thinking toggle and a Tools count', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama', platform: 'android', deferInitialLoad: true,
       modelName: 'Gemma 4 E2B', modelFileName: 'gemma-4-E2B-it-Q4_K_M.gguf',
     });
@@ -44,7 +41,7 @@ describe('selected-but-not-loaded GGUF shows its real capability settings (rende
   });
 
   it('falsifier — an unknown-named GGUF in the same unloaded state promises nothing (no Thinking toggle, Tools N/A)', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android', deferInitialLoad: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android', deferInitialLoad: true });
     h.render();
     const { rtl } = h; const view = h.view!;
 

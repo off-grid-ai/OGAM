@@ -37,6 +37,8 @@ export interface RemoteFile {
   hold?: boolean;
   /** false = the transfer finishes even after stopDownload (it was already complete natively). */
   honorsStop?: boolean;
+  /** The size the finished file reports on disk, for a model too large to hold as a body. */
+  reportedSize?: number;
 }
 
 export interface RemoteTransfer {
@@ -315,6 +317,7 @@ export function createNativeFileSystemBoundary(
           if (stopped) throw new Error('Download has been aborted');
         }
         volume.writeFileSync(target, body);
+        if (served.reportedSize !== undefined) reportedFileSizes.set(target, served.reportedSize);
         return {
           jobId,
           statusCode: served.statusCode ?? 200,

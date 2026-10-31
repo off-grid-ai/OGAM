@@ -16,12 +16,8 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { MB } from '../../harness/nativeBoundary';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 type Harness = Awaited<ReturnType<typeof setupChatScreen>>;
 
@@ -51,7 +47,7 @@ async function switchAtoBtoA(h: Harness): Promise<void> {
 
 describe('chat switch keeps each chat warm', () => {
   it('CPU: leaving A saves it, B starts empty, returning to A restores A', async () => {
-    const h = await setupChatScreen({ engine: 'llama', modelFileSizeBytes: 500 * MB });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', modelFileSizeBytes: 500 * MB });
     const llama = h.boundary.llama!;
     // BEFORE: nothing saved, nothing restored.
     expect(llama.calls.saveSession).toHaveLength(0);
@@ -70,7 +66,7 @@ describe('chat switch keeps each chat warm', () => {
   });
 
   it('keeps at most three saved chats on the device', async () => {
-    const h = await setupChatScreen({ engine: 'llama', modelFileSizeBytes: 500 * MB });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', modelFileSizeBytes: 500 * MB });
     h.render();
     await sendAndSee(h, 'chat 1', 'Reply 1.');
     for (let chat = 2; chat <= 5; chat++) {
@@ -87,7 +83,7 @@ describe('chat switch keeps each chat warm', () => {
   });
 
   it('MTP on: no session is saved or restored', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       modelFileSizeBytes: 500 * MB,
       deferInitialLoad: true,
@@ -96,7 +92,7 @@ describe('chat switch keeps each chat warm', () => {
     const { TextGenerationSection } = require('../../../src/components/GenerationSettingsModal/TextGenerationSection');
     // The sheet shows the shared General controls (backend, loading mode) above the Text section.
     const { GeneralGenerationControls } = require('../../../src/components/settings/GeneralGenerationControls');
-    const section = h.rtl.render(h.React.createElement(h.React.Fragment, null, h.React.createElement(GeneralGenerationControls), h.React.createElement(TextGenerationSection, {})));
+    const section = h.renderAside(h.React.createElement(h.React.Fragment, null, h.React.createElement(GeneralGenerationControls), h.React.createElement(TextGenerationSection, {})));
     h.rtl.fireEvent.press(section.getByTestId('modal-text-advanced-toggle'));
     h.rtl.fireEvent.press(section.getByTestId('speculative-on-button'));
     await h.rtl.waitFor(() => expect(section.queryByTestId('speculative-draft-stepper-value')).not.toBeNull());
@@ -112,7 +108,7 @@ describe('chat switch keeps each chat warm', () => {
   });
 
   it('GPU (OpenCL): no session is saved or restored', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       deviceHardware: 'qcom', // Adreno: the OpenCL backend is offered
       modelFileSizeBytes: 500 * MB,
@@ -122,7 +118,7 @@ describe('chat switch keeps each chat warm', () => {
     const { TextGenerationSection } = require('../../../src/components/GenerationSettingsModal/TextGenerationSection');
     // The sheet shows the shared General controls (backend, loading mode) above the Text section.
     const { GeneralGenerationControls } = require('../../../src/components/settings/GeneralGenerationControls');
-    const section = h.rtl.render(h.React.createElement(h.React.Fragment, null, h.React.createElement(GeneralGenerationControls), h.React.createElement(TextGenerationSection, {})));
+    const section = h.renderAside(h.React.createElement(h.React.Fragment, null, h.React.createElement(GeneralGenerationControls), h.React.createElement(TextGenerationSection, {})));
     h.rtl.fireEvent.press(section.getByTestId('modal-text-advanced-toggle'));
     h.rtl.fireEvent.press(section.getByTestId('backend-opencl-button'));
     await h.rtl.waitFor(() => {

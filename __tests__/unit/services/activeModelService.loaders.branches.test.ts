@@ -1,268 +1,211 @@
 /**
- * Branch-coverage tests for activeModelService/loaders.ts.
- * Targets: doLoadLiteRTModel (engine guard, unload-previous + warn, GPU->CPU toast,
- * GPU/NPU warmup), doLoadTextModel mmproj-clear branch, resolveMmProjPath store-map
- * update + saveModelWithMmproj (string size parse), and doLoadImageModel paths.
+ * activeModelService/loaders — the less common turns of a model load, through activeModelService.
+ *
+ *  - llama: a projector link that cannot be saved, a stored projector that does not start, the OpenCL cache
+ *    type, a native unload that fails during an engine switch.
+ *  - LiteRT: a GPU request that native runs on the CPU at a long context (the toast), the warmup on an
+ *    accelerator, the vision flag handed to native.
+ *  - Image: switching image models, reloading for a new thread count, a native load that fails.
+ *
+ * Real: activeModelService and its loaders, the residency manager's load lock, llmService, liteRTService,
+ * localDreamGenerator, modelManager, the stores. Faked (device, harness/generationDevice): llama.rn, the
+ * LiteRT and diffusion native modules, the filesystem, async-storage, RAM, the OS toast.
  */
+import { launchGeneration, type GenerationDevice } from '../../harness/generationDevice';
+import { SD_MNN_PACKAGE_FILES } from '../../harness/imageModelPackage';
+import { createONNXImageModel } from '../../utils/factories';
 
-jest.mock('react-native', () => ({
-  Platform: { OS: 'android' },
-  ToastAndroid: { showWithGravity: jest.fn(), LONG: 1, BOTTOM: 2 },
-}));
-jest.mock('../../../src/stores', () => ({
-  useAppStore: { getState: jest.fn() },
-}));
-jest.mock('../../../src/stores/debugLogsStore', () => ({
-  useDebugLogsStore: { getState: jest.fn(() => ({ addLog: jest.fn() })) },
-}));
-jest.mock('../../../src/services/llm', () => ({
-  llmService: { loadModel: jest.fn(), unloadModel: jest.fn(), getMultimodalSupport: jest.fn(() => null) },
-}));
-jest.mock('../../../src/services/litert', () => ({
-  liteRTService: {
-    loadModel: jest.fn(), unloadModel: jest.fn(),
-    getActiveBackend: jest.fn(() => 'cpu'), warmup: jest.fn(),
-  },
-}));
-jest.mock('../../../src/services/localDreamGenerator', () => ({
-  localDreamGeneratorService: { loadModel: jest.fn(), unloadModel: jest.fn() },
-}));
-jest.mock('../../../src/services/modelManager', () => ({
-  modelManager: { saveModelWithMmproj: jest.fn(), clearMmProjLink: jest.fn() },
-}));
-jest.mock('react-native-fs', () => ({
-  exists: jest.fn(() => Promise.resolve(false)),
-  readDir: jest.fn(() => Promise.resolve([])),
-}));
-jest.mock('../../../src/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+const REGISTRY_KEY = '@local_llm/downloaded_models';
+let d: GenerationDevice;
 
-import { ToastAndroid } from 'react-native';
-import RNFS from 'react-native-fs';
-import {
-  doLoadTextModel,
-  doLoadImageModel,
-  resolveMmProjPath,
-} from '../../../src/services/activeModelService/loaders';
-import { liteRTService } from '../../../src/services/litert';
-import { llmService } from '../../../src/services/llm';
-import { localDreamGeneratorService } from '../../../src/services/localDreamGenerator';
-import { modelManager } from '../../../src/services/modelManager';
-import { useAppStore } from '../../../src/stores';
-import logger from '../../../src/utils/logger';
+const storage = () => {
+  const mod = require('@react-native-async-storage/async-storage');
+  return mod.default ?? mod;
+};
 
-const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
-const mockedLiteRT = liteRTService as jest.Mocked<typeof liteRTService>;
-const mockedLlm = llmService as jest.Mocked<typeof llmService>;
-const mockedImage = localDreamGeneratorService as jest.Mocked<typeof localDreamGeneratorService>;
-const mockedGetState = useAppStore.getState as jest.Mock;
+beforeEach(async () => {
+  await storage().clear(); // each test is a fresh install
+});
 
-function makeStore(overrides: any = {}) {
-  return {
-    settings: {
-      inferenceBackend: undefined, enableGpu: false, gpuLayers: 0, nThreads: 4, nBatch: 512,
-      contextLength: 2048, flashAttn: false, cacheType: 'ram',
-      liteRTBackend: 'gpu', liteRTMaxTokens: 4096,
-    },
-    downloadedModels: [],
-    setDownloadedModels: jest.fn(),
-    setActiveModelId: jest.fn(),
-    setActiveImageModelId: jest.fn(),
-    setLoadedSettings: jest.fn(),
-    ...overrides,
-  };
-}
+const modelById = (id: string) => d.useAppStore.getState().downloadedModels.find((m: any) => m.id === id);
+const llamaContext = () => {
+  const i = d.boundary.llama!.calls.initLlama.findIndex(p => !p.embedding);
+  return d.boundary.llama!.module.initLlama.mock.results[i].value;
+};
+/** The models registry on disk, as a finished download leaves it. */
+const persistRegistry = () => storage().setItem(REGISTRY_KEY, JSON.stringify(d.useAppStore.getState().downloadedModels));
+const projectorBeside = (filePath: string, name: string) => `${filePath.slice(0, filePath.lastIndexOf('/'))}/${name}`;
 
-function makeTextCtx(overrides: any = {}) {
-  const { model, store, ...rest } = overrides;
-  return {
-    model: { id: 'model-1', fileName: 'model.gguf', filePath: '/models/model.gguf', engine: 'ggml', ...model },
-    modelId: 'model-1',
-    store: makeStore(store),
-    timeoutMs: 30000,
-    loadedTextModelId: null,
-    onLoaded: jest.fn(),
-    onError: jest.fn(),
-    onFinally: jest.fn(),
-    ...rest,
-  };
-}
+describe('llama — the projector', () => {
+  it('loads the model text-only when the found projector cannot be saved to the registry', async () => {
+    d = await launchGeneration({ load: false });
+    d.boundary.fs!.seedFile(projectorBeside(modelById('m').filePath, 'm-mmproj-f16.gguf'), 1024);
+    await persistRegistry();
+    // The disk refuses the registry write.
+    const store = storage();
+    const setItem = store.setItem.getMockImplementation();
+    store.setItem.mockImplementation(async (key: string, value: string) => {
+      if (key === REGISTRY_KEY) throw new Error('disk full');
+      return setItem(key, value);
+    });
 
-beforeEach(() => jest.clearAllMocks());
+    await d.activeModelService.loadTextModel('m');
 
-describe('resolveMmProjPath — store map update + persistence', () => {
-  // (Removed: asserted the scan links ANY found mmproj. Strict matching now requires the projector's
-  // quant-stripped stem to equal the model's — toy 'm.gguf' vs 'model-mmproj-f16' ('m' != 'model') is
-  // correctly rejected. Same-stem linking/persistence is covered by mmProjMatchesModel.test.ts.)
+    expect((await llamaContext()).initMultimodal).not.toHaveBeenCalled();
+    expect(d.llmService.isModelLoaded()).toBe(true);
+    expect(d.activeModelService.getLoadedModelIds().textModelId).toBe('m');
+  });
 
-  it('returns undefined (catch) when saveModelWithMmproj rejects', async () => {
-    mockedRNFS.exists.mockResolvedValue(false);
-    mockedRNFS.readDir.mockResolvedValue([
-      { name: 'model-mmproj-f16.gguf', path: '/p/model-mmproj-f16.gguf', isFile: () => true, size: 10 } as any,
+  it('clears a stored projector link that native could not start, and keeps the vision identity', async () => {
+    d = await launchGeneration({ load: false });
+    const m = modelById('m');
+    const projector = projectorBeside(m.filePath, 'm-mmproj-f16.gguf');
+    d.boundary.fs!.seedFile(projector, 1024);
+    d.useAppStore.getState().setDownloadedModels([
+      { ...m, mmProjPath: projector, mmProjFileName: 'm-mmproj-f16.gguf', isVisionModel: true },
     ]);
-    mockedGetState.mockReturnValue({ downloadedModels: [{ id: 'model-1' }], setDownloadedModels: jest.fn() });
-    (modelManager.saveModelWithMmproj as jest.Mock).mockRejectedValue(new Error('save failed'));
-    const model = { filePath: '/models/m.gguf', isVisionModel: true } as any;
-    expect(await resolveMmProjPath(model, 'model-1')).toBeUndefined();
+    await persistRegistry();
+
+    await d.activeModelService.loadTextModel('m');
+
+    expect((await llamaContext()).initMultimodal).toHaveBeenCalledWith(expect.objectContaining({ path: projector }));
+    expect(modelById('m').mmProjPath).toBeUndefined();
+    expect(modelById('m')).toEqual(expect.objectContaining({ isVisionModel: true, mmProjFileName: 'm-mmproj-f16.gguf' }));
+    expect(d.activeModelService.getLoadedModelIds().textModelId).toBe('m');
   });
 });
 
-describe('doLoadTextModel — mmproj clear branch', () => {
-  it('clears the mmproj link when stored mmProjPath exists but native reports no vision', async () => {
-    mockedLlm.loadModel.mockResolvedValue(undefined);
-    (mockedLlm.getMultimodalSupport as jest.Mock).mockReturnValue({ vision: false });
-    mockedRNFS.exists.mockResolvedValue(true); // stored mmProjPath exists on disk -> fast path
-    const ctx = makeTextCtx({ model: { id: 'model-1', fileName: 'm.gguf', filePath: '/models/m.gguf', engine: 'ggml', mmProjPath: '/models/mmproj.gguf' } });
-    mockedGetState.mockReturnValue(ctx.store);
+describe('llama — settings and switches', () => {
+  it('snapshots the f16 cache type OpenCL forces, so the banner does not show a false change', async () => {
+    d = await launchGeneration({ load: false });
+    d.useAppStore.getState().updateSettings({ inferenceBackend: 'opencl', cacheType: 'q8_0' });
 
-    await doLoadTextModel(ctx);
+    await d.activeModelService.loadTextModel('m');
 
-    expect(modelManager.clearMmProjLink).toHaveBeenCalledWith('model-1');
-    expect(ctx.onLoaded).toHaveBeenCalledWith('model-1');
+    expect(d.useAppStore.getState().loadedSettings).toEqual(expect.objectContaining({
+      inferenceBackend: 'opencl',
+      cacheType: 'f16',
+    }));
   });
 
-  it('uses OPENCL cache-type override branch when inferenceBackend is opencl', async () => {
-    mockedLlm.loadModel.mockResolvedValue(undefined);
-    (mockedLlm.getMultimodalSupport as jest.Mock).mockReturnValue({ vision: true });
-    mockedRNFS.exists.mockResolvedValue(false);
-    mockedRNFS.readDir.mockResolvedValue([]);
-    const ctx = makeTextCtx({ store: { settings: { ...makeStore().settings, inferenceBackend: 'opencl' } } });
-    mockedGetState.mockReturnValue(ctx.store);
+  it('still loads the llama model when the resident LiteRT model fails to unload natively', async () => {
+    d = await launchGeneration({ engine: 'litert', extraModels: [{ id: 'g', name: 'Gguf', engine: 'llama' }] });
+    d.boundary.litert.module.unloadModel.mockRejectedValueOnce(new Error('unload boom'));
 
-    await doLoadTextModel(ctx);
+    await d.activeModelService.loadTextModel('g');
 
-    const loaded = (ctx.store.setLoadedSettings as jest.Mock).mock.calls[0][0];
-    expect(loaded.cacheType).toBe('f16');
-  });
-
-  it('logs a warning but continues when unloading the previous LiteRT model fails', async () => {
-    (mockedLiteRT.unloadModel as jest.Mock).mockRejectedValue(new Error('unload boom'));
-    mockedLlm.loadModel.mockResolvedValue(undefined);
-    (mockedLlm.getMultimodalSupport as jest.Mock).mockReturnValue(null);
-    mockedRNFS.exists.mockResolvedValue(false);
-    mockedRNFS.readDir.mockResolvedValue([]);
-    const ctx = makeTextCtx({ loadedTextModelId: 'old-model' });
-    mockedGetState.mockReturnValue(ctx.store);
-
-    await doLoadTextModel(ctx);
-
-    expect(logger.warn).toHaveBeenCalledWith('[engines] text engine unload during switch failed, continuing:', expect.any(Error));
-    expect(ctx.onLoaded).toHaveBeenCalled();
+    expect(d.liteRTService.isModelLoaded()).toBe(false);
+    expect(d.llmService.isModelLoaded()).toBe(true);
+    expect(d.activeModelService.getLoadedModelIds().textModelId).toBe('g');
+    expect(d.useAppStore.getState().activeModelId).toBe('g');
   });
 });
 
-describe('doLoadLiteRTModel branches', () => {
-  function liteCtx(overrides: any = {}) {
-    return makeTextCtx({
-      model: { id: 'model-1', fileName: 'm.litertlm', filePath: '/models/m.litertlm', engine: 'litert', liteRTVision: true, liteRTAudio: true, ...overrides.model },
-      ...overrides,
-    });
-  }
+describe('LiteRT — backends', () => {
+  it('switching LiteRT models when native runs a GPU request on the CPU at a long context shows the toast', async () => {
+    d = await launchGeneration({ engine: 'litert', extraModels: [{ id: 'l2', name: 'Lite 2', engine: 'litert' }] });
+    d.useAppStore.getState().updateSettings({ liteRTBackend: 'gpu', liteRTMaxTokens: 16384 });
+    d.boundary.litert.module.unloadModel.mockRejectedValueOnce(new Error('lt unload'));
+    d.boundary.litert.module.loadModel.mockResolvedValueOnce({ backend: 'cpu', maxNumTokens: 16384 });
+    const toasts: string[] = [];
+    require('react-native').ToastAndroid.showWithGravity = (message: string) => toasts.push(message);
 
-  it('throws when routed a non-litert model directly (engine guard)', async () => {
-    // doLoadTextModel routes by engine, so call the litert path with a mismatched
-    // model by forcing engine litert at routing but non-litert inside is impossible;
-    // instead assert the guard via a litert ctx whose model engine is flipped after routing.
-    const ctx = liteCtx();
-    (ctx.model as any).engine = 'litert';
-    mockedLiteRT.loadModel.mockResolvedValue(undefined);
-    mockedLiteRT.getActiveBackend.mockReturnValue('cpu');
-    await doLoadTextModel(ctx);
-    expect(mockedLiteRT.loadModel).toHaveBeenCalled();
+    await d.activeModelService.loadTextModel('l2');
+
+    expect(toasts).toEqual([expect.stringMatching(/GPU unavailable at 16,384 token context\. Running on CPU/)]);
+    expect(d.liteRTService.getActiveBackend()).toBe('cpu');
+    expect(d.liteRTService.getLoadedModelPath()).toBe(modelById('l2').filePath);
+    expect(d.activeModelService.getLoadedModelIds().textModelId).toBe('l2');
   });
 
-  it('unloads previous litert model (warn on failure) and shows GPU->CPU toast at high context', async () => {
-    mockedLiteRT.unloadModel.mockRejectedValue(new Error('lt unload'));
-    mockedLiteRT.loadModel.mockResolvedValue(undefined);
-    mockedLiteRT.getActiveBackend.mockReturnValue('cpu'); // != preferred 'gpu'
-    const ctx = liteCtx({
-      loadedTextModelId: 'prev',
-      store: { settings: { ...makeStore().settings, liteRTBackend: 'gpu', liteRTMaxTokens: 16384 } },
-    });
+  it('warms an NPU load up with one native turn, and skips the warmup on the CPU', async () => {
+    d = await launchGeneration({ engine: 'litert', load: false, extraModels: [{ id: 'c', name: 'Cpu', engine: 'litert' }] });
+    d.useAppStore.getState().updateSettings({ liteRTBackend: 'npu' });
+    d.boundary.litert.module.loadModel.mockResolvedValueOnce({ backend: 'npu', maxNumTokens: 4096 });
 
-    await doLoadTextModel(ctx);
+    await d.activeModelService.loadTextModel('m');
+    expect(d.liteRTService.getActiveBackend()).toBe('npu');
+    expect(d.boundary.litert.calls.sendMessage.map(args => args[0])).toEqual(['Hi']);
 
-    expect(logger.warn).toHaveBeenCalledWith('[engines] text engine unload during switch failed, continuing:', expect.any(Error));
-    expect(ctx.onError).toHaveBeenCalled();
-    expect(ToastAndroid.showWithGravity).toHaveBeenCalled();
+    d.useAppStore.getState().updateSettings({ liteRTBackend: 'cpu' });
+    d.boundary.litert.module.loadModel.mockResolvedValueOnce({ backend: 'cpu', maxNumTokens: 4096 });
+    await d.activeModelService.loadTextModel('c');
+
+    expect(d.liteRTService.getActiveBackend()).toBe('cpu');
+    expect(d.boundary.litert.calls.sendMessage).toHaveLength(1); // no second warmup
   });
 
-  it('runs warmup when active backend is gpu/npu', async () => {
-    mockedLiteRT.loadModel.mockResolvedValue(undefined);
-    mockedLiteRT.getActiveBackend.mockReturnValue('npu');
-    (mockedLiteRT.warmup as jest.Mock).mockResolvedValue(undefined);
-    const ctx = liteCtx({ store: { settings: { ...makeStore().settings, liteRTBackend: 'npu' } } });
+  it('hands native the vision flag of a model that carries vision', async () => {
+    d = await launchGeneration({ engine: 'litert', load: false, liteRTVision: true });
 
-    await doLoadTextModel(ctx);
+    await d.activeModelService.loadTextModel('m');
 
-    expect(mockedLiteRT.warmup).toHaveBeenCalled();
-    expect(ctx.onLoaded).toHaveBeenCalledWith('model-1');
-  });
-
-  it('defaults liteRTVision/liteRTAudio to false when undefined', async () => {
-    mockedLiteRT.loadModel.mockResolvedValue(undefined);
-    mockedLiteRT.getActiveBackend.mockReturnValue('cpu');
-    const ctx = liteCtx({ model: { id: 'model-1', fileName: 'm.litertlm', filePath: '/p', engine: 'litert' } });
-
-    await doLoadTextModel(ctx);
-
-    const loadArgs = (mockedLiteRT.loadModel as jest.Mock).mock.calls[0];
-    expect(loadArgs[2]).toMatchObject({ supportsVision: false, supportsAudio: false });
+    const [, , supportsVision, supportsAudio] = d.boundary.litert.calls.loadModel[0];
+    expect({ supportsVision, supportsAudio }).toEqual({ supportsVision: true, supportsAudio: false });
   });
 });
 
-describe('doLoadImageModel branches', () => {
-  function imgCtx(overrides: any = {}) {
-    return {
-      model: { id: 'img-1', modelPath: '/img/m', attentionVariant: 'v1', ...overrides.model },
-      modelId: 'img-1',
-      imageThreads: 4,
-      needsThreadReload: false,
-      cpuOnly: true,
-      store: makeStore(overrides.store),
-      timeoutMs: 30000,
-      loadedImageModelId: null,
-      onLoaded: jest.fn(),
-      onError: jest.fn(),
-      onFinally: jest.fn(),
-      ...overrides,
-    };
-  }
+describe('image models', () => {
+  const addImageModel = (id: string) => {
+    const modelPath = `${d.boundary.fs!.DocumentDirectoryPath}/image_models/${id}`;
+    for (const f of SD_MNN_PACKAGE_FILES) d.boundary.fs!.seedFile(`${modelPath}/${f}`, 1024);
+    d.useAppStore.getState().addDownloadedImageModel(
+      createONNXImageModel({ id, name: id, modelPath, backend: 'mnn', size: 1024 * 1024 * 1024 }),
+    );
+    return modelPath;
+  };
+  const native = () => d.boundary.diffusion.module;
 
-  it('unloads the previously loaded image model when id differs', async () => {
-    mockedImage.loadModel.mockResolvedValue(undefined as any);
-    mockedImage.unloadModel.mockResolvedValue(undefined as any);
-    const ctx = imgCtx({ loadedImageModelId: 'other' });
-    await doLoadImageModel(ctx);
-    expect(mockedImage.unloadModel).toHaveBeenCalled();
-    expect(ctx.onError).toHaveBeenCalled(); // reset path
-    expect(ctx.onLoaded).toHaveBeenCalledWith('img-1', 4);
-    expect(ctx.store.setActiveImageModelId).toHaveBeenCalledWith('img-1');
+  it('the first load opens the model without unloading anything', async () => {
+    d = await launchGeneration({ load: false });
+    const path = addImageModel('img-1');
+
+    await d.activeModelService.loadImageModel('img-1');
+
+    expect(native().unloadModel).not.toHaveBeenCalled();
+    expect(native().loadModel).toHaveBeenCalledTimes(1);
+    expect(native().loadModel.mock.calls[0][0]).toEqual(expect.objectContaining({ modelPath: path, threads: 4 }));
+    expect(d.activeModelService.getLoadedModelIds().imageModelId).toBe('img-1');
+    expect(d.useAppStore.getState().activeImageModelId).toBe('img-1');
+    expect(d.activeModelService.getActiveModels().image.isLoading).toBe(false);
   });
 
-  it('unloads when needsThreadReload even if same id', async () => {
-    mockedImage.loadModel.mockResolvedValue(undefined as any);
-    mockedImage.unloadModel.mockResolvedValue(undefined as any);
-    const ctx = imgCtx({ loadedImageModelId: 'img-1', needsThreadReload: true });
-    await doLoadImageModel(ctx);
-    expect(mockedImage.unloadModel).toHaveBeenCalled();
+  it('switching image models unloads the first natively and makes the second active', async () => {
+    d = await launchGeneration({ load: false });
+    addImageModel('img-1');
+    const second = addImageModel('img-2');
+    await d.activeModelService.loadImageModel('img-1');
+
+    await d.activeModelService.loadImageModel('img-2');
+
+    expect(native().unloadModel).toHaveBeenCalledTimes(1);
+    expect(native().loadModel.mock.calls[1][0]).toEqual(expect.objectContaining({ modelPath: second }));
+    expect(d.activeModelService.getLoadedModelIds().imageModelId).toBe('img-2');
+    expect(d.useAppStore.getState().activeImageModelId).toBe('img-2');
   });
 
-  it('does not unload when no model is loaded yet', async () => {
-    mockedImage.loadModel.mockResolvedValue(undefined as any);
-    const ctx = imgCtx();
-    await doLoadImageModel(ctx);
-    expect(mockedImage.unloadModel).not.toHaveBeenCalled();
-    expect(ctx.onFinally).toHaveBeenCalled();
+  it('reloads the same image model when the thread count changed', async () => {
+    d = await launchGeneration({ load: false });
+    addImageModel('img-1');
+    await d.activeModelService.loadImageModel('img-1');
+    d.useAppStore.getState().updateSettings({ imageThreads: 6 });
+
+    await d.activeModelService.loadImageModel('img-1');
+
+    expect(native().unloadModel).toHaveBeenCalledTimes(1);
+    expect(native().loadModel).toHaveBeenCalledTimes(2);
+    expect(native().loadModel.mock.calls[1][0]).toEqual(expect.objectContaining({ threads: 6 }));
+    expect(d.activeModelService.getLoadedModelIds().imageModelId).toBe('img-1');
   });
 
-  it('calls onError and rethrows when image loadModel fails', async () => {
-    mockedImage.loadModel.mockRejectedValue(new Error('img load fail'));
-    const ctx = imgCtx();
-    await expect(doLoadImageModel(ctx)).rejects.toThrow('img load fail');
-    expect(ctx.onError).toHaveBeenCalled();
-    expect(ctx.onFinally).toHaveBeenCalled();
+  it('surfaces a native load failure and leaves no image model loaded', async () => {
+    d = await launchGeneration({ load: false });
+    addImageModel('img-1');
+    native().loadModel.mockRejectedValueOnce(new Error('img load fail'));
+
+    await expect(d.activeModelService.loadImageModel('img-1')).rejects.toThrow('img load fail');
+
+    expect(d.activeModelService.getLoadedModelIds().imageModelId).toBeNull();
+    expect(d.activeModelService.getActiveModels().image.isLoading).toBe(false);
   });
 });

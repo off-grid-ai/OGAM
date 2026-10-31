@@ -10,11 +10,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 type Harness = Awaited<ReturnType<typeof setupChatScreen>>;
 
@@ -33,7 +30,7 @@ const audioBubbles = (h: Harness) => h.view!.queryAllByTestId(/^audio-bubble-/);
 
 describe('a voice transcript stays in the chat it was spoken in', () => {
   it('sends nothing into the chat opened while the recording was being transcribed', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android', whisper: true, pro: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android', whisper: true, pro: true });
     await h.setupWhisperModel();
     h.render();
 
@@ -70,7 +67,7 @@ describe('a voice transcript stays in the chat it was spoken in', () => {
     expect(turnsSent()).toBe(turnsBefore);
   });
   it('sends the note in the chat it was spoken in when that chat is still open', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android', whisper: true, pro: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android', whisper: true, pro: true });
     await h.setupWhisperModel();
     h.render();
 
@@ -101,7 +98,7 @@ describe('a voice transcript stays in the chat it was spoken in', () => {
   });
 
   it('sends the note in its own chat when the person returns to it before transcription finishes', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android', whisper: true, pro: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android', whisper: true, pro: true });
     await h.setupWhisperModel();
     h.render();
 
@@ -138,7 +135,7 @@ describe('a voice transcript stays in the chat it was spoken in', () => {
   // model the hold records a file that whisper transcribes after release (the direct-audio path).
   describe('chat-mode hold-to-talk', () => {
     async function chatModeInChatA() {
-      const h = await setupChatScreen({ engine: 'litert', platform: 'android', whisper: true, audio: true });
+      const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android', whisper: true, audio: true });
       await h.setupWhisperModel('tiny.en');
       h.render();
       await h.send('hello from the first chat', { content: 'First chat reply.' });

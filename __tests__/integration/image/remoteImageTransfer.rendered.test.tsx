@@ -13,12 +13,8 @@ import { setupChatScreen } from '../../harness/chatHarness';
 import type { RemoteTransfer } from '../../harness/nativeFileSystem';
 import { REMOTE_IMAGE_URL, chooseRemoteImageModel, serveImageGeneration } from '../../harness/remoteImageServer';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const IMAGE_URL = REMOTE_IMAGE_URL;
 const PNG_BODY = 'synthetic-png-bytes';
@@ -31,7 +27,7 @@ describe('remote image transfer', () => {
   const imagesDir = () => `${h.boundary.fs!.DocumentDirectoryPath}/generated_images`;
 
   beforeEach(async () => {
-    h = await setupChatScreen({ engine: 'llama' });
+    h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     server = serveImageGeneration();
   });
 

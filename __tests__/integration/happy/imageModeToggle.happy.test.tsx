@@ -11,16 +11,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('happy — image-mode toggle routes correctly (heavy entry point)', () => {
   it('ON (force): the badge appears and a NON-draw prompt still generates an image', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' });
     h.render();
     await h.placeImageModel();
 
@@ -33,7 +29,7 @@ describe('happy — image-mode toggle routes correctly (heavy entry point)', () 
   });
 
   it('OFF (disabled): the badge clears and a "draw …" prompt does NOT generate an image', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' });
     h.render();
     await h.placeImageModel();
 

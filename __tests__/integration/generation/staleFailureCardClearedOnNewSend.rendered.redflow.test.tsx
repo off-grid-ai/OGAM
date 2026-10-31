@@ -24,11 +24,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 /** Real Tools-screen gesture: the switch handler TOGGLES, so flipping the three default-ON tools
  *  turns them OFF — the turn then runs the tool-FREE pipeline (the plain chat turn of the device
@@ -39,7 +36,7 @@ function disableDefaultToolsViaUI(h: Awaited<ReturnType<typeof setupChatScreen>>
 
 describe('stale text failure card cleared on a NEW attempt (rendered) — device IMG 00:23', () => {
   it('clears the failure card at dispatch: the card from a failed turn never sits next to the next send\'s live stream', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     disableDefaultToolsViaUI(h);
     h.render();
     const { rtl } = h;
@@ -80,7 +77,7 @@ describe('stale text failure card cleared on a NEW attempt (rendered) — device
   }, 30000);
 
   it('falsify: with NO new attempt the observed card STAYS — the clear is tied to dispatch, not re-render/time', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     disableDefaultToolsViaUI(h);
     h.render();
     const { rtl } = h;

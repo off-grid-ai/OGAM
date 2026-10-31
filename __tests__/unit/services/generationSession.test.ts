@@ -3,14 +3,14 @@
  * generating". Replaces the old multi-writer ref; verifies begin/end, the
  * isGeneratingFor projection, idempotence, and subscriber notification.
  */
-import logger from '../../../src/utils/logger';
 import { generationSession } from '../../../src/services/generationSession';
 
-jest.spyOn(logger, 'log').mockImplementation(() => {});
+// The real logger writes to the console: read what it wrote there.
+const logger = { log: jest.spyOn(console, 'log').mockImplementation(() => undefined) };
 
 beforeEach(() => {
   generationSession._reset();
-  (logger.log as jest.Mock).mockClear();
+  logger.log.mockClear();
 });
 
 describe('generationSession', () => {
@@ -32,7 +32,7 @@ describe('generationSession', () => {
   it('logs [GEN-SM] on begin and end with the reason', () => {
     generationSession.begin('c1');
     generationSession.end('stopped');
-    const lines = (logger.log as jest.Mock).mock.calls.map(c => c[0] as string);
+    const lines = logger.log.mock.calls.map(c => c[0] as string);
     expect(lines.some(l => l.includes('[GEN-SM] session begin conv=c1'))).toBe(true);
     expect(lines.some(l => l.includes('[GEN-SM] session end conv=c1 reason=stopped'))).toBe(true);
   });

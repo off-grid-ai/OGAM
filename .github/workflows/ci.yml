@@ -171,6 +171,16 @@ jobs:
       #     npm run lint:android      (cd android && ./gradlew :app:lintDebug)
       # Android unit tests still run here (:app:testDebugUnitTest, ~2 min) - it is lint's full-graph configure
       # that is pathological, not gradle itself.
+      - name: Lint the nightly workflow (actionlint)
+        # The UAT nightly only runs on dispatch: this shows a broken uat-dev.yml on the pull request.
+        # Its structure (pinned commit, uploads after builds, finalize after uploads, plan credentials)
+        # and uat.sh's --plan are checked by the Jest tests in __tests__/scripts. shellcheck is off so
+        # the gate does not depend on what the runner image happens to ship.
+        if: ${{ !cancelled() }}
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7 "$RUNNER_TEMP"
+          "$RUNNER_TEMP/actionlint" -no-color -shellcheck= .github/workflows/uat-dev.yml
+
       - name: Lint (eslint)
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npx eslint .

@@ -15,19 +15,15 @@
  */
 import { renderedThread, setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 /** How long the native stop takes to land on the device before the stopped completion settles. */
 const NATIVE_STOP_LATENCY_MS = 250;
 
 describe('queue: a stopped reply that settles twice still sends one turn at a time', () => {
   it('send now answers that message alone; the other queued message waits for it, then gets its own reply', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'ios' });
     h.render();
     const v = () => h.view!;
     const llama = h.boundary.llama!;

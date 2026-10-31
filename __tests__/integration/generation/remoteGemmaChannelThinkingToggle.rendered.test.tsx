@@ -27,11 +27,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const ENDPOINT = 'http://localhost:1234';
 const MODEL_ID = 'gemma-4-e2b';
@@ -101,7 +98,7 @@ describe('remote Gemma-channel inline reasoning → Thinking toggle appears (DEV
   it('detects <|channel>thought during discovery and shows quick-thinking-toggle for the remote model', async () => {
     // Mount the real ChatScreen. The local model the harness installs is unloaded below so the
     // capability path reads the remote model (the screen prefers a remote when one is active).
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
 
     const { useRemoteServerStore, useAppStore } = require('../../../src/stores');
     const { llmService } = require('../../../src/services/llm');
@@ -148,7 +145,7 @@ describe('remote Gemma-channel inline reasoning → Thinking toggle appears (DEV
     // deltaHasThinking must return false → supportsThinking=false → NO thinking toggle. This is the
     // discriminator: it FAILS if deltaHasThinking is broken to be always-true (the surviving M10 mutant),
     // so together with the positive case it pins detection to the actual delimiter grammar.
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     const { useRemoteServerStore, useAppStore } = require('../../../src/stores');
     const { llmService } = require('../../../src/services/llm');
     const { setActiveRemoteTextModelImpl } = require('../../../src/services/remoteServerManagerUtils');

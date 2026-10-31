@@ -26,16 +26,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('T058/B20 — LiteRT vision-capable model exposes the same attach-photo affordance', () => {
   it('a LiteRT vision model (liteRTVision:true, mirroring native supportsVision:true) attaches a photo via the real gesture — no vision wall', async () => {
-    const h = await setupChatScreen({ engine: 'litert', vision: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', vision: true });
     h.render();
 
     // REAL affordance gesture: attach button → Photo → Photo Library → faked picker adds the image.
@@ -51,7 +47,7 @@ describe('T058/B20 — LiteRT vision-capable model exposes the same attach-photo
   });
 
   it('a LiteRT model WITHOUT vision walls the identical gesture with "Vision Not Supported" — proving the affordance is gated, not always-on', async () => {
-    const h = await setupChatScreen({ engine: 'litert', vision: false });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', vision: false });
     h.render();
 
     // Same real gesture path up to the Photo tap. Without vision the app must NOT attach — it alerts.

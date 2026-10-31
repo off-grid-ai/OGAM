@@ -11,24 +11,9 @@
  */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 // Mock AppSheet to render children and expose onClose
-jest.mock('../../../src/components/AppSheet', () => ({
-  AppSheet: ({ visible, children, onClose, title }: any) => {
-    if (!visible) return null;
-    const { View, Text, TouchableOpacity } = require('react-native');
-    return (
-      <View testID="app-sheet">
-        <Text>{title}</Text>
-        <TouchableOpacity testID="sheet-close" onPress={onClose}>
-          <Text>Close</Text>
-        </TouchableOpacity>
-        {children}
-      </View>
-    );
-  },
-}));
 
 import { CustomAlert, showAlert, hideAlert, initialAlertState } from '../../../src/components/CustomAlert';
 
@@ -48,14 +33,15 @@ describe('CustomAlert', () => {
     expect(getByText('OK')).toBeTruthy();
   });
 
-  it('calls onClose when AppSheet close is triggered', () => {
+  it('calls onClose when the sheet header Done is pressed', async () => {
     const onClose = jest.fn();
     const { getByTestId } = render(
       <CustomAlert visible={true} title="Alert" onClose={onClose} />,
     );
 
-    fireEvent.press(getByTestId('sheet-close'));
-    expect(onClose).toHaveBeenCalled();
+    fireEvent.press(getByTestId('app-sheet-close'));
+    // The real sheet animates out, then reports the close.
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
   it('calls button onPress and onClose when button pressed', () => {

@@ -9,15 +9,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('T062 (rendered) — resend of an image request re-draws, not text (DEV-B33)', () => {
   it('re-runs the IMAGE pipeline on resend of "draw a dog" (does not load the text model)', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' });
     h.render();
     await h.placeImageModel({ backend: 'coreml' });
     await h.cycleImageMode(); // auto → ON(force): "draw a dog" routes to IMAGE deterministically

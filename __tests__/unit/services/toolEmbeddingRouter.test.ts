@@ -1,92 +1,133 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+/**
+ * toolEmbeddingRouter — picks the tools a turn offers the model by embedding the question and each tool
+ * on the on-device MiniLM model, and keeps tool vectors on disk so a relaunch does not re-embed them.
+ *
+ * Real: the router, embeddingService (bundled model copy, load through the residency lock, vector checks),
+ * the documents store, AsyncStorage persistence. Faked (device): llama.rn's embedding context, which answers
+ * by meaning over a few topics, react-native-fs and SQLite (harness/embeddingDevice).
+ */
+import { launchEmbeddingDevice, type EmbeddingDevice } from '../../harness/embeddingDevice';
 
-jest.mock('../../../src/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+const CACHE_KEY = 'tool-embedding-cache-v1';
 
-const mockEmbed = jest.fn();
-const mockLoad = jest.fn();
-jest.mock('../../../src/services/rag/embedding', () => ({
-  embeddingService: {
-    runExclusive: <T,>(operation: () => Promise<T>) => operation(),
-    getModelId: () => 'bundled:all-MiniLM-L6-v2-Q8_0',
-    load: (...a: unknown[]) => mockLoad(...a),
-    embed: (...a: unknown[]) => mockEmbed(...a),
-  },
-}));
+const tool = (name: string, description: string) => ({ function: { name, description } });
 
-import { selectToolsByEmbedding, _resetToolEmbeddingCache } from '../../../src/services/toolEmbeddingRouter';
+// 12 tools, so routing runs (topK 4 < 12).
+const TOOLS = [
+  tool('notion-search', 'Search pages in your Notion workspace'),
+  tool('notion-fetch', 'Read a Notion page'),
+  tool('notion-update-page', 'Change a Notion page'),
+  tool('notion-get-users', 'List the people in a Notion workspace'),
+  tool('calendar-events', 'Show events on your calendar'),
+  tool('calendar-create', 'Add an event to your calendar'),
+  tool('mail-inbox', 'Show mail in your inbox'),
+  tool('mail-send', 'Send a mail message'),
+  tool('weather-forecast', 'The weather forecast for a city'),
+  tool('maps-route', 'Directions between two places'),
+  tool('github-issues', 'Issues in a GitHub repository'),
+  tool('slack-post', 'Post a message in a Slack channel'),
+];
+const textOf = (t: { function: { name: string; description: string } }) =>
+  `${t.function.name}: ${t.function.description}`;
 
-const tool = (name: string, description = `does ${name}`) => ({ function: { name, description } });
+// MiniLM answers by meaning: a text points along the topics whose words it uses.
+const TOPICS = [
+  ['notion', 'page', 'pages', 'workspace'],
+  ['calendar', 'event', 'events'],
+  ['mail', 'inbox', 'message'],
+  ['weather', 'forecast', 'city'],
+  ['maps', 'directions', 'places'],
+  ['github', 'issues', 'repository'],
+  ['slack', 'channel', 'post'],
+];
 
-// 12 tools so routing actually runs (topK 4 < 12).
-const TOOLS = Array.from({ length: 12 }, (_, i) => tool(`provider-action-${i}`));
+const QUESTION = 'look at my notion page';
+
+function launch(): { device: EmbeddingDevice; router: typeof import('../../../src/services/toolEmbeddingRouter') } {
+  const device = launchEmbeddingDevice({ topics: TOPICS });
+  return { device, router: require('../../../src/services/toolEmbeddingRouter') };
+}
+
+function storage() {
+  const mod = require('@react-native-async-storage/async-storage');
+  return mod.default ?? mod;
+}
+
+/** The router writes its cache a second after the last new vector; wait for that write to land. */
+async function persisted(): Promise<Record<string, { h: string; v: number[] }>> {
+  const deadline = Date.now() + 3000;
+  for (;;) {
+    const raw = await storage().getItem(CACHE_KEY);
+    if (raw) return JSON.parse(raw);
+    if (Date.now() > deadline) throw new Error('the tool embedding cache was never written');
+    await new Promise(r => setTimeout(r, 50));
+  }
+}
 
 describe('toolEmbeddingRouter (F6 — persistent embedding cache)', () => {
   beforeEach(async () => {
-    jest.clearAllMocks();
-    _resetToolEmbeddingCache();
-    await AsyncStorage.clear();
-    // Deterministic per-text embeddings so cosine math is stable.
-    let n = 0;
-    mockEmbed.mockImplementation(async () => { n += 1; return [n, 1, 0]; });
-    mockLoad.mockResolvedValue(undefined);
+    await storage().clear();
   });
 
-  it('embeds each tool once and the query once on a cold cache', async () => {
-    await selectToolsByEmbedding('find my page', TOOLS, 4);
-    // 1 query embed + 12 tool embeds
-    expect(mockEmbed).toHaveBeenCalledTimes(TOOLS.length + 1);
+  it('on a cold cache embeds the question once and each tool once, and keeps the tools the question is about', async () => {
+    const { device, router } = launch();
+
+    const picked = await router.selectToolsByEmbedding(QUESTION, TOOLS, 4);
+
+    expect(device.embedded).toEqual([QUESTION, ...TOOLS.map(textOf)]);
+    expect(picked.sort()).toEqual(['notion-fetch', 'notion-get-users', 'notion-search', 'notion-update-page']);
   });
 
-  it('persists embeddings so a relaunch (cache cleared) does not re-embed tools', async () => {
-    await selectToolsByEmbedding('find my page', TOOLS, 4);
-    await new Promise(r => setTimeout(r, 1100)); // let the debounced persist fire
-    const stored = await AsyncStorage.getItem('tool-embedding-cache-v1');
-    expect(stored).toBeTruthy();
+  it('keeps tool vectors across a relaunch, so only the question is embedded again', async () => {
+    const first = launch();
+    await first.router.selectToolsByEmbedding(QUESTION, TOOLS, 4);
+    expect(Object.keys(await persisted()).sort()).toEqual(TOOLS.map(t => t.function.name).sort());
 
-    // Simulate relaunch: clear in-memory cache, keep AsyncStorage.
-    _resetToolEmbeddingCache();
-    mockEmbed.mockClear();
-    await selectToolsByEmbedding('find my page', TOOLS, 4);
-    // Only the query is embedded; all 12 tools come from the persisted cache.
-    expect(mockEmbed).toHaveBeenCalledTimes(1);
+    const { device, router } = launch(); // relaunch: fresh memory, same disk
+    expect(device.embedded).toEqual([]);
+    const picked = await router.selectToolsByEmbedding(QUESTION, TOOLS, 4);
+
+    expect(device.embedded).toEqual([QUESTION]);
+    expect(picked).toHaveLength(4);
   });
 
   it('re-embeds a tool whose description changed (content-hash keyed)', async () => {
-    await selectToolsByEmbedding('find my page', TOOLS, 4);
-    await new Promise(r => setTimeout(r, 1100));
-    _resetToolEmbeddingCache();
-    mockEmbed.mockClear();
+    await launch().router.selectToolsByEmbedding(QUESTION, TOOLS, 4);
+    await persisted();
 
-    const changed = [tool('provider-action-0', 'NOW DOES SOMETHING ELSE'), ...TOOLS.slice(1)];
-    await selectToolsByEmbedding('find my page', changed, 4);
-    // query (1) + the single changed tool (1) re-embedded; the other 11 are cached.
-    expect(mockEmbed).toHaveBeenCalledTimes(2);
+    const { device, router } = launch();
+    const changed = [tool('notion-search', 'Look up the weather forecast for a city'), ...TOOLS.slice(1)];
+    await router.selectToolsByEmbedding(QUESTION, changed, 4);
+
+    expect(device.embedded).toEqual([QUESTION, textOf(changed[0])]);
   });
 
-  it('drops a cached entry with a corrupt (NaN) vector on hydration and re-embeds it', async () => {
-    await selectToolsByEmbedding('find my page', TOOLS, 4);
-    await new Promise(r => setTimeout(r, 1100)); // let the debounced persist fire
+  it('drops a stored vector with a NaN on relaunch and embeds that tool again', async () => {
+    await launch().router.selectToolsByEmbedding(QUESTION, TOOLS, 4);
+    const stored = await persisted();
+    // A NaN slips in through stale or garbled storage. Kept, it would poison every cosine score with NaN.
+    stored['mail-send'] = { ...stored['mail-send'], v: [Number.NaN, ...stored['mail-send'].v.slice(1)] };
+    await storage().setItem(CACHE_KEY, JSON.stringify(stored));
 
-    // Corrupt ONE tool's persisted vector (a NaN slips in via stale/garbled storage).
-    // Left unchecked it would poison cosine similarity with NaN scores.
-    const stored = JSON.parse((await AsyncStorage.getItem('tool-embedding-cache-v1'))!);
-    const corruptName = Object.keys(stored)[0];
-    stored[corruptName] = { ...stored[corruptName], v: [Number.NaN, 1, 0] };
-    await AsyncStorage.setItem('tool-embedding-cache-v1', JSON.stringify(stored));
+    const { device, router } = launch();
+    const picked = await router.selectToolsByEmbedding(QUESTION, TOOLS, 4);
 
-    _resetToolEmbeddingCache();
-    mockEmbed.mockClear();
-    await selectToolsByEmbedding('find my page', TOOLS, 4);
-    // query (1) + the one corrupt tool re-embedded (1); the other 11 came from valid cache.
-    expect(mockEmbed).toHaveBeenCalledTimes(2);
+    expect(device.embedded).toEqual([QUESTION, textOf(TOOLS[7])]);
+    expect(picked.sort()).toEqual(['notion-fetch', 'notion-get-users', 'notion-search', 'notion-update-page']);
   });
 
-  it('returns all tools without embedding when count <= topK', async () => {
-    const names = await selectToolsByEmbedding('x', TOOLS.slice(0, 3), 4);
-    expect(names).toHaveLength(3);
-    expect(mockEmbed).not.toHaveBeenCalled();
+  it('offers every tool and embeds nothing when there are no more tools than topK', async () => {
+    const { device, router } = launch();
+
+    expect(await router.selectToolsByEmbedding('x', TOOLS.slice(0, 3), 4))
+      .toEqual(['notion-search', 'notion-fetch', 'notion-update-page']);
+    expect(device.embedded).toEqual([]);
+  });
+
+  it('offers every tool and embeds nothing for a blank question', async () => {
+    const { device, router } = launch();
+
+    expect(await router.selectToolsByEmbedding('   ', TOOLS, 4)).toEqual(TOOLS.map(t => t.function.name));
+    expect(device.embedded).toEqual([]);
   });
 });

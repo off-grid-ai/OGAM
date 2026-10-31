@@ -9,16 +9,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('happy — first message renders the answer (heavy entry point)', () => {
   it('llama.cpp (Android): typing + send renders the reply', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.render();
     await h.send('what is the capital of France', { text: 'The capital of France is Paris.' });
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/The capital of France is Paris\./)).not.toBeNull(); });
@@ -26,7 +22,7 @@ describe('happy — first message renders the answer (heavy entry point)', () =>
   });
 
   it('LiteRT: typing + send renders the reply', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android' });
     h.render();
     await h.send('what is the capital of France', { content: 'The capital of France is Paris.' });
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/The capital of France is Paris\./)).not.toBeNull(); });
@@ -36,7 +32,7 @@ describe('happy — first message renders the answer (heavy entry point)', () =>
     // iOS is the Metal-backend platform for llama.cpp; this proves the flow works under the iOS engine
     // config (platform parity). The 'Metal' accelerator LABEL only resolves on a GPU-enabled load, which
     // the native fake does not model, so that is asserted elsewhere — not conflated into the happy flow.
-    const h = await setupChatScreen({ engine: 'llama', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'ios' });
     h.render();
     await h.send('what is the capital of France', { text: 'The capital of France is Paris.' });
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/The capital of France is Paris\./)).not.toBeNull(); });
@@ -44,7 +40,7 @@ describe('happy — first message renders the answer (heavy entry point)', () =>
   });
 
   it('first send starts the selected model load and shows the real loading state', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'ios', deferInitialLoad: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'ios', deferInitialLoad: true });
     h.boundary.llama!.scriptMultimodalHold();
     h.render();
     expect(h.view!.queryByText(/Loading Test Model/)).toBeNull();
@@ -64,7 +60,7 @@ describe('happy — first message renders the answer (heavy entry point)', () =>
   });
 
   it('new chat keeps a remote model choice while discovery metadata refreshes', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'ios', deferInitialLoad: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'ios', deferInitialLoad: true });
     const { useRemoteServerStore } = require('../../../src/stores');
     const { setActiveRemoteTextModelImpl } = require('../../../src/services/remoteServerManagerUtils');
 

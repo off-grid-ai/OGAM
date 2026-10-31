@@ -26,17 +26,14 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const ZOMBIE_TEXT = 'ZOMBIE answer that must never render after a stop';
 
 describe('stop mid tool-turn, then send again (rendered) — device 2026-07-13 busy-wedge', () => {
   it('after STOP the turn ends quietly and the next send streams a reply — never "LLM service busy"', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.enableToolViaUI('calculator'); // real toggle → the turn runs the REAL tool loop
     h.render();
     const { rtl } = h;

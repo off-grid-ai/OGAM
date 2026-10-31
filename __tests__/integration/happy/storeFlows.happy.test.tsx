@@ -10,15 +10,10 @@
  * (the message action menu is copy/edit/retry/speak/generate-image), so it was never a real user flow.
  */
 import { installNativeBoundary, requireRTL } from '../../harness/nativeBoundary';
+import { withNavigator } from '../../harness/realNavigation';
 
-let mockRoute: { params: Record<string, unknown> } = { params: {} };
-const mockGoBack = jest.fn();
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: jest.fn(), goBack: mockGoBack, setOptions: jest.fn(), addListener: jest.fn(() => jest.fn()) }),
-  useRoute: () => mockRoute,
-  useFocusEffect: jest.fn(),
-  useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 describe('happy — create a project by tapping through the real form', () => {
   it('typing a name and tapping Save creates the project, which then lists on the Projects screen', () => {
@@ -31,10 +26,9 @@ describe('happy — create a project by tapping through the real form', () => {
     const { ProjectsScreen } = require('../../../src/screens/ProjectsScreen');
      
 
-    mockRoute = { params: {} }; // no projectId → "New Project"
 
     // --- User taps through the create form ---
-    const form = render(React.createElement(ProjectEditScreen, {}));
+    const form = render(withNavigator(React.createElement(ProjectEditScreen, {})));
     fireEvent.changeText(form.getByPlaceholderText('e.g., Spanish Learning, Code Review'), 'Q3 Research');
     // The form requires a system prompt too (Save alerts otherwise) — a real user fills it.
     fireEvent.changeText(form.getByPlaceholderText('Enter the instructions or context for the AI...'), 'You are a research assistant.');
@@ -42,7 +36,7 @@ describe('happy — create a project by tapping through the real form', () => {
     form.unmount();
 
     // --- The new project is now listed on the Projects screen ---
-    const projects = render(React.createElement(ProjectsScreen, {}));
+    const projects = render(withNavigator(React.createElement(ProjectsScreen, {})));
     expect(projects.getByText('Q3 Research')).toBeTruthy();
     expect(useProjectStore.getState().projects.some((p: { name: string }) => p.name === 'Q3 Research')).toBe(true);
   });

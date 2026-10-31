@@ -6,13 +6,10 @@
  * boundary; it refuses one unlink, as a locked file does on device.
  */
 import { installNativeBoundary, requireRTL } from '../../harness/nativeBoundary';
+import { withNavigator } from '../../harness/realNavigation';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => ({ params: {} }),
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 it('removes the chat\'s videos, file first, and keeps a video whose file stays', async () => {
   const boundary = installNativeBoundary({ fs: true });
@@ -59,7 +56,7 @@ it('removes the chat\'s videos, file first, and keeps a video whose file stays',
   });
 
   const { ChatsListScreen } = require('../../../src/screens/ChatsListScreen');
-  const chats = rtl.render(React.createElement(ChatsListScreen));
+  const chats = rtl.render(withNavigator(React.createElement(ChatsListScreen)));
   rtl.fireEvent.press(chats.getByLabelText('Delete Fox clips'));
   await rtl.act(() => new Promise(resolve => setTimeout(resolve, 350)));
   await rtl.act(async () => { rtl.fireEvent.press(chats.getByText('Delete')); });
@@ -72,7 +69,7 @@ it('removes the chat\'s videos, file first, and keeps a video whose file stays',
 
   // The Gallery lists the video that stayed and the other chat's video, not the one removed.
   const { GalleryScreen } = require('../../../src/screens/GalleryScreen');
-  const gallery = rtl.render(React.createElement(GalleryScreen));
+  const gallery = rtl.render(withNavigator(React.createElement(GalleryScreen)));
   expect(await gallery.findByText('Videos (2)')).toBeTruthy();
   gallery.unmount();
 });

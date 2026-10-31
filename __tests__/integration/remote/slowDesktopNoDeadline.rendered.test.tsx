@@ -16,12 +16,8 @@
 import React from 'react';
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const ENDPOINT = 'http://192.168.1.63:7878'; // NOSONAR - private LAN test fixture
 const MODEL = { id: 'flux-schnell', name: 'Flux Schnell' };
@@ -106,7 +102,7 @@ describe('a slow Off Grid AI Desktop', () => {
   });
 
   it('activates the picked model and draws the image when each answer takes 6 seconds', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     desktop = serveSlowDesktop();
     const { remoteServerManager } = require('../../../src/services/remoteServerManager');
     const { RemoteModelOptionsSection } = require('../../../src/components/models/RemoteModelOptionsSection');
@@ -120,7 +116,7 @@ describe('a slow Off Grid AI Desktop', () => {
     });
     const rowId = `remote-image-model-${server.id}:${MODEL.id}`;
 
-    const picker = h.rtl.render(React.createElement(RemoteModelOptionsSection, { category: 'image' }));
+    const picker = h.renderAside(React.createElement(RemoteModelOptionsSection, { category: 'image' }));
     // BEFORE: Desktop's image model is listed and not selected.
     expect(picker.getByTestId(rowId).props.accessibilityState?.selected).not.toBe(true);
     h.rtl.fireEvent.press(picker.getByTestId(rowId));

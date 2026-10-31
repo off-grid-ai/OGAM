@@ -2,11 +2,8 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { installRemoteStream } from '../../harness/remoteHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const FAILED_STREAM =
   'data: {"choices":[{"delta":{"content":"Failed route partial."}}]}\n\n' +
@@ -18,7 +15,7 @@ const BACKUP_STREAM =
 
 describe('remote model fallback in chat', () => {
   it('shows the change, removes failed text, and names the model that answered', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     const { remoteServerManager } = require('../../../src/services/remoteServerManager');
     const { useRemoteServerStore } = require('../../../src/stores');
     const originalFetch = global.fetch;
@@ -72,7 +69,7 @@ describe('remote model fallback in chat', () => {
   });
 
   it('uses a downloaded local model when no other remote model is available', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.boundary.llama!.scriptCompletion({ text: 'Local answer.' });
     const { remoteServerManager } = require('../../../src/services/remoteServerManager');
     const { useRemoteServerStore } = require('../../../src/stores');

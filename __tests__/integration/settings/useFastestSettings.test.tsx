@@ -15,12 +15,8 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { GB, MB } from '../../harness/nativeBoundary';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 jest.mock('@react-native-community/slider', () => ({
   __esModule: true,
@@ -37,7 +33,7 @@ type Harness = Awaited<ReturnType<typeof setupChatScreen>>;
 
 /** A Snapdragon 8 Gen 3 phone (12 GB) with a model picked on Home. */
 function npuPhone() {
-  return setupChatScreen({
+  return setupChatScreen({ navigation: 'real',
     engine: 'llama',
     deferInitialLoad: true,
     deviceHardware: 'qcom',
@@ -47,9 +43,9 @@ function npuPhone() {
 }
 
 /** Open Model Settings → Text Generation → Advanced. */
-function openModelSettingsAdvanced(h: Harness) {
-  const { ModelSettingsScreen } = require('../../../src/screens/ModelSettingsScreen');
-  const screen = h.rtl.render(h.React.createElement(ModelSettingsScreen, {}));
+async function openModelSettingsAdvanced(h: Harness) {
+  // Model Settings opens inside the app, on its own route.
+  const screen = await h.openScreen('ModelSettings');
   // The backend is a shared General control; the fastest-settings run is in Text > Advanced.
   h.rtl.fireEvent.press(screen.getByTestId('general-generation-accordion'));
   h.rtl.fireEvent.press(screen.getByTestId('text-generation-accordion'));
@@ -61,7 +57,7 @@ describe('Use fastest settings', () => {
   it('measures each backend and selects the NPU when it is fastest', async () => {
     const h = await npuPhone();
     h.boundary.llama!.scriptBench({ cpu: 9, htp: 24, opencl: 14 });
-    const screen = openModelSettingsAdvanced(h);
+    const screen = await openModelSettingsAdvanced(h);
 
     // BEFORE: the CPU is selected (its description shows, no NPU layer control).
     await h.rtl.waitFor(() => expect(screen.getByTestId('backend-htp-button')).toBeTruthy());
@@ -86,7 +82,7 @@ describe('Use fastest settings', () => {
     const h = await npuPhone();
     // The GPU "reports" a high speed, but on 0 offloaded layers: it never ran where we asked.
     h.boundary.llama!.scriptBench({ cpu: 9, htp: 'fail', opencl: { cpuFallback: 30 } });
-    const screen = openModelSettingsAdvanced(h);
+    const screen = await openModelSettingsAdvanced(h);
 
     // BEFORE: the user had picked the GPU.
     h.rtl.fireEvent.press(screen.getByTestId('backend-opencl-button'));
@@ -105,7 +101,7 @@ describe('Use fastest settings', () => {
   });
 
   it('a phone under 6 GB goes to the CPU without measuring anything', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       deferInitialLoad: true,
       deviceHardware: 'qcom',
@@ -113,7 +109,7 @@ describe('Use fastest settings', () => {
       ram: { platform: 'android', totalBytes: 4 * GB, availBytes: 2.5 * GB },
       modelFileSizeBytes: 400 * MB,
     });
-    const screen = openModelSettingsAdvanced(h);
+    const screen = await openModelSettingsAdvanced(h);
     h.rtl.fireEvent.press(screen.getByTestId('backend-opencl-button'));
     await h.rtl.waitFor(() => expect(screen.queryByText('Text GPU Layers (OpenCL)')).not.toBeNull());
 
@@ -130,7 +126,7 @@ describe('Use fastest settings', () => {
     const h = await npuPhone();
     // The CPU measurement hangs, so the run is genuinely in progress when Cancel is pressed.
     h.boundary.llama!.scriptBench({ cpu: 'hang', htp: 50, opencl: 40 });
-    const screen = openModelSettingsAdvanced(h);
+    const screen = await openModelSettingsAdvanced(h);
 
     h.rtl.fireEvent.press(screen.getByTestId('backend-opencl-button'));
     await h.rtl.waitFor(() => expect(screen.queryByText('Text GPU Layers (OpenCL)')).not.toBeNull());

@@ -38,13 +38,11 @@ import {
   scanForUntrackedImageModels as scanUntrackedImage,
   scanForUntrackedTextModels as scanUntrackedText,
   reconcileFinishedImageDownloads as reconcileImageDownloads,
-  isMMProjFile,
 } from './scan';
 import {
   importLocalModel as scanImportLocalModel,
   type ImportLocalModelOpts,
 } from './importLocalModel';
-import { resolveStoredPath, determineCredibility } from './storage';
 import * as visionRepair from './visionRepairService';
 import type { RepairOpts, VisionRepairContext } from './visionRepairService';
 import { resolveOwnedDocumentPath } from '../../utils/resolveDocumentPath';
@@ -59,10 +57,6 @@ class ModelManager {
     this.modelsDir = `${RNFS.DocumentDirectoryPath}/${APP_CONFIG.modelStorageDir}`;
     this.imageModelsDir = `${RNFS.DocumentDirectoryPath}/image_models`;
   }
-
-  private resolveStoredPath(p: string, d: string) { return resolveStoredPath(p, d); }
-  private determineCredibility(a: string) { return determineCredibility(a); }
-  private isMMProjFile(f: string) { return isMMProjFile(f); }
 
   async initialize(): Promise<void> {
     if (!(await RNFS.exists(this.modelsDir))) await RNFS.mkdir(this.modelsDir);

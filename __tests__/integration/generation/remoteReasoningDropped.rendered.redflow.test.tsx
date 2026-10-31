@@ -16,11 +16,8 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { installRemoteModel, installRemoteStream } from '../../harness/remoteHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 // The captured LM Studio streaming shape: reasoning_content deltas, then the answer, then stop.
 const LM_STUDIO_SSE =
@@ -36,7 +33,7 @@ const RENDER_WAIT = { timeout: 20000 };
 
 describe('T049 (rendered) — remote LM Studio reasoning is shown (DEV-B16)', () => {
   it('renders the answer and the reasoning the remote model streamed', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     // LM Studio (like Ollama) does NOT advertise a thinking capability → no thinking toggle for remote.
     await installRemoteModel({ name: 'LM Studio', caps: { supportsThinking: false } });
     installRemoteStream(LM_STUDIO_SSE);

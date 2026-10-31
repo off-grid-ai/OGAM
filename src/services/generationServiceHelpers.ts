@@ -367,68 +367,73 @@ async function runLiteRTResponseImpl(
       history,
     });
 
-    await liteRTService.sendMessage(
-      typeof lastUser.content === 'string' ? lastUser.content : '',
-      {
-        onToken: (token: string) => {
-          if (svc.abortRequested) return;
-          if (jsTtftSeconds === undefined && svc.state.startTime) {
-            jsTtftSeconds = (Date.now() - svc.state.startTime) / 1000;
-          }
-          if (!firstTokenReceived) {
-            firstTokenReceived = true;
-            svc.updateState({ isThinking: false });
-            onFirstToken?.();
-          }
-          svc.state.streamingContent += token;
-          svc.tokenBuffer += token;
-          if (!svc.flushTimer) {
-            svc.flushTimer = setTimeout(
-              () => svc.flushTokenBuffer(),
-              FLUSH_INTERVAL_MS,
+    // Await the whole turn, not only the native send: LiteRT accepts the prompt and then answers through
+    // events, so its end (and an error) arrives after sendMessage has resolved. Ending here lets the
+    // caller's fallback and error handling see a LiteRT failure exactly as they see a llama one.
+    await new Promise<void>((turnDone, turnFailed) => {
+      liteRTService.sendMessage(
+        typeof lastUser.content === 'string' ? lastUser.content : '',
+        {
+          onToken: (token: string) => {
+            if (svc.abortRequested) return;
+            if (jsTtftSeconds === undefined && svc.state.startTime) {
+              jsTtftSeconds = (Date.now() - svc.state.startTime) / 1000;
+            }
+            if (!firstTokenReceived) {
+              firstTokenReceived = true;
+              svc.updateState({ isThinking: false });
+              onFirstToken?.();
+            }
+            svc.state.streamingContent += token;
+            svc.tokenBuffer += token;
+            if (!svc.flushTimer) {
+              svc.flushTimer = setTimeout(
+                () => svc.flushTokenBuffer(),
+                FLUSH_INTERVAL_MS,
+              );
+            }
+          },
+          onReasoning: (token: string) => {
+            if (svc.abortRequested) return;
+            // Capture TTFT on first thinking token so it reflects time-to-first-visible-output
+            if (jsTtftSeconds === undefined && svc.state.startTime) {
+              jsTtftSeconds = (Date.now() - svc.state.startTime) / 1000;
+            }
+            svc.reasoningBuffer += token;
+            if (!svc.flushTimer) {
+              svc.flushTimer = setTimeout(
+                () => svc.flushTokenBuffer(),
+                FLUSH_INTERVAL_MS,
+              );
+            }
+          },
+          onComplete: (_content: string, _reasoning: string, stats) => {
+            if (svc.abortRequested) { turnDone(); return; }
+            svc.forceFlushTokens();
+            svc.liteRTBenchmarkStats = stats
+              ? { ...stats, ttft: jsTtftSeconds ?? stats.ttft }
+              : stats;
+            const generationTime = svc.state.startTime
+              ? Date.now() - svc.state.startTime
+              : undefined;
+            chatStore.finalizeStreamingMessage(
+              conversationId,
+              generationTime,
+              buildGenerationMetaImpl(svc),
             );
-          }
+            svc.checkSharePrompt();
+            svc.resetState();
+            turnDone();
+          },
+          onError: (err: Error) => {
+            if (svc.abortRequested) { turnDone(); return; }
+            logger.error('[LiteRT] sendMessage error:', err.message);
+            turnFailed(err); // the catch below keeps the partial the user already saw
+          },
         },
-        onReasoning: (token: string) => {
-          if (svc.abortRequested) return;
-          // Capture TTFT on first thinking token so it reflects time-to-first-visible-output
-          if (jsTtftSeconds === undefined && svc.state.startTime) {
-            jsTtftSeconds = (Date.now() - svc.state.startTime) / 1000;
-          }
-          svc.reasoningBuffer += token;
-          if (!svc.flushTimer) {
-            svc.flushTimer = setTimeout(
-              () => svc.flushTokenBuffer(),
-              FLUSH_INTERVAL_MS,
-            );
-          }
-        },
-        onComplete: (_content: string, _reasoning: string, stats) => {
-          if (svc.abortRequested) return;
-          svc.forceFlushTokens();
-          svc.liteRTBenchmarkStats = stats
-            ? { ...stats, ttft: jsTtftSeconds ?? stats.ttft }
-            : stats;
-          const generationTime = svc.state.startTime
-            ? Date.now() - svc.state.startTime
-            : undefined;
-          chatStore.finalizeStreamingMessage(
-            conversationId,
-            generationTime,
-            buildGenerationMetaImpl(svc),
-          );
-          svc.checkSharePrompt();
-          svc.resetState();
-        },
-        onError: (err: Error) => {
-          if (svc.abortRequested) return;
-          logger.error('[LiteRT] sendMessage error:', err.message);
-          if (req.preservePartialOnError === false) throw err;
-          keepShownPartialOnError(svc, conversationId); // keep the partial the user already saw
-        },
-      },
-      { imageUris, audioUris },
-    );
+        { imageUris, audioUris },
+      ).catch(turnFailed);
+    });
   } catch (error: any) {
     if (svc.abortRequested) return;
     if (req.preservePartialOnError !== false) keepShownPartialOnError(svc, conversationId);

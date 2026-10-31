@@ -9,15 +9,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('thinking toggle applies to the next turn (no off-by-one) — device 2026-07-14', () => {
   it('the <|think|> activation follows the LIVE thinking setting, not a stale snapshot (LiteRT loaded)', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android' }); // litert model 'm' loaded
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android' }); // litert model 'm' loaded
      
     const { wantsLeadingThinkToken } = require('../../../src/services/engines');
      

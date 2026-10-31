@@ -15,17 +15,14 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const PARTIAL = 'Looking at the image, I can see a';
 
 describe('Stop mid-generation keeps the partial — LiteRT engine (device 2026-07-14)', () => {
   it('pressing STOP while a LiteRT partial is streaming persists it — the message does not disappear', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android' });
     h.render();
     const { rtl } = h;
     const view = h.view!;

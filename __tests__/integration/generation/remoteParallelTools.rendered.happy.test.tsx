@@ -18,11 +18,8 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { installRemoteModel, installRemoteStream } from '../../harness/remoteHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 // Request 1: the parallel tool_calls (index 0/1/2), then finish_reason=tool_calls (the captured shape).
 const TOOL_CALLS_SSE =
@@ -40,7 +37,7 @@ const REPLY_SSE =
 
 describe('T048 (rendered) — remote parallel tool_calls render as bubbles + final reply', () => {
   it('accumulates 3 parallel calculator calls, runs them, renders 3 tool bubbles and the reply', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'ios' });
     // LM Studio advertises tool-calling (the capture shows [ToolLoop] executed) → the app sends the tools.
     await installRemoteModel({ name: 'OGAD', caps: { supportsThinking: false, supportsToolCalling: true } });
     const stream = installRemoteStream([

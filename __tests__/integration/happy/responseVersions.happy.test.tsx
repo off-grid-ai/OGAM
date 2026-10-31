@@ -15,21 +15,12 @@ const sse = (text: string) =>
   'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
   'data: [DONE]\n\n';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: () => {},
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('happy — retry keeps every answer as a version', () => {
   it('llama.cpp: an older answer retried shows 2/2, and Previous brings back its later turn', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     h.render();
     await h.send('tell me a fact', { text: 'Honey never spoils.' });
     await h.rtl.waitFor(() => expect(h.view!.queryByText(/Honey never spoils\./)).not.toBeNull());
@@ -71,7 +62,7 @@ describe('happy — retry keeps every answer as a version', () => {
   it.each(['llama.cpp', 'remote'] as const)(
     '%s: an edited question shows 2/2, Previous brings back the original turn and the turn after it; resending an older question keeps its later turns as a version',
     async model => {
-      const h = await setupChatScreen({ engine: 'llama' });
+      const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
       h.render();
       const v = () => h.view!;
       const restoreRemote =

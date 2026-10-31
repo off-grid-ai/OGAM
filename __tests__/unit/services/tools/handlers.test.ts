@@ -12,13 +12,6 @@ import { ToolCall } from '../../../../src/services/tools/types';
 
 const mockedDeviceInfo = DeviceInfo as jest.Mocked<typeof DeviceInfo>;
 
-jest.mock('../../../../src/utils/logger', () => ({
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-  debug: jest.fn(),
-  log: jest.fn(),
-}));
 
 
 // ============================================================================

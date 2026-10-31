@@ -11,12 +11,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 type Cfg = { label: string; backend: 'mnn' | 'qnn'; platform: 'ios' | 'android'; expected: string };
 const CONFIGS: Cfg[] = [
@@ -26,7 +22,7 @@ const CONFIGS: Cfg[] = [
 
 describe('happy — image generation shows the correct backend label (heavy entry point)', () => {
   it.each(CONFIGS)('$label: produces an image and the details show "$expected"', async (cfg) => {
-    const h = await setupChatScreen({ engine: 'litert', platform: cfg.platform });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: cfg.platform });
     h.enableGenerationDetailsViaUI(); // turn details on BEFORE mounting the chat (separate render)
     h.render();
     await h.placeImageModel({ backend: cfg.backend });

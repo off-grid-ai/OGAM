@@ -2,16 +2,12 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { GB, MB } from '../../harness/nativeBoundary';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('Android image generation under live memory pressure', () => {
   it('refuses the image load instead of co-residing with text when only 1GB is available', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android',
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android',
       ram: { platform: 'android', totalBytes: 11297 * MB, availBytes: 8 * GB },
       modelFileSizeBytes: 1300 * MB });
     h.render();

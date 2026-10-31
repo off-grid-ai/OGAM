@@ -13,12 +13,8 @@
 import React from 'react';
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const ENDPOINT = 'http://192.168.1.64:7878'; // NOSONAR - private LAN test fixture
 const MODEL = { id: 'flux-schnell', name: 'Flux Schnell' };
@@ -75,7 +71,7 @@ describe('a paired Desktop that never answers', () => {
   });
 
   it('lets the person stop a model switch, then switch once Desktop answers', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     desktop = serveSilentDesktop();
     const { remoteServerManager } = require('../../../src/services/remoteServerManager');
     const { RemoteModelOptionsSection } = require('../../../src/components/models/RemoteModelOptionsSection');

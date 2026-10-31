@@ -12,12 +12,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 // Register the audio.* hook seam the way the Pro audio module does — AFTER the harness's resetModules, so the
 // app and the test share the same hook registry instance. canSpeak=true enables the affordance; speak captures.
@@ -33,7 +29,7 @@ function installTtsSeam(): { spoken: Array<{ text: string; id: string }> } {
 
 describe.each(['longpress', 'dots'] as const)('happy — speak an assistant reply (via %s)', (via) => {
   it('dispatches the reply text to the audio engine when Speak is tapped', async () => {
-    const h = await setupChatScreen({ engine: 'litert' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
     const seam = installTtsSeam();
     h.render();
     await h.send('capital of France?', { content: 'The capital of France is Paris.' });
@@ -50,7 +46,7 @@ describe.each(['longpress', 'dots'] as const)('happy — speak an assistant repl
   });
 
   it('offers no Speak affordance on the user\'s own message', async () => {
-    const h = await setupChatScreen({ engine: 'litert' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
     installTtsSeam();
     h.render();
     await h.send('hello there', { content: 'Hi!' });
