@@ -52,9 +52,10 @@ it('a clip the phone stopped with the app is shown interrupted, and Retry makes 
   // Closed and opened again; the OS ended the video worker with the app.
   const phone = await bootPhoneVideo({ relaunch: true, keptPack: WAN });
   await until(() => phone.service.getState().phase === 'failed', 10_000, 'the interrupted clip');
-  expect(phone.service.getState().error).toMatch(/interrupted/i);
   expect(phone.seam.isBusy()).toBe(false);
   const card = phone.failure()!;
+  // Titled as an interrupted clip, never as a model that failed to load.
+  expect(card.title).toMatch(/interrupted/i);
   expect(card.onRetry).toEqual(expect.any(Function));
 
   card.onRetry!();
