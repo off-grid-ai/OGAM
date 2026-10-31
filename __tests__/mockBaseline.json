@@ -177,7 +177,6 @@
   "__tests__/rntl/components/TranscriptionModelsTab.test.tsx": 4,
   "__tests__/rntl/components/VoiceModelsPanel.test.tsx": 6,
   "__tests__/rntl/screens/AboutScreen.test.tsx": 2,
-  "__tests__/rntl/screens/ChatsListScreen.test.tsx": 7,
   "__tests__/rntl/screens/DeviceInfoScreen.test.tsx": 6,
   "__tests__/rntl/screens/DownloadManagerScreen.test.tsx": 9,
   "__tests__/rntl/screens/GalleryScreen.test.tsx": 8,
