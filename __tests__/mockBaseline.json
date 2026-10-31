@@ -363,7 +363,6 @@
   "__tests__/unit/sync/forgetUnregisteredDevice.test.ts": 1,
   "__tests__/unit/sync/pairingEntitlementReplacementAdapter.test.ts": 4,
   "__tests__/unit/sync/repairDevice.test.ts": 4,
-  "__tests__/unit/utils/imageModelIntegrity.io.test.ts": 1,
   "__tests__/unit/utils/network.test.ts": 1,
   "__tests__/unit/utils/recommendedModels.test.ts": 1
 }
