@@ -63,6 +63,11 @@ it('plays in the card with pause, time, scrubber and mute; full screen opens at 
   rtl.fireEvent.press(view.getByTestId(`expand-${CARD}`));
   await view.findByTestId('video-viewer', {}, { timeout: 10_000 });
   expect(view.getByTestId('clip-viewer').props.muted).toBe(true);
+
+  // A clip shorter than a second (17 frames, 0.7 s) reads 0:01, never 0:00, and its scrubber has room.
+  rtl.fireEvent(view.getByTestId('clip-viewer'), 'onLoad', { duration: 0.7 });
+  expect(textOf(view.getByTestId('time-viewer'))).toMatch(/ \/ 0:01$/);
+  expect(view.getByTestId('scrubber-viewer').props.maximumValue).toBeCloseTo(0.7);
   expect(textOf(view.getByTestId('time-viewer'))).toMatch(/^0:01 \/ /);
   // The chat sits under full screen, hidden from the reader, still mounted.
   await rtl.waitFor(() =>
