@@ -66,6 +66,9 @@ jobs:
       beta_n: ${{ steps.plan.outputs.UAT_BETA_N }}
       build_number: ${{ steps.plan.outputs.UAT_BUILD_NUMBER }}
       shared_sha: ${{ steps.plan.outputs.UAT_SHARED_SHA }}
+      # Every later job checks out this exact commit, as OGAD's release.yml pins its builds: a push
+      # mid-run must not make Android and iOS build different code.
+      sha: ${{ steps.sha.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -82,6 +85,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - run: mv _shared ../shared
+      - name: Pin the commit
+        id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - name: Plan the beta (scripts/uat.sh --plan)
@@ -109,6 +115,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.plan.outputs.sha }}
           submodules: false         # pro/ is a private repo — fetch it below with a PAT
           fetch-depth: 0
       - name: Check out pro submodule (private)
@@ -188,6 +195,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.plan.outputs.sha }}
           submodules: false
           fetch-depth: 0
       - name: Check out pro submodule (private)
@@ -272,7 +280,7 @@ jobs:
       UAT_NOTES: ${{ github.workspace }}/../uat-notes/uat-notes.md
     steps:
       - uses: actions/checkout@v4
-        with: { submodules: false, fetch-depth: 0 }
+        with: { ref: '${{ needs.plan.outputs.sha }}', submodules: false, fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - uses: ruby/setup-ruby@v1
@@ -306,7 +314,7 @@ jobs:
       UAT_NOTES: ${{ github.workspace }}/../uat-notes/uat-notes.md
     steps:
       - uses: actions/checkout@v4
-        with: { submodules: false, fetch-depth: 0 }
+        with: { ref: '${{ needs.plan.outputs.sha }}', submodules: false, fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - uses: ruby/setup-ruby@v1
@@ -344,7 +352,7 @@ jobs:
       UAT_NOTES: ${{ github.workspace }}/../uat-notes/uat-notes.md
     steps:
       - uses: actions/checkout@v4
-        with: { submodules: false, fetch-depth: 0 }
+        with: { ref: '${{ needs.plan.outputs.sha }}', submodules: false, fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - uses: actions/download-artifact@v4
