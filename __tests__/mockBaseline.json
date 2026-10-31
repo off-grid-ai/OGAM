@@ -184,7 +184,6 @@
   "__tests__/rntl/screens/GalleryScreen.test.tsx": 8,
   "__tests__/rntl/screens/LockScreen.test.tsx": 8,
   "__tests__/rntl/screens/ModelDownloadHelpers.test.tsx": 6,
-  "__tests__/rntl/screens/ModelDownloadScreen.test.tsx": 12,
   "__tests__/rntl/screens/NoModelScreen.test.tsx": 2,
   "__tests__/rntl/screens/OnboardingScreen.test.tsx": 7,
   "__tests__/rntl/screens/PassphraseSetupScreen.test.tsx": 7,
