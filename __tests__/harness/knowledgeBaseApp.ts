@@ -150,6 +150,13 @@ export interface ProjectChatAppOptions extends DocumentEngineOptions {
    * earlier run left, with nothing seeded again.
    */
   relaunchFrom?: DiskImage;
+  /** The driveable whisper.rn context (boundary.whisper), for journeys that transcribe speech. */
+  whisper?: boolean;
+  /**
+   * Put more of what the phone holds in place (files, databases, saved settings) after the device
+   * boundaries are installed and before the App loads, e.g. what an earlier version left behind.
+   */
+  beforeApp?: (boundary: NativeBoundary, engine: DocumentEngineBoundary) => void | Promise<void>;
 }
 
 const RENDER_WAIT = { timeout: 8000 };
@@ -170,6 +177,7 @@ export async function launchProjectChatApp(options: ProjectChatAppOptions = {}) 
   const boundary: NativeBoundary = installNativeBoundary({
     llama: true,
     fs: true,
+    whisper: options.whisper,
     ram: { platform: 'ios', totalBytes: 8 * GB, availBytes: 6 * GB },
   });
   const fs = boundary.fs!;
@@ -197,6 +205,8 @@ export async function launchProjectChatApp(options: ProjectChatAppOptions = {}) 
       version: 0,
     }));
   }
+
+  await options.beforeApp?.(boundary, engine);
 
   const App = require('../../App').default;
   const view = rtl.render(React.createElement(App));
@@ -238,16 +248,17 @@ export async function launchProjectChatApp(options: ProjectChatAppOptions = {}) 
     },
 
     /**
-     * From the project page: open its knowledge base, pick these files (seeded on the disk first), wait
-     * until each one has been read to the end ("<size> · <n> pages"), then go back to the project.
+     * From the project page: on its Knowledge base tab, + then File, pick these files (seeded on the
+     * disk first), and wait until each one has been read to the end ("<size> · <n> pages").
      */
     async addKnowledge(files: Array<PickedFile & { pages: number }>) {
-      fireEvent.press(view.getByTestId('project-knowledge-base-open'));
-      await view.findByTestId('knowledge-base-screen', {}, RENDER_WAIT);
+      // The project opens on Chats; the knowledge base is behind its tab.
+      fireEvent.press(view.getByTestId('project-tab-knowledge'));
       picker.pick.mockResolvedValue(
         files.map(file => ({ uri: `file://${file.path}`, name: file.name, size: file.size ?? 0 })),
       );
-      fireEvent.press(view.queryByText('Add Document') ?? view.getByLabelText('Add documents'));
+      fireEvent.press(view.getByTestId('kb-add'));
+      fireEvent.press(await view.findByText('File', {}, RENDER_WAIT));
       for (const file of files) {
         const status = await view.findByTestId(
           `knowledge-document-status-${await engine.documentIdOf(file.path)}`, {}, RENDER_WAIT,
@@ -255,13 +266,11 @@ export async function launchProjectChatApp(options: ProjectChatAppOptions = {}) 
         const pages = file.pages === 1 ? '1 page' : `${file.pages} pages`;
         await waitFor(() => expect(status.props.children).toMatch(new RegExp(`· ${pages}$`)), RENDER_WAIT);
       }
-      expect(view.queryByTestId('kb-index-error-card')).toBeNull();
-      fireEvent.press(view.getByTestId('knowledge-base-back'));
-      await view.findByTestId('project-detail-screen', {}, RENDER_WAIT);
     },
 
     /** The project page's New chat button. */
     async newProjectChat() {
+      fireEvent.press(await waitFor(() => view.getByTestId('project-tab-chats'), RENDER_WAIT));
       fireEvent.press(await waitFor(
         () => view.queryByTestId('project-start-chat') ?? view.getByTestId('project-new-chat'),
         RENDER_WAIT,

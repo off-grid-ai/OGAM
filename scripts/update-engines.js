@@ -8,7 +8,7 @@
 //
 //   --check     report only; change nothing (scripts/uat.sh runs this before a beta)
 //   --pods      after a bump, run `pod install` so ios/Podfile.lock matches
-//   --summary   write a Markdown summary (the weekly PR's body)
+//   --summary   write a Markdown summary (the daily PR's body)
 //
 // Prints one line of JSON: { "changed": [...], "held": [...], "current": [...] }.
 
@@ -68,6 +68,29 @@ async function mavenEngine(engine) {
   return { decision: engines.decide({ current, latest }), from: current };
 }
 
+/** GitHub's API, with the workflow's token when there is one (the anonymous limit is 60 an hour). */
+async function github(pathname) {
+  const headers = { Accept: 'application/vnd.github+json' };
+  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  const res = await fetch(`https://api.github.com${pathname}`, { headers });
+  if (!res.ok) throw new Error(`${pathname} answered ${res.status}`);
+  return res.json();
+}
+
+/** A source build pinned to a commit: the repo's newest release, when it is ahead of the pin. */
+async function githubEngine(engine) {
+  const current = fs.readFileSync(path.join(ROOT, engine.file), 'utf8').trim();
+  const release = await github(`/repos/${engine.repo}/releases/latest`);
+  const latest = (await github(`/repos/${engine.repo}/commits/${encodeURIComponent(release.tag_name)}`)).sha;
+  const { status } = await github(`/repos/${engine.repo}/compare/${current}...${latest}`);
+  const decision = engines.githubDecision({ current, latest, status });
+  return { decision: decision.status === 'bump' ? { ...decision, tag: release.tag_name } : decision, from: current.slice(0, 7) };
+}
+
+function applyGithub(engine, to) {
+  fs.writeFileSync(path.join(ROOT, engine.file), `${to}\n`);
+}
+
 function applyNpm(engine, to, pkg) {
   pkg.dependencies[engine.pkg] = engines.specFor(pkg.dependencies[engine.pkg], to);
   for (const companion of engine.with ?? []) {
@@ -89,7 +112,8 @@ async function main() {
   const results = [];
   for (const engine of engines.ENGINES) {
     try {
-      const { decision, from } = engine.source === 'npm' ? npmEngine(engine, pkg) : await mavenEngine(engine);
+      const { decision, from } =
+        engine.source === 'npm' ? npmEngine(engine, pkg) : engine.source === 'github' ? await githubEngine(engine) : await mavenEngine(engine);
       results.push({ id: engine.id, what: engine.what, from, ...decision });
     } catch (error) {
       // A registry that does not answer leaves that engine where it is, and says so.
@@ -102,6 +126,7 @@ async function main() {
     for (const r of bumps) {
       const engine = engines.ENGINES.find(e => e.id === r.id);
       if (engine.source === 'npm') applyNpm(engine, r.to, pkg);
+      else if (engine.source === 'github') applyGithub(engine, r.to);
       else applyMaven(engine, r.to);
     }
     fs.writeFileSync(pkgFile, `${JSON.stringify(pkg, null, 2)}\n`);

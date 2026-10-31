@@ -2,11 +2,11 @@ import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   Animated,
   Vibration,
   Linking,
 } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import ReanimatedAnimated, {
   useSharedValue,

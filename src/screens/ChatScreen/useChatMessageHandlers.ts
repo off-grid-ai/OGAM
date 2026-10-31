@@ -22,6 +22,8 @@ import { activeModelService } from '../../services/activeModelService';
 import { ensureWhisperForTranscription } from '../../components/ChatInput/ensureWhisperForTranscription';
 import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
 import { shownMessages } from '../../utils/chatThread';
+import { videoSeam } from '../../bootstrap/videoSeam';
+import { generationSession } from '../../services/generationSession';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
 
@@ -101,6 +103,12 @@ export async function handleRetryMessageFn(
   // no-op. Mirrors the send path's "No Model Selected" alert (handleSendFn).
   if (!p.hasActiveModel) { logger.log('[RESEND-SM] retry BAIL: no active model'); genDeps.setAlertState(showAlert('No Model Selected', 'Please select a model first.')); return; }
   if (!p.activeConversationId) { logger.log('[RESEND-SM] retry BAIL: no conv'); return; }
+  // Stop can end the chat session before the native video worker exits.
+  // Reject retry before deleting replies or starting another frontend session.
+  if (videoSeam.isBusy()) {
+    genDeps.setAlertState(showAlert('Video is busy', 'Wait for the video engine to finish or stop before resending.'));
+    return;
+  }
   // Retry does not go through the composer button. Re-apply its tool selection before deleting the
   // old reply, so a selected Assistant never silently resends with only the other enabled tools.
   if (p.assistantEnabled && !enableAssistantTools()) {
@@ -113,8 +121,14 @@ export async function handleRetryMessageFn(
   // A synced reply shows as a live preview until its op lands; clear it too, or resend duplicates it.
   supersedeSyncedReplies(p.activeConversationId);
   const ctx: RetryCtx = { message, genDeps, p, convId: p.activeConversationId, msgs };
-  if (message.role === 'user') await retryFromUserMessage(ctx);
-  else await retryFromAssistantMessage(ctx);
+  try {
+    if (message.role === 'user') await retryFromUserMessage(ctx);
+    else await retryFromAssistantMessage(ctx);
+  } catch (error) {
+    generationSession.end('error');
+    logger.warn('[RESEND-SM] retry failed', error);
+    genDeps.setAlertState(showAlert('Could not resend', error instanceof Error ? error.message : 'Please try again.'));
+  }
 }
 
 type EditParams = {

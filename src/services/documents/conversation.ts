@@ -6,14 +6,10 @@ import RNFS from 'react-native-fs';
 import type { ConversationDocumentsPort, DocumentSource } from '@offgrid/rag/documents';
 import { useChatStore } from '../../stores/chatStore';
 import type { MediaAttachment } from '../../types';
-import { knowledgeDocumentIds } from './project';
+import { knowledgeDocumentIds, localPath } from './project';
 import { excludedDocuments } from './store';
 
 const legacyIds = new Map<string, string>();
-
-function localPath(uri: string): string {
-  return uri.replace(/^file:\/\//, '');
-}
 
 /** The SHA-256 of a file, hashed natively (it streams; a large PDF never enters JS memory). */
 export async function hashFile(uri: string): Promise<string> {

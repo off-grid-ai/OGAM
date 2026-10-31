@@ -27,7 +27,7 @@ jest.mock('../../../src/utils/logger', () => ({ __esModule: true, default: { log
 
 import {
   resolveImageModelDir, validateImageModelDir, ensureImageExtractionComplete,
-} from '../../../src/utils/imageModelIntegrity';
+} from '../../../src/services/imageModelIntegrity';
 import { ImageModelIncompleteError } from '../../../src/services/modelLoadErrors';
 
 const COMPLETE_MNN = [

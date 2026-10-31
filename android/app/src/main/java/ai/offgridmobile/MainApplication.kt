@@ -13,6 +13,8 @@ import ai.offgridmobile.localdream.LocalDreamPackage
 import ai.offgridmobile.pdf.PDFExtractorPackage
 import ai.offgridmobile.litert.LiteRTPackage
 import ai.offgridmobile.devicememory.DeviceMemoryPackage
+import ai.offgridmobile.problemreport.ProblemReportPackage
+import ai.offgridmobile.mediashare.MediaSharePackage
 import ai.offgridmobile.clipboard.SyncClipboardPackage
 import ai.offgridmobile.directory.SyncDirectorySourcePackage
 import ai.offgridmobile.downloads.SyncDownloadsPackage
@@ -30,9 +32,12 @@ class MainApplication : Application(), ReactApplication {
           // Packages that cannot be autolinked yet can be added manually here, for example:
           add(DownloadManagerPackage())
           add(LocalDreamPackage())
+          add(ai.offgridmobile.video.VideoGenerationPackage())
           add(PDFExtractorPackage())
           add(LiteRTPackage())
           add(DeviceMemoryPackage())
+          add(ProblemReportPackage())
+          add(MediaSharePackage())
           add(SyncClipboardPackage())
           add(SyncDirectorySourcePackage())
           add(MeshResidencyPackage())

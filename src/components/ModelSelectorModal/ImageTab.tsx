@@ -1,11 +1,13 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import { LoadingDots } from '../LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
 import { ONNXImageModel, RemoteModel } from '../../types';
 import { hardwareService } from '../../services';
 import { ModelCard } from '../ModelCard';
+import { RemoteModelServerGroup } from '../models/RemoteModelServerGroup';
 import { fileExceedsBudget } from '../../services/memoryBudget';
 import { createAllStyles } from './styles';
 
@@ -166,34 +168,20 @@ export const ImageTab: React.FC<ImageTabProps> = ({
 
       {/* Remote Vision Models */}
       {remoteVisionModels.map(({ serverId, serverName, models }) => (
-        <View key={serverId}>
-          <View style={styles.sectionHeaderRow}>
-            <Icon name="wifi" size={14} color={colors.textMuted} />
-            <Text style={styles.sectionSubTitle}>{serverName}</Text>
-          </View>
-          {models.map(model => {
-            const isCurrent =
-              activeRemoteImageServerId === serverId &&
-              activeRemoteImageModelId === model.id;
-            const isLoadingThis =
-              loadingRemoteModelKey === `${serverId}:${model.id}`;
-            return (
-              <ModelCard
-                key={model.id}
-                compact
-                testID={`remote-image-model-${serverId}-${model.id}`}
-                model={{ id: model.id, name: model.name, author: '', modelType: 'vision' }}
-                sourceBadge="Remote"
-                isActive={isCurrent || isLoadingThis}
-                onPress={() => onSelectRemoteVisionModel(model, serverId)}
-                disabled={isAnyLoading || isCurrent}
-                trailing={isLoadingThis ? <LoadingDots color={colors.primary} testID="remote-image-model-loading" />
-                  : isCurrent ? <View style={styles.checkmark}><Icon name="check" size={16} color={colors.background} /></View>
-                  : null}
-              />
-            );
-          })}
-        </View>
+        <RemoteModelServerGroup
+          key={serverId}
+          serverName={serverName}
+          disabled={isAnyLoading}
+          loadingTestID="remote-image-model-loading"
+          rows={models.map(model => ({
+            id: model.id,
+            testID: `remote-image-model-${serverId}-${model.id}`,
+            model: { id: model.id, name: model.name, author: '', modelType: 'vision' },
+            isCurrent: activeRemoteImageServerId === serverId && activeRemoteImageModelId === model.id,
+            isLoading: loadingRemoteModelKey === `${serverId}:${model.id}`,
+            onPress: () => onSelectRemoteVisionModel(model, serverId),
+          }))}
+        />
       ))}
     </>
   );

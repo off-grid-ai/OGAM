@@ -1,3 +1,4 @@
+import { videoSeam } from '../bootstrap/videoSeam';
 import { activeModelService } from './activeModelService';
 import { generationService } from './generationService';
 import { imageGenerationService } from './imageGenerationService';
@@ -11,6 +12,7 @@ export async function ejectAllModelsForUser(): Promise<{ count: number }> {
   await Promise.all([
     generationService.stopGeneration(),
     imageGenerationService.cancelGeneration(),
+    videoSeam.cancel(),
   ]);
   return activeModelService.ejectAll();
 }

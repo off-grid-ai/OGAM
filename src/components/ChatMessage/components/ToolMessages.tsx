@@ -7,7 +7,8 @@
  * bubble beyond the styles object.
  */
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { TouchableOpacity } from '../../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { parseSearchBlock } from '@offgrid/rag/documents';
 import { useTheme } from '../../../theme';
@@ -36,6 +37,10 @@ function getToolIcon(toolName?: string): string {
       return 'shuffle';
     case 'generate_image':
       return 'image';
+    case 'generate_video':
+      return 'video';
+    case 'make_film':
+      return 'film';
     default:
       return 'tool';
   }
@@ -70,6 +75,10 @@ function getToolLabel(toolName?: string, content?: string): string {
       return 'Model changed';
     case 'generate_image':
       return 'Generated image';
+    case 'generate_video':
+      return 'Video requested';
+    case 'make_film':
+      return 'Film started';
     default:
       return toolName || 'Tool result';
   }

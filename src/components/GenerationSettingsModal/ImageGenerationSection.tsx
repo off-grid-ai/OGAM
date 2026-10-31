@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AdvancedToggle } from '../AdvancedToggle';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -208,7 +209,9 @@ export const ImageGenerationSection: React.FC = () => {
         </View>
       </View>
 
-      <ImageQualityBasicSliders />
+      <View style={styles.settingGroup}>
+        <ImageQualityBasicSliders />
+      </View>
 
       <View style={[styles.modeToggleContainer, !hasTextModel && styles.dimmed]}>
         <View style={styles.modeToggleInfo}>

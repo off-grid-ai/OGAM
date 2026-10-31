@@ -6,7 +6,7 @@ import { useDownloadStore } from '../../stores/downloadStore';
 import { useModelCatalogStore } from '../../stores/modelCatalogStore';
 import { makeImageModelKey } from '../../utils/modelKey';
 import { modelManager, hardwareService, backgroundDownloadService } from '../../services';
-import { fetchAvailableModels, HFImageModel, guessStyle } from '../../services/huggingFaceModelBrowser';
+import { fetchAvailableModels, getOfferedSDImageModels, getRecommendedSDImageModels, searchSDImageModels, HFImageModel, guessStyle } from '../../services/huggingFaceModelBrowser';
 import { fetchAvailableCoreMLModels } from '../../services/coreMLModelBrowser';
 import { ImageModelRecommendation } from '../../types';
 import { BackendFilter, ImageFilterDimension, ImageModelDescriptor } from './types';
@@ -25,6 +25,27 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
   const [imageFilterExpanded, setImageFilterExpanded] = useState<ImageFilterDimension>(null);
   const [imageSearchQuery, setImageSearchQuery] = useState('');
   const [imageFiltersVisible, setImageFiltersVisible] = useState(false);
+  const [sdSearchModels, setSDSearchModels] = useState<HFImageModel[]>([]);
+  const [sdSearchLoading, setSDSearchLoading] = useState(false);
+  const [sdSearchError, setSDSearchError] = useState<string | null>(null);
+  const [sdSearchRevision, setSDSearchRevision] = useState(0);
+  useEffect(() => {
+    let current = true;
+    const controller = new AbortController();
+    setSDSearchModels([]);
+    setSDSearchError(null);
+    const query = imageSearchQuery.trim();
+    if (!query) { setSDSearchLoading(false); return; }
+    setSDSearchLoading(true);
+    const timer = setTimeout(() => {
+      searchSDImageModels(query, controller.signal)
+        .then(models => { if (current) setSDSearchModels(models); })
+        .catch(error => { if (current) setSDSearchError(error.message ?? 'Image search failed. Try again.'); })
+        .finally(() => { if (current) setSDSearchLoading(false); });
+    }, 300);
+    return () => { current = false; controller.abort(); clearTimeout(timer); };
+  }, [imageSearchQuery, sdSearchRevision]);
+
   const [imageRec, setImageRec] = useState<ImageModelRecommendation | null>(null);
   const [userChangedBackendFilter, setUserChangedBackendFilter] = useState(false);
   const [showRecommendedOnly, setShowRecommendedOnly] = useState(true);
@@ -52,19 +73,20 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
   }, [setDownloadedImageModels]);
 
   const loadHFModels = useCallback(async (forceRefresh = false) => {
+    if (forceRefresh) setSDSearchRevision(value => value + 1);
     setHfModelsLoading(true); setHfModelsError(null);
     try {
       if (Platform.OS === 'ios') {
         const coremlModels = await fetchAvailableCoreMLModels(forceRefresh);
-        setAvailableHFModels(coremlModels.map(m => ({
+        setAvailableHFModels([...getOfferedSDImageModels(), ...coremlModels.map(m => ({
           id: m.id, name: m.name, displayName: m.displayName, backend: 'coreml' as any,
           fileName: m.fileName, downloadUrl: m.downloadUrl, size: m.size, repo: m.repo,
           _coreml: true, _coremlFiles: m.files,
           _coremlAttentionVariant: m.attentionVariant,
-        })));
+        }))]);
       } else {
         const socInfo = await hardwareService.getSoCInfo();
-        setAvailableHFModels(await fetchAvailableModels(forceRefresh, { skipQnn: !socInfo.hasNPU }));
+        setAvailableHFModels([...getOfferedSDImageModels(), ...await fetchAvailableModels(forceRefresh, { skipQnn: !socInfo.hasNPU })]);
       }
     } catch (error: any) {
       setHfModelsError(error?.message || 'Failed to fetch models');
@@ -73,12 +95,13 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
     }
   }, []);
 
-  // A remote catalog update can add a Core ML repo: reload a list already shown.
+  // A remote catalog update can add a Core ML repo or an sd.cpp model: reload a list already shown.
   const remoteCoreML = useModelCatalogStore(s => s.remote.coreml);
+  const remoteModels = useModelCatalogStore(s => s.remote.models);
   useEffect(() => {
-    if (Platform.OS === 'ios' && availableHFModels.length > 0) loadHFModels();
+    if (availableHFModels.length > 0) loadHFModels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remoteCoreML]);
+  }, [remoteCoreML, remoteModels]);
 
   useEffect(() => {
     const init = async () => {
@@ -155,8 +178,13 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
     setStyleFilter('all'); setSdVersionFilter('all'); setImageFilterExpanded(null);
   }, []);
 
+  // sd.cpp models that fit this phone sit after the device's fastest engine (QNN/MNN, Core ML).
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- remoteModels: a catalog check can add one
+  const sdRecommended = useMemo(() => getRecommendedSDImageModels(hardwareService.getTotalMemoryGB()), [remoteModels]);
   const isRecommendedModel = useCallback((model: HFImageModel): boolean => {
     if (!imageRec) return false;
+    // sd.cpp runs on every phone; it is recommended when the catalog says it fits this one.
+    if (model.backend === 'sd') return sdRecommended.some(candidate => candidate.id === model.id);
     if (model.backend !== imageRec.recommendedBackend && imageRec.recommendedBackend !== 'all') return false;
     if (imageRec.qnnVariant && model.variant) return model.variant.includes(imageRec.qnnVariant);
     if (imageRec.recommendedModels?.length) {
@@ -164,20 +192,27 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
       return imageRec.recommendedModels.some(p => fields.some(f => f.includes(p)));
     }
     return true;
-  }, [imageRec]);
+  }, [imageRec, sdRecommended]);
 
+  const allHFModels = useMemo(
+    () => [...new Map([...availableHFModels, ...sdRecommended, ...sdSearchModels].map(model => [model.id, model])).values()],
+    [availableHFModels, sdRecommended, sdSearchModels],
+  );
   const filteredHFModels = useMemo(() => {
     const query = imageSearchQuery.toLowerCase().trim();
-    const filtered = availableHFModels.filter(m => {
-      if (showRecommendedOnly && imageRec && !isRecommendedModel(m)) return false;
-      if (backendFilter !== 'all' && m.backend !== backendFilter) return false;
+    const searchedIds = new Set(sdSearchModels.map(model => model.id));
+    const filtered = allHFModels.filter(m => {
+      if (!query && showRecommendedOnly && imageRec && !isRecommendedModel(m)) return false;
+      // The automatic QNN/MNN filter does not hide sd.cpp models; a filter the person picks does.
+      const automaticFilter = !userChangedBackendFilter && m.backend === 'sd';
+      if ((!query || userChangedBackendFilter) && backendFilter !== 'all' && m.backend !== backendFilter && !automaticFilter) return false;
       if (styleFilter !== 'all' && guessStyle(m.name) !== styleFilter) return false;
       if (!matchesSdVersionFilter(m.name, sdVersionFilter)) return false;
-      return !query || m.displayName.toLowerCase().includes(query) || m.name.toLowerCase().includes(query);
+      return !query || searchedIds.has(m.id) || m.displayName.toLowerCase().includes(query) || m.name.toLowerCase().includes(query);
     });
     if (!showRecommendedOnly) filtered.sort((a, b) => a.displayName.localeCompare(b.displayName));
     return filtered;
-  }, [availableHFModels, backendFilter, styleFilter, sdVersionFilter, imageSearchQuery, imageRec, isRecommendedModel, showRecommendedOnly]);
+  }, [allHFModels, sdSearchModels, userChangedBackendFilter, backendFilter, styleFilter, sdVersionFilter, imageSearchQuery, imageRec, isRecommendedModel, showRecommendedOnly]);
 
   const hasActiveImageFilters = backendFilter !== 'all' || styleFilter !== 'all' || sdVersionFilter !== 'all';
   const imageRecommendation = imageRec?.bannerText ?? 'Loading recommendation...';
@@ -202,7 +237,9 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
   };
 
   return {
-    availableHFModels, hfModelsLoading, hfModelsError,
+    // The fetched engine catalog (QNN/MNN or Core ML), apart from the sd.cpp catalog entries always listed.
+    hfCatalogLoaded: availableHFModels.length > 0,
+    availableHFModels: allHFModels, hfModelsLoading: hfModelsLoading || sdSearchLoading, hfModelsError: imageSearchQuery.trim() ? sdSearchError : hfModelsError,
     backendFilter, setBackendFilter,
     styleFilter, setStyleFilter,
     sdVersionFilter, setSdVersionFilter,

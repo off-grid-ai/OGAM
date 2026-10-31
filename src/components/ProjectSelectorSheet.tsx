@@ -3,8 +3,8 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
 } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import { AppSheet } from './AppSheet';
 import { useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
@@ -35,6 +35,7 @@ export const ProjectSelectorSheet: React.FC<ProjectSelectorSheetProps> = ({
 
   return (
     <AppSheet
+      sheet="project-selector"
       visible={visible}
       onClose={onClose}
       snapPoints={['45%']}

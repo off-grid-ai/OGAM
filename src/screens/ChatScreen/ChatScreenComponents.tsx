@@ -2,10 +2,10 @@ import React from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   Modal,
   Image,
 } from 'react-native';
+import { TouchableOpacity } from '../../components/Touchable';
 import { LoadingDots } from '../../components/LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -161,8 +161,11 @@ export const EmptyChat: React.FC<{
       <Text style={styles.emptyChatTitle}>Start a Conversation</Text>
     </AnimatedEntry>
     <AnimatedEntry index={2} staggerMs={60}>
-      <Text style={styles.emptyChatText}>
-        Type a message below to begin chatting with {activeModelName || activeModel?.name || 'Unknown'}.
+      <Text style={styles.emptyChatText} testID="empty-chat-hint">
+        {/* With no model chosen yet, no name: never "Unknown". */}
+        {activeModelName || activeModel?.name
+          ? `Type a message below to begin chatting with ${activeModelName || activeModel?.name}.`
+          : 'Type a message below to begin.'}
       </Text>
     </AnimatedEntry>
     <AnimatedEntry index={3} staggerMs={60}>
@@ -180,7 +183,7 @@ export const EmptyChat: React.FC<{
     <AnimatedEntry index={4} staggerMs={60}>
       <Text style={styles.privacyText}>
         {isRemote
-          ? 'This conversation uses a remote model. Your messages will be sent to the remote server.'
+          ? 'This chat runs on a remote server, not on this phone.'
           : 'This conversation is completely private. All processing happens on your device.'}
       </Text>
     </AnimatedEntry>
@@ -256,7 +259,10 @@ export const ImageViewerModal: React.FC<{
   viewerImageUri: string | null;
   onClose: () => void;
   onSave: () => void;
-}> = ({ styles, colors, viewerImageUri, onClose, onSave }) => (
+  /** Video is Pro: "Animate this photo" fills this slot. */
+  AnimateAction?: React.ComponentType<any>;
+  conversationId?: string | null;
+}> = ({ styles, colors, viewerImageUri, onClose, onSave, AnimateAction, conversationId }) => (
   <Modal visible={!!viewerImageUri} transparent animationType="fade" onRequestClose={onClose}>
     <View style={styles.imageViewerContainer}>
       <TouchableOpacity style={styles.imageViewerBackdrop} activeOpacity={1} onPress={onClose} />
@@ -264,6 +270,16 @@ export const ImageViewerModal: React.FC<{
         <View style={styles.imageViewerContent}>
           <Image source={{ uri: viewerImageUri }} style={styles.fullscreenImage} resizeMode="contain" />
           <View style={styles.imageViewerActions}>
+            {AnimateAction && (
+              <AnimateAction
+                imagePath={viewerImageUri}
+                conversationId={conversationId}
+                onStarted={onClose}
+                buttonStyle={styles.imageViewerButton}
+                textStyle={styles.imageViewerButtonText}
+                iconColor={colors.text}
+              />
+            )}
             <TouchableOpacity style={styles.imageViewerButton} onPress={onSave}>
               <Icon name="download" size={24} color={colors.text} />
               <Text style={styles.imageViewerButtonText}>Save</Text>

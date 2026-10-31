@@ -5,7 +5,8 @@
  * would have made the dependency circular.
  */
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import { useThemedStyles } from '../../theme';
 import { createTextGenAdvancedStyles } from './textGenAdvancedStyles';
 

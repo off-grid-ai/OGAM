@@ -1,3 +1,4 @@
+import { videoModelsDirectory } from '../videoModelFiles';
 import RNFS from 'react-native-fs';
 import { splitGgufPartNames } from '@offgrid/models';
 import logger from '../../utils/logger';
@@ -68,6 +69,7 @@ class ModelManager {
     if (!(await RNFS.exists(this.imageModelsDir))) await RNFS.mkdir(this.imageModelsDir);
     const exclude = (p: string) => backgroundDownloadService.excludeFromBackup(p);
     await Promise.all([exclude(this.modelsDir), exclude(this.imageModelsDir),
+      exclude(videoModelsDirectory()),
       exclude(`${RNFS.DocumentDirectoryPath}/${APP_CONFIG.whisperStorageDir}`)]);
   }
 

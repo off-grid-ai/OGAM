@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
 import { DownloadedModel, RemoteModel } from '../../types';
@@ -8,6 +9,7 @@ import { textOverheadMultiplier } from '../../services/activeModelService/types'
 import { estimateTextModelMemoryMB } from '../../services/activeModelService/memory';
 import { useAppStore } from '../../stores';
 import { ModelCard } from '../ModelCard';
+import { RemoteModelServerGroup } from '../models/RemoteModelServerGroup';
 import { createAllStyles } from './styles';
 import { fileExceedsBudget, textModelBudget } from '../../services/memoryBudget';
 import { useResidentRows } from '../models/useResidentRows';
@@ -242,39 +244,27 @@ export const TextTab: React.FC<TextTabProps> = ({
 
       {/* Remote Models Sections */}
       {remoteModels.map(({ serverId, serverName, models }) => (
-        <View key={serverId}>
-          <View style={styles.sectionHeaderRow}>
-            <Icon name="wifi" size={14} color={colors.textMuted} />
-            <Text style={styles.sectionSubTitle}>{serverName}</Text>
-          </View>
-          {models.map(model => {
-            const isCurrent = currentRemoteModelId === model.id;
-            const isLoadingThis =
-              loadingRemoteModelKey === `${serverId}:${model.id}`;
-            return (
-              <ModelCard
-                key={model.id}
-                compact
-                testID={`remote-text-model-${serverId}-${model.id}`}
-                model={{ id: model.id, name: model.name, author: '',
-                  modelType: model.capabilities.supportsVision ? 'vision' : 'text',
-                  quantization: typeof model.details?.quantization === 'string' ? model.details.quantization : undefined }}
-                sourceBadge="Remote"
-                capabilities={{
-                  vision: model.capabilities.supportsVision,
-                  tools: model.capabilities.supportsToolCalling,
-                  thinking: model.capabilities.supportsThinking,
-                }}
-                isActive={isCurrent || isLoadingThis}
-                onPress={() => onSelectRemoteModel(model, serverId)}
-                disabled={isAnyLoading || isCurrent}
-                trailing={isLoadingThis ? <LoadingDots color={colors.primary} testID="remote-text-model-loading" />
-                  : isCurrent ? <View style={styles.checkmarkRemote}><Icon name="check" size={16} color={colors.background} /></View>
-                  : null}
-              />
-            );
-          })}
-        </View>
+        <RemoteModelServerGroup
+          key={serverId}
+          serverName={serverName}
+          disabled={isAnyLoading}
+          loadingTestID="remote-text-model-loading"
+          rows={models.map(model => ({
+            id: model.id,
+            testID: `remote-text-model-${serverId}-${model.id}`,
+            model: { id: model.id, name: model.name, author: '',
+              modelType: model.capabilities.supportsVision ? 'vision' : 'text',
+              quantization: typeof model.details?.quantization === 'string' ? model.details.quantization : undefined },
+            capabilities: {
+              vision: model.capabilities.supportsVision,
+              tools: model.capabilities.supportsToolCalling,
+              thinking: model.capabilities.supportsThinking,
+            },
+            isCurrent: currentRemoteModelId === model.id,
+            isLoading: loadingRemoteModelKey === `${serverId}:${model.id}`,
+            onPress: () => onSelectRemoteModel(model, serverId),
+          }))}
+        />
       ))}
     </>
   );

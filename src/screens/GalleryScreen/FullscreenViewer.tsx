@@ -3,16 +3,17 @@ import {
   View,
   Text,
   Image,
-  TouchableOpacity,
   Modal,
   ScrollView,
 } from 'react-native';
+import { TouchableOpacity } from '../../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
 import { GeneratedImage } from '../../types';
 import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
 import { createStyles } from './styles';
 import { formatDate } from './useGalleryActions';
+import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 
 interface FullscreenViewerProps {
   image: GeneratedImage | null;
@@ -33,6 +34,8 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  // Video is Pro: "Animate this photo" fills this slot.
+  const AnimateAction = useSlot(SLOTS.imageAnimateAction);
   const imageUri = image
     ? `file://${resolveDocumentPath(image.imagePath)}`
     : '';
@@ -108,6 +111,16 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({
                   Info
                 </Text>
               </TouchableOpacity>
+              {AnimateAction && (
+                <AnimateAction
+                  imagePath={resolveDocumentPath(image.imagePath)}
+                  conversationId={image.conversationId}
+                  onStarted={onClose}
+                  buttonStyle={styles.viewerButton}
+                  textStyle={styles.viewerButtonText}
+                  iconColor={colors.text}
+                />
+              )}
               <TouchableOpacity style={styles.viewerButton} onPress={() => onSave(image)}>
                 <Icon name="download" size={22} color={colors.text} />
                 <Text style={styles.viewerButtonText}>Save</Text>

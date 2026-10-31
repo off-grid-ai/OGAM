@@ -313,7 +313,7 @@ describe('GalleryScreen', () => {
     }
   });
 
-  it('shows "Chat Images" title when conversationId is provided', () => {
+  it('shows "Chat Media" title when conversationId is provided', () => {
     mockRouteParams = { conversationId: 'conv-123' };
     mockGeneratedImages.push({
       ...sampleImages[0],
@@ -321,7 +321,7 @@ describe('GalleryScreen', () => {
     });
 
     const { getByText } = render(<GalleryScreen />);
-    expect(getByText('Chat Images')).toBeTruthy();
+    expect(getByText('Chat Media')).toBeTruthy();
   });
 
   it('shows chat-specific empty state when no images match conversation', () => {
@@ -452,18 +452,9 @@ describe('GalleryScreen', () => {
     fireEvent.press(result.getByText('All'));
     expect(result.getByText('3 selected')).toBeTruthy();
 
-    // In select mode, the header touchables (non-grid) are:
-    // [X close button, "All" text button, trash icon button]
-    // The trash button is the one with disabled={false} (items selected)
-    // and is NOT the All button or X button.
-    const allTouchables = result.UNSAFE_getAllByType(TouchableOpacity);
-    const nonGridTouchables = allTouchables.filter((t: any) => t.props.activeOpacity !== 0.8);
-    // The last non-grid touchable before grid items should be the trash button
-    // Try pressing from the last non-grid touchable backwards until handleDeleteSelected fires
-    for (let i = nonGridTouchables.length - 1; i >= 0; i--) {
-      fireEvent.press(nonGridTouchables[i]);
-      if (mockShowAlert.mock.calls.length > 0) break;
-    }
+    // The header's trash button, by its label (pressing every header button in turn would also
+    // press the Videos tab, which ends image select mode).
+    fireEvent.press(result.getByLabelText('Delete selected images'));
 
     expect(mockShowAlert).toHaveBeenCalledWith(
       'Delete Images',

@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ScrollView,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { TouchableOpacity } from '../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -41,6 +41,14 @@ export const RemoteServerEditorScreen: React.FC = () => {
   const [showApiKey, setShowApiKey] = useState(false);
   const close = () => navigation.goBack();
   const form = useRemoteServerForm({ server, visible: true, onClose: close });
+  const needsKey = route.params?.needsKey === true;
+  const apiKeyInput = useRef<TextInput>(null);
+  // autoFocus during the push animation marks the field focused but leaves the iOS keyboard
+  // down, so the key field takes focus once the screen has finished arriving.
+  useEffect(() => {
+    if (!needsKey) return undefined;
+    return navigation.addListener('transitionEnd', () => apiKeyInput.current?.focus());
+  }, [navigation, needsKey]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -94,10 +102,19 @@ export const RemoteServerEditorScreen: React.FC = () => {
           </Text>
         )}
 
-        <Text style={styles.label}>API key (optional)</Text>
+        <Text style={styles.label}>
+          {needsKey ? 'API key' : 'API key (optional)'}
+        </Text>
+        {needsKey ? (
+          <Text style={styles.helperText} testID="server-needs-key">
+            This computer asks for a key. Copy one from Off Grid AI Desktop,
+            Gateway, API keys.
+          </Text>
+        ) : null}
         <View style={styles.apiKeyContainer}>
           <TextInput
             testID="server-api-key"
+            ref={apiKeyInput}
             style={[styles.input, styles.apiKeyInput]}
             value={form.apiKey}
             onChangeText={form.setApiKey}
@@ -149,6 +166,18 @@ export const RemoteServerEditorScreen: React.FC = () => {
           loading={form.isTesting}
           allowManualEntry={form.modelManagement !== 'offgrid-desktop-v1'}
         />
+        {form.modelManagement === 'offgrid-desktop-v1' && (
+          <RemoteModelField
+            label="Video model"
+            value={form.videoModelId}
+            options={form.modelCatalog.video ?? []}
+            onChange={form.setVideoModelId}
+            placeholder="Select an OGAD video model"
+            testID="server-video-model"
+            loading={form.isTesting}
+            allowManualEntry={false}
+          />
+        )}
         <RemoteModelField
           label="Transcription model"
           value={form.transcriptionModelId}

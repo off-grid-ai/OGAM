@@ -199,7 +199,10 @@ describe('Unified Model Selection', () => {
 
       expect(useRemoteServerStore.getState().activeRemoteImageModelId).toBe('llava');
       expect(useRemoteServerStore.getState().activeRemoteMediaServerIds.image).toBe(serverId);
-      expect(mockLoadModel).toHaveBeenCalledWith('llava');
+      // Generation reads the server's image model, so the pick must land there.
+      expect(useRemoteServerStore.getState().getServerById(serverId)?.mediaModels?.image).toBe('llava');
+      // An image pick never becomes the server's chat model.
+      expect(mockLoadModel).not.toHaveBeenCalled();
     });
   });
 

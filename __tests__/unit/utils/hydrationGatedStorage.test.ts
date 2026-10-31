@@ -20,6 +20,39 @@ function memoryStorage(initial: Record<string, string> = {}): StateStorage & {
 }
 
 describe('hydration-gated storage', () => {
+  it('keeps one write in flight: changes made meanwhile are saved as one write of the newest state', async () => {
+    // A chat store changing at token rate (image prompt enhancement) used to issue a full serialized copy
+    // per change, all in flight at once, until an iPhone outgrew its 6 GB memory limit.
+    const base = memoryStorage();
+    const written: string[] = [];
+    let releaseFirst = () => {};
+    const firstHeld = new Promise<void>(resolve => {
+      releaseFirst = resolve;
+    });
+    const slowBase: StateStorage = {
+      ...base,
+      setItem: async (name, value) => {
+        written.push(JSON.parse(value).state.text);
+        if (written.length === 1) await firstHeld;
+        await base.setItem(name, value);
+      },
+    };
+    const gated = createHydrationGatedStorage<{ text: string }>(slowBase);
+    gated.markHydrated();
+
+    gated.storage.setItem('chat', { state: { text: 'a' }, version: 0 });
+    for (const text of ['ab', 'abc', 'abcd', 'abcde']) {
+      gated.storage.setItem('chat', { state: { text }, version: 0 });
+    }
+    // Only the first change has reached storage while it is still being written.
+    expect(written).toEqual(['a']);
+    releaseFirst();
+    await gated.waitForWrites();
+
+    expect(written).toEqual(['a', 'abcde']);
+    expect(await gated.storage.getItem('chat')).toEqual({ state: { text: 'abcde' }, version: 0 });
+  });
+
   it('preserves saved state from writes and removal before hydration', async () => {
     const saved = JSON.stringify({ state: { selected: 'saved' }, version: 0 });
     const base = memoryStorage({ settings: saved });

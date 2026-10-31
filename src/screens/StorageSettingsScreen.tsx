@@ -1,10 +1,19 @@
+import { statFile } from '../utils/fileStat';
+import { videoModelDirectory } from '../services/videoModelFiles';
+import { videoModelDisplayName } from '../utils/modelHelpers';
+import {
+  deleteVideoPack,
+  documentIndexBytes,
+  generatedVideoBytes,
+  searchModelBytes,
+} from '../services/storageBreakdown';
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
 } from 'react-native';
+import { TouchableOpacity } from '../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
@@ -28,12 +37,12 @@ export const StorageSettingsScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const [storageUsed, setStorageUsed] = useState(0);
   const [availableStorage, setAvailableStorage] = useState(0);
+  const [extra, setExtra] = useState({ videos: 0, search: 0, index: 0 });
+  const generatedVideoCount = useAppStore(s => s.generatedVideos.length);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
-  const {
-    downloadedModels,
-    downloadedImageModels,
-  } = useAppStore();
+  const { downloadedModels, downloadedImageModels, downloadedVideoModels } =
+    useAppStore();
   const { conversations } = useChatStore();
   const transcriptionModelCount = useWhisperStore(s => s.presentModelIds.length);
   const speechModelCount = useModelDownloads().filter(
@@ -42,7 +51,10 @@ export const StorageSettingsScreen: React.FC = () => {
   const downloads = useDownloadStore(s => s.downloads);
   const removeFromStore = useDownloadStore(s => s.remove);
 
-  const imageStorageUsed = downloadedImageModels.reduce((total, m) => total + (m.size || 0), 0);
+  const imageStorageUsed = downloadedImageModels.reduce(
+    (total, m) => total + (m.size || 0),
+    0,
+  );
 
   // A "stale" entry is a store entry missing the basic fields needed to
   // display or finalize it. Now sourced from the unified download store.
@@ -51,15 +63,41 @@ export const StorageSettingsScreen: React.FC = () => {
   });
 
   const loadStorageInfo = useCallback(async () => {
+    const videoSizes = await Promise.all(downloadedVideoModels.flatMap(model =>
+      model.files.map(async file => {
+        const facts = await statFile(`${videoModelDirectory(model.id)}/${file.name}`);
+        return facts?.isFile ? facts.size : 0;
+      }),
+    ));
+    const videoStorageUsed = videoSizes.reduce((total, size) => total + size, 0);
     const used = await modelManager.getStorageUsed();
     const available = await modelManager.getAvailableStorage();
-    setStorageUsed(used + imageStorageUsed);
+    const [videos, search, index] = await Promise.all([generatedVideoBytes(), searchModelBytes(), documentIndexBytes()]);
+    setExtra({ videos, search, index });
+    setStorageUsed(used + imageStorageUsed + videoStorageUsed + search);
     setAvailableStorage(available);
-  }, [imageStorageUsed]);
+  }, [imageStorageUsed, downloadedVideoModels]);
+
+  const confirmDeleteVideoPack = (id: string, name: string) => {
+    setAlertState(
+      showAlert('Delete video model?', `Delete "${name}" from this phone?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setAlertState(hideAlert());
+            deleteVideoPack(id).then(loadStorageInfo).catch(() => undefined);
+          },
+        },
+      ]),
+    );
+  };
 
   useEffect(() => {
     loadStorageInfo();
-  }, [loadStorageInfo]);
+    // A new or deleted video changes the Videos and Films row.
+  }, [loadStorageInfo, generatedVideoCount]);
 
   const handleClearStaleDownload = useCallback(
     (modelKey: string) => {
@@ -105,7 +143,10 @@ export const StorageSettingsScreen: React.FC = () => {
         <Text style={styles.title}>Storage</Text>
       </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
+      >
         <Card style={styles.section}>
           <Text style={styles.sectionTitle}>Storage Usage</Text>
           <View style={styles.storageBar}>
@@ -113,12 +154,23 @@ export const StorageSettingsScreen: React.FC = () => {
           </View>
           <View style={styles.storageLegend}>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
-              <Text style={styles.legendText}>Used: {hardwareService.formatBytes(storageUsed)}</Text>
+              <View
+                style={[styles.legendDot, { backgroundColor: colors.primary }]}
+              />
+              <Text style={styles.legendText}>
+                Used: {hardwareService.formatBytes(storageUsed)}
+              </Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.surfaceLight }]} />
-              <Text style={styles.legendText}>Free: {hardwareService.formatBytes(availableStorage)}</Text>
+              <View
+                style={[
+                  styles.legendDot,
+                  { backgroundColor: colors.surfaceLight },
+                ]}
+              />
+              <Text style={styles.legendText}>
+                Free: {hardwareService.formatBytes(availableStorage)}
+              </Text>
             </View>
           </View>
         </Card>
@@ -141,6 +193,35 @@ export const StorageSettingsScreen: React.FC = () => {
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
+              <Icon name="video" size={18} color={colors.primary} />
+              <Text style={styles.infoLabel}>Video Models</Text>
+            </View>
+            <Text style={styles.infoValue}>{downloadedVideoModels.length}</Text>
+          </View>
+          {downloadedVideoModels.map(model => (
+            <View key={model.id} style={styles.infoRow}>
+              <Text style={[styles.infoLabel, styles.indented]} numberOfLines={1}>
+                {videoModelDisplayName(model.id, model.name)}
+              </Text>
+              <TouchableOpacity
+                onPress={() => confirmDeleteVideoPack(model.id, videoModelDisplayName(model.id, model.name))}
+                accessibilityRole="button"
+                accessibilityLabel={`Delete ${videoModelDisplayName(model.id, model.name)}`}
+                testID={`storage-delete-video-${model.id}`}
+              >
+                <Icon name="trash-2" size={16} color={colors.error} />
+              </TouchableOpacity>
+            </View>
+          ))}
+          <View style={styles.infoRow}>
+            <View style={styles.infoRowLeft}>
+              <Icon name="search" size={18} color={colors.primary} />
+              <Text style={styles.infoLabel}>Search Models</Text>
+            </View>
+            <Text style={styles.infoValue}>{hardwareService.formatBytes(extra.search)}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <View style={styles.infoRowLeft}>
               <Icon name="mic" size={18} color={colors.primary} />
               <Text style={styles.infoLabel}>Transcription Models</Text>
             </View>
@@ -159,6 +240,22 @@ export const StorageSettingsScreen: React.FC = () => {
               <Text style={styles.infoLabel}>Model Storage</Text>
             </View>
             <Text style={styles.infoValue}>{hardwareService.formatBytes(storageUsed)}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <View style={styles.infoRowLeft}>
+              <Icon name="film" size={18} color={colors.primary} />
+              <Text style={styles.infoLabel}>Videos and Films</Text>
+            </View>
+            <Text style={styles.infoValue}>
+              {generatedVideoCount} · {hardwareService.formatBytes(extra.videos)}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <View style={styles.infoRowLeft}>
+              <Icon name="file-text" size={18} color={colors.primary} />
+              <Text style={styles.infoLabel}>Document Index</Text>
+            </View>
+            <Text style={styles.infoValue}>{hardwareService.formatBytes(extra.index)}</Text>
           </View>
           <View style={[styles.infoRow, styles.lastRow]}>
             <View style={styles.infoRowLeft}>
@@ -189,15 +286,22 @@ export const StorageSettingsScreen: React.FC = () => {
                 <Text style={styles.clearAllText}>Clear All</Text>
               </TouchableOpacity>
             </View>
-            <Text style={[styles.hint, { textAlign: 'left' as const, marginBottom: SPACING.md }]}>
-              These download entries have invalid or missing data and can be safely cleared.
+            <Text
+              style={[
+                styles.hint,
+                { textAlign: 'left' as const, marginBottom: SPACING.md },
+              ]}
+            >
+              These download entries have invalid or missing data and can be
+              safely cleared.
             </Text>
             {staleDownloads.map(entry => (
               <View key={entry.modelKey} style={styles.orphanedRow}>
                 <View style={styles.orphanedInfo}>
                   <Text style={styles.orphanedName}>Download #{entry.downloadId}</Text>
                   <Text style={styles.orphanedMeta}>
-                    {entry.fileName || 'Unknown file'} • {entry.modelId || 'Unknown model'}
+                    {entry.fileName || 'Unknown file'} •{' '}
+                    {entry.modelId || 'Unknown model'}
                   </Text>
                 </View>
                 <TouchableOpacity

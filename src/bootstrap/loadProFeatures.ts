@@ -67,6 +67,13 @@ export async function loadProFeatures(isPro?: boolean): Promise<boolean> {
       },
     });
   }
+  if (expired && typeof pro.prepareLicenseActivation === 'function') {
+    // Sync stays off on an expired device, but a renewed key must still activate: without the
+    // activation owner, Activate waited 30 s and said activation was not ready.
+    pro.prepareLicenseActivation().catch((error: unknown) => {
+      logger.warn(`[BOOT-PRO] license activation did not prepare: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  }
   if (!active || !admitted) {
     // Sync stays reachable on purpose even here: claiming a seat again, by key or from a paired device,
     // goes through the mesh runtime, so tearing it down would strand a deactivated device with no way back.

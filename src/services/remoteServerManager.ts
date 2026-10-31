@@ -30,11 +30,18 @@ import {
   removeApiKeyImpl,
   createProviderForServerImpl,
   setActiveRemoteTextModelImpl,
-  setActiveRemoteImageModelImpl,
   initializeProvidersImpl,
 } from './remoteServerManagerUtils';
 import { remoteAuthorizationHeaders } from './remoteTransportPolicy';
-import { activateOffGridDesktopModel } from './offGridDesktopModels';
+import {
+  activateOffGridDesktopModel,
+  readOffGridDesktopDownload,
+  readOffGridDesktopRoom,
+  startOffGridDesktopDownload,
+  type OffGridDesktopDownload,
+  type OffGridDesktopRoom,
+} from './offGridDesktopModels';
+import { featureUsed, flowFinished, flowStep } from './analytics/analytics';
 
 /** Normalize an endpoint for identity comparison (lowercase, no trailing slashes). */
 const trimSlash = (url: string): string => {
@@ -43,7 +50,36 @@ const trimSlash = (url: string): string => {
   return s;
 };
 
+/** A Desktop model switch the person stopped. Their selection stays as it was. */
+export class ModelSwitchStopped extends Error {
+  constructor() {
+    super('Model switch stopped');
+    this.name = 'ModelSwitchStopped';
+  }
+}
+
 class RemoteServerManager {
+  /** Desktop model switches still loading. Desktop takes as long as the model needs, so Stop is the way out. */
+  private readonly modelSwitches = new Set<AbortController>();
+
+  /** Run one Desktop model switch that `stopModelSwitch` can stop, whatever Desktop does. */
+  private async switching<T>(work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const controller = new AbortController();
+    this.modelSwitches.add(controller);
+    try {
+      return await work(controller.signal);
+    } catch (error) {
+      throw controller.signal.aborted ? new ModelSwitchStopped() : error;
+    } finally {
+      this.modelSwitches.delete(controller);
+    }
+  }
+
+  /** Stop every Desktop model switch still loading. Nothing is selected; the request to Desktop is closed. */
+  stopModelSwitch(): void {
+    for (const controller of this.modelSwitches) controller.abort();
+  }
+
   /**
    * Add a new remote server
    */
@@ -53,11 +89,13 @@ class RemoteServerManager {
   ): Promise<RemoteServer> {
     const store = useRemoteServerStore.getState();
 
-    // Deduplicate: if a server with the same endpoint already exists, return it
+    // Deduplicate: the same computer (by its Sync id), or the same endpoint, is the server already saved
     const normalizedEndpoint = trimSlash(config.endpoint);
-    const existing = store.servers.find(
-      s => trimSlash(s.endpoint) === normalizedEndpoint,
-    );
+    const existing =
+      (config.computerId
+        ? store.servers.find(s => s.computerId === config.computerId)
+        : undefined) ??
+      store.servers.find(s => trimSlash(s.endpoint) === normalizedEndpoint);
     if (existing) {
       logger.log('[RemoteServerManager] Server already exists:', existing.name);
       return existing;
@@ -72,6 +110,8 @@ class RemoteServerManager {
 
     const server = store.getServerById(id);
     if (!server) throw new Error('Failed to create server');
+    flowStep('remote_server', 'connected');
+    flowFinished('remote_server', 'done');
 
     await createProviderForServerImpl(server);
     logger.log('[RemoteServerManager] Added server:', server.name);
@@ -168,9 +208,11 @@ class RemoteServerManager {
     endpoint: string,
     apiKey?: string,
   ): Promise<ServerTestResult> {
-    return useRemoteServerStore
+    const result = await useRemoteServerStore
       .getState()
       .testConnectionByEndpoint(endpoint, apiKey);
+    if (result.success) flowStep('remote_server', 'tested');
+    return result;
   }
 
   /**
@@ -199,7 +241,8 @@ class RemoteServerManager {
     serverId: string,
     modelId: string,
   ): Promise<void> {
-    return setActiveRemoteTextModelImpl(serverId, modelId);
+    featureUsed('remote_server');
+    return this.switching(signal => setActiveRemoteTextModelImpl(serverId, modelId, signal));
   }
 
   /** Set the active remote vision/image model */
@@ -207,10 +250,10 @@ class RemoteServerManager {
     serverId: string,
     modelId: string,
   ): Promise<void> {
-    const server = useRemoteServerStore.getState().getServerById(serverId);
-    return server?.modelManagement === 'offgrid-desktop-v1'
-      ? this.setActiveRemoteMediaModel(serverId, 'image', modelId)
-      : setActiveRemoteImageModelImpl(serverId, modelId);
+    // One write path for every server. Image generation reads the server's mediaModels.image; the
+    // older path for other servers wrote only the picker's id, and set the server's chat model to the
+    // image model, so a pick never reached generation and remote chat asked an image model for text.
+    return this.setActiveRemoteMediaModel(serverId, 'image', modelId);
   }
 
   /** Select one remote model for image, transcription, or voice work. */
@@ -224,13 +267,16 @@ class RemoteServerManager {
     if (!server) throw new Error(`Server not found: ${serverId}`);
     const confirmedState =
       server.modelManagement === 'offgrid-desktop-v1'
-        ? await activateOffGridDesktopModel(
-            {
-              ...server,
-              apiKey: (await this.getApiKey(serverId)) ?? undefined,
-            },
-            category,
-            modelId,
+        ? await this.switching(async signal =>
+            activateOffGridDesktopModel(
+              {
+                ...server,
+                apiKey: (await this.getApiKey(serverId)) ?? undefined,
+              },
+              category,
+              modelId,
+              signal,
+            ),
           )
         : null;
     const confirmedModels = confirmedState?.active ?? {
@@ -239,6 +285,8 @@ class RemoteServerManager {
     };
     store.updateServer(serverId, {
       mediaModels: confirmedModels,
+      // Desktop's installed list as it stands now: a model just downloaded there is in it.
+      ...(confirmedState ? { modelCatalog: confirmedState.catalog } : {}),
     });
     store.setActiveRemoteMediaServerId(category, serverId);
     if (category === 'image') store.setActiveRemoteImageModelId(modelId);
@@ -257,6 +305,7 @@ class RemoteServerManager {
     store.setActiveServerId(null);
     store.setActiveRemoteTextModelId(null);
     store.setActiveRemoteImageModelId(null);
+    store.setActiveRemoteMediaServerId('video', null);
     store.setActiveRemoteMediaServerId('image', null);
     store.setActiveRemoteMediaServerId('transcription', null);
     store.setActiveRemoteMediaServerId('voice', null);
@@ -302,14 +351,20 @@ class RemoteServerManager {
     found: DiscoveredServer[];
   }> {
     let discovered: DiscoveredServer[];
-    const savedEndpoints = new Set(
-      useRemoteServerStore.getState().servers.map(server => trimSlash(server.endpoint)),
+    const saved = useRemoteServerStore.getState().servers;
+    const savedEndpoints = new Set(saved.map(server => trimSlash(server.endpoint)));
+    const savedComputers = new Set(
+      saved.flatMap(server => (server.computerId ? [server.computerId] : [])),
     );
+    // A computer already saved at another address is not new: one row per computer.
+    const isNew = (server: DiscoveredServer): boolean =>
+      !savedEndpoints.has(trimSlash(server.endpoint)) &&
+      !(server.computerId && savedComputers.has(server.computerId));
     try {
       discovered = await discoverLANServers(undefined, {
         ...options,
         onFound: server => {
-          if (!savedEndpoints.has(trimSlash(server.endpoint))) options.onFound?.(server);
+          if (isNew(server)) options.onFound?.(server);
         },
       });
     } catch (error) {
@@ -321,7 +376,7 @@ class RemoteServerManager {
     }
     return {
       moved: [],
-      found: discovered.filter(server => !savedEndpoints.has(trimSlash(server.endpoint))),
+      found: discovered.filter(isNew),
     };
   }
 
@@ -381,6 +436,27 @@ class RemoteServerManager {
 
   async storeApiKey(serverId: string, apiKey: string): Promise<void> {
     return storeApiKeyImpl(serverId, apiKey);
+  }
+
+  /** Download a catalog model on an Off Grid AI Desktop, through its gateway. */
+  async startDesktopDownload(serverId: string, modelId: string, signal?: AbortSignal): Promise<void> {
+    await startOffGridDesktopDownload(await this.desktopServer(serverId), modelId, signal);
+  }
+
+  /** How a download on an Off Grid AI Desktop is going. */
+  async readDesktopDownload(serverId: string, modelId: string, signal?: AbortSignal): Promise<OffGridDesktopDownload> {
+    return readOffGridDesktopDownload(await this.desktopServer(serverId), modelId, signal);
+  }
+
+  /** The Desktop's memory and installed models. */
+  async readDesktopRoom(serverId: string, signal?: AbortSignal): Promise<OffGridDesktopRoom> {
+    return readOffGridDesktopRoom(await this.desktopServer(serverId), signal);
+  }
+
+  private async desktopServer(serverId: string): Promise<RemoteServer> {
+    const server = useRemoteServerStore.getState().getServerById(serverId);
+    if (server?.modelManagement !== 'offgrid-desktop-v1') throw new Error('Connect Off Grid AI Desktop first.');
+    return { ...server, apiKey: (await this.getApiKey(serverId)) ?? undefined };
   }
 
   async getApiKey(serverId: string): Promise<string | null> {

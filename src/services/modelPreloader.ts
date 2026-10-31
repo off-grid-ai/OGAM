@@ -1,3 +1,4 @@
+import { videoSeam } from '../bootstrap/videoSeam';
 /**
  * Boot-time model preloader.
  *
@@ -12,8 +13,7 @@
 import { useAppStore, useWhisperStore } from '../stores';
 import { activeModelService } from './activeModelService';
 import { estimateTextModelMemoryMB } from './activeModelService/memory';
-import { WHISPER_MODELS } from './whisperService';
-import { withRemoteCatalog } from '../stores/modelCatalogStore';
+import { transcriptionResidentSizeMB } from './whisperModels';
 import { modelResidencyManager } from './modelResidency';
 import { generationService } from './generationService';
 import { imageGenerationService } from './imageGenerationService';
@@ -36,6 +36,7 @@ export function abortPreload(): void {
 function isGenerationActive(): boolean {
   return (
     generationService.getState().isGenerating ||
+    videoSeam.isBusy() ||
     imageGenerationService.getState().isGenerating
   );
 }
@@ -62,7 +63,7 @@ async function preloadTts(): Promise<void> {
 async function preloadStt(): Promise<void> {
   const whisper = useWhisperStore.getState();
   if (!whisper.downloadedModelId || whisper.isModelLoaded) return;
-  const sizeMB = withRemoteCatalog('transcription', WHISPER_MODELS).find(m => m.id === whisper.downloadedModelId)?.size ?? 200;
+  const sizeMB = transcriptionResidentSizeMB(whisper.downloadedModelId);
   if (!modelResidencyManager.canLoadWithoutEviction({ key: 'whisper', sizeMB })) return;
   await whisper.loadModel();
 }

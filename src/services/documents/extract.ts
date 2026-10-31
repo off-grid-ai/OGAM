@@ -4,12 +4,9 @@
 import RNFS from 'react-native-fs';
 import { textParts, type DocumentPage, type ExtractPort } from '@offgrid/rag/documents';
 import { pdfExtractor } from '../pdfExtractor';
+import { localPath } from './project';
 
 const PAGE_BATCH = 50;
-
-function localPath(path: string): string {
-  return path.replace(/^file:\/\//, '');
-}
 
 export const documentExtractor: ExtractPort = {
   async extract(source, { signal, onPages }) {

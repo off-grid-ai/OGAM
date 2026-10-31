@@ -29,7 +29,7 @@ describe('the expired Pro purchase route', () => {
     await waitFor(() =>
       expect(navigation.resetRoot).toHaveBeenCalledWith({
         index: 1,
-        routes: [{ name: 'Main' }, { name: 'ProDetail' }],
+        routes: [{ name: 'Main', params: { screen: 'HomeTab' } }, { name: 'ProDetail' }],
       }),
     );
   });
@@ -45,7 +45,7 @@ describe('the expired Pro purchase route', () => {
     await waitFor(() =>
       expect(navigation.resetRoot).toHaveBeenCalledWith({
         index: 1,
-        routes: [{ name: 'Main' }, { name: 'ProDetail' }],
+        routes: [{ name: 'Main', params: { screen: 'HomeTab' } }, { name: 'ProDetail' }],
       }),
     );
   });

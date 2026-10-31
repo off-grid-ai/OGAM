@@ -12,6 +12,7 @@ type RemoteProviderType = 'openai-compatible' | 'anthropic';
 export interface RemoteMediaModelIds {
   text?: string;
   image?: string;
+  video?: string;
   transcription?: string;
   voice?: string;
 }
@@ -33,6 +34,7 @@ export type RemoteModelCatalog = Partial<
 
 export interface RemoteServerCapabilities {
   imageGeneration: boolean;
+  videoGeneration: boolean;
   transcription: boolean;
   voice: boolean;
 }
@@ -63,6 +65,8 @@ export interface RemoteServer {
   modelCatalog?: RemoteModelCatalog;
   /** A detected model-management contract. Generic OpenAI-compatible servers leave this unset. */
   modelManagement?: 'offgrid-desktop-v1';
+  /** An Off Grid AI Desktop's Sync device id: the same computer whatever address it has today. */
+  computerId?: string;
 }
 
 /** Model presence is the one source of truth for available remote media work. */
@@ -71,6 +75,7 @@ export function remoteServerCapabilities(
 ): RemoteServerCapabilities {
   return {
     imageGeneration: !!server.mediaModels?.image?.trim(),
+    videoGeneration: !!server.mediaModels?.video?.trim(),
     transcription: !!server.mediaModels?.transcription?.trim(),
     voice: !!server.mediaModels?.voice?.trim(),
   };

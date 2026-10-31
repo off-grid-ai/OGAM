@@ -26,6 +26,8 @@ const mockGetImageModelRecommendation = jest.fn();
 const mockFetchAvailableModels = jest.fn();
 const mockFetchAvailableCoreMLModels = jest.fn();
 const mockGuessStyle = jest.fn();
+// The SD catalog is listed ahead of fetched packs; these tests cover the fetched packs.
+let mockSDImageModels: any[] = [];
 const mockMatchesSdVersionFilter = jest.fn();
 const mockCancelSynthetic = jest.fn();
 const mockStoreRemove = jest.fn();
@@ -47,6 +49,8 @@ jest.mock('../../../../src/services', () => ({
   },
   hardwareService: {
     getSoCInfo: (...a: any[]) => mockGetSoCInfo(...a),
+    // The phone's memory picks which sd.cpp models are recommended (9061db452).
+    getTotalMemoryGB: () => 8,
     getImageModelRecommendation: (...a: any[]) => mockGetImageModelRecommendation(...a),
   },
   backgroundDownloadService: {
@@ -61,6 +65,10 @@ jest.mock('../../../../src/screens/ModelsScreen/imageDownloadResume', () => ({
 jest.mock('../../../../src/services/huggingFaceModelBrowser', () => ({
   fetchAvailableModels: (...a: any[]) => mockFetchAvailableModels(...a),
   guessStyle: (...a: any[]) => mockGuessStyle(...a),
+  getOfferedSDImageModels: () => mockSDImageModels,
+  // The sd.cpp models whose memory need fits the phone (9061db452).
+  getRecommendedSDImageModels: (ramGB: number) =>
+    mockSDImageModels.filter((model: any) => !model.minRamGb || model.minRamGb <= ramGB),
 }));
 
 jest.mock('../../../../src/services/coreMLModelBrowser', () => ({
@@ -154,6 +162,17 @@ describe('loadHFModels', () => {
 
     expect(mockFetchAvailableModels).toHaveBeenCalledWith(true, { skipQnn: true });
     expect(result.current.hfModelsError).toBeNull();
+  });
+
+  it('lists the SD catalog ahead of the fetched packs', async () => {
+    mockSDImageModels = [{ id: 'sd-1', name: 'SD', backend: 'sd' }];
+    mockGetSoCInfo.mockResolvedValueOnce({ hasNPU: true });
+    mockFetchAvailableModels.mockResolvedValueOnce([{ id: 'mnn-1', name: 'MNN', backend: 'mnn' }]);
+    const { result } = renderHook(() => useImageModels(setAlertState));
+    await act(async () => { await result.current.loadHFModels(); });
+    mockSDImageModels = [];
+
+    expect(result.current.availableHFModels.map((m: any) => m.id)).toEqual(['sd-1', 'mnn-1']);
   });
 
   it('captures error.message into hfModelsError', async () => {

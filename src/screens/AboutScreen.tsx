@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Linking, ScrollView, Image, StyleSheet } from 'react-native';
+import { View, Text, Linking, ScrollView, Image, StyleSheet } from 'react-native';
+import { TouchableOpacity } from '../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -39,7 +40,7 @@ export const AboutScreen: React.FC = () => {
           <Text style={styles.appName}>Off Grid AI</Text>
           <Text style={styles.version}>Version {appVersion()}</Text>
           <Text style={styles.description}>
-            Local AI that runs entirely on your phone. No cloud, no telemetry, nothing leaves the device.
+            Local AI that runs entirely on your phone. Your chats and files never leave your device.
           </Text>
         </View>
 

@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, TextInput, TouchableOpacity, type StyleProp, type ViewStyle } from 'react-native';
+import { View, TextInput, type StyleProp, type ViewStyle } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';

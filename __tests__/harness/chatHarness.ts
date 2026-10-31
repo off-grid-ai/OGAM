@@ -45,6 +45,8 @@ export interface ChatHarnessOptions {
   audio?: boolean;
   /** Install the driveable whisper.rn STT fake (for chat-mode voice input flows). */
   whisper?: boolean;
+  /** (llama) A llama.rn audio projector starts, as Qwen3-ASR's does (speech-to-text on llama.rn). */
+  llamaAudio?: boolean;
   /** Install the stateful background-download native fake (drive DownloadProgress/Complete/Error
    *  events through the real backgroundDownloadService — e.g. an in-flight STT model download). */
   download?: boolean;
@@ -218,6 +220,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     llamaChatTemplate: opts.chatTemplate,
     llamaModelInfo: opts.llamaModelInfo,
     llamaVision: opts.engine === 'llama' && opts.vision,
+    llamaAudio: opts.engine === 'llama' && opts.llamaAudio,
     deviceHardware: opts.deviceHardware,
     socModel: opts.socModel,
     fs: true,

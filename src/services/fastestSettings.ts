@@ -18,6 +18,8 @@ import { buildModelParams } from './llmHelpers';
 import { readModelFileType } from './modelHeader';
 import { modelResidencyManager } from './modelResidency';
 import { activeModelService } from './activeModelService';
+import { llmPlacement, placeOtherModalities } from './modalityPlacement';
+import { savePlacements, type ModalityPlacement } from './modalityBackends';
 
 /**
  * "Use fastest settings" on a phone: gather the device facts, measure each backend the device
@@ -132,6 +134,8 @@ export interface FastestSettingsOutcome {
   backend: MobileBackend;
   /** False when the run was cancelled: nothing was written. */
   applied: boolean;
+  /** Where every installed modality runs now, for the one-line summary. */
+  placements: ModalityPlacement[];
 }
 
 /**
@@ -145,7 +149,7 @@ export async function applyFastestSettings(opts: { modelPath?: string; signal?: 
   let benched: MobileBackend | null = useAppStore.getState().speedBenchmarkBackend ?? null;
   if (opts.modelPath && row.benchBackends.length > 1) {
     const results = await benchmarkBackends(opts.modelPath, row.benchBackends, opts.signal);
-    if (opts.signal?.aborted) return { backend: row.defaultBackend, applied: false };
+    if (opts.signal?.aborted) return { backend: row.defaultBackend, applied: false, placements: [] };
     benched = fastestBenchedBackend(results, row.defaultBackend);
     useAppStore.getState().setSpeedBenchmarkBackend(benched as InferenceBackend);
   }
@@ -167,6 +171,11 @@ export async function applyFastestSettings(opts: { modelPath?: string; signal?: 
     speculativeDecoding: plan.mtp,
     speculativeDraftMax: plan.mtpDraftTokens,
   });
-  logger.log(`[SPEED] fastest settings applied: backend=${plan.backend}`);
-  return { backend: plan.backend, applied: true };
+  // Every other installed modality: measured (search) or decided by what its engine runs here.
+  const others = await placeOtherModalities(opts.signal);
+  const placements = [llmPlacement(plan.backend), ...others];
+  if (!opts.signal?.aborted) savePlacements(placements);
+  const summary = placements.map(item => [item.modality, item.place].join('=')).join(' ');
+  logger.log(`[SPEED] fastest settings applied: ${summary}`);
+  return { backend: plan.backend, applied: true, placements };
 }

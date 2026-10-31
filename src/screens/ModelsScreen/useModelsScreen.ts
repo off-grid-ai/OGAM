@@ -21,6 +21,8 @@ import { useImageModels } from './useImageModels';
 import { importGgufFiles, getErrorMessage } from './importHelpers';
 import { isPickerStuck } from '../../utils/pickerErrorUtils';
 import { isLiteRTFileName } from '../../utils/modelHelpers';
+import { flowStarted } from '../../services/analytics/analytics';
+import { subScreenShown } from '../../services/analytics/interactions';
 
 type ZipImportDeps = {
   addDownloadedImageModel: (model: ONNXImageModel) => void;
@@ -89,7 +91,11 @@ export function useModelsScreen() {
   const image = useImageModels(setAlertState);
 
   useEffect(() => {
-    if (activeTab === 'image' && image.availableHFModels.length === 0 && !image.hfModelsLoading) {
+    subScreenShown(activeTab);
+    if (activeTab === 'image') flowStarted('image_setup', 'opened');
+    if (activeTab === 'video') flowStarted('video_setup', 'opened');
+    if (activeTab === 'voice' || activeTab === 'transcription') flowStarted('voice_setup', 'opened');
+    if (activeTab === 'image' && !image.hfCatalogLoaded && !image.hfModelsLoading) {
       image.loadHFModels();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

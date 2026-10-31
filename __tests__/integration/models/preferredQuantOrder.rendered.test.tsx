@@ -60,7 +60,7 @@ async function openDetailFileOrder(opts: { platform: 'android' | 'ios'; files?: 
     const { BackendSelector } = require('../../../src/components/settings/textGenAdvancedSections');
     const settings = render(React.createElement(BackendSelector, {}));
     fireEvent.press(settings.getByTestId('backend-opencl-button'));
-    await waitFor(() => expect(settings.queryByText('GPU Layers (OpenCL)')).not.toBeNull());
+    await waitFor(() => expect(settings.queryByText('Text GPU Layers (OpenCL)')).not.toBeNull());
     settings.unmount();
   }
 

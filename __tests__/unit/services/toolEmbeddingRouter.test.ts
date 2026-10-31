@@ -9,6 +9,8 @@ const mockEmbed = jest.fn();
 const mockLoad = jest.fn();
 jest.mock('../../../src/services/rag/embedding', () => ({
   embeddingService: {
+    runExclusive: <T,>(operation: () => Promise<T>) => operation(),
+    getModelId: () => 'bundled:all-MiniLM-L6-v2-Q8_0',
     load: (...a: unknown[]) => mockLoad(...a),
     embed: (...a: unknown[]) => mockEmbed(...a),
   },

@@ -1,6 +1,6 @@
 /**
  * HAPPY-PATH (UI, BEHAVIORAL — graceful OOM surface) — when an image generation can't fit the image model in
- * RAM, the user sees the dismissible "Not Enough Memory" card with a "Run anyway" override instead of a crash.
+ * RAM, the user sees the dismissible "Not enough memory" card with a "Run anyway" override instead of a crash.
  *
  * Heavy entry point on the REAL ChatScreen: the user turns image-mode ON and sends. The device is now low on
  * RAM (dropped below the image model's need AFTER the text model loaded), so the REAL activeModelService /
@@ -18,7 +18,7 @@ jest.mock('@react-navigation/native', () => ({
   useIsFocused: () => true,
 }));
 
-describe('happy — image-gen OOM surfaces the graceful "Not Enough Memory" card (heavy entry point)', () => {
+describe('happy — image-gen OOM surfaces the graceful "Not enough memory" card (heavy entry point)', () => {
   it('refuses the over-budget image load and shows the card with Run anyway (no crash, no image)', async () => {
     const h = await setupChatScreen({ engine: 'litert', platform: 'ios' }); // generous RAM for text-model setup
     h.render();
@@ -37,7 +37,7 @@ describe('happy — image-gen OOM surfaces the graceful "Not Enough Memory" card
     await h.tapSend('a fox in the snow');
 
     // Graceful outcome: the user sees the memory card + the override, and NO image was generated.
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/Not Enough Memory/)).not.toBeNull(); });
+    await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('model-failure-load-anyway-image')).not.toBeNull(); });
     expect(h.view!.queryByText('Run anyway')).not.toBeNull();
     expect(h.boundary.diffusion.calls.generateImage.length).toBe(0);
   });

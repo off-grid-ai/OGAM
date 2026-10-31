@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
+import { TouchableOpacity } from '../../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
@@ -14,10 +15,11 @@ import {
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
 import { createStyles } from './styles';
-import { SystemPromptSection } from './SystemPromptSection';
+import { SystemPromptSection } from '../../components/settings/SystemPromptSection';
 import { ImageGenerationSection } from './ImageGenerationSection';
 import { TextGenerationSection } from './TextGenerationSection';
 import { VoiceTurnSettings } from '../../components/settings/voiceSections';
+import { GeneralGenerationControls } from '../../components/settings/GeneralGenerationControls';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import {
@@ -33,6 +35,7 @@ export const ModelSettingsScreen: React.FC = () => {
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
   const [promptOpen, setPromptOpen] = useState(false);
+  const [generalOpen, setGeneralOpen] = useState(false);
   const [imageOpen, setImageOpen] = useState(false);
   const [textOpen, setTextOpen] = useState(false);
   const [ttsOpen, setTtsOpen] = useState(false);
@@ -41,25 +44,26 @@ export const ModelSettingsScreen: React.FC = () => {
   // TTS is a pro feature injected via a slot (same as the in-chat generation settings). Free builds have no
   // slot → the section is not shown at all.
   const TtsSection = getSlot(SLOTS.generationSettingsTts);
+  const VideoSettings = getSlot(SLOTS.generationSettingsVideo);
   const { modelName: sttModelName, isRemote: isRemoteTranscription } =
     useTranscriptionModelSetting();
 
   const handleReset = () => {
     setAlertState(
       showAlert(
-      'Reset All Settings',
-      'This will restore all model settings to their defaults. You may need to reload the model for changes to take effect.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
+        'Reset All Settings',
+        'This will restore all model settings to their defaults. You may need to reload the model for changes to take effect.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Reset',
+            style: 'destructive',
             onPress: () => {
               resetSettings();
               setAlertState(hideAlert());
             },
-        },
-      ],
+          },
+        ],
       ),
     );
   };
@@ -81,6 +85,18 @@ export const ModelSettingsScreen: React.FC = () => {
         style={styles.scrollView}
         contentContainerStyle={styles.content}
       >
+        <TouchableOpacity
+          style={styles.accordionHeader}
+          onPress={() => setGeneralOpen(!generalOpen)}
+          activeOpacity={0.7}
+          testID="general-generation-accordion"
+          accessibilityRole="button"
+          accessibilityState={{ expanded: generalOpen }}
+        >
+          <Text style={styles.accordionTitle}>General</Text>
+          <Icon name={generalOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        {generalOpen && <View style={styles.settingSection}><GeneralGenerationControls /></View>}
           <TouchableOpacity
             style={styles.accordionHeader}
             onPress={() => setPromptOpen(!promptOpen)}
@@ -110,6 +126,7 @@ export const ModelSettingsScreen: React.FC = () => {
           />
         </TouchableOpacity>
         {imageOpen && <ImageGenerationSection />}
+        {VideoSettings && <VideoSettings />}
 
         <TouchableOpacity
           style={styles.accordionHeader}

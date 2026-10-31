@@ -12,11 +12,9 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    // The tab row below continues this surface and casts the bar's shadow.
     backgroundColor: colors.surface,
-    ...shadows.small,
-    zIndex: 1,
+    zIndex: 2,
   },
   backButton: {
     padding: SPACING.xs,
@@ -108,14 +106,46 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   sectionList: {
     flex: 1,
+    paddingTop: SPACING.md,
   },
   sectionsContainer: {
     flex: 1,
   },
-  sectionHalf: {
+  // The Models screen's tabs: body text, muted until chosen, an emerald line under the open one.
+  tabRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: SPACING.lg,
+    // One raised bar with the header: the header's surface, a shadow under it, above the list.
+    backgroundColor: colors.surface,
+    ...shadows.edge,
+    zIndex: 1,
+  },
+  tabs: {
     flex: 1,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    flexDirection: 'row' as const,
+    gap: SPACING.lg,
+  },
+  tab: { paddingTop: SPACING.md, alignItems: 'center' as const },
+  tabText: { ...TYPOGRAPHY.body, color: colors.textMuted },
+  tabTextActive: { color: colors.text },
+  tabCount: { ...TYPOGRAPHY.meta, color: colors.textMuted },
+  tabIndicator: {
+    height: 2,
+    backgroundColor: colors.primary,
+    marginTop: SPACING.sm,
+    alignSelf: 'stretch' as const,
+  },
+  tabIndicatorOff: { backgroundColor: 'transparent' },
+  tabAdd: { width: 44, height: 44, alignItems: 'center' as const, justifyContent: 'center' as const },
+  hidden: { display: 'none' as const },
+  // A tab names the section, so its header carries only the actions, on the right.
+  sectionActionsHeader: {
+    flexDirection: 'row' as const,
+    justifyContent: 'flex-end' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
   },
   sectionContent: {
     flex: 1,

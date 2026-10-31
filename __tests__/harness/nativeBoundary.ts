@@ -419,6 +419,7 @@ function makeLlamaFake(
   modelInfo?: Record<string, unknown>,
   fs?: NativeFileSystemBoundary,
   vision = false,
+  audio = false,
 ): LlamaFake {
   const calls: LlamaFake['calls'] = {
     completion: [],
@@ -464,6 +465,13 @@ function makeLlamaFake(
   // Sticky Metal backend error (ggml-metal-context has_error): set when the app goes to background with a
   // completion in flight on Metal; cleared only by a fresh initLlama (a new native context).
   let backendFault = false;
+  // llama.cpp's own log (llama.rn toggleNativeLog / addNativeLogListener). While a lazy tool grammar
+  // waits for its trigger, llama.cpp logs every sampled token, with the token's text, at info level.
+  let nativeLogOn = false;
+  const nativeLogListeners: Array<(level: string, text: string) => void> = [];
+  const nativeLog = (level: string, text: string) => {
+    if (nativeLogOn) for (const listener of nativeLogListeners) listener(level, text);
+  };
   let completionInFlight = false;
   // The device shape of a completion that the backend fault ended: what streamed so far, no EOS, no stop
   // word, no cap, NOT interrupted (rn-completion.cpp just sets has_next_token=false on the failed decode).
@@ -570,6 +578,11 @@ function makeLlamaFake(
             if (backendFault) break; // the GPU refused the next decode (app went to background)
             acc += c;
             streamed = acc;
+            // A real token is about a word: log the word this character ends.
+            const word = /(\S+)$/.exec(acc.slice(0, -1))?.[1];
+            if (/\s/.test(c) && word) {
+              nativeLog('info', `Grammar still awaiting trigger after token ${acc.length} (\` ${word}\`)`);
+            }
             onToken({ token: c, content: acc });
             if (
               scripted.pauseAfter &&
@@ -691,7 +704,25 @@ function makeLlamaFake(
       setTimeout(() => onRelease?.(), 50);
     }),
     tokenize: jest.fn().mockResolvedValue({ tokens: [1, 2, 3] }),
-    initMultimodal: jest.fn().mockResolvedValue(vision),
+    initMultimodal: jest.fn().mockResolvedValue(vision || audio),
+    // llama.rn renders the chat with the model's template; each media part becomes its marker and
+    // its path joins media_paths, in order.
+    getFormattedChat: jest.fn(async (messages: Array<{ role: string; content?: unknown }>) => {
+      const mediaPaths: string[] = [];
+      const turns = messages.map(message => {
+        const parts = Array.isArray(message.content) ? message.content : [{ type: 'text', text: message.content }];
+        const body = parts.map((part: { type: string; text?: string; input_audio?: { url?: string }; image_url?: { url?: string } }) => {
+          if (part.type === 'input_audio' || part.type === 'image_url') {
+            mediaPaths.push(String(part.input_audio?.url ?? part.image_url?.url ?? '').replace(/^file:\/\//, ''));
+            return '<__media__>';
+          }
+          return part.text ?? '';
+        }).join('');
+        return `<|im_start|>${message.role}\n${body}<|im_end|>\n`;
+      }).join('');
+      const prompt = `${turns}<|im_start|>assistant\n`;
+      return { type: 'jinja', prompt, has_media: mediaPaths.length > 0, media_paths: mediaPaths };
+    }),
     // The post-init multimodal probe. A scripted hold parks the caller here — the real device's
     // window between context init and capability detection — until releaseMultimodalHold().
     getMultimodalSupport: jest.fn(async () => {
@@ -703,7 +734,7 @@ function makeLlamaFake(
         });
         mmHoldEngaged = false;
       }
-      return { vision, audio: false };
+      return { vision, audio };
     }),
     // Embedding boundary (embedding-model contexts, initLlama({embedding:true})): return a device-shaped
     // 384-dim vector derived from the text so RAG cosine ranking is real. Matches all-MiniLM-L6-v2 (384).
@@ -736,6 +767,13 @@ function makeLlamaFake(
 
   const module: Record<string, jest.Mock> = {
     loadLlamaModelInfo: jest.fn(async () => modelInfo ?? {}),
+    toggleNativeLog: jest.fn(async (enabled: boolean) => {
+      nativeLogOn = enabled;
+    }),
+    addNativeLogListener: jest.fn((listener: (level: string, text: string) => void) => {
+      nativeLogListeners.push(listener);
+      return { remove: () => nativeLogListeners.splice(nativeLogListeners.indexOf(listener), 1) };
+    }),
     // Faithful to llama.rn/llama.cpp: the native loader reports gpu=true (+ the offload device
     // list) when it actually offloaded layers (n_gpu_layers > 0), and gpu=false for a pure-CPU
     // init. Echo that from the requested load params so the REAL captureGpuInfo → GenerationMeta
@@ -959,6 +997,9 @@ export interface DownloadRow {
   bytesDownloaded?: number;
   totalBytes?: number;
   reason?: string;
+  modelKey?: string;
+  combinedTotalBytes?: number;
+  createdAt?: number;
 }
 
 export interface DownloadFake {
@@ -974,6 +1015,12 @@ export interface DownloadFake {
 
 function makeDownloadFake(handle: FakeEmitterHandle): DownloadFake {
   const rows = new Map<string, DownloadRow>();
+  // A new id no row has, seeded ones included (a row kept across a restart may hold "dl-2").
+  const nextDownloadId = () => {
+    let n = rows.size + 1;
+    while (rows.has(`dl-${n}`)) n += 1;
+    return `dl-${n}`;
+  };
   const module: Record<string, jest.Mock> = {
     startDownload: jest.fn(async (params: DownloadRow) => {
       const row: DownloadRow = {
@@ -981,7 +1028,7 @@ function makeDownloadFake(handle: FakeEmitterHandle): DownloadFake {
         bytesDownloaded: 0,
         totalBytes: 0,
         ...params,
-        downloadId: params.downloadId ?? `dl-${rows.size + 1}`,
+        downloadId: params.downloadId ?? nextDownloadId(),
       };
       rows.set(row.downloadId, row);
       return row;
@@ -1183,6 +1230,8 @@ export interface RamProfile {
   totalBytes: number;
   /** Truly-free RAM right now, in bytes (os_proc_available). */
   availBytes: number;
+  /** iOS only: pages the whole phone can still hand out (free + inactive + purgeable). Unset: not reported. */
+  systemAvailBytes?: number;
 }
 
 export const GB = 1024 * 1024 * 1024;
@@ -1216,6 +1265,8 @@ export interface InstallOpts {
   llamaModelInfo?: Record<string, unknown>;
   /** The projector starts: initMultimodal resolves true and the context reports vision support. */
   llamaVision?: boolean;
+  /** An audio projector starts: initMultimodal resolves true and the context reports audio support. */
+  llamaAudio?: boolean;
   /** Seed a stateful background-download native module (boundary.download). */
   download?: boolean;
   /** Replace the global whisper.rn stub with a driveable STT context (boundary.whisper). */
@@ -1276,7 +1327,8 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   // context FREES memory (footprint drops, available rises), so the post-unload reclaim barrier
   // (memoryBudget.awaitMemoryReclaim) observes the drop and resolves — instead of timing out on a
   // frozen snapshot. A released llama context frees roughly a heavy model's worth (~3GB).
-  const memState = {
+  const memState: { availBytes: number; footprintBytes: number; systemAvailBytes?: number } = {
+    systemAvailBytes: ram.systemAvailBytes,
     availBytes: ram.availBytes,
     footprintBytes: ram.totalBytes - ram.availBytes,
   };
@@ -1284,6 +1336,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     const freed = Math.min(memState.footprintBytes, 3 * GB);
     memState.footprintBytes -= freed;
     memState.availBytes += freed;
+    if (memState.systemAvailBytes !== undefined) memState.systemAvailBytes += freed;
   };
 
   const litert = makeLiteRTFake(handle);
@@ -1298,7 +1351,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
 
   // Scriptable llama.rn: override the global stub so completion output is under test control.
   const llamaFake = opts.llama
-    ? makeLlamaFake(freeModelMemory, opts.llamaChatTemplate, opts.llamaModelInfo, fsFake, opts.llamaVision)
+    ? makeLlamaFake(freeModelMemory, opts.llamaChatTemplate, opts.llamaModelInfo, fsFake, opts.llamaVision, opts.llamaAudio)
     : undefined;
   if (llamaFake) jest.doMock('llama.rn', () => llamaFake.module);
 
@@ -1311,6 +1364,11 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   // Both platform names point at the same fake; localDreamGenerator's Platform.select picks one.
   RN.NativeModules.LocalDreamModule = diffusion.module;
   RN.NativeModules.CoreMLDiffusionModule = diffusion.module;
+  // The video player's commands (seek, pause, volume) go to the native player: they resolve, and the
+  // player's props (paused, muted) stay observable.
+  RN.NativeModules.VideoManager = new Proxy({}, { get: () => jest.fn(() => Promise.resolve()) });
+  // The system share sheet: what was handed to it (a file path and its type).
+  RN.NativeModules.MediaShareModule = { shareFile: jest.fn(async () => true) };
   if (opts.socModel) {
     const socModel = opts.socModel;
     diffusion.module.getSoCModel = jest.fn(async () => socModel);
@@ -1337,6 +1395,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     // must be able to SEE the footprint drop, exactly as it does on device.
     getMemoryInfo: jest.fn(async () => ({
       processAvailableBytes: memState.availBytes,
+      ...(memState.systemAvailBytes === undefined ? {} : { systemAvailableBytes: memState.systemAvailBytes }),
       footprintBytes: memState.footprintBytes,
     })),
   };
@@ -1406,6 +1465,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
 
   const setRam = (profile: RamProfile) => {
     memState.availBytes = profile.availBytes;
+    memState.systemAvailBytes = profile.systemAvailBytes;
     memState.footprintBytes = profile.totalBytes - profile.availBytes;
     (DeviceInfo.getTotalMemory as jest.Mock).mockResolvedValue(
       profile.totalBytes,

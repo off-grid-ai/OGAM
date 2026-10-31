@@ -87,13 +87,24 @@ let mockDownloadedImageModels: any[] = [];
 let mockConversations: any[] = [];
 let mockStaleDownloadStoreEntries: any[] = [];
 const mockRemoveFromStore = jest.fn();
+const mockNoVideos: any[] = [];
+const mockNoImages: any[] = [];
+const mockAppState = () => ({
+  downloadedModels: mockDownloadedModels,
+  downloadedImageModels: mockDownloadedImageModels,
+  downloadedVideoModels: mockNoVideos,
+  generatedImages: mockNoImages,
+  generatedVideos: mockNoVideos,
+});
 
 jest.mock('../../../src/stores', () => ({
-  useAppStore: jest.fn(() => ({
-    downloadedModels: mockDownloadedModels,
-    downloadedImageModels: mockDownloadedImageModels,
-    generatedImages: [],
-  })),
+  // The screen reads the store whole, through selectors and through getState (the video count and
+  // the storage breakdown, 8bc6073e3), as the real store allows. Empty lists keep one identity, as
+  // the real store's do between renders.
+  useAppStore: Object.assign(
+    jest.fn((selector?: any) => (selector ? selector(mockAppState()) : mockAppState())),
+    { getState: () => mockAppState() },
+  ),
   useChatStore: jest.fn((selector?: any) => {
     const state = { conversations: mockConversations };
     return selector ? selector(state) : state;

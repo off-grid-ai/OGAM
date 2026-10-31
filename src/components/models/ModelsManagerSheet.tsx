@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import { LoadingDots } from '../LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../../components/AppSheet';
@@ -7,14 +8,14 @@ import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
-import { useResidentRows, ejectResident, type ModelRowType } from './useResidentRows';
+import { useResidentRows, ejectResident, type ModelRowLabels, type ModelRowType } from './useResidentRows';
 import { remoteServerManager } from '../../services/remoteServerManager';
 import { useRemoteServerStore } from '../../stores/remoteServerStore';
 import logger from '../../utils/logger';
 
 // Defined in useResidentRows (breaks the sheet<->hook import cycle); re-exported here so existing
 // consumers (Home, Chat, ModelsSummaryRow) keep importing it from the sheet.
-export type { ModelRowType };
+export type { ModelRowLabels, ModelRowType };
 
 /** Minimal loading shape so this sheet is screen-agnostic (home + chat). */
 type LoadingState = { isLoading: boolean; type?: string | null };
@@ -24,8 +25,10 @@ type RowDef = { type: ModelRowType; icon: string; label: string };
 const ROWS: RowDef[] = [
   { type: 'text', icon: 'message-square', label: 'Text' },
   { type: 'image', icon: 'image', label: 'Image' },
+  { type: 'video', icon: 'video', label: 'Video' },
   { type: 'voice', icon: 'volume-2', label: 'Voice' },
   { type: 'speech', icon: 'mic', label: 'Speech' },
+  { type: 'search', icon: 'search', label: 'Search' },
 ];
 
 type Props = {
@@ -33,7 +36,7 @@ type Props = {
   onClose: () => void;
   /** Fired once the sheet has fully closed — used to open a picker safely after. */
   onClosed?: () => void;
-  labels: Record<ModelRowType, string>;
+  labels: ModelRowLabels;
   /** Rows whose active selection lives on a REMOTE server (gateway) — shown with a cloud marker,
    *  matching the chat header's remote indicator, so a remote model is never mistaken for local. */
   remote?: Partial<Record<ModelRowType, boolean>>;
@@ -50,7 +53,16 @@ type Props = {
  * type's picker.
  */
 export const ModelsManagerSheet: React.FC<Props> = ({
-  visible, onClose, onClosed, labels, remote, loadingState, isEjecting, hasActiveModel, onOpenRow, onEject,
+  visible,
+  onClose,
+  onClosed,
+  labels,
+  remote,
+  loadingState,
+  isEjecting,
+  hasActiveModel,
+  onOpenRow,
+  onEject,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -66,7 +78,9 @@ export const ModelsManagerSheet: React.FC<Props> = ({
     setEjectingRow(row);
     logger.log(`[MODEL-SM] sheet eject → ${resident.type} (${resident.key}) ~${(resident.sizeMB / 1024).toFixed(1)}GB`);
     ejectResident(resident)
-      .catch((err) => logger.log(`[MODEL-SM] sheet eject ${resident.key} failed:`, err))
+      .catch(err =>
+        logger.log(`[MODEL-SM] sheet eject ${resident.key} failed:`, err),
+      )
       .finally(() => setEjectingRow(null));
   };
   const refreshModels = async () => {
@@ -88,7 +102,7 @@ export const ModelsManagerSheet: React.FC<Props> = ({
           if (selection.activeServerId === server.id) {
             remoteServerManager.clearActiveRemoteTextModel();
           }
-          (['image', 'transcription', 'voice'] as const).forEach(category => {
+          (['image', 'video', 'transcription', 'voice'] as const).forEach(category => {
             if (selection.activeRemoteMediaServerIds[category] === server.id) {
               remoteServerManager.clearActiveRemoteMediaModel(category);
             }
@@ -105,11 +119,19 @@ export const ModelsManagerSheet: React.FC<Props> = ({
   };
 
   return (
-    <AppSheet visible={visible} onClose={onClose} onClosed={onClosed} title="MODELS" enableDynamicSizing>
+    <AppSheet
+      sheet="models-manager"
+      visible={visible}
+      onClose={onClose}
+      onClosed={onClosed}
+      title="MODELS"
+      enableDynamicSizing
+    >
       <View style={styles.content}>
-        {ROWS.map((row) => {
-          const isLoading = loadingState.isLoading && loadingState.type === row.type;
-          const value = labels[row.type];
+        {ROWS.map(row => {
+          const isLoading =
+            loadingState.isLoading && loadingState.type === row.type;
+          const value = (labels[row.type] ?? '—');
           const isSet = value && value !== '—';
           const resident = residentByRow[row.type];
           return (
@@ -124,9 +146,10 @@ export const ModelsManagerSheet: React.FC<Props> = ({
               <Text style={styles.label}>{row.label}</Text>
               {/* Fixed-width eject column right of the label so all four rows align; empty when not resident. */}
               <View style={styles.ejectSlot}>
-                {resident && (ejectingRow === row.type
-                  ? <LoadingDots color={colors.error} />
-                  : (
+                {resident &&
+                  (ejectingRow === row.type ? (
+                    <LoadingDots color={colors.error} />
+                  ) : (
                     <TouchableOpacity
                       testID={`models-row-${row.type}-eject`}
                       accessibilityLabel={`Eject ${row.label} model from memory`}
@@ -139,11 +162,19 @@ export const ModelsManagerSheet: React.FC<Props> = ({
               </View>
               <View style={styles.valueGroup}>
                 {resident && (
-                  <View testID={`models-row-${row.type}-ram`} style={styles.ramChip}>
-                    <Text style={styles.ramChipText}>{`${(resident.sizeMB / 1024).toFixed(1)} GB`}</Text>
+                  <View
+                    testID={`models-row-${row.type}-ram`}
+                    style={styles.ramChip}
+                  >
+                    <Text
+                      style={styles.ramChipText}
+                    >{`${(resident.sizeMB / 1024).toFixed(1)} GB`}</Text>
                   </View>
                 )}
-                <Text style={[styles.value, isSet && styles.valueSet]} numberOfLines={1}>
+                <Text
+                  style={[styles.value, isSet && styles.valueSet]}
+                  numberOfLines={1}
+                >
                   {isLoading ? 'Loading…' : value}
                 </Text>
                 {!!remote?.[row.type] && isSet && (
@@ -196,7 +227,12 @@ export const ModelsManagerSheet: React.FC<Props> = ({
 };
 
 const createStyles = (colors: ThemeColors) => ({
-  content: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm, paddingBottom: SPACING.md, gap: SPACING.sm as number },
+  content: {
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.md,
+    gap: SPACING.sm as number,
+  },
   row: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -208,9 +244,18 @@ const createStyles = (colors: ThemeColors) => ({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  label: { ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, color: colors.textMuted, width: 64 },
+  label: {
+    ...TYPOGRAPHY.label,
+    textTransform: 'uppercase' as const,
+    color: colors.textMuted,
+    width: 64,
+  },
   // Fixed-width control column right of the label — all four rows align whether or not resident.
-  ejectSlot: { width: 22, alignItems: 'center' as const, justifyContent: 'center' as const },
+  ejectSlot: {
+    width: 22,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
   ejectGlyph: { opacity: 0.8 },
   ramChip: {
     borderWidth: 1,
@@ -222,8 +267,19 @@ const createStyles = (colors: ThemeColors) => ({
   ramChipText: { ...TYPOGRAPHY.label, color: colors.textMuted },
   // Right-aligned value cluster: the name (shrinks/ellipsizes) with the remote cloud hugging its
   // right edge at the minimum token gap (xs) — the marker reads as part of the name, not the row.
-  valueGroup: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'flex-end' as const, gap: SPACING.xs },
-  value: { ...TYPOGRAPHY.body, color: colors.textMuted, flexShrink: 1, textAlign: 'right' as const },
+  valueGroup: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'flex-end' as const,
+    gap: SPACING.xs,
+  },
+  value: {
+    ...TYPOGRAPHY.body,
+    color: colors.textMuted,
+    flexShrink: 1,
+    textAlign: 'right' as const,
+  },
   valueSet: { color: colors.text },
   actions: {
     flexDirection: 'row' as const,

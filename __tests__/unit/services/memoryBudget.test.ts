@@ -156,11 +156,12 @@ describe('awaitMemoryReclaim — unload does not return until native memory is f
 });
 
 describe('fit budgets: an iPhone maps GGUF chat weights, nothing else', () => {
-  // A 12 GB iPhone reports ~11.2 GB. A 9B Q4_K_M with its vision file is 6.6 GB.
+  // A 12 GB iPhone reports ~11.2 GB. Gemma 4 12B Q4 is 7.3 GB: under the iPhone's 70% chat
+  // ceiling (7.8 GB), past the 62% everything else keeps (6.9 GB).
   const RAM = 11.2;
-  const BYTES = 6.6e9;
+  const BYTES = 7.3e9;
 
-  it('fits a 6.6 GB chat model on a 12 GB iPhone with the text budget', () => {
+  it('fits a 7.3 GB chat model on a 12 GB iPhone with the text budget', () => {
     expect(fileExceedsBudget(BYTES, RAM, textModelBudget())).toBe(false);
   });
 

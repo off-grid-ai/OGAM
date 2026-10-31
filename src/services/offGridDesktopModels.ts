@@ -13,8 +13,6 @@ import {
   remoteAuthorizationHeaders,
 } from './remoteTransportPolicy';
 
-const REQUEST_TIMEOUT_MS = 5_000;
-
 type GatewayCategory = RemoteModelCategory | null;
 
 interface GatewayCatalogModel {
@@ -45,6 +43,7 @@ function record(value: unknown): Record<string, unknown> | null {
 
 function categoryForKind(kind: string): GatewayCategory {
   if (kind === 'text' || kind === 'vision' || kind === 'chat') return 'text';
+  if (kind === 'video') return 'video';
   if (kind === 'image') return 'image';
   if (kind === 'voice' || kind === 'speech') return 'voice';
   if (kind === 'transcription') return 'transcription';
@@ -64,7 +63,11 @@ function modelFiles(value: unknown): string[] {
 
 function parseCatalog(value: unknown): GatewayCatalogModel[] | null {
   const payload = record(value);
-  if (!payload || !Array.isArray(payload.models) || !Array.isArray(payload.kinds)) {
+  if (
+    !payload ||
+    !Array.isArray(payload.models) ||
+    !Array.isArray(payload.kinds)
+  ) {
     return null;
   }
   const models: GatewayCatalogModel[] = [];
@@ -138,24 +141,17 @@ async function gatewayFetch(
   path: string,
   init: RequestInit = {},
 ): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let endpoint = server.endpoint;
   while (endpoint.endsWith('/')) endpoint = endpoint.slice(0, -1);
-  try {
-    return await fetch(`${endpoint}${path}`, {
-      ...init,
-      headers: {
-        Accept: 'application/json',
-        ...remoteAuthorizationHeaders(server.endpoint, server.apiKey),
-        ...init.headers,
-      },
-      signal: controller.signal,
-      redirect: REMOTE_FETCH_REDIRECT_POLICY,
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
+  return fetch(`${endpoint}${path}`, {
+    ...init,
+    headers: {
+      Accept: 'application/json',
+      ...remoteAuthorizationHeaders(server.endpoint, server.apiKey),
+      ...init.headers,
+    },
+    redirect: REMOTE_FETCH_REDIRECT_POLICY,
+  });
 }
 
 function optionFor(
@@ -194,6 +190,7 @@ function projectActive(
   active: Record<string, string | null>,
 ): RemoteMediaModelIds {
   const text = activeOptionId(catalog, 'text', active.text);
+  const video = activeOptionId(catalog, 'video', active.video);
   const image = activeOptionId(catalog, 'image', active.image);
   const transcription = activeOptionId(
     catalog,
@@ -208,6 +205,7 @@ function projectActive(
   return {
     ...(text ? { text } : {}),
     ...(image ? { image } : {}),
+    ...(video ? { video } : {}),
     ...(transcription ? { transcription } : {}),
     ...(voice ? { voice } : {}),
   };
@@ -227,7 +225,8 @@ function textModels(
     const predicted = predictGgufCapabilities(model);
     const hasLiveCapabilities = live?.capabilities !== undefined && live.capabilities !== null;
     const supportsThinking = hasLiveCapabilities
-      ? live?.capabilities?.includes('reasoning') === true || live?.reasoningMandatory === true
+      ? live?.capabilities?.includes('reasoning') === true ||
+        live?.reasoningMandatory === true
       : predicted.thinking;
     return [
       {
@@ -235,17 +234,18 @@ function textModels(
         name: model.name,
         serverId,
         capabilities: {
-          supportsVision: model.kind === 'vision' || live?.capabilities?.includes('vision') === true,
+          supportsVision:
+            model.kind === 'vision' ||
+            live?.capabilities?.includes('vision') === true,
           supportsToolCalling: hasLiveCapabilities
             ? live?.capabilities?.includes('tools') === true
-            // Desktop offloads idle models, so /v1/models can omit capabilities.
-            // Keep tools usable until the runtime makes an authoritative claim.
-            : true,
+            : // Desktop offloads idle models, so /v1/models can omit capabilities.
+              // Keep tools usable until the runtime makes an authoritative claim.
+              true,
           supportsThinking,
-          acceptsThinkingKwarg: model.id.startsWith('remote-vision:') && supportsThinking,
-          ...(live?.reasoningMandatory
-            ? { thinkingLevelsOnly: true }
-            : {}),
+          acceptsThinkingKwarg:
+            model.id.startsWith('remote-vision:') && supportsThinking,
+          ...(live?.reasoningMandatory ? { thinkingLevelsOnly: true } : {}),
         },
         lastUpdated: new Date().toISOString(),
       },
@@ -256,20 +256,17 @@ function textModels(
 /** Detect and read the complete installed-model contract exposed by Off Grid Desktop. */
 export async function readOffGridDesktopModelState(
   server: Pick<RemoteServer, 'id' | 'endpoint' | 'apiKey'>,
+  signal?: AbortSignal,
 ): Promise<OffGridDesktopModelState | null> {
   try {
     const [catalogResponse, installedResponse, activeResponse, liveResponse] =
       await Promise.all([
-        gatewayFetch(server, '/v1/models/catalog'),
-        gatewayFetch(server, '/v1/models/installed'),
-        gatewayFetch(server, '/v1/models/active'),
-        gatewayFetch(server, '/v1/models'),
+        gatewayFetch(server, '/v1/models/catalog', { signal }),
+        gatewayFetch(server, '/v1/models/installed', { signal }),
+        gatewayFetch(server, '/v1/models/active', { signal }),
+        gatewayFetch(server, '/v1/models', { signal }),
       ]);
-    if (
-      !catalogResponse.ok ||
-      !installedResponse.ok ||
-      !activeResponse.ok
-    ) {
+    if (!catalogResponse.ok || !installedResponse.ok || !activeResponse.ok) {
       return null;
     }
     const [catalogPayload, installedPayload, activePayload] =
@@ -291,23 +288,36 @@ export async function readOffGridDesktopModelState(
       active: projectActive(catalog, activeValues),
       textModels: textModels(server.id, models, installed, liveModels),
     };
-  } catch {
+  } catch (error) {
+    if (signal?.aborted) throw error;
     return null;
   }
 }
 
-/** Activate one installed Desktop model, then confirm Desktop reports that exact selection. */
+/**
+ * Activate one installed Desktop model, then confirm Desktop reports that exact selection.
+ * Loading a large model takes as long as it takes, so there is no deadline: `signal` is how the person stops it.
+ */
 export async function activateOffGridDesktopModel(
   server: RemoteServer,
   category: RemoteModelCategory,
   modelId: string,
+  signal?: AbortSignal,
 ): Promise<OffGridDesktopModelState> {
   const response = await gatewayFetch(server, '/v1/models/activate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: modelId, kind: category }),
+    signal,
   });
   const result = record(await response.json().catch(() => null));
+  if (response.status === 401) {
+    throw new Error(
+      server.apiKey
+        ? 'Desktop did not accept this API key. Copy a current one from Off Grid AI Desktop, Gateway, API keys, and paste it in Remote servers, Edit.'
+        : 'Desktop asks for an API key. Copy one from Off Grid AI Desktop, Gateway, API keys, and paste it in Remote servers, Edit.',
+    );
+  }
   if (!response.ok || result?.success !== true) {
     throw new Error(
       typeof result?.error === 'string'
@@ -315,9 +325,100 @@ export async function activateOffGridDesktopModel(
         : 'Desktop could not activate this model.',
     );
   }
-  const refreshed = await readOffGridDesktopModelState(server);
+  const refreshed = await readOffGridDesktopModelState(server, signal);
   if (!refreshed || refreshed.active[category] !== modelId) {
     throw new Error('Desktop did not confirm the selected model.');
   }
   return refreshed;
+}
+
+/** How a download on the Desktop is going, as its gateway reports it. */
+export interface OffGridDesktopDownload {
+  status: 'idle' | 'queued' | 'downloading' | 'completed' | 'failed' | 'cancelled';
+  percent: number;
+  downloadedBytes?: number;
+  totalBytes?: number;
+  error?: string;
+  /** On completion: the installed package to activate. */
+  installedId?: string;
+}
+
+function gatewayError(server: Pick<RemoteServer, 'apiKey'>, status: number, fallback: string, body: Record<string, unknown> | null): Error {
+  if (status === 401) {
+    return new Error(
+      server.apiKey
+        ? 'Desktop did not accept this API key. Copy a current one from Off Grid AI Desktop, Gateway, API keys, and paste it in Remote servers, Edit.'
+        : 'Desktop asks for an API key. Copy one from Off Grid AI Desktop, Gateway, API keys, and paste it in Remote servers, Edit.',
+    );
+  }
+  return new Error(typeof body?.error === 'string' ? body.error : fallback);
+}
+
+/** Start downloading one catalog model on the Desktop. Desktop resolves its weights and companion files. */
+export async function startOffGridDesktopDownload(server: RemoteServer, modelId: string, signal?: AbortSignal): Promise<void> {
+  const response = await gatewayFetch(server, '/v1/models/pull', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: modelId }),
+    signal,
+  });
+  if (!response.ok) {
+    throw gatewayError(server, response.status, 'Desktop could not start the download.', record(await response.json().catch(() => null)));
+  }
+}
+
+/** Read how a Desktop download is going. */
+export async function readOffGridDesktopDownload(server: RemoteServer, modelId: string, signal?: AbortSignal): Promise<OffGridDesktopDownload> {
+  const response = await gatewayFetch(server, `/v1/models/pull/status?id=${encodeURIComponent(modelId)}`, { signal });
+  const body = record(await response.json().catch(() => null));
+  if (!response.ok || !body) {
+    throw gatewayError(server, response.status, 'Desktop did not say how the download is going.', body);
+  }
+  const status = typeof body.status === 'string' ? body.status : 'idle';
+  const number = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
+  return {
+    status: (['queued', 'downloading', 'completed', 'failed', 'cancelled'].includes(status)
+      ? status
+      : 'idle') as OffGridDesktopDownload['status'],
+    percent: Math.max(0, Math.min(100, number(body.percent) ?? 0)),
+    downloadedBytes: number(body.downloadedBytes),
+    totalBytes: number(body.totalBytes),
+    error: typeof body.error === 'string' ? body.error : undefined,
+    installedId: typeof body.installedId === 'string' && body.installedId ? body.installedId : undefined,
+  };
+}
+
+/** What the Desktop can take: its memory (absent on an older Desktop) and the catalog ids installed there. */
+export interface OffGridDesktopRoom {
+  memoryGb?: number;
+  installed: string[];
+  /** What a download would still fetch, by catalog id, where another model already brought some files (a shared encoder or VAE). */
+  missingBytes?: Record<string, number>;
+}
+
+/** Read the Desktop's memory and installed models, as its Models screen judges them. */
+export async function readOffGridDesktopRoom(server: RemoteServer, signal?: AbortSignal): Promise<OffGridDesktopRoom> {
+  const [catalogResponse, installedResponse] = await Promise.all([
+    gatewayFetch(server, '/v1/models/catalog', { signal }),
+    gatewayFetch(server, '/v1/models/installed', { signal }),
+  ]);
+  const catalog = record(await catalogResponse.json().catch(() => null));
+  const installedBody = record(await installedResponse.json().catch(() => null));
+  const installed = parseInstalled(installedBody);
+  if (!catalogResponse.ok || !installed) {
+    throw gatewayError(
+      server,
+      catalogResponse.ok ? installedResponse.status : catalogResponse.status,
+      'Desktop did not say which models it has.',
+      catalogResponse.ok ? installedBody : catalog,
+    );
+  }
+  const memoryGb = typeof catalog?.memoryGb === 'number' && catalog.memoryGb > 0 ? catalog.memoryGb : undefined;
+  const missingBytes = Object.fromEntries(
+    (Array.isArray(catalog?.models) ? catalog.models : []).flatMap(model => {
+      const entry = record(model);
+      return typeof entry?.id === 'string' && typeof entry.missingBytes === 'number' ? [[entry.id, entry.missingBytes]] : [];
+    }),
+  );
+  return { ...(memoryGb ? { memoryGb } : {}), installed: [...installed], missingBytes };
 }

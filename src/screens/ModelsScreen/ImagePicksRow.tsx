@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { determineCredibility } from '@offgrid/models';
 import { useAppStore } from '../../stores';
 import { useDownloadStore, isActiveStatus } from '../../stores/downloadStore';
 import { makeImageModelKey } from '../../utils/modelKey';
@@ -58,6 +59,9 @@ export const ImagePicksRow: React.FC<{
     return { kind: 'download', onDownload: () => onDownload(hfModelToDescriptor(model)) };
   };
 
-  const items: PickItem[] = picks.map(({ slot, item }) => ({ slot, name: imageFamilyName(item.displayName), sizeBytes: item.size, state: stateFor(item) }));
+  const items: PickItem[] = picks.map(({ slot, item }) => ({
+    slot, name: imageFamilyName(item.displayName), sizeBytes: item.size, state: stateFor(item),
+    madeByOffGrid: determineCredibility((item.repo ?? '').split('/')[0] ?? '') === 'offgrid',
+  }));
   return <PicksRow items={items} testID="image-picks" />;
 };

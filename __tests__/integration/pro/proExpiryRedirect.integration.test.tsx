@@ -60,7 +60,7 @@ describe('the live Pro expiry redirect', () => {
     expect(resetRoot).toHaveBeenCalledTimes(1);
     expect(resetRoot).toHaveBeenCalledWith({
       index: 1,
-      routes: [{ name: 'Main' }, { name: 'ProDetail' }],
+      routes: [{ name: 'Main', params: { screen: 'HomeTab' } }, { name: 'ProDetail' }],
     });
   });
 });

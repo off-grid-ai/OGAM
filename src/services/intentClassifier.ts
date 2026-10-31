@@ -52,6 +52,11 @@ const IMAGE_PATTERNS = [
   /\b(4k|8k|hd|high resolution|ultra detailed)\b.*\b(image|picture|art|render)\b/i,
   /\b(photorealistic|hyperrealistic)\b.*\b(image|render|of)\b/i,
 
+  // Prompt-style descriptions: a scene followed by a trailing medium/style tag, the way
+  // people write an image prompt ("a red fox in fresh snow at dawn, photo"). A comma
+  // right before a medium word at the END of the message is a style tag, not prose.
+  /\S+\s+\S+.*,\s*(?:a\s+)?(?:photo|photograph|photography|photorealistic|illustration|painting|digital art|3d render|cinematic|watercolor|oil painting|concept art|anime|4k|8k)\s*$/i,
+
   // SD/AI tools - strong signals
   /\bstable diffusion\b/i,
   /\bdall-?e\b/i,
@@ -194,20 +199,21 @@ class IntentClassifier {
       : options;
 
     const trimmedMessage = message.trim().toLowerCase();
-    const logMsg = trimmedMessage.slice(0, 60);
+    // Length only: the message is what the person typed and never goes in the log.
+    const logMsg = `${trimmedMessage.length}ch`;
 
     // Check cache first
     const cacheKey = trimmedMessage.slice(0, 200); // Limit key size
     const cachedIntent = intentCache.get(cacheKey);
     if (cachedIntent) {
-      logger.log(`[ROUTE-SM] classify CACHE intent=${cachedIntent} msg="${logMsg}"`);
+      logger.log(`[ROUTE-SM] classify CACHE intent=${cachedIntent} msg=${logMsg}`);
       return cachedIntent;
     }
 
     // Fast pattern matching
     const patternResult = this.classifyByPattern(trimmedMessage);
     if (patternResult !== null) {
-      logger.log(`[ROUTE-SM] classify PATTERN intent=${patternResult} msg="${logMsg}"`);
+      logger.log(`[ROUTE-SM] classify PATTERN intent=${patternResult} msg=${logMsg}`);
       this.cacheIntent(cacheKey, patternResult);
       return patternResult;
     }
@@ -216,7 +222,7 @@ class IntentClassifier {
     if (opts.useLLM) {
       try {
         const llmResult = await this.classifyWithLLM(message, opts);
-        logger.log(`[ROUTE-SM] classify LLM intent=${llmResult} msg="${logMsg}"`);
+        logger.log(`[ROUTE-SM] classify LLM intent=${llmResult} msg=${logMsg}`);
         this.cacheIntent(cacheKey, llmResult);
         return llmResult;
       } catch (error) {
@@ -225,7 +231,7 @@ class IntentClassifier {
     }
 
     // Default to text intent if uncertain
-    logger.log(`[ROUTE-SM] classify DEFAULT→text (uncertain, llm=${opts.useLLM}) msg="${logMsg}"`);
+    logger.log(`[ROUTE-SM] classify DEFAULT→text (uncertain, llm=${opts.useLLM}) msg=${logMsg}`);
     return 'text';
   }
 

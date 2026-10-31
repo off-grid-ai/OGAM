@@ -1,0 +1,448 @@
+diff --git a/node_modules/react-native-video-player/lib/commonjs/Video.js b/node_modules/react-native-video-player/lib/commonjs/Video.js
+index 9ff315d..181c87a 100644
+--- a/node_modules/react-native-video-player/lib/commonjs/Video.js
++++ b/node_modules/react-native-video-player/lib/commonjs/Video.js
+@@ -19,6 +19,8 @@ const RenderVideo = exports.RenderVideo = /*#__PURE__*/(0, _react.memo)(/*#__PUR
+     defaultMuted,
+     disableControlsAutoHide,
+     disableFullscreen,
++    disableMute,
++    additionalControl,
+     disableSeek,
+     fullScreenOnLongPress,
+     hideControlsOnStart = false,
+@@ -123,7 +125,8 @@ const RenderVideo = exports.RenderVideo = /*#__PURE__*/(0, _react.memo)(/*#__PUR
+   const _onLoad = (0, _react.useCallback)(event => {
+     if (onLoad) onLoad(event);
+     setDuration(event.duration);
+-  }, [onLoad]);
++        if (!hideControlsOnStart) _showControls();
++  }, [onLoad, hideControlsOnStart, _showControls]);
+   const _onPlayPress = (0, _react.useCallback)(() => {
+     if (onPlayPress) onPlayPress();
+     setIsPlaying(prev => !prev);
+@@ -179,6 +182,8 @@ const RenderVideo = exports.RenderVideo = /*#__PURE__*/(0, _react.memo)(/*#__PUR
+       customStyles: customStyles,
+       showDuration: showDuration,
+       disableFullscreen: disableFullscreen,
++      disableMute: disableMute,
++      additionalControl: additionalControl,
+       duration: props.duration || duration,
+       isPlaying: isPlaying,
+       isMuted: isMuted,
+diff --git a/node_modules/react-native-video-player/lib/commonjs/controls/Controls.js b/node_modules/react-native-video-player/lib/commonjs/controls/Controls.js
+index bb476fb..54ba537 100644
+--- a/node_modules/react-native-video-player/lib/commonjs/controls/Controls.js
++++ b/node_modules/react-native-video-player/lib/commonjs/controls/Controls.js
+@@ -20,6 +20,8 @@ const Controls = exports.Controls = /*#__PURE__*/(0, _react.forwardRef)(({
+   onToggleFullScreen,
+   duration,
+   disableFullscreen,
++  disableMute,
++  additionalControl,
+   onMutePress,
+   isMuted,
+   animationDuration,
+@@ -63,6 +65,7 @@ const Controls = exports.Controls = /*#__PURE__*/(0, _react.forwardRef)(({
+     children: [/*#__PURE__*/(0, _jsxRuntime.jsx)(_PlayButton.PlayButton, {
+       controlButtonCustomStyles: customStyles?.controlButton,
+       playControlCustomStyles: customStyles?.playControl,
++      controlIconCustomStyles: customStyles?.controlIcon,
+       isPlaying: isPlaying,
+       onPlayPress: onPlayPress
+     }), /*#__PURE__*/(0, _jsxRuntime.jsx)(_Seekbar.Seekbar, {
+@@ -83,12 +86,12 @@ const Controls = exports.Controls = /*#__PURE__*/(0, _react.forwardRef)(({
+       ref: durationRef,
+       duration: duration,
+       durationTextCustomStyles: customStyles?.durationText
+-    }), /*#__PURE__*/(0, _jsxRuntime.jsx)(_Mute.Mute, {
++    }), !disableMute && /*#__PURE__*/(0, _jsxRuntime.jsx)(_Mute.Mute, {
+       controlButtonCustomStyles: customStyles?.controlButton,
+       controlIconCustomStyles: customStyles?.controlIcon,
+       isMuted: isMuted,
+       onMutePress: onMutePress
+-    }), !disableFullscreen && /*#__PURE__*/(0, _jsxRuntime.jsx)(_Fullscreen.Fullscreen, {
++    }), additionalControl, !disableFullscreen && /*#__PURE__*/(0, _jsxRuntime.jsx)(_Fullscreen.Fullscreen, {
+       onToggleFullScreen: onToggleFullScreen,
+       controlButtonCustomStyles: customStyles?.controlButton,
+       controlIconCustomStyles: customStyles?.controlIcon
+diff --git a/node_modules/react-native-video-player/lib/commonjs/controls/PlayButton.js b/node_modules/react-native-video-player/lib/commonjs/controls/PlayButton.js
+index 2c49655..340f714 100644
+--- a/node_modules/react-native-video-player/lib/commonjs/controls/PlayButton.js
++++ b/node_modules/react-native-video-player/lib/commonjs/controls/PlayButton.js
+@@ -9,14 +9,18 @@ var _react = require("react");
+ var _jsxRuntime = require("react/jsx-runtime");
+ const PlayButton = exports.PlayButton = /*#__PURE__*/(0, _react.memo)(({
+   isPlaying,
++  controlIconCustomStyles,
+   onPlayPress,
+   playControlCustomStyles,
+   controlButtonCustomStyles
+ }) => {
+   return /*#__PURE__*/(0, _jsxRuntime.jsx)(_reactNative.TouchableOpacity, {
++    accessibilityRole: 'button',
++    accessibilityLabel: isPlaying ? 'Pause video' : 'Play video',
+     onPress: onPlayPress,
+     style: [styles.playControl, controlButtonCustomStyles, playControlCustomStyles],
+     children: /*#__PURE__*/(0, _jsxRuntime.jsx)(_reactNative.Image, {
++      style: controlIconCustomStyles,
+       source: isPlaying ? require('../img/pause.png') : require('../img/play.png')
+     })
+   });
+diff --git a/node_modules/react-native-video-player/lib/commonjs/index.js b/node_modules/react-native-video-player/lib/commonjs/index.js
+index 02eadd9..b1b30a2 100644
+--- a/node_modules/react-native-video-player/lib/commonjs/index.js
++++ b/node_modules/react-native-video-player/lib/commonjs/index.js
+@@ -12,6 +12,7 @@ var _jsxRuntime = require("react/jsx-runtime");
+ const VideoPlayer = /*#__PURE__*/(0, _react.forwardRef)((props, ref) => {
+   const {
+     autoplay = false,
++    preload = false,
+     customStyles = {},
+     endThumbnail,
+     endWithThumbnail,
+@@ -79,7 +80,7 @@ const VideoPlayer = /*#__PURE__*/(0, _react.forwardRef)((props, ref) => {
+       customStylesPlayButton: customStyles.playButton,
+       customStylesPlayArrow: customStyles.playArrow
+     });
+-    if (!isStarted) return /*#__PURE__*/(0, _jsxRuntime.jsx)(_reactNative.View, {
++    if (!isStarted && !preload) return /*#__PURE__*/(0, _jsxRuntime.jsx)(_reactNative.View, {
+       style: [styles.preloadingPlaceholder, sizeStyles, style],
+       children: /*#__PURE__*/(0, _jsxRuntime.jsx)(_Thumbnail.StartButton, {
+         onStart: _onStart,
+@@ -96,7 +97,7 @@ const VideoPlayer = /*#__PURE__*/(0, _react.forwardRef)((props, ref) => {
+       onEnd: _onEnd,
+       sizeStyle: sizeStyles
+     });
+-  }, [hasEnded, endThumbnail, isStarted, thumbnail, style, sizeStyles, _onStart, customStyles, rest, autoplay, _onEnd]);
++  }, [preload, hasEnded, endThumbnail, isStarted, thumbnail, style, sizeStyles, _onStart, customStyles, rest, autoplay, _onEnd]);
+   return /*#__PURE__*/(0, _jsxRuntime.jsx)(_reactNative.View, {
+     onLayout: onLayout,
+     style: customStyles.wrapper,
+diff --git a/node_modules/react-native-video-player/lib/module/Video.js b/node_modules/react-native-video-player/lib/module/Video.js
+index d190ce5..733710b 100644
+--- a/node_modules/react-native-video-player/lib/module/Video.js
++++ b/node_modules/react-native-video-player/lib/module/Video.js
+@@ -14,6 +14,8 @@ export const RenderVideo = /*#__PURE__*/memo(/*#__PURE__*/forwardRef((props, ref
+     defaultMuted,
+     disableControlsAutoHide,
+     disableFullscreen,
++    disableMute,
++    additionalControl,
+     disableSeek,
+     fullScreenOnLongPress,
+     hideControlsOnStart = false,
+@@ -118,7 +120,8 @@ export const RenderVideo = /*#__PURE__*/memo(/*#__PURE__*/forwardRef((props, ref
+   const _onLoad = useCallback(event => {
+     if (onLoad) onLoad(event);
+     setDuration(event.duration);
+-  }, [onLoad]);
++        if (!hideControlsOnStart) _showControls();
++  }, [onLoad, hideControlsOnStart, _showControls]);
+   const _onPlayPress = useCallback(() => {
+     if (onPlayPress) onPlayPress();
+     setIsPlaying(prev => !prev);
+@@ -174,6 +177,8 @@ export const RenderVideo = /*#__PURE__*/memo(/*#__PURE__*/forwardRef((props, ref
+       customStyles: customStyles,
+       showDuration: showDuration,
+       disableFullscreen: disableFullscreen,
++      disableMute: disableMute,
++      additionalControl: additionalControl,
+       duration: props.duration || duration,
+       isPlaying: isPlaying,
+       isMuted: isMuted,
+diff --git a/node_modules/react-native-video-player/lib/module/controls/Controls.js b/node_modules/react-native-video-player/lib/module/controls/Controls.js
+index 64b64f4..9ed6aa2 100644
+--- a/node_modules/react-native-video-player/lib/module/controls/Controls.js
++++ b/node_modules/react-native-video-player/lib/module/controls/Controls.js
+@@ -16,6 +16,8 @@ export const Controls = /*#__PURE__*/forwardRef(({
+   onToggleFullScreen,
+   duration,
+   disableFullscreen,
++  disableMute,
++  additionalControl,
+   onMutePress,
+   isMuted,
+   animationDuration,
+@@ -59,6 +61,7 @@ export const Controls = /*#__PURE__*/forwardRef(({
+     children: [/*#__PURE__*/_jsx(PlayButton, {
+       controlButtonCustomStyles: customStyles?.controlButton,
+       playControlCustomStyles: customStyles?.playControl,
++      controlIconCustomStyles: customStyles?.controlIcon,
+       isPlaying: isPlaying,
+       onPlayPress: onPlayPress
+     }), /*#__PURE__*/_jsx(Seekbar, {
+@@ -79,12 +82,12 @@ export const Controls = /*#__PURE__*/forwardRef(({
+       ref: durationRef,
+       duration: duration,
+       durationTextCustomStyles: customStyles?.durationText
+-    }), /*#__PURE__*/_jsx(Mute, {
++    }), !disableMute && /*#__PURE__*/_jsx(Mute, {
+       controlButtonCustomStyles: customStyles?.controlButton,
+       controlIconCustomStyles: customStyles?.controlIcon,
+       isMuted: isMuted,
+       onMutePress: onMutePress
+-    }), !disableFullscreen && /*#__PURE__*/_jsx(Fullscreen, {
++    }), additionalControl, !disableFullscreen && /*#__PURE__*/_jsx(Fullscreen, {
+       onToggleFullScreen: onToggleFullScreen,
+       controlButtonCustomStyles: customStyles?.controlButton,
+       controlIconCustomStyles: customStyles?.controlIcon
+diff --git a/node_modules/react-native-video-player/lib/module/controls/PlayButton.js b/node_modules/react-native-video-player/lib/module/controls/PlayButton.js
+index 1dea3ae..b177c91 100644
+--- a/node_modules/react-native-video-player/lib/module/controls/PlayButton.js
++++ b/node_modules/react-native-video-player/lib/module/controls/PlayButton.js
+@@ -5,14 +5,18 @@ import { memo } from 'react';
+ import { jsx as _jsx } from "react/jsx-runtime";
+ export const PlayButton = /*#__PURE__*/memo(({
+   isPlaying,
++  controlIconCustomStyles,
+   onPlayPress,
+   playControlCustomStyles,
+   controlButtonCustomStyles
+ }) => {
+   return /*#__PURE__*/_jsx(TouchableOpacity, {
++    accessibilityRole: 'button',
++    accessibilityLabel: isPlaying ? 'Pause video' : 'Play video',
+     onPress: onPlayPress,
+     style: [styles.playControl, controlButtonCustomStyles, playControlCustomStyles],
+     children: /*#__PURE__*/_jsx(Image, {
++      style: controlIconCustomStyles,
+       source: isPlaying ? require('../img/pause.png') : require('../img/play.png')
+     })
+   });
+diff --git a/node_modules/react-native-video-player/lib/module/index.js b/node_modules/react-native-video-player/lib/module/index.js
+index 5fc06ec..83e65b1 100644
+--- a/node_modules/react-native-video-player/lib/module/index.js
++++ b/node_modules/react-native-video-player/lib/module/index.js
+@@ -8,6 +8,7 @@ import { jsx as _jsx } from "react/jsx-runtime";
+ const VideoPlayer = /*#__PURE__*/forwardRef((props, ref) => {
+   const {
+     autoplay = false,
++    preload = false,
+     customStyles = {},
+     endThumbnail,
+     endWithThumbnail,
+@@ -75,7 +76,7 @@ const VideoPlayer = /*#__PURE__*/forwardRef((props, ref) => {
+       customStylesPlayButton: customStyles.playButton,
+       customStylesPlayArrow: customStyles.playArrow
+     });
+-    if (!isStarted) return /*#__PURE__*/_jsx(View, {
++    if (!isStarted && !preload) return /*#__PURE__*/_jsx(View, {
+       style: [styles.preloadingPlaceholder, sizeStyles, style],
+       children: /*#__PURE__*/_jsx(StartButton, {
+         onStart: _onStart,
+@@ -92,7 +93,7 @@ const VideoPlayer = /*#__PURE__*/forwardRef((props, ref) => {
+       onEnd: _onEnd,
+       sizeStyle: sizeStyles
+     });
+-  }, [hasEnded, endThumbnail, isStarted, thumbnail, style, sizeStyles, _onStart, customStyles, rest, autoplay, _onEnd]);
++  }, [preload, hasEnded, endThumbnail, isStarted, thumbnail, style, sizeStyles, _onStart, customStyles, rest, autoplay, _onEnd]);
+   return /*#__PURE__*/_jsx(View, {
+     onLayout: onLayout,
+     style: customStyles.wrapper,
+diff --git a/node_modules/react-native-video-player/lib/typescript/commonjs/src/index.d.ts b/node_modules/react-native-video-player/lib/typescript/commonjs/src/index.d.ts
+index a5eb66e..8b79e74 100644
+--- a/node_modules/react-native-video-player/lib/typescript/commonjs/src/index.d.ts
++++ b/node_modules/react-native-video-player/lib/typescript/commonjs/src/index.d.ts
+@@ -27,11 +27,14 @@ export interface CustomStyles {
+ export interface VideoPlayerProps extends ReactVideoProps {
+     animationDuration?: number;
+     autoplay?: boolean;
++  preload?: boolean;
+     controlsTimeout?: number;
+     customStyles?: CustomStyles;
+     defaultMuted?: boolean;
+     disableControlsAutoHide?: boolean;
+     disableFullscreen?: boolean;
++  disableMute?: boolean;
++  additionalControl?: React.ReactNode;
+     disableSeek?: boolean;
+     duration?: number;
+     endThumbnail?: ImageSourcePropType;
+diff --git a/node_modules/react-native-video-player/lib/typescript/module/src/index.d.ts b/node_modules/react-native-video-player/lib/typescript/module/src/index.d.ts
+index a5eb66e..8b79e74 100644
+--- a/node_modules/react-native-video-player/lib/typescript/module/src/index.d.ts
++++ b/node_modules/react-native-video-player/lib/typescript/module/src/index.d.ts
+@@ -27,11 +27,14 @@ export interface CustomStyles {
+ export interface VideoPlayerProps extends ReactVideoProps {
+     animationDuration?: number;
+     autoplay?: boolean;
++  preload?: boolean;
+     controlsTimeout?: number;
+     customStyles?: CustomStyles;
+     defaultMuted?: boolean;
+     disableControlsAutoHide?: boolean;
+     disableFullscreen?: boolean;
++  disableMute?: boolean;
++  additionalControl?: React.ReactNode;
+     disableSeek?: boolean;
+     duration?: number;
+     endThumbnail?: ImageSourcePropType;
+diff --git a/node_modules/react-native-video-player/src/Video.tsx b/node_modules/react-native-video-player/src/Video.tsx
+index 191e724..1d0484b 100644
+--- a/node_modules/react-native-video-player/src/Video.tsx
++++ b/node_modules/react-native-video-player/src/Video.tsx
+@@ -31,6 +31,8 @@ type RenderVideoProps = Pick<
+   | 'defaultMuted'
+   | 'disableControlsAutoHide'
+   | 'disableFullscreen'
++  | 'disableMute'
++  | 'additionalControl'
+   | 'disableSeek'
+   | 'duration'
+   | 'fullScreenOnLongPress'
+@@ -63,6 +65,8 @@ export const RenderVideo = memo(
+       defaultMuted,
+       disableControlsAutoHide,
+       disableFullscreen,
++      disableMute,
++      additionalControl,
+       disableSeek,
+       fullScreenOnLongPress,
+       hideControlsOnStart = false,
+@@ -190,8 +194,9 @@ export const RenderVideo = memo(
+       (event: OnLoadData) => {
+         if (onLoad) onLoad(event);
+         setDuration(event.duration);
++        if (!hideControlsOnStart) _showControls();
+       },
+-      [onLoad]
++      [onLoad, hideControlsOnStart, _showControls]
+     );
+ 
+     const _onPlayPress = useCallback(() => {
+@@ -262,6 +267,8 @@ export const RenderVideo = memo(
+           customStyles={customStyles}
+           showDuration={showDuration}
+           disableFullscreen={disableFullscreen}
++          disableMute={disableMute}
++          additionalControl={additionalControl}
+           duration={props.duration || duration}
+           isPlaying={isPlaying}
+           isMuted={isMuted}
+diff --git a/node_modules/react-native-video-player/src/controls/Controls.tsx b/node_modules/react-native-video-player/src/controls/Controls.tsx
+index 7ac7e72..eca3620 100644
+--- a/node_modules/react-native-video-player/src/controls/Controls.tsx
++++ b/node_modules/react-native-video-player/src/controls/Controls.tsx
+@@ -11,6 +11,8 @@ interface ControlsProps
+   extends Omit<SeekbarProps, 'customStyles' | 'onSeeking'> {
+   customStyles: VideoPlayerProps['customStyles'];
+   showDuration: VideoPlayerProps['showDuration'];
++  disableMute?: boolean;
++  additionalControl?: React.ReactNode;
+   disableFullscreen: VideoPlayerProps['disableFullscreen'];
+   animationDuration: number;
+   duration: number;
+@@ -36,6 +38,8 @@ export const Controls = forwardRef<ProgressRef, ControlsProps>(
+       onToggleFullScreen,
+       duration,
+       disableFullscreen,
++      disableMute,
++      additionalControl,
+       onMutePress,
+       isMuted,
+       animationDuration,
+@@ -88,6 +92,7 @@ export const Controls = forwardRef<ProgressRef, ControlsProps>(
+         <PlayButton
+           controlButtonCustomStyles={customStyles?.controlButton}
+           playControlCustomStyles={customStyles?.playControl}
++          controlIconCustomStyles={customStyles?.controlIcon}
+           isPlaying={isPlaying}
+           onPlayPress={onPlayPress}
+         />
+@@ -113,12 +118,13 @@ export const Controls = forwardRef<ProgressRef, ControlsProps>(
+             durationTextCustomStyles={customStyles?.durationText}
+           />
+         )}
+-        <Mute
++        {!disableMute && <Mute
+           controlButtonCustomStyles={customStyles?.controlButton}
+           controlIconCustomStyles={customStyles?.controlIcon}
+           isMuted={isMuted}
+           onMutePress={onMutePress}
+-        />
++        />}
++        {additionalControl}
+         {!disableFullscreen && (
+           <Fullscreen
+             onToggleFullScreen={onToggleFullScreen}
+diff --git a/node_modules/react-native-video-player/src/controls/PlayButton.tsx b/node_modules/react-native-video-player/src/controls/PlayButton.tsx
+index 4df5211..b69fd01 100644
+--- a/node_modules/react-native-video-player/src/controls/PlayButton.tsx
++++ b/node_modules/react-native-video-player/src/controls/PlayButton.tsx
+@@ -5,6 +5,7 @@ import { memo } from 'react';
+ interface PlayButtonProps {
+   controlButtonCustomStyles?: CustomStyles['controlButton'];
+   playControlCustomStyles?: CustomStyles['playControl'];
++  controlIconCustomStyles?: CustomStyles['controlIcon'];
+   isPlaying: boolean;
+   onPlayPress: () => void;
+ }
+@@ -12,12 +13,15 @@ interface PlayButtonProps {
+ export const PlayButton = memo(
+   ({
+     isPlaying,
++    controlIconCustomStyles,
+     onPlayPress,
+     playControlCustomStyles,
+     controlButtonCustomStyles,
+   }: PlayButtonProps) => {
+     return (
+       <TouchableOpacity
++        accessibilityRole="button"
++        accessibilityLabel={isPlaying ? 'Pause video' : 'Play video'}
+         onPress={onPlayPress}
+         style={[
+           styles.playControl,
+@@ -26,6 +30,7 @@ export const PlayButton = memo(
+         ]}
+       >
+         <Image
++          style={controlIconCustomStyles}
+           source={
+             isPlaying ? require('../img/pause.png') : require('../img/play.png')
+           }
+diff --git a/node_modules/react-native-video-player/src/index.tsx b/node_modules/react-native-video-player/src/index.tsx
+index 26bf374..6641672 100644
+--- a/node_modules/react-native-video-player/src/index.tsx
++++ b/node_modules/react-native-video-player/src/index.tsx
+@@ -56,11 +56,14 @@ export interface CustomStyles {
+ export interface VideoPlayerProps extends ReactVideoProps {
+   animationDuration?: number;
+   autoplay?: boolean;
++  preload?: boolean;
+   controlsTimeout?: number;
+   customStyles?: CustomStyles;
+   defaultMuted?: boolean;
+   disableControlsAutoHide?: boolean;
+   disableFullscreen?: boolean;
++  disableMute?: boolean;
++  additionalControl?: React.ReactNode;
+   disableSeek?: boolean;
+   duration?: number;
+   endThumbnail?: ImageSourcePropType;
+@@ -92,6 +95,7 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(
+   (props, ref) => {
+     const {
+       autoplay = false,
++      preload = false,
+       customStyles = {},
+       endThumbnail,
+       endWithThumbnail,
+@@ -167,7 +171,7 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(
+             customStylesPlayArrow={customStyles.playArrow}
+           />
+         );
+-      if (!isStarted)
++      if (!isStarted && !preload)
+         return (
+           <View style={[styles.preloadingPlaceholder, sizeStyles, style]}>
+             <StartButton
+@@ -189,6 +193,7 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(
+         />
+       );
+     }, [
++      preload,
+       hasEnded,
+       endThumbnail,
+       isStarted,

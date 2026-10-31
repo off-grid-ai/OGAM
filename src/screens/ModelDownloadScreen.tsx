@@ -117,10 +117,16 @@ export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
       const store = useRemoteServerStore.getState();
       const existing = new Set(store.servers.map(s => s.endpoint.replace(/\/$/, '')));
       let added = 0;
+      let keyServerId: string | null = null;
       for (const d of discovered) {
         if (existing.has(d.endpoint.replace(/\/$/, ''))) continue;
-        await remoteServerManager.addServer({ name: d.name, endpoint: d.endpoint, providerType: 'openai-compatible' });
+        const saved = await remoteServerManager.addServer({ name: d.name, endpoint: d.endpoint, providerType: 'openai-compatible' });
+        if (d.needsKey) keyServerId ??= saved.id;
         added += 1;
+      }
+      if (keyServerId) {
+        navigation.navigate('RemoteServerEditor', { serverId: keyServerId, needsKey: true });
+        return;
       }
       const { ran, reachable } = await refreshServerHealth();
       // The alert must AGREE with the rendered list: never claim "no servers" while one is present or
@@ -145,7 +151,7 @@ export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
     } finally {
       setIsScanning(false);
     }
-  }, [refreshServerHealth]);
+  }, [refreshServerHealth, navigation]);
 
   const handleConnectServer = async (server: RemoteServer) => {
     setConnectingServerId(server.id);

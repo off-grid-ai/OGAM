@@ -2,9 +2,9 @@ import React from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   Linking,
 } from 'react-native';
+import { TouchableOpacity } from '../components/Touchable';
 import { LoadingDots } from '../components/LoadingDots';
 import { Card } from '../components';
 import type { ThemeColors } from '../theme';

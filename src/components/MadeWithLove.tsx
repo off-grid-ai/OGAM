@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, Linking, StyleSheet } from 'react-native';
+import { View, Text, Image, Linking, StyleSheet } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import { TYPOGRAPHY, WEDNESDAY_URL } from '../constants';
 
 export const MadeWithLove: React.FC = () => (

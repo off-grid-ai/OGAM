@@ -90,9 +90,9 @@ describe('Pro pricing reached from Settings (rendered, real App)', () => {
     expect(view.queryByText(/\$119/)).toBeNull();
     expect(view.queryByText('Intelligence, democratized.')).toBeNull();
 
-    // The Settings upsell banner (its LIVE SYNC feature grid) carries its own "Get Pro" button.
+    // The Settings upsell banner carries its own "Get Pro" button.
     // Home stays mounted behind the tabs with a "Get Pro" of its own, so scope to the banner.
-    let banner = view.getByText('LIVE SYNC').parent;
+    let banner = view.getByText('Keep your work in context with memory, Sync, and actions you approve.').parent;
     while (banner && rtl.within(banner).queryAllByText('Get Pro').length === 0) {
       banner = banner.parent;
     }

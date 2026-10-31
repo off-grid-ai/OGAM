@@ -8,6 +8,7 @@
 import RNFS from 'react-native-fs';
 import { statFile } from '../utils/fileStat';
 import logger from '../utils/logger';
+import { qwenAsrFiles, QWEN_ASR_MODEL_ID, type QwenAsrFiles } from './qwenAsrModel';
 
 /**
  * Minimum valid model file size in bytes (10 MB).
@@ -26,11 +27,57 @@ export async function ensureModelsDirExists(): Promise<void> {
 }
 
 export function getModelPath(modelId: string): string {
-  return `${getModelsDir()}/ggml-${modelId}.bin`;
+  // A Qwen3-ASR model is its weights plus an audio projector; the weights path names it.
+  const asr = qwenAsrFiles(modelId, getModelsDir());
+  return asr ? asr.primary.path : `${getModelsDir()}/ggml-${modelId}.bin`;
+}
+
+/** Every file a transcription model keeps on disk. */
+export function getModelFilePaths(modelId: string): string[] {
+  const asr = qwenAsrFiles(modelId, getModelsDir());
+  return asr ? [asr.primary.path, asr.mmproj.path] : [getModelPath(modelId)];
 }
 
 export async function isModelDownloaded(modelId: string): Promise<boolean> {
-  return RNFS.exists(getModelPath(modelId));
+  const present = await Promise.all(getModelFilePaths(modelId).map(path => RNFS.exists(path)));
+  return present.every(Boolean);
+}
+
+/** A Qwen3-ASR model's two files in the transcription models folder; undefined for a Whisper id. */
+export function getQwenAsrFiles(modelId: string | null | undefined): QwenAsrFiles | undefined {
+  return qwenAsrFiles(modelId, getModelsDir());
+}
+
+/** The Qwen3-ASR model whose weights live at this path, if any. */
+export function getQwenAsrFilesForPath(modelPath: string): QwenAsrFiles | undefined {
+  const files = getQwenAsrFiles(QWEN_ASR_MODEL_ID);
+  return files?.primary.path === modelPath ? files : undefined;
+}
+
+/** A Qwen3-ASR model on disk when both of its files are there in full. */
+async function downloadedQwenAsrModel(): Promise<
+  { modelId: string; fileName: string; sizeBytes: number; filePath: string } | null
+> {
+  const files = getQwenAsrFiles(QWEN_ASR_MODEL_ID);
+  if (!files) return null;
+  const facts = await Promise.all([statFile(files.primary.path), statFile(files.mmproj.path)]);
+  if (facts.some(fact => !fact || fact.size < MIN_MODEL_FILE_SIZE)) return null;
+  return {
+    modelId: QWEN_ASR_MODEL_ID,
+    fileName: files.primary.name,
+    sizeBytes: facts.reduce((sum, fact) => sum + (fact?.size ?? 0), 0),
+    filePath: files.primary.path,
+  };
+}
+
+/** Check a Qwen3-ASR model's two files before native code reads them. */
+export async function validateQwenAsrFiles(files: QwenAsrFiles): Promise<void> {
+  for (const file of [files.primary, files.mmproj]) {
+    const facts = await statFile(file.path);
+    if (!facts || facts.size < MIN_MODEL_FILE_SIZE) {
+      throw new Error(`Qwen3-ASR model file not found or incomplete: ${file.name}`);
+    }
+  }
 }
 
 /** List every downloaded ggml whisper model on disk (for the Download Manager). */
@@ -45,7 +92,8 @@ export async function listDownloadedModels(): Promise<
   const dir = getModelsDir();
   if (!(await RNFS.exists(dir))) return [];
   const entries = await RNFS.readDir(dir);
-  return entries
+  const asr = await downloadedQwenAsrModel();
+  const whisper = entries
     .filter(
       f =>
         f.isFile() &&
@@ -63,6 +111,7 @@ export async function listDownloadedModels(): Promise<
       sizeBytes: Number(f.size) || 0,
       filePath: f.path,
     }));
+  return asr ? [...whisper, asr] : whisper;
 }
 
 /**

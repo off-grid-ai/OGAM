@@ -5,7 +5,8 @@
 
 import 'react-native-gesture-handler';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, Pressable, StyleSheet, LogBox } from 'react-native';
+import { View, Text, StyleSheet, LogBox } from 'react-native';
+import { Pressable } from './src/components/Touchable';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,13 +40,22 @@ import { useDownloadStore } from './src/stores/downloadStore';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { DebugLogsScreen } from './src/components/DebugLogsScreen';
 import { LoadingDots } from './src/components/LoadingDots';
+import { AnalyticsConsentPrompt } from './src/components/AnalyticsConsentPrompt';
+import {
+  startAnalytics,
+  trackScreen,
+} from './src/services/analytics/analytics';
+import { featureSnapshot } from './src/services/analytics/featureSnapshot';
+import { usageSnapshot } from './src/services/analytics/usageSnapshot';
 
 LogBox.ignoreAllLogs(); // Suppress all logs
 
 let stopStartupProbe: (() => void) | null = null;
-// Dev-only: mirror logger output into the in-app Debug Logs viewer. The whole block
-// is behind __DEV__, so release builds keep main's no-op logger (zero logging cost).
-if (__DEV__) {
+let stopAnalytics: (() => void) | null = null;
+// Every build mirrors logger output into the in-app Debug Logs viewer and the size-capped log
+// file, so Report a problem carries a trace from a store build too. Log lines hold metadata only,
+// never chat content (docs/ANALYTICS.md, Report a problem). The console stays dev-only (logger.ts).
+{
   const fmt = (a: unknown): string => {
     if (a instanceof Error) return `${a.name}: ${a.message}`;
     if (typeof a === 'string') return a;
@@ -68,7 +78,7 @@ if (__DEV__) {
   initDebugLogFile();
   // Immediately after the sink exists, so the first sample lands before anything heavy runs. The app
   // was being killed by iOS at launch with the log going silent half a second in; this says where it
-  // stops and what memory was doing when it did.
+  // stops and what memory was doing when it did. Dev builds only (the probe is a no-op elsewhere).
   stopStartupProbe = startStartupMemoryProbe();
 }
 
@@ -373,6 +383,9 @@ function App() {
       logger.log('[BOOT] startup complete');
       setIsInitializing(false);
 
+      // Settings are hydrated: analytics starts only now, and only if the person opted in.
+      stopAnalytics = startAnalytics(featureSnapshot, usageSnapshot);
+
       // Reconcile downloaded Whisper models against disk at startup. presentModelIds
       // isn't persisted (the filesystem is the source of truth), so it rehydrates
       // empty — without this scan a freshly launched app shows an already-installed
@@ -406,6 +419,8 @@ function App() {
     return () => {
       startupGeneration.current += 1;
       stopNetworkReconnectWatcher();
+      stopAnalytics?.();
+      stopAnalytics = null;
     };
   }, [initializeApp]);
 
@@ -447,7 +462,14 @@ function App() {
         {AppRoot ? <AppRoot /> : null}
         <NavigationContainer
           ref={appNavigationRef}
-          onReady={applyPendingProRedirect}
+          onReady={() => {
+            applyPendingProRedirect();
+            trackScreen(appNavigationRef.getCurrentRoute()?.name);
+          }}
+          onStateChange={() => {
+            applyPendingProRedirect();
+            trackScreen(appNavigationRef.getCurrentRoute()?.name);
+          }}
           theme={{
             dark: isDark,
             colors: {
@@ -480,6 +502,7 @@ function App() {
         >
           <AppNavigator />
         </NavigationContainer>
+        <AnalyticsConsentPrompt />
         {__DEV__ && showSyncStatusBar ? <DevSyncStrip /> : null}
       </SafeAreaProvider>
     </GestureHandlerRootView>

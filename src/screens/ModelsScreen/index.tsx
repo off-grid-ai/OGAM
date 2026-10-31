@@ -1,5 +1,8 @@
+import { EmbeddingModelsTab } from './EmbeddingModelsTab';
+import type { HFSearchResult } from '@offgrid/models';
 import React, { useCallback, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { TouchableOpacity } from '../../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
 import { MainTabParamList } from '../../navigation/types';
@@ -12,16 +15,25 @@ import { createStyles } from './styles';
 import { TextModelsTab } from './TextModelsTab';
 import { ImageModelsTab } from './ImageModelsTab';
 import { VoiceModelsUpsell } from '../../components/models/VoiceModelsUpsell';
+import { VideoUpsell } from '../../components/models/VideoUpsell';
 import { TranscriptionModelsTab } from './TranscriptionModelsTab';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import type { ModelTab } from './types';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { checkForNewModels, useModelCatalogStore, withRemoteCatalog, type CatalogCheckResult } from '../../stores/modelCatalogStore';
 import { CatalogCheckSheet } from '../../components/models/CatalogCheckSheet';
+import { proGateShown } from '../../services/analytics/analytics';
+import { SCROLL_DEPTH_PROPS } from '../../constants/scrollDepth';
 
-const MODEL_TABS: ReadonlyArray<{ key: ModelTab; label: string; testID?: string }> = [
+const MODEL_TABS: ReadonlyArray<{
+  key: ModelTab;
+  label: string;
+  testID?: string;
+}> = [
   { key: 'text', label: 'Text' },
+  { key: 'embedding', label: 'Search', testID: 'embedding-tab' },
   { key: 'image', label: 'Image' },
+  { key: 'video', label: 'Video', testID: 'video-models-tab' },
   { key: 'voice', label: 'Voice', testID: 'voice-models-tab' },
   { key: 'transcription', label: 'Speech', testID: 'transcription-models-tab' },
 ];
@@ -41,18 +53,26 @@ const ScreenFrame: React.FC<{
     <SafeAreaView style={styles.container} edges={['top']} testID="models-screen">{children}</SafeAreaView>
   );
 
-const HideWhenEmbedded: React.FC<{ embedded: boolean; children: React.ReactNode }> = ({ embedded, children }) => (
+const HideWhenEmbedded: React.FC<{
+  embedded: boolean;
+  children: React.ReactNode;
+}> = ({ embedded, children }) => (
   <View style={embedded ? collapsedStyle.hidden : undefined}>{children}</View>
 );
 
-export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) => {
+export const ModelsScreen: React.FC<ModelsScreenProps> = ({
+  embedded = false,
+}) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const vm = useModelsScreen();
+  const [selectedVideoModel, setSelectedVideoModel] = useState<HFSearchResult | null>(null);
   // Pro fills this slot with the real voice-models panel (engine + downloads).
   // The Voice tab always renders; when the slot is empty (free / non-pro) we
   // show an upsell so users can see what Pro adds.
   const VoiceModelsPanel = useSlot(SLOTS.modelsScreenVoiceTab);
+  // Video is Pro: same pattern as Voice.
+  const VideoModelsPanel = useSlot(SLOTS.modelsScreenVideoTab);
   const route = useRoute<RouteProp<MainTabParamList, 'ModelsTab'>>();
   const isCheckingCatalog = useModelCatalogStore(s => s.isChecking);
   // What the last "check for new models" found, shown in a sheet until dismissed.
@@ -83,13 +103,15 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
       return () => {
         didAutoSelect.current = false;
         vm.setSelectedModel(null);
+        setSelectedVideoModel(null);
         vm.setModelFiles([]);
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [route.params?.initialTab, route.params?.repairModelId]),
   );
 
-  const isShowingDetail = vm.activeTab === 'text' && vm.selectedModel !== null;
+  const isShowingDetail = (vm.activeTab === 'text' && vm.selectedModel !== null) ||
+    (vm.activeTab === 'video' && selectedVideoModel !== null);
 
   const content = (
     <>
@@ -136,27 +158,37 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
           />
         </HideWhenEmbedded>
 
-        <HideWhenEmbedded embedded={embedded}><View>
-          {vm.activeTab === 'text' && vm.isImporting && vm.importProgress && (
-            <View style={styles.importProgressCard}>
-              <View style={styles.importProgressHeader}>
-                <Icon name="file" size={18} color={colors.primary} />
-                <Text style={styles.importProgressText} numberOfLines={1}>
-                  Importing {vm.importProgress.fileName}
+        <HideWhenEmbedded embedded={embedded}>
+          <View>
+            {vm.activeTab === 'text' && vm.isImporting && vm.importProgress && (
+              <View style={styles.importProgressCard}>
+                <View style={styles.importProgressHeader}>
+                  <Icon name="file" size={18} color={colors.primary} />
+                  <Text style={styles.importProgressText} numberOfLines={1}>
+                    Importing {vm.importProgress.fileName}
+                  </Text>
+                </View>
+                <View style={styles.imageProgressBar}>
+                  <View
+                    style={[
+                      styles.imageProgressFill,
+                      {
+                        width: `${Math.round(vm.importProgress.fraction * 100)}%`,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.importProgressPercent}>
+                  {Math.round(vm.importProgress.fraction * 100)}%
                 </Text>
               </View>
-              <View style={styles.imageProgressBar}>
-                <View style={[styles.imageProgressFill, { width: `${Math.round(vm.importProgress.fraction * 100)}%` }]} />
-              </View>
-              <Text style={styles.importProgressPercent}>
-                {Math.round(vm.importProgress.fraction * 100)}%
-              </Text>
-            </View>
-          )}
-        </View></HideWhenEmbedded>
+            )}
+          </View>
+        </HideWhenEmbedded>
 
         {/* Tab Bar (horizontally scrollable — four tabs don't fit on a phone) */}
         <ScrollView
+          {...SCROLL_DEPTH_PROPS}
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.tabScroller}
@@ -226,7 +258,19 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
         />
       )}
 
+      {vm.activeTab === 'embedding' && <EmbeddingModelsTab />}
+
       {/* Image Models Tab */}
+      {vm.activeTab === 'video' && (
+        VideoModelsPanel
+          ? <VideoModelsPanel selected={selectedVideoModel} setSelected={setSelectedVideoModel} />
+          : <VideoUpsell
+              onGetPro={() => {
+                proGateShown('video');
+                vm.navigation.navigate('ProDetail');
+              }}
+            />
+      )}
       {vm.activeTab === 'image' && (
         <ImageModelsTab
           imageSearchQuery={vm.imageSearchQuery}
@@ -266,7 +310,12 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
       {vm.activeTab === 'voice' && (
         VoiceModelsPanel
           ? <VoiceModelsPanel showRemoteModels={false} />
-          : <VoiceModelsUpsell onGetPro={() => vm.navigation.navigate('ProDetail')} />
+          : <VoiceModelsUpsell
+              onGetPro={() => {
+                proGateShown('voice');
+                vm.navigation.navigate('ProDetail');
+              }}
+            />
       )}
 
       {/* Transcription Models Tab (speech-to-text, core). */}

@@ -468,6 +468,14 @@ jest.mock('react-native-device-info', () => ({
   getDeviceId: jest.fn(() => 'test-device-id'),
   getHardware: jest.fn(() => Promise.resolve('unknown')),
   getIpAddress: jest.fn(() => Promise.resolve('192.168.1.20')),
+  // Battery + form factor (analytics `battery_pct`, `charging`, `device_class`).
+  getPowerState: jest.fn(() => Promise.resolve({ batteryLevel: 0.64, batteryState: 'unplugged', lowPowerMode: false })),
+  isTablet: jest.fn(() => false),
+  // Synchronous build/device identity the PostHog SDK reads for its app properties.
+  getApplicationName: jest.fn(() => 'Off Grid'),
+  getBundleId: jest.fn(() => 'ai.offgridmobile'),
+  getManufacturerSync: jest.fn(() => 'Google'),
+  isEmulatorSync: jest.fn(() => false),
 }));
 
 // react-native-image-picker mock
@@ -631,6 +639,12 @@ jest.mock('react-native-reanimated', () => {
     },
     FadeIn: { duration: jest.fn().mockReturnThis(), delay: jest.fn().mockReturnThis() },
     FadeOut: { duration: jest.fn().mockReturnThis(), delay: jest.fn().mockReturnThis() },
+    FadeInDown: {
+      duration: jest.fn().mockReturnThis(),
+      delay: jest.fn().mockReturnThis(),
+      springify: jest.fn().mockReturnThis(),
+      damping: jest.fn().mockReturnThis(),
+    },
     SlideInDown: { duration: jest.fn().mockReturnThis() },
     SlideOutDown: { duration: jest.fn().mockReturnThis() },
     LinearTransition: { duration: jest.fn().mockReturnThis() },
@@ -656,6 +670,8 @@ jest.mock('@op-engineering/op-sqlite', () => {
     execute: jest.fn(() => Promise.resolve(mockResults)),
     close: jest.fn(),
     delete: jest.fn(),
+    // op-sqlite's real DB answers where its file lives (Storage sizes the document index, 8bc6073e3).
+    getDbPath: jest.fn(() => '/mock/databases/rag.db'),
   };
   return {
     open: jest.fn(() => mockDb),

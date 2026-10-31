@@ -454,6 +454,8 @@ describe('Pro mobile knowledge document sync journey', () => {
         expect(view!.queryByText('OGAD')).not.toBeNull();
       });
       rtl.fireEvent.press(view.getByText('OGAD'));
+      // A project opens on Chats; its documents are behind the Knowledge base tab.
+      rtl.fireEvent.press(await view.findByTestId('project-tab-knowledge'));
       await rtl.waitFor(() => {
         expect(view!.queryByText('launch-brief.txt')).not.toBeNull();
         expect(view!.queryByLabelText('Use launch-brief.txt, ON')).not.toBeNull();
@@ -475,7 +477,9 @@ describe('Pro mobile knowledge document sync journey', () => {
           size: 65,
         },
       ]);
-      rtl.fireEvent.press(view.getByText('Add'));
+      // The tab row's + adds to the open tab: File, then the picker.
+      rtl.fireEvent.press(view.getByTestId('kb-add'));
+      rtl.fireEvent.press(await view.findByText('File'));
       await rtl.waitFor(
         () => {
           expect(view!.queryByText('phone-notes.txt')).not.toBeNull();
@@ -531,6 +535,7 @@ describe('Pro mobile knowledge document sync journey', () => {
         expect(view!.queryByText('OGAD')).not.toBeNull();
       });
       rtl.fireEvent.press(view.getByText('OGAD'));
+      rtl.fireEvent.press(await view.findByTestId('project-tab-knowledge'));
       await rtl.waitFor(() => {
         expect(view!.queryByText('launch-brief.txt')).toBeNull();
         expect(view!.queryByText('phone-notes.txt')).not.toBeNull();

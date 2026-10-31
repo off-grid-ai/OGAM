@@ -106,18 +106,21 @@ async function plansSeenOnPhone(totalGB: number) {
     for (const tier of TIERS) {
       const card = ui.queryByTestId(`auto-setup-plan-${tier}`);
       if (!card) continue;
-      fireEvent.press(card);
+      // One plan is open at a time; its heading opens it.
+      if (!within(card).queryByTestId('auto-setup-selected-plan')) {
+        fireEvent.press(within(card).getByTestId(`auto-setup-plan-heading-${tier}`));
+      }
       const expanded = within(ui.getByTestId(`auto-setup-plan-${tier}`)).getByTestId(
         'auto-setup-selected-plan',
       );
-      // The chat model is the name printed under the "TEXT + VISION" label.
+      // The chat model is the name printed before its "TEXT" label.
       const labels = within(expanded).getAllByText(/.+/).map(node => {
         const children = (node.props as { children?: unknown }).children;
         return typeof children === 'string' ? children : null;
       });
-      const at = labels.indexOf('TEXT + VISION');
-      expect(at).toBeGreaterThanOrEqual(0);
-      seen.push({ tier, chatModel: labels[at + 1] as string });
+      const at = labels.indexOf('TEXT');
+      expect(at).toBeGreaterThan(0);
+      seen.push({ tier, chatModel: labels[at - 1] as string });
     }
     return seen;
   } finally {
@@ -140,16 +143,16 @@ describe('Auto Setup plans by phone memory', () => {
   it('a 12 GB iPhone sees three plans, Extreme with the 9B, never the same chat model twice', async () => {
     const plans = await plansSeenOnPhone(12);
     expect(plans.map(plan => plan.tier)).toEqual(['lean', 'balanced', 'extreme']);
-    expect(chatModels(plans)).toEqual(['Qwen 3.5 2B', 'Qwen 3.5 4B', 'Qwen 3.5 9B']);
+    // The plans are the phone's Fast, Balanced and Best picks (37759c684), by quality alone (afdb05f).
+    expect(chatModels(plans)).toEqual(['LFM2.5 8B A1B', 'MiniCPM5 2B', 'Qwen 3.5 9B']);
   });
 
-  it('a 6 GB phone sees fewer plans than a 16 GB phone, and no chat model twice', async () => {
-    const big = await plansSeenOnPhone(16);
+  // Setup's plans are the phone's picks (37759c684): a 6 GB phone has three distinct models that run
+  // well, so it sees all three plans, each with its own chat model.
+  it('a 6 GB phone sees its own three picks, and no chat model twice', async () => {
     const small = await plansSeenOnPhone(6);
-    expect(small.length).toBeGreaterThanOrEqual(1);
-    expect(small.length).toBeLessThan(big.length);
+    expect(small.map(plan => plan.tier)).toEqual(['lean', 'balanced', 'extreme']);
+    expect(chatModels(small)).toEqual(['Qwen 3.5 2B', 'Qwen 3.5 4B', 'MiniCPM5 2B']);
     expect(new Set(chatModels(small)).size).toBe(small.length);
-    // The chat models the small phone sees are the smaller ones the big phone also offers.
-    expect(chatModels(small).every(name => chatModels(big).includes(name))).toBe(true);
   });
 });

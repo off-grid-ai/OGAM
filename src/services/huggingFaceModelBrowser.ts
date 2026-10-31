@@ -1,13 +1,40 @@
+import { Buffer } from 'buffer';
+import { Platform } from 'react-native';
+import {
+  CATALOG,
+  searchHuggingFace,
+  resolveHuggingFaceModel,
+  type MobileWhisperCatalogModel,
+  extractQuantization,
+  imageEngineSettings,
+  isCompleteSDCheckpointHeader,
+  isImageWeightAvailableOn,
+  isSDImageWeight,
+  QWEN_IMAGE_21_WEIGHT,
+  SD_CHECKPOINT_HEADER_BYTES,
+  sdImagePackFor,
+} from '@offgrid/models';
+import RNFS from 'react-native-fs';
+import { hardwareService } from './hardware';
+import { computeBudgetMB } from './modelResidency/budget';
+import type { ImageModelDescriptor } from './imageModelDownloadTypes';
+import { useModelCatalogStore, withRemoteCatalog } from '../stores/modelCatalogStore';
+
 export interface HFImageModel {
   id: string;
   name: string;
   displayName: string;
-  backend: 'mnn' | 'qnn';
+  backend: ImageModelDescriptor['backend'];
+  huggingFaceFiles?: ImageModelDescriptor['huggingFaceFiles'];
   variant?: string;
   downloadUrl: string;
   fileName: string;
   size: number;
   repo: string;
+  /** sd.cpp catalog models: the memory the shared catalog says the model needs. */
+  minRamGb?: number;
+  /** A newer catalog model replaces it: an install keeps working, but it is not offered. */
+  supersededBy?: string;
 }
 
 interface HFTreeEntry {
@@ -140,4 +167,257 @@ export function guessStyle(name: string): string {
     return 'photorealistic';
   }
   return 'anime';
+}
+
+const QWEN_IMAGE_WEIGHT = QWEN_IMAGE_21_WEIGHT;
+
+/** The sd.cpp image models this phone's runtime loads: complete checkpoints and the diffusion-transformer
+ * packs (FLUX.2 klein, Z-Image, Qwen-Image 2.1) whose companion files the shared pack rules name.
+ * Replaced models stay in this list so an install keeps its name and files; see getOfferedSDImageModels. */
+export function getSDImageModels(): HFImageModel[] {
+  // The bundled sd.cpp packs, plus every single-file image model the phone's catalog file
+  // (OGAM catalog/models.json) lists: a new image model ships without an app update.
+  const listed = new Set((useModelCatalogStore.getState().remote.models ?? [])
+    .filter(model => model.kind === 'image').map(model => model.id));
+  return withRemoteCatalog('models', CATALOG).filter(model => {
+    const weight = model.files?.[0]?.name;
+    if (model.kind !== 'image' || !weight || !isImageWeightAvailableOn(weight, Platform.OS)) return false;
+    const pack = sdImagePackFor(weight);
+    // Qwen-Image's Off Grid AI builds need 24 GB or more: phones list leejet's pack only.
+    if (pack) return pack.family !== 'qwen-image-2.1' || model.id === 'leejet/Qwen-Image-2.1-GGUF';
+    return model.files.length === 1 &&
+      (listed.has(model.id) || /^(off-?grid-ai\/|mzwing\/SDXL-Lightning|OlegSkutte\/sdxl-turbo)/i.test(model.id));
+  })
+    .map(model => ({
+      id: `sd-${model.id.replaceAll('/', '--')}`,
+      name: model.name, displayName: model.name, backend: 'sd' as const,
+      // Quant variants can have a distinct catalog ID in the same HF repository.
+      repo: model.files[0].url.match(/^https:\/\/huggingface\.co\/([^/]+\/[^/]+)\/resolve\//i)?.[1] ?? model.id,
+      fileName: model.files[0].name, downloadUrl: model.files[0].url,
+      size: model.files.reduce((sum, file) => sum + (file.sizeBytes ?? 0), 0),
+      huggingFaceFiles: model.files.map(file => ({ path: file.name, size: file.sizeBytes ?? 0, downloadUrl: file.url, sha256: file.sha256 })),
+      minRamGb: model.minRamGb,
+      supersededBy: model.supersededBy,
+    }));
+}
+
+/** The sd.cpp image models offered for download: every runnable one a newer model does not replace. */
+export function getOfferedSDImageModels(): HFImageModel[] {
+  return getSDImageModels().filter(model => !model.supersededBy);
+}
+
+/**
+ * The sd.cpp catalog models this phone can run: those whose catalog memory need fits its RAM.
+ * The one list the Image tab's recommendations and Auto Setup both read.
+ */
+export function getRecommendedSDImageModels(ramGB: number): HFImageModel[] {
+  // The same estimate and budget the load guard uses, so a recommended model is not then refused.
+  const budgetBytes = computeBudgetMB(ramGB * 1024) * 1024 * 1024;
+  return getOfferedSDImageModels().filter(model =>
+    (!model.minRamGb || model.minRamGb <= ramGB) &&
+    hardwareService.estimateImageModelRam({ size: model.size, backend: 'sd' }) <= budgetBytes);
+}
+
+/** Filename candidates only. New checkpoint candidates must pass tensor validation. */
+export { isSDImageWeight };
+
+export async function validateSDCheckpointFile(path: string): Promise<boolean> {
+  const size = Number((await RNFS.stat(path)).size);
+  return isCompleteSDCheckpointHeader(Buffer.from(await RNFS.read(path, Math.min(size, SD_CHECKPOINT_HEADER_BYTES), 0, 'base64'), 'base64'));
+}
+
+/** The same required-file list is used by loading, recovery, and model transfer. */
+export function getSDImagePackFiles(names: string[], modelId?: string): NonNullable<HFImageModel['huggingFaceFiles']> | null {
+  const weights = names.filter(isSDImageWeight);
+  if (weights.length !== 1) return null;
+  const templates = getSDImageModels();
+  const pack = sdImagePackFor(weights[0]);
+  if (!pack) {
+    const template = templates.find(model => model.id === modelId && model.fileName === weights[0]);
+    return [{ path: weights[0], size: 0, sha256: template?.huggingFaceFiles?.[0].sha256 }];
+  }
+  // The pack's own catalog entry, else one of its family (a Qwen-Image pack found by search uses leejet's companions).
+  const family = templates.filter(model => sdImagePackFor(model.fileName)?.family === pack.family);
+  const template = family.find(model => model.id === modelId) ?? family.find(model => model.fileName === weights[0]) ??
+    family.find(model => model.repo === 'leejet/Qwen-Image-2.1-GGUF');
+  if (!template?.huggingFaceFiles) return null;
+  return template.huggingFaceFiles.map(file => file.path === template.fileName
+    ? { path: weights[0], size: 0, sha256: modelId === template.id && weights[0] === file.path ? file.sha256 : undefined }
+    : file);
+}
+
+/** Replace catalog size estimates with immutable Hugging Face file metadata. */
+export async function resolveSDImageDownloadFiles(repo: string, files: NonNullable<HFImageModel['huggingFaceFiles']>) {
+  if (files.every(file => file.sha256 && /\/resolve\/[a-f0-9]{40}\//i.test(file.downloadUrl ?? ''))) return files;
+  const response = await fetch(`https://huggingface.co/api/models/${repo}?blobs=true`);
+  if (!response.ok) throw new Error('Could not verify the image download files. Try again.');
+  const data = await response.json() as { sha: string; siblings?: { rfilename: string; size?: number; lfs?: { size: number; sha256?: string } }[] };
+  if (!/^[a-f0-9]{40}$/i.test(data.sha)) throw new Error('The model repository has no stable revision.');
+  return files.map(file => {
+    if (file.sha256 && /\/resolve\/[a-f0-9]{40}\//i.test(file.downloadUrl ?? '')) return file;
+    const source = data.siblings?.find(candidate => candidate.rfilename === file.path);
+    const size = source?.lfs?.size ?? source?.size ?? 0;
+    if (!source || size <= 0) throw new Error(`Required image file is missing: ${file.path}`);
+    return { path: file.path, size, sha256: source.lfs?.sha256,
+      downloadUrl: `https://huggingface.co/${repo}/resolve/${data.sha}/${file.path.split('/').map(encodeURIComponent).join('/')}` };
+  });
+}
+
+export async function searchSDImageModels(query: string, signal?: AbortSignal): Promise<HFImageModel[]> {
+  const params = new URLSearchParams({ search: query, pipeline_tag: 'text-to-image', sort: 'downloads', direction: '-1', limit: '10' });
+  const [ggufRepos, checkpointResponse] = await Promise.all([
+    searchHuggingFace(query, { kind: 'image', limit: 10, fetchImpl: (url, init) => fetch(url, { ...init, signal }) }),
+    fetch(`https://huggingface.co/api/models?${params}`, { signal }),
+  ]);
+  if (!checkpointResponse.ok) throw new Error('Could not search image models on Hugging Face. Try again.');
+  const checkpointRepos = await checkpointResponse.json() as { id: string }[];
+  const repositories = [...new Map([...ggufRepos, ...checkpointRepos].map(repo => [repo.id, repo])).values()];
+  const catalogModels = getSDImageModels();
+  const template = catalogModels.find(model => model.repo === 'leejet/Qwen-Image-2.1-GGUF')!;
+  const companion = template.huggingFaceFiles!.filter(file => file.path !== template.fileName);
+  const models: HFImageModel[] = [];
+  let readableRepos = 0;
+  for (const repo of repositories) {
+    if (signal?.aborted) throw new Error('Image search cancelled.');
+    try {
+      const response = await fetch(`https://huggingface.co/api/models/${repo.id}?blobs=true`, { signal });
+      if (!response.ok) continue;
+      const data = await response.json() as { sha: string; siblings?: { rfilename: string; size?: number; lfs?: { size: number; sha256?: string } }[] };
+      if (!/^[a-f0-9]{40}$/i.test(data.sha)) continue;
+      readableRepos++;
+      // Bound header work per repo. Unsupported files remain absent from downloads.
+      // Root-level weights only: a pack is read from the top of its folder, so a nested checkpoint
+      // would download in full and then not be found.
+      const candidates = (data.siblings ?? []).filter(file => !file.rfilename.includes('/') && isSDImageWeight(file.rfilename) && (file.lfs?.size ?? file.size ?? 0) > 0).slice(0, 8);
+      for (const file of candidates) {
+        const downloadUrl = `https://huggingface.co/${repo.id}/resolve/${data.sha}/${file.rfilename.split('/').map(encodeURIComponent).join('/')}`;
+        const qwen = QWEN_IMAGE_WEIGHT.test(file.rfilename);
+        if (!qwen) {
+          const header = await fetch(downloadUrl, { signal, headers: { Range: `bytes=0-${SD_CHECKPOINT_HEADER_BYTES - 1}` } });
+          if (header.status !== 206 || !/^bytes 0-\d+\//.test(header.headers.get('content-range') ?? '') ||
+            Number(header.headers.get('content-length')) > SD_CHECKPOINT_HEADER_BYTES) continue;
+          if (!isCompleteSDCheckpointHeader(Buffer.from(await header.arrayBuffer()))) continue;
+        }
+        const size = file.lfs?.size ?? file.size ?? 0;
+        const canonical = catalogModels.find(model => model.repo === repo.id && model.fileName === file.rfilename);
+        const id = canonical?.id ?? `sd-${repo.id.replaceAll('/', '--')}--${file.rfilename}`;
+        if (id.length > 160) continue;
+        const displayName = canonical?.displayName ?? (qwen ? `Qwen Image 2.1 ${extractQuantization(file.rfilename)}` : file.rfilename.replace(/\.(gguf|safetensors)$/i, ''));
+        const parts = [{ path: file.rfilename, size, downloadUrl, sha256: file.lfs?.sha256 }, ...(qwen ? companion : [])];
+        models.push({ id, name: displayName, displayName, backend: 'sd', repo: repo.id, fileName: file.rfilename,
+          downloadUrl, size: parts.reduce((sum, part) => sum + part.size, 0), huggingFaceFiles: parts });
+      }
+    } catch { /* One inaccessible repository must not hide other supported results. */ }
+  }
+  if (repositories.length && !readableRepos) throw new Error('Could not read image model files from Hugging Face. Try again.');
+  // No supported checkpoint (Flux ships split files) is an empty result, not an error.
+  return models;
+}
+
+export async function resolveSDImagePack(_modelId: string, modelPath: string) {
+  const files = getSDImagePackFiles((await RNFS.readDir(modelPath)).filter(file => file.isFile()).map(file => file.name));
+  if (!files) throw new Error('Select one complete SD checkpoint or a complete image model pack.');
+  const weight = files[0].path;
+  const defaults = imageEngineSettings(weight);
+  const pack = sdImagePackFor(weight);
+  if (!pack) {
+    if (!await validateSDCheckpointFile(`${modelPath}/${weight}`)) throw new Error('This checkpoint is unsupported or incomplete. It must include the SD image model, text encoder, and VAE.');
+    return { family: 'checkpoint', weight: `${modelPath}/${weight}`, vae: '', llm: '', sampler: defaults.sampler, scheduler: defaults.scheduler };
+  }
+  const required = (pattern: RegExp) => {
+    const file = files.find(part => pattern.test(part.path));
+    if (!file) throw new Error('The image model pack is incomplete.');
+    return `${modelPath}/${file.path}`;
+  };
+  return { family: pack.family, weight: `${modelPath}/${weight}`,
+    vae: required(pack.vae), llm: required(pack.llm),
+    sampler: defaults.sampler, scheduler: defaults.scheduler };
+}
+
+/**
+ * Speech-to-text models from Hugging Face that whisper.rn can run: speech-recognition repos (the
+ * shared search scopes by task) whose files include a whisper GGML weight (ggml-*.bin, resolved by
+ * the shared resolver). Anything else is left out.
+ */
+export async function searchWhisperModels(query: string): Promise<MobileWhisperCatalogModel[]> {
+  const repos = await searchHuggingFace(query, { kind: 'transcription', limit: 12 });
+  const resolved = await Promise.allSettled(
+    repos.map(repo => resolveHuggingFaceModel(repo.id, { kind: 'transcription' })),
+  );
+  return resolved.flatMap(result => {
+    const model = result.status === 'fulfilled' ? result.value : null;
+    const file = model?.kind === 'transcription' ? model.files[0] : undefined;
+    if (!model || !file?.sizeBytes || !/\.bin$/i.test(file.name)) return [];
+    if (!/whisper/i.test(model.id) && !/ggml-(?:tiny|base|small|medium|large)/i.test(file.name)) return [];
+    const stem = file.name.replace(/^ggml-/i, '').replace(/\.bin$/i, '');
+    return [{
+      id: `hf-${model.id}-${stem}`.replace(/[^\w.-]+/g, '-'),
+      name: `${model.name} ${stem}`,
+      size: Math.ceil(file.sizeBytes / 1e6),
+      lang: /(?:^|[._-])en(?:[._-]|$)/i.test(stem) ? 'en' : 'multi',
+      url: file.url,
+      description: `From ${model.id}`,
+    }];
+  });
+}
+
+export const BUNDLED_EMBEDDING_MODEL = {
+  id: 'bundled:all-MiniLM-L6-v2-Q8_0', name: 'MiniLM L6 (built-in)',
+  description: 'English text search. Included with the app.', size: 0, downloadUrl: undefined,
+} as const;
+
+/** Pinned Hugging Face files; runtime validation is still required on each phone. */
+export const RECOMMENDED_EMBEDDING_MODELS = [
+  {
+    id: 'leliuga/all-MiniLM-L12-v2-GGUF@f048c4f3577816f9825989a59a7eed3c9afa3f1d/all-MiniLM-L12-v2.Q8_0.gguf',
+    name: 'MiniLM L12', description: 'English text search, 12-layer encoder.', size: 36413728,
+    downloadUrl: 'https://huggingface.co/leliuga/all-MiniLM-L12-v2-GGUF/resolve/f048c4f3577816f9825989a59a7eed3c9afa3f1d/all-MiniLM-L12-v2.Q8_0.gguf',
+    sha256: '161d07a32057e754e1fe82e30547c736032ab255a6719890b7e76414c565b748',
+  },
+  {
+    id: 'armand01/paraphrase-multilingual-MiniLM-L12-v2-Q6_K-GGUF@34b69e1683fccf80bbbe7255b8651cd7a76e8891/paraphrase-multilingual-minilm-l12-v2.Q6_K.gguf',
+    name: 'Multilingual MiniLM L12', description: 'Text search across multiple languages.', size: 130844160,
+    downloadUrl: 'https://huggingface.co/armand01/paraphrase-multilingual-MiniLM-L12-v2-Q6_K-GGUF/resolve/34b69e1683fccf80bbbe7255b8651cd7a76e8891/paraphrase-multilingual-minilm-l12-v2.Q6_K.gguf',
+    sha256: 'b5780f54a02b2e9a1cded186d349800aedfd6fb38635c41f532a9385fed34d32',
+  },
+] as const;
+
+/** GGUF text encoders are candidates until the local runtime validates the file. */
+export async function searchEmbeddingModels(query: string, signal?: AbortSignal) {
+  const params = new URLSearchParams({
+    search: query.trim(), filter: 'gguf',
+    sort: 'downloads', direction: '-1', limit: '20',
+  });
+  const searches = await Promise.all(['sentence-similarity', 'feature-extraction'].map(async tag => {
+    const response = await fetch(`https://huggingface.co/api/models?${params}&pipeline_tag=${tag}`, { signal });
+    if (!response.ok) throw new Error(`Embedding search failed: HTTP ${response.status}`);
+    return await response.json() as { id: string }[];
+  }));
+  const repos = [...new Map(searches.flat().map(repo => [repo.id, repo])).values()];
+  const listings = await Promise.allSettled(repos.map(async repo => {
+    const result = await fetch(`https://huggingface.co/api/models/${repo.id}?blobs=true`, { signal });
+    if (!result.ok) throw new Error(`Could not read ${repo.id}`);
+    const data = await result.json() as {
+      sha: string;
+      gguf?: { architecture?: string };
+      siblings?: { rfilename: string; size?: number; lfs?: { size: number; sha256?: string } }[];
+    };
+    if (!/^[a-f0-9]{40}$/i.test(data.sha) || (data.gguf?.architecture && data.gguf.architecture !== 'bert')) return [];
+    return (data.siblings ?? []).filter(file =>
+      /\.gguf$/i.test(file.rfilename) &&
+      !/mmproj|(?:-\d{5}-of-\d{5})/i.test(file.rfilename) &&
+      (file.lfs?.size ?? file.size ?? 0) > 0,
+    ).map(file => ({
+      id: `${repo.id}@${data.sha}/${file.rfilename}`,
+      name: `${repo.id} / ${file.rfilename}`,
+      size: file.lfs?.size ?? file.size ?? 0,
+      sha256: file.lfs?.sha256,
+      downloadUrl: `https://huggingface.co/${repo.id}/resolve/${data.sha}/${file.rfilename.split('/').map(encodeURIComponent).join('/')}`,
+    }));
+  }));
+  if (signal?.aborted) throw new Error('Embedding search cancelled');
+  if (listings.length && listings.every(result => result.status === 'rejected')) {
+    throw new Error('Could not read embedding model files. Try again.');
+  }
+  return listings.flatMap(result => result.status === 'fulfilled' ? result.value : []);
 }

@@ -31,6 +31,7 @@ export const DebugSheet: React.FC<DebugSheetProps> = ({
 
   return (
     <AppSheet
+      sheet="debug-log"
       visible={visible}
       onClose={onClose}
       snapPoints={['35%', '65%', '90%']}

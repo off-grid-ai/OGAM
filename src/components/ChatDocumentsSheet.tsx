@@ -2,7 +2,8 @@
 // has been read, and a switch to leave one out of the answers. Tapping a row opens its pages.
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import type { StoredDocument } from '@offgrid/rag/documents';
 import { AppSheet } from './AppSheet';
@@ -79,7 +80,7 @@ const ChatDocumentsSheet: React.FC<ChatDocumentsSheetProps> = ({
   };
 
   return (
-    <AppSheet visible={visible} onClose={onClose} snapPoints={['45%']} title="Documents in this chat">
+    <AppSheet sheet="chat-documents" visible={visible} onClose={onClose} snapPoints={['45%']} title="Documents in this chat">
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
         {documents.map((document) => {
           const out = excluded.has(document.documentId);

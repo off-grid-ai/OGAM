@@ -16,17 +16,38 @@ export function useLANDiscovery({ navigation, setAlertState }: LANDiscoveryParam
   const addNewServersAndNotify = useCallback(async (
     newServersToAdd: Awaited<ReturnType<typeof discoverLANServers>>
   ) => {
+    let keyServer: { id: string; name: string } | null = null;
     for (const server of newServersToAdd) {
       logger.log('[HomeScreen] Auto-adding discovered server:', server.name);
       const added = await remoteServerManager.addServer({
         name: server.name,
         endpoint: server.endpoint,
         providerType: 'openai-compatible',
+        ...(server.computerId ? { computerId: server.computerId } : {}),
       });
-      remoteServerManager.testConnection(added.id).catch(() => { });
+      if (server.needsKey) keyServer ??= { id: added.id, name: server.name };
+      else remoteServerManager.testConnection(added.id).catch(() => { });
     }
 
     if (newServersToAdd.length === 0) return;
+
+    if (keyServer) {
+      const { id, name } = keyServer;
+      setAlertState(showAlert(
+        'Off Grid AI Desktop found',
+        `${name} asks for an API key before this phone can use its models.`,
+        [
+          { text: 'Later', style: 'cancel' },
+          {
+            text: 'Enter key', onPress: () => {
+              setAlertState(hideAlert());
+              navigation.navigate('RemoteServerEditor', { serverId: id, needsKey: true });
+            }
+          },
+        ],
+      ));
+      return;
+    }
 
     const names = newServersToAdd.map(s => s.name).join(', ');
     const title = newServersToAdd.length === 1

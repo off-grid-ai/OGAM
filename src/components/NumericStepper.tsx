@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';

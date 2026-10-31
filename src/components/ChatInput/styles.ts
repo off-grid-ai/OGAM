@@ -136,6 +136,11 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     padding: 4,
   },
   // Main input row (pill + circular button)
+  transcriptionNotice: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
+    marginBottom: SPACING.xs,
+  },
   mainRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,

@@ -276,7 +276,7 @@ describe('Gallery record repointed at its synced copy', () => {
       ui.getByLabelText(`Generated image unavailable: ${PROMPT}`),
     ).toBeTruthy();
     expect(ui.queryByLabelText(`Generated image loaded: ${PROMPT}`)).toBeNull();
-    fireEvent.press(ui.getByLabelText('Close gallery'));
+    fireEvent.press(ui.getByTestId('gallery-back'));
 
     // The user pairs the Desktop from Settings > Sync.
     fireEvent.press(await waitFor(() => ui!.getByTestId('settings-tab')));

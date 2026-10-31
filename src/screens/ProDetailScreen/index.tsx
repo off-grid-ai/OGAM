@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   ScrollView,
   Linking,
 } from 'react-native';
+import { TouchableOpacity } from '../../components/Touchable';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,6 +30,7 @@ import { ProManageSection } from './ProManageSection';
 import { ProIncludedSection } from './ProIncludedSection';
 import { ProUnlockModal } from './ProUnlockModal';
 import type { RootStackParamList } from '../../navigation/types';
+import { proPaywallViewed, proPurchased } from '../../services/analytics/analytics';
 
 // Off Grid AI Pro is the ambient intelligence layer across desktop + phone, not a
 // mobile feature list. These pillars mirror the early-access page framing.
@@ -47,7 +48,7 @@ const PILLARS = [
   {
     icon: 'shield',
     title: 'Private by architecture',
-    desc: 'The model runs on your own hardware. No training on your data, no server to leak. Open source, so you can check.',
+    desc: 'The model runs on your own hardware. Your chats and files never leave your devices, and nothing trains on them. Open source, so you can check.',
   },
   {
     icon: 'refresh-cw',
@@ -94,9 +95,16 @@ export const ProDetailScreen: React.FC = () => {
   };
   const openVerifyModal = () => setVerifyModalVisible(true);
 
+  useEffect(() => {
+    if (!hasProAccess) proPaywallViewed();
+    // Once per visit: a paywall view is the screen opening, not every access change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Activation verified: load the pro bundle now so Pro lights up live (the
   // reactive appRoot slot mounts the engine without a restart). Registries dedupe.
   const handleUnlocked = () => {
+    proPurchased();
     loadProFeatures(true).catch(() => {});
   };
 
@@ -106,7 +114,10 @@ export const ProDetailScreen: React.FC = () => {
           entitlement state where a screen's actions go. */}
       <ScreenHeader
         title="Off Grid AI Pro"
-        onBack={() => navigation.goBack()}
+        onBack={() => {
+          if (navigation.canGoBack()) navigation.goBack();
+          else navigation.replace('Main', { screen: 'HomeTab' });
+        }}
         right={
 <View style={styles.headerActions}>
             {deviceStatus ? (
@@ -176,7 +187,7 @@ export const ProDetailScreen: React.FC = () => {
               <Text style={styles.heroSubtitle}>
                 Ambient and proactive. It sees your day, remembers it, and gets
                 ahead of you - and the model runs on your own hardware, so
-                nothing is sent anywhere.
+                your chats and files never leave your devices.
               </Text>
             </View>
 
@@ -238,7 +249,7 @@ export const ProDetailScreen: React.FC = () => {
             <Text style={styles.desktopTitle}>Get Off Grid AI Desktop</Text>
             <Text style={styles.desktopDesc}>{OFF_GRID_DESKTOP_BENEFIT}</Text>
           </View>
-          <Icon name="external-link" size={16} color={colors.textMuted} />
+          <Icon name="external-link" size={16} color={colors.primary} />
         </TouchableOpacity>
       </ScrollView>
 
@@ -433,7 +444,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     justifyContent: 'center' as const,
   },
   desktopText: { flex: 1, gap: 3 as number },
-  desktopTitle: { ...TYPOGRAPHY.body, color: colors.text },
+  desktopTitle: { ...TYPOGRAPHY.body, color: colors.primary, textDecorationLine: 'underline' as const },
   desktopDesc: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,

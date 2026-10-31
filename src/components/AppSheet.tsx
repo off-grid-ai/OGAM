@@ -8,7 +8,6 @@ import React, {
 import {
   View,
   Text,
-  TouchableOpacity,
   TouchableWithoutFeedback,
   Modal,
   Animated,
@@ -18,10 +17,12 @@ import {
   Platform,
   Keyboard,
 } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import { createStyles } from './AppSheet.styles';
+import { sheetHidden, sheetShown } from '../services/analytics/interactions';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -39,12 +40,18 @@ export interface AppSheetProps {
   snapPoints?: (string | number)[];
   enableDynamicSizing?: boolean;
   title?: string;
+  /** The header's dismiss button; empty hides it (the sheet still closes by swipe or backdrop). */
   closeLabel?: string;
   showHeader?: boolean;
   showHandle?: boolean;
   elevation?: 'level3' | 'level4';
   /** Prevent every user-driven dismissal path while a critical action runs. */
   dismissible?: boolean;
+  /**
+   * A fixed name for analytics (docs/ANALYTICS.md): while open, the sheet counts as the screen
+   * `<screen>:<sheet>`. Never the title or anything the person typed.
+   */
+  sheet?: string;
   children: React.ReactNode;
 }
 
@@ -116,6 +123,55 @@ function createSheetPanResponder({
   });
 }
 
+/** While the named sheet is open it counts as the screen `<screen>:<sheet>` (docs/ANALYTICS.md). */
+function useSheetAnalytics(visible: boolean, sheet: string | undefined): void {
+  useEffect(() => {
+    if (!visible || !sheet) return undefined;
+    sheetShown(sheet);
+    return () => sheetHidden(sheet);
+  }, [visible, sheet]);
+}
+
+/**
+ * The keyboard's height, so the sheet lifts above it. The slide-in runs on the native driver: a render
+ * during it commits the slide's start value (off-screen) over the native position, and nothing renders
+ * the sheet again when the slide ends. An input that focused as the sheet opened left the sheet below
+ * the screen, behind its keyboard (iOS, Extend's "What happens next?"). A change during the slide waits
+ * for it to land.
+ */
+function useKeyboardHeight() {
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const slidingIn = useRef(false);
+  const held = useRef<number | null>(null);
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent =
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const follow = (height: number) => {
+      if (slidingIn.current) held.current = height;
+      else setKeyboardHeight(height);
+    };
+    const showSub = Keyboard.addListener(showEvent, e =>
+      follow(e.endCoordinates.height),
+    );
+    const hideSub = Keyboard.addListener(hideEvent, () => follow(0));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+  const slideStarted = useCallback(() => {
+    slidingIn.current = true;
+  }, []);
+  const slideLanded = useCallback(() => {
+    slidingIn.current = false;
+    if (held.current !== null) setKeyboardHeight(held.current);
+    held.current = null;
+  }, []);
+  return { keyboardHeight, slideStarted, slideLanded };
+}
+
 export const AppSheet: React.FC<AppSheetProps> = ({
   visible,
   onClose,
@@ -130,14 +186,16 @@ export const AppSheet: React.FC<AppSheetProps> = ({
   showHandle = true,
   elevation = 'level3',
   dismissible = true,
+  sheet,
   children,
 }) => {
+  useSheetAnalytics(visible, sheet);
   const { elevation: elevationTokens } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { bottom: bottomInset } = useSafeAreaInsets();
 
   const [modalVisible, setModalVisible] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const { keyboardHeight, slideStarted, slideLanded } = useKeyboardHeight();
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
@@ -161,6 +219,9 @@ export const AppSheet: React.FC<AppSheetProps> = ({
   // (translateY=SCREEN_HEIGHT) so there is nothing to guard against.
   // animateIn() sets it to false, then back to true on completion.
   const backdropEnabled = useRef(true);
+  // A sheet can be asked to animate after it has gone (a keyboard timer, a close racing an unmount).
+  // Starting a native-driver animation then fails to find its view, so an unmounted sheet never animates.
+  const mounted = useRef(true);
 
   // Calculate sheet max height from largest snap point
   const sheetMaxHeight = enableDynamicSizing
@@ -175,7 +236,9 @@ export const AppSheet: React.FC<AppSheetProps> = ({
   // 1–2 s, leaving backdropEnabled=false the whole time and silently eating
   // every tap that lands even slightly outside a button's hit area.
   const animateIn = useCallback(() => {
+    if (!mounted.current) return;
     backdropEnabled.current = false;
+    slideStarted();
     Animated.parallel([
       Animated.timing(translateY, {
         toValue: 0,
@@ -190,12 +253,17 @@ export const AppSheet: React.FC<AppSheetProps> = ({
       }),
     ]).start(() => {
       backdropEnabled.current = true;
+      if (mounted.current) slideLanded();
     });
-  }, [translateY, backdropOpacity]);
+  }, [translateY, backdropOpacity, slideStarted, slideLanded]);
 
   // Animate out then callback
   const animateOut = useCallback(
     (cb?: () => void) => {
+      if (!mounted.current) {
+        cb?.();
+        return;
+      }
       backdropEnabled.current = false;
       Animated.parallel([
         Animated.timing(translateY, {
@@ -237,14 +305,15 @@ export const AppSheet: React.FC<AppSheetProps> = ({
     });
   }, [animateInIfPending]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
       if (pendingAnimationFrame.current !== null) {
         cancelAnimationFrame(pendingAnimationFrame.current);
       }
-    },
-    [],
-  );
+    };
+  }, []);
 
   useEffect(() => {
     if (visible) {
@@ -277,28 +346,13 @@ export const AppSheet: React.FC<AppSheetProps> = ({
       }
       showModal();
     } else if (modalVisible) {
-      animateOut(() => {
-        setModalVisible(false);
-        onClosedRef.current?.();
-      });
+      // The Modal shows only while `visible`, so its view is already gone here: animating it out
+      // targets a view that no longer exists. Close at once, as the screen already shows it.
+      backdropEnabled.current = false;
+      setModalVisible(false);
+      onClosedRef.current?.();
     }
-  }, [animateOut, modalVisible, showModal, visible]);
-
-  // Track keyboard height so the sheet lifts above the keyboard
-  useEffect(() => {
-    const showEvent =
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent =
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSub = Keyboard.addListener(showEvent, e =>
-      setKeyboardHeight(e.endCoordinates.height),
-    );
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
+  }, [modalVisible, showModal, visible]);
 
   // Called by Modal when the Dialog is fully rendered and ready for touch
   const handleModalShow = useCallback(() => {
@@ -421,19 +475,21 @@ export const AppSheet: React.FC<AppSheetProps> = ({
                   <Icon name="chevron-left" size={18} style={styles.headerBackIcon} />
                 </TouchableOpacity>
               ) : null}
-              <Text style={styles.headerTitle} numberOfLines={1}>
+              <Text style={styles.headerTitle} numberOfLines={1} testID="app-sheet-title">
                 {title}
               </Text>
-              <TouchableOpacity
-                testID="app-sheet-close"
-                onPress={() => {
-                  if (!dismissibleRef.current) return;
-                  (onHeaderClosePress || dismiss)();
-                }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={styles.headerClose}>{closeLabel}</Text>
-              </TouchableOpacity>
+              {closeLabel ? (
+                <TouchableOpacity
+                  testID="app-sheet-close"
+                  onPress={() => {
+                    if (!dismissibleRef.current) return;
+                    (onHeaderClosePress || dismiss)();
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.headerClose}>{closeLabel}</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           ) : null}
 

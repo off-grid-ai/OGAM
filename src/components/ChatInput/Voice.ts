@@ -69,6 +69,27 @@ function createWhisperReadiness(
   });
 }
 
+/** How long a one-line transcription notice stays in the composer. */
+const NOTICE_MS = 5000;
+
+/** The latest one-line notice about a transcription (a Qwen3-ASR failure or its Whisper fallback). */
+function useTranscriptionNotice(): string | null {
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = whisperService.onNotice(message => {
+      setNotice(message);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setNotice(null), NOTICE_MS);
+    });
+    return () => {
+      unsubscribe();
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
+  return notice;
+}
+
 function useRemoteTranscriptionAvailable(): boolean {
   return useRemoteServerStore(state => {
     const server = state.servers.find(item => item.id === state.activeRemoteMediaServerIds.transcription);
@@ -124,6 +145,7 @@ export function useVoiceInput({ conversationId, interfaceMode, onTranscript, onA
 
   const [isTranscribingFile, setIsTranscribingFile] = useState(false);
   const [directError, setDirectError] = useState<string | null>(null);
+  const transcriptionNotice = useTranscriptionNotice();
 
   const supportsDirectAudio = (): boolean =>
     activeModelService.supportsAudioInput() && audioRecorderService.supportsDirectAudioInput();
@@ -448,6 +470,7 @@ export function useVoiceInput({ conversationId, interfaceMode, onTranscript, onA
     isTranscribing,
     partialResult,
     error,
+    transcriptionNotice,
     voiceAvailable,
     // INTENTS, not mechanics: the controller's registered handlers own the session decisions
     // (userStart out of stopped, userStop on a deliberate hands-free stop). Handing out the raw

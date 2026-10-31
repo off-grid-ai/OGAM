@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Animated, Platform, ActionSheetIOS } from 'react-native';
+import { View, Text, TextInput, Animated, Platform, ActionSheetIOS } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { GodIcon } from '../GodIcon';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -18,8 +19,13 @@ import { buildVoiceNoteHandlers } from './voiceNoteSend';
 import { QuickSettingsPopover, AttachPickerPopover } from './Popovers';
 import { useKeyboardAwarePopover } from './useKeyboardAwarePopover';
 import { useAppStore } from '../../stores';
+import { useRemoteServerStore } from '../../stores/remoteServerStore';
+import { remoteServerCapabilities } from '../../types/remoteServer';
 import { useUiModeStore } from '../../stores';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import { videoSeam } from '../../bootstrap/videoSeam';
+import { hardwareService } from '../../services/hardware';
+import { bestInstalledVideoModel, videoPacksForPhone } from '../../services/phoneVideoPacks';
 import { AppSheet } from '../AppSheet';
 import { Button } from '../Button';
 
@@ -36,6 +42,12 @@ interface ChatInputProps {
   conversationId?: string | null;
   imageModelLoaded?: boolean;
   onImageModeChange?: (mode: ImageModeState) => void;
+  /** Video is Pro. Called instead of turning video on when Pro is not active. */
+  onVideoUpgrade?: () => void;
+  /** Opens the screen where a computer is paired. Offered when no video model is reachable. */
+  onFindComputer?: () => void;
+  /** Opens the video models to download one. Offered instead when this phone can run one. */
+  onGetVideoModel?: () => void;
   onOpenSettings?: () => void;
   queue?: QueueView;
   queueActions?: QueueActions;
@@ -120,7 +132,15 @@ const buildNoVisionAlert = (opts: {
       [
         { text: 'Cancel', onPress: opts.dismiss },
         ...(opts.onRepairVision
-          ? [{ text: 'Go to Download Manager', onPress: () => { opts.dismiss(); opts.onRepairVision!(); } }]
+          ? [
+              {
+                text: 'Go to Download Manager',
+                onPress: () => {
+                  opts.dismiss();
+                  opts.onRepairVision!();
+                },
+              },
+            ]
           : [{ text: 'OK' }]),
       ],
     );
@@ -145,6 +165,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   conversationId,
   imageModelLoaded = false,
   onImageModeChange,
+  onVideoUpgrade,
+  onFindComputer,
+  onGetVideoModel,
   onOpenSettings: _onOpenSettings,
   queue,
   queueActions,
@@ -222,13 +245,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     addAudioAttachment,
     clearAttachments,
     onHaptic: () => triggerHaptic('impactMedium'),
-    appendTranscript: (text) => setMessage(prev => {
-      const prefix = prev.trim() ? `${prev.trim()} ` : '';
-      return prefix + text;
-    }),
+    appendTranscript: text =>
+      setMessage(prev => {
+        const prefix = prev.trim() ? `${prev.trim()} ` : '';
+        return prefix + text;
+      }),
   });
 
-  const { isRecording, isModelLoading, isStartingRecording, isTranscribing, partialResult, error, voiceAvailable, isAwaitingSpeech, startRecording, stopRecording, cancelRecording } = useVoiceInput({
+  const {
+    isRecording,
+    isModelLoading,
+    isStartingRecording,
+    isTranscribing,
+    partialResult,
+    error,
+    transcriptionNotice,
+    voiceAvailable,
+    isAwaitingSpeech,
+    startRecording,
+    stopRecording,
+    cancelRecording,
+  } = useVoiceInput({
     conversationId,
     interfaceMode,
     onTranscript: voiceHandlers.onTranscript,
@@ -281,7 +318,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setMessage('');
     clearAttachments();
     inputRef.current?.focus();
-    if (imageMode === 'force') {
+    if (imageMode === 'force' || imageMode === 'video') {
       setImageMode('auto');
       onImageModeChange?.('auto');
     }
@@ -301,6 +338,83 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setActiveImageModelId(downloadedImageModels[0].id);
     }
     const newMode = IMAGE_MODE_CYCLE[(IMAGE_MODE_CYCLE.indexOf(imageMode) + 1) % IMAGE_MODE_CYCLE.length];
+    setImageMode(newMode);
+    onImageModeChange?.(newMode);
+  };
+
+  /** No video model and no computer: download one when this phone can run it, else find the computer. */
+  const offerVideoStart = async () => {
+    await hardwareService.getDeviceInfo();
+    const phoneCanMakeVideo = videoPacksForPhone(hardwareService.getTotalMemoryGB()).length > 0;
+    if (phoneCanMakeVideo && onGetVideoModel) {
+      setAlertState(
+        showAlert('Make videos on this phone', 'Download a video model, and videos are made right here.', [
+          { text: 'Not now' },
+          {
+            text: 'Get a video model',
+            onPress: () => {
+              setAlertState(hideAlert());
+              onGetVideoModel();
+            },
+          },
+        ]),
+      );
+      return;
+    }
+    setAlertState(
+      showAlert(
+        'Videos are made on your computer',
+        'Find your computer running Off Grid AI Desktop, and videos are made there.',
+        onFindComputer
+          ? [
+              { text: 'Not now' },
+              {
+                text: 'Find my computer',
+                onPress: () => {
+                  setAlertState(hideAlert());
+                  onFindComputer();
+                },
+              },
+            ]
+          : [{ text: 'OK' }],
+      ),
+    );
+  };
+
+  const handleVideoModeToggle = () => {
+    if (imageMode !== 'video' && !videoSeam.available()) {
+      quickSettings.hide();
+      onVideoUpgrade?.();
+      return;
+    }
+    if (imageMode !== 'video') {
+      const { activeVideoModelId, downloadedVideoModels, setActiveVideoModelId } =
+        useAppStore.getState();
+      const remoteVideoId =
+        useRemoteServerStore.getState().activeRemoteMediaServerIds.video;
+      const localVideoSelected = downloadedVideoModels.some(
+        model => model.id === activeVideoModelId,
+      );
+      if (!remoteVideoId && !localVideoSelected) {
+        if (downloadedVideoModels.length === 0) {
+          const remote = useRemoteServerStore.getState();
+          const computer = [
+            ...remote.servers.filter(server => server.id === remote.activeServerId),
+            ...remote.servers,
+          ].find(server => remoteServerCapabilities(server).videoGeneration);
+          if (computer) {
+            remote.setActiveRemoteMediaServerId('video', computer.id);
+          } else {
+            quickSettings.hide();
+            offerVideoStart().catch(() => {});
+            return;
+          }
+        } else {
+          setActiveVideoModelId(bestInstalledVideoModel(downloadedVideoModels)!.id);
+        }
+      }
+    }
+    const newMode: ImageModeState = imageMode === 'video' ? 'auto' : 'video';
     setImageMode(newMode);
     onImageModeChange?.(newMode);
   };
@@ -343,26 +457,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }, ANIM_DURATION_IN);
   };
 
-  const assistantGate = assistantAvailability === 'no-pro'
-    ? {
-        title: 'Assistant requires Pro',
-        body: 'Assistant uses Web Use and Computer Use on a connected Desktop.',
-        action: 'View Pro',
-        onPress: onAssistantUpgrade,
-      }
-    : assistantAvailability === 'unavailable'
+  const assistantGate =
+    assistantAvailability === 'no-pro'
       ? {
-          title: 'Desktop tasks unavailable',
-          body: 'This Desktop is connected, but Web Use and Computer Use are not available. Allow remote tasks on the Desktop and try again.',
-          action: 'OK',
-          onPress: undefined,
+          title: 'Assistant requires Pro',
+          body: 'Assistant uses Web Use and Computer Use on a connected Desktop.',
+          action: 'View Pro',
+          onPress: onAssistantUpgrade,
         }
-    : {
-        title: 'Connect a Desktop',
-        body: 'Set up Sync and connect Off Grid AI Desktop to use Web Use and Computer Use.',
-        action: 'Set up Sync',
-        onPress: onAssistantSetupSync,
-      };
+      : assistantAvailability === 'unavailable'
+        ? {
+            title: 'Desktop tasks unavailable',
+            body: 'This Desktop is connected, but Web Use and Computer Use are not available. Allow remote tasks on the Desktop and try again.',
+            action: 'OK',
+            onPress: undefined,
+          }
+        : {
+            title: 'Connect a Desktop',
+            body: 'Set up Sync and connect Off Grid AI Desktop to use Web Use and Computer Use.',
+            action: 'Set up Sync',
+            onPress: onAssistantSetupSync,
+          };
 
   const handleAttachPress = () => {
     logger.log(`[COMPOSER-SM] attach pressed platform=${Platform.OS} supportsVision=${supportsVision}`);
@@ -372,7 +487,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         : ['Document', 'Cancel'];
       ActionSheetIOS.showActionSheetWithOptions(
         { options, cancelButtonIndex: options.length - 1 },
-        (index) => {
+        index => {
           if (supportsVision) {
             if (index === 0) handleVisionPress();
             else if (index === 1) handlePickDocument();
@@ -420,6 +535,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         onCancelRecording={cancelRecording}
         onStop={onStop}
         onImageModeToggle={handleImageModeToggle}
+        onVideoModeToggle={handleVideoModeToggle}
         onThinkingToggle={handleThinkingToggle}
         onToolsPress={onToolsPress}
         onMcpPress={onMcpPress}
@@ -437,6 +553,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         onAssistantPress={handleAssistantPress}
       />
       <AppSheet
+        sheet="assistant-gate"
         visible={assistantGateOpen}
         onClose={() => setAssistantGateOpen(false)}
         title={assistantGate.title}
@@ -498,6 +615,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     <View style={styles.container}>
       <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
       <QueueRow queue={queue} actions={queueActions} />
+      {transcriptionNotice ? (
+        <Text style={styles.transcriptionNotice} testID="transcription-notice">
+          {transcriptionNotice}
+        </Text>
+      ) : null}
       <View style={styles.mainRow}>
         <View style={styles.pill}>
           {showVoiceStatus ? (
@@ -514,7 +636,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 size="small"
                 testID="assistant-toggle"
                 accessibilityLabel="Assistant"
-                accessibilityState={{ selected: assistantEnabled, busy: assistantTransitioning }}
+                accessibilityState={{
+                  selected: assistantEnabled,
+                  busy: assistantTransitioning,
+                }}
                 onPress={handleAssistantPress}
                 active={assistantEnabled}
                 loading={assistantTransitioning}
@@ -533,7 +658,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 style={styles.pillInput}
                 value={message}
                 onChangeText={setMessage}
-                placeholder={placeholder}
+                placeholder={
+                  imageMode === 'video' ? 'Describe a video' : placeholder
+                }
                 placeholderTextColor={colors.textMuted}
                 multiline
                 scrollEnabled
@@ -578,6 +705,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         anchorX={quickSettings.anchor.x}
         imageMode={imageMode}
         onImageModeToggle={handleImageModeToggle}
+        onVideoModeToggle={handleVideoModeToggle}
         imageModelLoaded={imageModelLoaded}
         supportsThinking={supportsThinking}
         supportsToolCalling={supportsToolCalling}
@@ -594,6 +722,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         onClose={() => setAlertState(hideAlert())}
       />
       <AppSheet
+        sheet="assistant-gate"
         visible={assistantGateOpen}
         onClose={() => setAssistantGateOpen(false)}
         title={assistantGate.title}

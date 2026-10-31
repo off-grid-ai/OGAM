@@ -4,8 +4,8 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
 } from 'react-native';
+import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -18,7 +18,7 @@ import { useTheme, useThemedStyles } from '../theme';
 import { formatWhen } from '../utils/localTime';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { useChatStore, useProjectStore, useAppStore } from '../stores';
+import { useChatStore, useProjectStore, useAppStore, useRemoteServerStore } from '../stores';
 import { Conversation } from '../types';
 import { RootStackParamList } from '../navigation/types';
 import { byRecentActivity } from '../utils/conversationOrdering';
@@ -165,7 +165,10 @@ export const ProjectChatsScreen: React.FC = () => {
   const downloadedModels = useAppStore(state => state.downloadedModels);
   const activeModelId = useAppStore(state => state.activeModelId);
 
-  const hasModels = downloadedModels.length > 0;
+  const activeVideoModelId = useAppStore(s => s.activeVideoModelId);
+  const remoteVideoServerId = useRemoteServerStore(s => s.activeRemoteMediaServerIds.video);
+  const hasVideoModel = !!activeVideoModelId || !!remoteVideoServerId;
+  const hasModels = downloadedModels.length > 0 || hasVideoModel;
 
   // Get chats for this project
   const projectChats = useMemo(
@@ -179,6 +182,10 @@ export const ProjectChatsScreen: React.FC = () => {
   };
 
   const handleNewChat = () => {
+    if (hasVideoModel && downloadedModels.length === 0) {
+      navigation.navigate('Chat', { projectId });
+      return;
+    }
     if (!hasModels) {
       setAlertState(showAlert('No Model', 'Please download a model first from the Models tab.'));
       return;

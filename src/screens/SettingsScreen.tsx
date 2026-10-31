@@ -1,12 +1,12 @@
+import { useSearchModelLabel } from '../hooks/useSearchModelLabel';
 import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   Alert,
-  Switch,
 } from 'react-native';
+import { TouchableOpacity, Switch } from '../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -17,10 +17,10 @@ import {
 } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { Card } from '../components';
 import { createStyles } from './SettingsScreen.styles';
 import { SettingsAppearanceRow } from './SettingsAppearanceRow';
 import { SettingsCommunitySections } from './SettingsCommunitySections';
+import { SettingsAnalyticsSection } from './SettingsAnalyticsSection';
 import { AnimatedEntry } from '../components/AnimatedEntry';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { MadeWithLove } from '../components/MadeWithLove';
@@ -40,6 +40,7 @@ import { useOpenSync } from '../hooks/useOpenSync';
 import { appBuildLabel, appVersion } from '../utils/appVersion';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { openSupportEmail } from '../utils/supportEmail';
+import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
 
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'SettingsTab'>,
@@ -64,6 +65,7 @@ async function loadDemoData(): Promise<void> {
 
 export const SettingsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
+  const searchLabel = useSearchModelLabel();
   const focusTrigger = useFocusTrigger();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -166,6 +168,7 @@ export const SettingsScreen: React.FC = () => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader title="Settings" variant="tab" />
       <ScrollView
+        {...SCROLL_DEPTH_PROPS}
         style={styles.scrollView}
         contentContainerStyle={styles.content}
       >
@@ -192,6 +195,14 @@ export const SettingsScreen: React.FC = () => {
                 desc: 'System prompt, generation, and performance',
                 screen: 'ModelSettings' as const,
                 testID: 'open-model-settings',
+              },
+              {
+                // The search model is chosen in one place, Models → Search; this row only goes there.
+                icon: 'search',
+                title: 'Search Model',
+                desc: searchLabel,
+                screen: 'SearchModel' as const,
+                testID: 'open-search-model',
               },
               {
                 icon: 'wifi',
@@ -244,7 +255,12 @@ export const SettingsScreen: React.FC = () => {
                 onPress={() =>
                   item.screen === 'Sync'
                     ? openSync()
-                    : navigation.navigate(item.screen)
+                    : item.screen === 'SearchModel'
+                      ? (navigation as unknown as { navigate: (name: string, params: object) => void }).navigate(
+                          'ModelsTab',
+                          { initialTab: 'embedding' },
+                        )
+                      : navigation.navigate(item.screen)
                 }
                 testID={'testID' in item ? item.testID : undefined}
               >
@@ -315,19 +331,13 @@ export const SettingsScreen: React.FC = () => {
           </View>
         </AnimatedEntry>
 
-        {/* Privacy */}
-        <AnimatedEntry index={10} staggerMs={40} trigger={focusTrigger}>
-          <Card style={styles.privacyCard}>
-            <View style={styles.privacyIconContainer}>
-              <Icon name="shield" size={18} color={colors.textSecondary} />
-            </View>
-            <Text style={styles.privacyTitle}>Privacy First</Text>
-            <Text style={styles.privacyText}>
-              All your data stays on this device. No conversations, prompts, or
-              personal information is ever sent to any server.
-            </Text>
-          </Card>
-        </AnimatedEntry>
+        {/* Analytics: opt-in consent, what is shared, Report a problem */}
+        <SettingsAnalyticsSection
+          focusTrigger={focusTrigger}
+          styles={styles}
+          colors={colors}
+          onWhatWeShare={() => navigation.navigate('AnalyticsInfo')}
+        />
 
         {/* Pro feature sections registered at runtime by @offgrid/pro */}
         {settingsSections.map((Section, i) => (

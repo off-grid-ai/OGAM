@@ -4,6 +4,7 @@ export type RootStackParamList = {
   Onboarding: undefined;
   AutoSetup: undefined;
   AdvancedSetup: undefined;
+  AnalyticsInfo: undefined;
   Main: NavigatorScreenParams<MainTabParamList> | undefined;
   // Former ChatsStack
   Chat: { conversationId?: string; projectId?: string };
@@ -23,7 +24,8 @@ export type RootStackParamList = {
   // Former SettingsStack
   ModelSettings: undefined;
   RemoteServers: undefined;
-  RemoteServerEditor: { serverId?: string } | undefined;
+  /** `needsKey`: the scan found Off Grid AI Desktop, and it asks for an API key. */
+  RemoteServerEditor: { serverId?: string; needsKey?: boolean } | undefined;
   DeviceInfo: undefined;
   StorageSettings: undefined;
   SecuritySettings: undefined;
@@ -44,7 +46,7 @@ export type MainTabParamList = {
   ProjectsTab: undefined;
   ModelsTab:
     | {
-        initialTab?: 'text' | 'image' | 'voice' | 'transcription';
+        initialTab?: 'text' | 'image' | 'video' | 'voice' | 'transcription' | 'embedding';
         repairModelId?: string;
         initialSearchQuery?: string;
       }

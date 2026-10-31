@@ -106,6 +106,7 @@ export function getImageModelCompatibility(
   socInfo?: SoCInfo | null,
 ): { isCompatible: boolean; incompatibleReason: string | undefined } {
   const backendCompatible =
+    model.backend === 'sd' ||
     !imageRec?.compatibleBackends ||
     imageRec.compatibleBackends.includes(model.backend as any);
 
@@ -153,6 +154,8 @@ export function hfModelToDescriptor(
     backend: hfModel._coreml ? 'coreml' : hfModel.backend,
     variant: hfModel.variant,
     coremlFiles: hfModel._coremlFiles,
+    huggingFaceRepo: hfModel.repo,
+    huggingFaceFiles: hfModel.huggingFaceFiles,
     repo: hfModel.repo,
     attentionVariant: hfModel._coremlAttentionVariant,
   };

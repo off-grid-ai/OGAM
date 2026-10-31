@@ -45,7 +45,7 @@ describe('happy — a full disk surfaces a storage message on the image failure 
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/Not enough storage to prepare this image model/)).not.toBeNull(); });
     expect(h.view!.queryByText(/Free up space in Settings → Storage/)).not.toBeNull();
     // A storage refusal is not a memory problem: the card must not tell the user to close apps for RAM.
-    expect(h.view!.queryByText(/Not Enough Memory/)).toBeNull();
+    expect(h.view!.queryByText(/Not enough memory/)).toBeNull();
     expect(h.view!.queryByTestId('model-failure-retry-image')).not.toBeNull();
     expect(h.boundary.diffusion.calls.generateImage.length).toBe(0);
   });
@@ -57,7 +57,7 @@ describe('happy — a full disk surfaces a storage message on the image failure 
     await h.tapSend('a fox in the snow');
 
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/Not enough storage to prepare this image model/)).not.toBeNull(); });
-    expect(h.view!.queryByText(/Not Enough Memory/)).toBeNull();
+    expect(h.view!.queryByText(/Not enough memory/)).toBeNull();
     // The refusal is not shown as a pipeline crash that "unloaded" the model.
     expect(h.view!.queryByText(/the model encountered an error and was unloaded/)).toBeNull();
     expect(h.view!.queryByTestId('model-failure-retry-image')).not.toBeNull();

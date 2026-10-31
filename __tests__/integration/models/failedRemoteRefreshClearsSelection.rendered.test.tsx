@@ -17,12 +17,14 @@ function ModelsSheet() {
       labels={{
         text: textModel ?? 'Local text',
         image: imageModel ?? 'Local image',
+        video: mediaServers.video ? 'Cloud video' : 'Local video',
         voice: mediaServers.voice ? 'Cloud voice' : 'Local voice',
         speech: mediaServers.transcription ? 'Cloud speech' : 'Local speech',
       }}
       remote={{
         text: !!textModel,
         image: !!mediaServers.image,
+        video: !!mediaServers.video,
         voice: !!mediaServers.voice,
         speech: !!mediaServers.transcription,
       }}
@@ -46,6 +48,7 @@ describe('remote model refresh failure', () => {
         providerType: 'openai-compatible',
         mediaModels: {
           image: 'cloud-image',
+          video: 'cloud-video',
           transcription: 'cloud-speech',
           voice: 'cloud-voice',
         },
@@ -56,6 +59,7 @@ describe('remote model refresh failure', () => {
     store.setActiveRemoteTextModelId('cloud-text');
     store.setActiveRemoteImageModelId('cloud-image');
     store.setActiveRemoteMediaServerId('image', 'unavailable-gateway');
+    store.setActiveRemoteMediaServerId('video', 'unavailable-gateway');
     store.setActiveRemoteMediaServerId('transcription', 'unavailable-gateway');
     store.setActiveRemoteMediaServerId('voice', 'unavailable-gateway');
     global.fetch = async () =>
@@ -64,7 +68,7 @@ describe('remote model refresh failure', () => {
 
   it('unsets only the unreachable server models after Refresh Models', async () => {
     const view = render(<ModelsSheet />);
-    expect(view.getAllByTestId(/models-row-.*-remote/)).toHaveLength(4);
+    expect(view.getAllByTestId(/models-row-.*-remote/)).toHaveLength(5);
 
     fireEvent.press(view.getByTestId('models-refresh-remote'));
 
@@ -74,6 +78,7 @@ describe('remote model refresh failure', () => {
     });
     expect(view.getByText('Local text')).toBeTruthy();
     expect(view.getByText('Local image')).toBeTruthy();
+    expect(view.getByText('Local video')).toBeTruthy();
     expect(view.getByText('Local voice')).toBeTruthy();
     expect(view.getByText('Local speech')).toBeTruthy();
   });

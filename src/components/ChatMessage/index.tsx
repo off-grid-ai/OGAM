@@ -1,5 +1,8 @@
+import { useAppStore } from '../../stores';
+import { videoGenerationMeta } from '../../utils/modelHelpers';
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Clipboard } from 'react-native';
+import { View, Text, Clipboard } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
@@ -16,6 +19,7 @@ import { ThinkingIndicator } from '../ThinkingIndicator';
 import { triggerHaptic } from '../../utils/haptics';
 import { createStyles } from './styles';
 import { MessageAttachments } from './components/MessageAttachments';
+import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { MessageContent } from './components/MessageContent';
 import { GenerationMeta } from './components/GenerationMeta';
 import { MessageOverlays } from './components/MessageOverlays';
@@ -33,6 +37,7 @@ import type { ChatMessageProps } from './types';
 import type { Message } from '../../types';
 import { isSupportingChatContext } from '@offgrid/sync';
 import { VersionSwitcher } from './components/VersionSwitcher';
+import { messageAction } from '../../services/analytics/analytics';
 
 type MetaRowProps = {
   message: Message;
@@ -221,6 +226,18 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   onLongPress,
   onMenuOpen,
 }) => {
+  const savedVideo = useAppStore(state =>
+    message.role === 'assistant'
+      ? state.generatedVideos.find(video =>
+          message.attachments?.some(attachment =>
+            attachment.type === 'video' && attachment.id === video.id,
+          ),
+        )
+      : undefined,
+  );
+  const generationMeta = savedVideo
+    ? { ...videoGenerationMeta(savedVideo), ...message.generationMeta }
+    : message.generationMeta;
   const timelineHasThinking = Boolean(
     message.timeline?.some(entry => entry.kind === 'thinking'),
   );
@@ -237,6 +254,18 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const answerParsedContent = hasAssistantWork
     ? { ...parsedContent, thinking: '' }
     : parsedContent;
+  const isGeneratedVideo = Boolean(
+    !isUser &&
+      message.turnKind === 'video' &&
+      message.attachments?.length &&
+      message.attachments.every(attachment => attachment.type === 'video'),
+  );
+  // Video is Pro: Continue / New shot / Make it a story, and film cards, fill this slot.
+  const VideoActions = useSlot(SLOTS.messageVideoActions);
+  const showVideoActions = Boolean(
+    VideoActions && !isUser && !isStreaming && (isGeneratedVideo || message.videoStoryId),
+  );
+  // With Pro, the slot draws a generated clip as its own card; core's player is the free fallback.
   const hasVisibleAnswer = Boolean(
     hasAttachments || answerParsedContent.response.trim(),
   );
@@ -321,10 +350,16 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         </View>
       )}
 
-      {(!hideProse || hasAttachments) && showAnswerBubble && (
+      {(!hideProse || hasAttachments) && showAnswerBubble && !(showVideoActions && isGeneratedVideo) && (
         <View
           testID={message.isThinking ? undefined : 'message-bubble'}
-          style={message.isThinking ? undefined : bubbleStyle}
+          style={
+            message.isThinking
+              ? undefined
+              : isGeneratedVideo
+                ? styles.videoMessage
+                : bubbleStyle
+          }
         >
           {hasAttachments && (
             <MessageAttachments
@@ -336,20 +371,24 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             />
           )}
 
-          <MessageContent
-            isUser={isUser}
-            isThinking={message.isThinking}
-            content={message.content}
-            isStreaming={isStreaming}
-            parsedContent={answerParsedContent}
-            showThinking={showThinking}
-            onToggleThinking={onToggleThinking}
-            styles={styles}
-            documentSources={message.documentSources}
-            onCitationPress={onCitationPress}
-          />
+          {!isGeneratedVideo && (
+            <MessageContent
+              isUser={isUser}
+              isThinking={message.isThinking}
+              content={message.content}
+              isStreaming={isStreaming}
+              parsedContent={answerParsedContent}
+              showThinking={showThinking}
+              onToggleThinking={onToggleThinking}
+              styles={styles}
+              documentSources={message.documentSources}
+              onCitationPress={onCitationPress}
+            />
+          )}
         </View>
       )}
+
+      {showVideoActions && VideoActions && <VideoActions message={message} />}
 
       {!message.isThinking && !isStreaming && !hideProse && hasVisibleAnswer && (
         <MessageMetaRow
@@ -379,10 +418,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         </View>
       )}
 
-      {showTurnFooter && showGenerationDetails && message.generationMeta && (
+      {showTurnFooter && showGenerationDetails && generationMeta && (
         <GenerationMeta
           messageId={message.id}
-          generationMeta={message.generationMeta}
+          generationMeta={generationMeta}
           styles={styles}
           colors={colors}
         />
@@ -455,6 +494,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const handleCopy = () => {
     Clipboard.setString(displayContent);
+    messageAction('copy');
     triggerHaptic('notificationSuccess');
     onCopy?.(displayContent);
     setShowActionMenu(false);
@@ -473,8 +513,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const handleSaveEdit = (text: string) => {
     const trimmed = text.trim();
-    if (trimmed !== (isUser ? message.content : displayContent))
-      onEdit?.(message, trimmed);
+    if (trimmed !== (isUser ? message.content : displayContent) && onEdit) {
+      messageAction('edit');
+      onEdit(message, trimmed);
+    }
     setIsEditing(false);
   };
 

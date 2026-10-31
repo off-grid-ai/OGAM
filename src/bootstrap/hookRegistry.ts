@@ -19,6 +19,11 @@ export function registerHook(name: string, fn: HookFn): () => void {
   };
 }
 
+/** Whether a hook is registered (Pro features present and active). */
+export function hasHook(name: string): boolean {
+  return name in hooks;
+}
+
 /** Call a hook if registered; returns its result, or undefined when absent. */
 export function callHook<R = any>(name: string, ...args: any[]): R | undefined {
   const fn = hooks[name];
@@ -98,4 +103,29 @@ export const HOOKS = {
   /** (text: string, timestamp: number) => void — core copied text locally. Pro records it through
    *  the shared clipboard owner instead of waiting for a delayed native clipboard notification. */
   clipboardRecordLocalText: 'clipboard.recordLocalText',
+  /** () => Record<string, boolean> — Pro features switched on, for the daily analytics
+   *  `features_snapshot` (tts, mcp_tool, sync, clipboard, meetings, browser_action). */
+  analyticsProFeatures: 'analytics.proFeatures',
+  /** () => Record<string, number> — Pro counts for the daily analytics `usage_snapshot`, raw (core
+   *  buckets them): films, models_tts, mcp_servers, paired_devices. */
+  analyticsProUsage: 'analytics.proUsage',
+  /** Video is Pro. Core asks these through `videoSeam`; free builds register none of them. */
+  /** () => boolean — a video job (clip or film) is running. */
+  videoIsBusy: 'video.isBusy',
+  /** () => boolean — a video is running or requested for after the current reply. */
+  videoHasPending: 'video.hasPending',
+  /** () => Promise<void> — stop the running video and drop requested ones. */
+  videoCancel: 'video.cancel',
+  /** (input: { prompt: string; conversationId: string; initImagePath?: string }) => Promise<unknown>
+   *  — make one clip in the chat. */
+  videoGenerate: 'video.generate',
+  /** (conversationId: string, input: { prompt: string; film?: boolean; startImage?: 'last_image' })
+   *  => void — the model asked for a clip (generate_video) or a film (make_film); start it after
+   *  this reply. */
+  videoDefer: 'video.defer',
+  /** (conversationId: string, stopped: boolean) => Promise<void> — the reply ended; start the
+   *  requested video unless the person stopped. */
+  videoFinishDeferred: 'video.finishDeferred',
+  /** (conversationId: string) => void — the reply failed; forget the requested video. */
+  videoDiscardDeferred: 'video.discardDeferred',
 } as const;

@@ -258,7 +258,7 @@ export const useWhisperTranscription = ({ ensureModelReady, onCaptureEnded }: Us
       logger.log('[Whisper] Starting realtime transcription...');
 
       await whisperService.startRealtimeTranscription((result) => {
-        logger.log('[Whisper] Transcription result:', result.isCapturing, result.text?.slice(0, 50));
+        logger.log('[Whisper] Transcription result:', result.isCapturing, `${result.text?.length ?? 0}ch`);
 
         if (isCancelled.current || !mountedRef.current) return;
 

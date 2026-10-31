@@ -12,8 +12,11 @@ import { render, fireEvent, screen } from '@testing-library/react-native';
 import { ToolsScreen } from '../../../src/screens/ToolsScreen';
 import { AVAILABLE_TOOLS } from '../../../src/services/tools/registry';
 
+// Video tools are Pro (d51e111c1, a3f6bd8cf): without Pro video the screen offers the free tools.
+const FREE_TOOLS = AVAILABLE_TOOLS.filter(tool => !['generate_video', 'make_film'].includes(tool.id));
+
 function expectEverySwitchMatchesItsLabel() {
-  for (const tool of AVAILABLE_TOOLS) {
+  for (const tool of FREE_TOOLS) {
     const toggle = screen.getByTestId(`tool-picker-toggle-${tool.id}`);
     const label: string = toggle.props.accessibilityLabel;
     expect(label === `${tool.displayName}, ON` || label === `${tool.displayName}, OFF`).toBe(true);

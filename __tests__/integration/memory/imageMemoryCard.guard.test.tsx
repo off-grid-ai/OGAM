@@ -3,7 +3,7 @@
  *
  * You can't test a SIGKILL; you test that the app AVOIDS it. These drive the REAL imageGenerationService
  * with an image model that cannot fit the seeded RAM — the REAL modelResidencyManager + memoryBudget
- * decide — and assert the user sees the graceful "Not Enough Memory" card (with a "Load Anyway"
+ * decide — and assert the user sees the graceful "Not enough memory" card (with a "Load Anyway"
  * affordance), never a silent proceed-to-crash. Only native leaves are faked (diffusion + RAM); a CoreML
  * model skips the mnn/qnn integrity gate so no filesystem is needed.
  *
@@ -42,10 +42,10 @@ describe('memory OOM-avoidance — image gen + ModelFailureCard (guards)', () =>
     expect(result).toBeNull();
 
     const view = t.render(t.React.createElement(t.ModelFailureCard, {}));
-    expect(view.getByText('Image model: Not Enough Memory')).toBeTruthy();
+    expect(view.getByText('Image model: Not enough memory')).toBeTruthy();
   });
 
-  it('refuses an unfittable load and shows the "Not Enough Memory" card + Load Anyway', async () => {
+  it('refuses an unfittable load and shows the "Not enough memory" card + Load Anyway', async () => {
     const t = await setup({ platform: 'ios', totalBytes: 6 * GB, availBytes: 300 * MB }, 8 * GB);
     const result = await t.imageGenerationService.generateImage({ prompt: 'a cat' });
     expect(result).toBeNull(); // refused, not generated
@@ -53,7 +53,7 @@ describe('memory OOM-avoidance — image gen + ModelFailureCard (guards)', () =>
     const view = t.render(t.React.createElement(t.ModelFailureCard, {}));
     // The graceful surface the user sees instead of a crash: the failure card + a Load Anyway escape hatch.
     expect(view.getByTestId('model-failure-load-anyway-image')).toBeTruthy();
-    expect(view.getByText('Image model: Not Enough Memory')).toBeTruthy();
+    expect(view.getByText('Image model: Not enough memory')).toBeTruthy();
     expect(view.queryByText(/Free up space/)).not.toBeNull();
   });
 
@@ -71,6 +71,6 @@ describe('memory OOM-avoidance — image gen + ModelFailureCard (guards)', () =>
     // Whether the forced 8GB dirty load then survives on the physical device is the native OOM outcome —
     // an on-device run, not something the in-Node fake can honestly assert.
     const view = t.render(t.React.createElement(t.ModelFailureCard, {}));
-    expect(view.queryByText('Image model: Not Enough Memory')).toBeNull();
+    expect(view.queryByText('Image model: Not enough memory')).toBeNull();
   });
 });

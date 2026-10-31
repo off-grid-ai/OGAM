@@ -1,0 +1,18 @@
+--- a/src/ggml-vulkan/ggml-vulkan.cpp
++++ b/src/ggml-vulkan/ggml-vulkan.cpp
+@@ -146,6 +146,15 @@
+     return std::find(lightning_indexer_k_types.begin(), lightning_indexer_k_types.end(), type) != lightning_indexer_k_types.end();
+ }
+ void ggml_vk_print_device_fault_info(const vk_device& device) {
++#ifdef __ANDROID__
++    // Adreno's fault-info callback can dereference null after device loss
++    // (observed on SM8635). Keep normal error reporting and exception handling
++    // alive instead of crashing while asking the driver for extra diagnostics.
++    if (device->vendor_id == VK_VENDOR_ID_QUALCOMM) {
++        GGML_LOG_ERROR("ggml_vulkan: skipping unsafe Adreno device-fault query\n");
++        return;
++    }
++#endif
+     if (!device->device_fault || !device->pfn_vkGetDeviceFaultInfoEXT) {
+         return;
+     }

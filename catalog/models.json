@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-23",
+  "updatedAt": "2026-10-27",
   "sections": {
     "models": [
       {
@@ -26,6 +26,646 @@
             "role": "primary"
           }
         ]
+      },
+      {
+        "id": "leejet/FLUX.2-klein-4B-GGUF",
+        "quantLabel": "Full quality",
+        "sourceModelId": "black-forest-labs/FLUX.2-klein-4B",
+        "name": "FLUX.2 klein 4B",
+        "kind": "image",
+        "tags": [
+          "2026",
+          "Fast",
+          "Image editing"
+        ],
+        "org": "Black Forest Labs",
+        "description": "The small FLUX from Black Forest Labs: 4 steps, sharp detail and text, edits with a reference image. Apache-2.0. The Qwen3 text encoder and VAE are included in the download.",
+        "minRamGb": 11,
+        "quant": "Q8_0",
+        "releaseDate": "2026-01-15",
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "flux-2-klein-4b-Q8_0.gguf",
+            "url": "https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF/resolve/3b1f5a9dc3abb32238b053aeb3d823c30afdacbd/flux-2-klein-4b-Q8_0.gguf",
+            "role": "primary",
+            "sizeBytes": 4300629440,
+            "sha256": "0bba6951258ec8f92d51114a8fa13e66828297bfff58a738f52729b3ef66fa28"
+          },
+          {
+            "name": "Qwen3-4B-Q4_K_M.gguf",
+            "url": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/22c9fc8a8c7700b76a1789366280a6a5a1ad1120/Qwen3-4B-Q4_K_M.gguf",
+            "role": "aux",
+            "sizeBytes": 2497281312,
+            "sha256": "f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a"
+          },
+          {
+            "name": "flux2-vae.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/resolve/533c4cbc3d3b89af1743d9466c434e89810391c0/split_files/vae/flux2-vae.safetensors",
+            "role": "aux",
+            "sizeBytes": 336211292,
+            "sha256": "868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3"
+          }
+        ]
+      },
+      {
+        "id": "leejet/FLUX.2-klein-4B-GGUF-Q4",
+        "quantOf": "leejet/FLUX.2-klein-4B-GGUF",
+        "quantLabel": "Light",
+        "sourceModelId": "black-forest-labs/FLUX.2-klein-4B",
+        "name": "FLUX.2 klein 4B (Light)",
+        "kind": "image",
+        "tags": [
+          "2026",
+          "Light",
+          "Fast",
+          "Image editing"
+        ],
+        "org": "Black Forest Labs",
+        "description": "The small FLUX from Black Forest Labs: 4 steps, sharp detail and text, edits with a reference image. Apache-2.0. The Qwen3 text encoder and VAE are included in the download.",
+        "minRamGb": 7,
+        "quant": "Q4_0",
+        "releaseDate": "2026-01-15",
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "flux-2-klein-4b-Q4_0.gguf",
+            "url": "https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF/resolve/3b1f5a9dc3abb32238b053aeb3d823c30afdacbd/flux-2-klein-4b-Q4_0.gguf",
+            "role": "primary",
+            "sizeBytes": 2460378560,
+            "sha256": "d1023499ef3f2f82ff7c50e6778495195c1b6cc34835741778868428111f9ff4"
+          },
+          {
+            "name": "Qwen3-4B-Q4_K_M.gguf",
+            "url": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/22c9fc8a8c7700b76a1789366280a6a5a1ad1120/Qwen3-4B-Q4_K_M.gguf",
+            "role": "aux",
+            "sizeBytes": 2497281312,
+            "sha256": "f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a"
+          },
+          {
+            "name": "flux2-vae.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/resolve/533c4cbc3d3b89af1743d9466c434e89810391c0/split_files/vae/flux2-vae.safetensors",
+            "role": "aux",
+            "sizeBytes": 336211292,
+            "sha256": "868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3"
+          }
+        ]
+      },
+      {
+        "id": "leejet/Z-Image-Turbo-GGUF",
+        "quantLabel": "Full quality",
+        "sourceModelId": "Tongyi-MAI/Z-Image-Turbo",
+        "name": "Z-Image Turbo (2026)",
+        "kind": "image",
+        "tags": [
+          "Recommended",
+          "2026",
+          "Top quality"
+        ],
+        "org": "Alibaba Tongyi",
+        "description": "1024px in 8 steps, strong bilingual text. Apache-2.0. The Qwen3 text encoder and VAE are included in the download.",
+        "minRamGb": 15,
+        "quant": "Q4_K",
+        "imageModes": [
+          "txt2img"
+        ],
+        "files": [
+          {
+            "name": "z_image_turbo-Q4_K.gguf",
+            "url": "https://huggingface.co/leejet/Z-Image-Turbo-GGUF/resolve/c61c0e422dc8b541b7548cf33a4ef8302b0f8085/z_image_turbo-Q4_K.gguf",
+            "role": "primary",
+            "sizeBytes": 3864250304,
+            "sha256": "14b375ab4f226bc5378f68f37e899ef3c2242b8541e61e2bc1aff40976086fbd"
+          },
+          {
+            "name": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+            "url": "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+            "role": "aux",
+            "sizeBytes": 2497281120,
+            "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597"
+          },
+          {
+            "name": "ae.safetensors",
+            "url": "https://huggingface.co/second-state/FLUX.1-schnell-GGUF/resolve/8c45a2ba25e2d02bd34230989fb54983f39e44ec/ae.safetensors",
+            "role": "aux",
+            "sizeBytes": 335304388,
+            "sha256": "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38"
+          }
+        ]
+      },
+      {
+        "id": "leejet/Z-Image-Turbo-GGUF-Q3",
+        "quantOf": "leejet/Z-Image-Turbo-GGUF",
+        "quantLabel": "Light",
+        "sourceModelId": "Tongyi-MAI/Z-Image-Turbo",
+        "name": "Z-Image Turbo (Light)",
+        "kind": "image",
+        "tags": [
+          "2026",
+          "Light"
+        ],
+        "org": "Alibaba Tongyi",
+        "description": "1024px in 8 steps, strong bilingual text. Apache-2.0. The Qwen3 text encoder and VAE are included in the download.",
+        "minRamGb": 11,
+        "quant": "Q3_K",
+        "imageModes": [
+          "txt2img"
+        ],
+        "files": [
+          {
+            "name": "z_image_turbo-Q3_K.gguf",
+            "url": "https://huggingface.co/leejet/Z-Image-Turbo-GGUF/resolve/c61c0e422dc8b541b7548cf33a4ef8302b0f8085/z_image_turbo-Q3_K.gguf",
+            "role": "primary",
+            "sizeBytes": 3143559104,
+            "sha256": "4b44bdaa7814f20d7cf144e3939bd93aa32f50660204dd0c2aea5c5376232980"
+          },
+          {
+            "name": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+            "url": "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+            "role": "aux",
+            "sizeBytes": 2497281120,
+            "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597"
+          },
+          {
+            "name": "ae.safetensors",
+            "url": "https://huggingface.co/second-state/FLUX.1-schnell-GGUF/resolve/8c45a2ba25e2d02bd34230989fb54983f39e44ec/ae.safetensors",
+            "role": "aux",
+            "sizeBytes": 335304388,
+            "sha256": "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38"
+          }
+        ]
+      },
+      {
+        "id": "mzwing/SDXL-Lightning-GGUF",
+        "supersededBy": "leejet/FLUX.2-klein-4B-GGUF",
+        "name": "SDXL Lightning (4-step)",
+        "kind": "image",
+        "tags": [
+          "Recommended",
+          "Fast"
+        ],
+        "org": "ByteDance",
+        "description": "Near-SDXL quality at 1024px in 4 steps (~7× faster). ~4GB model. Best balance — recommended.",
+        "minRamGb": 8,
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "sdxl_lightning_4step.q8_0.gguf",
+            "url": "https://huggingface.co/mzwing/SDXL-Lightning-GGUF/resolve/main/sdxl_lightning_4step.q8_0.gguf",
+            "role": "primary",
+            "sizeBytes": 4098988672
+          }
+        ]
+      },
+      {
+        "id": "OlegSkutte/sdxl-turbo-GGUF",
+        "supersededBy": "leejet/FLUX.2-klein-4B-GGUF",
+        "name": "SDXL Turbo (fast drafts)",
+        "kind": "image",
+        "tags": [
+          "Fastest",
+          "Drafts"
+        ],
+        "org": "Stability AI",
+        "description": "Distilled SDXL — 1-4 steps, ~10s drafts at 512px. Fastest option; lower fidelity.",
+        "minRamGb": 8,
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "sd_xl_turbo_1.0.q8_0.gguf",
+            "url": "https://huggingface.co/OlegSkutte/sdxl-turbo-GGUF/resolve/main/sd_xl_turbo_1.0.q8_0.gguf",
+            "role": "primary",
+            "sizeBytes": 4098988672
+          }
+        ]
+      },
+      {
+        "id": "offgrid-ai/realvisxl-v5.0-GGUF",
+        "quantLabel": "Full quality",
+        "name": "RealVisXL v5.0 (photoreal)",
+        "kind": "image",
+        "tags": [
+          "High quality",
+          "Photoreal"
+        ],
+        "org": "RealVis",
+        "description": "Top photorealism SDXL — Off Grid GGUF build of SG161222/RealVisXL_V5.0.",
+        "minRamGb": 8,
+        "quant": "Q8_0",
+        "releaseDate": "2024-08-05",
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "realvisxl-v5.0-Q8_0.gguf",
+            "url": "https://huggingface.co/off-grid-ai/realvisxl-v5.0-GGUF/resolve/main/realvisxl-v5.0-Q8_0.gguf",
+            "role": "primary",
+            "sizeBytes": 4180188864
+          }
+        ]
+      },
+      {
+        "id": "offgrid-ai/realvisxl-v5.0-GGUF-Q4",
+        "quantOf": "offgrid-ai/realvisxl-v5.0-GGUF",
+        "quantLabel": "Light",
+        "name": "RealVisXL v5.0 (Light)",
+        "kind": "image",
+        "tags": [
+          "Photoreal",
+          "Light"
+        ],
+        "org": "RealVis",
+        "description": "Top photorealism SDXL. Q4 quant: ~35% less memory, small quality trade-off. Runs on a 16GB Mac. Off Grid GGUF build of SG161222/RealVisXL_V5.0.",
+        "minRamGb": 8,
+        "quant": "Q4_K",
+        "releaseDate": "2024-08-05",
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "realvisxl-v5.0-Q4_K.gguf",
+            "url": "https://huggingface.co/off-grid-ai/realvisxl-v5.0-GGUF/resolve/main/realvisxl-v5.0-Q4_K.gguf",
+            "role": "primary",
+            "sizeBytes": 2797755008
+          }
+        ]
+      },
+      {
+        "id": "offgrid-ai/realvisxl-v5.0-lightning-GGUF",
+        "quantLabel": "Full quality",
+        "name": "RealVisXL v5.0 Lightning (photoreal)",
+        "kind": "image",
+        "tags": [
+          "Photoreal"
+        ],
+        "org": "RealVis",
+        "description": "Photoreal SDXL, few-step (fast) — Off Grid GGUF build of SG161222/RealVisXL_V5.0_Lightning.",
+        "minRamGb": 8,
+        "quant": "Q8_0",
+        "releaseDate": "2024-09-02",
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "realvisxl-v5.0-lightning-Q8_0.gguf",
+            "url": "https://huggingface.co/off-grid-ai/realvisxl-v5.0-lightning-GGUF/resolve/main/realvisxl-v5.0-lightning-Q8_0.gguf",
+            "role": "primary",
+            "sizeBytes": 4180188864
+          }
+        ]
+      },
+      {
+        "id": "offgrid-ai/realvisxl-v5.0-lightning-GGUF-Q4",
+        "quantOf": "offgrid-ai/realvisxl-v5.0-lightning-GGUF",
+        "quantLabel": "Light",
+        "name": "RealVisXL v5.0 Lightning (Light)",
+        "kind": "image",
+        "tags": [
+          "Fast",
+          "Photoreal",
+          "Light"
+        ],
+        "org": "RealVis",
+        "description": "Photoreal SDXL, few-step (fast). Q4 quant: ~35% less memory, small quality trade-off. Runs on a 16GB Mac. Off Grid GGUF build of SG161222/RealVisXL_V5.0_Lightning.",
+        "minRamGb": 8,
+        "quant": "Q4_K",
+        "releaseDate": "2024-09-02",
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "realvisxl-v5.0-lightning-Q4_K.gguf",
+            "url": "https://huggingface.co/off-grid-ai/realvisxl-v5.0-lightning-GGUF/resolve/main/realvisxl-v5.0-lightning-Q4_K.gguf",
+            "role": "primary",
+            "sizeBytes": 2797755008
+          }
+        ]
+      },
+      {
+        "id": "offgrid-ai/dreamshaper-xl-v2-turbo-GGUF",
+        "quantLabel": "Full quality",
+        "name": "DreamShaper XL v2 Turbo (versatile)",
+        "kind": "image",
+        "tags": [
+          "Versatile"
+        ],
+        "org": "Lykon",
+        "description": "The all-rounder — photoreal, art, fantasy, 3D. Off Grid GGUF build of Lykon/dreamshaper-xl-v2-turbo. Full Q8 quant (best quality); best on 24GB+ RAM.",
+        "minRamGb": 8,
+        "quant": "Q8_0",
+        "releaseDate": "2024-02-07",
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "dreamshaper-xl-v2-turbo-Q8_0.gguf",
+            "url": "https://huggingface.co/off-grid-ai/dreamshaper-xl-v2-turbo-GGUF/resolve/main/dreamshaper-xl-v2-turbo-Q8_0.gguf",
+            "role": "primary",
+            "sizeBytes": 4180813664
+          }
+        ]
+      },
+      {
+        "id": "offgrid-ai/dreamshaper-xl-v2-turbo-GGUF-Q4",
+        "quantOf": "offgrid-ai/dreamshaper-xl-v2-turbo-GGUF",
+        "quantLabel": "Light",
+        "name": "DreamShaper XL v2 Turbo (Light)",
+        "kind": "image",
+        "tags": [
+          "Versatile",
+          "Fast",
+          "Light"
+        ],
+        "org": "Lykon",
+        "description": "The all-rounder — photoreal, art, fantasy, 3D. Q4 quant: ~35% less memory than the full model, small quality trade-off. Runs on a 16GB Mac. Off Grid GGUF build of Lykon/dreamshaper-xl-v2-turbo.",
+        "minRamGb": 8,
+        "quant": "Q4_K",
+        "releaseDate": "2024-02-07",
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "dreamshaper-xl-v2-turbo-Q4_K.gguf",
+            "url": "https://huggingface.co/off-grid-ai/dreamshaper-xl-v2-turbo-GGUF/resolve/main/dreamshaper-xl-v2-turbo-Q4_K.gguf",
+            "role": "primary",
+            "sizeBytes": 2798084896
+          }
+        ]
+      },
+      {
+        "id": "offgrid-ai/juggernaut-xl-v9-GGUF",
+        "quantLabel": "Full quality",
+        "name": "Juggernaut XL v9 (photoreal)",
+        "kind": "image",
+        "tags": [
+          "High quality",
+          "Photoreal"
+        ],
+        "org": "RunDiffusion",
+        "description": "Versatile photoreal SDXL — cinematic, portraits, landscapes. Off Grid GGUF build of RunDiffusion/Juggernaut-XL-v9.",
+        "minRamGb": 8,
+        "quant": "Q8_0",
+        "releaseDate": "2024-02-18",
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "juggernaut-xl-v9-Q8_0.gguf",
+            "url": "https://huggingface.co/off-grid-ai/juggernaut-xl-v9-GGUF/resolve/main/juggernaut-xl-v9-Q8_0.gguf",
+            "role": "primary",
+            "sizeBytes": 4347454816
+          }
+        ]
+      },
+      {
+        "id": "offgrid-ai/juggernaut-xl-v9-GGUF-Q4",
+        "quantOf": "offgrid-ai/juggernaut-xl-v9-GGUF",
+        "quantLabel": "Light",
+        "name": "Juggernaut XL v9 (Light)",
+        "kind": "image",
+        "tags": [
+          "Photoreal",
+          "Light"
+        ],
+        "org": "RunDiffusion",
+        "description": "Versatile photoreal SDXL. Q4 quant: ~35% less memory, small quality trade-off. Runs on a 16GB Mac. Off Grid GGUF build of RunDiffusion/Juggernaut-XL-v9.",
+        "minRamGb": 8,
+        "quant": "Q4_K",
+        "releaseDate": "2024-02-18",
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "juggernaut-xl-v9-Q4_K.gguf",
+            "url": "https://huggingface.co/off-grid-ai/juggernaut-xl-v9-GGUF/resolve/main/juggernaut-xl-v9-Q4_K.gguf",
+            "role": "primary",
+            "sizeBytes": 2965023776
+          }
+        ]
+      },
+      {
+        "id": "offgrid-ai/animagine-xl-4.0-GGUF",
+        "quantLabel": "Full quality",
+        "name": "Animagine XL 4.0 (anime)",
+        "kind": "image",
+        "tags": [
+          "High quality",
+          "Anime"
+        ],
+        "org": "Cagliostro",
+        "description": "Leading anime SDXL — strong character knowledge. Off Grid GGUF build of cagliostrolab/animagine-xl-4.0.",
+        "minRamGb": 8,
+        "quant": "Q8_0",
+        "releaseDate": "2025-01-10",
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "animagine-xl-4.0-Q8_0.gguf",
+            "url": "https://huggingface.co/off-grid-ai/animagine-xl-4.0-GGUF/resolve/main/animagine-xl-4.0-Q8_0.gguf",
+            "role": "primary",
+            "sizeBytes": 4180186816
+          }
+        ]
+      },
+      {
+        "id": "offgrid-ai/animagine-xl-4.0-GGUF-Q4",
+        "quantOf": "offgrid-ai/animagine-xl-4.0-GGUF",
+        "quantLabel": "Light",
+        "name": "Animagine XL 4.0 (Light)",
+        "kind": "image",
+        "tags": [
+          "Anime",
+          "Light"
+        ],
+        "org": "Cagliostro",
+        "description": "Leading anime SDXL — strong character knowledge. Q4 quant: ~35% less memory, small quality trade-off. Runs on a 16GB Mac. Off Grid GGUF build of cagliostrolab/animagine-xl-4.0.",
+        "minRamGb": 8,
+        "quant": "Q4_K",
+        "releaseDate": "2025-01-10",
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "animagine-xl-4.0-Q4_K.gguf",
+            "url": "https://huggingface.co/off-grid-ai/animagine-xl-4.0-GGUF/resolve/main/animagine-xl-4.0-Q4_K.gguf",
+            "role": "primary",
+            "sizeBytes": 2797752960
+          }
+        ]
+      },
+      {
+        "id": "offgrid-ai/illustrious-xl-v2.0-GGUF",
+        "quantLabel": "Full quality",
+        "name": "Illustrious XL v2.0 (anime)",
+        "kind": "image",
+        "tags": [
+          "High quality",
+          "Anime"
+        ],
+        "org": "OnomaAI",
+        "description": "Top anime / illustration SDXL base. Off Grid GGUF build of OnomaAIResearch/Illustrious-XL-v2.0.",
+        "minRamGb": 8,
+        "quant": "Q8_0",
+        "releaseDate": "2025-04-18",
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "illustrious-xl-v2.0-Q8_0.gguf",
+            "url": "https://huggingface.co/off-grid-ai/illustrious-xl-v2.0-GGUF/resolve/main/illustrious-xl-v2.0-Q8_0.gguf",
+            "role": "primary",
+            "sizeBytes": 4180186816
+          }
+        ]
+      },
+      {
+        "id": "offgrid-ai/illustrious-xl-v2.0-GGUF-Q4",
+        "quantOf": "offgrid-ai/illustrious-xl-v2.0-GGUF",
+        "quantLabel": "Light",
+        "name": "Illustrious XL v2.0 (Light)",
+        "kind": "image",
+        "tags": [
+          "Anime",
+          "Light"
+        ],
+        "org": "OnomaAI",
+        "description": "Top anime / illustration SDXL base. Q4 quant: ~35% less memory, small quality trade-off. Runs on a 16GB Mac. Off Grid GGUF build of OnomaAIResearch/Illustrious-XL-v2.0.",
+        "minRamGb": 8,
+        "quant": "Q4_K",
+        "releaseDate": "2025-04-18",
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "illustrious-xl-v2.0-Q4_K.gguf",
+            "url": "https://huggingface.co/off-grid-ai/illustrious-xl-v2.0-GGUF/resolve/main/illustrious-xl-v2.0-Q4_K.gguf",
+            "role": "primary",
+            "sizeBytes": 2797752960
+          }
+        ]
+      },
+      {
+        "id": "off-grid-ai/Wan2.1-T2V-1.3B-GGUF-Q4",
+        "quantOf": "off-grid-ai/Wan2.1-T2V-1.3B-GGUF",
+        "quantLabel": "Light",
+        "sourceModelId": "Wan-AI/Wan2.1-T2V-1.3B",
+        "name": "Wan 2.1 (1.3B), Light",
+        "kind": "video",
+        "org": "Off Grid AI",
+        "description": "Create short, silent videos from a description. Converted to GGUF by Off Grid AI; the text encoder and VAE are included in the download.",
+        "minRamGb": 16,
+        "quant": "Q4_K",
+        "videoModes": [
+          "text-to-video"
+        ],
+        "tags": [
+          "Text to video",
+          "Short clips",
+          "Light"
+        ],
+        "files": [
+          {
+            "name": "Wan2.1-T2V-1.3B-calibrated-Q4_K_S.gguf",
+            "url": "https://huggingface.co/off-grid-ai/Wan2.1-T2V-1.3B-GGUF/resolve/main/Wan2.1-T2V-1.3B-calibrated-Q4_K_S.gguf",
+            "sizeBytes": 816061024,
+            "sha256": "82788a4a3ce6e206edd3e8e5fe512b2a75344a3d272d80f07cd4e48b60b7aaf7",
+            "role": "primary"
+          },
+          {
+            "name": "wan_2.1_vae.safetensors",
+            "url": "https://huggingface.co/off-grid-ai/Video-Companions-GGUF/resolve/main/wan_2.1_vae.safetensors",
+            "sizeBytes": 253815318,
+            "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b",
+            "role": "aux"
+          },
+          {
+            "name": "umt5-xxl-encoder-Q4_K_M.gguf",
+            "url": "https://huggingface.co/off-grid-ai/Video-Companions-GGUF/resolve/main/umt5-xxl-encoder-Q4_K_M.gguf",
+            "sizeBytes": 3655145312,
+            "sha256": "17cf97a5bbbc60a646d6105b832b6f657ce904a8a1ad970e4b59df0c67584a40",
+            "role": "aux"
+          }
+        ]
+      },
+      {
+        "id": "off-grid-ai/Wan2.2-TI2V-5B-GGUF-Q4",
+        "quantOf": "off-grid-ai/Wan2.2-TI2V-5B-GGUF",
+        "quantLabel": "Light",
+        "sourceModelId": "Wan-AI/Wan2.2-TI2V-5B",
+        "name": "Wan 2.2 (5B), Light",
+        "kind": "video",
+        "org": "Off Grid AI",
+        "description": "Create short, silent videos with Wan 2.2, from a description or a photo. Converted to GGUF by Off Grid AI; the text encoder and VAE are included in the download.",
+        "minRamGb": 24,
+        "quant": "Q4_K",
+        "videoModes": [
+          "text-to-video"
+        ],
+        "tags": [
+          "Text to video",
+          "Short clips",
+          "Light"
+        ],
+        "files": [
+          {
+            "name": "Wan2.2-TI2V-5B-Q4_K_S.gguf",
+            "url": "https://huggingface.co/off-grid-ai/Wan2.2-TI2V-5B-GGUF/resolve/main/Wan2.2-TI2V-5B-Q4_K_S.gguf",
+            "sizeBytes": 2861621472,
+            "sha256": "2221abe02e0f9024181aafebd92944cd999518955a0ae7706650fbc0941a14c2",
+            "role": "primary"
+          },
+          {
+            "name": "wan2.2_vae.safetensors",
+            "url": "https://huggingface.co/off-grid-ai/Wan2.2-TI2V-5B-GGUF/resolve/main/wan2.2_vae.safetensors",
+            "sizeBytes": 1409400960,
+            "sha256": "e40321bd36b9709991dae2530eb4ac303dd168276980d3e9bc4b6e2b75fed156",
+            "role": "aux"
+          },
+          {
+            "name": "umt5-xxl-encoder-Q4_K_M.gguf",
+            "url": "https://huggingface.co/off-grid-ai/Video-Companions-GGUF/resolve/main/umt5-xxl-encoder-Q4_K_M.gguf",
+            "sizeBytes": 3655145312,
+            "sha256": "17cf97a5bbbc60a646d6105b832b6f657ce904a8a1ad970e4b59df0c67584a40",
+            "role": "aux"
+          }
+        ]
       }
     ],
     "text": [
@@ -40,7 +680,16 @@
         "isNew": true
       }
     ],
-    "transcription": [],
+    "transcription": [
+      {
+        "id": "large-v3-turbo-q5_0",
+        "name": "Large v3 Turbo (Light)",
+        "size": 574,
+        "lang": "multi",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
+        "description": "Large v3 Turbo at a third of the download, 99 languages"
+      }
+    ],
     "coreml": [],
     "litert": []
   }

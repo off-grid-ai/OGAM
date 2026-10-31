@@ -3,10 +3,9 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
-  Switch,
   Modal,
 } from 'react-native';
+import { TouchableOpacity, Switch } from '../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../components/Button';

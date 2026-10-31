@@ -297,9 +297,12 @@ describe('Pro mobile state sync journey', () => {
         created_at: createdAt,
       },
     );
+    // Twenty real edits: a put that repeats the current value is not a new op, so each revision
+    // carries its own value and the Desktop's final 0.55 is genuinely later than the phone's
+    // own first-run settings.
     for (let revision = 0; revision < 20; revision += 1) {
       remoteLog.record(CORE_SYNC_ENTITIES.modelSetting, 'temperature', 'put', {
-        value_json: revision === 19 ? '0.55' : '0.5',
+        value_json: revision === 19 ? '0.55' : (0.3 + revision * 0.01).toFixed(2),
       });
     }
 
@@ -318,7 +321,7 @@ describe('Pro mobile state sync journey', () => {
     );
     fireEvent.press(ui.getByTestId('settings-tab'));
     fireEvent.press(ui.getByText('Model Settings'));
-    fireEvent.press(ui.getByTestId('text-generation-accordion'));
+    fireEvent.press(ui.getByTestId('general-generation-accordion'));
     fireEvent.press(ui.getByTestId('show-gen-details-on-button'));
     fireEvent.press(ui.getByLabelText('Back'));
     fireEvent.press(await waitFor(() => ui!.getByTestId('open-sync-settings')));

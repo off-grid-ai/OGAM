@@ -4,14 +4,10 @@ import { Text } from 'react-native';
 import { AdvancedToggle, Card } from '../../components';
 import { SliderSetting } from '../../components/SliderSetting';
 import {
-  BackendSelector,
   BatchSizeSlider,
   CpuThreadsSlider,
   FlashAttentionToggle,
   KvCacheTypeToggle,
-  LiteRTBackendSelector,
-  ModelLoadingModeSelector,
-  ShowGenerationDetailsToggle,
   SpeculativeDecodingToggle,
   ThinkingBudgetSelector,
 } from '../../components/settings/textGenAdvancedSections';
@@ -52,7 +48,6 @@ export const TextGenerationSection: React.FC = () => {
         </>
       )}
 
-      <ShowGenerationDetailsToggle />
       <AdvancedToggle
         isExpanded={showAdvanced}
         onPress={() => setShowAdvanced(current => !current)}
@@ -63,8 +58,6 @@ export const TextGenerationSection: React.FC = () => {
           <>
             <SliderSetting testID="litert-top-p" {...liteRT.topP} />
             <SliderSetting testID="max-tool-calls" {...toolCalls} />
-            <LiteRTBackendSelector />
-            <ModelLoadingModeSelector />
           </>
         ) : (
           <>
@@ -73,11 +66,9 @@ export const TextGenerationSection: React.FC = () => {
             <SliderSetting testID="max-tool-calls" {...toolCalls} />
             <CpuThreadsSlider />
             <BatchSizeSlider />
-            <BackendSelector />
             <FlashAttentionToggle />
             <SpeculativeDecodingToggle />
             <KvCacheTypeToggle />
-            <ModelLoadingModeSelector />
           </>
         )
       ) : null}

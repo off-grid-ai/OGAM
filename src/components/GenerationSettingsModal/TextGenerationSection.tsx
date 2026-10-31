@@ -1,23 +1,20 @@
 import { FastestSettingsButton } from '../settings/FastestSettingsButton';
 import React, { useState } from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { AdvancedToggle } from '../AdvancedToggle';
 import { SliderSetting } from '../SliderSetting';
 import { useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
+import { SystemPromptSection } from '../settings/SystemPromptSection';
 import {
   type NumericSettingModel,
   useTextGenerationSettings,
 } from '../../hooks/useTextGenerationSettings';
 import {
-  BackendSelector,
   BatchSizeSlider,
   CpuThreadsSlider,
   FlashAttentionToggle,
   KvCacheTypeToggle,
-  LiteRTBackendSelector,
-  ModelLoadingModeSelector,
-  ShowGenerationDetailsToggle,
   SpeculativeDecodingToggle,
   ThinkingBudgetSelector,
 } from '../settings/textGenAdvancedSections';
@@ -39,13 +36,14 @@ export const TextGenerationSection: React.FC = () => {
 
   return (
     <View style={styles.sectionCard}>
+      <Text style={styles.settingLabel}>Default System Prompt</Text>
+      <SystemPromptSection />
       {/* The one-tap speed setup comes first; the controls it sets stay under Advanced. */}
       {!isLiteRT && <FastestSettingsButton />}
       {basicSettings.map(setting => (
         <ChatSettingSlider key={setting.key} setting={setting} />
       ))}
       {!isLiteRT && <ThinkingBudgetSelector compact />}
-      <ShowGenerationDetailsToggle />
       <AdvancedToggle
         isExpanded={showAdvanced}
         onPress={() => setShowAdvanced(current => !current)}
@@ -56,20 +54,13 @@ export const TextGenerationSection: React.FC = () => {
           {advancedSettings.map(setting => (
             <ChatSettingSlider key={setting.key} setting={setting} />
           ))}
-          {isLiteRT ? (
-            <>
-              <LiteRTBackendSelector />
-              <ModelLoadingModeSelector />
-            </>
-          ) : (
+          {!isLiteRT && (
             <>
               <CpuThreadsSlider />
               <BatchSizeSlider />
-              <BackendSelector />
               <FlashAttentionToggle />
               <SpeculativeDecodingToggle />
               <KvCacheTypeToggle />
-              <ModelLoadingModeSelector />
             </>
           )}
         </>

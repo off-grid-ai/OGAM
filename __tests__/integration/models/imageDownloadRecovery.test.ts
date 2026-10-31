@@ -14,7 +14,7 @@ const mockModelManager = {
 
 // Integrity is a boundary for this recovery test (it exercises the resume/move
 // orchestration, not the completeness rule — that has its own dedicated tests).
-jest.mock('../../../src/utils/imageModelIntegrity', () => ({
+jest.mock('../../../src/services/imageModelIntegrity', () => ({
   validateImageModelDir: jest.fn(async () => ({ complete: true, missing: [] })),
   ensureImageExtractionComplete: jest.fn(async () => {}),
 }));

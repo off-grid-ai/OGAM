@@ -5,6 +5,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppStore } from '../stores/appStore';
 import { selectHasProAccess } from '../stores/proAccessSlice';
 import { PRO_TOOLS_SCREEN } from './useIsProActive';
+import { proGateShown } from '../services/analytics/analytics';
 
 /**
  * One callback for "open the Pro Tools destination", used everywhere the user can
@@ -25,6 +26,7 @@ export function useOpenProTools(): () => void {
     if (hasAccess && hasProScreen) {
       navigation.navigate(PRO_TOOLS_SCREEN as any);
     } else {
+      proGateShown('tools');
       navigation.navigate('ProDetail');
     }
   };

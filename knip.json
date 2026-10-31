@@ -15,6 +15,7 @@
   ],
   "ignoreDependencies": [
     "@offgrid/pro",
+    "@offgrid/film-native",
     "buffer",
     "js-sha512",
     "tweetnacl",

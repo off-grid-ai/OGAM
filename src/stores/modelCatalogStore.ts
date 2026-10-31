@@ -47,31 +47,51 @@ export type CatalogCheckResult =
 
 interface ModelCatalogState {
   remote: MobileCatalogSections;
+  /** Models the person found by search and added on this phone; merged after the remote list. */
+  added: MobileCatalogSections;
   fetchedAt: number | null;
   isChecking: boolean;
 }
 
 export const useModelCatalogStore = create<ModelCatalogState>(() => ({
   remote: {},
+  added: {},
   fetchedAt: null,
   isChecking: false,
 }));
 
 // One memo per section, so a merged list keeps its identity until its remote section changes
 // (screens use it in deps and selectors).
-const memo = new Map<Section, { remote: unknown; bundled: unknown; merged: unknown[] }>();
+const memo = new Map<Section, { remote: unknown; added: unknown; bundled: unknown; merged: unknown[] }>();
 
 function mergeSection<K extends Section>(
   section: K,
   bundled: readonly SectionEntry<K>[],
   remote: MobileCatalogSections[K],
+  added: MobileCatalogSections[K] = useModelCatalogStore.getState().added[section],
 ): SectionEntry<K>[] {
   const hit = memo.get(section);
-  if (hit && hit.remote === remote && hit.bundled === bundled) return hit.merged as SectionEntry<K>[];
+  if (hit && hit.remote === remote && hit.added === added && hit.bundled === bundled) return hit.merged as SectionEntry<K>[];
   const key = mobileCatalogKey[section] as (entry: SectionEntry<K>) => string;
-  const merged = mergeCatalogEntries(bundled, remote as readonly SectionEntry<K>[] | undefined, key);
-  memo.set(section, { remote, bundled, merged });
+  const curated = mergeCatalogEntries(bundled, remote as readonly SectionEntry<K>[] | undefined, key);
+  const merged = mergeCatalogEntries(curated, added as readonly SectionEntry<K>[] | undefined, key);
+  memo.set(section, { remote, added, bundled, merged });
   return merged;
+}
+
+const ADDED_KEY = '@offgrid/added-model-catalog';
+
+/**
+ * Keep a model the person found by search, so every list, download and picker that reads this
+ * section sees it like a catalog model. Saved on this phone only.
+ */
+export function addCatalogEntry<K extends Section>(section: K, entry: SectionEntry<K>): void {
+  const key = mobileCatalogKey[section] as (item: SectionEntry<K>) => string;
+  const current = (useModelCatalogStore.getState().added[section] ?? []) as SectionEntry<K>[];
+  const next = [...current.filter(item => key(item) !== key(entry)), entry];
+  const added = { ...useModelCatalogStore.getState().added, [section]: next };
+  useModelCatalogStore.setState({ added });
+  AsyncStorage.setItem(ADDED_KEY, JSON.stringify(added)).catch(error => logger.warn('[ModelCatalog] could not save an added model', error));
 }
 
 /** A bundled list merged with its remote catalog section. */
@@ -83,7 +103,8 @@ export function withRemoteCatalog<K extends Section>(section: K, bundled: readon
  *  (not read inside) so the React Compiler's memo of this call changes with it. */
 export function useWithRemoteCatalog<K extends Section>(section: K, bundled: readonly SectionEntry<K>[]): SectionEntry<K>[] {
   const remote = useModelCatalogStore(s => s.remote[section]);
-  return mergeSection(section, bundled, remote);
+  const added = useModelCatalogStore(s => s.added[section]);
+  return mergeSection(section, bundled, remote, added);
 }
 
 // Registered by the modules that own a bundled list, so a manual check can count what is new
@@ -133,6 +154,8 @@ export async function initModelCatalog(): Promise<void> {
   try {
     const cached = await loadCachedCatalog(source);
     if (cached) useModelCatalogStore.setState({ remote: cached.sections, fetchedAt: cached.fetchedAt });
+    const added = await AsyncStorage.getItem(ADDED_KEY);
+    if (added) useModelCatalogStore.setState({ added: parseMobileCatalogSections(JSON.parse(added)) });
   } catch (error) {
     logger.warn('[ModelCatalog] init failed:', error);
   }

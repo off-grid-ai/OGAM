@@ -1,5 +1,6 @@
 import { useWhisperStore } from '../stores/whisperStore';
 import { WHISPER_MODELS } from '../services/whisperService';
+import { findTranscriptionModel } from '../services/whisperModels';
 import { useWithRemoteCatalog } from '../stores/modelCatalogStore';
 import { selectedRemoteModelName } from '../services/remoteModelSelection';
 import { useRemoteServerStore } from '../stores/remoteServerStore';
@@ -33,7 +34,7 @@ export function useTranscriptionModelSetting(): {
       : modelId,
     modelName:
       remoteModelName ??
-      whisperModels.find(model => model.id === modelId)?.name ??
+      findTranscriptionModel(whisperModels, modelId)?.name ??
       null,
     isRemote: remoteModelName !== null,
   };

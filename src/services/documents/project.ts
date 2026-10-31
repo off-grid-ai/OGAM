@@ -7,9 +7,15 @@ import type { DocumentSource, ProjectDocumentsPort } from '@offgrid/rag/document
 import { useChatStore } from '../../stores/chatStore';
 import { ragDatabase, type KnowledgeDocument } from '../rag/database';
 import logger from '../../utils/logger';
+import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
 
+/**
+ * A stored document path as a file path on this install. iOS moves the app to a new container on
+ * update and reinstall, so a path saved by an earlier install names a folder that no longer exists;
+ * it is re-based onto the current one, where the file now is.
+ */
 export function localPath(path: string): string {
-  return path.replace(/^file:\/\//, '');
+  return resolveDocumentPath(path);
 }
 
 /** How the document engine reads a knowledge-base file. The phone knowledge base holds PDFs and text. */

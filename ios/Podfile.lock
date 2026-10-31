@@ -42,6 +42,10 @@ PODS:
   - MMKV (2.4.0):
     - MMKVCore (~> 2.4.0)
   - MMKVCore (2.4.0)
+  - OffgridFilm (0.1.0):
+    - React-Core
+  - OffgridVideo (0.1.0):
+    - React-Core
   - op-sqlite (15.2.5):
     - boost
     - DoubleConversion
@@ -2303,6 +2307,92 @@ PODS:
   - react-native-tcp-socket (6.4.1):
     - CocoaAsyncSocket
     - React-Core
+  - react-native-video (6.19.3):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - react-native-video/Video (= 6.19.3)
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
+  - react-native-video/Fabric (6.19.3):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
+  - react-native-video/Video (6.19.3):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - react-native-video/Fabric
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
   - react-native-voice (3.2.4):
     - React-Core
   - react-native-zeroconf (0.14.0):
@@ -3506,6 +3596,8 @@ DEPENDENCIES:
   - glog (from `../node_modules/react-native/third-party-podspecs/glog.podspec`)
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
   - llama-rn (from `../node_modules/llama.rn`)
+  - OffgridFilm (from `../pro/native/film`)
+  - OffgridVideo (from `../native/video`)
   - "op-sqlite (from `../node_modules/@op-engineering/op-sqlite`)"
   - RCT-Folly (from `../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
@@ -3554,6 +3646,7 @@ DEPENDENCIES:
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - "react-native-slider (from `../node_modules/@react-native-community/slider`)"
   - react-native-tcp-socket (from `../node_modules/react-native-tcp-socket`)
+  - react-native-video (from `../node_modules/react-native-video`)
   - "react-native-voice (from `../node_modules/@react-native-voice/voice`)"
   - react-native-zeroconf (from `../node_modules/react-native-zeroconf`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
@@ -3636,6 +3729,10 @@ EXTERNAL SOURCES:
     :tag: hermes-v0.14.0
   llama-rn:
     :path: "../node_modules/llama.rn"
+  OffgridFilm:
+    :path: "../pro/native/film"
+  OffgridVideo:
+    :path: "../native/video"
   op-sqlite:
     :path: "../node_modules/@op-engineering/op-sqlite"
   RCT-Folly:
@@ -3730,6 +3827,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-community/slider"
   react-native-tcp-socket:
     :path: "../node_modules/react-native-tcp-socket"
+  react-native-video:
+    :path: "../node_modules/react-native-video"
   react-native-voice:
     :path: "../node_modules/@react-native-voice/voice"
   react-native-zeroconf:
@@ -3845,10 +3944,12 @@ SPEC CHECKSUMS:
   FBLazyVector: 309703e71d3f2f1ed7dc7889d58309c9d77a95a4
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
-  hermes-engine: 9dc108855bf9303b9eb77035684065901459b954
+  hermes-engine: 3de70ea2100f1780402cf146bb8110a0cdb2f34e
   llama-rn: dd60415f7ae47554b7498aed4f4e39b522bb19c3
   MMKV: 86859fdfa2b0b21db1fd6e48788474a6416a2c77
   MMKVCore: 3d16ce9f7d411e135020915fde98a056859a1efa
+  OffgridFilm: d93b098e7b123a8f4b3d10145a3736cf38ff1481
+  OffgridVideo: 3a0d4acebd54e2ab315c9ff737aa017ccc3d36b8
   op-sqlite: ab292d8057b994f220b8c61f2683f5ff9286958e
   opencv-rne: 2305807573b6e29c8c87e3416ab096d09047a7a0
   RCT-Folly: 846fda9475e61ec7bcbf8a3fe81edfcaeb090669
@@ -3890,13 +3991,14 @@ SPEC CHECKSUMS:
   react-native-background-downloader: b02d12c3961322ce1c85fa0f8b3e4adb5b652106
   react-native-document-picker: dc2d83366e47e89e7c51e8a41eab99c1d54e941c
   react-native-document-viewer: 8c6ed07e7e27352743fa98e8dd6d288ad925b884
-  react-native-executorch: b868c3f6db3791ace32df3cc59785e7818e54ff2
+  react-native-executorch: 863673cf458ceec5df61012fa30981ffa3ee8fc4
   react-native-get-random-values: d16467cf726c618e9c7a8c3c39c31faa2244bbba
   react-native-image-picker: 0314366753615115fa55c3cc937ac44cb7e75702
   react-native-keyboard-controller: 7534b5a39d1e8b2b79f86e8e998ed71c7154f69f
   react-native-safe-area-context: c00143b4823773bba23f2f19f85663ae89ceb460
   react-native-slider: 34064ca1a6864d7b263e44dd76a2d794e8d26744
   react-native-tcp-socket: 7c7e53a07f122ecf00fb3626684bc0ca82c4f044
+  react-native-video: 61841250a61ed594812b0bd4ce3f03549d574efc
   react-native-voice: 908a0eba96c8c3d643e4f98b7232c6557d0a6f9c
   react-native-zeroconf: eb2e5584308f20f5fc3eb0cea2ceafbbd345b48b
   React-NativeModulesApple: a2c3d2cbec893956a5b3e4060322db2984fff75b
@@ -3953,6 +4055,6 @@ SPEC CHECKSUMS:
   whisper-rn: 7566faf9b7d78e39ab9fc634cb90fdee81177793
   Yoga: 5456bb010373068fc92221140921b09d126b116e
 
-PODFILE CHECKSUM: d2e7563af7ca0531bcab79cceff20997d2fbe48c
+PODFILE CHECKSUM: a51a87720248f5187c458d3af5dfc690def5388e
 
 COCOAPODS: 1.16.2

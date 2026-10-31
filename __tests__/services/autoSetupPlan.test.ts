@@ -9,6 +9,7 @@ const candidate = (
   sizeBytes: number,
   fitScore: number,
   parameterCountB?: number,
+  pick?: 'fast' | 'balanced' | 'best',
 ) => ({
   id: `${kind}-${name}`,
   name,
@@ -16,6 +17,7 @@ const candidate = (
   sizeBytes,
   fitScore,
   parameterCountB,
+  pick,
   payload:
     kind === 'text'
       ? {
@@ -43,9 +45,9 @@ const candidate = (
 test('Lean, Balanced, and Extreme select only from the compatible device catalog', () => {
   const catalog = {
     text: [
-      candidate('text', 'small', 100, 4, 2),
-      candidate('text', 'fit', 200, 0, 4),
-      candidate('text', 'large', 300, 2, 9),
+      candidate('text', 'small', 100, 4, 2, 'fast'),
+      candidate('text', 'fit', 200, 0, 4, 'balanced'),
+      candidate('text', 'large', 300, 2, 9, 'best'),
     ],
     image: [
       candidate('image', 'small', 10, 4),
@@ -70,13 +72,13 @@ test('Lean, Balanced, and Extreme select only from the compatible device catalog
   expect(plans[1].totalBytes).toBe(222);
 });
 
-test('text plans target 2B, 4B, and 9B instead of file-size order', () => {
+test("text plans are the phone's Fast, Balanced and Best picks, not file-size order", () => {
   const catalog = {
     text: [
       candidate('text', 'Qwen 0.8B', 80, 0, 0.8),
-      candidate('text', 'Qwen 9B', 500, 3, 9),
-      candidate('text', 'Gemma 4B', 900, 2, 4),
-      candidate('text', 'Gemma 2B', 700, 1, 2),
+      candidate('text', 'Qwen 9B', 500, 3, 9, 'best'),
+      candidate('text', 'Gemma 4B', 900, 2, 4, 'balanced'),
+      candidate('text', 'Gemma 2B', 700, 1, 2, 'fast'),
     ],
     image: [candidate('image', 'image', 10, 0)],
     stt: [candidate('stt', 'speech', 1, 0)],

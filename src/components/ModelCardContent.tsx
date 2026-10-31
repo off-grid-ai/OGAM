@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, Image, StyleSheet } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import { LoadingDots } from './LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
@@ -9,6 +10,21 @@ import { createStyles } from './ModelCard.styles';
 import { huggingFaceService } from '../services/huggingface';
 import { ModelCredibility } from '../types';
 import { triggerHaptic } from '../utils/haptics';
+
+const OFF_GRID_LOGO = require('../assets/logo.png');
+
+/** The app's own mark beside a model Off Grid AI made: small, no words on the row. */
+export const MadeByOffGrid: React.FC = () => (
+  <Image
+    source={OFF_GRID_LOGO}
+    style={markStyles.mark}
+    accessibilityLabel="Made by Off Grid AI"
+    accessibilityRole="image"
+    testID="made-by-off-grid"
+  />
+);
+
+const markStyles = StyleSheet.create({ mark: { width: 12, height: 12, borderRadius: 3 } });
 
 interface CredibilityInfo {
   color: string;
@@ -104,12 +120,15 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
     credibilitySource === 'verified-quantizer' || credibilitySource === 'official';
   // Who published a model is shown as one verified mark, not a name on every card.
   const sourceLabels = [
-    credibilitySource && credibilitySource !== 'community' && !hasVerifiedMark ? credibilityLabel : undefined,
+    credibilitySource && credibilitySource !== 'community' && credibilitySource !== 'offgrid' && !hasVerifiedMark
+      ? credibilityLabel
+      : undefined,
   ].filter((value): value is string => !!value);
 
   return (
     <>
       <View style={styles.denseTitleRow}>
+        {credibilitySource === 'offgrid' && <MadeByOffGrid />}
         <Text style={styles.denseName} numberOfLines={1} testID={nameTestID}>{model.name}</Text>
         <View style={styles.denseSourceGroup}>
           {sourceBadge === 'Remote' ? <Icon name="cloud" size={14} color={colors.textMuted} accessibilityLabel="Remote model" />
@@ -230,6 +249,7 @@ export const StandardModelCardContent: React.FC<StandardModelCardContentProps> =
         {model.author && model.author !== 'Unknown' && <View style={styles.authorTag}>
           <Text style={styles.authorTagText}>{model.author}</Text>
         </View>}
+        {credibility?.source === 'offgrid' && <MadeByOffGrid />}
         {credibilityInfo && (credibility?.source === 'official' || credibility?.source === 'verified-quantizer') && (
           <MaterialIcon name="verified" size={14} color={colors.primary} accessibilityLabel={credibilityInfo.label} />
         )}
@@ -375,7 +395,9 @@ interface ModelCardActionsProps {
   onResume?: () => void;
 }
 
-const HIT_SLOP = { top: 14, bottom: 14, left: 14, right: 14 };
+// Action icons sit side by side (Resume beside Cancel), so the touch area grows only up and down: a sideways
+// slop spilled onto the neighbour, and the button drawn later (Cancel) took taps aimed at Resume.
+const HIT_SLOP = { top: 10, bottom: 10, left: 0, right: 0 };
 
 function ActionButton({ icon, color, haptic, onPress, disabled, testID, accessibilityLabel, styles }: {
   icon: string; color: string; haptic: string; onPress: () => void;
@@ -411,7 +433,9 @@ function DownloadedActions({ isActive, testID, colors, styles, onSelect, onDelet
       ) : (
         onRepairVision && <ActionButton icon="tool" color={colors.warning} haptic="impactLight" onPress={onRepairVision} testID={tid('repair-vision')} styles={styles} />
       )}
-      {!isActive && onSelect && <ActionButton icon="check-circle" color={colors.primary} haptic="selection" onPress={onSelect} styles={styles} />}
+      {/* A radio: the model in use shows a check; any other shows an empty circle that picks it. */}
+      {isActive && onSelect && <View style={styles.iconButton} accessibilityLabel="In use" testID={tid('in-use')}><Icon name="check-circle" size={16} color={colors.primary} /></View>}
+      {!isActive && onSelect && <ActionButton icon="circle" color={colors.textMuted} haptic="selection" onPress={onSelect} testID={tid('select')} accessibilityLabel="Use this model" styles={styles} />}
       {onDelete && <ActionButton icon="trash-2" color={colors.error} haptic="notificationWarning" onPress={onDelete} testID={tid('delete') ?? 'delete-model-button'} accessibilityLabel="Delete model" styles={styles} />}
     </>
   );

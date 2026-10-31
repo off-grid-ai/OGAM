@@ -1,6 +1,7 @@
 import { deleteChatImages, imagesNotDeletedAlert } from '../services/chatImageCleanup';
 import React, { useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, FlatList } from 'react-native';
+import { View, Text, FlatList } from 'react-native';
+import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -17,7 +18,7 @@ import {
 } from '../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../theme';
 import { createStyles } from './ProjectDetailScreen.styles';
-import { useChatStore, useProjectStore, useAppStore } from '../stores';
+import { useChatStore, useProjectStore, useAppStore, useRemoteServerStore } from '../stores';
 import { Conversation } from '../types';
 import { RootStackParamList } from '../navigation/types';
 import { KnowledgeBaseSection } from './ProjectDetailKnowledgeBaseSection';
@@ -26,6 +27,7 @@ import { formatWhen } from '../utils/localTime';
 import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
 import { PROJECT_DELETE_FALLBACK_REASON } from '../stores/projectDeleteOutcome';
 import { byRecentActivity } from '../utils/conversationOrdering';
+import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProjectDetail'>;
@@ -36,6 +38,10 @@ export const ProjectDetailScreen: React.FC = () => {
   const route = useRoute<RouteProps>();
   const { projectId } = route.params;
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
+  // People open a project to chat, so Chats comes first; the knowledge base is one tap away.
+  const [tab, setTab] = useState<'chats' | 'knowledge'>('chats');
+  const [kbAddRequest, setKbAddRequest] = useState(0);
+  const [kbCount, setKbCount] = useState(0);
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
@@ -48,7 +54,10 @@ export const ProjectDetailScreen: React.FC = () => {
   const downloadedModels = useAppStore(state => state.downloadedModels);
   const activeModelId = useAppStore(state => state.activeModelId);
 
-  const hasModels = downloadedModels.length > 0;
+  const activeVideoModelId = useAppStore(s => s.activeVideoModelId);
+  const remoteVideoServerId = useRemoteServerStore(s => s.activeRemoteMediaServerIds.video);
+  const hasVideoModel = !!activeVideoModelId || !!remoteVideoServerId;
+  const hasModels = downloadedModels.length > 0 || hasVideoModel;
 
   // Get chats for this project
   const projectChats = useMemo(
@@ -62,6 +71,10 @@ export const ProjectDetailScreen: React.FC = () => {
   };
 
   const handleNewChat = () => {
+    if (hasVideoModel && downloadedModels.length === 0) {
+      navigation.navigate('Chat', { projectId });
+      return;
+    }
     if (!hasModels) {
       setAlertState(
         showAlert(
@@ -223,14 +236,64 @@ export const ProjectDetailScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.tabRow}>
+        <View style={styles.tabs} accessibilityRole="tablist">
+          {(['chats', 'knowledge'] as const).map(id => (
+            <TouchableOpacity
+              key={id}
+              onPress={() => setTab(id)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: tab === id }}
+              testID={id === 'chats' ? 'project-tab-chats' : 'project-tab-knowledge'}
+              style={styles.tab}
+            >
+              <Text style={[styles.tabText, tab === id && styles.tabTextActive]}>
+                {id === 'chats' ? 'Chats' : 'Knowledge base'}{' '}
+                <Text
+                  style={styles.tabCount}
+                  testID={id === 'chats' ? 'project-chats-count' : 'project-knowledge-base-count'}
+                  accessibilityLabel={
+                    id === 'chats'
+                      ? `${projectChats.length} chats`
+                      : `Knowledge Base has ${kbCount} documents`
+                  }
+                >
+                  {id === 'chats' ? projectChats.length : kbCount}
+                </Text>
+              </Text>
+              <View style={[styles.tabIndicator, tab !== id && styles.tabIndicatorOff]} />
+            </TouchableOpacity>
+          ))}
+        </View>
+        {/* One add for the open tab: a new chat, or a file or text for the knowledge base. */}
+        <TouchableOpacity
+          onPress={tab === 'chats' ? handleNewChat : () => setKbAddRequest(n => n + 1)}
+          disabled={tab === 'chats' && !hasModels}
+          accessibilityRole="button"
+          accessibilityLabel={tab === 'chats' ? 'New chat' : 'Add to knowledge base'}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={styles.tabAdd}
+          testID={tab === 'chats' ? 'project-new-chat' : 'kb-add'}
+        >
+          <Icon
+            name="plus"
+            size={20}
+            color={tab === 'chats' && !hasModels ? colors.textDisabled : colors.primary}
+          />
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.sectionsContainer}>
-        {/* Knowledge Base Section */}
-        <View style={styles.sectionHalf}>
+        {/* Both stay mounted so the knowledge base's count shows on its tab before it is opened. */}
+        <View style={[styles.sectionContent, tab !== 'knowledge' && styles.hidden]}>
           <KnowledgeBaseSection
             projectId={projectId}
             colors={colors}
             styles={styles}
             setAlertState={setAlertState}
+            inTab
+            addRequest={kbAddRequest}
+            onCountChange={setKbCount}
             onNavigateToKb={() =>
               navigation.navigate('KnowledgeBase', { projectId })
             }
@@ -243,44 +306,7 @@ export const ProjectDetailScreen: React.FC = () => {
           />
         </View>
 
-        {/* Chats Section */}
-        <View style={styles.sectionHalf}>
-          <TouchableOpacity
-            style={styles.sectionHeader}
-            onPress={() => navigation.navigate('ProjectChats', { projectId })}
-            activeOpacity={0.7}
-          >
-            <View style={styles.sectionTitleRow}>
-              <Text style={styles.sectionTitle}>Chats</Text>
-              {projectChats.length > 0 && (
-                <Text style={styles.sectionCount}>{projectChats.length}</Text>
-              )}
-            </View>
-            <View style={styles.sectionActions}>
-              <Button
-                title="New"
-                variant="primary"
-                size="small"
-                onPress={handleNewChat}
-                disabled={!hasModels}
-                testID="project-new-chat"
-                icon={
-                  <Icon
-                    name="plus"
-                    size={16}
-                    color={hasModels ? colors.primary : colors.textDisabled}
-                  />
-                }
-              />
-              <Icon
-                name="chevron-right"
-                size={16}
-                color={colors.textMuted}
-                style={styles.navIcon}
-              />
-            </View>
-          </TouchableOpacity>
-
+        <View style={[styles.sectionContent, tab !== 'chats' && styles.hidden]}>
           {projectChats.length === 0 ? (
             <View style={styles.sectionList}>
               <View style={styles.emptyState}>
@@ -304,6 +330,7 @@ export const ProjectDetailScreen: React.FC = () => {
             </View>
           ) : (
             <FlatList
+              {...SCROLL_DEPTH_PROPS}
               style={styles.sectionList}
               data={projectChats}
               keyExtractor={item => item.id}

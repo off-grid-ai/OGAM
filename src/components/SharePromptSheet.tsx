@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Linking, Platform } from 'react-native';
+import { View, Text, Linking, Platform } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from './AppSheet';
 import { useThemedStyles } from '../theme';
@@ -31,10 +32,10 @@ export const SharePromptSheet: React.FC<SharePromptSheetProps> = ({ visible, onC
   };
 
   return (
-    <AppSheet visible={visible} onClose={onClose} enableDynamicSizing title="Support Open-Source AI">
+    <AppSheet sheet="share-prompt" visible={visible} onClose={onClose} enableDynamicSizing title="Support Open-Source AI">
       <View style={styles.content}>
         <Text style={styles.message}>
-          Off Grid AI is completely free, open-source, and private - your data never leaves your device. Help grow the movement for accessible, private AI by spreading the word.
+          Off Grid AI is completely free, open-source, and private - your chats and files never leave your device. Help grow the movement for accessible, private AI by spreading the word.
         </Text>
 
         <TouchableOpacity style={styles.button} onPress={() => handleEngage(GITHUB_URL)}>

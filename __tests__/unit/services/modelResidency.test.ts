@@ -1264,10 +1264,14 @@ describe('ModelResidencyManager', () => {
 
       const balanced = await modelResidencyManager.makeRoomFor(spec);
       expect(balanced.fits).toBe(false);
+      // The refusal reports the budget it compared: less than asked, and less than raw free RAM.
+      expect(balanced.budgetMB).toBeLessThan(spec.sizeMB);
+      expect(balanced.budgetMB).toBeLessThan(3.4 * 1024);
 
       modelResidencyManager.setLoadPolicy('aggressive');
       const aggressive = await modelResidencyManager.makeRoomFor(spec);
       expect(aggressive.fits).toBe(true);
+      expect(aggressive.budgetMB).toBeGreaterThanOrEqual(spec.sizeMB);
     });
   });
 });

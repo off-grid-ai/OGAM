@@ -6,7 +6,7 @@ import { localDreamGeneratorService as onnxImageGeneratorService } from '../loca
 import { hardwareService } from '../hardware';
 import { modelResidencyManager } from '../modelResidency';
 import { OverridableMemoryError, ImageModelIncompleteError } from '../modelLoadErrors';
-import { validateImageModelDir } from '../../utils/imageModelIntegrity';
+import { validateImageModelDir } from '../imageModelIntegrity';
 import { remoteServerManager } from '../remoteServerManager';
 import { useAppStore, useRemoteServerStore } from '../../stores';
 import logger from '../../utils/logger';
@@ -15,7 +15,7 @@ import {
   selectedTextModelIdOf,
 } from './selectedTextModel';
 import { activeModelSnapshot } from './snapshot';
-import type { DownloadedModel } from '../../types';
+import type { DownloadedModel, ONNXImageModel } from '../../types';
 import type {
   ActiveModelInfo,
   ResourceUsage,
@@ -30,6 +30,8 @@ import {
   estimateTextModelMemoryMB,
 } from './memory';
 import { doLoadTextModel, doLoadImageModel, checkImageModelCanLoad } from './loaders';
+import { modelSelected, trackModelLoad } from '../analytics/analytics';
+import { downloadedModelFacts, imageModelFacts } from '../analytics/modelFacts';
 import {
   getResourceUsage as _getResourceUsage,
   syncWithNativeState as _syncWithNativeState,
@@ -111,7 +113,7 @@ class ActiveModelService {
    */
   keepLoadedTextModelSelected(): void {
     const loaded = this.loadedTextModelId;
-    if (loaded && useAppStore.getState().activeModelId !== loaded) this.selectTextModel(loaded);
+    if (loaded && useAppStore.getState().activeModelId !== loaded) this.markSelected(loaded);
   }
   getLoadedModelIds(): {
     textModelId: string | null;
@@ -177,6 +179,17 @@ class ActiveModelService {
     if (!model) {
       throw new Error('Model not found');
     }
+    await trackModelLoad(downloadedModelFacts(model, store.settings), () =>
+      this.loadFoundTextModel(model, modelId, timeoutMs, opts),
+    );
+  }
+  private async loadFoundTextModel(
+    model: DownloadedModel,
+    modelId: string,
+    timeoutMs: number,
+    opts?: { override?: boolean },
+  ): Promise<void> {
+    const store = useAppStore.getState();
     // Use estimated runtime RAM (file size + overhead), not just file size,
     // so the residency budget reflects the model's real memory footprint.
     // GPU-aware overhead: a GPU/NPU backend adds working buffers in system RAM the flat CPU 1.5× misses.
@@ -232,6 +245,11 @@ class ActiveModelService {
    * load-success (loaders), and cleared on load-failure/unload — so it can never drift from reality.
    */
   selectTextModel(modelId: string): void {
+    if (useAppStore.getState().activeModelId !== modelId) modelSelected('text', modelId);
+    this.markSelected(modelId);
+  }
+  /** Record the selection without reporting it: a cancelled switch going back is not a pick. */
+  private markSelected(modelId: string): void {
     const store = useAppStore.getState();
     store.setActiveModelId(modelId);
     store.setLastTextModelId(modelId); // remembered choice → routing reloads it on demand after eviction
@@ -310,6 +328,20 @@ class ActiveModelService {
     if (!model) {
       throw new Error('Model not found');
     }
+    await trackModelLoad(imageModelFacts(model), () =>
+      this.loadFoundImageModel(model, modelId, imageThreads, needsThreadReload, timeoutMs, opts),
+    );
+  }
+  // eslint-disable-next-line max-params
+  private async loadFoundImageModel(
+    model: ONNXImageModel,
+    modelId: string,
+    imageThreads: number,
+    needsThreadReload: boolean,
+    timeoutMs: number,
+    opts?: { override?: boolean },
+  ): Promise<void> {
+    const store = useAppStore.getState();
     // Integrity gate (B): a partial extraction crashes the native server as a misleading "backend unsupported" — throw typed error so the UI says "re-download".
     if (model.backend === 'mnn' || model.backend === 'qnn') {
       const integ = await validateImageModelDir(model.modelPath, model.backend);
@@ -342,7 +374,7 @@ class ActiveModelService {
           // os_proc RAM (budgetForSpec dirty-pressure), or a sidecar stacks onto its
           // generation spike and jetsams the app. Without this flag the resident-dirty
           // arm of the gate is a no-op.
-          { key: 'image', type: 'image', dirtyMemory: true, sizeMB: Math.round((hardwareService.estimateImageModelRam(model) || 0) / (1024 * 1024)) },
+          { key: 'image', type: 'image', dirtyMemory: true, canEvict: () => !onnxImageGeneratorService.isGenerating(), sizeMB: Math.round((hardwareService.estimateImageModelRam(model) || 0) / (1024 * 1024)) },
           () => this.doUnloadImageModelLocked(true), // eviction keeps the selection
         );
       },
@@ -385,7 +417,9 @@ class ActiveModelService {
     this.notifyListeners();
     try {
       if (isNativeLoaded) {
-        await onnxImageGeneratorService.unloadModel();
+        if (!(await onnxImageGeneratorService.unloadModel())) {
+          throw new Error('The image model is still in use and could not be unloaded.');
+        }
       }
       this.loadedImageModelId = null;
       this.loadedImageModelThreads = null;

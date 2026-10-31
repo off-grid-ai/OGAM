@@ -11,7 +11,8 @@
  * the active one.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, TextInput } from 'react-native';
+import { TouchableOpacity } from '../../components/Touchable';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { ModelCard } from '../../components';
@@ -29,7 +30,9 @@ import { useWhisperStore, useAppStore } from '../../stores';
 import { useSttDownloadState } from '../../hooks/useSttDownloadState';
 import type { MobileWhisperCatalogModel } from '@offgrid/models';
 import { WHISPER_MODELS } from '../../services';
-import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
+import { addCatalogEntry, useWithRemoteCatalog } from '../../stores/modelCatalogStore';
+import { searchWhisperModels } from '../../services/huggingFaceModelBrowser';
+import { findTranscriptionModel } from '../../services/whisperModels';
 import { createStyles as createModelsScreenStyles } from './styles';
 import logger from '../../utils/logger';
 import { RemoteModelOptionsSection } from '../../components/models/RemoteModelOptionsSection';
@@ -40,6 +43,7 @@ import { uniformDownloadId } from '../../services/modelDownloadService/uniformId
 import { picksAmong } from '../../services/devicePicks';
 import { hardwareService } from '../../services/hardware';
 import { PicksRow, type PickState } from '../../components/models/PicksRow';
+import { isQwenAsrOffered, qwenAsrCardFor, QWEN_ASR_MODEL_ID } from '../../services/qwenAsrModel';
 
 const formatSize = (mb: number): string =>
   mb >= 1000 ? `${(mb / 1000).toFixed(1)} GB` : `${mb} MB`;
@@ -47,6 +51,7 @@ const formatSize = (mb: number): string =>
 interface WhisperCardProps {
   model: MobileWhisperCatalogModel;
   index: number;
+  testID?: string;
   downloadedModelId: string | null;
   presentModelIds: string[];
   downloading: boolean;
@@ -72,6 +77,7 @@ interface WhisperCardProps {
 const WhisperCard: React.FC<WhisperCardProps> = ({
   model,
   index,
+  testID,
   downloadedModelId,
   presentModelIds,
   downloading,
@@ -117,7 +123,7 @@ const WhisperCard: React.FC<WhisperCardProps> = ({
       isPaused={paused}
       downloadProgress={downloadProgress}
       downloadBytes={visibleDownloadBytes}
-      testID={`transcription-model-card-${index}`}
+      testID={testID ?? `transcription-model-card-${index}`}
       // Present but not active → tap to use; not present → tap to download.
       onPress={
         downloading || queued || paused
@@ -155,6 +161,25 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
   const shared = useThemedStyles(createModelsScreenStyles);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const remoteLabels = useActiveRemoteModelLabels();
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<MobileWhisperCatalogModel[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  // Hugging Face search, 350 ms after the last keystroke; only models whisper.rn can run come back.
+  useEffect(() => {
+    let current = true;
+    setResults([]);
+    setSearchError('');
+    if (!query.trim()) { setSearching(false); return; }
+    setSearching(true);
+    const timer = setTimeout(() => {
+      searchWhisperModels(query.trim())
+        .then(rows => { if (current) setResults(rows.filter(row => !whisperModels.some(model => model.id === row.id))); })
+        .catch(e => { if (current) setSearchError(String(e.message)); })
+        .finally(() => { if (current) setSearching(false); });
+    }, 350);
+    return () => { current = false; clearTimeout(timer); };
+  }, [query, whisperModels]);
 
   const {
     downloadedModelId,
@@ -193,6 +218,9 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
 
   const handleDownload = useCallback(
     (id: string) => {
+      // A search result joins the catalog first, so download, pickers and Fastest settings see it.
+      const found = results.find(model => model.id === id);
+      if (found) addCatalogEntry('transcription', found);
     // The store owns downloadingId (set/cleared in downloadModel), so a download
     // started here — or from the chat voice button — shows progress on this tab.
       remoteServerManager.clearActiveRemoteMediaModel('transcription');
@@ -200,7 +228,7 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
         logger.error('[Transcription] download failed:', err),
       );
     },
-    [downloadModel],
+    [downloadModel, results],
   );
 
   const handleSelect = useCallback(
@@ -218,7 +246,7 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
       setAlertState(
         showAlert(
           'Remove Transcription Model',
-          `Delete "${whisperModels.find(model => model.id === id)?.name ?? id}"? This will free up about ${formatSize(whisperModels.find(model => model.id === id)?.size ?? 0)}.`,
+          `Delete "${findTranscriptionModel(whisperModels, id)?.name ?? id}"? This will free up about ${formatSize(findTranscriptionModel(whisperModels, id)?.size ?? 0)}.`,
           [
       { text: 'Cancel', style: 'cancel' },
             {
@@ -244,6 +272,12 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [deviceRam, multiModels],
   );
+  // Qwen3-ASR, where this platform runs it and the phone memory guard admits it.
+  const asrModel = useMemo(
+    () => (isQwenAsrOffered(hardwareService.getTotalMemoryGB()) ? qwenAsrCardFor(QWEN_ASR_MODEL_ID) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deviceRam],
+  );
   // A pick is shown once, in the row above; the list leaves out that exact model.
   const pickedIds = new Set(speechPicks.map(({ item }) => item.id));
   const speechPickState = (id: string): PickState => {
@@ -258,6 +292,7 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
   const renderWhisperCard = (
     model: MobileWhisperCatalogModel,
     index: number,
+    testID?: string,
   ) => {
     const state = downloadStateFor(model.id);
     return (
@@ -265,6 +300,7 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
         key={model.id}
         model={model}
         index={index}
+        testID={testID}
         downloadedModelId={downloadedModelId}
         presentModelIds={presentModelIds}
         downloading={state?.downloading ?? false}
@@ -322,6 +358,29 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
         <RemoteModelOptionsSection category="transcription" />
       )}
 
+      <TextInput
+        style={styles.search}
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search Hugging Face"
+        placeholderTextColor={colors.textMuted}
+        accessibilityLabel="Search speech models on Hugging Face"
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="search"
+        testID="speech-search-input"
+      />
+      {query.trim() ? (
+        <>
+          {searching ? <Text style={styles.status}>Searching…</Text> : null}
+          {!searching && !searchError && results.length === 0 ? (
+            <Text style={styles.status}>No models this phone can run. Try another name.</Text>
+          ) : null}
+          {searchError ? <Text style={styles.error}>{searchError}</Text> : null}
+          {results.map((m, i) => renderWhisperCard(m, whisperModels.length + i))}
+        </>
+      ) : null}
+
       <PicksRow testID="speech-picks" items={speechPicks.map(({ slot, item }) => ({
         slot,
         name: item.name,
@@ -335,6 +394,13 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
       <Text style={styles.sectionLabel}>Multilingual - 99 languages</Text>
       {/* The card keeps its catalogue position as its index, so a card means the same model whatever the picks are. */}
       {multiModels.map((m, i) => (pickedIds.has(m.id) ? null : renderWhisperCard(m, englishModels.length + i)))}
+
+      {asrModel ? (
+        <>
+          <Text style={styles.sectionLabel}>Multilingual - 30 languages</Text>
+          {renderWhisperCard(asrModel, whisperModels.length, 'transcription-model-card-qwen3-asr')}
+        </>
+      ) : null}
 
       <CustomAlert visible={alertState.visible} title={alertState.title}
         message={alertState.message} buttons={alertState.buttons}
@@ -352,4 +418,10 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) =>
       letterSpacing: 0.3, marginBottom: SPACING.sm, marginTop: SPACING.xs,
     },
     error: { ...TYPOGRAPHY.bodySmall, color: colors.error, textAlign: 'center' as const, marginBottom: SPACING.md },
+    status: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, marginBottom: SPACING.sm },
+    search: {
+      ...TYPOGRAPHY.body, color: colors.text, backgroundColor: colors.surfaceLight,
+      borderColor: colors.border, borderWidth: 1, borderRadius: SPACING.sm,
+      paddingHorizontal: SPACING.md, paddingVertical: SPACING.md, marginBottom: SPACING.sm,
+    },
   });

@@ -1,35 +1,25 @@
-import { RECOMMENDED_MODELS } from '../../src/constants';
-import { buildAutoSetupTextCandidates } from '../../src/services/autoSetupCatalog';
+import { Platform } from 'react-native';
+import { loadAutoSetupCompatibleCatalog } from '../../src/services/autoSetupCatalog';
 import { selectAutoSetupPlans } from '../../src/services/autoSetupPlan';
-import { recommendedModelsForDevice } from '../../src/utils/recommendedModels';
 
-const GB = 1024 ** 3;
-
-// The 9B with its projector (about 6.2 GB) is past the phone fit ceiling: on this phone the app had
-// 6.0 GB free and a 4.64 GB model needed 6.4 GB to load. The phone sees two plans, never one twice.
-// The catalog offers Qwen 3.5 4B (the shared catalog is the list now): it is the 4B choice, ahead of
-// Gemma 4 E4B.
-test('an iPhone 17 Pro Max gets 2B, Qwen 3.5 4B and 9B setup choices, each model once', () => {
-  const files = Object.fromEntries(RECOMMENDED_MODELS.map(model => [model.id, [{
-    name: `${model.params}B-Q4_K_M.gguf`,
-    size: model.params * 0.6 * GB,
-    quantization: 'Q4_K_M',
-    downloadUrl: `https://boundary.test/${model.id}`,
-    mmProjFile: {
-      name: 'mmproj-F16.gguf',
-      size: 0.8 * GB,
-      downloadUrl: `https://boundary.test/${model.id}/mmproj`,
-    },
-  }]]));
-
-  const catalog = buildAutoSetupTextCandidates(recommendedModelsForDevice(12), files, 12);
+// Setup's Lean, Balanced and Extreme are this phone's Fast, Balanced and Best picks from the catalog
+// (37759c684), ranked by quality alone (shared afdb05f) on the iPhone budget (shared ddaa6c1): on a
+// 12 GB iPhone 17 Pro Max the 9B is the Best pick, and no plan repeats another's chat model.
+test('an iPhone 17 Pro Max gets its Fast, Balanced and Best picks as setup choices, each model once', async () => {
+  expect(Platform.OS).toBe('ios');
+  const catalog = await loadAutoSetupCompatibleCatalog({
+    totalMemoryGB: () => 12,
+    fetchTextFiles: async () => ({}),
+    imageRecommendation: async () => ({ compatibleBackends: ['coreml'], recommendedBackend: 'coreml', bannerText: '' }),
+    imageModels: async () => [],
+  });
   const image = [{ id: 'image', name: 'Image', kind: 'image' as const, sizeBytes: 1, fitScore: 0, payload: {} as never }];
   const stt = [{ id: 'stt', name: 'Speech', kind: 'stt' as const, sizeBytes: 1, fitScore: 0, payload: { modelId: 'stt' } }];
-  const plans = selectAutoSetupPlans({ text: catalog, image, stt });
+  const plans = selectAutoSetupPlans({ text: catalog.text, image, stt });
 
   expect(plans.map(plan => plan.items[0].name)).toEqual([
-    'Qwen 3.5 2B',
-    'Qwen 3.5 4B',
+    'LFM2.5 8B A1B',
+    'MiniCPM5 2B',
     'Qwen 3.5 9B',
   ]);
 });

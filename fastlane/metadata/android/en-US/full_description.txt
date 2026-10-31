@@ -1,4 +1,4 @@
-Off Grid is a fully on-device AI assistant. Large language models run directly on your phone via llama.cpp and GGUF — no cloud, no account, no telemetry. Airplane-mode tested.
+Off Grid is a fully on-device AI assistant. Large language models run directly on your phone via llama.cpp and GGUF. No cloud, no account. Your chats and files never leave your device; anonymous usage data and crash reports only if you turn them on. Airplane-mode tested.
 
 Capabilities:
 

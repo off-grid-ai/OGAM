@@ -4,9 +4,36 @@ import { useDownloadStore } from '../stores/downloadStore';
 import { makeModelKey } from '../utils/modelKey';
 import { backgroundDownloadService } from './backgroundDownloadService';
 import * as whisperModelFiles from './whisperModelFiles';
-import { WHISPER_MODELS } from './whisperModels';
+import { WHISPER_MODELS, findTranscriptionModel } from './whisperModels';
 import { withRemoteCatalog } from '../stores/modelCatalogStore';
 import type { MobileWhisperCatalogModel } from '@offgrid/models';
+
+/** One file of a transcription model download: Whisper has one, Qwen3-ASR two. */
+interface ModelDownloadFile {
+  url: string;
+  fileName: string;
+  destPath: string;
+  totalBytes: number;
+  /** Exact catalog sizes are checked by the downloader; rounded MB sizes are not. */
+  exactSize: boolean;
+  sha256?: string;
+}
+
+/** The files to fetch for a transcription model. Qwen3-ASR's projector comes first, its weights last. */
+function downloadFilesFor(model: MobileWhisperCatalogModel, fileName: string, destPath: string): ModelDownloadFile[] {
+  const asr = whisperModelFiles.getQwenAsrFiles(model.id);
+  if (!asr) {
+    return [{ url: model.url, fileName, destPath, totalBytes: model.size * 1024 * 1024, exactSize: false }];
+  }
+  return [asr.mmproj, asr.primary].map(file => ({
+    url: file.url,
+    fileName: file.name,
+    destPath: file.path,
+    totalBytes: file.sizeBytes,
+    exactSize: true,
+    ...(file.sha256 ? { sha256: file.sha256 } : {}),
+  }));
+}
 
 export interface DownloadedWhisperModel {
   modelId: string;
@@ -47,6 +74,7 @@ interface MissingModelDownloadInput {
   model: MobileWhisperCatalogModel;
   fileName: string;
   destPath: string;
+  files: ModelDownloadFile[];
   owner: ActiveDownloadOwner;
   onProgress?: (progress: number) => void;
 }
@@ -69,9 +97,10 @@ export class WhisperModelDownloads {
     modelId: string,
     onProgress?: (progress: number) => void,
   ): Promise<string> {
-    const model = withRemoteCatalog('transcription', WHISPER_MODELS).find(candidate => candidate.id === modelId);
+    const model = findTranscriptionModel(withRemoteCatalog('transcription', WHISPER_MODELS), modelId);
     if (!model) throw new Error(`Unknown model: ${modelId}`);
-    const fileName = `ggml-${modelId}.bin`;
+    const destPath = whisperModelFiles.getModelPath(modelId);
+    const fileName = whisperModelFiles.getQwenAsrFiles(modelId)?.primary.name ?? `ggml-${modelId}.bin`;
     const modelKey = makeModelKey(`whisper-${modelId}`, fileName);
     const owner = createDownloadOwner(modelKey);
     // Ownership exists before the first asynchronous boundary. A delete that
@@ -80,8 +109,7 @@ export class WhisperModelDownloads {
 
     try {
       await whisperModelFiles.ensureModelsDirExists();
-      const destPath = whisperModelFiles.getModelPath(modelId);
-      if (await RNFS.exists(destPath)) return destPath;
+      if (await whisperModelFiles.isModelDownloaded(modelId)) return destPath;
       if (owner.cancelRequested) {
         const cancelled = new Error('Download cancelled') as Error & {
           cancelled?: boolean;
@@ -94,6 +122,7 @@ export class WhisperModelDownloads {
         model,
         fileName,
         destPath,
+        files: downloadFilesFor(model, fileName, destPath),
         owner,
         onProgress,
       });
@@ -111,6 +140,7 @@ export class WhisperModelDownloads {
     model,
     fileName,
     destPath,
+    files,
     owner,
     onProgress,
   }: MissingModelDownloadInput): Promise<string> {
@@ -119,7 +149,7 @@ export class WhisperModelDownloads {
     logger.log(
       `[Whisper] Downloading ${model.name} via background download service...`,
     );
-    const totalBytes = model.size * 1024 * 1024;
+    const totalBytes = files.reduce((sum, file) => sum + file.totalBytes, 0);
     const { modelKey } = owner;
     const queuedId = `queued:${modelKey}`;
 
@@ -141,22 +171,60 @@ export class WhisperModelDownloads {
       createdAt: Date.now(),
     });
 
+    // Files fetched earlier count toward the one progress bar, as a model's companion files do.
+    let doneBytes = 0;
+    for (const file of files) {
+      if (file.exactSize && (await RNFS.exists(file.destPath))) {
+        doneBytes += file.totalBytes;
+        continue;
+      }
+      if (doneBytes > 0) useDownloadStore.getState().setCompanionBytes(modelKey, doneBytes);
+      await this.downloadFile(file, { model, owner, doneBytes, totalBytes, onProgress });
+      doneBytes += file.totalBytes;
+    }
+
+    logger.log(`[Whisper] Downloaded to ${destPath}`);
+    return destPath;
+  }
+
+  private async downloadFile(
+    file: ModelDownloadFile,
+    job: {
+      model: MobileWhisperCatalogModel;
+      owner: ActiveDownloadOwner;
+      doneBytes: number;
+      totalBytes: number;
+      onProgress?: (progress: number) => void;
+    },
+  ): Promise<void> {
+    const { model, owner, doneBytes, totalBytes, onProgress } = job;
+    const modelId = model.id;
+    const { modelKey } = owner;
+    const { destPath } = file;
+    if (owner.cancelRequested) {
+      const cancelled = new Error('Download cancelled') as Error & { cancelled?: boolean };
+      cancelled.cancelled = true;
+      throw cancelled;
+    }
     const { downloadIdPromise, promise } =
       backgroundDownloadService.downloadFileTo({
         params: {
-          url: model.url,
-          fileName,
+          url: file.url,
+          fileName: file.fileName,
           modelId: `whisper-${modelId}`,
           modelKey,
           modelType: 'stt',
-          totalBytes,
+          totalBytes: file.totalBytes,
+          ...(file.sha256 ? { sha256: file.sha256 } : {}),
           // Catalog sizes are rounded MB values, not byte-exact checksums.
-          metadataJson: JSON.stringify({ skipSizeValidation: true }),
+          ...(file.exactSize ? {} : { metadataJson: JSON.stringify({ skipSizeValidation: true }) }),
         },
         destPath,
         onProgress: onProgress
           ? (bytesDownloaded, total) => {
-              onProgress(total > 0 ? bytesDownloaded / total : 0);
+              // This file at the size the downloader reports, the files after it at their catalog size.
+              const overall = total > 0 ? totalBytes - file.totalBytes + total : 0;
+              onProgress(overall > 0 ? (doneBytes + bytesDownloaded) / overall : 0);
             }
           : undefined,
         silent: true,
@@ -186,6 +254,9 @@ export class WhisperModelDownloads {
       await this.unlinkOwnedFile(modelId, owner, destPath).catch(() => {});
       throw error;
     }
+    // A finished file starts a new native transfer for the next one.
+    owner.nativeDownloadId = null;
+    owner.nativeCancel = null;
 
     try {
       await whisperModelFiles.validateModelFile(destPath);
@@ -199,9 +270,6 @@ export class WhisperModelDownloads {
           : 'unknown error';
       throw new Error(`Downloaded model file is invalid: ${reason}`);
     }
-
-    logger.log(`[Whisper] Downloaded to ${destPath}`);
-    return destPath;
   }
 
   listDownloadedModels(): Promise<DownloadedWhisperModel[]> {
@@ -228,8 +296,8 @@ export class WhisperModelDownloads {
       }
     }
 
-    const path = whisperModelFiles.getModelPath(modelId);
-    if (await RNFS.exists(path)) {
+    for (const path of whisperModelFiles.getModelFilePaths(modelId)) {
+      if (!(await RNFS.exists(path))) continue;
       const replacement = this.activeDownloads.get(modelId);
       if (replacement && replacement !== owner) return;
       await RNFS.unlink(path);

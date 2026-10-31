@@ -1,5 +1,8 @@
+import { videoModelDisplayName } from '../../utils/modelHelpers';
+import { useAppStore } from '../../stores/appStore';
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, ScrollView, Image } from 'react-native';
+import { TouchableOpacity } from '../../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Button,
@@ -23,17 +26,21 @@ import { ModelsSummaryRow } from '../../components/models/ModelsSummaryRow';
 import {
   ModelsManagerSheet,
   ModelRowType,
+  type ModelRowLabels,
 } from '../../components/models/ModelsManagerSheet';
+import { useSearchModelLabel } from '../../hooks/useSearchModelLabel';
 import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { WHISPER_MODELS } from '../../services';
+import { findTranscriptionModel } from '../../services/whisperModels';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useUiModeStore } from '../../stores/uiModeStore';
 import { SLOTS, useSlot } from '../../bootstrap/slotRegistry';
 import { useOpenSync } from '../../hooks/useOpenSync';
 import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabels';
 import { openSupportEmail } from '../../utils/supportEmail';
+import { SCROLL_DEPTH_PROPS } from '../../constants/scrollDepth';
 
 type HomeScreenProps = {
   navigation: HomeScreenNavigationProp;
@@ -42,16 +49,20 @@ type HomeScreenProps = {
 function homeModelLabels(input: {
   text?: string;
   image?: string;
+  video?: string;
   voice?: string | null;
   transcription?: string | null;
   localVoice?: string | null;
   localTranscription?: string;
-}): Record<ModelRowType, string> {
+  search?: string;
+}): ModelRowLabels {
   return {
     text: input.text ?? '—',
     image: input.image ?? '—',
+    video: input.video ?? '—',
     voice: input.voice ?? input.localVoice ?? '—',
     speech: input.transcription ?? input.localTranscription ?? '—',
+    search: input.search,
   };
 }
 
@@ -75,6 +86,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     downloadedImageModels,
     activeImageModelId,
     generatedImages,
+    generatedVideos,
     conversationCount,
     activeTextModelId,
     activeTextModelName,
@@ -112,17 +124,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const voiceSummary = useUiModeStore(s => s.voiceSummary);
   const remoteLabels = useActiveRemoteModelLabels();
 
+  const videoLabel = useAppStore(s => {
+    const model = s.downloadedVideoModels.find(m => m.id === s.activeVideoModelId);
+    return model ? videoModelDisplayName(model.id, model.name) : undefined;
+  });
+  const searchLabel = useSearchModelLabel();
   const modelLabels = homeModelLabels({
+    search: searchLabel,
+    video: remoteLabels.video ?? videoLabel,
     text: activeTextModelId ? activeTextModelName : undefined,
     image: activeImageModel?.name,
     voice: remoteLabels.voice,
     transcription: remoteLabels.transcription,
     localVoice: voiceSummary,
-    localTranscription: whisperModels.find(m => m.id === whisperModelId)?.name,
+    localTranscription: findTranscriptionModel(whisperModels, whisperModelId)?.name,
   });
 
   // Downloaded-model counts shown in the Models card (replaces the old stats row).
   const modelCounts: Partial<Record<ModelRowType, number>> = {
+    video: useAppStore(s => s.downloadedVideoModels.length),
     text: downloadedModels.length,
     image: downloadedImageModels.length,
     speech: whisperPresentCount,
@@ -140,7 +160,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const presentModelSheet = (type: ModelRowType) => {
     if (type === 'text') setPickerType('text');
     else if (type === 'image') setPickerType('image');
+    else if (type === 'video') setPickerType('video');
     else if (type === 'speech') setWhisperOpen(true);
+    else if (type === 'search') setPickerType('search');
     else setVoiceOpen(true);
   };
   const openModelRow = (type: ModelRowType) => {
@@ -167,6 +189,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View testID="home-screen" style={styles.scrollView}>
         <ScrollView
+          {...SCROLL_DEPTH_PROPS}
           style={styles.scrollView}
           contentContainerStyle={styles.content}
         >
@@ -214,7 +237,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </AnimatedEntry>
 
           {/* New Chat Button */}
-          {activeTextModelId || activeImageModelId ? (
+          {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? (
             <Button
               title="New Chat"
               onPress={startNewChat}
@@ -225,7 +248,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <Card style={styles.setupCard} testID="setup-card">
               <Text style={styles.setupText}>
                 {downloadedModels.length > 0 || remoteTextModels.length > 0
-                  ? 'Select a text or image model to start'
+                  ? 'Select a text, image, or video model to start'
                   : 'Choose a model here or on your network.'}
               </Text>
               <View style={styles.setupActions}>
@@ -283,18 +306,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </AnimatedEntry>
           )}
 
-          {/* Image Gallery */}
+          {/* Media Gallery */}
           <AnimatedPressable
             style={styles.galleryCard}
             onPress={() => navigation.navigate('Gallery')}
             hapticType="selection"
+            testID="home-gallery-card"
           >
             <Icon name="grid" size={18} color={colors.primary} />
             <View style={styles.galleryCardInfo}>
               <Text style={styles.galleryCardTitle}>Image Gallery</Text>
               <Text style={styles.galleryCardMeta}>
-                {generatedImages.length}{' '}
-                {generatedImages.length === 1 ? 'image' : 'images'}
+                {generatedImages.length} images · {generatedVideos.length}{' '}
+                videos
               </Text>
             </View>
             <Icon name="chevron-right" size={16} color={colors.textMuted} />
@@ -348,7 +372,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         onSelectionComplete={() => setPickerType(null)}
         onBrowseModels={tab => {
           setPickerType(null);
-          navigation.navigate('ModelsTab', { initialTab: tab });
+          navigation.navigate('ModelsTab', { initialTab: tab === 'search' ? 'embedding' : tab });
         }}
         onAddServer={() => navigation.navigate('RemoteServers')}
       />

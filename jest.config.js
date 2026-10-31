@@ -110,10 +110,23 @@ module.exports = {
     './pro': { statements: 75, branches: 75, functions: 75, lines: 75 },
     // New standalone modules in this change set are held to 100% on every axis. Changed
     // legacy files have their NEW branches covered by the suites but aren't whole-file-100%.
-    './src/utils/imageModelIntegrity.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
+    './src/services/imageModelIntegrity.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
     './src/utils/imageGenAdvice.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
     './src/services/modelLoadErrors.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
     './src/components/ImageGenAdviceCard.tsx': { statements: 100, branches: 100, functions: 100, lines: 100 },
     './src/components/VoiceRecordButton/derive.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
+    // Opt-in analytics (docs/ANALYTICS.md): every new module is held to 100% on every axis.
+    './src/services/analytics/analytics.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
+    './src/services/analytics/client.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
+    './src/services/analytics/consentPrompt.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
+    './src/services/analytics/featureSnapshot.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
+    './src/services/analytics/modelFacts.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
+    './src/services/analytics/scrub.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
+    './src/services/analytics/uncleanExit.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
+    './src/services/analytics/values.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
+    './src/services/problemReport.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
+    './src/components/AnalyticsConsentPrompt.tsx': { statements: 100, branches: 100, functions: 100, lines: 100 },
+    './src/screens/AnalyticsInfoScreen.tsx': { statements: 100, branches: 100, functions: 100, lines: 100 },
+    './src/screens/SettingsAnalyticsSection.tsx': { statements: 100, branches: 100, functions: 100, lines: 100 },
   },
 };

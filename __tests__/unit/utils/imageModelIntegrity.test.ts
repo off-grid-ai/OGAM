@@ -6,7 +6,7 @@
  * Reproduces the EXACT on-device defect: the mnn model extracted missing `pos_emb.bin`
  * AND `clip_v2.mnn.weight` while every other file was present, yet nothing flagged it.
  */
-import { checkImageModelFiles, type ImageDirEntry } from '../../../src/utils/imageModelIntegrity';
+import { checkImageModelFiles, type ImageDirEntry } from '../../../src/services/imageModelIntegrity';
 
 // The complete, correct mnn model file set (from the verified xororz/sd-mnn zip).
 const COMPLETE_MNN: ImageDirEntry[] = [

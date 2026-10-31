@@ -1,3 +1,5 @@
+import { videoModelDisplayName } from '../../utils/modelHelpers';
+import { useAppStore } from '../../stores/appStore';
 import React, { useEffect, useRef, useState } from 'react';
 import { FlatList, Keyboard, Platform } from 'react-native';
 // Edge-to-edge-aware KeyboardAvoidingView. RN's own version leaves a residual
@@ -31,11 +33,14 @@ import { ChatMessageArea } from './ChatMessageArea';
 import {
   ModelsManagerSheet,
   ModelRowType,
+  type ModelRowLabels,
 } from '../../components/models/ModelsManagerSheet';
+import { useSearchModelLabel } from '../../hooks/useSearchModelLabel';
 import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { WHISPER_MODELS } from '../../services';
+import { findTranscriptionModel } from '../../services/whisperModels';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabels';
 import { useChatStore } from '../../stores';
@@ -65,9 +70,9 @@ export const ChatScreen: React.FC = () => {
   const [modelsManagerOpen, setModelsManagerOpen] = useState(false);
   // Which tab the model selector opens on — set from the manager row the user tapped so
   // tapping "Image" focuses the Image tab (it defaulted to Text regardless of the row).
-  const [modelSelectorTab, setModelSelectorTab] = useState<'text' | 'image'>(
-    'text',
-  );
+  const [modelSelectorTab, setModelSelectorTab] = useState<
+    'text' | 'image' | 'video' | 'search'
+  >('text');
   const [whisperOpen, setWhisperOpen] = useState(false);
   const documents = useChatDocumentsSheet(chat.activeConversation, rootNavigation);
   const [voiceOpen, setVoiceOpen] = useState(false);
@@ -81,13 +86,20 @@ export const ChatScreen: React.FC = () => {
   const whisperModelId = useWhisperStore(s => s.downloadedModelId);
   const whisperModels = useWithRemoteCatalog('transcription', WHISPER_MODELS);
   const remoteLabels = useActiveRemoteModelLabels();
-  const modelLabels: Record<ModelRowType, string> = {
-    text: chat.activeModelName ?? chat.activeModel?.name ?? '—',
+  const videoLabel = useAppStore(s => {
+    const model = s.downloadedVideoModels.find(m => m.id === s.activeVideoModelId);
+    return model ? videoModelDisplayName(model.id, model.name) : '—';
+  });
+  const searchLabel = useSearchModelLabel();
+  const modelLabels: ModelRowLabels = {
+    search: searchLabel,
+    video: remoteLabels.video ?? videoLabel,
+    text: chat.activeModelName || chat.activeModel?.name || '—',
     image: remoteLabels.image ?? chat.activeImageModel?.name ?? '—',
     voice: remoteLabels.voice ?? voiceSummary ?? '—',
     speech:
       remoteLabels.transcription ??
-      whisperModels.find(m => m.id === whisperModelId)?.name ??
+      findTranscriptionModel(whisperModels, whisperModelId)?.name ??
       '—',
   };
   const pendingModelRowRef = useRef<ModelRowType | null>(null);
@@ -106,14 +118,14 @@ export const ChatScreen: React.FC = () => {
         'Eject All Models',
         'Unload all active models to free up memory?',
         [
-      { text: 'Cancel', style: 'cancel' },
-      {
+          { text: 'Cancel', style: 'cancel' },
+          {
             text: 'Eject',
             style: 'destructive',
-        onPress: async () => {
-          chat.setAlertState(hideAlert());
-          try {
-            const count = await ejectAll();
+            onPress: async () => {
+              chat.setAlertState(hideAlert());
+              try {
+                const count = await ejectAll();
                 if (count > 0)
                   chat.setAlertState(
                     showAlert(
@@ -121,19 +133,19 @@ export const ChatScreen: React.FC = () => {
                       `Unloaded ${count} model${count > 1 ? 's' : ''}`,
                     ),
                   );
-          } catch {
+              } catch {
                 chat.setAlertState(
                   showAlert('Error', 'Failed to unload models'),
                 );
-          }
-        },
-      },
+              }
+            },
+          },
         ],
       ),
     );
   };
   const openModelRowNow = (type: ModelRowType) => {
-    if (type === 'text' || type === 'image') {
+    if (type === 'text' || type === 'image' || type === 'video' || type === 'search') {
       setModelSelectorTab(type);
       chat.setShowModelSelector(true);
     } else if (type === 'speech') setWhisperOpen(true);
@@ -211,7 +223,11 @@ export const ChatScreen: React.FC = () => {
       onClose={() => chat.setAlertState(hideAlert())}
     />
   );
-  if (!chat.hasActiveModel && chat.displayMessages.length === 0 && !chat.isModelLoading) {
+  if (
+    !chat.hasActiveModel &&
+    chat.displayMessages.length === 0 &&
+    !chat.isModelLoading
+  ) {
     return (
       <>
         <NoModelScreen

@@ -1,3 +1,11 @@
+import type { ImageParameterStore } from '@offgrid/models';
+import type { ModalityName, ProcessorPlace } from '../types';
+import { videoModelDisplayName } from '../utils/modelHelpers';
+import type {
+  ModelEntry,
+  VideoGenerationRequestContract,
+} from '@offgrid/models';
+import type { VideoModel } from '../services/videoModelFiles';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Platform } from 'react-native';
@@ -8,7 +16,7 @@ import {
   DEFAULT_SILENCE_AFTER_SPEECH_MS,
   DEFAULT_SPEAKER_DRAIN_MS,
 } from '@offgrid/speech';
-import { DEFAULT_MAX_TOOL_CALLS, REASONING_BUDGET_AUTO } from '@offgrid/models';
+import { DEFAULT_MAX_TOOL_CALLS, MOBILE_MTP_DRAFT_TOKENS, REASONING_BUDGET_AUTO } from '@offgrid/models';
 import { APP_CONFIG } from '../constants';
 import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
 import {
@@ -24,6 +32,7 @@ import {
   INFERENCE_BACKENDS,
   LiteRTBackend,
   GeneratedImage,
+  GeneratedVideo,
 } from '../types';
 import {
   emitChangedModelSettings,
@@ -61,7 +70,14 @@ export type AppSettings = {
   imageGenerationMode: ImageGenerationMode;
   autoDetectMethod: AutoDetectMethod;
   classifierModelId: string | null;
+  videoParams: Record<string, Partial<VideoGenerationRequestContract>>;
+  videoSeed: number;
+  videoNegative: string;
+  enhanceVideoPrompts: boolean;
   imageSteps: number;
+  /** sd.cpp models keep their own steps, guidance and size, as on Off Grid Desktop (shared
+   *  ImageParameterStore): one global value would give a 4-step Lightning model 50 steps. */
+  imageParameterOverrides?: ImageParameterStore;
   imageGuidanceScale: number;
   imageThreads: number;
   imageWidth: number;
@@ -74,7 +90,7 @@ export type AppSettings = {
   /** MTP speculative decoding: the model drafts several tokens per step and verifies them in one
    *  pass. Only models carrying MTP draft layers benefit; the engine ignores it on the rest. */
   speculativeDecoding: boolean;
-  /** MTP draft tokens per step. llama.cpp's default is 3. */
+  /** MTP draft tokens per step: the shared, cited default (llama.cpp's own 3). */
   speculativeDraftMax: number;
   /** Aggressive model loading: commit more RAM + a smaller reserve so large models
    *  load (with a "Load Anyway" override when the budget still blocks). Off by
@@ -109,6 +125,9 @@ export type AppSettings = {
    *  answer still streams after the cap closes the thinking block. Optional so installs persisted
    *  before this setting read as auto. */
   reasoningBudget?: number;
+  /** Where each modality runs, as Fastest settings measured or decided it (npu / gpu / cpu).
+   *  Optional: absent means each loader keeps its own default. */
+  modalityBackends?: Partial<Record<ModalityName, ProcessorPlace>>;
   inferenceBackend: InferenceBackend;
   /** True once the user has explicitly picked an inference backend in Settings.
    *  While false, the boot-time backendSync may upgrade the default to the GPU
@@ -126,6 +145,13 @@ export type AppSettings = {
   autoDiscoverRemoteModels?: boolean;
   /** LAN server types to probe when Scan network is used. */
   remoteScanKinds?: Array<'gateway' | 'ollama' | 'lmstudio'>;
+  /** Opt-in analytics consent. Per device: never part of the synced model settings. */
+  analyticsUsage: boolean;
+  analyticsCrashes: boolean;
+  /** The person has seen the consent choice (Auto Setup or a prompt). */
+  analyticsAsked: boolean;
+  /** When a consent prompt was last shown, so a declined prompt waits 30 days. */
+  analyticsLastPromptAt: number | null;
 };
 
 type ThemeMode = 'system' | 'light' | 'dark';
@@ -183,6 +209,13 @@ export interface AppState extends ProAccessSlice {
     provenance?: RecordProvenance,
   ) => void;
   resetSettings: () => void;
+  downloadedVideoModels: VideoModel[];
+  videoDownloads: Record<string, ModelEntry>;
+  activeVideoModelId: string | null;
+  setActiveVideoModelId: (id: string | null) => void;
+  addDownloadedVideoModel: (model: VideoModel) => void;
+  removeDownloadedVideoModel: (id: string) => void;
+  setVideoDownload: (id: string, model: ModelEntry | null) => void;
   downloadedImageModels: ONNXImageModel[];
   activeImageModelId: string | null;
   setDownloadedImageModels: (models: ONNXImageModel[]) => void;
@@ -200,6 +233,10 @@ export interface AppState extends ProAccessSlice {
   setImageGenerationStatus: (status: string | null) => void;
   setImagePreviewPath: (path: string | null) => void;
   generatedImages: GeneratedImage[];
+  generatedVideos: GeneratedVideo[];
+  addGeneratedVideo: (video: GeneratedVideo) => void;
+  removeGeneratedVideo: (videoId: string) => void;
+  removeVideosByConversationId: (conversationId: string) => string[];
   addGeneratedImage: (image: GeneratedImage) => void;
   removeGeneratedImage: (imageId: string) => void;
   removeImagesByConversationId: (conversationId: string) => string[];
@@ -248,10 +285,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   nThreads: 0,
   nBatch: 0,
   speculativeDecoding: false,
-  speculativeDraftMax: 3,
+  speculativeDraftMax: MOBILE_MTP_DRAFT_TOKENS,
   imageGenerationMode: 'auto' as ImageGenerationMode,
   autoDetectMethod: 'pattern' as AutoDetectMethod,
   classifierModelId: null,
+  videoParams: {},
+  videoSeed: -1,
+  videoNegative: '',
+  enhanceVideoPrompts: false,
   imageSteps: defaultImageSteps(Platform.OS),
   imageGuidanceScale: 7.5,
   imageThreads: 4,
@@ -280,6 +321,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   liteRTTemperature: 0.7,
   liteRTTopP: 0.9,
   liteRTMaxTokens: 4096,
+  analyticsUsage: false,
+  analyticsCrashes: false,
+  analyticsAsked: false,
+  analyticsLastPromptAt: null,
 };
 
 export const selectIsLiteRT = (state: AppState): boolean =>
@@ -380,11 +425,47 @@ export const useAppStore = create<AppState>()(
       },
       resetSettings: () => {
         const before = get().settings;
-        const after = { ...DEFAULT_SETTINGS };
+        // Consent resets to off (analytics opts out); whether the person was already asked does not,
+        // so a reset never brings back the one-time prompt.
+        const after = {
+          ...DEFAULT_SETTINGS,
+          analyticsAsked: before.analyticsAsked,
+          analyticsLastPromptAt: before.analyticsLastPromptAt,
+        };
         set({ settings: after });
         emitChangedModelSettings(before, after);
       },
       // Image models (ONNX-based)
+      downloadedVideoModels: [],
+      videoDownloads: {},
+      activeVideoModelId: null,
+      setActiveVideoModelId: id => set({ activeVideoModelId: id }),
+      addDownloadedVideoModel: model =>
+        set(state => ({
+          downloadedVideoModels: [
+            ...state.downloadedVideoModels.filter(m => m.id !== model.id),
+            { ...model, name: videoModelDisplayName(model.id, model.name) },
+          ],
+        })),
+      removeDownloadedVideoModel: id =>
+        set(state => ({
+          downloadedVideoModels: state.downloadedVideoModels.filter(
+            m => m.id !== id,
+          ),
+          activeVideoModelId:
+            state.activeVideoModelId === id ? null : state.activeVideoModelId,
+        })),
+      setVideoDownload: (id, model) =>
+        set(state => {
+          const videoDownloads = { ...state.videoDownloads };
+          if (model) {
+            videoDownloads[id] = {
+              ...model,
+              name: videoModelDisplayName(model.id, model.name),
+            };
+          } else delete videoDownloads[id];
+          return { videoDownloads };
+        }),
       downloadedImageModels: [],
       activeImageModelId: null,
       setDownloadedImageModels: models =>
@@ -428,6 +509,25 @@ export const useAppStore = create<AppState>()(
       setImagePreviewPath: path => set({ imagePreviewPath: path }),
       // Gallery
       generatedImages: [],
+      generatedVideos: [],
+      addGeneratedVideo: video =>
+        set(state => ({
+          generatedVideos: [
+            video,
+            ...state.generatedVideos.filter(item => item.id !== video.id),
+          ],
+        })),
+      removeGeneratedVideo: videoId =>
+        set(state => ({
+          generatedVideos: state.generatedVideos.filter(
+            video => video.id !== videoId,
+          ),
+        })),
+      removeVideosByConversationId: conversationId => {
+        const videos = get().generatedVideos.filter(video => video.conversationId === conversationId);
+        set(state => ({ generatedVideos: state.generatedVideos.filter(video => video.conversationId !== conversationId) }));
+        return videos.map(video => video.id);
+      },
       addGeneratedImage: image =>
         set(state => ({
           generatedImages: [image, ...state.generatedImages],
@@ -499,29 +599,33 @@ appStorage.attach(useAppStore);
 
 function persistedAppState(state: AppState) {
   return {
-        showSyncStatusBar: state.showSyncStatusBar,
-        themeMode: state.themeMode,
-        hasCompletedOnboarding: state.hasCompletedOnboarding,
-        onboardingChecklist: state.onboardingChecklist,
-        checklistDismissed: state.checklistDismissed,
-        activeModelId: state.activeModelId,
-        lastTextModelId: state.lastTextModelId,
-        settings: state.settings,
-        modelSettingProvenance: state.modelSettingProvenance,
-        activeImageModelId: state.activeImageModelId,
-        generatedImages: state.generatedImages,
-        warmedImageModels: state.warmedImageModels,
-        textGenerationCount: state.textGenerationCount,
-        imageGenerationCount: state.imageGenerationCount,
-        hasEngagedSharePrompt: state.hasEngagedSharePrompt,
-        speedBenchmarkBackend: state.speedBenchmarkBackend,
-        hasRegisteredPro: state.hasRegisteredPro,
-        // Persist eviction so a relaunch cannot grant Pro while the roster is offline.
-        proDeviceAdmission: state.proDeviceAdmission,
-        devProDisabled: state.devProDisabled,
-        proBannerDismissed: state.proBannerDismissed,
-        desktopPromoDismissed: state.desktopPromoDismissed,
-        proAhaTriggeredBy: state.proAhaTriggeredBy,
-        loadedSettings: state.loadedSettings,
+    showSyncStatusBar: state.showSyncStatusBar,
+    themeMode: state.themeMode,
+    hasCompletedOnboarding: state.hasCompletedOnboarding,
+    onboardingChecklist: state.onboardingChecklist,
+    checklistDismissed: state.checklistDismissed,
+    activeModelId: state.activeModelId,
+    lastTextModelId: state.lastTextModelId,
+    settings: state.settings,
+    modelSettingProvenance: state.modelSettingProvenance,
+    activeVideoModelId: state.activeVideoModelId,
+    downloadedVideoModels: state.downloadedVideoModels,
+    videoDownloads: state.videoDownloads,
+    activeImageModelId: state.activeImageModelId,
+    generatedImages: state.generatedImages,
+    generatedVideos: state.generatedVideos,
+    warmedImageModels: state.warmedImageModels,
+    textGenerationCount: state.textGenerationCount,
+    imageGenerationCount: state.imageGenerationCount,
+    hasEngagedSharePrompt: state.hasEngagedSharePrompt,
+    speedBenchmarkBackend: state.speedBenchmarkBackend,
+    hasRegisteredPro: state.hasRegisteredPro,
+    // Persist eviction so a relaunch cannot grant Pro while the roster is offline.
+    proDeviceAdmission: state.proDeviceAdmission,
+    devProDisabled: state.devProDisabled,
+    proBannerDismissed: state.proBannerDismissed,
+    desktopPromoDismissed: state.desktopPromoDismissed,
+    proAhaTriggeredBy: state.proAhaTriggeredBy,
+    loadedSettings: state.loadedSettings,
   };
 }

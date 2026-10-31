@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList } from 'react-native';
+import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
@@ -14,11 +15,13 @@ import { AnimatedEntry } from '../components/AnimatedEntry';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ListSearchBar } from '../components/ListSearchBar';
+import { PairedComputerSearchFooter } from '../components/PairedComputerSearchFooter';
+import { pairedComputer } from '../services/pairedComputerSearch';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { useChatStore, useProjectStore, useAppStore } from '../stores';
+import { useChatStore, useProjectStore, useAppStore, useRemoteServerStore } from '../stores';
 import { useActiveTextModel } from '../hooks/useActiveTextModel';
 import { activeModelService, llmService, remoteServerManager } from '../services';
 import { deleteChatImages, imagesNotDeletedAlert } from '../services/chatImageCleanup';
@@ -27,10 +30,13 @@ import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { byRecentActivity } from '../utils/conversationOrdering';
 import { formatWhen } from '../utils/localTime';
 import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
+import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'ChatsTab'>,
   NativeStackNavigationProp<RootStackParamList>
 >;
+
+const SEARCH_BAR = { placeholder: 'Search chats', clearLabel: 'Clear chat search', testID: 'chat-search-input' };
 
 export const ChatsListScreen: React.FC = () => {
   const previewLine = useConversationPreviewLine();
@@ -50,7 +56,9 @@ export const ChatsListScreen: React.FC = () => {
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const hasModels = !!activeTextModelId || !!activeImageModelId;
+  const activeVideoModelId = useAppStore(s => s.activeVideoModelId);
+  const remoteVideoServerId = useRemoteServerStore(s => s.activeRemoteMediaServerIds.video);
+  const hasModels = !!activeTextModelId || !!activeImageModelId || !!activeVideoModelId || !!remoteVideoServerId;
 
   const handleChatPress = (conversation: Conversation) => {
     setActiveConversation(conversation.id);
@@ -229,6 +237,20 @@ export const ChatsListScreen: React.FC = () => {
       conversation.messages.some(message => message.content.toLowerCase().includes(query)),
     );
   }, [searchQuery, sortedConversations]);
+  const computerResults = selecting ? null : (
+    <PairedComputerSearchFooter
+      query={searchQuery}
+      conversations={conversations}
+      listed={visibleConversations}
+      onOpenChat={conversationId => {
+        setActiveConversation(conversationId);
+        navigation.navigate('Chat', { conversationId });
+      }}
+    />
+  );
+  // With no chats yet, a paired computer is still worth searching: the bar stays.
+  const hasComputer = useRemoteServerStore(s => !!pairedComputer(s.servers, s.activeServerId));
+  const searchBar = <ListSearchBar value={searchQuery} onChangeText={setSearchQuery} {...SEARCH_BAR} />;
   const allVisibleSelected =
     visibleConversations.length > 0 &&
     visibleConversations.every(conversation => selectedIds.has(conversation.id));
@@ -273,7 +295,9 @@ export const ChatsListScreen: React.FC = () => {
         }
       />
 
-      {sortedConversations.length === 0 ? (
+      {sortedConversations.length === 0 && hasComputer ? searchBar : null}
+      {sortedConversations.length === 0 && hasComputer && searchQuery.trim() ? computerResults : null}
+      {sortedConversations.length === 0 ? (hasComputer && searchQuery.trim() ? null : (
         <View style={styles.emptyState}>
           <AnimatedEntry index={0} staggerMs={60} trigger={focusTrigger}>
             <View style={styles.emptyIcon}>
@@ -297,15 +321,9 @@ export const ChatsListScreen: React.FC = () => {
             </AnimatedListItem>
           )}
         </View>
-      ) : (
+      )) : (
         <>
-          <ListSearchBar
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search chats"
-            clearLabel="Clear chat search"
-            testID="chat-search-input"
-          />
+          {searchBar}
           {selecting ? (
             <View style={styles.selectionBar}>
               <Text style={styles.selectionCount}>{selectedIds.size} selected</Text>
@@ -333,6 +351,7 @@ export const ChatsListScreen: React.FC = () => {
             </View>
           ) : null}
           <FlatList
+            {...SCROLL_DEPTH_PROPS}
             data={visibleConversations}
             renderItem={renderChat}
             keyExtractor={(item) => item.id}
@@ -344,6 +363,7 @@ export const ChatsListScreen: React.FC = () => {
             ListEmptyComponent={
               <Text style={styles.noMatches}>No chats match your search.</Text>
             }
+            ListFooterComponent={computerResults}
             testID="conversation-list"
           />
         </>
@@ -368,7 +388,7 @@ export const ChatsListScreen: React.FC = () => {
         }}
         onBrowseModels={(tab) => {
           setShowModelSelector(false);
-          navigation.navigate('ModelsTab', { initialTab: tab });
+          navigation.navigate('ModelsTab', { initialTab: tab === 'search' ? 'embedding' : tab });
         }}
         onSelectionComplete={() => {
           setShowModelSelector(false);

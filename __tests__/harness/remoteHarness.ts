@@ -9,7 +9,7 @@
 /** Behavior-faithful fake of the streaming XMLHttpRequest transport. Replays `sseBody` incrementally via
  *  onprogress (as chunked SSE arrives on device), then completes 200 — exactly what createStreamingRequest
  *  consumes (reads xhr.responseText in onprogress, finalises on readyState 4). Install before a remote send. */
-export function installRemoteStream(sseBody: string | string[]): { release: () => void } {
+export function installRemoteStream(sseBody: string | string[]): { release: () => Promise<void> } {
   // Accept a QUEUE of per-request bodies so a multi-turn remote flow (a tool loop: request 1 returns
   // tool_calls, request 2 — sent WITH the tool results — returns the final reply) replays the right body per
   // XHR. A single string keeps the old behavior; with an array each send() shifts the next body, the last
@@ -20,6 +20,9 @@ export function installRemoteStream(sseBody: string | string[]): { release: () =
   // rendered state (e.g. the thinking-box header WHILE reasoning is still streaming). No pause line = no-op.
   const bodies = Array.isArray(sseBody) ? [...sseBody] : [sseBody];
   let releaseFn: (() => void) | null = null;
+  // Resolved when a stream has delivered its last chunk and reported done: release() returns it, so a
+  // test awaits the stream's real end instead of a clock.
+  let ended: () => void = () => undefined;
   class FakeXHR {
     responseText = '';
     readyState = 0;
@@ -49,13 +52,20 @@ export function installRemoteStream(sseBody: string | string[]): { release: () =
           this.readyState = 4;
           this.status = 200;
           this.onreadystatechange?.();
+          ended();
         }
       };
       setTimeout(pump, 0);
     }
   }
   (global as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXHR;
-  return { release: () => releaseFn?.() };
+  return {
+    release: () =>
+      new Promise<void>(resolve => {
+        ended = resolve;
+        releaseFn?.();
+      }),
+  };
 }
 
 /** Make a remote OpenAI-compatible model the ACTIVE model — the real connect flow's end state (server

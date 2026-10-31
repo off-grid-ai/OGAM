@@ -63,11 +63,11 @@ describe('developer tooling release gate (rendered, real App)', () => {
     const { view, rtl } = await bootReturningUser(false);
 
     // BEFORE the Settings tap: the user is on Home, the Settings screen is not yet shown.
-    expect(view.queryByText('Privacy First')).toBeNull();
+    expect(view.queryByText('Report a problem')).toBeNull();
     expect(view.queryByTestId('dev-sync-strip')).toBeNull();
 
     rtl.fireEvent.press(view.getByTestId('settings-tab'));
-    await rtl.waitFor(() => expect(view.getByText('Privacy First')).toBeTruthy());
+    await rtl.waitFor(() => expect(view.getByText('Report a problem')).toBeTruthy());
 
     expect(view.queryByTestId('seed-demo-data')).toBeNull();
     expect(view.queryByText('Load demo data')).toBeNull();
@@ -82,11 +82,11 @@ describe('developer tooling release gate (rendered, real App)', () => {
   it('a developer build shows the sync strip and both developer controls in Settings', async () => {
     const { view, rtl } = await bootReturningUser(true);
 
-    expect(view.queryByText('Privacy First')).toBeNull();
+    expect(view.queryByText('Report a problem')).toBeNull();
     expect(view.getByTestId('dev-sync-strip')).toBeTruthy();
 
     rtl.fireEvent.press(view.getByTestId('settings-tab'));
-    await rtl.waitFor(() => expect(view.getByText('Privacy First')).toBeTruthy());
+    await rtl.waitFor(() => expect(view.getByText('Report a problem')).toBeTruthy());
 
     expect(view.getByTestId('seed-demo-data')).toBeTruthy();
     expect(view.getByText('Load demo data')).toBeTruthy();
@@ -231,14 +231,17 @@ describe('Load demo data in a developer build (rendered, real App)', () => {
     await view.findByTestId('project-detail-screen');
     expect(await view.findByText(String(chats))).toBeTruthy();
     await rtl.waitFor(() => expect(view.getByTestId('project-knowledge-base-count')).toHaveTextContent(String(documents)));
+    // The project opens on Chats; its documents are behind the Knowledge base tab.
+    rtl.fireEvent.press(view.getByTestId('project-tab-knowledge'));
     expect(view.getByLabelText('Knowledge document Promises to Sam.txt')).toBeTruthy();
     expect(view.getByLabelText('Knowledge document Acme pilot brief.txt')).toBeTruthy();
     expect(view.getByLabelText('Knowledge document Acme_rollout_v3.pdf')).toBeTruthy();
+    // Every document reached the paired Mac: none says it could not sync.
+    expect(view.queryByText(/Couldn't sync to/)).toBeNull();
+    rtl.fireEvent.press(view.getByTestId('project-tab-chats'));
     // The chats are the demo's own conversations, newest first.
     expect(view.getByText('Pilot email draft ready')).toBeTruthy();
     expect(view.getByText('Pilot seat-days result')).toBeTruthy();
-    // Every document reached the paired Mac: none says it could not sync.
-    expect(view.queryByText(/Couldn't sync to/)).toBeNull();
 
     // The chat titles use the theme's text colour, in light and, after switching, in dark.
     const { getTheme } = require('../../../src/theme');

@@ -30,14 +30,15 @@ import { useTheme } from '../../theme';
 import { useAppStore } from '../../stores';
 import { getToolExtensions } from '../../services/tools/extensions';
 import { enableAssistantTools, useAssistantToolAvailability, useExtensionToolCount } from '../../services/tools/useExtensionToolCount';
-import { AVAILABLE_TOOLS } from '../../services/tools';
+import { offeredTools } from '../../services/tools';
 import { useOpenProTools } from '../../hooks/useOpenProTools';
 import { useIsProActive } from '../../hooks/useIsProActive';
-import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import { getSlot, useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { SPACING } from '../../constants';
+import { proGateShown } from '../../services/analytics/analytics';
 
 export type ChatMessageAreaProps = {
   assistantSelected: boolean;
@@ -198,9 +199,10 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
     chat.enabledTools.includes(id),
   ).length;
   const proToolsCount = proToolsActiveCount + extToolCount;
-  // The free Tools page lists only AVAILABLE_TOOLS, so its badge counts just those
-  // (pro email/calendar ids are surfaced under Pro Tools instead, not double-counted).
-  const freeToolIds = new Set(AVAILABLE_TOOLS.map(t => t.id));
+  // The free Tools page lists only the tools offered now, so its badge counts just those
+  // (pro email/calendar ids are surfaced under Pro Tools instead, not double-counted; the video
+  // tool counts only while Pro video is on).
+  const freeToolIds = new Set(offeredTools().map(t => t.id));
   const freeToolsCount = chat.enabledTools.filter(id =>
     freeToolIds.has(id),
   ).length;
@@ -219,6 +221,8 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   // inset value keeps this correct on both iOS and Android without any
   // Platform.OS layout branching.
   const insets = useSafeAreaInsets();
+  // Video is Pro: its live status fills this slot; free builds render nothing here.
+  const VideoStatus = useSlot(SLOTS.videoStatus);
   const keyboardVisible = useKeyboardVisible();
   const footerPaddingBottom = computeFooterPaddingBottom(
     keyboardVisible,
@@ -230,7 +234,10 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
     prevIsStreamingRef.current = isStreaming;
   }, [isStreaming]);
   useEffect(() => {
-    if (chat.isGeneratingForThisConversation && !generationWasActiveRef.current) {
+    if (
+      chat.isGeneratingForThisConversation &&
+      !generationWasActiveRef.current
+    ) {
       userScrolledDuringGenerationRef.current = false;
     }
     generationWasActiveRef.current = chat.isGeneratingForThisConversation;
@@ -263,6 +270,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
               activeModelName={chat.activeModelName}
               activeProject={chat.activeProject}
               setShowProjectSelector={chat.setShowProjectSelector}
+              isRemote={chat.activeModelInfo?.isRemote}
             />
           );
         })()
@@ -274,6 +282,9 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           renderItem={renderItem}
           keyExtractor={item => item.id}
           extraData={interfaceMode}
+          ListFooterComponent={
+            VideoStatus ? <VideoStatus conversationId={chat.activeConversationId} /> : null
+          }
           contentContainerStyle={styles.messageList}
           onScroll={handleScroll}
           onContentSizeChange={(_w, h) => {
@@ -371,7 +382,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
       <RequiredThinkingAdviceCard
         modelName={chat.activeModelName}
         required={Boolean(
-          chat.activeRemoteModel?.capabilities.thinkingLevelsOnly
+          chat.activeRemoteModel?.capabilities.thinkingLevelsOnly,
         )}
       />
       {/* A vision model missing its projector: repairable from here, because this is where the
@@ -416,7 +427,9 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           onSend={chat.handleSend}
           onStop={chat.handleStop}
           disabled={!chat.hasActiveModel}
-          isGenerating={chat.isStreaming || chat.isThinking}
+          isGenerating={
+            chat.isGeneratingForThisConversation || chat.isStreaming || chat.isThinking
+          }
           supportsVision={chat.supportsVision}
           visionNeedsRepair={chat.visionNeedsRepair}
           conversationId={chat.activeConversationId}
@@ -446,8 +459,17 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
               : assistantAvailability
           }
           onAssistantEnableTools={enableAssistantTools}
-          onAssistantUpgrade={() => tabNav.navigate('ProDetail')}
+          onAssistantUpgrade={() => {
+            proGateShown('assistant');
+            tabNav.navigate('ProDetail');
+          }}
           onAssistantSetupSync={() => tabNav.navigate('Sync')}
+          onFindComputer={() => tabNav.navigate('RemoteServers')}
+          onGetVideoModel={() => tabNav.navigate('Main', { screen: 'ModelsTab', params: { initialTab: 'video' } })}
+          onVideoUpgrade={() => {
+            proGateShown('video');
+            tabNav.navigate('ProDetail');
+          }}
         />
       </View>
     </>

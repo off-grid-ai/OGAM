@@ -8,7 +8,8 @@
  */
 
 import type { MobileWhisperCatalogModel } from '@offgrid/models';
-import { registerBundledCatalog } from '../stores/modelCatalogStore';
+import { registerBundledCatalog, withRemoteCatalog } from '../stores/modelCatalogStore';
+import { qwenAsrCardFor } from './qwenAsrModel';
 
 const GGML_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main';
 
@@ -23,11 +24,29 @@ export const WHISPER_MODELS: MobileWhisperCatalogModel[] = [
   { id: 'base',           name: 'Base',             size: 142,  lang: 'multi', url: `${GGML_BASE}/ggml-base.bin`,           description: 'Better accuracy, 99 languages' },
   { id: 'small',          name: 'Small',            size: 466,  lang: 'multi', url: `${GGML_BASE}/ggml-small.bin`,          description: 'High accuracy, 99 languages' },
   { id: 'medium',         name: 'Medium',           size: 1500, lang: 'multi', url: `${GGML_BASE}/ggml-medium.bin`,         description: 'Near human-level, 99 languages, ~2 GB RAM' },
-  { id: 'large-v3-turbo', name: 'Large v3 Turbo',  size: 809,  lang: 'multi', url: `${GGML_BASE}/ggml-large-v3-turbo.bin`, description: 'Fast + accurate, distilled large, 99 languages' },
-  { id: 'large-v3',       name: 'Large v3',         size: 1550, lang: 'multi', url: `${GGML_BASE}/ggml-large-v3.bin`,       description: 'Best quality, 99 languages, ~3 GB RAM' },
+  { id: 'large-v3-turbo', name: 'Large v3 Turbo',  size: 1550, lang: 'multi', url: `${GGML_BASE}/ggml-large-v3-turbo.bin`, description: 'Fast + accurate, distilled large, 99 languages' },
+  { id: 'large-v3',       name: 'Large v3',         size: 2952, lang: 'multi', url: `${GGML_BASE}/ggml-large-v3.bin`,       description: 'Best quality, 99 languages, ~3 GB RAM' },
 ];
 // The bundled fallback: read it merged with the remote catalog (withRemoteCatalog('transcription', …)).
 registerBundledCatalog('transcription', WHISPER_MODELS);
+
+/** A local transcription model by id: a Whisper model from `whisperModels`, else Qwen3-ASR. */
+export function findTranscriptionModel(
+  whisperModels: readonly MobileWhisperCatalogModel[],
+  modelId: string | null | undefined,
+): MobileWhisperCatalogModel | undefined {
+  return whisperModels.find(model => model.id === modelId) ?? qwenAsrCardFor(modelId);
+}
+
+/** Qwen3-ASR's KV cache and compute buffers beside its weights (4096-token context). */
+const QWEN_ASR_RUNTIME_MB = 512;
+
+/** What a resident transcription model holds in memory, for the residency budget. */
+export function transcriptionResidentSizeMB(modelId: string): number {
+  const asr = qwenAsrCardFor(modelId);
+  if (asr) return asr.size + QWEN_ASR_RUNTIME_MB;
+  return withRemoteCatalog('transcription', WHISPER_MODELS).find(model => model.id === modelId)?.size ?? 200;
+}
 
 /**
  * Normalize a raw Whisper transcription: strip the non-speech markers Whisper

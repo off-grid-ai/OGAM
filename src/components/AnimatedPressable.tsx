@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
-import { TouchableOpacity, StyleSheet, type TouchableOpacityProps, type StyleProp, type ViewStyle, type GestureResponderEvent } from 'react-native';
+import { StyleSheet, type TouchableOpacityProps, type StyleProp, type ViewStyle, type GestureResponderEvent } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,

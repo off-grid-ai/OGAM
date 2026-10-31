@@ -7,6 +7,7 @@
 import {
   ENGINES,
   decide,
+  githubDecision,
   gradlePin,
   mavenRelease,
   patchFileName,
@@ -19,7 +20,21 @@ import {
 
 describe('the engines the app ships', () => {
   it('lists every native inference engine once', () => {
-    expect(ENGINES.map(e => e.id)).toEqual(['llama.rn', 'whisper.rn', 'react-native-executorch', 'litertlm-android']);
+    expect(ENGINES.map(e => e.id)).toEqual(['llama.rn', 'whisper.rn', 'react-native-executorch', 'litertlm-android', 'stable-diffusion.cpp']);
+  });
+});
+
+describe('githubDecision', () => {
+  it('moves a pinned commit to the newest release when the release is ahead of it', () => {
+    expect(githubDecision({ current: 'aaa', latest: 'bbb', status: 'ahead' })).toEqual({ status: 'bump', to: 'bbb' });
+  });
+  it.each([
+    ['identical', 'bbb'],
+    ['behind', 'bbb'],
+    ['diverged', 'bbb'],
+    ['ahead', null],
+  ])('stays when the compare says %p', (status, latest) => {
+    expect(githubDecision({ current: 'aaa', latest, status })).toEqual({ status: 'current' });
   });
 });
 

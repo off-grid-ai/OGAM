@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text } from 'react-native';
+import { TouchableOpacity } from '../../Touchable';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
 import { Message } from '../../../types';
@@ -33,6 +34,9 @@ function formatOptionalMeta(meta: NonNullable<Message['generationMeta']>, tps: n
     ['steps', m.steps == null ? undefined : `${m.steps} steps`],
     ['cfg', m.guidanceScale == null ? undefined : `cfg ${m.guidanceScale}`],
     ['res', m.resolution],
+    ['frames', m.frames == null ? undefined : `${m.frames} frames`],
+    ['fps', m.fps == null ? undefined : `${m.fps} fps`],
+    ['seed', m.seed == null ? undefined : `Seed: ${m.seed}`],
     ['cache', m.cacheType ? `KV ${m.cacheType}` : undefined],
   ];
   return entries

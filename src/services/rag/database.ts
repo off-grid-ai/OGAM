@@ -28,6 +28,11 @@ class RagDatabase {
   private db: DB | null = null;
   private ready = false;
 
+  /** Where the document index lives on disk, once it is open (Storage shows its size). */
+  filePath(): string | null {
+    return this.db?.getDbPath() ?? null;
+  }
+
   async ensureReady(): Promise<void> {
     if (this.ready) return;
     try {

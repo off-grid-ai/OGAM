@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { View, Text, ScrollView, Platform } from 'react-native';
+import { TouchableOpacity } from '../../components/Touchable';
 import { useThemedStyles } from '../../theme';
 import { SPACING } from '../../constants';
 import { createStyles } from './styles';

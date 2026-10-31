@@ -84,6 +84,11 @@ export const VERIFIED_QUANTIZERS: Record<string, string> = {
 
 // Credibility level labels
 export const CREDIBILITY_LABELS = {
+  offgrid: {
+    label: 'Off Grid AI',
+    description: 'Made by Off Grid AI',
+    color: '#34D399', // emerald
+  },
   lmstudio: {
     label: 'LM Studio',
     description: 'Official LM Studio quantization - highest quality GGUF',
@@ -245,4 +250,10 @@ export const SPACING = {
   lg: 16,
   xl: 24,
   xxl: 32,
+};
+
+// Corner radius (@offgrid/design RADIUS): md for cards and controls, sm for hairline tracks.
+export const RADIUS = {
+  sm: 2,
+  md: 8,
 };

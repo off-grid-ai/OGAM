@@ -17,6 +17,11 @@ import {
 import { MODEL_RECOMMENDATIONS, RECOMMENDED_MODELS } from '../constants';
 import { withRemoteCatalog } from '../stores/modelCatalogStore';
 import { HTP_ENABLED } from '../config/featureFlags';
+import { sdCppRunsOnCpu } from './sdCppPlacement';
+
+/** sd.cpp image memory per byte of pack file, measured on device (see estimateImageModelRam). */
+const SD_CPP_RAM_MULTIPLIER = 1.3;
+
 /**
  * QNN variant tiers — mirrors local-dream's chipsetModelSuffixes map exactly.
  * Source: https://github.com/xororz/local-dream — Model.kt getChipsetSuffix()
@@ -83,6 +88,17 @@ class HardwareService {
     const sys = await this.readSystemAvailableBytes();
     return sys != null ? sys : totalMemory - usedMemory;
   }
+  /** Pages the whole phone can still hand out (iOS). null when the native module does not report it. */
+  async getSystemAvailableBytes(): Promise<number | null> {
+    const mod = NativeModules.DeviceMemoryModule;
+    if (!mod?.getMemoryInfo) return null;
+    try {
+      const bytes = Number((await mod.getMemoryInfo())?.systemAvailableBytes);
+      return Number.isFinite(bytes) && bytes > 0 ? bytes : null;
+    } catch {
+      return null;
+    }
+  }
   /** Real per-process available memory (bytes) via the native module — same on
    *  iOS and Android. null when the module is unavailable. */
   private async readProcessAvailableBytes(): Promise<number | null> {
@@ -92,7 +108,12 @@ class HardwareService {
       const info = await mod.getMemoryInfo();
       logger.log(`[WIRE-RAM] ${JSON.stringify({ platform: Platform.OS, info })}`); // [WIRE] raw DeviceMemoryModule shape from-device
       const bytes = Number(info?.processAvailableBytes);
-      return Number.isFinite(bytes) && bytes > 0 ? bytes : null;
+      if (!Number.isFinite(bytes) || bytes <= 0) return null;
+      // iOS also reports what the whole phone can still hand out. The app's own headroom can be
+      // large while the phone is short of pages, and then the OS kills the app: never fit past
+      // the smaller of the two.
+      const system = Number(info?.systemAvailableBytes);
+      return Number.isFinite(system) && system > 0 ? Math.min(bytes, system) : bytes;
     } catch {
       return null;
     }
@@ -297,7 +318,11 @@ class HardwareService {
    * so the gate doesn't refuse an ANE load that fits (nor admit a GPU load that
    * OOMs). Android (ONNX/QNN reserves accelerator memory up front) keeps 2.5×.
    */
-  estimateImageModelRam(model: { fileSize?: number; size?: number; mmProjFileSize?: number }): number {
+  estimateImageModelRam(model: { fileSize?: number; size?: number; mmProjFileSize?: number; backend?: string }): number {
+    // sd.cpp packs carry their text encoders and VAE in the file and stream compute in segments:
+    // RealVisXL Lightning Q4 (2.67 GB) peaked at 3.33 GB app memory on a OnePlus (SM8635, 2026-10-27),
+    // 1.25x its file. 1.3x keeps that measurement with a little headroom; 2.5x refused it at 6.7 GB.
+    if (model.backend === 'sd') return this.estimateModelRam(model, SD_CPP_RAM_MULTIPLIER);
     const multiplier = Platform.OS === 'ios' && !this.preferGpuForImageGen() ? 1.8 : 2.5;
     return this.estimateModelRam(model, multiplier);
   }
@@ -425,6 +450,7 @@ class HardwareService {
     if (ramGB < 4) {
       rec.warning = 'Low RAM \u2014 expect slower performance';
     }
+    rec.sdCppOnCpu = sdCppRunsOnCpu(Platform.OS, socInfo.vendor);
     this.cachedImageRecommendation = rec;
     return rec;
   }

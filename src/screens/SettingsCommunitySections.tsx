@@ -1,5 +1,6 @@
 import React from 'react';
-import { Linking, Platform, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, Platform, Text, View } from 'react-native';
+import { TouchableOpacity } from '../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
 import { AnimatedEntry } from '../components/AnimatedEntry';

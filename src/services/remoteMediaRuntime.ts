@@ -22,7 +22,7 @@ export interface RemoteMediaRequestOptions {
   onImageProgress?: (step: number, total: number) => void;
 }
 
-function endpoint(server: RemoteServer, path: string): string {
+export function endpoint(server: RemoteServer, path: string): string {
   let base = server.endpoint;
   while (base.endsWith('/')) base = base.slice(0, -1);
   return `${base}${base.endsWith('/v1') && path.startsWith('/v1/') ? path.slice(3) : path}`;
@@ -42,7 +42,8 @@ function throwRemoteError(detail: string, message: string): never {
   throw new Error(message);
 }
 
-async function request<T>(
+/** One authenticated call to a paired server. Pro media clients (video) reuse it. */
+export async function request<T>(
   input: {
     server: RemoteServer;
     path: string;
@@ -53,20 +54,12 @@ async function request<T>(
 ): Promise<T> {
   const { server, path, init, signal } = input;
   const controller = new AbortController();
-  // An async image submission must receive its ID before it can cancel the Desktop job.
-  const needsRequestId = server.modelManagement === 'offgrid-desktop-v1' &&
-    path === '/v1/images/generations' && init.method === 'POST';
-  let sent = false;
-  let responseTimer: ReturnType<typeof setTimeout> | undefined;
-  const abort = () => {
-    if (!needsRequestId || !sent) controller.abort();
-  };
-  const unlinkAbort = onAbort(signal, abort);
+  // Calls to a paired server have no deadline, so Stop must close the request at once: a server that
+  // never answers would otherwise hold the phone.
+  const unlinkAbort = onAbort(signal, () => controller.abort());
   try {
     const apiKey = await remoteServerManager.getApiKey(server.id);
     if (controller.signal.aborted) throw new Error('Remote request cancelled');
-    sent = true;
-    if (needsRequestId) responseTimer = setTimeout(() => controller.abort(), 30000);
     const response = await fetch(endpoint(server, path), {
       ...init,
       headers: {
@@ -86,21 +79,61 @@ async function request<T>(
     // consumed. A successful header is not a completed image/audio transfer.
     return await consume(response);
   } catch (error) {
-    if (needsRequestId && sent && signal?.aborted) {
-      logger.warn('[RemoteImage] no Desktop request ID received; remote cancellation is unconfirmed:', error);
-    }
-    if (needsRequestId && controller.signal.aborted && !signal?.aborted) {
-      throw new Error('Desktop image request timed out');
-    }
     if (controller.signal.aborted) throw new Error('Remote request cancelled');
     throw error;
   } finally {
-    if (responseTimer) clearTimeout(responseTimer);
     unlinkAbort();
   }
 }
 
-function requiredModel(
+/**
+ * Ask Desktop to cancel one image job. Sent, never awaited: a Desktop that stopped answering must not
+ * hold the phone after Stop.
+ */
+function cancelDesktopImageJob(server: RemoteServer, requestId: string): void {
+  request({
+    server,
+    path: `/v1/requests/${encodeURIComponent(requestId)}`,
+    init: { method: 'DELETE' },
+  }, response => response.json() as Promise<{ cancelled: boolean; status: string }>)
+    .then(state => {
+      if (!state.cancelled) {
+        logger.log('[RemoteImage] Desktop request was not cancelled:', requestId, state.status);
+      }
+    })
+    .catch(error => logger.warn('[RemoteImage] could not confirm Desktop cancellation:', error));
+}
+
+/**
+ * Desktop's job ID is how its job is cancelled, so the submission is not closed on Stop. The person is
+ * released at once instead, and a job ID that arrives after Stop is cancelled then.
+ */
+function untilStopped<T extends { request_id?: string }>(
+  server: RemoteServer,
+  submission: Promise<T>,
+  signal: AbortSignal | undefined,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let stopped = false;
+    const unlink = onAbort(signal, () => {
+      stopped = true;
+      reject(new Error('Remote request cancelled'));
+    });
+    submission.then(
+      payload => {
+        unlink();
+        if (!stopped) resolve(payload);
+        else if (payload.request_id) cancelDesktopImageJob(server, payload.request_id);
+      },
+      error => {
+        unlink();
+        if (!stopped) reject(error);
+      },
+    );
+  });
+}
+
+export function requiredModel(
   server: RemoteServer,
   kind: keyof RemoteMediaModelIds,
 ): string {
@@ -118,56 +151,52 @@ export const remoteMediaRuntime = {
   ): Promise<RemoteImageResult> {
     const openRouter = new URL(server.endpoint).hostname === 'openrouter.ai';
     const desktop = server.modelManagement === 'offgrid-desktop-v1';
-    type ImagePayload = {
-      data?: Array<{ b64_json?: string; url?: string }>;
-      choices?: Array<{ message?: { images?: Array<{ image_url?: { url?: string } }> } }>;
-    };
-    const payload = await request({
-      server,
-      path: openRouter ? '/v1/chat/completions' : '/v1/images/generations',
-      init: {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(openRouter
-          ? {
-              model: requiredModel(server, 'image'),
-              messages: [{ role: 'user', content: input.prompt }],
-              modalities: ['image', 'text'],
-              stream: false,
-            }
-          : {
-              model: requiredModel(server, 'image'),
-              prompt: input.prompt,
-              size: input.size ?? '1024x1024',
-              response_format: 'b64_json',
-              ...(desktop ? { async: true } : {}),
-              ...(options.override ? { allow_unsafe_memory_override: true } : {}),
-            }),
+    type ImagePayload = { data?: Array<{ b64_json?: string; url?: string }> };
+    if (options.signal?.aborted) throw new Error('Remote request cancelled');
+    const submission = request(
+      {
+        server,
+        // OpenRouter's Images API serves every image model it lists. Its chat endpoint refuses the
+        // pure image models (Qwen Image, FLUX, Seedream), so it is not used for images.
+        path: openRouter ? '/v1/images' : '/v1/images/generations',
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(
+            openRouter
+              ? {
+                  model: requiredModel(server, 'image'),
+                  prompt: input.prompt,
+                  // A ratio, not pixels: OpenRouter refuses a pixel size the model does not offer.
+                  aspect_ratio: '1:1',
+                  n: 1,
+                }
+              : {
+                  model: requiredModel(server, 'image'),
+                  prompt: input.prompt,
+                  size: input.size ?? '1024x1024',
+                  response_format: 'b64_json',
+                  ...(desktop ? { async: true } : {}),
+                  ...(options.override
+                    ? { allow_unsafe_memory_override: true }
+                    : {}),
+                },
+          ),
+        },
+        signal: desktop ? undefined : options.signal,
       },
-      signal: options.signal,
-    }, response => response.json() as Promise<ImagePayload & { request_id?: string }>);
+      response =>
+        response.json() as Promise<ImagePayload & { request_id?: string }>,
+    );
+    const payload = desktop ? await untilStopped(server, submission, options.signal) : await submission;
     let result: ImagePayload = payload;
     if (desktop && payload.request_id) {
       const requestId = payload.request_id;
-      let cancellation: Promise<void> | undefined;
+      let cancelled = false;
       const cancelDesktopRequest = () => {
-        if (cancellation) return;
-        const cancelController = new AbortController();
-        const timeout = setTimeout(() => cancelController.abort(), 30000);
-        cancellation = request({
-          server,
-          path: `/v1/requests/${encodeURIComponent(requestId)}`,
-          init: { method: 'DELETE' },
-          // The caller's signal is already aborted. Cleanup needs a fresh request.
-          signal: cancelController.signal,
-        }, response => response.json() as Promise<{ cancelled: boolean; status: string }>)
-          .then(state => {
-            if (!state.cancelled) {
-              logger.log('[RemoteImage] Desktop request was not cancelled:', requestId, state.status);
-            }
-          })
-          .catch(error => logger.warn('[RemoteImage] could not confirm Desktop cancellation:', error))
-          .finally(() => clearTimeout(timeout));
+        if (cancelled) return;
+        cancelled = true;
+        cancelDesktopImageJob(server, requestId);
       };
       const unlinkCancel = onAbort(options.signal, cancelDesktopRequest);
       try {
@@ -207,11 +236,10 @@ export const remoteMediaRuntime = {
         }
       } finally {
         unlinkCancel();
-        if (cancellation) await cancellation;
       }
     }
     const image = result.data?.[0];
-    const imageUrl = image?.url ?? result.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    const imageUrl = image?.url;
     if (!image?.b64_json && !imageUrl) throw new Error('Remote server returned no image');
     return { base64: image?.b64_json, url: imageUrl };
   },
@@ -247,31 +275,40 @@ export const remoteMediaRuntime = {
     options: RemoteMediaRequestOptions = {},
   ): Promise<RemoteVoiceResult> {
     const openRouter = new URL(server.endpoint).hostname === 'openrouter.ai';
-    const voice = input.voice || (openRouter
-      ? (await remoteMediaRuntime.listVoices(server, options))[0]
-      : undefined);
-    if (openRouter && !voice) throw new Error('This remote model has no available speakers.');
-    return request({
-      server,
-      path: '/v1/audio/speech',
-      init: {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: requiredModel(server, 'voice'),
-          input: input.text,
-          ...(voice ? { voice } : {}),
-          ...(openRouter ? { response_format: 'mp3' } : {}),
-        }),
+    const voice =
+      input.voice ||
+      (openRouter
+        ? (await remoteMediaRuntime.listVoices(server, options))[0]
+        : undefined);
+    if (openRouter && !voice)
+      throw new Error('This remote model has no available speakers.');
+    return request(
+      {
+        server,
+        path: '/v1/audio/speech',
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: requiredModel(server, 'voice'),
+            input: input.text,
+            ...(voice ? { voice } : {}),
+            ...(openRouter ? { response_format: 'mp3' } : {}),
+          }),
+        },
+        signal: options.signal,
       },
-      signal: options.signal,
-    }, async response => ({
-      audio: await response.arrayBuffer(),
-      contentType: response.headers.get('content-type') ?? 'audio/mpeg',
-    }));
+      async response => ({
+        audio: await response.arrayBuffer(),
+        contentType: response.headers.get('content-type') ?? 'audio/mpeg',
+      }),
+    );
   },
 
-  async listVoices(server: RemoteServer, options: RemoteMediaRequestOptions = {}): Promise<string[]> {
+  async listVoices(
+    server: RemoteServer,
+    options: RemoteMediaRequestOptions = {},
+  ): Promise<string[]> {
     try {
       const modelId = requiredModel(server, 'voice');
       const catalog = await request({
@@ -297,7 +334,9 @@ export const remoteMediaRuntime = {
       signal: options.signal,
     }, response => response.json() as Promise<{ voices?: unknown }>);
     return Array.isArray(payload.voices)
-      ? payload.voices.filter((voice): voice is string => typeof voice === 'string')
+      ? payload.voices.filter(
+          (voice): voice is string => typeof voice === 'string',
+        )
       : [];
   },
 };

@@ -50,6 +50,7 @@ import {
 import { useChatScreenActions } from './useChatScreenActions';
 import { shownMessages } from '../../utils/chatThread';
 import { chatQueueView } from './chatQueueView';
+import { useLiveMessageStore, withLiveMessages } from '../../stores/liveMessageStore';
 
 export type { AlertState };
 export type { ChatMessageItem } from './types';
@@ -176,7 +177,16 @@ export const useChatScreen = () => {
     ? (activeModelInfo.model as RemoteModel | null)
     : null;
   const hasTextModel = activeModelInfo.modelId !== null;
-  const hasActiveModel = hasTextModel || !!activeImageModelId || !!activeRemoteImageServer;
+  const selectedVideoModelId = useAppStore(s => s.activeVideoModelId);
+  const remoteVideoId = useRemoteServerStore(
+    s => s.activeRemoteMediaServerIds.video,
+  );
+  const hasActiveModel =
+    !!remoteVideoId ||
+    !!selectedVideoModelId ||
+    hasTextModel ||
+    !!activeImageModelId ||
+    !!activeRemoteImageServer;
   const activeModelName = activeModelInfo.modelName;
   const availableDownloadedTextModels = useMemo(
     () =>
@@ -205,7 +215,10 @@ export const useChatScreen = () => {
     ? getProject(effectiveProjectId)
     : null;
   const activeImageModel = activeRemoteImageServer
-    ? { id: activeRemoteImageServer.mediaModels!.image!, name: `${activeRemoteImageServer.name} / ${activeRemoteImageServer.mediaModels!.image}` }
+    ? {
+        id: activeRemoteImageServer.mediaModels!.image!,
+        name: `${activeRemoteImageServer.name} / ${activeRemoteImageServer.mediaModels!.image}`,
+      }
     : downloadedImageModels.find(m => m.id === activeImageModelId);
   const imageModelLoaded = !!activeImageModel;
   const isGeneratingImage = imageGenState.isGenerating;
@@ -314,8 +327,10 @@ export const useChatScreen = () => {
   const pendingVersionParent = useChatStore(s =>
     activeConversationId ? s.pendingVersionParents[activeConversationId] : undefined,
   );
+  // A message still being written (image prompt enhancement) shows its live text until it is saved.
+  const liveMessages = useLiveMessageStore(s => s.byId);
   const displayMessages = useMemo(
-    () => getDisplayMessages(shownMessages(activeConversation?.messages || [], pendingVersionParent), {
+    () => getDisplayMessages(shownMessages(withLiveMessages(activeConversation?.messages || [], liveMessages), pendingVersionParent), {
       isThinking,
       streamingMessage: '',
       streamingReasoningContent: '',
@@ -328,7 +343,7 @@ export const useChatScreen = () => {
       remotePreviews,
       localDeviceId,
     }),
-    [activeConversation?.messages, pendingVersionParent, isThinking, hasStreamingText,
+    [activeConversation?.messages, liveMessages, pendingVersionParent, isThinking, hasStreamingText,
       isStreamingForThisConversation, isModelLoading, loadingModel?.name,
       isGeneratingForThisConversation, documentStatus, remotePreviews, localDeviceId],
   );
@@ -340,7 +355,8 @@ export const useChatScreen = () => {
   );
 
   const chatActions = useChatScreenActions({
-    generationDeps: genDeps, generationDepsRef: genDepsRef,
+    generationDeps: genDeps,
+    generationDepsRef: genDepsRef,
     modelDeps,
     activeModelInfo,
     supportsToolCalling,

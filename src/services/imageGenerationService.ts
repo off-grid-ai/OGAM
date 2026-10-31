@@ -30,6 +30,8 @@ import {
   ActiveImageModel,
   RunGenerationOptions,
 } from './imageGenerationTypes';
+import { featureUsed, generationStarted, type ModelFacts } from './analytics/analytics';
+import { imageModelFacts, REMOTE_MODEL_FACTS } from './analytics/modelFacts';
 
 export { isInFlight } from './imageGenerationTypes';
 export type {
@@ -136,6 +138,8 @@ class ImageGenerationService {
 
   /** Own the terminal error state and its retry actions. */
   private _fail(error: string, opts?: { cause?: unknown; remote?: boolean }): null {
+    // Where it failed decides the title: a model that loaded and then could not draw did not fail to load.
+    const failedWhileDrawing = this.state.phase === 'generating';
     this.updateState({
       phase: 'error',
       progress: null,
@@ -143,7 +147,7 @@ class ImageGenerationService {
       previewPath: null,
       error,
     });
-    // On a memory-pressure failure the card offers "Free memory & Retry" — so the retry
+    // On a memory-pressure failure the card offers "Free memory & retry" — so the retry
     // must ACTUALLY free memory (eject resident models) before re-running, not just
     // re-run into the same wall. Derive memory-pressure from the SAME single source the
     // card's label uses (reasonFromLoadError) so the label and the eject can never
@@ -170,9 +174,10 @@ class ImageGenerationService {
         : undefined;
     // Report with the typed cause (not the wrapped string) so the overridable
     // discriminant survives; `message` keeps the user-facing wrapped text.
+    const drawFailed = failedWhileDrawing && !opts?.remote && !memoryPressure;
     reportModelFailure('image', opts?.cause ?? error, {
       message: error,
-      title: opts?.remote ? 'Remote image error' : undefined,
+      title: opts?.remote ? 'Remote image error' : drawFailed ? "Image model: Couldn't make the image" : undefined,
       remote: opts?.remote,
       onRetry,
       onLoadAnyway,
@@ -241,6 +246,11 @@ class ImageGenerationService {
       );
       return true;
     } catch (error: any) {
+      // A request cancelled while its model loads ends without an error card.
+      if (job.cancelled || !this.isLive(job)) {
+        this.resetFor(job);
+        return false;
+      }
       // Pass the TYPED error as `cause` — an OverridableMemoryError here is what lets
       // the failure card offer "Load Anyway". Stringifying it (as before) hid it.
       this.failFor(
@@ -273,10 +283,10 @@ class ImageGenerationService {
     // the single cross-platform signal (so the notice shows once on every device);
     // the OpenCL kernel-cache check is an extra Android signal in case the cache was
     // cleared after the flag was set.
-    let isFirstRun = !useAppStore
+    let isFirstRun = activeImageModel.backend !== 'sd' && !useAppStore
       .getState()
       .warmedImageModels.includes(activeImageModel.id);
-    if (useOpenCL) {
+    if (useOpenCL && activeImageModel.backend !== 'sd') {
       try {
         const hasCache = await onnxImageGeneratorService.hasKernelCache(
           activeImageModel.modelPath,
@@ -290,7 +300,7 @@ class ImageGenerationService {
 
     this.updateFor(job, {
       phase: 'generating',
-      status: isFirstRun
+      status: activeImageModel.backend === 'sd' ? 'Processing image prompt...' : isFirstRun
         ? 'Optimizing GPU for your device (~120s, one-time)...'
         : 'Starting image generation...',
     });
@@ -389,7 +399,7 @@ class ImageGenerationService {
     params: GenerateImageParams,
     opts?: { override?: boolean },
   ): Promise<GeneratedImage | null> {
-    if (isInFlight(this.state.phase) || (this.job && !this.job.cancelled)) {
+    if (isInFlight(this.state.phase) || (this.job && !this.job.cancelled) || onnxImageGeneratorService.isGenerating()) {
       logger.log(
         '[ImageGenerationService] Already generating, ignoring request',
       );
@@ -405,13 +415,30 @@ class ImageGenerationService {
     };
     this.job = job;
     this._lastParams = params; // so a failure card's Retry can re-run this exact request
+    featureUsed('image_generation');
+    const endAnalytics = generationStarted('image', this.analyticsFacts());
     const run = this._generate(job, params, opts);
     job.settled = run.catch(() => null);
     try {
-      return await run;
+      const result = await run;
+      if (result) endAnalytics('done');
+      else endAnalytics(job.cancelled ? 'stopped' : 'failed', { error: this.state.error ?? undefined });
+      return result;
+    } catch (error) {
+      endAnalytics(job.cancelled ? 'stopped' : 'failed', { error });
+      throw error;
     } finally {
       if (this.job === job) this.job = null;
     }
+  }
+
+  /** The image route this request will use, in the spec's terms. */
+  private analyticsFacts(): ModelFacts {
+    if (useRemoteServerStore.getState().getActiveRemoteMediaServer('image')?.mediaModels?.image) {
+      return REMOTE_MODEL_FACTS;
+    }
+    const { activeImageModelId, downloadedImageModels } = useAppStore.getState();
+    return imageModelFacts(downloadedImageModels.find(m => m.id === activeImageModelId));
   }
 
   private async _generate(

@@ -19,6 +19,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createChunkedStorage } from '../../../src/utils/chunkedStorage';
 import * as Keychain from 'react-native-keychain';
 import TcpSocket from 'react-native-tcp-socket';
 import {
@@ -66,6 +67,8 @@ import { startPairedPeer } from '../../harness/proHarness';
 
 const PHONE_FINGERPRINT = 'fp-this-phone';
 const CHAT_STORAGE_KEY = 'local-llm-chat-storage';
+// The saved chat list, read and written in the parts the app stores it in.
+const savedChats = createChunkedStorage();
 
 jest.unmock('@react-navigation/native');
 
@@ -224,9 +227,9 @@ describe('synced chat restored from the sync history on relaunch', () => {
 
     // The chat list as saved on disk before any sync: the copy a kill before the next save leaves.
     await waitFor(async () =>
-      expect(await AsyncStorage.getItem(CHAT_STORAGE_KEY)).not.toBeNull(),
+      expect(await savedChats.getItem(CHAT_STORAGE_KEY)).not.toBeNull(),
     );
-    const chatsOnDiskBeforeSync = (await AsyncStorage.getItem(CHAT_STORAGE_KEY))!;
+    const chatsOnDiskBeforeSync = (await savedChats.getItem(CHAT_STORAGE_KEY))!;
 
     ui = renderApp();
     fireEvent.press(ui.getByTestId('settings-tab'));
@@ -257,7 +260,7 @@ describe('synced chat restored from the sync history on relaunch', () => {
     remote = undefined;
     await stateSyncService.stop();
     await syncService.stop();
-    await AsyncStorage.setItem(CHAT_STORAGE_KEY, chatsOnDiskBeforeSync);
+    await savedChats.setItem(CHAT_STORAGE_KEY, chatsOnDiskBeforeSync);
 
     // RELAUNCH: the chat list is restored from disk as launch restores it. BEFORE sync history
     // loads, the synced chat is not on screen.
@@ -333,9 +336,9 @@ describe('synced chat restored from the sync history on relaunch', () => {
 
     // The chat list as saved to disk: the first and third replies.
     await waitFor(async () =>
-      expect(await AsyncStorage.getItem(CHAT_STORAGE_KEY)).toContain(THIRD),
+      expect(await savedChats.getItem(CHAT_STORAGE_KEY)).toContain(THIRD),
     );
-    const savedWithoutSecond = (await AsyncStorage.getItem(CHAT_STORAGE_KEY))!;
+    const savedWithoutSecond = (await savedChats.getItem(CHAT_STORAGE_KEY))!;
     expect(savedWithoutSecond).not.toContain(SECOND);
 
     // The Desktop's second reply reaches the phone's sync history...
@@ -350,7 +353,7 @@ describe('synced chat restored from the sync history on relaunch', () => {
     remote = undefined;
     await stateSyncService.stop();
     await syncService.stop();
-    await AsyncStorage.setItem(CHAT_STORAGE_KEY, savedWithoutSecond);
+    await savedChats.setItem(CHAT_STORAGE_KEY, savedWithoutSecond);
 
     // RELAUNCH, Desktop offline. The user opens the chat before sync history has loaded: the saved
     // two replies, in order, and not the missing one.

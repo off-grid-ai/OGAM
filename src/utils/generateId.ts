@@ -15,6 +15,11 @@ function randomBytes(): Uint8Array {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; // NOSONAR
     bytes[index] = seed % 256;
   }
+  // Time XOR sequence can repeat when the clock ticks between calls, so the sequence
+  // itself goes in the last bytes: two fallback ids in one process never match.
+  for (let index = 0; index < 4; index += 1) {
+    bytes[12 + index] ^= (fallbackSequence >>> (8 * index)) & 0xff;
+  }
   return bytes;
 }
 

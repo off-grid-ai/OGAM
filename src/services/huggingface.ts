@@ -56,7 +56,9 @@ class HuggingFaceService {
     const results = await searchHuggingFace(query, {
       limit: options.limit ?? 30,
       sort: options.sort,
-      kind: options.pipelineTag === 'image-text-to-text' ? 'vision' : undefined,
+      // Chat search is the text kind, as on the desktop: it keeps models that read images and
+      // leaves out speech, transcription, embedding and reranker models.
+      kind: options.pipelineTag === 'image-text-to-text' ? 'vision' : 'text',
     });
     // An image generator is not a chat model: it belongs on the Image tab, not in chat search.
     return results
@@ -68,7 +70,9 @@ class HuggingFaceService {
     const author = result.org || result.id.split('/')[0] || 'Unknown';
     const name = result.name.toLowerCase();
     const paramMatch = name.match(/(\d+\.?\d*)\s*b(?:\b|-)/);
-    const parts = [this.detectModelType(name, [])];
+    // A repo that ships a vision projector reads images, whatever its name says.
+    const tags = result.readsImages ? ['vision'] : [];
+    const parts = [this.detectModelType(name, tags)];
     if (result.activeParams && result.params) parts.push(`${result.params}B`);
     else if (paramMatch) parts.push(`${paramMatch[1]}B`);
     return {
@@ -78,7 +82,7 @@ class HuggingFaceService {
       description: parts.join(' · '),
       downloads: result.downloads ?? 0,
       likes: result.likes ?? 0,
-      tags: [],
+      tags,
       lastModified: result.lastModified ?? '',
       files: [],
       credibility: this.determineCredibility(author),

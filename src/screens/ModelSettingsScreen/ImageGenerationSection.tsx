@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, Switch, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, Platform } from 'react-native';
+import { Switch, TouchableOpacity } from '../../components/Touchable';
 import { AdvancedToggle, Card } from '../../components';
 import { SliderSetting } from '../../components/SliderSetting';
 import { Button } from '../../components/Button';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
-import { DEFAULT_SETTINGS } from '../../stores/appStore';
-import { useClearGpuCache } from '../../hooks/useImageGenerationSettings';
+import { useClearGpuCache, useImageParameterSettings } from '../../hooks/useImageGenerationSettings';
 import {
-  defaultImageSteps,
   MAX_IMAGE_STEPS,
   SWEET_SPOT_SIZE,
 } from '../../utils/imageGenAdvice';
@@ -129,6 +128,7 @@ const DetectionMethodRow: React.FC = () => {
 // ─── Advanced Section ────────────────────────────────────────────────────────
 
 const ImageAdvancedSection: React.FC = () => {
+  const { parameters, setParameter } = useImageParameterSettings();
   const { settings, updateSettings } = useAppStore();
 
   return (
@@ -137,9 +137,9 @@ const ImageAdvancedSection: React.FC = () => {
         testID="image-guidance-scale"
         label="Guidance Scale"
         description="Higher = follows prompt more strictly"
-        value={settings?.imageGuidanceScale || 7.5}
+        value={parameters.guidanceScale}
         min={1} max={20} step={0.5} decimals={1}
-        onChange={(value) => updateSettings({ imageGuidanceScale: value })}
+        onChange={(value) => setParameter('cfgScale', value)}
       />
 
       <SliderSetting
@@ -162,6 +162,7 @@ const ImageAdvancedSection: React.FC = () => {
 // ─── Main Section ────────────────────────────────────────────────────────────
 
 export const ImageGenerationSection: React.FC = () => {
+  const { parameters, defaults, maxSize, applyDefaults, setParameter } = useImageParameterSettings();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
@@ -206,23 +207,21 @@ export const ImageGenerationSection: React.FC = () => {
         testID="image-steps"
         label="Image Steps"
         description="More steps = better quality but slower (4-8 fast, 20-50 high quality)"
-        value={settings?.imageSteps || defaultImageSteps(Platform.OS)}
+        value={parameters.steps}
         min={4} max={MAX_IMAGE_STEPS} step={1}
-        onChange={(value) => updateSettings({ imageSteps: value })}
+        onChange={(value) => setParameter('steps', value)}
       />
 
       <SliderSetting
         testID="image-size"
         label="Image Size"
-        description="Output resolution. Default: 512x512."
-        // Single source of truth for the floor: SD-class models render garbage below the
-        // sweet spot (256), so both this screen and the chat modal (ImageQualitySliders) share
-        // the SAME min/fallback — the surfaces can't diverge and a sub-256 value is unreachable.
-        value={Math.max(SWEET_SPOT_SIZE, settings?.imageWidth ?? DEFAULT_SETTINGS.imageWidth)}
-        min={SWEET_SPOT_SIZE} max={512} step={64}
+        description={`Output resolution. Recommended: ${defaults.size}x${defaults.size}.`}
+        value={parameters.size}
+        min={SWEET_SPOT_SIZE} max={maxSize} step={64}
         formatValue={(v) => `${v}x${v}`}
-        onChange={(value) => updateSettings({ imageWidth: value, imageHeight: value })}
+        onChange={(value) => setParameter('size', value)}
       />
+      <Button title="Use model defaults" variant="secondary" size="small" onPress={applyDefaults} testID="image-model-defaults" />
 
       <AdvancedToggle isExpanded={showAdvanced} onPress={() => setShowAdvanced(!showAdvanced)} testID="image-advanced-toggle" />
 

@@ -27,7 +27,7 @@ class PDFExtractor {
 
     try {
       const __text = await PDFExtractorModule.extractText(filePath, maxChars);
-      logger.log(`[WIRE-PDF] ${JSON.stringify({ filePath, maxChars, textLength: __text?.length, sample: (__text ?? '').slice(0, 200) })}`); // [WIRE] native PDF→text extraction shape
+      logger.log(`[WIRE-PDF] ${JSON.stringify({ maxChars, textLength: __text?.length })}`); // [WIRE] native PDF→text extraction shape; never the path (it names the document)
       return __text;
     } catch (error: any) {
       // Guard against NullPointerException when bridge promise is rejected after teardown

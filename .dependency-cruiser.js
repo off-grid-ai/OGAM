@@ -52,6 +52,13 @@ module.exports = {
       from: { path: '^src/components/' },
       to: { path: '^src/(screens|navigation)/' },
     },
+    {
+      name: 'core-not-to-pro-code',
+      severity: 'error',
+      comment: 'Video, voice, sync and tools are Pro and live in the private pro/ submodule. Core reaches them only through bootstrap/hookRegistry, slotRegistry and screenRegistry, so the open-source build compiles and runs with pro/ absent. Add a hook or slot; never import pro/ (or @offgrid/pro/*) from src/.',
+      from: { path: '^src/' },
+      to: { path: '(^pro/|^@offgrid/pro/)' },
+    },
     // ── Dead code ─────────────────────────────────────────────────────────────
     {
       name: 'no-orphans',

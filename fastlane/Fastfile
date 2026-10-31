@@ -17,7 +17,7 @@
 require "json"
 require "fileutils"
 
-# Off Grid ships no telemetry. Disable fastlane's anonymous usage analytics too.
+# Off Grid sends analytics only when the person opts in. Disable fastlane's anonymous usage analytics.
 opt_out_usage
 
 REPO_ROOT = File.expand_path("..", __dir__)

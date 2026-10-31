@@ -6,6 +6,7 @@ import {
 } from '../utils/messageContent';
 import { generateId } from '../utils/generateId';
 import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
+import { createChunkedStorage, readOversizedRow } from '../utils/chunkedStorage';
 import {
   finalizeStreamedReply,
   type ReplyEnd,
@@ -31,6 +32,7 @@ import {
   messagePutMutation,
 } from '../services/sync/mutation';
 import { appendPlaceFor, neighbourMessage, versionParent } from '../utils/chatThread';
+import { itemDeleted, track } from '../services/analytics/analytics';
 
 /**
  * The portion of the in-progress stream that is safe to SPEAK in voice mode —
@@ -192,12 +194,141 @@ const NO_REPLY_FORMING: StreamingFields = {
   isThinking: false,
 };
 
+// Chunked: a long chat history outgrows the single row Android can read back.
 const chatStorage = createHydrationGatedStorage<PersistedChatState>(
-  undefined,
+  createChunkedStorage(undefined, readOversizedRow),
   (previous, next) =>
     previous.conversations === next.conversations &&
     previous.activeConversationId === next.activeConversationId,
 );
+
+type ChatSet = (
+  partial: Partial<ChatState> | ((state: ChatState) => Partial<ChatState>),
+) => void;
+
+type StreamingActions = Pick<
+  ChatState,
+  'startStreaming' | 'setStreamingMessage' | 'appendToStreamingMessage' | 'appendToStreamingReasoningContent' | 'resetStreamingSegment' | 'setIsStreaming' | 'setIsThinking' | 'finalizeStreamingMessage' | 'clearStreamingMessage'
+>;
+
+/** The reply forming live: its tokens, reasoning and thinking state, then its end. */
+function createStreamingActions(
+  set: ChatSet,
+  get: () => ChatState,
+): StreamingActions {
+  return {
+  startStreaming: conversationId => {
+    set({
+      ...NO_REPLY_FORMING,
+      streamingForConversationId: conversationId,
+      // Minted here, before the first token, and carried all the way to the stored row. This is
+      // the id a paired device sees on every live frame, so when the record arrives it recognises
+      // the answer it is already showing instead of drawing it a second time.
+      streamingMessageUuid: generateId(),
+      isThinking: true,
+    });
+  },
+
+  setStreamingMessage: content => {
+    set({ streamingMessage: content });
+  },
+
+  appendToStreamingMessage: token => {
+    set(state => ({
+      streamingMessage: stripStreamingControlTokens(
+        state.streamingMessage + token,
+      ),
+      isStreaming: true,
+      isThinking: false,
+    }));
+    // Feed only the ANSWER to pro audio for real-time sentence-by-sentence
+    // TTS (never the reasoning) — no-op unless voice mode + engine ready;
+    // free builds register nothing.
+    callHook(
+      HOOKS.audioOnStreamingToken,
+      speakableStreamingAnswer(
+        get().streamingMessage,
+        get().streamingReasoningContent,
+      ),
+    );
+  },
+
+  appendToStreamingReasoningContent: token => {
+    set(state => ({
+      streamingReasoningContent: state.streamingReasoningContent + token,
+      isStreaming: true,
+      isThinking: false,
+    }));
+  },
+
+  resetStreamingSegment: () => {
+    set({ streamingMessage: '', streamingReasoningContent: '' });
+  },
+
+  setIsStreaming: streaming => {
+    set({ isStreaming: streaming, isThinking: false });
+  },
+
+  setIsThinking: thinking => {
+    set({ isThinking: thinking });
+  },
+
+  finalizeStreamingMessage: (
+    conversationId,
+    generationTimeMs,
+    generationMeta,
+    turnStatus,
+  ) => {
+    const {
+      streamingMessage,
+      streamingReasoningContent,
+      streamingForConversationId,
+      streamingMessageUuid,
+      addMessage,
+    } = get();
+
+    const finalized = finalizeStreamedReply({
+      streamingMessage,
+      streamingReasoningContent,
+      streamingForConversationId,
+      conversationId,
+    });
+    const { content, reasoningContent } = finalized;
+    const persisted =
+      finalized.persisted ||
+      ((turnStatus === 'failed' || turnStatus === 'cancelled') &&
+        streamingForConversationId === conversationId);
+    // End the ephemeral reply before the durable mutation leaves this device. Both use the same
+    // peer link. This order guarantees a receiver sees the final stream frame first and then the
+    // record that replaces it, never the reverse order that could recreate a retired preview.
+    set({ ...NO_REPLY_FORMING, lastReplyEnd: { conversationId, persisted } });
+    if (persisted) {
+      addMessage(conversationId, {
+        role: 'assistant',
+        content,
+        reasoningContent,
+        generationTimeMs,
+        generationMeta,
+        turnStatus,
+        // The SAME id the live frames carried. `createPersistedMessage` keeps a supplied uuid, so
+        // the reply is stored under the identity its peers have already seen.
+        ...(streamingMessageUuid ? { uuid: streamingMessageUuid } : {}),
+      });
+    }
+  },
+
+  clearStreamingMessage: () => {
+    // Nothing was shown and nothing is stored, so any peer preview for this reply is orphaned.
+    const conversationId = get().streamingForConversationId;
+    set({
+      ...NO_REPLY_FORMING,
+      ...(conversationId
+        ? { lastReplyEnd: { conversationId, persisted: false } }
+        : {}),
+    });
+  },
+  };
+}
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -226,6 +357,7 @@ export const useChatStore = create<ChatState>()(
           activeConversationId: id,
         }));
         emitSyncMutation(conversationPutMutation(conversation));
+        track('chat_created');
 
         return id;
       },
@@ -247,10 +379,12 @@ export const useChatStore = create<ChatState>()(
               deleteSyncMutation(CORE_SYNC_ENTITIES.message, message.uuid),
             );
         }
-        if (removed)
+        if (removed) {
+          itemDeleted('chat');
           emitSyncMutation(
             deleteSyncMutation(CORE_SYNC_ENTITIES.conversation, conversationId),
           );
+        }
         // The document services free index entries no remaining chat uses (they read this store).
         callHook(HOOKS.conversationsDeleted, [conversationId]);
       },
@@ -406,116 +540,7 @@ export const useChatStore = create<ChatState>()(
           get().getConversationMessages(conversationId),
       }),
 
-      startStreaming: conversationId => {
-        set({
-          ...NO_REPLY_FORMING,
-          streamingForConversationId: conversationId,
-          // Minted here, before the first token, and carried all the way to the stored row. This is
-          // the id a paired device sees on every live frame, so when the record arrives it recognises
-          // the answer it is already showing instead of drawing it a second time.
-          streamingMessageUuid: generateId(),
-          isThinking: true,
-        });
-      },
-
-      setStreamingMessage: content => {
-        set({ streamingMessage: content });
-      },
-
-      appendToStreamingMessage: token => {
-        set(state => ({
-          streamingMessage: stripStreamingControlTokens(
-            state.streamingMessage + token,
-          ),
-          isStreaming: true,
-          isThinking: false,
-        }));
-        // Feed only the ANSWER to pro audio for real-time sentence-by-sentence
-        // TTS (never the reasoning) — no-op unless voice mode + engine ready;
-        // free builds register nothing.
-        callHook(
-          HOOKS.audioOnStreamingToken,
-          speakableStreamingAnswer(
-            get().streamingMessage,
-            get().streamingReasoningContent,
-          ),
-        );
-      },
-
-      appendToStreamingReasoningContent: token => {
-        set(state => ({
-          streamingReasoningContent: state.streamingReasoningContent + token,
-          isStreaming: true,
-          isThinking: false,
-        }));
-      },
-
-      resetStreamingSegment: () => {
-        set({ streamingMessage: '', streamingReasoningContent: '' });
-      },
-
-      setIsStreaming: streaming => {
-        set({ isStreaming: streaming, isThinking: false });
-      },
-
-      setIsThinking: thinking => {
-        set({ isThinking: thinking });
-      },
-
-      finalizeStreamingMessage: (
-        conversationId,
-        generationTimeMs,
-        generationMeta,
-        turnStatus,
-      ) => {
-        const {
-          streamingMessage,
-          streamingReasoningContent,
-          streamingForConversationId,
-          streamingMessageUuid,
-          addMessage,
-        } = get();
-
-        const finalized = finalizeStreamedReply({
-          streamingMessage,
-          streamingReasoningContent,
-          streamingForConversationId,
-          conversationId,
-        });
-        const { content, reasoningContent } = finalized;
-        const persisted =
-          finalized.persisted ||
-          ((turnStatus === 'failed' || turnStatus === 'cancelled') &&
-            streamingForConversationId === conversationId);
-        // End the ephemeral reply before the durable mutation leaves this device. Both use the same
-        // peer link. This order guarantees a receiver sees the final stream frame first and then the
-        // record that replaces it, never the reverse order that could recreate a retired preview.
-        set({ ...NO_REPLY_FORMING, lastReplyEnd: { conversationId, persisted } });
-        if (persisted) {
-          addMessage(conversationId, {
-            role: 'assistant',
-            content,
-            reasoningContent,
-            generationTimeMs,
-            generationMeta,
-            turnStatus,
-            // The SAME id the live frames carried. `createPersistedMessage` keeps a supplied uuid, so
-            // the reply is stored under the identity its peers have already seen.
-            ...(streamingMessageUuid ? { uuid: streamingMessageUuid } : {}),
-          });
-        }
-      },
-
-      clearStreamingMessage: () => {
-        // Nothing was shown and nothing is stored, so any peer preview for this reply is orphaned.
-        const conversationId = get().streamingForConversationId;
-        set({
-          ...NO_REPLY_FORMING,
-          ...(conversationId
-            ? { lastReplyEnd: { conversationId, persisted: false } }
-            : {}),
-        });
-      },
+      ...createStreamingActions(set, get),
 
       noteReplyEndHandled: () => set(NO_REPLY_ENDED),
 

@@ -39,6 +39,17 @@ describe('happy — prompt routing picks the right model (heavy entry point)', (
     await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); });
   });
 
+  it('a prompt-style description ("a red fox in fresh snow at dawn, photo") routes to the image model, not a text answer', async () => {
+    const h = await setupChatScreen({ engine: 'litert', platform: 'ios' });
+    await withImageModel(h);
+    h.render();
+
+    await h.send('a red fox in fresh snow at dawn, photo', { content: 'I do not have image tools.' });
+
+    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); });
+    expect(h.view!.queryByText(/I do not have image tools\./)).toBeNull();
+  });
+
   it('control: a normal prompt routes to the text model (no image generated)', async () => {
     const h = await setupChatScreen({ engine: 'litert', platform: 'ios' });
     await withImageModel(h);

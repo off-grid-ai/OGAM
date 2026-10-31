@@ -43,9 +43,13 @@ export function serializeMessageContext(
     | 'turnStatus'
     | 'parent'
     | 'selectedAt'
+    | 'turnKind'
+    | 'videoStoryId'
   >,
 ): string | null {
   return serializeSyncedMessageContext({
+    // A Video Studio film card names its story, so every device draws it as a film card.
+    videoStoryId: message.videoStoryId,
     // Its place among versions (utils/chatThread), so every device shows the same thread.
     parent: message.parent,
     selectedAt: message.selectedAt,
@@ -105,6 +109,7 @@ export function serializeMessageContext(
     ...(message.generationTimeMs !== undefined
       ? { durationMs: message.generationTimeMs }
       : {}),
+    turnKind: message.turnKind,
     status: message.turnStatus ?? 'completed',
   });
 }

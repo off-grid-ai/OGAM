@@ -3,8 +3,8 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
 } from 'react-native';
+import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
@@ -26,6 +26,7 @@ import { useProjectStore, useChatStore } from '../stores';
 import { Project } from '../types';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { PROJECT_DELETE_FALLBACK_REASON } from '../stores/projectDeleteOutcome';
+import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
 
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'ProjectsTab'>,
@@ -208,6 +209,7 @@ export const ProjectsScreen: React.FC = () => {
             style={styles.searchBar}
           />
           <FlatList
+            {...SCROLL_DEPTH_PROPS}
             data={visibleProjects}
             renderItem={renderProject}
             keyExtractor={(item) => item.id}

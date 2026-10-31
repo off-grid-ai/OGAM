@@ -3,7 +3,8 @@
 export interface Engine {
   id: string;
   what: string;
-  source: 'npm' | 'maven';
+  source: 'npm' | 'maven' | 'github';
+  repo?: string;
   pkg?: string;
   with?: string[];
   group?: string;
@@ -48,3 +49,4 @@ export function mavenRelease(metadataXml: string): string | null;
 export function gradlePin(gradle: string, group: string, artifact: string): string | null;
 export function setGradlePin(gradle: string, group: string, artifact: string, version: string): string;
 export function summaryMarkdown(results: EngineResult[]): string;
+export function githubDecision(input: { current: string | null; latest: string | null; status: string | null }): Decision;

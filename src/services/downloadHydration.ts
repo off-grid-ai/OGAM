@@ -67,8 +67,15 @@ function isImageRow(r: NativeDownloadRow): boolean {
   return r.modelType === 'image' || (r.modelId?.startsWith('image:') ?? false);
 }
 
+/**
+ * The native key of one file of a video pack. Those rows belong to the video provider, which shows the
+ * pack as one row (`video:<id>`); the Download Manager never shows a file of it on its own.
+ */
+export const VIDEO_FILE_KEY_PREFIX = 'video-file:';
+
 function getParentRows(rows: NativeDownloadRow[], mmProjIds: Set<string>): NativeDownloadRow[] {
   return rows.filter(r =>
+    !r.modelKey?.startsWith(VIDEO_FILE_KEY_PREFIX) &&
     !mmProjIds.has(r.downloadId) &&
     !isMmProjFileName(r.fileName) &&
     r.status !== 'cancelled' &&
@@ -210,6 +217,13 @@ export async function hydrateDownloadStore(): Promise<void> {
   // silently disappears from the Download Manager — including across a cold app-kill, where
   // the prior entry survives only in the durably-persisted snapshot (loadActiveDownloads).
   const hydratedKeys = new Set(entries.map(e => e.modelKey));
+  // A video pack has one row per file natively; while any of them is still live the pack is not
+  // interrupted (its provider carries it on), so it is not stranded as failed.
+  for (const row of rows) {
+    if (row.modelKey?.startsWith(VIDEO_FILE_KEY_PREFIX) && row.status !== 'failed' && row.status !== 'cancelled') {
+      hydratedKeys.add(row.modelId as ModelKey);
+    }
+  }
   const persistedPrior = await loadActiveDownloads();
   entries.push(...strandInterruptedEntries(hydratedKeys, persistedPrior));
 

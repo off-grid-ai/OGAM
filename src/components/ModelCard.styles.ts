@@ -22,7 +22,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   denseTitleRow: {
     flexDirection: 'row' as const,
-    alignItems: 'baseline' as const,
+    alignItems: 'center' as const,
     gap: SPACING.sm,
   },
   denseName: {
@@ -299,7 +299,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexShrink: 1,
   },
   iconButton: {
-    padding: 4,
+    padding: 10,
     flexShrink: 0,
   },
   failedSection: {

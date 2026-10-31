@@ -8,12 +8,12 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
   Clipboard,
   Share,
   SafeAreaView,
   Modal,
 } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -24,9 +24,11 @@ interface DebugLogsScreenProps {
   visible: boolean;
   onClose: () => void;
   syncOnly?: boolean;
+  /** Report a problem: the person reads the log here, then sends it to support. */
+  onSend?: () => void;
 }
 
-export const DebugLogsScreen: React.FC<DebugLogsScreenProps> = ({ visible, onClose, syncOnly = false }) => {
+export const DebugLogsScreen: React.FC<DebugLogsScreenProps> = ({ visible, onClose, syncOnly = false, onSend }) => {
   const theme = useTheme();
   const styles = useThemedStyles(createStyles);
   const { logs, clearLogs } = useDebugLogsStore();
@@ -106,7 +108,7 @@ export const DebugLogsScreen: React.FC<DebugLogsScreenProps> = ({ visible, onClo
             <Text style={styles.title}>{syncOnly ? 'Sync Debug Logs' : 'Debug Logs'}</Text>
             <Text style={styles.subtitle}>{visibleLogs.length} log entries</Text>
           </View>
-          <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }} testID="debug-logs-close">
             <Icon name="x" size={24} color={theme.colors.text} />
           </TouchableOpacity>
         </View>
@@ -129,6 +131,20 @@ export const DebugLogsScreen: React.FC<DebugLogsScreenProps> = ({ visible, onClo
           </View>
         )}
 
+        {onSend && (
+          <View style={styles.actionBar}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={onSend}
+              accessibilityRole="button"
+              testID="debug-logs-send-report"
+            >
+              <Icon name="send" size={16} color={theme.colors.primary} style={styles.actionIcon} />
+              <Text style={styles.actionButtonText}>Send to support</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Action Buttons */}
         <View style={styles.actionBar}>
           <TouchableOpacity style={styles.actionButton} onPress={handleCopyAllLogs}>
@@ -141,7 +157,8 @@ export const DebugLogsScreen: React.FC<DebugLogsScreenProps> = ({ visible, onClo
             <Text style={styles.actionButtonText}>Share</Text>
           </TouchableOpacity>
 
-          {!syncOnly && <TouchableOpacity style={styles.actionButton} onPress={clearLogs}>
+          {/* Report a problem sends the log file; clearing only this view would hide what is sent. */}
+          {!syncOnly && !onSend && <TouchableOpacity style={styles.actionButton} onPress={clearLogs}>
             <Icon name="trash-2" size={16} color={theme.colors.error} style={styles.actionIcon} />
             <Text style={[styles.actionButtonText, { color: theme.colors.error }]}>Clear</Text>
           </TouchableOpacity>}

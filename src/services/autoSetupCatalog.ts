@@ -1,65 +1,62 @@
-import { recommendedModelsForDevice, ramFitScore } from '../utils/recommendedModels';
-import { fileExceedsBudget, textModelBudget } from './memoryBudget';
+import { videoSeam } from '../bootstrap/videoSeam';
+import { ramFitScore } from '../utils/recommendedModels';
+import { fileExceedsBudget } from './memoryBudget';
+import { devicePicks } from './devicePicks';
 import { fetchModelFiles } from './modelCatalogFiles';
 import { hardwareService } from './hardware';
 import { WHISPER_MODELS } from './whisperModels';
+import { completeVideoPacks, videoPacksForPhone } from './phoneVideoPacks';
 import { withRemoteCatalog } from '../stores/modelCatalogStore';
-import { RECOMMENDED_MODELS } from '../constants';
 import type { AutoSetupCompatibleCatalog } from './autoSetupPlan';
 import { autoSetupImageCatalogProvider } from './autoSetupImageCatalogProvider';
+import { BUNDLED_EMBEDDING_MODEL, RECOMMENDED_EMBEDDING_MODELS } from './huggingFaceModelBrowser';
 
 const MB = 1024 * 1024;
 
-type CompatibleTextModel = ReturnType<typeof recommendedModelsForDevice>[number];
-
 export interface AutoSetupCatalogBoundaries {
-  totalMemoryGB: () => number;
+  totalMemoryGB: () => number | Promise<number>;
   fetchTextFiles: typeof fetchModelFiles;
   imageRecommendation: typeof hardwareService.getImageModelRecommendation;
   imageModels: typeof autoSetupImageCatalogProvider.load;
 }
 
 const productionCatalogBoundaries: AutoSetupCatalogBoundaries = {
-  totalMemoryGB: () => hardwareService.getTotalMemoryGB(),
+  totalMemoryGB: async () => {
+    await hardwareService.getDeviceInfo();
+    return hardwareService.getTotalMemoryGB();
+  },
   fetchTextFiles: fetchModelFiles,
   imageRecommendation: () => hardwareService.getImageModelRecommendation(),
   imageModels: () => autoSetupImageCatalogProvider.load(),
 };
 
-export function buildAutoSetupTextCandidates(
-  models: CompatibleTextModel[],
-  files: Record<string, import('../types').ModelFile[]>,
-  ramGB: number,
-): AutoSetupCompatibleCatalog['text'] {
-  return models.filter(model => model.type === 'vision').flatMap(model => {
-    const file = files[model.id]?.[0];
-    const sizeBytes = file ? file.size + (file.mmProjFile?.size ?? 0) : 0;
-    if (!file || fileExceedsBudget(sizeBytes, ramGB, textModelBudget())) return [];
-    return [{
-      id: `${model.id}/${file.name}`,
-      name: model.name,
-      kind: 'text' as const,
-      sizeBytes,
-      fitScore: ramFitScore(model.minRam, ramGB),
-      parameterCountB: model.params,
-      payload: { modelId: model.id, file },
-    }];
-  });
+/** Setup's chat models are this phone's Fast, Balanced and Best: the shared picking rule over the
+ *  catalog pool (bundled plus catalog/models.json), the same three the Models screen offers. */
+function buildAutoSetupPickCandidates(ramGB: number): AutoSetupCompatibleCatalog['text'] {
+  return devicePicks(ramGB).map(pick => ({
+    id: `${pick.model.id}/${pick.file.name}`,
+    name: pick.model.name,
+    kind: 'text' as const,
+    sizeBytes: pick.sizeBytes,
+    fitScore: 0,
+    parameterCountB: pick.model.paramCount,
+    pick: pick.slot,
+    payload: { modelId: pick.model.id, file: pick.file },
+  }));
 }
 
 /** Resolve the live catalogs, then admit candidates through the existing device-fit owners. */
 export async function loadAutoSetupCompatibleCatalog(
   boundaries: AutoSetupCatalogBoundaries = productionCatalogBoundaries,
 ): Promise<AutoSetupCompatibleCatalog> {
-  const ramGB = boundaries.totalMemoryGB();
-  const textModels = recommendedModelsForDevice(ramGB, withRemoteCatalog('text', RECOMMENDED_MODELS)).filter(model => model.type === 'vision');
-  const files = await boundaries.fetchTextFiles(textModels);
-  const text = buildAutoSetupTextCandidates(textModels, files, ramGB);
+  const ramGB = await boundaries.totalMemoryGB();
+  const text = buildAutoSetupPickCandidates(ramGB);
 
   const imageRecommendation = await boundaries.imageRecommendation();
   const imageModels = await boundaries.imageModels();
+  // sd.cpp runs on every phone; the fast engine is still preferred below when it has a fit.
   const compatibleImages = imageModels.filter(model =>
-    imageRecommendation.compatibleBackends.includes(model.backend) &&
+    (model.backend === 'sd' || imageRecommendation.compatibleBackends.includes(model.backend)) &&
     (!imageRecommendation.qnnVariant || model.backend !== 'qnn' || model.variant === imageRecommendation.qnnVariant) &&
     !fileExceedsBudget(model.size, ramGB),
   );
@@ -85,9 +82,37 @@ export async function loadAutoSetupCompatibleCatalog(
     name: `${model.name} Speech`,
     kind: 'stt' as const,
     sizeBytes: model.size * MB,
-    fitScore: Math.abs(model.size - Math.min(809, ramGB * 100)),
+    fitScore: model.id === 'large-v3-turbo'
+      ? 0
+      : Math.abs(model.size - Math.min(809, ramGB * 100)),
     payload: { modelId: model.id },
   }));
 
-  return { text, image, stt };
+  // Video is Pro: without it Auto Setup offers no video model.
+  const videoOn = videoSeam.available();
+  const packs = videoOn ? completeVideoPacks() : [];
+  const video = (videoOn ? videoPacksForPhone(ramGB) : []).map(model => {
+    const sizeBytes = model.files.reduce((sum, file) => sum + (file.sizeBytes ?? 0), 0);
+    return {
+      id: model.id, name: model.name, kind: 'video' as const, sizeBytes,
+      fitScore: ramFitScore(model.minRamGb!, ramGB), payload: model,
+    };
+  });
+  const videoExclusionReason = video.length ? undefined
+    : !videoOn ? 'Video needs Off Grid AI Pro.'
+    : packs.length
+      ? 'Videos are made on your computer with Off Grid AI Desktop.'
+      : 'Auto Setup has no complete video model to download.';
+  const embedding = [BUNDLED_EMBEDDING_MODEL, ...RECOMMENDED_EMBEDDING_MODELS]
+    .map((model, index) => ({
+      id: model.id,
+      name: model.name,
+      kind: 'embedding' as const,
+      sizeBytes: model.size,
+      fitScore: index === 1 ? 0 : index,
+      payload: model,
+    }));
+  // Too little memory for any pack here: the phone makes videos on a paired computer instead.
+  const videoOnComputer = !video.length && packs.length > 0;
+  return { text, image, stt, video, videoExclusionReason, videoOnComputer, embedding };
 }

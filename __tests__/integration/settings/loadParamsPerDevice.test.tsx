@@ -54,7 +54,9 @@ async function firstSendLoads(h: Harness): Promise<Record<string, unknown>> {
 /** Open the chat's settings sheet, expand Advanced, and return the mounted section. */
 function openAdvanced(h: Harness) {
   const { TextGenerationSection } = require('../../../src/components/GenerationSettingsModal/TextGenerationSection');
-  const section = h.rtl.render(h.React.createElement(TextGenerationSection, {}));
+  // The sheet shows the shared General controls (backend, loading mode) above the Text section.
+  const { GeneralGenerationControls } = require('../../../src/components/settings/GeneralGenerationControls');
+  const section = h.rtl.render(h.React.createElement(h.React.Fragment, null, h.React.createElement(GeneralGenerationControls), h.React.createElement(TextGenerationSection, {})));
   h.rtl.fireEvent.press(section.getByTestId('modal-text-advanced-toggle'));
   return section;
 }

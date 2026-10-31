@@ -1,6 +1,6 @@
 'use strict';
 // The native inference engines the app ships, and the rule that decides whether a newer upstream
-// release may replace the pinned one. Used by scripts/update-engines.js (the weekly engine PR) and
+// release may replace the pinned one. Used by scripts/update-engines.js (the daily engine PR) and
 // scripts/uat.sh (a beta warns when a newer engine exists). Plain CommonJS so node runs it
 // directly; typed via engines.d.ts so the jest test and `tsc --noEmit` resolve it.
 //
@@ -29,6 +29,13 @@ const ENGINES = [
     group: 'com.google.ai.edge.litertlm',
     artifact: 'litertlm-android',
     file: 'android/app/build.gradle',
+  },
+  {
+    id: 'stable-diffusion.cpp',
+    what: 'video (stable-diffusion.cpp, built from source with local patches)',
+    source: 'github',
+    repo: 'leejet/stable-diffusion.cpp',
+    file: 'scripts/video/revision',
   },
 ];
 
@@ -91,6 +98,16 @@ function patchFileName(pkg, version) {
   return `${pkg.replace('/', '+')}+${version}.patch`;
 }
 
+/**
+ * A pinned commit against the repo's newest release, by GitHub's compare status: 'ahead' means the
+ * release has commits the pin does not. The local patches are re-applied by the build, so CI says
+ * whether they still fit.
+ */
+function githubDecision({ current, latest, status }) {
+  if (!latest || !current || latest === current || status !== 'ahead') return { status: 'current' };
+  return { status: 'bump', to: latest };
+}
+
 /** The newest release in a Maven metadata file (its <release>, else its <latest>). */
 function mavenRelease(metadataXml) {
   const m = /<release>([^<]+)<\/release>/.exec(metadataXml) || /<latest>([^<]+)<\/latest>/.exec(metadataXml);
@@ -145,4 +162,5 @@ module.exports = {
   gradlePin,
   setGradlePin,
   summaryMarkdown,
+  githubDecision,
 };

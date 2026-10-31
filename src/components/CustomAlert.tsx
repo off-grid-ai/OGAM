@@ -1,14 +1,15 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
 } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import { LoadingDots } from './LoadingDots';
 import { AppSheet } from './AppSheet';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { SPACING, TYPOGRAPHY } from '../constants';
+import { countErrorShown } from '../services/analytics/interactions';
 
 // AlertState + its factories are pure and live in utils/alertState so non-UI code can build an
 // alert state without importing this component (no-backward-layering-core). Re-exported here so
@@ -30,6 +31,9 @@ export interface CustomAlertProps {
   prominentMessage?: boolean;
 }
 
+/** An alert that reports a failure. Only this yes/no leaves the device (as a count), never the words. */
+const ERROR_TITLE = /\b(error|failed|fail|couldn.t|could not|can.t|cannot|unable)\b/i;
+
 export const CustomAlert: React.FC<CustomAlertProps> = ({
   visible,
   title,
@@ -42,6 +46,11 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const isError = ERROR_TITLE.test(title);
+  useEffect(() => {
+    // session_summary.errors_shown: `<screen>:alert`, counted on the device.
+    if (visible && isError) countErrorShown('alert');
+  }, [visible, isError]);
 
   const handleButtonPress = (button: AlertButton) => {
     button.onPress?.();
@@ -54,13 +63,14 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
       onClose={() => onClose?.()}
       enableDynamicSizing
       title={title}
-      closeLabel={closeLabel}
+      // A question with its own Cancel needs no header Done: it would read as a second answer.
+      closeLabel={buttons.some(button => button.style === 'cancel') ? '' : closeLabel}
     >
-      <View style={styles.content}>
+      <View style={styles.content} testID="app-alert">
         {loading ? (
           <LoadingDots color={colors.primary} style={styles.loadingIndicator} />
         ) : null}
-        {message ? <Text style={[styles.message, prominentMessage && styles.messageProminent]}>{message}</Text> : null}
+        {message ? <Text style={[styles.message, prominentMessage && styles.messageProminent]} testID="app-alert-message">{message}</Text> : null}
         <View style={styles.buttonContainer}>
           {buttons.map((button, index) => (
             <TouchableOpacity

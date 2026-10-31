@@ -1,5 +1,12 @@
+import { useNavigation } from '@react-navigation/native';
+import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import { VideoUpsell } from '../models/VideoUpsell';
+import { SearchTab } from './SearchTab';
+import { proGateShown } from '../../services/analytics/analytics';
+import { ModelSwitchStopped } from '../../services/remoteServerManager';
 import React, { useEffect, useState, useMemo } from 'react';
-import { Text, ScrollView, TouchableOpacity } from 'react-native';
+import { Text, ScrollView } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../AppSheet';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -34,25 +41,26 @@ import {
 } from '../../utils/modelSelectorFilters';
 import logger from '../../utils/logger';
 
-type TabType = 'text' | 'image';
+type TabType = 'text' | 'image' | 'video' | 'search';
 
 function savedTextModels(
   server: RemoteServer,
   discovered: RemoteModel[],
 ): RemoteModel[] {
-  return remoteServerModelOptions([server], 'text').map(option =>
-    discovered.find(model => model.id === option.id) ?? {
-      id: option.id,
-      name: option.name,
-      serverId: option.serverId,
-      capabilities: {
-        supportsVision: false,
-        supportsToolCalling: false,
-        supportsThinking: false,
+  return remoteServerModelOptions([server], 'text').map(
+    option =>
+      discovered.find(model => model.id === option.id) ?? {
+        id: option.id,
+        name: option.name,
+        serverId: option.serverId,
+        capabilities: {
+          supportsVision: false,
+          supportsToolCalling: false,
+          supportsThinking: false,
+        },
+        details: { serverName: option.serverName },
+        lastUpdated: server.lastHealthCheck ?? server.createdAt,
       },
-      details: { serverName: option.serverName },
-      lastUpdated: server.lastHealthCheck ?? server.createdAt,
-    },
   );
 }
 
@@ -69,7 +77,7 @@ interface ModelSelectorModalProps {
   onSelectionComplete?: () => void;
   onClosed?: () => void;
   onBackToModels?: () => void;
-  onBrowseModels?: (tab: 'text' | 'image') => void;
+  onBrowseModels?: (tab: 'text' | 'image' | 'video' | 'search') => void;
 }
 
 export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
@@ -88,6 +96,9 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   onBrowseModels,
 }) => {
   const { colors } = useTheme();
+  const navigation = useNavigation();
+  // Video is Pro: the picker body fills this slot; free builds show the upgrade screen.
+  const VideoTab = useSlot(SLOTS.modelSelectorVideoTab);
   const styles = useThemedStyles(createAllStyles);
   const {
     downloadedModels,
@@ -180,7 +191,11 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
           id: option.id,
           name: option.name,
           serverId: option.serverId,
-          capabilities: { supportsVision: false, supportsToolCalling: false, supportsThinking: false },
+          capabilities: {
+            supportsVision: false,
+            supportsToolCalling: false,
+            supportsThinking: false,
+          },
           details: { serverName: option.serverName },
           lastUpdated: server.lastHealthCheck ?? server.createdAt,
         })),
@@ -222,6 +237,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
       await remoteServerManager.setActiveRemoteTextModel(serverId, model.id);
       onSelectionComplete?.();
     } catch (error) {
+      if (error instanceof ModelSwitchStopped) return;
       logger.error(
         '[ModelSelectorModal] Failed to set remote text model:',
         error,
@@ -251,6 +267,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
       }
       onSelectionComplete?.();
     } catch (error) {
+      if (error instanceof ModelSwitchStopped) return;
       logger.error(
         '[ModelSelectorModal] Failed to set remote vision model:',
         error,
@@ -281,33 +298,66 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
     isLoading || isLoadingImage || loadingRemoteTextModelKey !== null;
   return (
     <AppSheet
+      sheet="model-selector"
       visible={visible}
       onClose={onClose}
       onClosed={onClosed}
       onBackPress={onBackToModels}
       snapPoints={['40%', '75%']}
-      title={activeTab === 'image' ? 'IMAGE MODEL' : 'TEXT MODEL'}
+      title={
+        activeTab === 'video'
+          ? 'VIDEO MODEL'
+          : activeTab === 'search'
+            ? 'SEARCH MODEL'
+            : activeTab === 'image'
+            ? 'IMAGE MODEL'
+            : 'TEXT MODEL'
+      }
     >
-        {/* Text-model loading now shows an inline spinner ON the selected row (TextTab → ModelRow),
+      {/* Text-model loading now shows an inline spinner ON the selected row (TextTab → ModelRow),
             not a banner over the list. The image tab keeps its own indicator, so no banner for text. */}
 
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
       >
-          {activeTab === 'text' ? (
-            <TextTab
-              downloadedModels={filteredDownloadedModels}
-              remoteModels={remoteTextModels}
-              currentModelPath={currentModelPath}
-              selectedModelPath={selectedModelPath}
-              currentRemoteModelId={activeRemoteTextModelId}
-              isAnyLoading={isAnyLoading}
-              loadingModelId={effectiveLoadingTextModelId}
-              loadingRemoteModelKey={loadingRemoteTextModelKey}
-              onSelectModel={handleSelectLocalModel}
-              onSelectRemoteModel={handleSelectRemoteTextModel}
-              onUnloadModel={handleUnloadModel}
+        {activeTab === 'search' ? (
+          <SearchTab
+            onSelect={() => {
+              onSelectionComplete?.();
+              onClose();
+            }}
+          />
+        ) : activeTab === 'video' ? (
+          VideoTab ? (
+            <VideoTab
+              onSelect={() => {
+                onSelectionComplete?.();
+                onClose();
+              }}
+            />
+          ) : (
+            <VideoUpsell
+              onGetPro={() => {
+                proGateShown('video');
+                onClose();
+                (navigation as unknown as { navigate: (name: string) => void }).navigate('ProDetail');
+              }}
+            />
+          )
+        ) : activeTab === 'text' ? (
+          <TextTab
+            downloadedModels={filteredDownloadedModels}
+            remoteModels={remoteTextModels}
+            currentModelPath={currentModelPath}
+            selectedModelPath={selectedModelPath}
+            currentRemoteModelId={activeRemoteTextModelId}
+            isAnyLoading={isAnyLoading}
+            loadingModelId={effectiveLoadingTextModelId}
+            loadingRemoteModelKey={loadingRemoteTextModelKey}
+            onSelectModel={handleSelectLocalModel}
+            onSelectRemoteModel={handleSelectRemoteTextModel}
+            onUnloadModel={handleUnloadModel}
             onAddServer={() => {
               onClose();
               onAddServer?.();
@@ -315,14 +365,16 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
             onBrowseModels={
               onBrowseModels ? () => onBrowseModels('text') : undefined
             }
-            />
-          ) : (
-            <ImageTab
-              downloadedImageModels={filteredDownloadedImageModels}
+          />
+        ) : (
+          <ImageTab
+            downloadedImageModels={filteredDownloadedImageModels}
             remoteVisionModels={remoteImageModels}
-              activeImageModelId={activeImageModelId}
-              loadedImageModelId={activeModelService.getLoadedModelIds().imageModelId}
-              activeRemoteImageModelId={activeRemoteImageModelId}
+            activeImageModelId={activeImageModelId}
+            loadedImageModelId={
+              activeModelService.getLoadedModelIds().imageModelId
+            }
+            activeRemoteImageModelId={activeRemoteImageModelId}
             activeRemoteImageServerId={activeRemoteMediaServerIds.image ?? null}
               isAnyLoading={isAnyLoading}
               isLoadingImage={isLoadingImage}
@@ -333,9 +385,9 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
             onBrowseModels={
               onBrowseModels ? () => onBrowseModels('image') : undefined
             }
-            />
-          )}
-        </ScrollView>
+          />
+        )}
+      </ScrollView>
 
       {onBrowseModels && (
         <TouchableOpacity
