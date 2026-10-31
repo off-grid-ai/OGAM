@@ -6,7 +6,7 @@
  * next tier ($119 / $7.99) because the website's first tier ($69 / $4.99) is nearly full
  * and a release outlives it. The numbers are hardcoded and bumped in a new release
  * when a tier fills. The web pay page
- * (getoffgridai.co/pay) is where checkout happens and holds the authoritative price.
+ * (getoffgridai.co/pro/#buy) is where checkout happens and holds the authoritative price.
  */
 export interface ProPricingCopy {
   /** Small uppercase eyebrow label. */
