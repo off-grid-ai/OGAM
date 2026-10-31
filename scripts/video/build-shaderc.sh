@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+trap 'echo "build-shaderc.sh: line $LINENO failed: $BASH_COMMAND" >&2' ERR
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 REVISION=d393a813c9b67c709d37b329203d72beb69d719e
 SOURCE="$ROOT/.video-build/shaderc-source"
@@ -22,7 +23,8 @@ git -C "$SOURCE" checkout --detach "$REVISION"
 cmake -S "$SOURCE" -B "$SOURCE/build-host" -G "Unix Makefiles" \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX" \
   -DSHADERC_SKIP_TESTS=ON -DSHADERC_SKIP_EXAMPLES=ON -DSHADERC_SKIP_COPYRIGHT_CHECK=ON
-cmake --build "$SOURCE/build-host" --target glslc --parallel "${VIDEO_BUILD_JOBS:-4}"
+# Target glslc is the static library; glslc_exe is the command-line compiler (output name glslc).
+cmake --build "$SOURCE/build-host" --target glslc_exe --parallel "${VIDEO_BUILD_JOBS:-4}"
 mkdir -p "$PREFIX/bin"
 cp "$SOURCE/build-host/glslc/glslc" "$PREFIX/bin/glslc"
 printf '%s\n' "$REVISION" > "$PREFIX/revision"

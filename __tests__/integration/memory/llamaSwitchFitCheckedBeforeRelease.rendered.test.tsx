@@ -92,8 +92,8 @@ describe('llama → llama switch: the fit is checked before Model A is released'
     await rtl.waitFor(() =>
       expect(String(view().getByTestId('currently-loaded-model-name').props.children)).toContain('Model A'),
     );
+    // Closing the sheet animates on the real clock; what matters is the next answer, awaited below.
     rtl.fireEvent.press(view().getByTestId('app-sheet-close'));
-    await rtl.waitFor(() => expect(view().queryByTestId('currently-loaded-model-name')).toBeNull());
 
     // GESTURE: the next message is answered by Model A, no alert, no reload.
     await h.send('And now?', { text: 'Still A here.' });

@@ -1,14 +1,22 @@
-# UAT / internal-tester builds on merge to `dev` (or manual dispatch).
+# UAT / internal-tester builds on manual dispatch.
 #
 # OPTIONAL cloud path. The FAST path is local: `scripts/uat.sh` on your Mac (minutes).
-# This runs the SAME script on a single macOS runner so CI and local are ONE pipeline
-# (one source of truth): it computes the next beta version, generates release notes,
-# builds every artifact BEFORE publishing any, uploads Android -> Play "internal" +
-# iOS -> TestFlight, then cuts the GitHub prerelease tag with the APK + AAB attached.
+# This runs the SAME script, split into its stages so Android and iOS build at the same time:
 #
-# Cost note: iOS on GitHub's free macOS runners is slow (~30-90 min) and macOS minutes
-# bill at 10x. That's the price of a fully-consistent CI path; the local script stays the
-# fast default. Use workflow_dispatch with platform=android for a quick Play-only run.
+#   plan ─┬─ build-android ─┬─ upload-android ─┬─ finalize
+#         └─ build-ios ─────┴─ upload-ios ─────┘
+#
+#   plan      computes the next beta version, its number and the store build number, and writes the
+#             release notes once (uat.sh --plan). Every later job ships exactly these.
+#   build-*   bump in the working tree and build; nothing is published (uat.sh --build-only).
+#   upload-*  start only when EVERY build succeeded, so a failed build never leaves a half-published
+#             beta (Android on Play with no TestFlight build) (uat.sh --upload-only).
+#   finalize  starts only when every upload shipped: commits the bump, tags, pushes, creates the
+#             GitHub prerelease with the APK, AAB and IPA, and tells Slack (uat.sh --finalize).
+#             A failed build or upload therefore never leaves a tag.
+#
+# Android builds on Linux: its Hexagon DSP step builds inside a linux/amd64 Docker container, which
+# GitHub's macOS runners do not have. iOS needs macOS (Xcode, and the signing keychain for upload).
 #
 # Uses the credentials ALREADY stored as repo secrets (nothing new to add):
 #   Android: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS,
@@ -36,25 +44,81 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write   # uat.sh pushes the beta bump commit + tag and creates the GH release
+  contents: write   # finalize pushes the beta bump commit + tag and creates the GH release
+
+env:
+  # Which platform(s): push events build both; manual dispatch honors the picker.
+  UAT_PLATFORM_ARG: ${{ github.event_name == 'workflow_dispatch' && inputs.platform != 'both' && format('--{0}', inputs.platform) || '' }}
+  # uat.sh refuses a beta with no TestFlight external groups; locally it reads them from
+  # fastlane/.env, which CI does not have. Not a secret, so it is a repo variable.
+  TESTFLIGHT_EXTERNAL_GROUPS: ${{ vars.TESTFLIGHT_EXTERNAL_GROUPS }}
+  FASTLANE_SKIP_UPDATE_CHECK: '1'
+  FASTLANE_HIDE_CHANGELOG: '1'
 
 jobs:
-  beta:
-    # Single macOS runner: it has Xcode AND the Android SDK, so one machine builds both and
-    # runs scripts/uat.sh end to end (bump -> build all -> publish all -> tag -> GH release).
+  plan:
     # Skip runs triggered by the bot's back-merge of main -> dev (that push isn't a real
     # change to ship a beta for); real human pushes to dev and manual dispatch still run.
     if: ${{ github.event_name == 'workflow_dispatch' || github.actor != 'github-actions[bot]' }}
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.plan.outputs.UAT_VERSION }}
+      beta_n: ${{ steps.plan.outputs.UAT_BETA_N }}
+      build_number: ${{ steps.plan.outputs.UAT_BUILD_NUMBER }}
+      shared_sha: ${{ steps.plan.outputs.UAT_SHARED_SHA }}
+      # Every later job checks out this exact commit, as OGAD's release.yml pins its builds: a push
+      # mid-run must not make Android and iOS build different code.
+      sha: ${{ steps.sha.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: false         # pro/ is a private repo — fetch it below with a PAT
+          submodules: false
           fetch-depth: 0            # uat.sh needs full tag history to compute the next beta N
+      - name: Check out shared packages
+        # uat.sh records the shared commit in the beta tag; the builds check out this same commit.
+        uses: actions/checkout@v4
+        with:
+          repository: off-grid-ai/shared
+          token: ${{ secrets.PRO_SUBMODULE_PAT }}
+          path: _shared
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - run: mv _shared ../shared
+      - name: Pin the commit
+        id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Plan the beta (scripts/uat.sh --plan)
+        id: plan
+        env:
+          UAT_NOTES_OUT: ${{ runner.temp }}/uat-notes.md
+        run: bash scripts/uat.sh --plan $UAT_PLATFORM_ARG
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uat-notes
+          path: ${{ runner.temp }}/uat-notes.md
+          retention-days: 30
+
+  build-android:
+    needs: plan
+    if: ${{ inputs.platform != 'ios' }}
+    runs-on: ubuntu-latest
+    env:
+      UAT_VERSION: ${{ needs.plan.outputs.version }}
+      UAT_BETA_N: ${{ needs.plan.outputs.beta_n }}
+      UAT_BUILD_NUMBER: ${{ needs.plan.outputs.build_number }}
+      UAT_SHARED_SHA: ${{ needs.plan.outputs.shared_sha }}
+      # Beside the checkout, so it never dirties the tree uat.sh requires clean.
+      UAT_NOTES: ${{ github.workspace }}/../uat-notes/uat-notes.md
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          submodules: false         # pro/ is a private repo — fetch it below with a PAT
+          fetch-depth: 0
       - name: Check out pro submodule (private)
-        # pro/ lives in a separate private repo; the default GITHUB_TOKEN can't read it, so
-        # authenticate with PRO_SUBMODULE_PAT (same mechanism as ci.yml). uat.sh's build needs
-        # the real @offgrid/pro package present.
         env:
           PRO_PAT: ${{ secrets.PRO_SUBMODULE_PAT }}
         run: |
@@ -62,13 +126,13 @@ jobs:
           git config --global url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf "https://github.com/"
           git submodule update --init --recursive pro
           git config --global --unset url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf || true
-      - name: Check out shared packages
+      - name: Check out shared packages (the plan's commit)
         uses: actions/checkout@v4
         with:
           repository: off-grid-ai/shared
           token: ${{ secrets.PRO_SUBMODULE_PAT }}
           path: _shared
-          ref: main
+          ref: ${{ needs.plan.outputs.shared_sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with: { node-version: '20', cache: npm }
@@ -82,9 +146,88 @@ jobs:
           npm --prefix ../shared/packages/models run build
           npm --prefix ../shared/packages/speech run build
           npm --prefix ../shared/packages/ui run build
+          # The build left ../shared's tree as checked out: uat.sh requires it clean.
+          git -C ../shared status --porcelain
       - run: npm ci
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
+      - uses: ruby/setup-ruby@v1
+        with: { ruby-version: '3.3', bundler-cache: true }
+      - uses: actions/download-artifact@v4
+        with: { name: uat-notes, path: '${{ github.workspace }}/../uat-notes' }
+      - name: Decode signing keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+      - name: Restore files the setup rewrote
+        # setup-ruby's bundler-cache writes .bundle/config and can rewrite Gemfile.lock; uat.sh
+        # refuses a dirty tree, so restore them and show anything else that is still dirty.
+        run: |
+          git checkout -- .bundle/config Gemfile.lock 2>/dev/null || true
+          git status --porcelain
+      - name: Build Android (scripts/uat.sh --build-only --android)
+        env:
+          # Android signing — build.gradle reads these via project.hasProperty(...), so pass
+          # them as Gradle project properties (ORG_GRADLE_PROJECT_<name>), not plain env.
+          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_STORE_FILE: ${{ runner.temp }}/release.keystore
+          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: bash scripts/uat.sh --build-only --android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uat-android
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
+
+  build-ios:
+    needs: plan
+    if: ${{ inputs.platform != 'android' }}
+    runs-on: macos-latest
+    env:
+      UAT_VERSION: ${{ needs.plan.outputs.version }}
+      UAT_BETA_N: ${{ needs.plan.outputs.beta_n }}
+      UAT_BUILD_NUMBER: ${{ needs.plan.outputs.build_number }}
+      UAT_SHARED_SHA: ${{ needs.plan.outputs.shared_sha }}
+      # Beside the checkout, so it never dirties the tree uat.sh requires clean.
+      UAT_NOTES: ${{ github.workspace }}/../uat-notes/uat-notes.md
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          submodules: false
+          fetch-depth: 0
+      - name: Check out pro submodule (private)
+        env:
+          PRO_PAT: ${{ secrets.PRO_SUBMODULE_PAT }}
+        run: |
+          if [ -z "$PRO_PAT" ]; then echo "PRO_SUBMODULE_PAT not set — cannot fetch private pro/ submodule"; exit 1; fi
+          git config --global url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf "https://github.com/"
+          git submodule update --init --recursive pro
+          git config --global --unset url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf || true
+      - name: Check out shared packages (the plan's commit)
+        uses: actions/checkout@v4
+        with:
+          repository: off-grid-ai/shared
+          token: ${{ secrets.PRO_SUBMODULE_PAT }}
+          path: _shared
+          ref: ${{ needs.plan.outputs.shared_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: npm }
+      - name: Build shared packages
+        run: |
+          mv _shared ../shared
+          npm --prefix ../shared ci
+          npm --prefix ../shared/packages/automation run build
+          npm --prefix ../shared/packages/sync run build
+          npm --prefix ../shared/packages/rag run build
+          npm --prefix ../shared/packages/models run build
+          npm --prefix ../shared/packages/speech run build
+          npm --prefix ../shared/packages/ui run build
+          git -C ../shared status --porcelain
+      - run: npm ci
       - uses: ruby/setup-ruby@v1
         with: { ruby-version: '3.3', bundler-cache: true }
       - name: pod install
@@ -99,12 +242,129 @@ jobs:
           cd .. && git diff -- ios/Podfile.lock
           git checkout -- ios/Podfile.lock
           cp ios/Podfile.lock ios/Pods/Manifest.lock
-      - name: Decode signing secrets
+      - uses: actions/download-artifact@v4
+        with: { name: uat-notes, path: '${{ github.workspace }}/../uat-notes' }
+      - name: Restore files the setup rewrote
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          git checkout -- .bundle/config Gemfile.lock 2>/dev/null || true
+          git status --porcelain
+      - name: Build iOS (scripts/uat.sh --build-only --ios)
+        env:
+          # iOS signing (imported into a temp keychain by the Fastfile's setup_signing)
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISION_PROFILE: ${{ secrets.IOS_PROVISION_PROFILE }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: bash scripts/uat.sh --build-only --ios
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uat-ios
+          path: build/OffgridMobile.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+  upload-android:
+    # Every build that runs must have succeeded before anything is published.
+    needs: [plan, build-android, build-ios]
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && needs.build-android.result == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      UAT_VERSION: ${{ needs.plan.outputs.version }}
+      UAT_BETA_N: ${{ needs.plan.outputs.beta_n }}
+      UAT_BUILD_NUMBER: ${{ needs.plan.outputs.build_number }}
+      UAT_SHARED_SHA: ${{ needs.plan.outputs.shared_sha }}
+      # Beside the checkout, so it never dirties the tree uat.sh requires clean.
+      UAT_NOTES: ${{ github.workspace }}/../uat-notes/uat-notes.md
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ needs.plan.outputs.sha }}', submodules: false, fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: ruby/setup-ruby@v1
+        with: { ruby-version: '3.3', bundler-cache: true }
+      - uses: actions/download-artifact@v4
+        with: { name: uat-notes, path: '${{ github.workspace }}/../uat-notes' }
+      - uses: actions/download-artifact@v4
+        with: { name: uat-android, path: android/app/build/outputs }
+      - name: Decode the Play key
+        run: |
           # PLAY_STORE_JSON_KEY may be stored raw-JSON or base64 — handle both.
           echo "${{ secrets.PLAY_STORE_JSON_KEY }}" | base64 --decode > "$RUNNER_TEMP/play-key.json" \
             || printf '%s' '${{ secrets.PLAY_STORE_JSON_KEY }}' > "$RUNNER_TEMP/play-key.json"
+          git checkout -- .bundle/config Gemfile.lock 2>/dev/null || true
+          git status --porcelain
+      - name: Upload to Play (scripts/uat.sh --upload-only --android)
+        env:
+          PLAY_STORE_JSON_KEY_PATH: ${{ runner.temp }}/play-key.json
+        run: bash scripts/uat.sh --upload-only --android
+
+  upload-ios:
+    needs: [plan, build-android, build-ios]
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && needs.build-ios.result == 'success' }}
+    runs-on: macos-latest
+    env:
+      UAT_VERSION: ${{ needs.plan.outputs.version }}
+      UAT_BETA_N: ${{ needs.plan.outputs.beta_n }}
+      UAT_BUILD_NUMBER: ${{ needs.plan.outputs.build_number }}
+      UAT_SHARED_SHA: ${{ needs.plan.outputs.shared_sha }}
+      # Beside the checkout, so it never dirties the tree uat.sh requires clean.
+      UAT_NOTES: ${{ github.workspace }}/../uat-notes/uat-notes.md
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ needs.plan.outputs.sha }}', submodules: false, fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: ruby/setup-ruby@v1
+        with: { ruby-version: '3.3', bundler-cache: true }
+      - uses: actions/download-artifact@v4
+        with: { name: uat-notes, path: '${{ github.workspace }}/../uat-notes' }
+      - uses: actions/download-artifact@v4
+        with: { name: uat-ios, path: build }
+      - name: Restore files the setup rewrote
+        run: |
+          git checkout -- .bundle/config Gemfile.lock 2>/dev/null || true
+          git status --porcelain
+      - name: Upload to TestFlight (scripts/uat.sh --upload-only --ios)
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISION_PROFILE: ${{ secrets.IOS_PROVISION_PROFILE }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: bash scripts/uat.sh --upload-only --ios
+
+  finalize:
+    # Tag only once every upload that runs has shipped: a failure anywhere leaves no tag.
+    needs: [plan, upload-android, upload-ios]
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && (needs.upload-android.result == 'success' || needs.upload-ios.result == 'success') }}
+    runs-on: ubuntu-latest
+    env:
+      UAT_VERSION: ${{ needs.plan.outputs.version }}
+      UAT_BETA_N: ${{ needs.plan.outputs.beta_n }}
+      UAT_BUILD_NUMBER: ${{ needs.plan.outputs.build_number }}
+      UAT_SHARED_SHA: ${{ needs.plan.outputs.shared_sha }}
+      # Beside the checkout, so it never dirties the tree uat.sh requires clean.
+      UAT_NOTES: ${{ github.workspace }}/../uat-notes/uat-notes.md
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ needs.plan.outputs.sha }}', submodules: false, fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/download-artifact@v4
+        with: { name: uat-notes, path: '${{ github.workspace }}/../uat-notes' }
+      - name: Fetch the Android build
+        if: ${{ needs.upload-android.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with: { name: uat-android, path: android/app/build/outputs }
+      - name: Fetch the iOS build
+        if: ${{ needs.upload-ios.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with: { name: uat-ios, path: build }
       - name: Configure git for the beta bump commit + push
         # actions/checkout leaves HEAD detached; uat.sh commits the bump and `git push`es it,
         # which needs a real branch with an upstream. Re-attach to the triggering branch.
@@ -113,53 +373,11 @@ jobs:
           git config user.email "ci@offgridmobile.ai"
           git checkout -B "$GITHUB_REF_NAME"
           git branch --set-upstream-to="origin/$GITHUB_REF_NAME" "$GITHUB_REF_NAME" || true
-          # setup-ruby's bundler-cache writes its path/deployment settings into the tracked
-          # .bundle/config (gems stay in vendor/bundle, which that file already names) and can
-          # rewrite Gemfile.lock. uat.sh refuses a dirty tree, so restore them and show anything
-          # else that is still dirty. Podfile.lock is not restored: it must match the installed pods.
-          git checkout -- .bundle/config Gemfile.lock 2>/dev/null || true
           git status --porcelain
-      - name: Ship beta (scripts/uat.sh)
+      - name: Tag and release (scripts/uat.sh --finalize)
         env:
-          # Which platform(s): push events build both; manual dispatch honors the picker.
-          UAT_PLATFORM_ARG: ${{ github.event_name == 'workflow_dispatch' && inputs.platform != 'both' && format('--{0}', inputs.platform) || '' }}
-          # gh release create / git push
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Android signing — build.gradle reads these via project.hasProperty(...), so pass
-          # them as Gradle project properties (ORG_GRADLE_PROJECT_<name>), not plain env.
-          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_STORE_FILE: ${{ runner.temp }}/release.keystore
-          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          # Play upload
-          PLAY_STORE_JSON_KEY_PATH: ${{ runner.temp }}/play-key.json
-          # iOS auth + signing (imported into a temp keychain by the Fastfile's setup_signing)
-          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
-          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-          IOS_PROVISION_PROFILE: ${{ secrets.IOS_PROVISION_PROFILE }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-          # uat.sh refuses a beta with no TestFlight external groups; locally it reads them from
-          # fastlane/.env, which CI does not have. Not a secret, so it is a repo variable.
-          TESTFLIGHT_EXTERNAL_GROUPS: ${{ vars.TESTFLIGHT_EXTERNAL_GROUPS }}
-          FASTLANE_SKIP_UPDATE_CHECK: '1'
-          FASTLANE_HIDE_CHANGELOG: '1'
           # uat.sh announces the beta in Slack; without this it falls back to .env.keygen, which
           # only exists on a developer machine, and silently skips the message.
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: bash scripts/uat.sh $UAT_PLATFORM_ARG
-      - name: Keep the built APK, AAB and IPA
-        # Saved even when a later uat.sh step fails (e.g. the push after the store uploads), so the
-        # exact files sent to Play and TestFlight can still be attached to the GitHub release.
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: uat-builds
-          path: |
-            android/app/build/outputs/apk/release/app-release.apk
-            android/app/build/outputs/bundle/release/app-release.aab
-            build/OffgridMobile.ipa
-          if-no-files-found: warn
-          retention-days: 30
+        run: bash scripts/uat.sh --finalize $UAT_PLATFORM_ARG
