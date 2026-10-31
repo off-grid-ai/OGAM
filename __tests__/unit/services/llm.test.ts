@@ -6,8 +6,9 @@
  */
 
 import { initLlama } from 'llama.rn';
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import RNFS from 'react-native-fs';
+import DeviceInfo from 'react-native-device-info';
 import { llmService } from '../../../src/services/llm';
 import { useAppStore } from '../../../src/stores/appStore';
 import { resetStores } from '../../utils/testHelpers';
@@ -16,6 +17,24 @@ import { createUserMessage, createAssistantMessage, createSystemMessage } from '
 
 const mockedInitLlama = initLlama as jest.MockedFunction<typeof initLlama>;
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
+const GiB = 1024 * 1024 * 1024;
+
+/** The RAM the device reports: device-info's totals and the native per-process headroom (DeviceMemoryModule). */
+function deviceRam(r: { total: number; used: number; available: number }) {
+  (DeviceInfo.getTotalMemory as jest.Mock).mockResolvedValue(r.total);
+  (DeviceInfo.getUsedMemory as jest.Mock).mockResolvedValue(r.used);
+  NativeModules.DeviceMemoryModule = {
+    getMemoryInfo: jest.fn(async () => ({ processAvailableBytes: r.available, footprintBytes: r.used })),
+  };
+}
+/** Back to the default phone (8 GB, 4 GB used, no native memory module, unknown SoC). */
+function defaultDevice() {
+  (DeviceInfo.getTotalMemory as jest.Mock).mockResolvedValue(8 * GiB);
+  (DeviceInfo.getUsedMemory as jest.Mock).mockResolvedValue(4 * GiB);
+  (DeviceInfo.getHardware as jest.Mock).mockResolvedValue('unknown');
+  delete NativeModules.DeviceMemoryModule;
+  delete NativeModules.LocalDreamModule;
+}
 
 /**
  * Helper: sets up mocks for configured context-loading tests.
@@ -45,46 +64,21 @@ function setupContextLoadTest({
     );
   }
 
-  useAppStore.setState({
-    settings: {
-      ...useAppStore.getState().settings,
-      contextLength: userContextLength,
-    },
-  });
+  useAppStore.getState().updateSettings({ contextLength: userContextLength });
 
   return contexts;
 }
 
 describe('LLMService', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
     jest.restoreAllMocks(); // undo any jest.spyOn (e.g. getAppMemoryUsage) so memory state doesn't leak between tests
     mockedRNFS.stat.mockResolvedValue({ size: 1000000, isFile: () => true } as any); // reset file size so per-test overrides don't leak
     resetStores();
+    defaultDevice();
 
-    // Reset singleton state
-    (llmService as any).context = null;
-    (llmService as any).currentModelPath = null;
-    (llmService as any).nativeConversationId = null;
-    (llmService as any).isGenerating = false;
-    (llmService as any).multimodalSupport = null;
-    (llmService as any).multimodalInitialized = false;
-    (llmService as any).gpuEnabled = false;
-    (llmService as any).gpuReason = '';
-    (llmService as any).gpuDevices = [];
-    (llmService as any).activeGpuLayers = 0;
-    (llmService as any).performanceStats = {
-      lastTokensPerSecond: 0,
-      lastDecodeTokensPerSecond: 0,
-      lastTimeToFirstToken: 0,
-      lastGenerationTime: 0,
-      lastTokenCount: 0,
-    };
-    (llmService as any).currentSettings = {
-      nThreads: 4,
-      nBatch: 512,
-      contextLength: 2048,
-    };
+    // Each test starts from a phone with no model loaded (the service's own unload).
+    await llmService.unloadModel();
   });
 
   // ========================================================================
@@ -114,20 +108,13 @@ describe('LLMService', () => {
     });
 
     it('offers a memory override and then tries the selected context', async () => {
-      const { hardwareService } = require('../../../src/services/hardware');
       mockedRNFS.exists.mockResolvedValue(true);
       mockedRNFS.stat.mockResolvedValue({ size: 2 * 1024 * 1024 * 1024 } as any); // 2 GB model
       const ctx = createMockLlamaContext();
       mockedInitLlama.mockResolvedValue(ctx as any);
       // ~600 MB available: the mapped weights fit this RAM, but the 8192-token KV cache does not.
-      jest.spyOn(hardwareService, 'getAppMemoryUsage').mockResolvedValue({
-        used: 7.4 * 1024 * 1024 * 1024,
-        available: 600 * 1024 * 1024,
-        total: 8 * 1024 * 1024 * 1024,
-      });
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, contextLength: 8192, cacheType: 'q8_0' },
-      });
+      deviceRam({ used: 7.4 * GiB, available: 600 * 1024 * 1024, total: 8 * GiB });
+      useAppStore.getState().updateSettings({ contextLength: 8192, cacheType: 'q8_0' });
 
       await expect(llmService.loadModel('/models/big.gguf')).rejects.toThrow('Not enough memory');
       expect(initLlama).not.toHaveBeenCalled();
@@ -138,19 +125,12 @@ describe('LLMService', () => {
     });
 
     it('blocks the load when the model weights alone exceed available memory (F4)', async () => {
-      const { hardwareService } = require('../../../src/services/hardware');
       mockedRNFS.exists.mockResolvedValue(true);
       mockedRNFS.stat.mockResolvedValue({ size: 6 * 1024 * 1024 * 1024 } as any); // 6 GB model
       const ctx = createMockLlamaContext();
       mockedInitLlama.mockResolvedValue(ctx as any);
-      jest.spyOn(hardwareService, 'getAppMemoryUsage').mockResolvedValue({
-        used: 6 * 1024 * 1024 * 1024,
-        available: 2 * 1024 * 1024 * 1024, // 2 GB — can't even fit the weights
-        total: 8 * 1024 * 1024 * 1024,
-      });
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, contextLength: 4096, cacheType: 'q8_0' },
-      });
+      deviceRam({ used: 6 * GiB, available: 2 * GiB, total: 8 * GiB }); // 2 GB — can't even fit the weights
+      useAppStore.getState().updateSettings({ contextLength: 4096, cacheType: 'q8_0' });
 
       await expect(llmService.loadModel('/models/huge.gguf')).rejects.toThrow('Not enough memory');
       expect(initLlama).not.toHaveBeenCalled();
@@ -191,13 +171,7 @@ describe('LLMService', () => {
         .mockResolvedValueOnce(ctx as any);
 
       // Enable GPU via Metal backend (iOS test environment)
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings,
-          inferenceBackend: 'metal' as const,
-          gpuLayers: 6,
-        },
-      });
+      useAppStore.getState().updateSettings({ inferenceBackend: 'metal' as const, gpuLayers: 6 });
 
       await llmService.loadModel('/models/test.gguf');
 
@@ -212,13 +186,7 @@ describe('LLMService', () => {
         .mockRejectedValueOnce(new Error('GPU error'))
         .mockRejectedValueOnce(new Error('OOM with ctx=4096'));
 
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings,
-          contextLength: 4096,
-          inferenceBackend: 'metal' as const,
-        },
-      });
+      useAppStore.getState().updateSettings({ contextLength: 4096, inferenceBackend: 'metal' as const });
 
       await expect(llmService.loadModel('/models/test.gguf'))
         .rejects.toThrow('selected context 4096');
@@ -267,14 +235,7 @@ describe('LLMService', () => {
       const ctx = createMockLlamaContext();
       mockedInitLlama.mockResolvedValue(ctx as any);
 
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings,
-          nThreads: 8,
-          nBatch: 512,
-          contextLength: 4096,
-        },
-      });
+      useAppStore.getState().updateSettings({ nThreads: 8, nBatch: 512, contextLength: 4096 });
 
       await llmService.loadModel('/models/test.gguf');
 
@@ -292,12 +253,7 @@ describe('LLMService', () => {
       const ctx = createMockLlamaContext();
       mockedInitLlama.mockResolvedValue(ctx as any);
 
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings,
-          flashAttn: true,
-        },
-      });
+      useAppStore.getState().updateSettings({ flashAttn: true });
 
       await llmService.loadModel('/models/test.gguf');
 
@@ -315,13 +271,7 @@ describe('LLMService', () => {
       const ctx = createMockLlamaContext();
       mockedInitLlama.mockResolvedValue(ctx as any);
 
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings,
-          flashAttn: false,
-          cacheType: 'f16',
-        },
-      });
+      useAppStore.getState().updateSettings({ flashAttn: false, cacheType: 'f16' });
 
       await llmService.loadModel('/models/test.gguf');
 
@@ -339,12 +289,7 @@ describe('LLMService', () => {
       const ctx = createMockLlamaContext();
       mockedInitLlama.mockResolvedValue(ctx as any);
 
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings,
-          flashAttn: undefined as any,
-        },
-      });
+      useAppStore.getState().updateSettings({ flashAttn: undefined as any });
 
       await llmService.loadModel('/models/test.gguf');
 
@@ -367,13 +312,7 @@ describe('LLMService', () => {
       });
       mockedInitLlama.mockResolvedValue(ctx as any);
 
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings,
-          inferenceBackend: 'metal' as const,
-          gpuLayers: 99,
-        },
-      });
+      useAppStore.getState().updateSettings({ inferenceBackend: 'metal' as const, gpuLayers: 99 });
 
       await llmService.loadModel('/models/test.gguf');
 
@@ -387,12 +326,7 @@ describe('LLMService', () => {
       mockedInitLlama.mockRejectedValue(new Error('fatal'));
 
       // CPU backend to skip GPU retries
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings,
-          inferenceBackend: 'cpu' as const,
-        },
-      });
+      useAppStore.getState().updateSettings({ inferenceBackend: 'cpu' as const });
 
       await expect(llmService.loadModel('/models/test.gguf')).rejects.toThrow();
 
@@ -663,12 +597,7 @@ describe('LLMService', () => {
         isJinjaSupported: jest.fn(() => true),
       });
 
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings,
-          thinkingEnabled: false,
-        },
-      });
+      useAppStore.getState().updateSettings({ thinkingEnabled: false });
 
       await llmService.generateResponse([createUserMessage('Hello')]);
 
@@ -690,12 +619,7 @@ describe('LLMService', () => {
         }),
       });
 
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings,
-          thinkingEnabled: true,
-        },
-      });
+      useAppStore.getState().updateSettings({ thinkingEnabled: true });
 
       const result = await llmService.generateResponse([createUserMessage('Hello')], { onStream: (data) => streamChunks.push(data) });
 
@@ -903,9 +827,7 @@ describe('LLMService', () => {
       const ctx = createMockLlamaContext({ gpu: true, devices: [] });
       mockedInitLlama.mockResolvedValue(ctx as any);
 
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, inferenceBackend: 'metal' as const, gpuLayers: 99 },
-      });
+      useAppStore.getState().updateSettings({ inferenceBackend: 'metal' as const, gpuLayers: 99 });
 
       await llmService.loadModel('/models/test.gguf');
 
@@ -1282,7 +1204,7 @@ describe('LLMService', () => {
 
     beforeEach(() => {
       (hw as any).cachedOpenCLCapability = null;
-      jest.spyOn(hw, 'getOpenCLCapability').mockResolvedValue({ supported: true });
+      (DeviceInfo.getHardware as jest.Mock).mockResolvedValue('qcom'); // a Snapdragon with an Adreno GPU
     });
 
     afterEach(() => {
@@ -1297,9 +1219,7 @@ describe('LLMService', () => {
       const ctx = createMockLlamaContext({ gpu: true, devices: [] });
       mockedInitLlama.mockResolvedValue(ctx as any);
 
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, inferenceBackend: 'opencl' as const, gpuLayers: 6 },
-      });
+      useAppStore.getState().updateSettings({ inferenceBackend: 'opencl' as const, gpuLayers: 6 });
 
       await llmService.loadModel('/models/test.gguf');
 
@@ -1318,9 +1238,7 @@ describe('LLMService', () => {
       const ctx = createMockLlamaContext({ gpu: true, devices: ['Adreno 730'] });
       mockedInitLlama.mockResolvedValue(ctx as any);
 
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, inferenceBackend: 'opencl' as const, gpuLayers: 6 },
-      });
+      useAppStore.getState().updateSettings({ inferenceBackend: 'opencl' as const, gpuLayers: 6 });
 
       await llmService.loadModel('/models/test.gguf');
 
@@ -1439,12 +1357,7 @@ describe('LLMService', () => {
 
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
 
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings,
-          contextLength: 4096,
-        },
-      });
+      useAppStore.getState().updateSettings({ contextLength: 4096 });
 
       await llmService.loadModel('/models/test.gguf');
 
@@ -1679,15 +1592,7 @@ describe('LLMService', () => {
       mockedInitLlama.mockResolvedValue(ctx as any);
       await llmService.loadModel('/models/test.gguf');
 
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings,
-          temperature: 0.2,
-          maxTokens: 512,
-          topP: 0.8,
-          repeatPenalty: 1.3,
-        },
-      });
+      useAppStore.getState().updateSettings({ temperature: 0.2, maxTokens: 512, topP: 0.8, repeatPenalty: 1.3 });
 
       await llmService.generateResponse([createUserMessage('Hi')]);
 
@@ -1778,7 +1683,11 @@ describe('LLMService', () => {
   // ========================================================================
   describe('performance stats', () => {
     it('returns zero stats before any generation', () => {
-      const stats = llmService.getPerformanceStats();
+      // A fresh app start: the service as first loaded, before any reply ran.
+      let stats: any;
+      jest.isolateModules(() => {
+        stats = require('../../../src/services/llm').llmService.getPerformanceStats();
+      });
       expect(stats.lastTokensPerSecond).toBe(0);
       expect(stats.lastDecodeTokensPerSecond).toBe(0);
       expect(stats.lastTimeToFirstToken).toBe(0);
@@ -1864,9 +1773,7 @@ describe('LLMService', () => {
       // All attempts fail
       mockedInitLlama.mockRejectedValue(new Error('native crash'));
 
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, inferenceBackend: 'cpu' as const },
-      });
+      useAppStore.getState().updateSettings({ inferenceBackend: 'cpu' as const });
 
       await expect(llmService.loadModel('/models/test.gguf'))
         .rejects.toThrow('native crash');
@@ -1876,9 +1783,7 @@ describe('LLMService', () => {
       mockedRNFS.exists.mockResolvedValue(true);
       mockedInitLlama.mockRejectedValue('string error');
 
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, inferenceBackend: 'cpu' as const },
-      });
+      useAppStore.getState().updateSettings({ inferenceBackend: 'cpu' as const });
 
       await expect(llmService.loadModel('/models/test.gguf'))
         .rejects.toThrow('Failed to load model at selected context');
@@ -1894,9 +1799,7 @@ describe('LLMService', () => {
       const ctx = createMockLlamaContext({ gpu: true, devices: ['Metal'] });
       mockedInitLlama.mockResolvedValue(ctx as any);
 
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, inferenceBackend: 'metal' as const, gpuLayers: 99 },
-      });
+      useAppStore.getState().updateSettings({ inferenceBackend: 'metal' as const, gpuLayers: 99 });
 
       await llmService.loadModel('/models/test.gguf');
       expect(llmService.getGpuInfo().gpu).toBe(true);
@@ -1919,9 +1822,7 @@ describe('LLMService', () => {
       const ctx = createMockLlamaContext();
       mockedInitLlama.mockResolvedValue(ctx as any);
 
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, nThreads: 0, nBatch: 512 },
-      });
+      useAppStore.getState().updateSettings({ nThreads: 0, nBatch: 512 });
 
       await llmService.loadModel('/models/test.gguf');
 
@@ -1937,9 +1838,7 @@ describe('LLMService', () => {
       const ctx = createMockLlamaContext();
       mockedInitLlama.mockResolvedValue(ctx as any);
 
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, nThreads: 6, nBatch: 0 },
-      });
+      useAppStore.getState().updateSettings({ nThreads: 6, nBatch: 0 });
 
       await llmService.loadModel('/models/test.gguf');
 
@@ -2181,7 +2080,6 @@ describe('LLMService', () => {
 
     it('refuses a completion while released memory is still being reclaimed', async () => {
       mockedRNFS.exists.mockResolvedValue(true);
-      const { hardwareService } = require('../../../src/services/hardware');
       let released = false;
       const completion = jest.fn().mockImplementation((_params, cb) => {
         cb({ token: released ? 'ran on a freed context' : 'ok' });
@@ -2194,11 +2092,15 @@ describe('LLMService', () => {
       mockedInitLlama.mockResolvedValue(ctx as any);
       await llmService.loadModel('/models/test.gguf');
 
-      // The reclaim wait reads process memory; hold that read open so the unload sits in the wait.
-      let finishReclaim: (value: null) => void = () => {};
-      const memoryRead = jest.spyOn(hardwareService, 'getProcessMemory').mockReturnValue(
-        new Promise(resolve => { finishReclaim = resolve; }),
-      );
+      // The reclaim wait reads process memory from the native module; hold that read open so the unload
+      // sits in the wait.
+      // The first read (the footprint before the release lands) is held; later reads show it dropped.
+      const footprint = (bytes: number) => ({ processAvailableBytes: 4 * GiB, footprintBytes: bytes });
+      let finishReclaim: (value: unknown) => void = () => {};
+      const held = new Promise(resolve => { finishReclaim = resolve; });
+      let reads = 0;
+      const memoryRead = jest.fn((): Promise<unknown> => (++reads === 1 ? held : Promise.resolve(footprint(0))));
+      NativeModules.DeviceMemoryModule = { getMemoryInfo: memoryRead };
       const unloaded = llmService.unloadModel();
       while (!released || memoryRead.mock.calls.length === 0) await new Promise<void>(r => setImmediate(r));
 
@@ -2207,10 +2109,9 @@ describe('LLMService', () => {
       ).rejects.toThrow('No model loaded');
       expect(completion).not.toHaveBeenCalled();
 
-      finishReclaim(null);
+      finishReclaim(footprint(2 * GiB));
       await unloaded;
       expect(llmService.isModelLoaded()).toBe(false);
-      memoryRead.mockRestore();
     });
   });
 
@@ -2408,16 +2309,14 @@ describe('LLMService', () => {
 
     it('passes devices HTP0 + CPU fallback and 99 gpu_layers when inferenceBackend is htp on Android', async () => {
       jest.spyOn(Platform, 'OS', 'get').mockReturnValue('android');
-      jest.spyOn(hardwareService, 'getSoCInfo').mockResolvedValue({
-        vendor: 'qualcomm', hasNPU: true, qnnVariant: '8gen3',
-      });
+      // A Snapdragon 8 Gen 3 (SM8650), which carries a Hexagon NPU.
+      (DeviceInfo.getHardware as jest.Mock).mockResolvedValue('qcom');
+      NativeModules.LocalDreamModule = { getSoCModel: jest.fn(async () => 'SM8650') };
 
       const ctx = createMockLlamaContext();
       mockedInitLlama.mockResolvedValue(ctx as any);
 
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, inferenceBackend: 'htp' as const, gpuLayers: 99 },
-      });
+      useAppStore.getState().updateSettings({ inferenceBackend: 'htp' as const, gpuLayers: 99 });
 
       await llmService.loadModel('/models/test.gguf');
 

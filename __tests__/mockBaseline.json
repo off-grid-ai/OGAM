@@ -221,7 +221,6 @@
   "__tests__/unit/services/intentClassifier.test.ts": 2,
   "__tests__/unit/services/liteRTCompaction.test.ts": 3,
   "__tests__/unit/services/litertToolSelector.test.ts": 1,
-  "__tests__/unit/services/llm.test.ts": 5,
   "__tests__/unit/services/loadPolicySync.test.ts": 2,
   "__tests__/unit/services/modelDownloadService.test.ts": 2,
   "__tests__/unit/services/modelManager/imageSync.test.ts": 2,
