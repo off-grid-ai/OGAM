@@ -301,7 +301,6 @@
   "__tests__/unit/screens/ModelsScreen/imageDownloadResume.test.ts": 4,
   "__tests__/unit/screens/ModelsScreen/importHelpers.test.ts": 2,
   "__tests__/unit/screens/ModelsScreen/trendingSelection.test.ts": 4,
-  "__tests__/unit/screens/ModelsScreen/useImageModels.branches.test.ts": 8,
   "__tests__/unit/screens/ModelsScreen/useImageModels.processing.test.ts": 6,
   "__tests__/unit/screens/ModelsScreen/useModelsScreen.test.ts": 10,
   "__tests__/unit/screens/ModelsScreen/utils.test.ts": 1,

@@ -1,393 +1,442 @@
 /**
  * useImageModels.branches.test.ts
  *
- * Branch coverage for the conditional paths in useImageModels that the
- * processing-resume test does not exercise:
- * - loadHFModels iOS (CoreML) vs Android (HF) paths + error fallback (?? 'Failed to fetch models')
- * - hardware recommendation effect: qnn / mnn / all backend selection + userChangedBackendFilter guard
- * - isRecommendedModel guards (no rec, backend mismatch, qnnVariant, recommendedModels, default true)
- * - filteredHFModels filters (recommended-only, backend, style, sd version, query); downloaded models stay listed
- * - handleCancelImageDownload: missing entry, no downloadId, synthetic multi, native cancel
- * - loadDownloadedImageModels
+ * The Image tab's list logic, on the real stack. Only the device boundary is faked: the phone
+ * (platform, RAM, SoC through react-native-device-info and the LocalDream module), the file system,
+ * the native download module, async-storage and the Hugging Face catalog at fetch. The hook, the
+ * stores, hardwareService, huggingFaceModelBrowser, coreMLModelBrowser, imageDownloadActions and
+ * backgroundDownloadService all run for real.
+ *
+ * - loadHFModels: iOS (Core ML) vs Android (sd-mnn / sd-qnn), the NPU gate, the cache, the error text
+ * - the recommendation picks the backend filter on Android, never on iOS, and fills the banner
+ * - isRecommendedModel: no recommendation yet, backend mismatch, QNN variant, named picks, default
+ * - filteredHFModels: recommended-only, backend, style, SD version and search filters; a downloaded
+ *   model stays listed
+ * - handleCancelImageDownload: no entry, no download id, synthetic multi-file id, native id, a failing
+ *   native cancel
+ * - loadDownloadedImageModels, clearImageFilters
  */
+import {
+  installNativeBoundary,
+  requireRTL,
+  GB,
+  type NativeBoundary,
+  type RamProfile,
+} from '../../../harness/nativeBoundary';
+import {
+  serveHfImageCatalog,
+  lfsFile,
+  folder,
+  type HfImageCatalog,
+  type HfImageCatalogServer,
+} from '../../../harness/hfImageCatalogServer';
+import { SD_MNN_PACKAGE_FILES } from '../../../harness/imageModelPackage';
 
-import { renderHook, act, waitFor } from '@testing-library/react-native';
-import { Platform } from 'react-native';
-import { useImageModels } from '../../../../src/screens/ModelsScreen/useImageModels';
+jest.unmock('@react-navigation/native');
 
-const mockUseAppStore = jest.fn();
-const mockUseDownloadStore = jest.fn();
-const mockGetDownloadedImageModels = jest.fn();
-const mockSetDownloadedImageModels = jest.fn();
-const mockResumeImageDownload = jest.fn();
-const mockCancelDownload = jest.fn();
-const mockGetSoCInfo = jest.fn();
-const mockGetImageModelRecommendation = jest.fn();
-const mockFetchAvailableModels = jest.fn();
-const mockFetchAvailableCoreMLModels = jest.fn();
-const mockGuessStyle = jest.fn();
-// The SD catalog is listed ahead of fetched packs; these tests cover the fetched packs.
-let mockSDImageModels: any[] = [];
-const mockMatchesSdVersionFilter = jest.fn();
-const mockCancelSynthetic = jest.fn();
-const mockStoreRemove = jest.fn();
-const mockStoreGetState = jest.fn();
+const ANDROID: RamProfile = { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB };
+const IPHONE: RamProfile = { platform: 'ios', totalBytes: 8 * GB, availBytes: 5 * GB };
+/** A Snapdragon 8 Gen 3: Qualcomm hardware whose SoC carries a Hexagon NPU (QNN 8gen2 packs). */
+const SNAPDRAGON_8_GEN_3 = { deviceHardware: 'qcom', socModel: 'SM8650' };
 
-jest.mock('../../../../src/stores', () => ({
-  useAppStore: (selector?: any) => mockUseAppStore(selector),
-}));
+const ANDROID_CATALOG: HfImageCatalog = {
+  mnn: [lfsFile('AnythingV5.zip', 1.2 * GB), lfsFile('AbsoluteReality.zip', 1.1 * GB)],
+  qnn: [lfsFile('AnythingV5_qnn2.28_8gen2.zip', 1.0 * GB), lfsFile('AnythingV5_qnn2.28_min.zip', 1.0 * GB)],
+};
+const MNN_ANYTHING = 'anythingv5_cpu';
+const MNN_ABSOLUTE = 'absolutereality_cpu';
+const QNN_8GEN2 = 'anythingv5_npu_8gen2';
+const QNN_MIN = 'anythingv5_npu_min';
 
-jest.mock('../../../../src/stores/downloadStore', () => {
-  const useDownloadStore = (selector?: any) => mockUseDownloadStore(selector);
-  (useDownloadStore as any).getState = () => mockStoreGetState();
-  return { useDownloadStore };
+const PALETTIZED = 'apple/coreml-stable-diffusion-v1-5-palettized';
+const FULL = 'apple/coreml-stable-diffusion-v1-5';
+const IOS_CATALOG: HfImageCatalog = {
+  coreml: {
+    [PALETTIZED]: [
+      lfsFile('coreml-stable-diffusion-v1-5-palettized_split_einsum_v2_compiled.zip', 1.0 * GB),
+      lfsFile('coreml-stable-diffusion-v1-5-palettized_original_compiled.zip', 1.0 * GB),
+    ],
+    [FULL]: [folder('split_einsum')],
+    [`${FULL}/split_einsum`]: [folder('split_einsum/compiled')],
+    [`${FULL}/split_einsum/compiled`]: [
+      lfsFile('split_einsum/compiled/merges.txt', 500),
+      folder('split_einsum/compiled/Unet.mlmodelc'),
+    ],
+    [`${FULL}/split_einsum/compiled/Unet.mlmodelc`]: [
+      lfsFile('split_einsum/compiled/Unet.mlmodelc/weights.bin', 2 * GB),
+    ],
+  },
+};
+
+let server: HfImageCatalogServer | undefined;
+afterEach(() => {
+  server?.restore();
+  server = undefined;
 });
 
-jest.mock('../../../../src/services', () => ({
-  modelManager: {
-    getDownloadedImageModels: (...args: any[]) => mockGetDownloadedImageModels(...args),
-  },
-  hardwareService: {
-    getSoCInfo: (...a: any[]) => mockGetSoCInfo(...a),
-    // The phone's memory picks which sd.cpp models are recommended (9061db452).
-    getTotalMemoryGB: () => 8,
-    getImageModelRecommendation: (...a: any[]) => mockGetImageModelRecommendation(...a),
-  },
-  backgroundDownloadService: {
-    cancelDownload: (...a: any[]) => mockCancelDownload(...a),
-  },
-}));
-
-jest.mock('../../../../src/screens/ModelsScreen/imageDownloadResume', () => ({
-  resumeImageDownload: (...args: any[]) => mockResumeImageDownload(...args),
-}));
-
-jest.mock('../../../../src/services/huggingFaceModelBrowser', () => ({
-  fetchAvailableModels: (...a: any[]) => mockFetchAvailableModels(...a),
-  guessStyle: (...a: any[]) => mockGuessStyle(...a),
-  getOfferedSDImageModels: () => mockSDImageModels,
-  // The sd.cpp models whose memory need fits the phone (9061db452).
-  getRecommendedSDImageModels: (ramGB: number) =>
-    mockSDImageModels.filter((model: any) => !model.minRamGb || model.minRamGb <= ramGB),
-}));
-
-jest.mock('../../../../src/services/coreMLModelBrowser', () => ({
-  fetchAvailableCoreMLModels: (...a: any[]) => mockFetchAvailableCoreMLModels(...a),
-}));
-
-jest.mock('../../../../src/screens/ModelsScreen/utils', () => ({
-  matchesSdVersionFilter: (...a: any[]) => mockMatchesSdVersionFilter(...a),
-}));
-
-jest.mock('../../../../src/services/imageDownloadActions', () => ({
-  handleDownloadImageModel: jest.fn(),
-  cancelSyntheticImageDownload: (...a: any[]) => mockCancelSynthetic(...a),
-}));
-
-const setAlertState = jest.fn();
-const addDownloadedImageModel = jest.fn();
-const setActiveImageModelId = jest.fn();
-
-let appState: any;
-let downloadStoreState: any;
-
-function setDownloads(downloads: Record<string, any>) {
-  downloadStoreState = { downloads, remove: mockStoreRemove };
-  mockStoreGetState.mockReturnValue(downloadStoreState);
-  mockUseDownloadStore.mockImplementation((selector?: any) =>
-    selector ? selector(downloadStoreState) : downloadStoreState,
-  );
+interface MountOpts {
+  ram?: RamProfile;
+  deviceHardware?: string;
+  socModel?: string;
+  catalog?: HfImageCatalog;
+  /** Runs on the fresh boundary before the hook mounts (seed disk, storage, hold a native read). */
+  before?: (ctx: { boundary: NativeBoundary; services: any }) => void | Promise<void>;
 }
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  (Platform as any).OS = 'android';
-  mockGetDownloadedImageModels.mockResolvedValue([]);
-  mockResumeImageDownload.mockResolvedValue(undefined);
-  mockCancelDownload.mockResolvedValue(undefined);
-  mockCancelSynthetic.mockResolvedValue(undefined);
-  mockGetSoCInfo.mockResolvedValue({ hasNPU: true });
-  mockGetImageModelRecommendation.mockResolvedValue({
-    recommendedBackend: 'all',
-    bannerText: 'banner ok',
+async function mount(opts: MountOpts = {}) {
+  const boundary = installNativeBoundary({
+    ram: opts.ram ?? ANDROID,
+    fs: true,
+    download: true,
+    deviceHardware: opts.deviceHardware,
+    socModel: opts.socModel,
   });
-  mockFetchAvailableModels.mockResolvedValue([]);
-  mockFetchAvailableCoreMLModels.mockResolvedValue([]);
-  mockGuessStyle.mockReturnValue('all');
-  mockMatchesSdVersionFilter.mockReturnValue(true);
+  server = serveHfImageCatalog(opts.catalog ?? {});
+  const rtl = requireRTL();
+  const AsyncStorage = require('@react-native-async-storage/async-storage');
+  await (AsyncStorage.default ?? AsyncStorage).clear();
+  const services = require('../../../../src/services');
+  // The app reads the device once at boot; the RAM-dependent lists read that cache.
+  await services.hardwareService.getDeviceInfo();
+  await opts.before?.({ boundary, services });
+  const { useImageModels } = require('../../../../src/screens/ModelsScreen/useImageModels');
+  const { useDownloadStore } = require('../../../../src/stores/downloadStore');
+  const { useAppStore } = require('../../../../src/stores');
+  const alerts: Array<{ title: string }> = [];
+  const view = rtl.renderHook(() => useImageModels((s: { title: string }) => { alerts.push(s); }));
+  return { boundary, rtl, result: view.result, services, useDownloadStore, useAppStore, alerts };
+}
 
-  appState = {
-    downloadedImageModels: [],
-    setDownloadedImageModels: mockSetDownloadedImageModels,
-    addDownloadedImageModel,
-    activeImageModelId: null,
-    setActiveImageModelId,
-    onboardingChecklist: { triedImageGen: true },
-  };
-  mockUseAppStore.mockImplementation((selector?: any) =>
-    selector ? selector(appState) : appState,
-  );
+type Mounted = Awaited<ReturnType<typeof mount>>;
 
-  setDownloads({});
-});
+async function settleRecommendation(m: Mounted) {
+  await m.rtl.waitFor(() => expect(m.result.current.imageRec).not.toBeNull());
+}
+
+async function loadCatalog(m: Mounted, forceRefresh?: boolean) {
+  await m.rtl.act(async () => { await m.result.current.loadHFModels(forceRefresh); });
+}
+
+/** The fetched engine packs (the sd.cpp catalog entries are listed beside them on every phone). */
+const packIds = (models: Array<{ id: string; backend: string }>) =>
+  models.filter(model => model.backend !== 'sd').map(model => model.id);
+
+const byId = (m: Mounted, id: string) => m.result.current.availableHFModels.find((model: { id: string }) => model.id === id)!;
+
+/** Hold the SoC read (react-native-device-info getHardware) so the recommendation stays pending. */
+function holdSoCRead() {
+  let release!: (hardware: string) => void;
+  const DeviceInfo = require('react-native-device-info');
+  DeviceInfo.getHardware.mockReturnValue(new Promise<string>(resolve => { release = resolve; }));
+  return (hardware: string) => release(hardware);
+}
 
 // ── loadHFModels ──────────────────────────────────────────────────────
 
 describe('loadHFModels', () => {
-  it('fetches CoreML models and maps them on iOS', async () => {
-    (Platform as any).OS = 'ios';
-    mockFetchAvailableCoreMLModels.mockResolvedValueOnce([
-      {
-        id: 'cm-1', name: 'CM', displayName: 'CoreML Model', fileName: 'a.mlmodelc',
-        downloadUrl: 'http://x', size: 100, repo: 'org/repo',
-        files: ['f1'], attentionVariant: 'split',
-      },
-    ]);
+  it('lists the Core ML packs on iOS: zips by attention variant, and a multi-file pack with its files', async () => {
+    const m = await mount({ ram: IPHONE, catalog: IOS_CATALOG });
+    await loadCatalog(m);
 
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await act(async () => { await result.current.loadHFModels(); });
-
-    expect(mockFetchAvailableCoreMLModels).toHaveBeenCalledWith(false);
-    expect(result.current.availableHFModels[0]).toMatchObject({
-      id: 'cm-1', backend: 'coreml', _coreml: true,
-      _coremlFiles: ['f1'], _coremlAttentionVariant: 'split',
+    expect(byId(m, 'coreml_apple_coreml-stable-diffusion-v1-5-palettized')).toMatchObject({
+      backend: 'coreml', _coreml: true, _coremlAttentionVariant: 'split_einsum', repo: PALETTIZED,
+      fileName: 'coreml-stable-diffusion-v1-5-palettized_split_einsum_v2_compiled.zip',
     });
-    expect(result.current.hfModelsLoading).toBe(false);
+    expect(byId(m, 'coreml_apple_coreml-stable-diffusion-v1-5-palettized_original')).toMatchObject({
+      backend: 'coreml', _coremlAttentionVariant: 'original',
+    });
+    const full = byId(m, 'coreml_apple_coreml-stable-diffusion-v1-5');
+    expect(full).toMatchObject({ backend: 'coreml', _coreml: true, size: 2 * GB + 500 });
+    expect(full._coremlFiles.map((f: { relativePath: string }) => f.relativePath))
+      .toEqual(['merges.txt', 'Unet.mlmodelc/weights.bin']);
+    // iOS never asks for the Android packs.
+    expect(server!.requests.some(url => url.includes('xororz/'))).toBe(false);
+    expect(m.result.current.hfModelsLoading).toBe(false);
+    expect(m.result.current.hfModelsError).toBeNull();
   });
 
-  it('fetches HF models on Android passing skipQnn from SoC NPU flag', async () => {
-    mockGetSoCInfo.mockResolvedValueOnce({ hasNPU: false });
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await act(async () => { await result.current.loadHFModels(true); });
+  it('leaves the NPU packs out on an Android phone without an NPU', async () => {
+    const m = await mount({ catalog: ANDROID_CATALOG });
+    await loadCatalog(m, true);
 
-    expect(mockFetchAvailableModels).toHaveBeenCalledWith(true, { skipQnn: true });
-    expect(result.current.hfModelsError).toBeNull();
+    expect(packIds(m.result.current.availableHFModels).sort()).toEqual([MNN_ABSOLUTE, MNN_ANYTHING]);
+    expect(server!.requests.some(url => url.includes('xororz/sd-qnn'))).toBe(false);
+    expect(m.result.current.hfModelsError).toBeNull();
+  });
+
+  it('lists the NPU packs on a Snapdragon with an NPU', async () => {
+    const m = await mount({ ...SNAPDRAGON_8_GEN_3, catalog: ANDROID_CATALOG });
+    await loadCatalog(m);
+
+    expect(packIds(m.result.current.availableHFModels).sort())
+      .toEqual([MNN_ABSOLUTE, MNN_ANYTHING, QNN_8GEN2, QNN_MIN]);
+  });
+
+  it('keeps the fetched list until a forced refresh asks Hugging Face again', async () => {
+    const m = await mount({ catalog: ANDROID_CATALOG });
+    await loadCatalog(m);
+    server!.serve({ mnn: [lfsFile('ChilloutMix.zip', GB)] });
+
+    await loadCatalog(m);
+    expect(packIds(m.result.current.availableHFModels)).not.toContain('chilloutmix_cpu');
+
+    await loadCatalog(m, true);
+    expect(packIds(m.result.current.availableHFModels)).toEqual(['chilloutmix_cpu']);
   });
 
   it('lists the SD catalog ahead of the fetched packs', async () => {
-    mockSDImageModels = [{ id: 'sd-1', name: 'SD', backend: 'sd' }];
-    mockGetSoCInfo.mockResolvedValueOnce({ hasNPU: true });
-    mockFetchAvailableModels.mockResolvedValueOnce([{ id: 'mnn-1', name: 'MNN', backend: 'mnn' }]);
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await act(async () => { await result.current.loadHFModels(); });
-    mockSDImageModels = [];
+    const m = await mount({ catalog: ANDROID_CATALOG });
+    await loadCatalog(m);
 
-    expect(result.current.availableHFModels.map((m: any) => m.id)).toEqual(['sd-1', 'mnn-1']);
+    const backends = m.result.current.availableHFModels.map((model: { backend: string }) => model.backend);
+    const firstPack = backends.findIndex((backend: string) => backend !== 'sd');
+    expect(backends.slice(0, firstPack).length).toBeGreaterThan(0);
+    expect(backends.slice(0, firstPack).every((backend: string) => backend === 'sd')).toBe(true);
+    expect(backends.slice(firstPack).every((backend: string) => backend !== 'sd')).toBe(true);
   });
 
-  it('captures error.message into hfModelsError', async () => {
-    mockGetSoCInfo.mockRejectedValueOnce(new Error('soc failed'));
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await act(async () => { await result.current.loadHFModels(); });
-    expect(result.current.hfModelsError).toBe('soc failed');
+  it('shows the failure Hugging Face gave', async () => {
+    const m = await mount({ catalog: { status: 500 } });
+    await loadCatalog(m);
+    expect(m.result.current.hfModelsError).toBe('Failed to fetch xororz/sd-mnn: HTTP 500');
+    expect(m.result.current.hfModelsLoading).toBe(false);
   });
 
-  it('falls back to default error string when error has no message', async () => {
-    mockGetSoCInfo.mockRejectedValueOnce({});
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await act(async () => { await result.current.loadHFModels(); });
-    expect(result.current.hfModelsError).toBe('Failed to fetch models');
+  it('falls back to a plain message when the failure has no text', async () => {
+    const m = await mount({ catalog: { transportError: new TypeError('') } });
+    await loadCatalog(m);
+    expect(m.result.current.hfModelsError).toBe('Failed to fetch models');
   });
 });
 
 // ── hardware recommendation effect ────────────────────────────────────
 
-describe('recommendation effect → backendFilter', () => {
-  it('sets backendFilter to qnn when recommendedBackend is qnn', async () => {
-    mockGetImageModelRecommendation.mockResolvedValue({ recommendedBackend: 'qnn', bannerText: 'b' });
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await waitFor(() => expect(result.current.backendFilter).toBe('qnn'));
+describe('recommendation → backendFilter', () => {
+  it('picks the NPU (qnn) filter on a Snapdragon with an NPU', async () => {
+    const m = await mount(SNAPDRAGON_8_GEN_3);
+    await m.rtl.waitFor(() => expect(m.result.current.backendFilter).toBe('qnn'));
   });
 
-  it('sets backendFilter to mnn when recommendedBackend is mnn', async () => {
-    mockGetImageModelRecommendation.mockResolvedValue({ recommendedBackend: 'mnn', bannerText: 'b' });
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await waitFor(() => expect(result.current.backendFilter).toBe('mnn'));
+  it('picks the GPU (mnn) filter on a phone without an NPU', async () => {
+    const m = await mount();
+    await m.rtl.waitFor(() => expect(m.result.current.backendFilter).toBe('mnn'));
   });
 
-  it('leaves backendFilter at all when recommendedBackend is neither qnn nor mnn', async () => {
-    mockGetImageModelRecommendation.mockResolvedValue({ recommendedBackend: 'all', bannerText: 'b' });
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await waitFor(() => expect(result.current.imageRec).not.toBeNull());
-    expect(result.current.backendFilter).toBe('all');
+  it('does not pick a backend filter on iOS', async () => {
+    const m = await mount({ ram: IPHONE });
+    await settleRecommendation(m);
+    expect(m.result.current.imageRec.recommendedBackend).toBe('coreml');
+    expect(m.result.current.backendFilter).toBe('all');
   });
 
-  it('does not auto-set backendFilter on iOS', async () => {
-    (Platform as any).OS = 'ios';
-    mockGetImageModelRecommendation.mockResolvedValue({ recommendedBackend: 'qnn', bannerText: 'b' });
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await waitFor(() => expect(result.current.imageRec).not.toBeNull());
-    expect(result.current.backendFilter).toBe('all');
-  });
+  it('shows a loading banner until the phone is read, then the recommendation', async () => {
+    let release!: (hardware: string) => void;
+    const m = await mount({ before: () => { release = holdSoCRead(); } });
+    expect(m.result.current.imageRecommendation).toBe('Loading recommendation...');
 
-  it('updates imageRecommendation banner text from rec, with loading fallback before resolve', async () => {
-    let resolveRec!: (v: any) => void;
-    mockGetImageModelRecommendation.mockReturnValue(new Promise(r => { resolveRec = r; }));
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    expect(result.current.imageRecommendation).toBe('Loading recommendation...');
-    await act(async () => { resolveRec({ recommendedBackend: 'all', bannerText: 'Recommended X' }); });
-    await waitFor(() => expect(result.current.imageRecommendation).toBe('Recommended X'));
+    await m.rtl.act(async () => { release('unknown'); });
+    await m.rtl.waitFor(() =>
+      expect(m.result.current.imageRecommendation).toBe('GPU models recommended — NPU requires Snapdragon 888+'));
   });
 });
 
 // ── isRecommendedModel ────────────────────────────────────────────────
 
 describe('isRecommendedModel', () => {
-  function hookWithRec(rec: any) {
-    mockGetImageModelRecommendation.mockResolvedValue(rec);
-    return renderHook(() => useImageModels(setAlertState));
-  }
-
-  it('returns false when there is no recommendation yet', () => {
-    // synchronous read before the async rec resolves
-    mockGetImageModelRecommendation.mockReturnValue(new Promise(() => {}));
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    expect(result.current.isRecommendedModel({ backend: 'qnn' } as any)).toBe(false);
+  it('recommends nothing before the phone is read', async () => {
+    const m = await mount({ before: () => { holdSoCRead(); } });
+    const pack = { id: MNN_ANYTHING, name: 'AnythingV5', displayName: 'Anything V5 (GPU)', backend: 'mnn', repo: 'xororz/sd-mnn' };
+    expect(m.result.current.isRecommendedModel(pack)).toBe(false);
   });
 
-  it('returns false when backend differs and rec is not "all"', async () => {
-    const { result } = hookWithRec({ recommendedBackend: 'qnn', bannerText: 'b' });
-    await waitFor(() => expect(result.current.imageRec).not.toBeNull());
-    expect(result.current.isRecommendedModel({ backend: 'mnn', name: 'x', repo: 'r', id: 'i' } as any)).toBe(false);
+  it('on a QNN phone: a GPU pack is not recommended, and only the NPU pack for this chip is', async () => {
+    const m = await mount({ ...SNAPDRAGON_8_GEN_3, catalog: ANDROID_CATALOG });
+    await settleRecommendation(m);
+    await loadCatalog(m);
+
+    expect(m.result.current.isRecommendedModel(byId(m, MNN_ANYTHING))).toBe(false);
+    expect(m.result.current.isRecommendedModel(byId(m, QNN_8GEN2))).toBe(true);
+    expect(m.result.current.isRecommendedModel(byId(m, QNN_MIN))).toBe(false);
   });
 
-  it('matches on qnnVariant when present in the model variant', async () => {
-    const { result } = hookWithRec({ recommendedBackend: 'qnn', qnnVariant: 'v2', bannerText: 'b' });
-    await waitFor(() => expect(result.current.imageRec).not.toBeNull());
-    expect(result.current.isRecommendedModel({ backend: 'qnn', variant: 'model-v2-fast' } as any)).toBe(true);
-    expect(result.current.isRecommendedModel({ backend: 'qnn', variant: 'model-v1' } as any)).toBe(false);
+  it('on iOS: recommends the Core ML packs the recommendation names', async () => {
+    const m = await mount({ ram: IPHONE, catalog: IOS_CATALOG });
+    await settleRecommendation(m);
+    await loadCatalog(m);
+
+    expect(m.result.current.isRecommendedModel(byId(m, 'coreml_apple_coreml-stable-diffusion-v1-5-palettized'))).toBe(true);
+    expect(m.result.current.isRecommendedModel(byId(m, 'coreml_apple_coreml-stable-diffusion-v1-5'))).toBe(false);
   });
 
-  it('matches against recommendedModels list by name/repo/id substrings', async () => {
-    const { result } = hookWithRec({ recommendedBackend: 'all', recommendedModels: ['turbo'], bannerText: 'b' });
-    await waitFor(() => expect(result.current.imageRec).not.toBeNull());
-    expect(result.current.isRecommendedModel({ backend: 'mnn', name: 'SD Turbo', repo: 'org/x', id: 'id1' } as any)).toBe(true);
-    expect(result.current.isRecommendedModel({ backend: 'mnn', name: 'Plain', repo: 'org/y', id: 'id2' } as any)).toBe(false);
-  });
+  it('on a GPU phone: recommends every GPU pack', async () => {
+    const m = await mount({ catalog: ANDROID_CATALOG });
+    await settleRecommendation(m);
+    await loadCatalog(m);
 
-  it('returns true by default when rec matches and no qnnVariant/recommendedModels', async () => {
-    const { result } = hookWithRec({ recommendedBackend: 'all', bannerText: 'b' });
-    await waitFor(() => expect(result.current.imageRec).not.toBeNull());
-    expect(result.current.isRecommendedModel({ backend: 'mnn', name: 'x', repo: 'r', id: 'i' } as any)).toBe(true);
+    expect(m.result.current.isRecommendedModel(byId(m, MNN_ANYTHING))).toBe(true);
+    expect(m.result.current.isRecommendedModel(byId(m, MNN_ABSOLUTE))).toBe(true);
   });
 });
 
 // ── filteredHFModels ──────────────────────────────────────────────────
 
 describe('filteredHFModels', () => {
-  const models = [
-    { id: 'a', name: 'Alpha', displayName: 'Alpha SD', backend: 'mnn', repo: 'org/a' },
-    { id: 'b', name: 'Beta', displayName: 'Beta SD', backend: 'qnn', repo: 'org/b' },
-  ];
+  it('shows only the recommended packs while recommended-only is on', async () => {
+    const m = await mount({ ...SNAPDRAGON_8_GEN_3, catalog: ANDROID_CATALOG });
+    await settleRecommendation(m);
+    await loadCatalog(m);
 
-  async function seed(result: any) {
-    mockFetchAvailableModels.mockResolvedValue(models);
-    await act(async () => { await result.current.loadHFModels(); });
-  }
-
-  it('hides non-recommended models when showRecommendedOnly is on', async () => {
-    mockGetImageModelRecommendation.mockResolvedValue({ recommendedBackend: 'qnn', bannerText: 'b' });
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await waitFor(() => expect(result.current.imageRec).not.toBeNull());
-    await seed(result);
-    // only the qnn model is recommended
-    await waitFor(() => {
-      expect(result.current.filteredHFModels.map((m: any) => m.id)).toEqual(['b']);
-    });
+    await m.rtl.waitFor(() => expect(packIds(m.result.current.filteredHFModels)).toEqual([QNN_8GEN2]));
   });
 
-  it('a downloaded image model stays on the Image tab; backend and query filters still apply', async () => {
-    appState.downloadedImageModels = [{ id: 'a' }];
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await seed(result);
-    act(() => { result.current.setShowRecommendedOnly(false); });
-    // 'a' is downloaded and stays listed (the card marks it downloaded), sorted by name
-    await waitFor(() => {
-      expect(result.current.filteredHFModels.map((m: any) => m.id)).toEqual(['a', 'b']);
+  it('a downloaded image model stays on the Image tab; backend and search filters still apply', async () => {
+    const m = await mount({
+      catalog: ANDROID_CATALOG,
+      before: async ({ boundary, services }) => {
+        const modelDir = `${services.modelManager.getImageModelsDirectory()}/${MNN_ANYTHING}`;
+        for (const name of SD_MNN_PACKAGE_FILES) boundary.fs!.seedFile(`${modelDir}/${name}`, 1024);
+        await services.modelManager.addDownloadedImageModel({
+          id: MNN_ANYTHING, name: 'AnythingV5', description: 'GPU', modelPath: modelDir,
+          downloadedAt: new Date().toISOString(), size: 1.2 * GB, backend: 'mnn',
+        });
+      },
     });
-    // the backend filter, not the downloaded state, is what removes 'a' (mnn) here
-    act(() => { result.current.setBackendFilter('qnn'); });
-    await waitFor(() => {
-      expect(result.current.filteredHFModels.map((m: any) => m.id)).toEqual(['b']);
+    await settleRecommendation(m);
+    await m.rtl.waitFor(() =>
+      expect(m.result.current.downloadedImageModels.map((model: { id: string }) => model.id)).toEqual([MNN_ANYTHING]));
+    await loadCatalog(m);
+
+    m.rtl.act(() => {
+      m.result.current.setShowRecommendedOnly(false);
+      m.result.current.setBackendFilter('all');
     });
-    // query that matches nothing
-    act(() => { result.current.setImageSearchQuery('zzz'); });
-    await waitFor(() => expect(result.current.filteredHFModels).toHaveLength(0));
+    // The downloaded pack stays listed (its card marks it downloaded); the list is sorted by name.
+    expect(packIds(m.result.current.filteredHFModels)).toEqual([MNN_ABSOLUTE, MNN_ANYTHING]);
+
+    // The backend filter, not the downloaded state, is what removes a pack.
+    m.rtl.act(() => { m.result.current.setBackendFilter('qnn'); });
+    expect(packIds(m.result.current.filteredHFModels)).toEqual([]);
+    m.rtl.act(() => { m.result.current.setBackendFilter('mnn'); });
+    expect(packIds(m.result.current.filteredHFModels)).toEqual([MNN_ABSOLUTE, MNN_ANYTHING]);
+
+    // A search that names nothing empties the list.
+    m.rtl.act(() => { m.result.current.setImageSearchQuery('zzz'); });
+    await m.rtl.waitFor(() => expect(m.result.current.hfModelsLoading).toBe(false));
+    expect(m.result.current.filteredHFModels).toHaveLength(0);
   });
 
-  it('filters out by style and sd version', async () => {
-    mockGuessStyle.mockReturnValue('anime');
-    mockMatchesSdVersionFilter.mockReturnValue(false);
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await seed(result);
-    act(() => { result.current.setShowRecommendedOnly(false); });
-    act(() => { result.current.setStyleFilter('realistic'); });
-    await waitFor(() => expect(result.current.filteredHFModels).toHaveLength(0));
+  it('filters by style and by SD version', async () => {
+    const m = await mount({ catalog: ANDROID_CATALOG });
+    await settleRecommendation(m);
+    await loadCatalog(m);
+    m.rtl.act(() => { m.result.current.setShowRecommendedOnly(false); });
+
+    m.rtl.act(() => { m.result.current.setStyleFilter('photorealistic'); });
+    expect(packIds(m.result.current.filteredHFModels)).toEqual([MNN_ABSOLUTE]);
+    m.rtl.act(() => { m.result.current.setStyleFilter('anime'); });
+    expect(packIds(m.result.current.filteredHFModels)).toEqual([MNN_ANYTHING]);
+
+    m.rtl.act(() => {
+      m.result.current.setStyleFilter('all');
+      m.result.current.setSdVersionFilter('sdxl');
+    });
+    expect(packIds(m.result.current.filteredHFModels)).toEqual([]);
   });
 });
 
 // ── handleCancelImageDownload ─────────────────────────────────────────
 
 describe('handleCancelImageDownload', () => {
-  it('returns early when there is no store entry', async () => {
-    setDownloads({});
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await act(async () => { await result.current.handleCancelImageDownload('m1'); });
-    expect(mockStoreRemove).not.toHaveBeenCalled();
-    expect(mockCancelDownload).not.toHaveBeenCalled();
-  });
-
-  it('removes entry but skips native cancel when entry has no downloadId', async () => {
-    setDownloads({ 'image:m1': { downloadId: '', modelKey: 'image:m1' } });
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await act(async () => { await result.current.handleCancelImageDownload('m1'); });
-    expect(mockStoreRemove).toHaveBeenCalledWith('image:m1');
-    expect(mockCancelDownload).not.toHaveBeenCalled();
-    expect(mockCancelSynthetic).not.toHaveBeenCalled();
-  });
-
-  it('cancels synthetic multi-file downloads without calling native cancel', async () => {
-    setDownloads({ 'image:m1': { downloadId: 'image-multi:m1', modelKey: 'image:m1' } });
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await act(async () => { await result.current.handleCancelImageDownload('m1'); });
-    expect(mockCancelSynthetic).toHaveBeenCalledWith('m1');
-    expect(mockCancelDownload).not.toHaveBeenCalled();
-  });
-
-  it('calls native cancelDownload for a normal downloadId', async () => {
-    setDownloads({ 'image:m1': { downloadId: 'native-7', modelKey: 'image:m1' } });
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await act(async () => { await result.current.handleCancelImageDownload('m1'); });
-    expect(mockCancelDownload).toHaveBeenCalledWith('native-7');
-  });
-
-  it('swallows native cancel rejection', async () => {
-    mockCancelDownload.mockRejectedValueOnce(new Error('boom'));
-    setDownloads({ 'image:m1': { downloadId: 'native-7', modelKey: 'image:m1' } });
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await act(async () => {
-      await expect(result.current.handleCancelImageDownload('m1')).resolves.toBeUndefined();
+  function seedEntry(m: Mounted, downloadId: string) {
+    m.rtl.act(() => {
+      m.useDownloadStore.getState().add({
+        modelKey: 'image:m1', downloadId, modelId: 'image:m1', fileName: 'm1.zip', quantization: '',
+        modelType: 'image', status: 'running', bytesDownloaded: 10, totalBytes: 100,
+        combinedTotalBytes: 100, progress: 0.1, createdAt: Date.now(),
+      });
     });
+  }
+
+  it('does nothing when there is no download for the model', async () => {
+    const m = await mount();
+    m.boundary.download!.seedActive({ downloadId: 'native-7', modelId: 'image:other' });
+    await m.rtl.act(async () => { await m.result.current.handleCancelImageDownload('m1'); });
+    expect(m.useDownloadStore.getState().downloads).toEqual({});
+    expect(m.boundary.download!.active().map(row => row.downloadId)).toEqual(['native-7']);
+  });
+
+  it('removes a download that has no native id yet, without touching native downloads', async () => {
+    const m = await mount();
+    m.boundary.download!.seedActive({ downloadId: 'native-7', modelId: 'image:other' });
+    seedEntry(m, '');
+    await m.rtl.act(async () => { await m.result.current.handleCancelImageDownload('m1'); });
+    expect(m.useDownloadStore.getState().downloads['image:m1']).toBeUndefined();
+    expect(m.boundary.download!.active().map(row => row.downloadId)).toEqual(['native-7']);
+  });
+
+  it('removes a synthetic multi-file download; no native download carries that id', async () => {
+    const m = await mount();
+    m.boundary.download!.seedActive({ downloadId: 'native-7', modelId: 'image:other' });
+    seedEntry(m, 'image-multi:m1');
+    await m.rtl.act(async () => { await m.result.current.handleCancelImageDownload('m1'); });
+    expect(m.useDownloadStore.getState().downloads['image:m1']).toBeUndefined();
+    expect(m.boundary.download!.active().map(row => row.downloadId)).toEqual(['native-7']);
+  });
+
+  it('cancels the native download for a normal download id', async () => {
+    const m = await mount();
+    m.boundary.download!.seedActive({ downloadId: 'native-7', modelId: 'image:m1' });
+    seedEntry(m, 'native-7');
+    await m.rtl.act(async () => { await m.result.current.handleCancelImageDownload('m1'); });
+    expect(m.useDownloadStore.getState().downloads['image:m1']).toBeUndefined();
+    expect(m.boundary.download!.active()).toEqual([]);
+  });
+
+  it('still removes the download when the native cancel fails', async () => {
+    const m = await mount();
+    m.boundary.download!.module.cancelDownload.mockRejectedValueOnce(new Error('boom'));
+    seedEntry(m, 'native-7');
+    await m.rtl.act(async () => {
+      await expect(m.result.current.handleCancelImageDownload('m1')).resolves.toBeUndefined();
+    });
+    expect(m.useDownloadStore.getState().downloads['image:m1']).toBeUndefined();
   });
 });
 
 // ── loadDownloadedImageModels + clearImageFilters ─────────────────────
 
 describe('loadDownloadedImageModels / clearImageFilters', () => {
-  it('loads downloaded image models into the store', async () => {
-    mockGetDownloadedImageModels.mockResolvedValue([{ id: 'x' }]);
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    await act(async () => { await result.current.loadDownloadedImageModels(); });
-    expect(mockSetDownloadedImageModels).toHaveBeenCalledWith([{ id: 'x' }]);
+  it('reloads the downloaded image models into the app store', async () => {
+    const m = await mount();
+    await settleRecommendation(m);
+    expect(m.result.current.downloadedImageModels).toEqual([]);
+
+    const modelDir = `${m.services.modelManager.getImageModelsDirectory()}/x`;
+    for (const name of SD_MNN_PACKAGE_FILES) m.boundary.fs!.seedFile(`${modelDir}/${name}`, 1024);
+    await m.services.modelManager.addDownloadedImageModel({
+      id: 'x', name: 'X', description: 'GPU', modelPath: modelDir,
+      downloadedAt: new Date().toISOString(), size: GB, backend: 'mnn',
+    });
+    await m.rtl.act(async () => { await m.result.current.loadDownloadedImageModels(); });
+
+    expect(m.useAppStore.getState().downloadedImageModels.map((model: { id: string }) => model.id)).toEqual(['x']);
+    expect(m.result.current.downloadedImageModels.map((model: { id: string }) => model.id)).toEqual(['x']);
   });
 
-  it('clearImageFilters resets all filters and marks backend user-changed', async () => {
-    const { result } = renderHook(() => useImageModels(setAlertState));
-    act(() => { result.current.setBackendFilter('qnn'); });
-    act(() => { result.current.clearImageFilters(); });
-    expect(result.current.backendFilter).toBe('all');
-    expect(result.current.styleFilter).toBe('all');
-    expect(result.current.sdVersionFilter).toBe('all');
-    expect(result.current.hasActiveImageFilters).toBe(false);
+  it('clearImageFilters resets every filter and keeps the recommendation from picking one again', async () => {
+    const m = await mount();
+    m.rtl.act(() => {
+      m.result.current.setBackendFilter('qnn');
+      m.result.current.setStyleFilter('anime');
+      m.result.current.setSdVersionFilter('sd15');
+    });
+    expect(m.result.current.hasActiveImageFilters).toBe(true);
+    m.rtl.act(() => { m.result.current.clearImageFilters(); });
+    // The recommendation resolves after the clear and would pick 'mnn'; the person's clear wins.
+    await settleRecommendation(m);
+    expect(m.result.current.backendFilter).toBe('all');
+    expect(m.result.current.styleFilter).toBe('all');
+    expect(m.result.current.sdVersionFilter).toBe('all');
+    expect(m.result.current.hasActiveImageFilters).toBe(false);
   });
 });
