@@ -13,15 +13,13 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => ({ params: undefined }),
-  useIsFocused: () => true, useFocusEffect: () => {},
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 import { RemoteServersScreen } from '../../../src/screens/RemoteServersScreen';
 import { RemoteServerEditorScreen } from '../../../src/screens/RemoteServerEditorScreen';
 import { useRemoteServerStore } from '../../../src/stores';
+import { withNavigator } from '../../harness/realNavigation';
 
 describe('T046 (rendered) — add a remote server → it connects (connected state renders)', () => {
   beforeEach(() => {
@@ -37,7 +35,7 @@ describe('T046 (rendered) — add a remote server → it connects (connected sta
   });
 
   it('shows the server as Connected after adding it via the modal', async () => {
-    const ui = render(<RemoteServerEditorScreen />);
+    const ui = render(withNavigator(<RemoteServerEditorScreen />));
 
     // Fill the real modal inputs (targeted by their placeholders).
     fireEvent.changeText(await waitFor(() => ui.getByPlaceholderText('Off Grid AI Desktop')), 'My LM Studio');
@@ -54,7 +52,7 @@ describe('T046 (rendered) — add a remote server → it connects (connected sta
     // Back on the screen: the server row appears and its status shows Connected (real addServer + testConnection).
     await waitFor(() => { expect(useRemoteServerStore.getState().servers).toHaveLength(1); }, { timeout: 4000 });
     ui.unmount();
-    const list = render(<RemoteServersScreen />);
+    const list = render(withNavigator(<RemoteServersScreen />));
     await waitFor(() => { expect(list.queryByText('My LM Studio')).not.toBeNull(); }, { timeout: 4000 });
     await waitFor(() => { expect(list.queryByText('Connected')).not.toBeNull(); }, { timeout: 4000 });
   });

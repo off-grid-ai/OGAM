@@ -27,14 +27,12 @@
  * fakes ONLY at the native RAM-sensor boundary (installNativeBoundary). NEVER mocks our own code.
  */
 import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
+import { withNavigator } from '../../harness/realNavigation';
 
 // @react-navigation/native is OUTSIDE our system (an npm lib) — the only thing faked besides the device
 // boundary. The screen only uses navigation.replace (Skip / connected), never during this flow.
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {}, replace: () => {} }),
-  useRoute: () => ({ params: {} }),
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 describe('Curated LiteRT onboarding — an over-budget model that HAS a warning is offered (warning-guarded)', () => {
   it('offers the over-budget E4B card and surfaces its memory warning, while the over-budget no-warning E2B stays hidden (4GB Android)', async () => {
@@ -52,7 +50,7 @@ describe('Curated LiteRT onboarding — an over-budget model that HAS a warning 
     await hardwareService.getDeviceInfo();
 
     const nav: any = { navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {}, replace: () => {} };
-    const view = rtl.render(React.createElement(AdvancedSetupScreen, { navigation: nav }));
+    const view = rtl.render(withNavigator(React.createElement(AdvancedSetupScreen, { navigation: nav })));
 
     // Wait for the async init effect to settle (loading → loaded).
     await rtl.waitFor(() => { expect(view.getByText('Advanced Setup')).toBeTruthy(); }, { timeout: 10000 });

@@ -1,9 +1,9 @@
 import { installNativeBoundary, requireRTL, MB } from '../../harness/nativeBoundary';
 import { createDownloadedModel } from '../../utils/factories';
+import { withNavigator } from '../../harness/realNavigation';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ goBack: () => {} }),
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 describe('vision repair controls in Download Manager', () => {
   it('pauses, resumes, and offers to cancel a projector repair without deleting the model', async () => {
@@ -50,7 +50,7 @@ describe('vision repair controls in Download Manager', () => {
     });
     useDownloadStore.getState().setRepairingVision(model.id, true);
 
-    const screen = render(React.createElement(DownloadManagerScreen));
+    const screen = render(withNavigator(React.createElement(DownloadManagerScreen)));
     fireEvent.press(await waitFor(() => screen.getByLabelText('Pause download')));
     fireEvent.press(await waitFor(() => screen.getByLabelText('Resume download')));
     fireEvent.press(await waitFor(() => screen.getByLabelText('Cancel download')));

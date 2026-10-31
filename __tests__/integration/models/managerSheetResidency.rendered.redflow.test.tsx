@@ -14,12 +14,10 @@
  */
 import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
 import { createDownloadedModel } from '../../utils/factories';
+import { withNavigator } from '../../harness/realNavigation';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => ({ params: {} }),
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 /** Invoke the onPress bound at/above a testID host (AnimatedPressable's onPress lives on the composite). */
 function pressByWalkingUp(node: unknown): void {
@@ -57,11 +55,11 @@ async function setupHome() {
   useAppStore.setState({ checklistDismissed: true });
 
   const nav = { navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} };
-  const view = rtl.render(React.createElement(
+  const view = rtl.render(withNavigator(React.createElement(
     React.Fragment, null,
     React.createElement(ResidentsProbe, {}),
     React.createElement(HomeScreen, { navigation: nav }),
-  ));
+  )));
   await rtl.waitFor(() => { expect(useAppStore.getState().downloadedModels.length).toBeGreaterThan(0); }, { timeout: 10000 });
 
   // GESTURE: select the text model the way a user does — open the picker, tap the row.
@@ -124,10 +122,10 @@ describe('manager sheet residency — RAM chip + per-row eject (agreed design 20
     // sibling memory suite does — with a resident live, the section rendered here on HEAD).
      
     const { ModelSelectorModal } = require('../../../src/components/ModelSelectorModal');
-    const picker = rtl.render(React.createElement(ModelSelectorModal, {
+    const picker = rtl.render(withNavigator(React.createElement(ModelSelectorModal, {
       visible: true, onClose: () => {}, onSelectModel: () => {}, onUnloadModel: () => {}, isLoading: false,
       currentModelPath: null,
-    }));
+    })));
     await rtl.waitFor(() => { expect(picker.queryByText('TEXT MODEL')).not.toBeNull(); }, { timeout: 10000 });
     await new Promise((r) => setTimeout(r, 400)); // one poll tick of the section, so absence is real
 

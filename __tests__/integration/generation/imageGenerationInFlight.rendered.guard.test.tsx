@@ -21,16 +21,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('while an image is generating', () => {
   it('STOP reaches the native generator and clears the card', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' });
     await h.generateImageViaUI({ prompt: 'a fox in the snow', hold: true });
 
     expect(h.boundary.diffusion.cancelCount()).toBe(0);
@@ -48,7 +44,7 @@ describe('while an image is generating', () => {
   });
 
   it('shows the progress the native side reports, not a frozen card', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' });
     await h.generateImageViaUI({ prompt: 'a fox in the snow', hold: true });
 
     // The native progress event, on the channel localDreamGenerator really listens to.
@@ -76,7 +72,7 @@ describe('while an image is generating', () => {
   });
 
   it('keeps unrelated chat controls responsive through a burst of progress updates', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' });
     const {
       ImageQualityBasicSliders,
     } = require('../../../src/components/GenerationSettingsModal/ImageQualitySliders');
@@ -121,7 +117,7 @@ describe('while an image is generating', () => {
   });
 
   it('does not start a second diffusion when the user sends again mid-generation', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' });
     await h.generateImageViaUI({ prompt: 'a fox in the snow', hold: true });
 
     await h.tapSend('and a badger');

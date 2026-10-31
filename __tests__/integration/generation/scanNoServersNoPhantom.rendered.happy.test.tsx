@@ -18,13 +18,12 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useIsFocused: () => true, useFocusEffect: () => {},
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 import { RemoteServersScreen } from '../../../src/screens/RemoteServersScreen';
 import { useRemoteServerStore } from '../../../src/stores';
+import { withNavigator } from '../../harness/realNavigation';
 
 describe('T047 (rendered) — empty LAN scan shows the alert AND adds no phantom server (DEV-B8)', () => {
   beforeEach(() => {
@@ -38,7 +37,7 @@ describe('T047 (rendered) — empty LAN scan shows the alert AND adds no phantom
     const DeviceInfo = require('react-native-device-info');
     DeviceInfo.isEmulator = jest.fn(async () => true);
 
-    const ui = render(<RemoteServersScreen />);
+    const ui = render(withNavigator(<RemoteServersScreen />));
     // Precondition: the empty state is showing (no servers yet).
     expect(ui.queryByText('No servers yet')).not.toBeNull();
 

@@ -1,9 +1,9 @@
 import { installNativeBoundary, requireRTL, MB } from '../../harness/nativeBoundary';
 import { createDownloadedModel } from '../../utils/factories';
+import { withNavigator } from '../../harness/realNavigation';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ goBack: () => {} }),
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 describe('Download Manager model capabilities', () => {
   it('shows vision, tool calling, and thinking for downloaded and downloading GGUFs', async () => {
@@ -40,7 +40,7 @@ describe('Download Manager model capabilities', () => {
       createdAt: Date.now(),
     });
 
-    const screen = render(React.createElement(DownloadManagerScreen));
+    const screen = render(withNavigator(React.createElement(DownloadManagerScreen)));
     await waitFor(() => {
       expect(screen.getAllByLabelText('Vision')).toHaveLength(2);
       expect(screen.getAllByLabelText('Tool calling likely')).toHaveLength(2);

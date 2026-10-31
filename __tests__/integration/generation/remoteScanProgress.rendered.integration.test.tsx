@@ -2,12 +2,10 @@ import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { RemoteServersScreen } from '../../../src/screens/RemoteServersScreen';
 import { remoteServerManager } from '../../../src/services/remoteServerManager';
+import { withNavigator } from '../../harness/realNavigation';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {} }),
-  useIsFocused: () => true,
-  useFocusEffect: () => {},
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 jest.mock('react-native-device-info', () => ({
   isEmulator: async () => false,
   getIpAddress: async () => '192.168.1.42',
@@ -40,7 +38,7 @@ describe('remote server scan progress', () => {
       return { status: 404, ok: false } as Response;
     }) as typeof fetch;
 
-    const view = render(<RemoteServersScreen />);
+    const view = render(withNavigator(<RemoteServersScreen />));
     fireEvent(view.getByTestId('scan-kind-ollama'), 'valueChange', false);
     fireEvent(view.getByTestId('scan-kind-lmstudio'), 'valueChange', false);
     fireEvent.press(view.getByTestId('scan-network'));
