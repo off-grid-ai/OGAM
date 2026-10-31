@@ -2,11 +2,12 @@
  * The Improve screen, as the person meets it from another app's selection.
  *
  * SPEC: with no text model, Improve says rewrites need one; when I come back with a model picked,
- * the versions fill in without another tap. A model that only thinks shows no reasoning; the
+ * the version fills in without another tap. A model that only thinks shows no reasoning; the
  * screen says it spent its answer thinking and offers another model on the phone, and using that
- * model fills in the versions. A model too big for free memory is never loaded; the screen says so
- * and offers a smaller model. With the phone's model, three versions
- * fill in; I pick one and Copy puts exactly that text on the clipboard and says it was copied. When
+ * model fills in the version. A model too big for free memory is never loaded; the screen says so
+ * and offers a smaller model. A large model shows one quiet line with a quicker model to use. With the phone's model, one version
+ * streams in; Another version adds a second; I pick one and Copy puts exactly that text on the
+ * clipboard and says it was copied. When
  * the Android selection menu opened Improve (a native entry injected how to give text back), Replace
  * hands exactly the picked text back to the app it came from.
  *
@@ -28,7 +29,8 @@ const describePro = proIsPresent() ? describe : describe.skip;
 
 const MODEL_PATH = '/models/small.gguf';
 const DRAFT = 'Please send me the report today.';
-const VERSIONS = 'Could you send the report today?\n---\nPlease send the report today.\n---\nSend me the report today, please.';
+const VERSIONS = 'Could you send the report today?';
+const ANOTHER = 'Send me the report today, please.';
 
 function installPhone(): NativeBoundary {
   return installNativeBoundary({
@@ -175,26 +177,52 @@ describePro('Improve screen', () => {
     expect(boundary.llama!.calls.initLlama).toHaveLength(0);
   });
 
-  it('Copy puts the version I picked on the clipboard and says so', async () => {
+  it('Another version adds a second one; Copy puts the one I picked on the clipboard', async () => {
     const boundary = installPhone();
     await loadTextModel(boundary);
-    boundary.llama!.scriptCompletion({ text: VERSIONS });
+    boundary.llama!.scriptCompletions([{ text: VERSIONS }, { text: ANOTHER }]);
     const { Clipboard } = require('react-native');
 
     const { rtl, view } = openImprove({ text: DRAFT, apply: 'copy' });
-    const third = 'Send me the report today, please.';
     await rtl.waitFor(() =>
-      expect(view.getByTestId('improve-option-2').props.accessibilityState?.busy).toBe(false),
+      expect(view.getByTestId('improve-option-0').props.accessibilityState?.busy).toBe(false),
     );
-    rtl.fireEvent.press(view.getByTestId('improve-option-2'));
+    rtl.fireEvent.press(view.getByTestId('improve-another'));
     await rtl.waitFor(() =>
-      expect(view.getByTestId('improve-option-2').props.accessibilityState?.selected).toBe(true),
+      expect(view.getByTestId('improve-option-1').props.accessibilityState?.busy).toBe(false),
+    );
+    expect(view.getByTestId('improve-option-0')).toHaveTextContent(VERSIONS);
+    rtl.fireEvent.press(view.getByTestId('improve-option-1'));
+    await rtl.waitFor(() =>
+      expect(view.getByTestId('improve-option-1').props.accessibilityState?.selected).toBe(true),
     );
     rtl.fireEvent.press(view.getByTestId('improve-apply'));
 
     expect(await view.findByTestId('improve-copied')).toBeTruthy();
     expect(Clipboard.setString).toHaveBeenCalledTimes(1);
-    expect(Clipboard.setString).toHaveBeenCalledWith(third);
+    expect(Clipboard.setString).toHaveBeenCalledWith(ANOTHER);
+  });
+
+  it('a large model shows one quiet line offering a quicker model on the phone; Use it fills in a version', async () => {
+    const boundary = installPhone();
+    await loadTextModel(boundary);
+    const { useAppStore } = require('../../../src/stores');
+    boundary.fs!.seedFile('/models/q.gguf', 300 * 1024 * 1024);
+    useAppStore.setState({
+      downloadedModels: [
+        createDownloadedModel({ id: 'llm', name: 'Big 8B', engine: 'llama', filePath: MODEL_PATH, fileSize: 5 * GB }),
+        createDownloadedModel({ id: 'small', name: 'Small 0.8B', engine: 'llama', filePath: '/models/q.gguf', fileSize: 300 * 1024 * 1024 }),
+      ],
+    });
+    boundary.llama!.scriptCompletions([{ text: VERSIONS }, { text: ANOTHER }]);
+
+    const { rtl, view } = openImprove({ text: DRAFT, apply: 'copy' });
+
+    expect(await view.findByText('Small 0.8B is quicker for Improve.')).toBeTruthy();
+    rtl.fireEvent.press(view.getByText('Use it'));
+    await rtl.waitFor(() => expect(view.getByTestId('improve-option-0')).toHaveTextContent(ANOTHER));
+    expect(useAppStore.getState().activeModelId).toBe('small');
+    expect(view.queryByTestId('improve-quick-model')).toBeNull();
   });
 
   it('Replace from the selection menu gives the picked version back to the calling app', async () => {

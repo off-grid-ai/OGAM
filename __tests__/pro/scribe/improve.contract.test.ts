@@ -1,12 +1,14 @@
 /**
  * Scribe Improve below the screen: what the phone's own model gives back, and the live checks.
  *
- * SPEC: Improve needs a text model and says so when there is none. With one loaded, a single
- * completion gives up to three versions; one equal to what I wrote is not a version, and a
- * reasoning model's think block is never shown as one. A model that thinks even with thinking off
+ * SPEC: Improve needs a text model and says so when there is none. With one loaded, one version
+ * streams as it is written; "Another version" asks for a new one that differs from those shown, and
+ * a reasoning model's think block is never shown or returned. A model that thinks even with thinking off
  * still has room to answer after a long think block; one that thinks past the whole budget says so,
  * with another text model on the phone to try. Improve never loads a second copy of the chat's
- * model, and never forces a load the memory guard refuses: it names a smaller model that fits. The live checks flag a misspelt word with a
+ * model, and never forces a load the memory guard refuses: it names a smaller model that fits.
+ * When the model is large or thinks first, Improve offers a quicker one: on the phone, or else the
+ * smallest of this phone's picks; a quick model gets no offer. The live checks flag a misspelt word with a
  * fix, Fix all applies the fixes, a word I add to the dictionary is never flagged again, and an
  * issue I ignore stays hidden.
  *
@@ -59,61 +61,62 @@ describePro('Improve rewrites from the phone\'s model', () => {
     await expect(rewrites().prepareRewrites()).resolves.toEqual({ ready: false, blocker: 'no-model' });
   });
 
-  it('with a loaded model, one completion gives the three versions, streamed as they arrive', async () => {
+  it('with a loaded model, one version streams as it is written', async () => {
     const boundary = installPhone();
     await loadTextModel(boundary);
     const service = rewrites();
     await expect(service.prepareRewrites()).resolves.toEqual({ ready: true });
 
-    boundary.llama!.scriptCompletion({ text: 'First version\n---\nSecond version\n---\nThird version' });
-    const progress: string[][] = [];
-    const options = await service.rewriteOptions('the draft i wrote', 'improve', p => progress.push(p));
+    boundary.llama!.scriptCompletion({ text: 'The draft I wrote, made clearer.' });
+    const progress: string[] = [];
+    const version = await service.rewriteVersion('the draft i wrote', 'improve', [], p => progress.push(p));
 
-    expect(options).toEqual(['First version', 'Second version', 'Third version']);
-    expect(progress.length).toBeGreaterThan(0);
-    expect(progress[progress.length - 1]).toEqual(options);
+    expect(version).toBe('The draft I wrote, made clearer.');
+    expect(progress.length).toBeGreaterThan(1);
+    expect(progress[progress.length - 1]).toBe(version);
   });
 
-  it('a version equal to what I wrote is not offered', async () => {
+  it('Another version asks the model for one that differs from those already shown', async () => {
     const boundary = installPhone();
     await loadTextModel(boundary);
     const service = rewrites();
 
-    boundary.llama!.scriptCompletion({ text: 'Keep this line.\n---\nA better line.\n---\nThe best line.' });
-    const options = await service.rewriteOptions('  Keep this line.  ', 'improve', () => undefined);
+    boundary.llama!.scriptCompletion({ text: 'A third way to say it.' });
+    await service.rewriteVersion('a draft', 'improve', ['First way.', 'Second way.'], () => undefined);
 
-    expect(options).toEqual(['A better line.', 'The best line.']);
+    const sent = JSON.stringify(boundary.llama!.calls.completion.at(-1));
+    expect(sent).toContain('Versions already shown');
+    expect(sent).toContain('First way.');
+    expect(sent).toContain('Second way.');
   });
 
-  it('a leading think block is never one of the versions', async () => {
+  it('a leading think block is never shown or returned', async () => {
     const boundary = installPhone();
     await loadTextModel(boundary);
     const service = rewrites();
 
     boundary.llama!.scriptCompletion({
-      text: '<think>The person wants it clearer.\n---\nMaybe shorter.</think>\nOne\n---\nTwo\n---\nThree',
+      text: '<think>The person wants it clearer. Maybe shorter.</think>\nOne clearer line.',
     });
-    const progress: string[][] = [];
-    const options = await service.rewriteOptions('a draft', 'improve', p => progress.push(p));
+    const progress: string[] = [];
+    const version = await service.rewriteVersion('a draft', 'improve', [], p => progress.push(p));
 
-    expect(options).toEqual(['One', 'Two', 'Three']);
-    for (const partial of progress) {
-      for (const option of partial) expect(option).not.toMatch(/think|clearer|Maybe shorter/i);
-    }
+    expect(version).toBe('One clearer line.');
+    for (const partial of progress) expect(partial).not.toMatch(/think|wants it|Maybe shorter/i);
   });
 
   /** A model that ignores thinking-off: ~1,500 tokens of reasoning (4 characters each) first. */
   const LONG_THINKING = `<think>${'The person wants it clearer, so I weigh each word. '.repeat(118)}</think>\n`;
 
-  it('a model that thinks for longer than a chat reply still gives the versions after it', async () => {
+  it('a model that thinks for longer than the version itself still gives the version after it', async () => {
     const boundary = installPhone();
     await loadTextModel(boundary);
     const service = rewrites();
 
-    boundary.llama!.scriptCompletion({ text: `${LONG_THINKING}One\n---\nTwo\n---\nThree`, charsPerToken: 4 });
-    const options = await service.rewriteOptions('a draft', 'improve', () => undefined);
+    boundary.llama!.scriptCompletion({ text: `${LONG_THINKING}One clearer line.`, charsPerToken: 4 });
+    const version = await service.rewriteVersion('a draft', 'improve', [], () => undefined);
 
-    expect(options).toEqual(['One', 'Two', 'Three']);
+    expect(version).toBe('One clearer line.');
   });
 
   it('a model that thinks past the whole budget says so and names another model to try', async () => {
@@ -130,7 +133,7 @@ describePro('Improve rewrites from the phone\'s model', () => {
 
     const endless = `<think>${'I weigh one more word. '.repeat(800)}</think>\nOne`;
     boundary.llama!.scriptCompletion({ text: endless, charsPerToken: 4 });
-    await expect(service.rewriteOptions('a draft', 'improve', () => undefined)).rejects.toBeInstanceOf(
+    await expect(service.rewriteVersion('a draft', 'improve', [], () => undefined)).rejects.toBeInstanceOf(
       service.ThinkingOnlyError,
     );
     expect(service.thinkingOnlyReadiness()).toEqual({
@@ -181,6 +184,44 @@ describePro('Improve rewrites from the phone\'s model', () => {
 
     await expect(service.switchTextModel('small')).resolves.toEqual({ ready: true });
     expect(boundary.llama!.calls.initLlama).toHaveLength(1);
+  });
+
+  it('a large model gets an offer of a quicker one already on the phone', async () => {
+    const boundary = installPhone();
+    await loadTextModel(boundary);
+    const { useAppStore } = require('../../../src/stores');
+    useAppStore.setState({
+      downloadedModels: [
+        createDownloadedModel({ id: 'llm', name: 'Big 8B', engine: 'llama', filePath: MODEL_PATH, fileSize: 5 * GB }),
+        createDownloadedModel({ id: 'small', name: 'Small 0.8B', engine: 'llama', filePath: '/models/q.gguf', fileSize: 300 * 1024 * 1024 }),
+      ],
+    });
+
+    expect(rewrites().quickModelOffer()).toEqual({ kind: 'use', id: 'small', name: 'Small 0.8B' });
+  });
+
+  it('a small model that thinks first gets an offer of the smallest pick for this phone', async () => {
+    const boundary = installPhone();
+    await loadTextModel(boundary);
+    const { useAppStore } = require('../../../src/stores');
+    useAppStore.setState({
+      downloadedModels: [
+        createDownloadedModel({ id: 'llm', name: 'Thinker 1B', engine: 'llama', filePath: MODEL_PATH, fileSize: 800 * 1024 * 1024 }),
+      ],
+    });
+    const service = rewrites();
+    expect(service.quickModelOffer()).toBeNull();
+
+    boundary.llama!.scriptCompletion({ text: '<think>Weighing it.</think>\nOne clearer line.' });
+    await service.rewriteVersion('a draft', 'improve', [], () => undefined);
+
+    const { devicePicks } = require('../../../src/services/devicePicks');
+    const { hardwareService } = require('../../../src/services/hardware');
+    const smallest = devicePicks(hardwareService.getTotalMemoryGB())
+      .filter((p: { sizeBytes: number }) => p.sizeBytes <= service.QUICK_MODEL_MAX_BYTES)
+      .sort((a: { sizeBytes: number }, b: { sizeBytes: number }) => a.sizeBytes - b.sizeBytes)[0];
+    expect(smallest).toBeTruthy();
+    expect(service.quickModelOffer()).toMatchObject({ kind: 'get', name: smallest.model.name, sizeBytes: smallest.sizeBytes });
   });
 });
 
