@@ -241,7 +241,6 @@
   "__tests__/rntl/components/pairingCodeSheet.test.tsx": 2,
   "__tests__/rntl/components/TranscriptionModelsTab.test.tsx": 4,
   "__tests__/rntl/components/VoiceModelsPanel.test.tsx": 6,
-  "__tests__/rntl/hooks/useFocusTrigger.test.ts": 1,
   "__tests__/rntl/navigation/AppNavigator.test.tsx": 11,
   "__tests__/rntl/screens/AboutScreen.test.tsx": 2,
   "__tests__/rntl/screens/ChatsListScreen.test.tsx": 7,
