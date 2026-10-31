@@ -1,52 +1,86 @@
 /**
  * useModelDownloads — the reactive hook over ModelDownloadService used by every
- * screen. Verifies it lists on mount, re-lists (coalesced) when the service notifies,
- * and unsubscribes on unmount.
+ * screen. Verifies it lists on mount, re-lists when the service notifies (rapid ticks
+ * coalesce into one refresh), and stops listening on unmount.
+ *
+ * The phone is the boundary: the native background downloader, the disk and storage are fakes
+ * (harness/modelManagerDevice). The download service, its providers and the stores run for real,
+ * and a download starts the way the app starts one.
  */
-import { renderHook, act, waitFor } from '@testing-library/react-native';
+import { installModelManagerDevice, type ModelManagerDevice } from '../../harness/modelManagerDevice';
+import { requireRTL } from '../../harness/nativeBoundary';
+import { createModelFile } from '../../utils/factories';
 
-const mockList = jest.fn();
-const mockSubscribe = jest.fn();
-let notify: () => void = () => {};
-jest.mock('../../../src/services/modelDownloadService', () => ({
-  modelDownloadService: {
-    list: (...a: any[]) => mockList(...a),
-    subscribe: (cb: () => void) => mockSubscribe(cb),
-  },
-}));
+let device: ModelManagerDevice;
+let rtl: ReturnType<typeof requireRTL>;
+type Row = { id: string; status: string; bytesDownloaded?: number };
+let useModelDownloads: () => Row[];
+let useDownloadListeners: () => void;
 
-import { useModelDownloads } from '../../../src/services/modelDownloadService/useModelDownloads';
-
-beforeEach(() => {
-  jest.clearAllMocks();
-  jest.useFakeTimers();
-  mockList.mockResolvedValue([{ id: 'text:a', status: 'downloading' }]);
-  mockSubscribe.mockImplementation((cb: () => void) => { notify = cb; return () => { notify = () => {}; }; });
+beforeEach(async () => {
+  device = await installModelManagerDevice();
+  // App boot registers the core download providers with the one download service.
+  require('../../../src/services/modelDownloadService/registerProviders').registerCoreDownloadProviders();
+  rtl = requireRTL();
+  ({ useModelDownloads } = require('../../../src/services/modelDownloadService/useModelDownloads'));
+  ({ useDownloadListeners } = require('../../../src/hooks/useDownloads'));
 });
-afterEach(() => jest.useRealTimers());
+
+/** A screen using the hook, under the app root that listens to the native downloader. */
+const screen = (): Row[] => {
+  useDownloadListeners();
+  return useModelDownloads();
+};
+
+/** Start a text model download through the app's provider; return its native row. */
+async function startDownload() {
+  const { textProvider } = require('../../../src/services/modelDownloadService/providers/textProvider');
+  await textProvider.start({
+    modelType: 'text',
+    modelId: 'test/model',
+    file: createModelFile({ name: 'model-Q4_K_M.gguf', size: 1_000_000 }),
+  });
+  await device.settle();
+  return device.nativeRows()[0];
+}
 
 describe('useModelDownloads', () => {
-  it('lists on mount and subscribes', async () => {
-    const { result } = renderHook(() => useModelDownloads());
-    await waitFor(() => expect(result.current).toHaveLength(1));
-    expect(result.current[0].id).toBe('text:a');
-    expect(mockSubscribe).toHaveBeenCalled();
+  it('lists on mount', async () => {
+    await startDownload();
+    const { result } = rtl.renderHook(screen);
+    await rtl.waitFor(() => expect(result.current).toHaveLength(1));
+    // Started, no bytes yet: it waits in the queue.
+    expect(result.current[0]).toEqual(
+      expect.objectContaining({ id: 'text:test/model/model-Q4_K_M.gguf', status: 'queued' }),
+    );
   });
 
-  it('re-lists (coalesced) when the service notifies', async () => {
-    renderHook(() => useModelDownloads());
-    await waitFor(() => expect(mockList).toHaveBeenCalledTimes(1));
-    mockList.mockResolvedValue([{ id: 'text:a', status: 'completed' }, { id: 'image:b', status: 'downloading' }]);
-    act(() => { notify(); notify(); notify(); }); // rapid ticks coalesce to one refresh
-    act(() => { jest.advanceTimersByTime(250); });
-    await waitFor(() => expect(mockList).toHaveBeenCalledTimes(2));
+  it('re-lists when the service notifies, rapid ticks included', async () => {
+    const row = await startDownload();
+    const { result } = rtl.renderHook(screen);
+    await rtl.waitFor(() => expect(result.current).toHaveLength(1));
+
+    // Bytes arrive in quick succession; the hook ends up showing the latest.
+    await rtl.act(async () => {
+      await device.reportProgress(row.downloadId, 250_000, 1_000_000);
+      await device.reportProgress(row.downloadId, 500_000, 1_000_000);
+      await device.reportProgress(row.downloadId, 750_000, 1_000_000);
+    });
+    await rtl.waitFor(() => expect(result.current[0].bytesDownloaded).toBe(750_000));
+    expect(result.current[0].status).toBe('downloading');
   });
 
-  it('unsubscribes on unmount', async () => {
-    const unsub = jest.fn();
-    mockSubscribe.mockReturnValue(unsub);
-    const { unmount } = renderHook(() => useModelDownloads());
+  it('stops listening on unmount', async () => {
+    const row = await startDownload();
+    const { result, unmount } = rtl.renderHook(screen);
+    await rtl.waitFor(() => expect(result.current).toHaveLength(1));
+    const shown = result.current;
     unmount();
-    expect(unsub).toHaveBeenCalled();
+
+    await rtl.act(async () => {
+      await device.reportProgress(row.downloadId, 900_000, 1_000_000);
+    });
+    // Nothing re-renders an unmounted hook: what it last showed stays as it was.
+    expect(result.current).toBe(shown);
   });
 });
