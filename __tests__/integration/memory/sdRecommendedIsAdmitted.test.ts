@@ -17,7 +17,7 @@ afterEach(() => resetDeviceMemory());
 const LIGHT = 'RealVisXL v5.0 Lightning (Light)';
 
 it('the recommended RealVisXL Light loads at the OnePlus\'s usual free memory, without Run anyway', async () => {
-  setDeviceMemory({ platform: 'android', totalGB: 11, availGB: 4.5 });
+  await setDeviceMemory({ platform: 'android', totalGB: 11, availGB: 4.5 });
   const { getRecommendedSDImageModels } = require('../../../src/services/huggingFaceModelBrowser');
   const { hardwareService } = require('../../../src/services/hardware');
   const light = getRecommendedSDImageModels(11).find((model: { name: string }) => model.name === LIGHT);
@@ -33,8 +33,8 @@ it('the recommended RealVisXL Light loads at the OnePlus\'s usual free memory, w
   expect(fits).toBe(true);
 });
 
-it('a model too large for the budget is not recommended at all', () => {
-  setDeviceMemory({ platform: 'android', totalGB: 8, availGB: 4 });
+it('a model too large for the budget is not recommended at all', async () => {
+  await setDeviceMemory({ platform: 'android', totalGB: 8, availGB: 4 });
   const { getRecommendedSDImageModels } = require('../../../src/services/huggingFaceModelBrowser');
   const { hardwareService } = require('../../../src/services/hardware');
   const { computeBudgetMB } = require('../../../src/services/modelResidency/budget');

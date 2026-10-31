@@ -1,15 +1,13 @@
 /**
- * Device-memory harness — the RAM-sensor STUB (a data source, not a mock).
+ * Device-memory harness: the phone's RAM sensor, faked at the device boundary.
  *
- * `hardwareService.get{Total,Available}MemoryGB` is the outermost native leaf that reads the OS memory
- * counters — the ONE thing we cannot run in Node. We stub it to return exact device numbers; the REAL
- * `modelResidencyManager` + `memoryBudget` + `policy` run on top and DECIDE (fits / evict / floor). So
- * the outcome is emergent — a red test here fails because our budget logic is wrong, not because a mock
- * was told to. This is the sociable, state-verifying integration test for the memory subsystem.
- *
- * NOT a mock of the thing under test: the stub never decides `fits`; it only reports RAM.
+ * The phone reports its memory through react-native-device-info (total and used) and the native
+ * DeviceMemoryModule (what the OS will still give this process). Those are set to exact device numbers;
+ * the REAL hardwareService reads them, and the REAL `modelResidencyManager` + `memoryBudget` + `policy`
+ * run on top and DECIDE (fits / evict / floor). A red test here fails because our budget logic is wrong,
+ * not because a fake was told to.
  */
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import { hardwareService } from '../../src/services/hardware';
 import { modelResidencyManager } from '../../src/services/modelResidency';
 import type { LoadPolicy } from '../../src/services/memoryBudget';
@@ -24,20 +22,31 @@ export interface DeviceMemory {
   policy?: LoadPolicy;
 }
 
+const GB = 1024 * 1024 * 1024;
+const originalMemoryModule = NativeModules.DeviceMemoryModule;
+
 /** Seed the device's RAM + platform + policy and reset the REAL residency manager to empty. */
-export function setDeviceMemory(d: DeviceMemory): void {
+export async function setDeviceMemory(d: DeviceMemory): Promise<void> {
   Object.defineProperty(Platform, 'OS', { value: d.platform, configurable: true });
-  jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(d.totalGB);
-  jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(d.availGB);
-  jest.spyOn(hardwareService, 'refreshMemoryInfo').mockResolvedValue(undefined as never);
+  const total = d.totalGB * GB;
+  const available = d.availGB * GB;
+  const DeviceInfo = require('react-native-device-info');
+  (DeviceInfo.getTotalMemory as jest.Mock).mockResolvedValue(total);
+  (DeviceInfo.getUsedMemory as jest.Mock).mockResolvedValue(total - available);
+  NativeModules.DeviceMemoryModule = {
+    getMemoryInfo: async () => ({ processAvailableBytes: available, systemAvailableBytes: available, footprintBytes: 0 }),
+  };
+  // The app reads the sensor the way it does on device.
+  await hardwareService.refreshMemoryInfo();
   modelResidencyManager._reset();
   modelResidencyManager.setBudgetOverrideMB(null);
   modelResidencyManager.setLoadPolicy(d.policy ?? 'balanced');
 }
 
-/** Restore Platform.OS + spies after a test. */
+/** Restore Platform.OS, the memory module and any spies after a test. */
 export function resetDeviceMemory(): void {
   Object.defineProperty(Platform, 'OS', { value: originalOS, configurable: true });
+  NativeModules.DeviceMemoryModule = originalMemoryModule;
   jest.restoreAllMocks();
   modelResidencyManager._reset();
 }

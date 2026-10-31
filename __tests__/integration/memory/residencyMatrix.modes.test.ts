@@ -271,7 +271,7 @@ describe.each(POLICIES)('model residency matrix — %s policy', policy => {
 
   it.each(ROWS.map(r => [r.name, r] as const))('%s', async (_name, row) => {
     // Seed the device RAM + policy and reset the REAL manager to empty.
-    setDeviceMemory({ ...row.deviceRAM, policy });
+    await setDeviceMemory({ ...row.deviceRAM, policy });
 
     // Seed residentsBefore into the REAL manager (as if already loaded). No row pins a resident:
     // the "pinned model blocks a 2nd heavy" case is dropped from the finalized model (the UI can't
