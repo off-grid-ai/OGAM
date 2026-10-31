@@ -5,7 +5,8 @@
  * completion gives up to three versions; one equal to what I wrote is not a version, and a
  * reasoning model's think block is never shown as one. A model that thinks even with thinking off
  * still has room to answer after a long think block; one that thinks past the whole budget says so,
- * with another text model on the phone to try. The live checks flag a misspelt word with a
+ * with another text model on the phone to try. Improve never loads a second copy of the chat's
+ * model, and never forces a load the memory guard refuses: it names a smaller model that fits. The live checks flag a misspelt word with a
  * fix, Fix all applies the fixes, a word I add to the dictionary is never flagged again, and an
  * issue I ignore stays hidden.
  *
@@ -138,6 +139,48 @@ describePro('Improve rewrites from the phone\'s model', () => {
       modelName: 'Thinker 8B',
       alternative: { id: 'small', name: 'Qwen 3.5 0.8B' },
     });
+  });
+
+  it('with the chat model loaded, Improve uses it and loads nothing more', async () => {
+    const boundary = installPhone();
+    await loadTextModel(boundary);
+    const loadsBefore = boundary.llama!.calls.initLlama.length;
+
+    await expect(rewrites().prepareRewrites()).resolves.toEqual({ ready: true });
+
+    expect(boundary.llama!.calls.initLlama.length).toBe(loadsBefore);
+  });
+
+  it('a model too big for free memory is not loaded; a smaller one on the phone is offered and fits', async () => {
+    const boundary = installNativeBoundary({
+      llama: true,
+      fs: true,
+      ram: { platform: 'android', totalBytes: 6 * GB, availBytes: 1.5 * GB },
+    });
+    const { hardwareService } = require('../../../src/services/hardware');
+    const { useAppStore } = require('../../../src/stores');
+    boundary.fs!.seedFile('/models/big.gguf', 5 * GB);
+    boundary.fs!.seedFile('/models/small.gguf', 300 * 1024 * 1024);
+    await hardwareService.refreshMemoryInfo();
+    useAppStore.setState({
+      downloadedModels: [
+        createDownloadedModel({ id: 'big', name: 'Big 8B', engine: 'llama', filePath: '/models/big.gguf', fileSize: 5 * GB }),
+        createDownloadedModel({ id: 'small', name: 'Small 0.8B', engine: 'llama', filePath: '/models/small.gguf', fileSize: 300 * 1024 * 1024 }),
+      ],
+      activeModelId: 'big',
+    });
+    const service = rewrites();
+
+    await expect(service.prepareRewrites()).resolves.toEqual({
+      ready: false,
+      blocker: 'no-memory',
+      modelName: 'Big 8B',
+      alternative: { id: 'small', name: 'Small 0.8B' },
+    });
+    expect(boundary.llama!.calls.initLlama).toHaveLength(0);
+
+    await expect(service.switchTextModel('small')).resolves.toEqual({ ready: true });
+    expect(boundary.llama!.calls.initLlama).toHaveLength(1);
   });
 });
 

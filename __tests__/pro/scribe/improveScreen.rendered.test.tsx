@@ -4,7 +4,8 @@
  * SPEC: with no text model, Improve says rewrites need one; when I come back with a model picked,
  * the versions fill in without another tap. A model that only thinks shows no reasoning; the
  * screen says it spent its answer thinking and offers another model on the phone, and using that
- * model fills in the versions. With the phone's model, three versions
+ * model fills in the versions. A model too big for free memory is never loaded; the screen says so
+ * and offers a smaller model. With the phone's model, three versions
  * fill in; I pick one and Copy puts exactly that text on the clipboard and says it was copied. When
  * the Android selection menu opened Improve (a native entry injected how to give text back), Replace
  * hands exactly the picked text back to the app it came from.
@@ -137,6 +138,41 @@ describePro('Improve screen', () => {
     );
     expect(view.getByTestId('improve-option-0')).toHaveTextContent('Could you send the report today?');
     expect(useAppStore.getState().activeModelId).toBe('small');
+  });
+
+  it('a model that only thinks, with no other model on the phone, leads to Get a model', async () => {
+    const boundary = installPhone();
+    await loadTextModel(boundary);
+    boundary.llama!.scriptCompletion({ text: `<think>${'I weigh one more word. '.repeat(800)}`, charsPerToken: 4 });
+
+    const { view } = openImprove({ text: DRAFT, apply: 'copy' });
+
+    expect(await view.findByTestId('improve-thinking-only')).toBeTruthy();
+    expect(view.getByText('Get a model')).toBeTruthy();
+  });
+
+  it('a model too big for free memory is never loaded; Improve says so and offers a smaller one', async () => {
+    const boundary = installNativeBoundary({
+      llama: true,
+      fs: true,
+      ram: { platform: 'android', totalBytes: 6 * GB, availBytes: 1.5 * GB },
+    });
+    const { hardwareService } = require('../../../src/services/hardware');
+    const { useAppStore } = require('../../../src/stores');
+    boundary.fs!.seedFile('/models/big.gguf', 5 * GB);
+    await hardwareService.refreshMemoryInfo();
+    useAppStore.setState({
+      downloadedModels: [
+        createDownloadedModel({ id: 'big', name: 'Big 8B', engine: 'llama', filePath: '/models/big.gguf', fileSize: 5 * GB }),
+      ],
+      activeModelId: 'big',
+    });
+
+    const { view } = openImprove({ text: DRAFT, apply: 'copy' });
+
+    expect(await view.findByText('Big 8B needs more free memory than this phone has now.')).toBeTruthy();
+    expect(view.getByText('Get a smaller model')).toBeTruthy();
+    expect(boundary.llama!.calls.initLlama).toHaveLength(0);
   });
 
   it('Copy puts the version I picked on the clipboard and says so', async () => {
