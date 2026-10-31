@@ -329,7 +329,6 @@
   "__tests__/unit/services/loadModelWithOverride.test.ts": 1,
   "__tests__/unit/services/loadPolicySync.test.ts": 2,
   "__tests__/unit/services/modelDownloadService.test.ts": 2,
-  "__tests__/unit/services/modelManager.test.ts": 5,
   "__tests__/unit/services/modelManager/imageSync.test.ts": 2,
   "__tests__/unit/services/modelManager/reconcilePartialUnzipG7.test.ts": 2,
   "__tests__/unit/services/modelManager/scan.branches.test.ts": 4,
