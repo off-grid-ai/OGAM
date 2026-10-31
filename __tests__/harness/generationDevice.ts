@@ -34,6 +34,8 @@ export interface LaunchOptions {
   localModel?: boolean;
   /** The main model is a LiteRT bundle that carries vision. */
   liteRTVision?: boolean;
+  /** The main model's size on disk, which drives the memory budget (default 2 GB). */
+  modelFileSizeBytes?: number;
   /** More downloaded models, listed after the main one (for fallback turns). */
   extraModels?: DeviceModel[];
   ram?: RamProfile;
@@ -123,6 +125,7 @@ export async function launchGeneration(opts: LaunchOptions = {}): Promise<Genera
   if (opts.localModel !== false) {
     const main = seedModel(boundary, {
       id: 'm', name: 'Test Model', engine, liteRTVision: opts.liteRTVision,
+      fileSizeBytes: opts.modelFileSizeBytes,
     });
     useAppStore.getState().addDownloadedModel(main);
     activeModelService.selectTextModel('m');
