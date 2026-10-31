@@ -653,7 +653,9 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
         parent?: PressNode | null;
       };
       await rtl.act(async () => {
-        const xIcons = this.view!.root.findAll(
+        // Inside the chat screen only: the whole app (real navigation) has other "x" icons.
+        const chat = this.view!.queryAllByTestId('chat-screen')[0] ?? this.view!.root;
+        const xIcons = chat.findAll(
           (n: PressNode) =>
             n.type === 'Icon' && (n.props as { name?: string })?.name === 'x',
         );

@@ -23,12 +23,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const ENHANCEMENT = 'an energetic dog running through an open field, cinematic lighting, 8k.';
 
@@ -36,7 +32,7 @@ const ENHANCEMENT = 'an energetic dog running through an open field, cinematic l
 async function enableEnhanceViaUI(h: Awaited<ReturnType<typeof setupChatScreen>>) {
 
   const { ImageGenerationSection } = require('../../../src/components/GenerationSettingsModal/ImageGenerationSection');
-  const s = h.rtl.render(h.React.createElement(ImageGenerationSection, {}));
+  const s = h.renderAside(h.React.createElement(ImageGenerationSection, {}));
   h.rtl.fireEvent.press(s.getByTestId('modal-image-advanced-toggle'));
   h.rtl.fireEvent.press(await h.rtl.waitFor(() => s.getByTestId('image-enhance-on')));
   s.unmount();
@@ -73,7 +69,7 @@ async function resendLastUserMessage(h: Awaited<ReturnType<typeof setupChatScree
 
 describe('a cancelled image turn is still an image turn', () => {
   it('resending after pressing X on the progress card draws again, it does not answer in text', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     h.render();
     await h.placeImageModel({ backend: 'coreml' });
     await h.cycleImageMode(); // auto -> ON(force); also activates the downloaded image model

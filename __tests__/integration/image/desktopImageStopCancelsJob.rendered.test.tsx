@@ -18,12 +18,8 @@ import { setupChatScreen } from '../../harness/chatHarness';
 import { chooseDesktopImageModel } from '../../harness/remoteImageServer';
 import { holdDesktopImageJob, type HeldDesktopImageJob } from '../../harness/desktopImageJobHold';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 type Harness = Awaited<ReturnType<typeof setupChatScreen>>;
 
@@ -42,7 +38,7 @@ describe('Stop during a Desktop image job', () => {
 
   /** Pick the Desktop image model, send the prompt, and wait until the job is running on Desktop. */
   async function startRunningJob(honorsStop: boolean, cancelAnswers = true): Promise<HeldDesktopImageJob> {
-    h = await setupChatScreen({ engine: 'llama' });
+    h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     const job = holdDesktopImageJob({ honorsStop, cancelAnswers });
     desktop = job;
     await chooseDesktopImageModel(h);
@@ -69,7 +65,7 @@ describe('Stop during a Desktop image job', () => {
     expect(h.boundary.fs!.listFiles(imagesDir())).toEqual([]);
 
     const { GalleryScreen } = require('../../../src/screens/GalleryScreen');
-    const gallery = h.rtl.render(h.React.createElement(GalleryScreen));
+    const gallery = h.renderAside(h.React.createElement(GalleryScreen));
     expect(await gallery.findByText('No generated images yet')).toBeTruthy();
     expect(gallery.queryAllByTestId(/^gallery-image-/)).toHaveLength(0);
     gallery.unmount();

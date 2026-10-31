@@ -17,12 +17,8 @@ import {
   holdImageGeneration,
 } from '../../harness/remoteImageServer';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('a cancelled image does not overlap the next one', () => {
   let server: ReturnType<typeof holdImageGeneration>;
@@ -34,7 +30,7 @@ describe('a cancelled image does not overlap the next one', () => {
   });
 
   it('keeps the first image stopped after its text model loads, and stops the second on its own X', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     server = holdImageGeneration();
     h.boundary.fs!.serveRemoteFile(REMOTE_IMAGE_URL, {
       body: 'synthetic-png-bytes',
@@ -47,7 +43,7 @@ describe('a cancelled image does not overlap the next one', () => {
     // The user ejects the text model from the In Memory list, so the next enhancement has to load it.
     const React = require('react');
     const { ModelsManagerSheet } = require('../../../src/components/models/ModelsManagerSheet');
-    const sheet = h.rtl.render(React.createElement(ModelsManagerSheet, {
+    const sheet = h.renderAside(React.createElement(ModelsManagerSheet, {
       visible: true, onClose: () => {}, labels: { text: '-', image: '-', voice: '-', speech: '-' },
       loadingState: { isLoading: false }, isEjecting: false, hasActiveModel: false,
       onOpenRow: () => {}, onEject: () => {},
