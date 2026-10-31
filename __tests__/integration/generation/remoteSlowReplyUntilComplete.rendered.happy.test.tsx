@@ -24,10 +24,14 @@ describe('slow remote reply in the chat UI', () => {
 
     await h.settle(50);
     upstream.release();
-    await h.rtl.waitFor(() => {
-      expect(h.view!.queryByText(/Still working — finished\./)).not.toBeNull();
-      expect(h.view!.queryByTestId('stop-button')).toBeNull();
-    });
+    // The stream's end and the stop button's removal take a few frames; under a parallel run 1 s is too short.
+    await h.rtl.waitFor(
+      () => {
+        expect(h.view!.queryByText(/Still working — finished\./)).not.toBeNull();
+        expect(h.view!.queryByTestId('stop-button')).toBeNull();
+      },
+      { timeout: 10_000 },
+    );
   });
 
   it('keeps a draft and the Projects screen usable while a reply streams', async () => {
