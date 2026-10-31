@@ -1,313 +1,221 @@
-import { renderHook, act } from '@testing-library/react-native';
+/**
+ * useDownloads / useDownloadListeners — the app root's bridge from the native downloader's events to the
+ * download store, and the cancel / retry a download card offers.
+ *
+ * The phone is the boundary: the native background downloader (its rows and the events it sends) is a fake
+ * (harness/nativeBoundary). The background download service, the hook and the download store run for real.
+ * A download is in flight the way the app leaves one: a native row, and the store entry the app added for it
+ * through the store's own action. The test reads the store and the downloader, never a call on our code.
+ */
+import { installNativeBoundary, requireRTL, type NativeBoundary } from '../../harness/nativeBoundary';
 
-type ProgressCb = (event: { downloadId: string; bytesDownloaded: number; totalBytes: number; status?: string }) => void;
-type CompleteCb = (event: { downloadId: string; bytesDownloaded: number; totalBytes: number }) => void;
-type ErrorCb = (event: { downloadId: string; reason: string; reasonCode?: string }) => void;
+type Store = typeof import('../../../src/stores/downloadStore');
+type Hooks = typeof import('../../../src/hooks/useDownloads');
 
-let onAnyProgressCb: ProgressCb | null = null;
-let onAnyCompleteCb: CompleteCb | null = null;
-let onAnyErrorCb: ErrorCb | null = null;
+let device: NativeBoundary;
+let rtl: ReturnType<typeof requireRTL>;
+let useDownloadStore: Store['useDownloadStore'];
+let hooks: Hooks;
 
-jest.mock('../../../src/services/backgroundDownloadService', () => ({
-  backgroundDownloadService: {
-    isAvailable: jest.fn(() => true),
-    onAnyProgress: jest.fn(),
-    onAnyComplete: jest.fn(),
-    onAnyError: jest.fn(),
-    cancelDownload: jest.fn(() => Promise.resolve()),
-  },
-}));
+const KEY = 'author/model/model.gguf';
 
-const mockUnsubProgress = jest.fn();
-const mockUnsubComplete = jest.fn();
-const mockUnsubError = jest.fn();
-let mockCancelDownload: jest.Mock;
+beforeEach(() => {
+  device = installNativeBoundary({ fs: true, download: true });
+  rtl = requireRTL();
+  ({ useDownloadStore } = require('../../../src/stores/downloadStore'));
+  hooks = require('../../../src/hooks/useDownloads');
+});
 
-const mockGetState = jest.fn();
-const mockUpdateProgress = jest.fn();
-const mockUpdateMmProjProgress = jest.fn();
-const mockSetStatus = jest.fn();
-const mockSetProcessing = jest.fn();
-const mockSetCompleted = jest.fn();
-const mockSetMmProjCompleted = jest.fn();
-const mockRemove = jest.fn();
-const mockRetryEntry = jest.fn();
+/** A download in flight: the native row and the store entry the app added for it. */
+function inFlight(
+  opts: { downloadId?: string; modelType?: string; mmProjDownloadId?: string; modelKey?: string } = {},
+) {
+  const downloadId = opts.downloadId ?? 'dl-1';
+  const modelKey = opts.modelKey ?? KEY;
+  device.download!.seedActive({ downloadId, fileName: 'model.gguf', modelId: 'author/model', totalBytes: 1000 });
+  if (opts.mmProjDownloadId) {
+    device.download!.seedActive({ downloadId: opts.mmProjDownloadId, fileName: 'model-mmproj.gguf', modelId: 'author/model', totalBytes: 500 });
+  }
+  useDownloadStore.getState().add({
+    modelKey: modelKey as never,
+    downloadId,
+    modelId: 'author/model',
+    fileName: 'model.gguf',
+    quantization: 'Q4_K_M',
+    modelType: (opts.modelType ?? 'text') as never,
+    status: 'running' as never,
+    bytesDownloaded: 0,
+    totalBytes: 1000,
+    combinedTotalBytes: opts.mmProjDownloadId ? 1500 : 1000,
+    progress: 0,
+    createdAt: Date.now(),
+    ...(opts.mmProjDownloadId
+      ? { mmProjDownloadId: opts.mmProjDownloadId, mmProjFileName: 'model-mmproj.gguf', mmProjFileSize: 500 }
+      : {}),
+  });
+}
 
-const mockDownloads: Record<string, any> = {};
+/** The entry for `modelKey` as the store holds it. */
+const entry = (modelKey = KEY) => useDownloadStore.getState().downloads[modelKey as never];
 
-jest.mock('../../../src/stores/downloadStore', () => ({
-  useDownloadStore: Object.assign(
-    jest.fn((selector?: any) => selector ? selector({ downloads: mockDownloads }) : mockDownloads),
-    {
-      getState: () => mockGetState(),
+/** The native downloader reports an event, as the device does. */
+function native(event: 'DownloadProgress' | 'DownloadComplete' | 'DownloadError', payload: Record<string, unknown>) {
+  rtl.act(() => {
+    device.download!.events.emit(event, payload);
+  });
+}
+
+describe('useDownloadListeners', () => {
+  it('carries native progress into the store while mounted, and stops on unmount', () => {
+    inFlight();
+    const { unmount } = rtl.renderHook(() => hooks.useDownloadListeners());
+    native('DownloadProgress', { downloadId: 'dl-1', bytesDownloaded: 400, totalBytes: 1000, status: 'running' });
+    expect(entry().bytesDownloaded).toBe(400);
+
+    unmount();
+    native('DownloadProgress', { downloadId: 'dl-1', bytesDownloaded: 800, totalBytes: 1000, status: 'running' });
+    expect(entry().bytesDownloaded).toBe(400);
+  });
+
+  it('listens to nothing where the platform has no background downloader', () => {
+    device = installNativeBoundary({ fs: true, download: false });
+    rtl = requireRTL();
+    ({ useDownloadStore } = require('../../../src/stores/downloadStore'));
+    hooks = require('../../../src/hooks/useDownloads');
+    expect(() => rtl.renderHook(() => hooks.useDownloadListeners())).not.toThrow();
+  });
+
+  it('ignores events for a download the app did not start', () => {
+    inFlight();
+    rtl.renderHook(() => hooks.useDownloadListeners());
+    native('DownloadProgress', { downloadId: 'stranger', bytesDownloaded: 999, totalBytes: 1000, status: 'running' });
+    native('DownloadComplete', { downloadId: 'stranger', bytesDownloaded: 1000, totalBytes: 1000 });
+    native('DownloadError', { downloadId: 'stranger', reason: 'boom' });
+    expect(entry()).toEqual(expect.objectContaining({ status: 'running', bytesDownloaded: 0 }));
+  });
+
+  it.each(['retrying', 'waiting_for_network', 'paused'])(
+    'shows a %s status from native, not a byte update',
+    status => {
+      inFlight();
+      rtl.renderHook(() => hooks.useDownloadListeners());
+      native('DownloadProgress', { downloadId: 'dl-1', bytesDownloaded: 700, totalBytes: 1000, status });
+      expect(entry()).toEqual(expect.objectContaining({ status, bytesDownloaded: 0 }));
     },
-  ),
-  isActiveStatus: (s: string) => ['pending', 'running', 'retrying', 'waiting_for_network', 'processing'].includes(s),
-}));
+  );
 
-jest.mock('../../../src/utils/downloadErrors', () => ({
-  toUserMessage: jest.fn((reason: string) => reason),
-}));
+  it('routes the projector download progress to the projector bytes', () => {
+    inFlight({ mmProjDownloadId: 'mm-1' });
+    rtl.renderHook(() => hooks.useDownloadListeners());
+    native('DownloadProgress', { downloadId: 'mm-1', bytesDownloaded: 250, totalBytes: 500, status: 'running' });
+    expect(entry()).toEqual(expect.objectContaining({ mmProjBytesDownloaded: 250, bytesDownloaded: 0 }));
+  });
 
-import { useDownloads, useDownloadListeners } from '../../../src/hooks/useDownloads';
+  it('completes the model when the projector lands after the weights', () => {
+    inFlight({ mmProjDownloadId: 'mm-1', modelType: 'image' });
+    rtl.renderHook(() => hooks.useDownloadListeners());
+    native('DownloadComplete', { downloadId: 'dl-1', bytesDownloaded: 1000, totalBytes: 1000 });
+    // The weights are in; the projector is not, so the model is not done yet.
+    expect(entry().status).not.toBe('completed');
+    expect(entry().mmProjStatus).not.toBe('completed');
 
-function fireProgress(event: Parameters<ProgressCb>[0]) {
-  if (!onAnyProgressCb) throw new Error('onAnyProgressCb not set');
-  onAnyProgressCb(event);
-}
-function fireComplete(event: Parameters<CompleteCb>[0]) {
-  if (!onAnyCompleteCb) throw new Error('onAnyCompleteCb not set');
-  onAnyCompleteCb(event);
-}
-function fireError(event: Parameters<ErrorCb>[0]) {
-  if (!onAnyErrorCb) throw new Error('onAnyErrorCb not set');
-  onAnyErrorCb(event);
-}
+    native('DownloadComplete', { downloadId: 'mm-1', bytesDownloaded: 500, totalBytes: 500 });
+    expect(entry().mmProjStatus).toBe('completed');
+  });
 
-function makeStoreState(overrides: Partial<any> = {}) {
-  return {
-    downloadIdIndex: {},
-    downloads: mockDownloads,
-    updateProgress: mockUpdateProgress,
-    updateMmProjProgress: mockUpdateMmProjProgress,
-    setStatus: mockSetStatus,
-    setProcessing: mockSetProcessing,
-    setCompleted: mockSetCompleted,
-    setMmProjCompleted: mockSetMmProjCompleted,
-    remove: mockRemove,
-    retryEntry: mockRetryEntry,
-    ...overrides,
-  };
-}
+  it('marks the projector done but not the model while the weights are still coming', () => {
+    inFlight({ mmProjDownloadId: 'mm-1' });
+    rtl.renderHook(() => hooks.useDownloadListeners());
+    native('DownloadComplete', { downloadId: 'mm-1', bytesDownloaded: 500, totalBytes: 500 });
+    expect(entry().mmProjStatus).toBe('completed');
+    expect(entry().status).not.toBe('completed');
+  });
 
-function withSingleTextEntry(downloadId = 'dl-1', extra: Record<string, any> = {}) {
-  mockGetState.mockReturnValue(makeStoreState({
-    downloadIdIndex: { [downloadId]: 'llm:model' },
-    downloads: { 'llm:model': { downloadId, modelType: 'text', ...extra } },
-  }));
-}
+  it('moves a finished image download on to processing (unpacking)', () => {
+    inFlight({ modelType: 'image' });
+    rtl.renderHook(() => hooks.useDownloadListeners());
+    native('DownloadComplete', { downloadId: 'dl-1', bytesDownloaded: 1000, totalBytes: 1000 });
+    expect(entry().status).toBe('processing');
+  });
+
+  it('leaves a finished text download for its initiator to finalize, with all bytes shown', () => {
+    inFlight({ modelType: 'text' });
+    rtl.renderHook(() => hooks.useDownloadListeners());
+    native('DownloadComplete', { downloadId: 'dl-1', bytesDownloaded: 1000, totalBytes: 1000 });
+    expect(entry()).toEqual(expect.objectContaining({ bytesDownloaded: 1000 }));
+    expect(entry().status).not.toBe('completed');
+  });
+
+  it('completes a finished download of any other kind', () => {
+    inFlight({ modelType: 'stt' });
+    rtl.renderHook(() => hooks.useDownloadListeners());
+    native('DownloadComplete', { downloadId: 'dl-1', bytesDownloaded: 1000, totalBytes: 1000 });
+    expect(entry().status).toBe('completed');
+  });
+
+  it('fails the download with a message the user can read', () => {
+    inFlight();
+    rtl.renderHook(() => hooks.useDownloadListeners());
+    native('DownloadError', { downloadId: 'dl-1', reason: 'Network error', reasonCode: 'network_lost' });
+    expect(entry().status).toBe('failed');
+    expect(entry().errorMessage).toEqual(expect.any(String));
+    expect(entry().errorMessage!.length).toBeGreaterThan(0);
+  });
+});
 
 describe('useDownloads', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    onAnyProgressCb = null;
-    onAnyCompleteCb = null;
-    onAnyErrorCb = null;
-    Object.keys(mockDownloads).forEach(k => delete mockDownloads[k]);
-    mockGetState.mockReturnValue(makeStoreState());
-
-    const { backgroundDownloadService: svc } = jest.requireMock('../../../src/services/backgroundDownloadService');
-    mockCancelDownload = svc.cancelDownload as jest.Mock;
-    mockCancelDownload.mockResolvedValue(undefined);
-    (svc.onAnyProgress as jest.Mock).mockImplementation((cb: ProgressCb) => { onAnyProgressCb = cb; return mockUnsubProgress; });
-    (svc.onAnyComplete as jest.Mock).mockImplementation((cb: CompleteCb) => { onAnyCompleteCb = cb; return mockUnsubComplete; });
-    (svc.onAnyError as jest.Mock).mockImplementation((cb: ErrorCb) => { onAnyErrorCb = cb; return mockUnsubError; });
-  });
-
-  it('subscribes to all three event channels on mount', () => {
-    const { backgroundDownloadService: svc } = jest.requireMock('../../../src/services/backgroundDownloadService');
-    renderHook(() => useDownloadListeners());
-    expect(svc.onAnyProgress).toHaveBeenCalled();
-    expect(svc.onAnyComplete).toHaveBeenCalled();
-    expect(svc.onAnyError).toHaveBeenCalled();
-  });
-
-  it('unsubscribes all listeners on unmount', () => {
-    const { unmount } = renderHook(() => useDownloadListeners());
-    unmount();
-    expect(mockUnsubProgress).toHaveBeenCalled();
-    expect(mockUnsubComplete).toHaveBeenCalled();
-    expect(mockUnsubError).toHaveBeenCalled();
-  });
-
-  it('skips subscription when service is unavailable', () => {
-    const { backgroundDownloadService: svc } = jest.requireMock('../../../src/services/backgroundDownloadService');
-    (svc.isAvailable as jest.Mock).mockReturnValueOnce(false);
-    renderHook(() => useDownloadListeners());
-    expect(svc.onAnyProgress).not.toHaveBeenCalled();
-  });
-
-  it('ignores progress event when downloadId not in index', () => {
-    renderHook(() => useDownloadListeners());
-    act(() => { fireProgress({ downloadId: 'unknown', bytesDownloaded: 100, totalBytes: 1000 }); });
-    expect(mockUpdateProgress).not.toHaveBeenCalled();
-  });
-
-  it('routes retrying status through setStatus instead of updateProgress', () => {
-    withSingleTextEntry();
-    renderHook(() => useDownloadListeners());
-    act(() => { fireProgress({ downloadId: 'dl-1', bytesDownloaded: 0, totalBytes: 0, status: 'retrying' }); });
-    expect(mockSetStatus).toHaveBeenCalledWith('dl-1', 'retrying');
-    expect(mockUpdateProgress).not.toHaveBeenCalled();
-  });
-
-  it('routes waiting_for_network status through setStatus', () => {
-    withSingleTextEntry();
-    renderHook(() => useDownloadListeners());
-    act(() => { fireProgress({ downloadId: 'dl-1', bytesDownloaded: 0, totalBytes: 0, status: 'waiting_for_network' }); });
-    expect(mockSetStatus).toHaveBeenCalledWith('dl-1', 'waiting_for_network');
-  });
-
-  it('calls updateProgress for main download progress event', () => {
-    withSingleTextEntry();
-    renderHook(() => useDownloadListeners());
-    act(() => { fireProgress({ downloadId: 'dl-1', bytesDownloaded: 500, totalBytes: 1000 }); });
-    expect(mockUpdateProgress).toHaveBeenCalledWith('dl-1', 500, 1000);
-  });
-
-  it('routes mmproj progress to updateMmProjProgress', () => {
-    mockGetState.mockReturnValue(makeStoreState({
-      downloadIdIndex: { 'mmproj-1': 'llm:model' },
-      downloads: { 'llm:model': { downloadId: 'dl-1', mmProjDownloadId: 'mmproj-1', modelType: 'text' } },
-    }));
-    renderHook(() => useDownloadListeners());
-    act(() => { fireProgress({ downloadId: 'mmproj-1', bytesDownloaded: 200, totalBytes: 400 }); });
-    expect(mockUpdateMmProjProgress).toHaveBeenCalledWith('mmproj-1', 200);
-  });
-
-  it('warns and does nothing when downloadId matches neither main nor mmproj', () => {
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    mockGetState.mockReturnValue(makeStoreState({
-      downloadIdIndex: { 'other': 'llm:model' },
-      downloads: { 'llm:model': { downloadId: 'dl-1', mmProjDownloadId: 'mmproj-1', modelType: 'text' } },
-    }));
-    renderHook(() => useDownloadListeners());
-    act(() => { fireProgress({ downloadId: 'other', bytesDownloaded: 100, totalBytes: 200 }); });
-    expect(mockUpdateProgress).not.toHaveBeenCalled();
-    expect(mockUpdateMmProjProgress).not.toHaveBeenCalled();
-    warnSpy.mockRestore();
-  });
-
-  it('ignores complete event when downloadId not in index', () => {
-    renderHook(() => useDownloadListeners());
-    act(() => { fireComplete({ downloadId: 'unknown', bytesDownloaded: 100, totalBytes: 100 }); });
-    expect(mockSetCompleted).not.toHaveBeenCalled();
-  });
-
-  it('calls setMmProjCompleted and then setCompleted when mmproj finishes and main is done', () => {
-    const updatedEntry = { downloadId: 'dl-1', mmProjDownloadId: 'mmproj-1', mmProjStatus: 'completed', status: 'completed', modelType: 'text' };
-    const storeState = makeStoreState({
-      downloadIdIndex: { 'mmproj-1': 'llm:model' },
-      downloads: { 'llm:model': { downloadId: 'dl-1', mmProjDownloadId: 'mmproj-1', modelType: 'text' } },
+  it('cancel removes the card and stops the native download', async () => {
+    inFlight();
+    const { result } = rtl.renderHook(() => hooks.useDownloads());
+    await rtl.act(async () => {
+      await result.current.cancel(KEY as never);
     });
-    storeState.setMmProjCompleted = jest.fn(() => {
-      storeState.downloads['llm:model'] = updatedEntry;
+    expect(entry()).toBeUndefined();
+    expect(device.download!.active().map(r => r.downloadId)).toEqual([]);
+  });
+
+  it('cancel also stops the projector download', async () => {
+    inFlight({ mmProjDownloadId: 'mm-1' });
+    const { result } = rtl.renderHook(() => hooks.useDownloads());
+    await rtl.act(async () => {
+      await result.current.cancel(KEY as never);
     });
-    mockGetState.mockReturnValue(storeState);
-    renderHook(() => useDownloadListeners());
-    act(() => { fireComplete({ downloadId: 'mmproj-1', bytesDownloaded: 400, totalBytes: 400 }); });
-    expect(storeState.setMmProjCompleted).toHaveBeenCalledWith('mmproj-1', 400);
-    expect(mockSetCompleted).toHaveBeenCalledWith('dl-1');
+    expect(device.download!.active()).toEqual([]);
   });
 
-  it('calls setMmProjCompleted but not setCompleted when main model not yet done', () => {
-    const storeState = makeStoreState({
-      downloadIdIndex: { 'mmproj-1': 'llm:model' },
-      downloads: { 'llm:model': { downloadId: 'dl-1', mmProjDownloadId: 'mmproj-1', status: 'running', modelType: 'text' } },
+  it('cancel does nothing for a card that is not there', async () => {
+    inFlight();
+    const { result } = rtl.renderHook(() => hooks.useDownloads());
+    await rtl.act(async () => {
+      await result.current.cancel('nobody/none/none.gguf' as never);
     });
-    mockGetState.mockReturnValue(storeState);
-    renderHook(() => useDownloadListeners());
-    act(() => { fireComplete({ downloadId: 'mmproj-1', bytesDownloaded: 400, totalBytes: 400 }); });
-    expect(mockSetMmProjCompleted).toHaveBeenCalled();
-    expect(mockSetCompleted).not.toHaveBeenCalled();
+    expect(entry()).toBeDefined();
+    expect(device.download!.active()).toHaveLength(1);
   });
 
-  it('calls updateProgress when main gguf finishes but mmproj not yet done', () => {
-    withSingleTextEntry('dl-1', { mmProjDownloadId: 'mmproj-1', mmProjStatus: 'running' });
-    renderHook(() => useDownloadListeners());
-    act(() => { fireComplete({ downloadId: 'dl-1', bytesDownloaded: 1000, totalBytes: 1000 }); });
-    expect(mockUpdateProgress).toHaveBeenCalled();
-    expect(mockSetCompleted).not.toHaveBeenCalled();
+  it('retry stops the old transfer and follows the new one', async () => {
+    inFlight();
+    rtl.act(() => useDownloadStore.getState().setStatus('dl-1', 'failed' as never, { message: 'lost' }));
+    const { result } = rtl.renderHook(() => hooks.useDownloads());
+    expect(result.current.failed).toHaveLength(1);
+
+    await rtl.act(async () => {
+      await result.current.retry(KEY as never, async () => 'dl-2');
+    });
+    expect(device.download!.active().map(r => r.downloadId)).not.toContain('dl-1');
+    expect(entry()).toEqual(expect.objectContaining({ downloadId: 'dl-2' }));
+    expect(result.current.failed).toHaveLength(0);
   });
 
-  it('calls setProcessing for image model on complete', () => {
-    mockGetState.mockReturnValue(makeStoreState({
-      downloadIdIndex: { 'dl-1': 'image:model' },
-      downloads: { 'image:model': { downloadId: 'dl-1', modelType: 'image' } },
-    }));
-    renderHook(() => useDownloadListeners());
-    act(() => { fireComplete({ downloadId: 'dl-1', bytesDownloaded: 500, totalBytes: 500 }); });
-    expect(mockSetProcessing).toHaveBeenCalledWith('dl-1');
-    expect(mockSetCompleted).not.toHaveBeenCalled();
-  });
-
-  it('calls updateProgress for text model on complete (finalization handled elsewhere)', () => {
-    withSingleTextEntry();
-    renderHook(() => useDownloadListeners());
-    act(() => { fireComplete({ downloadId: 'dl-1', bytesDownloaded: 1000, totalBytes: 1000 }); });
-    expect(mockUpdateProgress).toHaveBeenCalled();
-    expect(mockSetCompleted).not.toHaveBeenCalled();
-  });
-
-  it('calls setCompleted for unknown model type on complete', () => {
-    mockGetState.mockReturnValue(makeStoreState({
-      downloadIdIndex: { 'dl-1': 'other:model' },
-      downloads: { 'other:model': { downloadId: 'dl-1', modelType: 'other' } },
-    }));
-    renderHook(() => useDownloadListeners());
-    act(() => { fireComplete({ downloadId: 'dl-1', bytesDownloaded: 500, totalBytes: 500 }); });
-    expect(mockSetCompleted).toHaveBeenCalledWith('dl-1');
-  });
-
-  it('ignores error event when downloadId not in index', () => {
-    renderHook(() => useDownloadListeners());
-    act(() => { fireError({ downloadId: 'unknown', reason: 'oops' }); });
-    expect(mockSetStatus).not.toHaveBeenCalled();
-  });
-
-  it('calls setStatus with failed on error event', () => {
-    withSingleTextEntry();
-    renderHook(() => useDownloadListeners());
-    act(() => { fireError({ downloadId: 'dl-1', reason: 'timeout', reasonCode: 'E_TIMEOUT' }); });
-    expect(mockSetStatus).toHaveBeenCalledWith('dl-1', 'failed', expect.objectContaining({ message: 'timeout' }));
-  });
-
-  it('cancel removes from store and cancels native download', async () => {
-    const entry = { downloadId: 'dl-1', modelType: 'text' };
-    mockGetState.mockReturnValue(makeStoreState({
-      downloads: { 'llm:model': entry },
-    }));
-    const { result } = renderHook(() => useDownloads());
-    await act(async () => { await result.current.cancel('llm:model'); });
-    expect(mockRemove).toHaveBeenCalledWith('llm:model');
-    expect(mockCancelDownload).toHaveBeenCalledWith('dl-1');
-  });
-
-  it('cancel also cancels mmproj download when present', async () => {
-    const entry = { downloadId: 'dl-1', mmProjDownloadId: 'mmproj-1', modelType: 'text' };
-    mockGetState.mockReturnValue(makeStoreState({
-      downloads: { 'llm:model': entry },
-    }));
-    const { result } = renderHook(() => useDownloads());
-    await act(async () => { await result.current.cancel('llm:model'); });
-    expect(mockCancelDownload).toHaveBeenCalledWith('mmproj-1');
-  });
-
-  it('cancel does nothing when entry not found', async () => {
-    mockGetState.mockReturnValue(makeStoreState({ downloads: {} }));
-    const { result } = renderHook(() => useDownloads());
-    await act(async () => { await result.current.cancel('llm:missing'); });
-    expect(mockCancelDownload).not.toHaveBeenCalled();
-  });
-
-  it('retry cancels old download, calls startDownload, and calls retryEntry', async () => {
-    const entry = { downloadId: 'dl-old', modelType: 'text' };
-    mockGetState.mockReturnValue(makeStoreState({
-      downloads: { 'llm:model': entry },
-    }));
-    const startDownload = jest.fn(() => Promise.resolve('dl-new'));
-    const { result } = renderHook(() => useDownloads());
-    await act(async () => { await result.current.retry('llm:model', startDownload); });
-    expect(mockCancelDownload).toHaveBeenCalledWith('dl-old');
-    expect(startDownload).toHaveBeenCalled();
-    expect(mockRetryEntry).toHaveBeenCalledWith('llm:model', 'dl-new');
-  });
-
-  it('retry does nothing when entry not found', async () => {
-    mockGetState.mockReturnValue(makeStoreState({ downloads: {} }));
-    const startDownload = jest.fn(() => Promise.resolve('dl-new'));
-    const { result } = renderHook(() => useDownloads());
-    await act(async () => { await result.current.retry('llm:missing', startDownload); });
-    expect(startDownload).not.toHaveBeenCalled();
+  it('retry does nothing for a card that is not there', async () => {
+    const { result } = rtl.renderHook(() => hooks.useDownloads());
+    let started = false;
+    await rtl.act(async () => {
+      await result.current.retry('nobody/none/none.gguf' as never, async () => {
+        started = true;
+        return 'dl-9';
+      });
+    });
+    expect(started).toBe(false);
   });
 });
