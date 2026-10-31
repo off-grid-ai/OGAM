@@ -19,7 +19,7 @@ import { PRO_TOOLS_SCREEN } from '../../../src/hooks/useIsProActive';
 import { useAppStore } from '../../../src/stores/appStore';
 
 const Stack = createNativeStackNavigator();
-const navigation = createNavigationContainerRef();
+const navigation = createNavigationContainerRef<Record<string, undefined>>();
 const Blank = () => null;
 
 const Opener = () => {
