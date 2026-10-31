@@ -122,7 +122,7 @@ export const ProUnlockModal: React.FC<Props> = ({
 
   return (
     <AppSheet
-      sheet="pro-unlock"
+      sheet="pro-activate"
       visible={sheetVisible}
       onClose={success ? finishSuccess : close}
       onHeaderClosePress={success ? finishSuccess : close}
@@ -193,6 +193,7 @@ export const ProUnlockModal: React.FC<Props> = ({
               ]}
               onPress={handleActivate}
               disabled={loading || !hasInput}
+              aria-busy={loading}
               activeOpacity={0.85}
             >
               <Text style={styles.primaryBtnText}>
