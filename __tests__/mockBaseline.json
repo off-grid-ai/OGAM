@@ -32,7 +32,6 @@
   "__tests__/integration/audio/voiceModeStrayEmptyBubble.rendered.redflow.test.tsx": 1,
   "__tests__/integration/audio/voiceModeThinkingBlockWidth.rendered.redflow.test.tsx": 1,
   "__tests__/integration/audio/voiceModeToolsSentOnce.rendered.test.tsx": 1,
-  "__tests__/integration/audio/voicePickerRowsAccessible.rendered.test.tsx": 1,
   "__tests__/integration/audio/voiceTranscriptStaysInItsChat.rendered.test.tsx": 1,
   "__tests__/integration/chat/existingConversationVisibleImmediately.rendered.redflow.test.tsx": 1,
   "__tests__/integration/chat/greetingSkipsRemoteTools.rendered.test.tsx": 1,
@@ -242,5 +241,6 @@
   "__tests__/unit/sync/forgetUnregisteredDevice.test.ts": 1,
   "__tests__/unit/sync/pairingEntitlementReplacementAdapter.test.ts": 4,
   "__tests__/unit/sync/repairDevice.test.ts": 4,
-  "__tests__/unit/utils/recommendedModels.test.ts": 1
+  "__tests__/unit/utils/recommendedModels.test.ts": 1,
+  "jest.setup.ts": 1
 }
