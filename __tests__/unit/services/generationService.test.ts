@@ -1,1836 +1,667 @@
 /**
- * Generation Service Unit Tests
+ * generationService — the reply state machine, driven end to end on a faked device.
  *
- * Tests for the LLM generation service state machine.
- * Priority: P0 (Critical) - Core generation functionality.
+ * Real: generationService and its helpers, llmService, activeModelService (loads through the residency
+ * lock), the tool loop and the calculator tool, the provider registry and the OpenAI-compatible provider,
+ * the stores, logger and sharePrompt. Faked (device / network, harness/generationDevice): llama.rn, the
+ * filesystem, RAM, and the OpenAI-compatible server on the LAN at its XMLHttpRequest.
+ *
+ * Assertions read what the user ends up with: the streamed and stored answer, the service's state, the
+ * error raised, what reached the native engine or the server.
  */
+import {
+  launchGeneration,
+  connectServer,
+  type GenerationDevice,
+  type ServerHandle,
+} from '../../harness/generationDevice';
 
-import { generationService, GenerationState } from '../../../src/services/generationService';
-import { llmService } from '../../../src/services/llm';
-import { useChatStore } from '../../../src/stores/chatStore';
-import { useRemoteServerStore } from '../../../src/stores/remoteServerStore';
-import { useAppStore } from '../../../src/stores/appStore';
-import { providerRegistry } from '../../../src/services/providers';
-import { resetStores, setupWithActiveModel, setupWithConversation } from '../../utils/testHelpers';
-import { createMessage } from '../../utils/factories';
+const tick = (ms = 0) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
-// Mock the llmService
-jest.mock('../../../src/services/llm', () => ({
-  llmService: {
-    isModelLoaded: jest.fn(),
-    isCurrentlyGenerating: jest.fn(),
-    generateResponse: jest.fn(),
-    stopGeneration: jest.fn(),
-    getGpuInfo: jest.fn(() => ({ gpu: false, gpuBackend: 'CPU', gpuLayers: 0, reasonNoGPU: '' })),
-    getPerformanceStats: jest.fn(() => ({
-      lastTokensPerSecond: 15,
-      lastDecodeTokensPerSecond: 18,
-      lastTimeToFirstToken: 0.5,
-      lastGenerationTime: 3.0,
-      lastTokenCount: 50,
-    })),
-  },
-}));
+async function until(check: () => boolean, what: string, timeoutMs = 3000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    await tick(5);
+  }
+}
 
-// Mock activeModelService
-jest.mock('../../../src/services/activeModelService', () => ({
-  activeModelService: {
-    // The model-selection seam, from the one place it is defined.
-    ...require('../../utils/activeModelServiceStub').activeModelSelectionStub(),
-    getActiveModels: jest.fn(() => ({ text: null, image: null })),
-  },
-}));
+function storage() {
+  const mod = require('@react-native-async-storage/async-storage');
+  return mod.default ?? mod;
+}
 
-// Mock sharePrompt utility (the once-per-session trigger the service delegates to)
-jest.mock('../../../src/utils/sharePrompt', () => ({
-  maybeScheduleSharePrompt: jest.fn(),
-  resetSharePromptSession: jest.fn(),
-  emitSharePrompt: jest.fn(),
-}));
+let d: GenerationDevice;
+let server: ServerHandle | null = null;
 
-// Mock provider registry
-jest.mock('../../../src/services/providers', () => ({
-  providerRegistry: {
-    getProvider: jest.fn(),
-    getActiveProvider: jest.fn(),
-    hasProvider: jest.fn(() => false),
-  },
-}));
+beforeEach(async () => {
+  await storage().clear(); // each test is a fresh install
+});
 
-// Mock runToolLoop
-jest.mock('../../../src/services/generationToolLoop', () => ({
-  runToolLoop: jest.fn(),
-}));
+afterEach(async () => {
+  server?.restore();
+  server = null;
+});
 
-import { runToolLoop } from '../../../src/services/generationToolLoop';
-const mockedRunToolLoop = runToolLoop as jest.Mock;
+const queued = (id: string, text: string, extra: Record<string, unknown> = {}) => ({
+  id, conversationId: 'c1', text, messageText: text, ...extra,
+});
 
-const mockedLlmService = llmService as jest.Mocked<typeof llmService>;
-const mockedProviderRegistry = providerRegistry as jest.Mocked<typeof providerRegistry>;
-
-describe('generationService', () => {
-  beforeEach(() => {
-    resetStores();
-    jest.clearAllMocks();
-
-    // Reset the service state by using private method access
-    // This is a workaround since the service is a singleton
-    (generationService as any).state = {
-      isGenerating: false,
-      isThinking: false,
-      conversationId: null,
-      streamingContent: '',
-      startTime: null,
-      queuedMessages: [],
-    };
-    (generationService as any).listeners.clear();
-    (generationService as any).abortRequested = false;
-    (generationService as any).queueProcessor = null;
-
-    // Re-setup mocks after clearAllMocks
-    mockedLlmService.isModelLoaded.mockReturnValue(true);
-    mockedLlmService.isCurrentlyGenerating.mockReturnValue(false);
-    mockedLlmService.stopGeneration.mockResolvedValue(undefined);
-    mockedLlmService.getGpuInfo.mockReturnValue({ gpu: false, gpuBackend: 'CPU', gpuLayers: 0, reasonNoGPU: '' });
-    mockedLlmService.getPerformanceStats.mockReturnValue({
-      lastTokensPerSecond: 15,
-      lastDecodeTokensPerSecond: 18,
-      lastTimeToFirstToken: 0.5,
-      lastGenerationTime: 3.0,
-      lastTokenCount: 50,
-    });
+// ============================================================================
+// State and subscription
+// ============================================================================
+describe('state and subscription', () => {
+  beforeEach(async () => {
+    d = await launchGeneration();
   });
 
-  // ============================================================================
-  // State Management
-  // ============================================================================
-  describe('getState', () => {
-    it('returns current state', () => {
-      const state = generationService.getState();
+  it('starts idle and hands out a copy of its state', () => {
+    const state = d.generationService.getState();
+    expect(state).toEqual(expect.objectContaining({
+      isGenerating: false, isThinking: false, conversationId: null, streamingContent: '', startTime: null,
+    }));
 
-      expect(state).toHaveProperty('isGenerating');
-      expect(state).toHaveProperty('isThinking');
-      expect(state).toHaveProperty('conversationId');
-      expect(state).toHaveProperty('streamingContent');
-      expect(state).toHaveProperty('startTime');
-    });
-
-    it('returns immutable copy (modifications do not affect service)', () => {
-      const state = generationService.getState();
-
-      state.isGenerating = true;
-      state.conversationId = 'modified';
-
-      const newState = generationService.getState();
-      expect(newState.isGenerating).toBe(false);
-      expect(newState.conversationId).toBeNull();
-    });
-
-    it('returns initial state correctly', () => {
-      const state = generationService.getState();
-
-      expect(state.isGenerating).toBe(false);
-      expect(state.isThinking).toBe(false);
-      expect(state.conversationId).toBeNull();
-      expect(state.streamingContent).toBe('');
-      expect(state.startTime).toBeNull();
-    });
+    state.isGenerating = true;
+    state.conversationId = 'modified';
+    expect(d.generationService.getState().isGenerating).toBe(false);
+    expect(d.generationService.getState().conversationId).toBeNull();
   });
 
-  describe('isGeneratingFor', () => {
-    it('returns false when not generating', () => {
-      expect(generationService.isGeneratingFor('any-conversation')).toBe(false);
-    });
+  it('isGeneratingFor is true only for the chat being answered, only while it is answered', async () => {
+    expect(d.generationService.isGeneratingFor(d.conversationId)).toBe(false);
+    d.boundary.llama!.scriptCompletion({ text: 'Hello there', pauseAfter: 'Hello' });
 
-    it('returns true for active conversation during generation', async () => {
-      const convId = setupWithConversation();
+    const reply = d.generationService.generateResponse(d.conversationId, d.ask('Hi'));
+    await until(() => d.useChatStore.getState().streamingMessage === 'Hello', 'the first words');
 
-      // Setup mock to simulate ongoing generation
-      mockedLlmService.generateResponse.mockImplementation((async () => {
-        // Never complete - simulates ongoing generation
-        await new Promise(() => {});
-      }) as any);
-
-      // Start generation (don't await - it won't complete)
-      generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hello' }),
-      ]);
-
-      // Give it a moment to start
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
-
-      expect(generationService.isGeneratingFor(convId)).toBe(true);
-    });
-
-    it('returns false for different conversation during generation', async () => {
-      const convId = setupWithConversation();
-
-      mockedLlmService.generateResponse.mockImplementation((async () => {
-        await new Promise(() => {});
-      }) as any);
-
-      generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hello' }),
-      ]);
-
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
-
-      expect(generationService.isGeneratingFor('different-conversation')).toBe(false);
-    });
+    expect(d.generationService.isGeneratingFor(d.conversationId)).toBe(true);
+    expect(d.generationService.isGeneratingFor('different-conversation')).toBe(false);
+    d.boundary.llama!.releaseStream();
+    await reply;
+    expect(d.generationService.isGeneratingFor(d.conversationId)).toBe(false);
   });
 
-  // ============================================================================
-  // Subscription
-  // ============================================================================
-  describe('subscribe', () => {
-    it('immediately calls listener with current state', () => {
-      const listener = jest.fn();
+  it('a subscriber hears the current state at once and every change after, until it unsubscribes', () => {
+    const first: any[] = [];
+    const second: any[] = [];
+    const unsubscribe = d.generationService.subscribe((s: any) => first.push(s));
+    d.generationService.subscribe((s: any) => second.push(s));
+    expect(first).toEqual([expect.objectContaining({ isGenerating: false, isThinking: false })]);
 
-      generationService.subscribe(listener);
+    d.generationService.enqueueMessage(queued('q1', 'Hello'));
+    expect(first).toHaveLength(2);
+    expect(second[second.length - 1].queuedMessages).toHaveLength(1);
 
-      expect(listener).toHaveBeenCalledTimes(1);
-      expect(listener).toHaveBeenCalledWith(expect.objectContaining({
-        isGenerating: false,
-        isThinking: false,
-      }));
-    });
+    unsubscribe();
+    d.generationService.enqueueMessage(queued('q2', 'Again'));
+    expect(first).toHaveLength(2);
+    expect(second[second.length - 1].queuedMessages).toHaveLength(2);
+  });
+});
 
-    it('returns unsubscribe function', () => {
-      const listener = jest.fn();
+// ============================================================================
+// A local (llama.rn) reply
+// ============================================================================
+describe('generateResponse on the local llama model', () => {
+  it('fails with "No model loaded" when the selected model is not in memory', async () => {
+    d = await launchGeneration({ load: false });
 
-      const unsubscribe = generationService.subscribe(listener);
-
-      expect(typeof unsubscribe).toBe('function');
-    });
-
-    it('unsubscribe removes listener', async () => {
-      const listener = jest.fn();
-
-      const unsubscribe = generationService.subscribe(listener);
-      listener.mockClear();
-
-      unsubscribe();
-
-      // Force a state update
-      (generationService as any).notifyListeners();
-
-      expect(listener).not.toHaveBeenCalled();
-    });
-
-    it('multiple listeners receive updates', () => {
-      const listener1 = jest.fn();
-      const listener2 = jest.fn();
-
-      generationService.subscribe(listener1);
-      generationService.subscribe(listener2);
-
-      // Both should have been called with initial state
-      expect(listener1).toHaveBeenCalled();
-      expect(listener2).toHaveBeenCalled();
-    });
+    await expect(d.generationService.generateResponse(d.conversationId, d.ask('Hello')))
+      .rejects.toThrow('No model loaded');
+    expect(d.generationService.getState().isGenerating).toBe(false);
+    expect(d.useChatStore.getState().streamingForConversationId).toBeNull();
+    expect(d.boundary.llama!.calls.completion).toHaveLength(0);
   });
 
-  // ============================================================================
-  // Generation
-  // ============================================================================
-  describe('generateResponse', () => {
-    it('throws when no model loaded', async () => {
-      mockedLlmService.isModelLoaded.mockReturnValue(false);
+  it('thinks until the first token, streams into the chat, and stores the whole answer with its details', async () => {
+    d = await launchGeneration();
+    const states: any[] = [];
+    d.generationService.subscribe((s: any) => states.push({ ...s }));
+    let firstTokens = 0;
+    d.boundary.llama!.scriptCompletion({ text: 'Hello world', holdBeforeStream: true });
 
-      const convId = setupWithConversation();
+    const reply = d.generationService.generateResponse(
+      d.conversationId, d.ask('Hi'), () => { firstTokens += 1; },
+    );
+    await until(() => d.boundary.llama!.calls.completion.length === 1, 'the native completion');
 
-      await expect(
-        generationService.generateResponse(convId, [
-          createMessage({ role: 'user', content: 'Hello' }),
-        ])
-      ).rejects.toThrow('No model loaded');
-    });
+    // Prefill: generating, thinking, the chat is streaming but nothing is shown yet.
+    expect(d.generationService.getState()).toEqual(expect.objectContaining({
+      isGenerating: true, isThinking: true, conversationId: d.conversationId,
+    }));
+    expect(d.useChatStore.getState().streamingForConversationId).toBe(d.conversationId);
+    expect(d.useChatStore.getState().streamingMessage).toBe('');
 
-    it('returns immediately when already generating', async () => {
-      const convId = setupWithConversation();
+    d.boundary.llama!.releaseStream();
+    await reply;
 
-      // Start a generation that won't complete
-      mockedLlmService.generateResponse.mockImplementation((async () => {
-        await new Promise(() => {});
-      }) as any);
-
-      // First generation
-      generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'First' }),
-      ]);
-
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
-
-      // Second generation should return immediately
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Second' }),
-      ]);
-
-      // Only one call to llmService
-      expect(mockedLlmService.generateResponse).toHaveBeenCalledTimes(1);
-    });
-
-    it('sets isThinking true initially', async () => {
-      const convId = setupWithConversation();
-      const stateUpdates: GenerationState[] = [];
-
-      generationService.subscribe(state => stateUpdates.push({ ...state }));
-
-      mockedLlmService.generateResponse.mockImplementation((async () => {
-        await new Promise(() => {});
-      }) as any);
-
-      generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hello' }),
-      ]);
-
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
-
-      // Find the state where isThinking is true
-      const thinkingState = stateUpdates.find(s => s.isThinking && s.isGenerating);
-      expect(thinkingState).toBeDefined();
-    });
-
-    it('calls chatStore.startStreaming', async () => {
-      const convId = setupWithConversation();
-      const startStreamingSpy = jest.spyOn(useChatStore.getState(), 'startStreaming');
-
-      mockedLlmService.generateResponse.mockImplementation((async () => {
-        await new Promise(() => {});
-      }) as any);
-
-      generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hello' }),
-      ]);
-
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
-
-      expect(startStreamingSpy).toHaveBeenCalledWith(convId);
-    });
-
-    it('accumulates streaming tokens', async () => {
-      const convId = setupWithConversation();
-      setupWithActiveModel();
-
-      // Track the streaming state during generation
-      const streamedTokens: string[] = [];
-
-      mockedLlmService.generateResponse.mockImplementation((async (
-        _messages: any,
-        { onStream, onComplete }: any = {}
-      ) => {
-        onStream?.('Hello');
-        streamedTokens.push('Hello');
-        onStream?.(' ');
-        streamedTokens.push(' ');
-        onStream?.('world');
-        streamedTokens.push('world');
-        onComplete?.('Hello world');
-        return 'Hello world';
-      }) as any);
-
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      // Verify tokens were streamed
-      expect(streamedTokens).toEqual(['Hello', ' ', 'world']);
-
-      // Verify the chat store was updated with streaming content
-      // Note: The actual content depends on how the service processed tokens
-      // The key is that onStream was called with the tokens
-    });
-
-    it('calls onFirstToken callback on first token', async () => {
-      const convId = setupWithConversation();
-      setupWithActiveModel();
-      const onFirstToken = jest.fn();
-
-      mockedLlmService.generateResponse.mockImplementation((async (
-        _messages: any,
-        { onStream, onComplete }: any = {}
-      ) => {
-        onStream?.('First');
-        onStream?.(' token');
-        onComplete?.('First token');
-      }) as any);
-
-      await generationService.generateResponse(
-        convId,
-        [createMessage({ role: 'user', content: 'Hi' })],
-        onFirstToken
-      );
-
-      expect(onFirstToken).toHaveBeenCalledTimes(1);
-    });
-
-    it('finalizes message on completion', async () => {
-      const convId = setupWithConversation();
-      setupWithActiveModel();
-
-      mockedLlmService.generateResponse.mockImplementation((async (
-        _messages: any,
-        { onStream, onComplete }: any = {}
-      ) => {
-        onStream?.('Response');
-        onComplete?.('Response');
-      }) as any);
-
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      const state = generationService.getState();
-      expect(state.isGenerating).toBe(false);
-      expect(state.conversationId).toBeNull();
-      expect(state.streamingContent).toBe('');
-    });
-
-    // (Removed: "handles generation error" asserted clearStreamingMessage-on-error, the SUPERSEDED
-    // discard behavior. Error now flushes + finalizes the shown partial (keepShownPartialOnError);
-    // covered by errorKeepsPartial.rendered.redflow.test.tsx.)
-
-    it('throws error on generation failure', async () => {
-      const convId = setupWithConversation();
-
-      mockedLlmService.generateResponse.mockRejectedValue(new Error('Failed'));
-
-      await expect(
-        generationService.generateResponse(convId, [
-          createMessage({ role: 'user', content: 'Hi' }),
-        ])
-      ).rejects.toThrow('Failed');
-    });
+    expect(firstTokens).toBe(1);
+    expect(states.some(s => s.isGenerating && !s.isThinking)).toBe(true);
+    expect(d.generationService.getState()).toEqual(expect.objectContaining({
+      isGenerating: false, isThinking: false, conversationId: null, streamingContent: '', startTime: null,
+    }));
+    expect(d.useChatStore.getState().streamingMessage).toBe('');
+    expect(d.useChatStore.getState().isStreaming).toBe(false);
+    const [answer] = d.answers();
+    expect(answer.content).toBe('Hello world');
+    expect(answer.generationTimeMs).toEqual(expect.any(Number));
+    expect(answer.generationMeta).toEqual(expect.objectContaining({
+      modelName: 'Test Model',
+      gpu: expect.any(Boolean),
+      gpuBackend: expect.any(String),
+      tokensPerSecond: expect.any(Number),
+    }));
   });
 
-  // ============================================================================
-  // Stop Generation
-  // ============================================================================
-  describe('stopGeneration', () => {
-    it('always attempts to stop native generation', async () => {
-      await generationService.stopGeneration();
+  it('ignores a second request while one is running: the device sees one completion', async () => {
+    d = await launchGeneration();
+    d.boundary.llama!.scriptCompletion({ text: 'First answer', pauseAfter: 'First' });
 
-      expect(mockedLlmService.stopGeneration).toHaveBeenCalled();
-    });
+    const first = d.generationService.generateResponse(d.conversationId, d.ask('First'));
+    await until(() => d.useChatStore.getState().streamingMessage === 'First', 'the first words');
+    await d.generationService.generateResponse(d.conversationId, d.ask('Second'));
 
-    it('returns empty string when not generating', async () => {
-      const result = await generationService.stopGeneration();
-
-      expect(result).toBe('');
-    });
-
-    it('saves partial content when stopped', async () => {
-      const convId = setupWithConversation();
-      setupWithActiveModel();
-
-      // Start generation that accumulates content
-      mockedLlmService.generateResponse.mockImplementation((async (
-        _messages: any,
-        { onStream }: any = {}
-      ) => {
-        onStream?.('Partial');
-        onStream?.(' content');
-        // Never complete - will be stopped
-        await new Promise(() => {});
-      }) as any);
-
-      // Start generation
-      generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      // Wait for tokens to be processed
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 50));
-
-      // Stop generation
-      const partial = await generationService.stopGeneration();
-
-      expect(partial).toBe('Partial content');
-    });
-
-    // (Removed: "clears streaming message when no content" asserted clear-on-stop, superseded by
-    // never-discard — stop flushes + finalizes whatever is shown. Covered by the stopKeepsPartial
-    // rendered integration tests.)
-
-    it('resets state after stopping', async () => {
-      const convId = setupWithConversation();
-
-      mockedLlmService.generateResponse.mockImplementation((async (
-        _messages: any,
-        { onStream }: any = {}
-      ) => {
-        onStream?.('Content');
-        await new Promise(() => {});
-      }) as any);
-
-      generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 50));
-
-      await generationService.stopGeneration();
-
-      const state = generationService.getState();
-      expect(state.isGenerating).toBe(false);
-      expect(state.isThinking).toBe(false);
-      expect(state.conversationId).toBeNull();
-      expect(state.streamingContent).toBe('');
-      expect(state.startTime).toBeNull();
-    });
-
-    it('handles stopGeneration error gracefully', async () => {
-      mockedLlmService.stopGeneration.mockRejectedValue(new Error('Stop failed'));
-
-      // Should not throw
-      await expect(generationService.stopGeneration()).resolves.toBe('');
-    });
-
-    it('IGNORES a token the provider emits AFTER stopGeneration (abort guard is load-bearing)', async () => {
-      // Regression guard for the mid-stream-cancel race: a slow/native provider can
-      // fire one more onStream callback AFTER the user hit Stop. The abort guard must
-      // drop it — otherwise a post-cancel token corrupts the finalized partial. This
-      // drives the REAL service (only the LLM boundary is faked) and captures the real
-      // onStream so we can invoke it post-stop, rather than asserting a mock's return.
-      const convId = setupWithConversation();
-      setupWithActiveModel();
-
-      let capturedOnStream: ((t: string) => void) | undefined;
-      mockedLlmService.generateResponse.mockImplementation((async (
-        _messages: any,
-        { onStream }: any = {},
-      ) => {
-        capturedOnStream = onStream;
-        onStream?.('Partial');
-        await new Promise(() => {}); // never resolves — will be stopped
-      }) as any);
-
-      generationService.generateResponse(convId, [createMessage({ role: 'user', content: 'Hi' })]);
-      await new Promise<void>(resolve => setTimeout(resolve, 50));
-
-      const partial = await generationService.stopGeneration();
-      expect(partial).toBe('Partial');
-
-      // The provider emits one more token AFTER stop (the exact race).
-      capturedOnStream?.(' LEAKED');
-
-      // It must NOT be appended anywhere: streaming content stays cleared and the
-      // finalized partial is unchanged. Deleting the abort guard fails this.
-      expect(generationService.getState().streamingContent).toBe('');
-      expect(generationService.getState().isGenerating).toBe(false);
-    });
+    expect(d.boundary.llama!.calls.completion).toHaveLength(1);
+    d.boundary.llama!.releaseStream();
+    await first;
+    expect(d.answers().map((m: any) => m.content)).toEqual(['First answer']);
   });
 
-  // ============================================================================
-  // Queue Management
-  // ============================================================================
-  describe('queue management', () => {
-    it('enqueueMessage adds to queue', () => {
-      generationService.enqueueMessage({
-        id: 'q1',
-        conversationId: 'conv-1',
-        text: 'Hello',
-        messageText: 'Hello',
-      });
+  it('keeps the reasoning a thinking model streams beside the answer', async () => {
+    d = await launchGeneration();
+    d.useAppStore.getState().updateSettings({ thinkingEnabled: true });
+    d.boundary.llama!.scriptCompletion({ text: 'answer', reasoning: 'thinking step' });
 
-      const state = generationService.getState();
-      expect(state.queuedMessages).toHaveLength(1);
-      expect(state.queuedMessages[0].id).toBe('q1');
-    });
+    await d.generationService.generateResponse(d.conversationId, d.ask('Hi'));
 
-    it('enqueueMessage appends multiple items', () => {
-      generationService.enqueueMessage({
-        id: 'q1',
-        conversationId: 'conv-1',
-        text: 'First',
-        messageText: 'First',
-      });
-      generationService.enqueueMessage({
-        id: 'q2',
-        conversationId: 'conv-1',
-        text: 'Second',
-        messageText: 'Second',
-      });
-
-      expect(generationService.getState().queuedMessages).toHaveLength(2);
-    });
-
-    it('removeFromQueue removes specific item', () => {
-      generationService.enqueueMessage({
-        id: 'q1',
-        conversationId: 'conv-1',
-        text: 'First',
-        messageText: 'First',
-      });
-      generationService.enqueueMessage({
-        id: 'q2',
-        conversationId: 'conv-1',
-        text: 'Second',
-        messageText: 'Second',
-      });
-
-      generationService.removeFromQueue('q1');
-
-      const queue = generationService.getState().queuedMessages;
-      expect(queue).toHaveLength(1);
-      expect(queue[0].id).toBe('q2');
-    });
-
-    it('clearQueue removes all items', () => {
-      generationService.enqueueMessage({
-        id: 'q1',
-        conversationId: 'conv-1',
-        text: 'First',
-        messageText: 'First',
-      });
-      generationService.enqueueMessage({
-        id: 'q2',
-        conversationId: 'conv-1',
-        text: 'Second',
-        messageText: 'Second',
-      });
-
-      generationService.clearQueue();
-
-      expect(generationService.getState().queuedMessages).toHaveLength(0);
-    });
-
-    it('notifies listeners on queue changes', () => {
-      const listener = jest.fn();
-      generationService.subscribe(listener);
-      listener.mockClear();
-
-      generationService.enqueueMessage({
-        id: 'q1',
-        conversationId: 'conv-1',
-        text: 'Hello',
-        messageText: 'Hello',
-      });
-
-      expect(listener).toHaveBeenCalled();
-      const lastCall = listener.mock.calls[listener.mock.calls.length - 1][0];
-      expect(lastCall.queuedMessages).toHaveLength(1);
-    });
+    const [answer] = d.answers();
+    expect(answer.content).toBe('answer');
+    expect(answer.reasoningContent).toBe('thinking step');
   });
 
-  // ============================================================================
-  // Queue Processor
-  // ============================================================================
-  describe('queue processor', () => {
-    it('setQueueProcessor registers callback', () => {
-      const processor = jest.fn();
-      generationService.setQueueProcessor(processor);
+  it('raises a native failure at the start and leaves nothing streaming', async () => {
+    d = await launchGeneration();
+    d.boundary.llama!.scriptCompletion({ throwMessage: 'Failed' });
 
-      expect((generationService as any).queueProcessor).toBe(processor);
-    });
+    await expect(d.generationService.generateResponse(d.conversationId, d.ask('Hi'))).rejects.toThrow('Failed');
 
-    it('setQueueProcessor with null clears callback', () => {
-      generationService.setQueueProcessor(jest.fn());
-      generationService.setQueueProcessor(null);
-
-      expect((generationService as any).queueProcessor).toBeNull();
-    });
-
-    it('processNextInQueue aggregates multiple messages', async () => {
-      const processor = jest.fn().mockResolvedValue(undefined);
-      generationService.setQueueProcessor(processor);
-
-      // Enqueue 3 messages
-      generationService.enqueueMessage({
-        id: 'q1',
-        conversationId: 'conv-1',
-        text: 'First',
-        messageText: 'First',
-        attachments: [{ id: 'att-1', type: 'image' as const, uri: '/img1.jpg' }],
-      });
-      generationService.enqueueMessage({
-        id: 'q2',
-        conversationId: 'conv-1',
-        text: 'Second',
-        messageText: 'Second',
-      });
-      generationService.enqueueMessage({
-        id: 'q3',
-        conversationId: 'conv-1',
-        text: 'Third',
-        messageText: 'Third',
-      });
-
-      // Trigger queue processing by calling private method
-      (generationService as any).processNextInQueue();
-
-      // Wait for async processor
-      await new Promise<void>(resolve => setTimeout(resolve, 10));
-
-      expect(processor).toHaveBeenCalledTimes(1);
-      const combined = processor.mock.calls[0][0];
-      expect(combined.text).toContain('First');
-      expect(combined.text).toContain('Second');
-      expect(combined.text).toContain('Third');
-      expect(combined.attachments).toHaveLength(1); // Only q1 had attachment
-    });
-
-    it('processNextInQueue passes single message directly', async () => {
-      const processor = jest.fn().mockResolvedValue(undefined);
-      generationService.setQueueProcessor(processor);
-
-      generationService.enqueueMessage({
-        id: 'q1',
-        conversationId: 'conv-1',
-        text: 'Only one',
-        messageText: 'Only one',
-      });
-
-      (generationService as any).processNextInQueue();
-      await new Promise<void>(resolve => setTimeout(resolve, 10));
-
-      expect(processor).toHaveBeenCalledTimes(1);
-      expect(processor.mock.calls[0][0].id).toBe('q1');
-      expect(processor.mock.calls[0][0].text).toBe('Only one');
-    });
-
-    it('processNextInQueue does nothing without processor', () => {
-      generationService.setQueueProcessor(null);
-      generationService.enqueueMessage({
-        id: 'q1',
-        conversationId: 'conv-1',
-        text: 'Hello',
-        messageText: 'Hello',
-      });
-
-      // Should not throw
-      (generationService as any).processNextInQueue();
-
-      // Queue should still have items since no processor handled them
-      // Actually processNextInQueue clears the queue first then calls processor
-      // If no processor, it returns early without clearing
-      expect(generationService.getState().queuedMessages).toHaveLength(1);
-    });
+    expect(d.generationService.getState().isGenerating).toBe(false);
+    expect(d.useChatStore.getState().streamingForConversationId).toBeNull();
+    // The failed turn is kept as an empty failed answer (so the chat can offer a retry), never as text.
+    expect(d.answers().map((m: any) => [m.content, m.turnStatus])).toEqual([['', 'failed']]);
   });
 
-  // ============================================================================
-  // Abort Handling
-  // ============================================================================
-  describe('abort handling', () => {
-    it('ignores tokens after abort is requested', async () => {
-      const convId = setupWithConversation();
-      setupWithActiveModel();
+  it('keeps the words already shown when the native decode fails mid-reply', async () => {
+    d = await launchGeneration();
+    d.boundary.llama!.scriptCompletion({ text: 'partial', throwAfter: 'sudden failure' });
 
-      mockedLlmService.generateResponse.mockImplementation((async (
-        _messages: any,
-        { onStream }: any = {},
-      ) => {
-        onStream?.('First');
-        // Simulate abort
-        (generationService as any).abortRequested = true;
-        onStream?.('Ignored');
-        await new Promise(() => {}); // Never complete
-      }) as any);
+    await expect(d.generationService.generateResponse(d.conversationId, d.ask('Hi')))
+      .rejects.toThrow('sudden failure');
 
-      generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
+    expect(d.generationService.getState().isGenerating).toBe(false);
+    expect(d.answers().map((m: any) => [m.content, m.turnStatus])).toEqual([['partial', 'failed']]);
+    // No batched-token flush is left to fire into a later reply.
+    await tick(80);
+    expect(d.useChatStore.getState().streamingMessage).toBe('');
+  });
+});
 
-      await new Promise<void>(resolve => setTimeout(resolve, 50));
+// ============================================================================
+// The share prompt after a reply
+// ============================================================================
+describe('the share prompt after a reply', () => {
+  const heard = () => {
+    const variants: string[] = [];
+    require('../../../src/utils/sharePrompt').subscribeSharePrompt((v: string) => variants.push(v));
+    return variants;
+  };
 
-      // streamingContent should only have First since abort was set before Ignored
-      const state = generationService.getState();
-      expect(state.streamingContent).toBe('First');
-    });
+  it('asks once, for text, from the second reply of a session', async () => {
+    d = await launchGeneration();
+    const variants = heard();
+    d.boundary.llama!.scriptCompletions([{ text: 'One' }, { text: 'Two' }]);
+
+    await d.generationService.generateResponse(d.conversationId, d.ask('Hi'));
+    await d.generationService.generateResponse(d.conversationId, d.ask('Again'));
+    expect(variants).toEqual([]);
+    await until(() => variants.length > 0, 'the share prompt', 2500);
+
+    expect(variants).toEqual(['text']);
   });
 
-  // ============================================================================
-  // Integration with Stores
-  // ============================================================================
-  describe('store integration', () => {
-    it('updates chatStore streaming state during generation', async () => {
-      const convId = setupWithConversation();
-      setupWithActiveModel();
+  it('never asks a person who already engaged with it', async () => {
+    d = await launchGeneration();
+    d.useAppStore.getState().setHasEngagedSharePrompt(true);
+    const variants = heard();
+    d.boundary.llama!.scriptCompletions([{ text: 'One' }, { text: 'Two' }]);
 
-      mockedLlmService.generateResponse.mockImplementation((async (
-        _messages: any,
-        { onStream, onComplete }: any = {}
-      ) => {
-        onStream?.('Token');
-        onComplete?.('Token');
-      }) as any);
+    await d.generationService.generateResponse(d.conversationId, d.ask('Hi'));
+    await d.generationService.generateResponse(d.conversationId, d.ask('Again'));
+    await tick(1700);
 
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
+    expect(variants).toEqual([]);
+  });
+});
 
-      // After completion, streaming should be cleared
-      const chatState = useChatStore.getState();
-      expect(chatState.streamingMessage).toBe('');
-      expect(chatState.isStreaming).toBe(false);
-    });
+// ============================================================================
+// Stop
+// ============================================================================
+describe('stopGeneration', () => {
+  it('when nothing runs, returns nothing, adds nothing, and tells the engine to stop anyway', async () => {
+    d = await launchGeneration();
+    const stops = d.nativeContext()!.stopCompletion;
 
-    it('includes generation metadata on finalized message', async () => {
-      const convId = setupWithConversation();
-      setupWithActiveModel({ name: 'Test Model' });
+    await expect(d.generationService.stopGeneration()).resolves.toBe('');
 
-      mockedLlmService.generateResponse.mockImplementation((async (
-        _messages: any,
-        { onStream, onComplete }: any = {}
-      ) => {
-        onStream?.('Response');
-        onComplete?.('Response');
-        return 'Response';
-      }) as any);
-
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      const messages = useChatStore.getState().getConversationMessages(convId);
-      const assistantMessage = messages.find(m => m.role === 'assistant');
-
-      // If message was created, it should have metadata
-      if (assistantMessage) {
-        expect(assistantMessage.generationMeta).toBeDefined();
-        expect(assistantMessage.generationTimeMs).toBeDefined();
-      } else {
-        // Message may not be created if streaming content was empty after trim
-        // This is acceptable behavior - the service clears empty messages
-        expect(true).toBe(true);
-      }
-    });
+    expect(stops).toHaveBeenCalled();
+    expect(d.answers()).toEqual([]);
   });
 
-  // ============================================================================
-  // Remote Provider
-  // ============================================================================
-  describe('remote provider', () => {
-    const mockRemoteProvider = {
-      id: 'test-remote',
-      isReady: jest.fn().mockResolvedValue(true),
-      generate: jest.fn(),
-      stopGeneration: jest.fn().mockResolvedValue(undefined),
-      getLoadedModelId: jest.fn().mockReturnValue('remote-model'),
-      capabilities: { supportsVision: false, supportsToolCalling: true, supportsThinking: false },
-    };
+  it('survives a native stop that fails', async () => {
+    d = await launchGeneration();
+    d.nativeContext()!.stopCompletion.mockRejectedValueOnce(new Error('Stop failed'));
 
-    beforeEach(() => {
-      // Reset remote server store state
-      useRemoteServerStore.setState({
-        activeServerId: null,
-        servers: [],
-      });
-      mockedProviderRegistry.getProvider.mockReturnValue(undefined);
-      mockedProviderRegistry.getActiveProvider.mockReturnValue(mockRemoteProvider as any);
-      (mockedProviderRegistry as any).hasProvider = jest.fn(() => true);
-      mockedLlmService.isModelLoaded.mockReturnValue(false);
-    });
-
-    afterEach(() => {
-      useRemoteServerStore.setState({ activeServerId: null });
-    });
-
-    it('routes to remote provider when activeServerId is set', async () => {
-      const convId = setupWithConversation();
-      useRemoteServerStore.setState({ activeServerId: 'test-remote' });
-      mockedProviderRegistry.getProvider.mockReturnValue(mockRemoteProvider as any);
-
-      mockRemoteProvider.generate.mockImplementation(async (_msgs: any, _opts: any, callbacks: any) => {
-        callbacks.onToken('Remote response');
-        callbacks.onComplete({ content: 'Remote response' });
-      });
-
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      expect(mockedLlmService.generateResponse).not.toHaveBeenCalled();
-      expect(mockRemoteProvider.generate).toHaveBeenCalled();
-    });
-
-    it('throws error when remote provider is not found', async () => {
-      const convId = setupWithConversation();
-      useRemoteServerStore.setState({ activeServerId: 'missing-remote' });
-      mockedProviderRegistry.getProvider.mockReturnValue(undefined);
-
-      await expect(
-        generationService.generateResponse(convId, [
-          createMessage({ role: 'user', content: 'Hi' }),
-        ])
-      ).rejects.toThrow('Remote provider not found');
-    });
-
-    it('throws error when remote provider is not ready', async () => {
-      const convId = setupWithConversation();
-      useRemoteServerStore.setState({ activeServerId: 'test-remote' });
-      mockRemoteProvider.isReady.mockResolvedValueOnce(false);
-      mockedProviderRegistry.getProvider.mockReturnValue(mockRemoteProvider as any);
-
-      await expect(
-        generationService.generateResponse(convId, [
-          createMessage({ role: 'user', content: 'Hi' }),
-        ])
-      ).rejects.toThrow('Remote provider not ready');
-    });
-
-    it('handles remote generation error', async () => {
-      const convId = setupWithConversation();
-      useRemoteServerStore.setState({ activeServerId: 'test-remote' });
-      mockedProviderRegistry.getProvider.mockReturnValue(mockRemoteProvider as any);
-
-      mockRemoteProvider.generate.mockImplementation(async (_msgs: any, _opts: any, callbacks: any) => {
-        callbacks.onError(new Error('Remote generation failed'));
-      });
-
-      await expect(
-        generationService.generateResponse(convId, [
-          createMessage({ role: 'user', content: 'Hi' }),
-        ])
-      ).rejects.toThrow('Remote generation failed');
-    });
-
-    it('tracks time to first token for remote generation', async () => {
-      const convId = setupWithConversation();
-      useRemoteServerStore.setState({ activeServerId: 'test-remote' });
-      mockedProviderRegistry.getProvider.mockReturnValue(mockRemoteProvider as any);
-
-      let _onFirstTokenCallback: (() => void) | undefined;
-      mockRemoteProvider.generate.mockImplementation(async (_msgs: any, _opts: any, callbacks: any) => {
-        // Simulate delay before first token
-        await new Promise(resolve => setTimeout(resolve, 10));
-        callbacks.onToken('First');
-        _onFirstTokenCallback = callbacks.onFirstToken;
-      });
-
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      // Verify remoteTimeToFirstToken was tracked
-      expect(mockRemoteProvider.generate).toHaveBeenCalled();
-    });
-
-    it('stops remote generation on abort', async () => {
-      const convId = setupWithConversation();
-      useRemoteServerStore.setState({ activeServerId: 'test-remote' });
-      mockedProviderRegistry.getProvider.mockReturnValue(mockRemoteProvider as any);
-
-      mockRemoteProvider.generate.mockImplementation(async () => {
-        // Never complete
-        await new Promise(() => {});
-      });
-
-      generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      // Stop should abort the remote controller
-      await generationService.stopGeneration();
-
-      const state = generationService.getState();
-      expect(state.isGenerating).toBe(false);
-    });
-
-    it('handles onReasoning callback for remote generation', async () => {
-      const convId = setupWithConversation();
-      useRemoteServerStore.setState({ activeServerId: 'test-remote' });
-      mockedProviderRegistry.getProvider.mockReturnValue(mockRemoteProvider as any);
-
-      mockRemoteProvider.generate.mockImplementation(async (_msgs: any, _opts: any, callbacks: any) => {
-        callbacks.onReasoning('Thinking...');
-        callbacks.onToken('Response');
-        callbacks.onComplete({ content: 'Response' });
-      });
-
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      expect(mockRemoteProvider.generate).toHaveBeenCalled();
-    });
-
-    it('uses remote metadata in generation meta', async () => {
-      const convId = setupWithConversation();
-      useRemoteServerStore.setState({
-        activeServerId: 'test-remote',
-        servers: [{ id: 'test-remote', name: 'Test Server', endpoint: 'http://test' }] as any,
-      });
-      mockedProviderRegistry.getProvider.mockReturnValue(mockRemoteProvider as any);
-      mockedProviderRegistry.getActiveProvider.mockReturnValue(mockRemoteProvider as any);
-
-      mockRemoteProvider.generate.mockImplementation(async (_msgs: any, _opts: any, callbacks: any) => {
-        callbacks.onToken('Response');
-        callbacks.onComplete({ content: 'Response' });
-      });
-
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      // Verify generation completed successfully
-      const state = generationService.getState();
-      expect(state.isGenerating).toBe(false);
-    });
+    await expect(d.generationService.stopGeneration()).resolves.toBe('');
   });
 
-  // ============================================================================
-  // Generation Metadata
-  // ============================================================================
-  describe('buildGenerationMeta', () => {
-    it('includes GPU info for local generation', async () => {
-      const convId = setupWithConversation();
-      setupWithActiveModel({ name: 'Test Model' });
-      mockedLlmService.getGpuInfo.mockReturnValue({
-        gpu: true,
-        gpuBackend: 'Metal',
-        gpuLayers: 32,
-        reasonNoGPU: '',
-      });
-      mockedLlmService.getPerformanceStats.mockReturnValue({
-        lastTokensPerSecond: 25,
-        lastDecodeTokensPerSecond: 30,
-        lastTimeToFirstToken: 0.3,
-        lastGenerationTime: 2.0,
-        lastTokenCount: 100,
-      });
+  it('keeps the partial answer shown, returns it, and resets', async () => {
+    d = await launchGeneration();
+    d.boundary.llama!.scriptCompletion({ text: 'Partial content and more', pauseAfter: 'Partial content' });
 
-      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, { onStream, onComplete }: any = {}) => {
-        onStream?.('Response');
-        onComplete?.('Response');
-        return 'Response';
-      });
+    const reply = d.generationService.generateResponse(d.conversationId, d.ask('Hi'));
+    await until(() => d.generationService.getState().streamingContent === 'Partial content', 'the partial');
+    const partial = await d.generationService.stopGeneration();
+    await reply;
 
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      // Generation should complete
-      expect(generationService.getState().isGenerating).toBe(false);
-    });
+    expect(partial).toBe('Partial content');
+    expect(d.answers().map((m: any) => [m.content, m.turnStatus])).toEqual([['Partial content', 'cancelled']]);
+    expect(d.generationService.getState()).toEqual(expect.objectContaining({
+      isGenerating: false, isThinking: false, conversationId: null, streamingContent: '', startTime: null,
+    }));
   });
 
-  // ============================================================================
-  // Share Prompt Check
-  // ============================================================================
-  describe('share prompt check', () => {
-    it('does not trigger share prompt if already engaged', async () => {
-      const { emitSharePrompt } = require('../../../src/utils/sharePrompt');
-      const convId = setupWithConversation();
-      setupWithActiveModel();
+  it('IGNORES a token the device emits AFTER Stop (abort guard is load-bearing)', async () => {
+    // The mid-stream-cancel race: a native completion can deliver one more token after the user hit Stop.
+    d = await launchGeneration();
+    d.boundary.llama!.scriptCompletion({ text: 'Partial answer', pauseAfter: 'Partial' });
 
-      useAppStore.setState({ hasEngagedSharePrompt: true });
+    const reply = d.generationService.generateResponse(d.conversationId, d.ask('Hi'));
+    await until(() => d.generationService.getState().streamingContent === 'Partial', 'the partial');
+    const lateToken = d.nativeOnToken()!;
+    expect(await d.generationService.stopGeneration()).toBe('Partial');
 
-      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, { onStream, onComplete }: any = {}) => {
-        onStream?.('Response');
-        onComplete?.('Response');
-        return 'Response';
-      });
+    lateToken({ token: ' LEAKED', content: 'Partial LEAKED' });
+    await reply;
+    await tick(80);
 
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      expect(emitSharePrompt).not.toHaveBeenCalled();
-    });
+    expect(d.generationService.getState().streamingContent).toBe('');
+    expect(d.generationService.getState().isGenerating).toBe(false);
+    expect(d.useChatStore.getState().streamingMessage).toBe('');
+    expect(d.answers().map((m: any) => m.content)).toEqual(['Partial']);
   });
 
-  // ============================================================================
-  // Additional branch coverage
-  // ============================================================================
-  describe('reasoning content in local generateResponse', () => {
-    it('accumulates reasoning content in reasoningBuffer', async () => {
-      const convId = setupWithConversation();
-      setupWithActiveModel();
+  it('a Stop during prefill (nothing shown yet) keeps only an empty stopped turn and resets', async () => {
+    d = await launchGeneration();
+    d.boundary.llama!.scriptCompletion({ text: 'never shown', holdBeforeStream: true });
 
-      mockedLlmService.generateResponse.mockImplementation(async (
-        _msgs: any, { onStream, onComplete }: any = {}
-      ) => {
-        onStream?.({ content: 'answer', reasoningContent: 'thinking step' });
-        onComplete?.('answer');
-        return 'answer';
-      });
+    const reply = d.generationService.generateResponse(d.conversationId, d.ask('Hi'));
+    await until(() => d.boundary.llama!.calls.completion.length === 1, 'the native completion');
+    expect(await d.generationService.stopGeneration()).toBe('');
+    await reply;
 
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
+    expect(d.generationService.getState().isGenerating).toBe(false);
+    expect(d.useChatStore.getState().streamingForConversationId).toBeNull();
+    expect(d.answers().map((m: any) => [m.content, m.turnStatus])).toEqual([['', 'cancelled']]);
+  });
+});
 
-      // If reasoning was buffered, appendToStreamingReasoningContent would have been called
-      expect(generationService.getState().isGenerating).toBe(false);
-    });
+// ============================================================================
+// The queue
+// ============================================================================
+describe('the message queue', () => {
+  beforeEach(async () => {
+    d = await launchGeneration();
   });
 
-  describe('error path clears flushTimer', () => {
-    it('clearTimeout on flushTimer when generation throws with buffered tokens', async () => {
-      jest.useFakeTimers();
-      const convId = setupWithConversation();
-      setupWithActiveModel();
+  it('adds, removes and clears queued messages', () => {
+    d.generationService.enqueueMessage(queued('q1', 'First'));
+    d.generationService.enqueueMessage(queued('q2', 'Second'));
+    expect(d.generationService.getState().queuedMessages.map((m: any) => m.id)).toEqual(['q1', 'q2']);
 
-      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, { onStream }: any = {}) => {
-        // Stream a token (sets flushTimer via buffering)
-        onStream?.('partial');
-        // Then throw
-        throw new Error('sudden failure');
-      });
+    d.generationService.removeFromQueue('q1');
+    expect(d.generationService.getState().queuedMessages.map((m: any) => m.id)).toEqual(['q2']);
 
-      await expect(
-        generationService.generateResponse(convId, [createMessage({ role: 'user', content: 'Hi' })])
-      ).rejects.toThrow('sudden failure');
-
-      expect(generationService.getState().isGenerating).toBe(false);
-      jest.useRealTimers();
-    });
+    d.generationService.clearQueue();
+    expect(d.generationService.getState().queuedMessages).toEqual([]);
   });
 
-  describe('generateWithTools — local path via runToolLoop', () => {
-    beforeEach(() => {
-      mockedRunToolLoop.mockReset();
-      (generationService as any).state = {
-        isGenerating: false, isThinking: false, conversationId: null,
-        streamingContent: '', startTime: null, queuedMessages: [],
-      };
-      (generationService as any).abortRequested = false;
-      (generationService as any).flushTimer = null;
-    });
+  it('sends what is queued in one chat as one turn, text joined and attachments kept', () => {
+    const sent: any[] = [];
+    d.generationService.setQueueProcessor(async (item: any) => { sent.push(item); });
+    d.generationService.enqueueMessage(queued('q1', 'First', { attachments: [{ id: 'att-1', type: 'image', uri: '/img1.jpg' }] }));
+    d.generationService.enqueueMessage(queued('q2', 'Second'));
+    d.generationService.enqueueMessage(queued('q3', 'Third'));
 
-    it('runs tool loop and finalizes on success', async () => {
-      const convId = setupWithConversation();
-      setupWithActiveModel();
+    d.generationService.drainQueue();
 
-      mockedRunToolLoop.mockImplementation(async ({ onStream, onThinkingDone }: any) => {
-        onThinkingDone?.();
-        onStream?.({ content: 'result', reasoningContent: '' });
-        return { interrupted: false };
-      });
-
-      await generationService.generateWithTools(convId, [
-        createMessage({ role: 'user', content: 'use tools' }),
-      ], { enabledToolIds: ['calculator'] });
-
-      expect(mockedRunToolLoop).toHaveBeenCalled();
-      expect(generationService.getState().isGenerating).toBe(false);
-    });
-
-    it('calls onStreamReset to flush pending content', async () => {
-      const convId = setupWithConversation();
-      setupWithActiveModel();
-
-      mockedRunToolLoop.mockImplementation(async ({ onStream, onStreamReset }: any) => {
-        onStream?.({ content: 'before reset' });
-        onStreamReset?.();
-        onStream?.({ content: 'after reset' });
-        return { interrupted: false };
-      });
-
-      await generationService.generateWithTools(convId, [
-        createMessage({ role: 'user', content: 'tool' }),
-      ], { enabledToolIds: [] });
-
-      expect(generationService.getState().isGenerating).toBe(false);
-    });
-
-    it('calls onFinalResponse to set streaming content', async () => {
-      const convId = setupWithConversation();
-      setupWithActiveModel();
-
-      mockedRunToolLoop.mockImplementation(async ({ onFinalResponse }: any) => {
-        onFinalResponse?.('final answer');
-        return { interrupted: false };
-      });
-
-      await generationService.generateWithTools(convId, [
-        createMessage({ role: 'user', content: 'tool' }),
-      ], { enabledToolIds: [] });
-
-      expect(generationService.getState().isGenerating).toBe(false);
-    });
-
-    it('throws and clears state on runToolLoop error', async () => {
-      const convId = setupWithConversation();
-      setupWithActiveModel();
-
-      mockedRunToolLoop.mockRejectedValue(new Error('tool loop fail'));
-
-      await expect(
-        generationService.generateWithTools(convId, [
-          createMessage({ role: 'user', content: 'tool' }),
-        ], { enabledToolIds: [] })
-      ).rejects.toThrow('tool loop fail');
-
-      expect(generationService.getState().isGenerating).toBe(false);
-    });
-
-    it('throws and clears flushTimer on error if timer was set', async () => {
-      jest.useFakeTimers();
-      const convId = setupWithConversation();
-      setupWithActiveModel();
-
-      mockedRunToolLoop.mockImplementation(async ({ onStream }: any) => {
-        onStream?.({ content: 'partial' });
-        throw new Error('mid-tool failure');
-      });
-
-      await expect(
-        generationService.generateWithTools(convId, [
-          createMessage({ role: 'user', content: 'tool' }),
-        ], { enabledToolIds: [] })
-      ).rejects.toThrow('mid-tool failure');
-
-      expect(generationService.getState().isGenerating).toBe(false);
-      jest.useRealTimers();
-    });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].text).toBe('First\n\nSecond\n\nThird');
+    expect(sent[0].attachments).toEqual([{ id: 'att-1', type: 'image', uri: '/img1.jpg' }]);
+    expect(d.generationService.getState().queuedMessages).toEqual([]);
   });
 
-  describe('resetState with queued items triggers processNextInQueue', () => {
-    it('schedules processNextInQueue when queue is non-empty after reset', async () => {
-      jest.useFakeTimers();
-      const convId = setupWithConversation();
-      setupWithActiveModel();
+  it('sends a single queued message as it is', () => {
+    const sent: any[] = [];
+    d.generationService.setQueueProcessor(async (item: any) => { sent.push(item); });
+    const only = queued('q1', 'Only one');
+    d.generationService.enqueueMessage(only);
 
-      const processor = jest.fn().mockResolvedValue(undefined);
-      generationService.setQueueProcessor(processor);
+    d.generationService.drainQueue();
 
-      // Enqueue a message
-      generationService.enqueueMessage({ id: 'q1', conversationId: convId, text: 'queued', messageText: 'queued' });
-
-      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, { onStream: _onStream, onComplete }: any = {}) => {
-        onComplete?.('done');
-        return 'done';
-      });
-
-      // Start and finish generation
-      await generationService.generateResponse(convId, [createMessage({ role: 'user', content: 'Hi' })]);
-
-      // Advance timer to trigger processNextInQueue
-      jest.advanceTimersByTime(200);
-      await Promise.resolve(); // flush microtasks
-
-      expect(processor).toHaveBeenCalledWith(expect.objectContaining({ id: 'q1' }));
-      jest.useRealTimers();
-    });
+    expect(sent).toEqual([only]);
   });
 
-  // ============================================================================
-  // checkSharePrompt — true branch (emitSharePrompt called)
-  // ============================================================================
-  describe('checkSharePrompt — triggers share', () => {
-    it('delegates to maybeScheduleSharePrompt with the text variant + generation count', async () => {
-      const { maybeScheduleSharePrompt } = require('../../../src/utils/sharePrompt');
-      (maybeScheduleSharePrompt as jest.Mock).mockClear();
+  it('keeps the queue when no chat is there to send it', () => {
+    d.generationService.setQueueProcessor(async () => {});
+    d.generationService.setQueueProcessor(null);
+    d.generationService.enqueueMessage(queued('q1', 'Hello'));
 
-      const convId = setupWithConversation();
-      setupWithActiveModel();
+    d.generationService.drainQueue();
 
-      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, { onStream, onComplete }: any = {}) => {
-        onStream?.({ content: 'Hi' });
-        onComplete?.('Hi');
-        return 'Hi';
-      });
-
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      // The service owns the count; the once-per-session decision lives in the util.
-      expect(maybeScheduleSharePrompt).toHaveBeenCalledWith({ variant: 'text', count: expect.any(Number), hasEngaged: expect.any(Boolean), delayMs: expect.any(Number) });
-    });
+    expect(d.generationService.getState().queuedMessages).toHaveLength(1);
   });
 
-  // ============================================================================
-  // stopGeneration — edge cases
-  // ============================================================================
-  describe('stopGeneration — edge cases', () => {
-    it('clears streaming when there is no content on stop', async () => {
-      const convId = setupWithConversation();
-      // Set up generating state with empty streamingContent
-      (generationService as any).state = {
-        ...(generationService as any).state,
-        isGenerating: true,
-        conversationId: convId,
-        streamingContent: '',
-        startTime: null,
-      };
-      (generationService as any).abortRequested = false;
+  it('waits while a reply runs, and sends the queue once that reply is stored', async () => {
+    const sent: any[] = [];
+    d.generationService.setQueueProcessor(async (item: any) => { sent.push(item); });
+    d.boundary.llama!.scriptCompletion({ text: 'done now', pauseAfter: 'done' });
+    const reply = d.generationService.generateResponse(d.conversationId, d.ask('Hi'));
+    await until(() => d.useChatStore.getState().streamingMessage === 'done', 'the first words');
+    d.generationService.enqueueMessage(queued('q1', 'queued', { conversationId: d.conversationId }));
 
-      await generationService.stopGeneration();
+    d.generationService.drainQueue();
+    expect(sent).toEqual([]);
+    expect(d.generationService.getState().queuedMessages).toHaveLength(1);
 
-      expect(generationService.getState().isGenerating).toBe(false);
-    });
-
-    it('aborts remote controller when not generating and controller exists', async () => {
-      const mockAbort = jest.fn();
-      (generationService as any).currentRemoteAbortController = { abort: mockAbort };
-      (generationService as any).state.isGenerating = false;
-
-      await generationService.stopGeneration();
-
-      expect(mockAbort).toHaveBeenCalled();
-      expect((generationService as any).currentRemoteAbortController).toBeNull();
-    });
-
-    it('returns streamingContent when stopping remote generation', async () => {
-      const convId = setupWithConversation();
-      useRemoteServerStore.setState({ activeServerId: 'test-remote' });
-      (mockedProviderRegistry as any).hasProvider = jest.fn(() => true);
-      mockedLlmService.isModelLoaded.mockReturnValue(false);
-
-      (generationService as any).state = {
-        ...(generationService as any).state,
-        isGenerating: true,
-        conversationId: convId,
-        streamingContent: 'partial response',
-        startTime: Date.now(),
-      };
-      (generationService as any).abortRequested = false;
-      (generationService as any).currentRemoteAbortController = { abort: jest.fn() };
-
-      const content = await generationService.stopGeneration();
-      expect(content).toBe('partial response');
-
-      useRemoteServerStore.setState({ activeServerId: null });
-    });
+    d.boundary.llama!.releaseStream();
+    await reply;
+    await until(() => sent.length === 1, 'the queued turn');
+    expect(sent[0]).toEqual(expect.objectContaining({ id: 'q1', text: 'queued' }));
   });
 
-  // ============================================================================
-  // generateWithTools — remote path
-  // ============================================================================
-  describe('generateWithTools — remote path via generateRemoteWithTools', () => {
-    const mockRemoteProvider2 = {
-      id: 'remote-tools',
-      isReady: jest.fn().mockResolvedValue(true),
-      generate: jest.fn(),
-      stopGeneration: jest.fn().mockResolvedValue(undefined),
-      getLoadedModelId: jest.fn().mockReturnValue('remote-model'),
-    };
-
-    beforeEach(() => {
-      mockedRunToolLoop.mockReset();
-      (generationService as any).state = {
-        isGenerating: false, isThinking: false, conversationId: null,
-        streamingContent: '', startTime: null, queuedMessages: [],
-      };
-      (generationService as any).abortRequested = false;
-      (generationService as any).flushTimer = null;
-      useRemoteServerStore.setState({ activeServerId: 'remote-tools' });
-      (mockedProviderRegistry as any).hasProvider = jest.fn(() => true);
-      mockedLlmService.isModelLoaded.mockReturnValue(false);
-      mockedProviderRegistry.getProvider.mockReturnValue(mockRemoteProvider2 as any);
+  // Seen on an iPhone: after send now, the stopped reply settled twice and the second drain sent the
+  // other queued message while the send-now turn was still starting, so the two ran at once.
+  it('sends the next queued turn only after the one being sent settles, however often a reply settles', async () => {
+    let settle: () => void = () => {};
+    const sent: any[] = [];
+    d.generationService.setQueueProcessor((item: any) => {
+      sent.push(item);
+      return new Promise<void>(resolve => { settle = resolve; });
     });
+    d.generationService.enqueueMessage(queued('q1', 'title'));
+    d.generationService.enqueueMessage(queued('q2', 'moral'));
+    d.generationService.sendQueuedNow('q2');
 
-    afterEach(() => {
-      useRemoteServerStore.setState({ activeServerId: null });
-    });
+    d.generationService.drainQueue();
+    d.generationService.drainQueue();
 
-    it('routes generateWithTools to generateRemoteWithTools and calls runToolLoop with forceRemote', async () => {
-      const convId = setupWithConversation();
-      mockedRunToolLoop.mockResolvedValue({ interrupted: false });
+    expect(sent.map(m => m.text)).toEqual(['moral']);
+    expect(d.generationService.getState().queuedMessages.map((m: any) => m.text)).toEqual(['title']);
 
-      await generationService.generateWithTools(convId, [
-        createMessage({ role: 'user', content: 'use tools' }),
-      ], { enabledToolIds: ['calculator'] });
+    settle();
+    await tick();
+    expect(sent.map(m => m.text)).toEqual(['moral', 'title']);
+  });
+});
 
-      expect(mockedRunToolLoop).toHaveBeenCalledWith(
-        expect.objectContaining({ forceRemote: true }),
-      );
-      expect(generationService.getState().isGenerating).toBe(false);
-    });
+// ============================================================================
+// A reply from a server on the LAN
+// ============================================================================
+describe('generateResponse on a remote (OpenAI-compatible) model', () => {
+  it('answers from the selected server model even while a local model is in memory', async () => {
+    d = await launchGeneration();
+    expect(d.llmService.isModelLoaded()).toBe(true);
+    server = await connectServer(d);
+    server.reply({ content: ['Remote ', 'response'] });
 
-    it('throws when remote provider not found in generateRemoteWithTools', async () => {
-      const convId = setupWithConversation();
-      mockedProviderRegistry.getProvider.mockReturnValue(undefined);
+    await d.generationService.generateResponse(d.conversationId, d.ask('Hi'));
 
-      await expect(
-        generationService.generateWithTools(convId, [
-          createMessage({ role: 'user', content: 'Hi' }),
-        ], { enabledToolIds: [] })
-      // prepareGeneration throws "Remote provider not found" when provider is null
-      ).rejects.toThrow('Remote provider not found');
-    });
-
-    it('finalizes after remote tool loop when not aborted', async () => {
-      const convId = setupWithConversation();
-      mockedRunToolLoop.mockImplementation(async ({ onFinalResponse }: any) => {
-        onFinalResponse?.('remote result');
-        return { interrupted: false };
-      });
-
-      await generationService.generateWithTools(convId, [
-        createMessage({ role: 'user', content: 'tool' }),
-      ], { enabledToolIds: [] });
-
-      expect(generationService.getState().isGenerating).toBe(false);
-    });
+    expect(d.boundary.llama!.calls.completion).toHaveLength(0);
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests[0].model).toBe('qwen3-8b');
+    const [answer] = d.answers();
+    expect(answer.content).toBe('Remote response');
+    expect(answer.generationMeta).toEqual(expect.objectContaining({
+      gpu: false, gpuBackend: 'Remote', modelName: 'Qwen3 8B', timeToFirstToken: expect.any(Number),
+    }));
+    expect(d.generationService.getState().isGenerating).toBe(false);
   });
 
-  // ============================================================================
-  // generateRemoteResponse — catch path with server health update
-  // ============================================================================
-  describe('generateRemoteResponse — error updates server health', () => {
-    const mockRemoteProvider3 = {
-      id: 'failing-server',
-      isReady: jest.fn().mockResolvedValue(true),
-      generate: jest.fn(),
-      stopGeneration: jest.fn().mockResolvedValue(undefined),
-      getLoadedModelId: jest.fn().mockReturnValue('model'),
-      capabilities: { supportsVision: false, supportsToolCalling: true, supportsThinking: false },
-    };
+  it('keeps the reasoning a thinking server model streams', async () => {
+    d = await launchGeneration();
+    d.useAppStore.getState().updateSettings({ thinkingEnabled: true });
+    server = await connectServer(d, { caps: { supportsThinking: true } });
+    server.reply({ reasoning: ['Thinking', '...'], content: ['Response'] });
 
-    beforeEach(() => {
-      useRemoteServerStore.setState({
-        activeServerId: 'failing-server',
-        servers: [{ id: 'failing-server', name: 'Failing Server', endpoint: 'http://fail' }] as any, // NOSONAR
-      });
-      (mockedProviderRegistry as any).hasProvider = jest.fn(() => true);
-      mockedLlmService.isModelLoaded.mockReturnValue(false);
-      mockedProviderRegistry.getProvider.mockReturnValue(mockRemoteProvider3 as any);
-    });
+    await d.generationService.generateResponse(d.conversationId, d.ask('Hi'));
 
-    afterEach(() => {
-      useRemoteServerStore.setState({ activeServerId: null });
-    });
-
-    it('marks server offline when provider.generate throws', async () => {
-      const convId = setupWithConversation();
-      mockRemoteProvider3.generate.mockRejectedValue(new Error('connection refused'));
-
-      await expect(
-        generationService.generateResponse(convId, [
-          createMessage({ role: 'user', content: 'Hi' }),
-        ])
-      ).rejects.toThrow('connection refused');
-
-      expect(generationService.getState().isGenerating).toBe(false);
-    });
+    const [answer] = d.answers();
+    expect(answer.content).toBe('Response');
+    expect(answer.reasoningContent).toBe('Thinking...');
   });
 
-  // ============================================================================
-  // generateWithTools — local path abort behavior
-  // ============================================================================
-  describe('generateWithTools — local abort paths', () => {
-    it('skips finalize when aborted after tool loop completes', async () => {
-      const convId = setupWithConversation();
-      mockedLlmService.isModelLoaded.mockReturnValue(true);
-      mockedLlmService.isCurrentlyGenerating.mockReturnValue(false);
+  it('a saved server whose provider is not registered yet does not take the turn', async () => {
+    d = await launchGeneration({ load: false });
+    server = await connectServer(d, { select: false, register: false });
 
-      const finalizespy = jest.spyOn(useChatStore.getState(), 'finalizeStreamingMessage');
-
-      mockedRunToolLoop.mockImplementation(async () => {
-        // Simulate proper abort during tool loop (stopGeneration sets abortRequested + resets state)
-        await generationService.stopGeneration();
-      });
-
-      await generationService.generateWithTools(convId, [
-        createMessage({ role: 'user', content: 'use tool' }),
-      ], { enabledToolIds: ['calculator'] });
-
-      // finalize should not be called again after abort (stopGeneration already finalized)
-      expect(finalizespy.mock.calls.length).toBeLessThanOrEqual(1);
-      expect(generationService.getState().isGenerating).toBe(false);
-    });
-
-    it('returns early when runToolLoop throws and abortRequested is true', async () => {
-      const convId = setupWithConversation();
-      mockedLlmService.isModelLoaded.mockReturnValue(true);
-      mockedLlmService.isCurrentlyGenerating.mockReturnValue(false);
-
-      mockedRunToolLoop.mockImplementation(async () => {
-        // stopGeneration sets abortRequested=true and resets state before the throw
-        await generationService.stopGeneration();
-        throw new Error('Tool error');
-      });
-
-      // Should not throw since abortRequested=true causes early return in catch
-      await generationService.generateWithTools(convId, [
-        createMessage({ role: 'user', content: 'tool' }),
-      ], { enabledToolIds: ['web_search'] });
-
-      expect(generationService.getState().isGenerating).toBe(false);
-    });
+    await expect(d.generationService.generateResponse(d.conversationId, d.ask('Hi')))
+      .rejects.toThrow('No model loaded');
+    expect(server.requests).toHaveLength(0);
   });
 
-  // ============================================================================
-  // generateRemoteWithTools — abort path
-  // ============================================================================
-  describe('generateRemoteWithTools — abort skips finalize', () => {
-    const mockRemoteProvider5 = {
-      id: 'remote-abort',
-      isReady: jest.fn().mockResolvedValue(true),
-      generate: jest.fn(),
-      stopGeneration: jest.fn().mockResolvedValue(undefined),
-      getLoadedModelId: jest.fn().mockReturnValue('model'),
-    };
+  it('fails with "Remote provider not ready" when no model is chosen on the server', async () => {
+    d = await launchGeneration({ localModel: false });
+    // No model was found on it either, so there is nothing to fall back to.
+    server = await connectServer(d, { select: false, discovered: false });
 
-    beforeEach(() => {
-      useRemoteServerStore.setState({ activeServerId: 'remote-abort' });
-      (mockedProviderRegistry as any).hasProvider = jest.fn(() => true);
-      mockedLlmService.isModelLoaded.mockReturnValue(false);
-      mockedProviderRegistry.getProvider.mockReturnValue(mockRemoteProvider5 as any);
-    });
-
-    afterEach(() => {
-      useRemoteServerStore.setState({ activeServerId: null });
-      (mockedProviderRegistry as any).hasProvider = jest.fn(() => false);
-    });
-
-    it('skips finalize in generateRemoteWithTools when aborted', async () => {
-      const convId = setupWithConversation();
-      mockedRunToolLoop.mockImplementation(async () => {
-        // Simulate proper abort via stopGeneration
-        await generationService.stopGeneration();
-      });
-
-      await generationService.generateWithTools(convId, [
-        createMessage({ role: 'user', content: 'tool' }),
-      ], { enabledToolIds: [] });
-
-      expect(generationService.getState().isGenerating).toBe(false);
-    });
+    await expect(d.generationService.generateResponse(d.conversationId, d.ask('Hi')))
+      .rejects.toThrow('Remote provider not ready');
+    expect(server.requests).toHaveLength(0);
+    expect(d.generationService.getState().isGenerating).toBe(false);
   });
 
-  // ============================================================================
-  // enqueueMessage + processNextInQueue — queue merging
-  // ============================================================================
-  describe('queue processing', () => {
-    it('skips processNextInQueue when no queueProcessor set', () => {
-      (generationService as any).queueProcessor = null;
-      (generationService as any).state.queuedMessages = [
-        { id: '1', conversationId: 'c1', text: 'hi', messageText: 'hi' },
-      ];
-      // Calling resetState should trigger processNextInQueue internally
-      // but since queueProcessor is null, it should be a no-op
-      expect(() => (generationService as any).processNextInQueue()).not.toThrow();
-    });
+  it('raises a server error and marks the server unhealthy', async () => {
+    d = await launchGeneration({ localModel: false });
+    server = await connectServer(d);
+    server.reply({ status: 500 });
 
-    it('merges multiple queued messages into a single combined message', async () => {
-      const processor = jest.fn(() => Promise.resolve());
-      (generationService as any).queueProcessor = processor;
-      (generationService as any).state.queuedMessages = [
-        { id: '1', conversationId: 'c1', text: 'msg1', messageText: 'msg1' },
-        { id: '2', conversationId: 'c1', text: 'msg2', messageText: 'msg2' },
-      ];
+    await expect(d.generationService.generateResponse(d.conversationId, d.ask('Hi'))).rejects.toThrow('upstream failed');
 
-      (generationService as any).processNextInQueue();
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      expect(processor).toHaveBeenCalledWith(
-        expect.objectContaining({ text: 'msg1\n\nmsg2' }),
-      );
-    });
-
-    it('passes single queued message directly without merging', async () => {
-      const processor = jest.fn(() => Promise.resolve());
-      (generationService as any).queueProcessor = processor;
-      const singleMsg = { id: '1', conversationId: 'c1', text: 'single', messageText: 'single' };
-      (generationService as any).state.queuedMessages = [singleMsg];
-
-      (generationService as any).processNextInQueue();
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      expect(processor).toHaveBeenCalledWith(singleMsg);
-    });
+    expect(d.useRemoteServerStore.getState().serverHealth[server.serverId].isHealthy).toBe(false);
+    expect(d.generationService.getState().isGenerating).toBe(false);
   });
 
-  // ============================================================================
-  // normalizeStreamChunk — string vs object
-  // ============================================================================
-  describe('normalizeStreamChunk', () => {
-    it('wraps string data as content object', () => {
-      const result = (generationService as any).normalizeStreamChunk('hello');
-      expect(result).toEqual({ content: 'hello' });
-    });
+  it('keeps the words shown when the server reports an error mid-stream', async () => {
+    d = await launchGeneration({ localModel: false });
+    server = await connectServer(d);
+    server.reply({ content: ['partial'], streamError: 'provider error' });
 
-    it('passes through object data unchanged', () => {
-      const chunk = { content: 'text', reasoningContent: 'think' };
-      const result = (generationService as any).normalizeStreamChunk(chunk);
-      expect(result).toBe(chunk);
-    });
+    await expect(d.generationService.generateResponse(d.conversationId, d.ask('Hi'))).rejects.toThrow('provider error');
+
+    expect(d.answers().map((m: any) => m.content)).toEqual(['partial']);
+    await tick(80);
+    expect(d.useChatStore.getState().streamingMessage).toBe('');
   });
 
-  // ============================================================================
-  // buildToolLoopHandlers — onStream abort guard
-  // ============================================================================
-  describe('buildToolLoopHandlers — onStream abort guard', () => {
-    it('returns early from onStream when abortRequested is true', () => {
-      (generationService as any).abortRequested = true;
-      const handlers = (generationService as any).buildToolLoopHandlers();
-      const before = (generationService as any).state.streamingContent;
-      handlers.onStream('some content');
-      expect((generationService as any).state.streamingContent).toBe(before);
-      (generationService as any).abortRequested = false;
-    });
+  it('keeps the words shown when the connection drops mid-stream', async () => {
+    d = await launchGeneration({ localModel: false });
+    server = await connectServer(d);
+    server.reply({ content: ['partial content'], dropConnection: true });
 
-    it('accumulates reasoning content in reasoningBuffer via onStream', () => {
-      (generationService as any).abortRequested = false;
-      (generationService as any).reasoningBuffer = '';
-      const handlers = (generationService as any).buildToolLoopHandlers();
-      handlers.onStream({ reasoningContent: 'thinking...' });
-      expect((generationService as any).reasoningBuffer).toBe('thinking...');
-    });
+    await expect(d.generationService.generateResponse(d.conversationId, d.ask('Hi'))).rejects.toThrow('Network error');
+
+    expect(d.answers().map((m: any) => m.content)).toEqual(['partial content']);
+    expect(d.useRemoteServerStore.getState().serverHealth[server.serverId].isHealthy).toBe(false);
   });
 
-  // ============================================================================
-  // isUsingRemoteProvider — explicit remote selection is authoritative
-  // ============================================================================
-  describe('isUsingRemoteProvider — selected remote model wins', () => {
-    const mockRemoteProvider4 = {
-      id: 'remote-srv',
-      capabilities: { supportsThinking: true },
-      isReady: jest.fn().mockResolvedValue(true),
-      generate: jest.fn(),
-      stopGeneration: jest.fn().mockResolvedValue(undefined),
-      getLoadedModelId: jest.fn().mockReturnValue('gpt-4'),
-    };
+  it('Stop closes the connection, keeps and returns the partial, and resets', async () => {
+    d = await launchGeneration();
+    server = await connectServer(d);
+    server.reply({ content: ['partial ', 'response'], hold: true });
 
-    beforeEach(() => {
-      useRemoteServerStore.setState({
-        activeServerId: 'remote-srv',
-        activeRemoteTextModelId: 'gpt-4',
-        servers: [{ id: 'remote-srv', name: 'Remote', endpoint: 'http://remote' }] as any, // NOSONAR
-      });
-      (mockedProviderRegistry as any).hasProvider = jest.fn(() => true);
-      mockedProviderRegistry.getProvider.mockReturnValue(mockRemoteProvider4 as any);
-      // A resident local model must not replace the explicit remote selection.
-      mockedLlmService.isModelLoaded.mockReturnValue(true);
-    });
+    const reply = d.generationService.generateResponse(d.conversationId, d.ask('Hi'));
+    await until(() => d.generationService.getState().streamingContent === 'partial ', 'the partial');
+    const partial = await d.generationService.stopGeneration();
+    await reply;
 
-    afterEach(() => {
-      useRemoteServerStore.setState({ activeServerId: null, activeRemoteTextModelId: null });
-      (mockedProviderRegistry as any).hasProvider = jest.fn(() => false);
-    });
-
-    it('uses the selected remote model even when a local model is resident', async () => {
-      const convId = setupWithConversation();
-      mockedLlmService.generateResponse.mockImplementation(async (_msgs, { onStream: cb }: any = {}) => {
-        cb?.({ content: 'hello' });
-        return 'hello';
-      });
-
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      expect(mockRemoteProvider4.generate).toHaveBeenCalled();
-      expect(mockedLlmService.generateResponse).not.toHaveBeenCalled();
-    });
+    expect(partial).toBe('partial ');
+    expect(server.aborted).toBe(1);
+    expect(d.answers().map((m: any) => m.content)).toEqual(['partial']);
+    expect(d.generationService.getState().isGenerating).toBe(false);
   });
 
-  // ============================================================================
-  // buildToolLoopHandlers — isAborted callback and timer flush
-  // ============================================================================
-  describe('buildToolLoopHandlers — isAborted and timer flush', () => {
-    it('isAborted returns the current abortRequested value', () => {
-      (generationService as any).abortRequested = false;
-      const handlers = (generationService as any).buildToolLoopHandlers();
-      expect(handlers.isAborted()).toBe(false);
+  it('when the server fails, the turn falls back to the local model and says so', async () => {
+    d = await launchGeneration();
+    server = await connectServer(d);
+    server.reply({ status: 500 });
+    d.boundary.llama!.scriptCompletion({ text: 'Local answer' });
 
-      (generationService as any).abortRequested = true;
-      expect(handlers.isAborted()).toBe(true);
+    await d.generationService.generateResponse(d.conversationId, d.ask('Hi'));
 
-      (generationService as any).abortRequested = false;
-    });
-
-    it('onStream schedules flushTokenBuffer via setTimeout and fires on advance', () => {
-      jest.useFakeTimers();
-      (generationService as any).abortRequested = false;
-      (generationService as any).flushTimer = null;
-      (generationService as any).tokenBuffer = '';
-
-      const handlers = (generationService as any).buildToolLoopHandlers();
-      handlers.onStream({ content: 'hello' });
-
-      expect((generationService as any).flushTimer).not.toBeNull();
-
-      // Advance timers to trigger the flushTokenBuffer callback
-      jest.runAllTimers();
-
-      // After timer fires, flushTimer should be cleared
-      expect((generationService as any).flushTimer).toBeNull();
-      jest.useRealTimers();
-    });
+    expect(server.requests).toHaveLength(1);
+    expect(d.thread().filter((m: any) => m.role === 'tool').map((m: any) => m.content))
+      .toEqual(['Qwen3 8B could not answer. Trying Test Model.']);
+    expect(d.answers().map((m: any) => m.content)).toEqual(['Local answer']);
+    expect(d.useRemoteServerStore.getState().activeServerId).toBeNull();
   });
 
-  // ============================================================================
-  // generateRemoteWithTools — no provider throws
-  // ============================================================================
-  describe('generateRemoteWithTools — no provider available', () => {
-    beforeEach(() => {
-      useRemoteServerStore.setState({ activeServerId: 'srv-no-prov' });
-      (mockedProviderRegistry as any).hasProvider = jest.fn(() => true);
-      mockedLlmService.isModelLoaded.mockReturnValue(false);
-      // getProvider returns null → no provider found at generateRemoteWithTools level
-      mockedProviderRegistry.getProvider.mockReturnValue(undefined);
-      // Need isReady to pass in prepareGeneration... but getProvider is null so it throws in prepareGeneration
-      // We need to make prepareGeneration pass by having a temporary valid provider then null
-      // Actually prepareGeneration ALSO calls getCurrentProvider - so if getProvider returns null,
-      // prepareGeneration throws 'Remote provider not found' before we hit line 542.
-      // To reach line 542, we need to bypass prepareGeneration's check.
-      // We'll directly call generateRemoteWithTools with a spy on prepareGeneration.
-    });
+  it('generateRemoteResponse fails when the active server has no provider', async () => {
+    d = await launchGeneration();
+    server = await connectServer(d, { select: false, register: false });
 
-    afterEach(() => {
-      useRemoteServerStore.setState({ activeServerId: null });
-      (mockedProviderRegistry as any).hasProvider = jest.fn(() => false);
-      mockedProviderRegistry.getProvider.mockReturnValue(undefined);
-    });
+    await expect(d.generationService.generateRemoteResponse(d.conversationId, d.ask('Hi')))
+      .rejects.toThrow('No remote provider available');
+    expect(d.generationService.getState().isGenerating).toBe(false);
+  });
+});
 
-    it('getCurrentProvider returns local provider fallback when no activeServerId', () => {
-      // Test line 61: getCurrentProvider when activeServerId is null
-      useRemoteServerStore.setState({ activeServerId: null });
-      mockedProviderRegistry.getProvider.mockReturnValue(undefined);
-      const _result = (generationService as any).getCurrentProvider();
-      expect(mockedProviderRegistry.getProvider).toHaveBeenCalledWith('local');
-    });
+// ============================================================================
+// Replies that use tools
+// ============================================================================
+describe('generateWithTools on the local llama model', () => {
+  it('runs the tool the model calls and stores the answer that follows', async () => {
+    d = await launchGeneration();
+    d.boundary.llama!.scriptCompletions([
+      // llama.rn's tool_calls shape (OpenAI-style, arguments as a JSON string).
+      { text: 'Let me work that out.', toolCalls: [{ type: 'function', function: { name: 'calculator', arguments: '{"expression":"6*7"}' } }] as any },
+      { text: 'It is 42.' },
+    ]);
+
+    const outcome = await d.generationService.generateWithTools(
+      d.conversationId, d.ask('what is 6 times 7'), { enabledToolIds: ['calculator'] },
+    );
+
+    expect(outcome).toEqual(expect.objectContaining({ interrupted: false }));
+    const tool = d.thread().find((m: any) => m.role === 'tool');
+    expect(tool.content).toContain('42');
+    expect(d.answers()[d.answers().length - 1].content).toBe('It is 42.');
+    expect(d.generationService.getState().isGenerating).toBe(false);
+    expect(d.useChatStore.getState().streamingMessage).toBe('');
   });
 
-  // ============================================================================
-  // resetState — clears flushTimer if set
-  // ============================================================================
-  describe('resetState — flushTimer cleanup', () => {
-    it('clears flushTimer in resetState when timer is set', () => {
-      jest.useFakeTimers();
-      // Set a fake flushTimer
-      (generationService as any).flushTimer = setTimeout(() => {}, 10000);
-      (generationService as any).state = {
-        ...(generationService as any).state,
-        isGenerating: true,
-        queuedMessages: [],
-      };
+  it('raises a native failure in the tool loop and resets', async () => {
+    d = await launchGeneration();
+    // A failed decode (device B13 wire), which the loop does not retry.
+    d.boundary.llama!.scriptCompletion({ throwMessage: 'llama_decode: failed to decode, ret = -1: Failed to evaluate chunks' });
 
-      (generationService as any).resetState();
+    await expect(d.generationService.generateWithTools(
+      d.conversationId, d.ask('use tools'), { enabledToolIds: ['calculator'] },
+    )).rejects.toThrow('Failed to evaluate chunks');
 
-      // flushTimer should be cleared
-      expect((generationService as any).flushTimer).toBeNull();
-      jest.useRealTimers();
-    });
+    expect(d.generationService.getState().isGenerating).toBe(false);
+    expect(d.useChatStore.getState().streamingForConversationId).toBeNull();
   });
 
-  // ============================================================================
-  // generateRemoteResponse — flushTimer in onError and catch
-  // ============================================================================
-  describe('generateRemoteResponse — flushTimer in error paths', () => {
-    const mockRemoteProviderFlush = {
-      id: 'remote-flush',
-      isReady: jest.fn().mockResolvedValue(true),
-      generate: jest.fn(),
-      stopGeneration: jest.fn().mockResolvedValue(undefined),
-      getLoadedModelId: jest.fn().mockReturnValue('model-flush'),
-      capabilities: { supportsVision: false, supportsToolCalling: true, supportsThinking: false },
-    };
+  it('a Stop during the tool turn keeps the partial once and stores nothing more', async () => {
+    d = await launchGeneration();
+    d.boundary.llama!.scriptCompletion({ text: 'Working on it now', pauseAfter: 'Working' });
 
-    beforeEach(() => {
-      jest.useFakeTimers();
-      useRemoteServerStore.setState({ activeServerId: 'remote-flush' });
-      (mockedProviderRegistry as any).hasProvider = jest.fn(() => true);
-      mockedLlmService.isModelLoaded.mockReturnValue(false);
-      mockedProviderRegistry.getProvider.mockReturnValue(mockRemoteProviderFlush as any);
-    });
+    const reply = d.generationService.generateWithTools(
+      d.conversationId, d.ask('use tool'), { enabledToolIds: ['calculator'] },
+    );
+    await until(() => d.useChatStore.getState().streamingMessage.includes('Working'), 'the partial');
+    await d.generationService.stopGeneration();
+    await reply;
+    await tick(80);
 
-    afterEach(() => {
-      jest.useRealTimers();
-      useRemoteServerStore.setState({ activeServerId: null });
-      (mockedProviderRegistry as any).hasProvider = jest.fn(() => false);
-    });
-
-    it('clears flushTimer in catch block when timer was set by onToken', async () => {
-      const convId = setupWithConversation();
-
-      mockRemoteProviderFlush.generate.mockImplementation(async (_msgs: any, _opts: any, callbacks: any) => {
-        // onToken sets flushTimer
-        callbacks.onToken('partial content');
-        // Then throw to trigger the catch block
-        throw new Error('network failure');
-      });
-
-      await expect(
-        generationService.generateResponse(convId, [
-          createMessage({ role: 'user', content: 'Hi' }),
-        ])
-      ).rejects.toThrow();
-
-      // flushTimer should be cleared in catch
-      expect((generationService as any).flushTimer).toBeNull();
-    });
-
-    it('clears flushTimer in onError callback when timer was set by onToken', async () => {
-      const convId = setupWithConversation();
-
-      mockRemoteProviderFlush.generate.mockImplementation(async (_msgs: any, _opts: any, callbacks: any) => {
-        callbacks.onToken('partial');
-        // Fire onError (which is called before reject in some providers)
-        callbacks.onError(new Error('provider error'));
-      });
-
-      // The onError throws which propagates to catch
-      await expect(
-        generationService.generateResponse(convId, [
-          createMessage({ role: 'user', content: 'Hi' }),
-        ])
-      ).rejects.toThrow();
-
-      expect((generationService as any).flushTimer).toBeNull();
-    });
-
-    it('triggers onReasoning flush timer path', async () => {
-      const convId = setupWithConversation();
-
-      mockRemoteProviderFlush.generate.mockImplementation(async (_msgs: any, _opts: any, callbacks: any) => {
-        callbacks.onReasoning('some thinking');
-        callbacks.onComplete({ content: 'done' });
-      });
-
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      // reasoningBuffer should have content (flushed)
-    });
+    expect(d.answers().map((m: any) => m.content)).toEqual(['Working']);
+    expect(d.generationService.getState().isGenerating).toBe(false);
   });
 
-  describe('drainQueue', () => {
-    it('processes queued messages through the queue processor when idle', () => {
-      const processor = jest.fn().mockResolvedValue(undefined);
-      generationService.setQueueProcessor(processor);
-      generationService.enqueueMessage({ id: 'q1', conversationId: 'c1', text: 'hi', messageText: 'hi' });
-
-      generationService.drainQueue();
-
-      expect(processor).toHaveBeenCalledTimes(1);
-      expect(processor.mock.calls[0][0]).toMatchObject({ text: 'hi', conversationId: 'c1' });
-      expect(generationService.getState().queuedMessages).toHaveLength(0);
+  it('a native failure that lands after Stop is not raised to the user', async () => {
+    d = await launchGeneration();
+    // The person stops mid-reply and the decode that was running fails as it ends.
+    d.boundary.llama!.scriptCompletion({
+      text: 'Working on it', pauseAfter: 'Working', throwAfter: 'llama_decode: failed to decode, ret = -1: Failed to evaluate chunks',
     });
 
-    it('is a no-op while a generation is in progress', () => {
-      const processor = jest.fn().mockResolvedValue(undefined);
-      generationService.setQueueProcessor(processor);
-      generationService.enqueueMessage({ id: 'q1', conversationId: 'c1', text: 'hi', messageText: 'hi' });
-      (generationService as any).state.isGenerating = true;
+    const reply = d.generationService.generateWithTools(
+      d.conversationId, d.ask('tool'), { enabledToolIds: ['calculator'] },
+    );
+    await until(() => d.useChatStore.getState().streamingMessage.includes('Working'), 'the partial');
+    await d.generationService.stopGeneration();
 
-      generationService.drainQueue();
+    await expect(reply).resolves.toBeUndefined();
+    expect(d.generationService.getState().isGenerating).toBe(false);
+  });
+});
 
-      expect(processor).not.toHaveBeenCalled();
-      expect(generationService.getState().queuedMessages).toHaveLength(1);
-    });
+describe('generateWithTools on a remote model', () => {
+  it('runs the tool the server model calls, sends the result back, and stores the answer', async () => {
+    d = await launchGeneration();
+    server = await connectServer(d);
+    server.reply(
+      { toolCalls: [{ id: 'call-1', name: 'calculator', arguments: { expression: '6*7' } }] },
+      { content: ['remote ', 'result 42'] },
+    );
 
-    // Seen on an iPhone: after send now, the stopped reply settled twice and the second drain sent the
-    // other queued message while the send-now turn was still starting, so the two ran at once.
-    it('sends the next queued turn only after the one being sent settles, however often a reply settles', async () => {
-      let settle: () => void = () => {};
-      const processor = jest.fn(
-        (_item: { text: string }) => new Promise<void>(resolve => { settle = resolve; }),
-      );
-      generationService.setQueueProcessor(processor);
-      generationService.enqueueMessage({ id: 'q1', conversationId: 'c1', text: 'title', messageText: 'title' });
-      generationService.enqueueMessage({ id: 'q2', conversationId: 'c1', text: 'moral', messageText: 'moral' });
-      generationService.sendQueuedNow('q2');
+    await d.generationService.generateWithTools(
+      d.conversationId, d.ask('what is 6 times 7'), { enabledToolIds: ['calculator'] },
+    );
 
-      generationService.drainQueue();
-      generationService.drainQueue();
+    expect(d.boundary.llama!.calls.completion).toHaveLength(0);
+    expect(server.requests).toHaveLength(2);
+    expect(server.requests[0].tools.map((t: any) => t.function.name)).toContain('calculator');
+    const toolResult = server.requests[1].messages.find((m: any) => m.role === 'tool');
+    expect(JSON.stringify(toolResult.content)).toContain('6*7 = 42');
+    expect(d.answers()[d.answers().length - 1].content).toBe('remote result 42');
+    expect(d.generationService.getState().isGenerating).toBe(false);
+  });
 
-      expect(processor).toHaveBeenCalledTimes(1);
-      expect(processor.mock.calls[0][0]).toMatchObject({ text: 'moral' });
-      expect(generationService.getState().queuedMessages.map(m => m.text)).toEqual(['title']);
+  it('a Stop during the remote tool turn stores only the partial', async () => {
+    d = await launchGeneration();
+    server = await connectServer(d);
+    server.reply({ content: ['partial ', 'more'], hold: true });
 
-      settle();
-      await new Promise(r => setTimeout(r, 0));
-      expect(processor).toHaveBeenCalledTimes(2);
-      expect(processor.mock.calls[1][0]).toMatchObject({ text: 'title' });
-    });
+    const reply = d.generationService.generateWithTools(
+      d.conversationId, d.ask('tool'), { enabledToolIds: [] },
+    );
+    await until(() => d.useChatStore.getState().streamingMessage === 'partial ', 'the partial');
+    await d.generationService.stopGeneration();
+    await reply;
+    await tick(80);
+
+    expect(d.answers().map((m: any) => m.content)).toEqual(['partial']);
+    expect(d.generationService.getState().isGenerating).toBe(false);
+  });
+
+  it('generateRemoteWithTools fails when the active server has no provider', async () => {
+    d = await launchGeneration();
+    server = await connectServer(d, { select: false, register: false });
+
+    await expect(d.generationService.generateRemoteWithTools(
+      d.conversationId, d.ask('Hi'), { enabledToolIds: [] },
+    )).rejects.toThrow('No remote provider available');
+    expect(d.generationService.getState().isGenerating).toBe(false);
   });
 });
