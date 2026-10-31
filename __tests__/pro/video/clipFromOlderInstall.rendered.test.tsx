@@ -64,7 +64,7 @@ it('after an update, Extend starts from the clip\'s last frame and Save saves th
   await view.findByTestId('gallery-screen');
   rtl.fireEvent.press(view.getByTestId('gallery-tab-videos'));
   await view.findByTestId('library-grid', {}, { timeout: 10_000 });
-  rtl.fireEvent.press((await view.findAllByTestId(/^library-item-/, {}, { timeout: 10_000 }))[0]);
+  rtl.fireEvent.press((await view.findAllByTestId(/^expand-library-item-/, {}, { timeout: 10_000 }))[0]);
   rtl.fireEvent.press(await view.findByTestId('viewer-save', {}, { timeout: 10_000 }));
   await rtl.waitFor(() => expect(downloads).toHaveLength(1));
   expect(downloads[0].source.startsWith(docs)).toBe(true);

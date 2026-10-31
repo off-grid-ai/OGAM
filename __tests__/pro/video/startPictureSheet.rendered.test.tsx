@@ -207,7 +207,7 @@ it('the storyboard\'s muted Start from a photo opens the sheet, with the shot ke
 it('the viewer\'s muted Continue opens the same sheet', async () => {
   const current = await clipInChat({ memoryGb: 34 });
   const { view, rtl } = current;
-  rtl.fireEvent.press(view.getByTestId('chat-clip-card'));
+  rtl.fireEvent.press(view.getByTestId('expand-chat-clip-card'));
   const continueAction = await view.findByTestId('viewer-continue', {}, { timeout: 10_000 });
   expect(continueAction.props.accessibilityState?.disabled).toBe(true);
   expect(view.queryByTestId('start-picture-sheet')).toBeNull();
