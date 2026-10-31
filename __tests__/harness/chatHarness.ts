@@ -34,6 +34,12 @@ export const routeHolder: { params: Record<string, unknown> } = { params: {} };
 
 export interface ChatHarnessOptions {
   engine: 'llama' | 'litert';
+  /**
+   * 'real': the screens mount inside the app's own NavigationContainer and AppNavigator, so routes,
+   * focus and navigate are the real ones. The test file calls `jest.unmock('@react-navigation/native')`
+   * and declares no navigation mock; Home, the model picker and Chat are reached as a person reaches them.
+   */
+  navigation?: 'real';
   /** 'ios' surfaces the Metal accelerator path for llama; default 'android'. */
   platform?: 'ios' | 'android';
   ram?: RamProfile;
@@ -326,18 +332,43 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     await installPro();
   }
 
+  // Real navigation: the app opens where a returning person's app opens, on Home. Onboarding was finished
+  // on an earlier launch (the store action Onboarding calls), and the downloaded model is known the way
+  // Home learns it (modelManager), so AppNavigator's first route is Main, as on device.
+  const realNav = opts.navigation === 'real';
+  const nav = realNav ? require('@react-navigation/native') : undefined;
+  const navRef = nav?.createNavigationContainerRef();
+  const appShell = (): React.ReactElement => {
+    const { AppNavigator } = require('../../src/navigation');
+    const { getSlot, SLOTS } = require('../../src/bootstrap/slotRegistry');
+    const AppRoot = opts.pro ? getSlot(SLOTS.appRoot) : undefined;
+    return React.createElement(
+      React.Fragment,
+      null,
+      AppRoot ? React.createElement(AppRoot, {}) : null,
+      React.createElement(nav.NavigationContainer, { ref: navRef }, React.createElement(AppNavigator)),
+    );
+  };
+  if (realNav) {
+    const { modelManager } = require('../../src/services');
+    useAppStore.getState().setDownloadedModels(await modelManager.getDownloadedModels());
+    useAppStore.getState().setOnboardingComplete(true);
+  }
+
   // GESTURE: mount the real Home screen — its REAL hydration loads the record — then open the picker and TAP
   // the model row. The real handleSelectTextModel sets it active (no setState activeModelId shortcut).
-  const home = rtl.render(
-    React.createElement(HomeScreen, {
-      navigation: {
-        navigate: () => {},
-        goBack: () => {},
-        setOptions: () => {},
-        addListener: () => () => {},
-      },
-    }),
-  );
+  const home = realNav
+    ? rtl.render(appShell())
+    : rtl.render(
+        React.createElement(HomeScreen, {
+          navigation: {
+            navigate: () => {},
+            goBack: () => {},
+            setOptions: () => {},
+            addListener: () => () => {},
+          },
+        }),
+      );
   await rtl.waitFor(
     () => {
       expect(useAppStore.getState().downloadedModels.length).toBeGreaterThan(0);
@@ -370,7 +401,9 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
   rtl.fireEvent.press(
     await rtl.waitFor(() => home.getByTestId('new-chat-button')),
   );
-  home.unmount();
+  // Real navigation keeps the app mounted: New Chat has opened the Chat screen in it.
+  if (realNav) await rtl.waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('Chat'));
+  else home.unmount();
 
   // Load via the REAL load path (the app loads lazily on the first send; we trigger the same path so the
   // readiness gate passes deterministically). This is the real native-faked load, not a state shortcut.
@@ -898,6 +931,13 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     /** Mount the real ChatScreen (plus the real app.root slot when pro is active, so the TTS EngineBridge
      *  mounts and the voice engine can load over the executorch fake — the same slot App.tsx renders). */
     render() {
+      if (realNav) {
+        // The app is already mounted on Chat (New Chat opened it); a chat chosen by the test opens there.
+        this.view = home;
+        const params = require('./chatHarness').routeHolder.params;
+        if (Object.keys(params).length) rtl.act(() => navRef.navigate('Chat', params));
+        return this.view;
+      }
       this.view = rtl.render(this.screenTree());
       return this.view;
     },
@@ -923,6 +963,14 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
      * still in flight in the composer (a transcription, a send) stays alive across the switch.
      */
     async openConversation(conversationId?: string) {
+      if (realNav) {
+        // The native stack keeps the Chat screen and hands it the new params.
+        await rtl.act(async () => navRef.navigate('Chat', conversationId ? { conversationId } : {}));
+        await rtl.waitFor(() => {
+          expect(useChatStore.getState().activeConversationId).toBe(conversationId ?? null);
+        });
+        return;
+      }
       // The screen reads the route through the module registry the harness reset into, which holds its
       // own copy of this module; set the params there.
       require('./chatHarness').routeHolder.params = conversationId ? { conversationId } : {};
@@ -939,6 +987,16 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
      * New Chat button opens a fresh chat screen with no conversation (created on the first send).
      */
     async newChatViaHome() {
+      if (realNav) {
+        // Back to Home in the same app, then its real New Chat button.
+        await rtl.act(async () => navRef.navigate('Main'));
+        rtl.fireEvent.press(await rtl.waitFor(() => home.getByTestId('new-chat-button')));
+        await rtl.waitFor(() => {
+          expect(navRef.getCurrentRoute()?.name).toBe('Chat');
+          expect(useChatStore.getState().activeConversationId).toBeNull();
+        });
+        return;
+      }
       this.view?.unmount();
       const homeView = rtl.render(
         React.createElement(HomeScreen, {

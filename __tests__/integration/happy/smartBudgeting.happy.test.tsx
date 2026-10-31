@@ -9,16 +9,12 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { GB } from '../../harness/nativeBoundary';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('happy — a fittable image gen succeeds with no failure card (heavy entry point)', () => {
   it('generates on ample RAM, becomes resident, shows no ModelFailureCard', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'ios', ram: { platform: 'ios', totalBytes: 12 * GB, availBytes: 8 * GB } });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios', ram: { platform: 'ios', totalBytes: 12 * GB, availBytes: 8 * GB } });
     h.render();
     await h.placeImageModel({ backend: 'coreml' }); // fits comfortably in 8GB free
 

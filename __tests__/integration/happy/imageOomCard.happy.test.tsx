@@ -11,16 +11,12 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { GB } from '../../harness/nativeBoundary';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('happy — image-gen OOM surfaces the graceful "Not enough memory" card (heavy entry point)', () => {
   it('refuses the over-budget image load and shows the card with Run anyway (no crash, no image)', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'ios' }); // generous RAM for text-model setup
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' }); // generous RAM for text-model setup
     h.render();
     await h.placeImageModel({ backend: 'coreml' }); // Core ML — no integrity-file gate; ~2GB model (~3.7GB est on iOS)
 
