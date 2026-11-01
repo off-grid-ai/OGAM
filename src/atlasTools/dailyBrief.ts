@@ -226,7 +226,7 @@ async function gatherStories(o: { interests: string[]; minutes: number; deep: bo
   for (const pick of pickStories(perInterest, Math.min(30, budget * 2))) {
     if (stories.length >= want) break;
     // The same event under another outlet's wording is one card, not two.
-    if (stories.some((x) => similarity(x.headline.title, pick.headline.title) >= 0.5 || (!!x.headline.url && x.headline.url === pick.headline.url))) continue;
+    if (stories.some((x) => similarity(x.headline.title, pick.headline.title) >= 0.5 || (!!x.headline.url && !/news\.google\.com/.test(x.headline.url) && x.headline.url === pick.headline.url))) continue;
     onStep(`Reading story ${stories.length + 1}: ${pick.headline.title.slice(0, 50)}...`);
     const item = await storyItem({ h: pick.headline, interest: interests[pick.interest], deep, n: outline.length + 1 });
     outline.push(item);
