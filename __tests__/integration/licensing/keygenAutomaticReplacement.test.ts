@@ -1,5 +1,5 @@
-import * as Keychain from 'react-native-keychain';
 import { createKeygenFake } from '../../harness/keygenFake';
+import { installNativeBoundary } from '../../harness/nativeBoundary';
 
 /**
  * Activating a key on a licence that is already full.
@@ -17,28 +17,13 @@ import { createKeygenFake } from '../../harness/keygenFake';
  *
  * It now registers the real provider the way loadProFeatures does, and stands Keygen up as a fake at the HTTP
  * boundary: real licences and machines, the seat cap enforced, Keygen's own JSON:API shapes. Everything above
- * that is the app - the client, the credential store, the mesh registry, the coordinator.
+ * that is the app - the real pro package, the client, the credential store, the mesh registry, the
+ * coordinator. The keychain and the native modules are the device.
  */
 
 const keygen = createKeygenFake();
 const LICENCE_KEY = 'OFFGRID-FULL-LICENCE';
 const CAP = 5;
-
-// The pro package as the app loads it. Its only job here is to hand the licence provider over to be
-// registered; nothing else about pro is involved in activating a key.
-jest.mock(
-  '@offgrid/pro',
-  () => {
-    const { proLicenseProvider } = require('../../../pro/licensing/proLicenseProvider');
-    return {
-      activate: jest.fn(),
-      configureProEntitlementProvider: (register: (provider: unknown) => void) => {
-        register(proLicenseProvider);
-      },
-    };
-  },
-  { virtual: true },
-);
 
 describe('activating a key when every seat is taken', () => {
   const vault = new Map<string, string>();
@@ -48,6 +33,9 @@ describe('activating a key when every seat is taken', () => {
     vault.set('off-grid-device-fingerprint', 'fp-sixth-device');
     keygen.reset();
     keygen.install();
+    // The phone's native modules (a fresh app module graph); the real pro package loads on top of them.
+    installNativeBoundary();
+    const Keychain = require('react-native-keychain');
 
     (Keychain.getGenericPassword as jest.Mock).mockImplementation(
       async ({ service }: { service: string }) => {
@@ -89,6 +77,7 @@ describe('activating a key when every seat is taken', () => {
   const activateWith = async (key: string): Promise<{ ok: boolean; reason?: string }> => {
      
     const service = require('../../../src/services/proLicenseService');
+    // The real pro package hands its licence provider over, as loadProFeatures has it do at boot.
     require('@offgrid/pro').configureProEntitlementProvider(
       service.registerProEntitlementProvider,
     );
