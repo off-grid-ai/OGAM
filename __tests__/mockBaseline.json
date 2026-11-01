@@ -1,7 +1,6 @@
 {
   "__tests__/App.test.tsx": 13,
   "__tests__/integration/pro/companionTaskRouting.integration.test.ts": 1,
-  "__tests__/pro/audio/ttsPlayback.extra.test.ts": 3,
   "__tests__/pro/audio/ttsStore.extra.test.ts": 3,
   "__tests__/pro/runtimeDeactivation.integration.test.ts": 20,
   "__tests__/rntl/components/ChatInput.test.tsx": 4,
