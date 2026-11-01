@@ -40,6 +40,7 @@ import { useRemoteServerStore } from '@offgrid/core/stores';
 import { NeedsAuthorizationError } from '@offgrid/pro/mcp/oauth';
 import { configureOAuthAdapters } from '@offgrid/pro/mcp/oauth/adapters';
 import type { McpServerConfig, McpTool } from '@offgrid/pro/mcp/types';
+import { isUnder } from '../../harness/urlMatch';
 
 const tool = (
   name: string,
@@ -197,12 +198,12 @@ function serveMcp(servers: Record<string, ServerSpec>): Network {
     const method = init?.method ?? 'GET';
     const body = typeof init?.body === 'string' ? init.body : '';
     if (url.includes('/.well-known/oauth-protected-resource')) {
-      const resource = Object.keys(servers).find(u => url.startsWith(new URL(u).origin));
+      const resource = Object.keys(servers).find(u => isUnder(url, new URL(u).origin));
       return json({ resource, authorization_servers: [AUTH_ISSUER] });
     }
-    if (!url.startsWith(AUTH_ISSUER)) return new Response('', { status: 404 });
+    if (!isUnder(url, AUTH_ISSUER)) return new Response('', { status: 404 });
     oauthRequests.push({ method, url, body });
-    if (url.startsWith(`${AUTH_ISSUER}/.well-known/`)) return json(metadata);
+    if (isUnder(url, `${AUTH_ISSUER}/.well-known`)) return json(metadata);
     if (method === 'POST' && url === REGISTRATION_ENDPOINT) return json({ client_id: 'registered-client' }, 201);
     if (method === 'POST' && url === TOKEN_ENDPOINT) {
       const form = new URLSearchParams(body);

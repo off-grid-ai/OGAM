@@ -7,6 +7,7 @@
  * A repo that is not served answers 401, as Hugging Face answers an unknown repo. A search answers
  * the served repos whose id contains the query (case-insensitive).
  */
+import { isUnder } from './urlMatch';
 
 export interface HfRepoFile {
   path: string;
@@ -39,7 +40,7 @@ export function serveHfModelApi(initial: HfModelApi = {}): HfModelApiServer {
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     requests.push(url);
-    if (!url.startsWith(API)) return json({ error: 'not found' }, 404);
+    if (!isUnder(url, API)) return json({ error: 'not found' }, 404);
     if (api.status) return json({ error: 'unavailable' }, api.status);
     const repos = api.repos ?? {};
     const parsed = new URL(url);

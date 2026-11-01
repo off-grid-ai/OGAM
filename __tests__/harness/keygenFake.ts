@@ -1,4 +1,5 @@
 import { KEYGEN_API_BASE, KEYGEN_PRODUCT_ID } from '../../src/config/keygen';
+import { isUnder } from './urlMatch';
 
 /**
  * Keygen, in memory, answering at the network boundary.
@@ -349,7 +350,7 @@ export function createKeygenFake(): KeygenFake {
             : input instanceof URL
             ? input.href
             : input.url;
-        if (!url.startsWith(KEYGEN_API_BASE)) {
+        if (!isUnder(url, KEYGEN_API_BASE)) {
           // Anything else is not this fake's business and must not silently succeed.
           throw new Error(`unexpected request to ${url}`);
         }
@@ -370,7 +371,7 @@ export function createKeygenFake(): KeygenFake {
             : input instanceof URL
             ? input.href
             : input.url;
-        if (url.startsWith(KEYGEN_API_BASE)) {
+        if (isUnder(url, KEYGEN_API_BASE)) {
           throw new Error(`unexpected Keygen request after fake restore: ${url}`);
         }
         return realFetch(input, init);

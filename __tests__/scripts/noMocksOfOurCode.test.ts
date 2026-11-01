@@ -13,6 +13,8 @@
  * that is down to zero must leave the list, so the list only shrinks.
  *
  * After fixing a file, refresh the list: UPDATE_MOCK_BASELINE=1 npx jest __tests__/scripts/noMocksOfOurCode
+ *
+ * Reviewed exceptions (EXCEPTIONS below) are named, with their reason, and never sit in the baseline.
  */
 import fs from 'fs';
 import path from 'path';
@@ -64,6 +66,28 @@ export function mocksOfOurs(text: string): string[] {
   return found;
 }
 
+/**
+ * Named, reviewed exceptions: a file and the one mock it may hold, with why. Anything else in that file
+ * still counts. Each entry is a decision, not a ratchet; remove it when the reason is gone.
+ */
+const EXCEPTIONS: Record<string, { mock: string; why: string }> = {
+  'jest.setup.ts': {
+    mock: 'mock @react-navigation/native',
+    why:
+      'third-party navigation library stubbed for screen-render tests; flows that depend on navigation ' +
+      'use the real-navigation harness (follow-up: remove the global stub, docs/test-audit/mobile-a.md)',
+  },
+};
+
+/** The mocks in a file that count against the rule: its named exception, if any, is set aside. */
+export function countedMocks(relative: string, text: string): string[] {
+  const found = mocksOfOurs(text);
+  const exception = EXCEPTIONS[relative];
+  if (!exception) return found;
+  const index = found.indexOf(exception.mock);
+  return index < 0 ? found : [...found.slice(0, index), ...found.slice(index + 1)];
+}
+
 function testFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
     const full = path.join(dir, entry.name);
@@ -80,7 +104,7 @@ function scan(): Record<string, number> {
     const relative = path.relative(ROOT, file);
     // This file names the rule's patterns in its own source; it mocks nothing.
     if (relative === path.relative(ROOT, __filename)) continue;
-    const count = mocksOfOurs(fs.readFileSync(file, 'utf8')).length;
+    const count = countedMocks(relative, fs.readFileSync(file, 'utf8')).length;
     if (count) counts[relative] = count;
   }
   return Object.fromEntries(Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)));
@@ -109,6 +133,20 @@ it('names our code and leaves the device boundary alone', () => {
     'spyOn useAppStore',
     "spyOn require('../../src/services/x').service",
   ]);
+});
+
+it('a named exception sets aside only its own mock, and only in its own file', () => {
+  const setup = "jest.mock('@react-navigation/native', () => ({}));\njest.mock('../src/stores');";
+  expect(countedMocks('jest.setup.ts', setup)).toEqual(['mock ../src/stores']);
+  expect(countedMocks('__tests__/some.test.tsx', setup)).toEqual([
+    'mock @react-navigation/native',
+    'mock ../src/stores',
+  ]);
+  for (const [file, exception] of Object.entries(EXCEPTIONS)) {
+    // Each exception names a mock its file really holds, so a stale entry is caught.
+    expect(mocksOfOurs(fs.readFileSync(path.join(ROOT, file), 'utf8'))).toContain(exception.mock);
+    expect(exception.why.length).toBeGreaterThan(0);
+  }
 });
 
 it('no test file mocks our code beyond the baseline, and the baseline only shrinks', () => {
