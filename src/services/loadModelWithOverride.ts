@@ -12,6 +12,7 @@
  */
 import { AlertState, showAlert, hideAlert } from '../utils/alertState';
 import { isOverridableMemoryError } from '../utils/modelLoadErrors';
+import { takeForceLoad } from './forceLoad';
 
 /** Safe message extraction — a thrown value isn't guaranteed to be an Error, and
  *  `(error as Error).message` renders "undefined" for a string/other throw. */
@@ -32,6 +33,14 @@ export interface LoadWithOverrideDeps {
 /**
  * @param load  performs the load; receives `{ override: true }` on the Load-Anyway retry.
  */
+/** Frees every loaded model so the load that follows has the whole memory. */
+async function freeMemory(): Promise<void> {
+  try {
+    const { activeModelService } = require('./activeModelService');
+    await activeModelService.unloadAllModels(true);
+  } catch { /* the load itself will say what is wrong */ }
+}
+
 export async function loadModelWithOverride(
   load: (opts?: { override?: boolean }) => Promise<void>,
   deps: LoadWithOverrideDeps,
@@ -52,6 +61,13 @@ export async function loadModelWithOverride(
             [
               { text: 'Cancel', style: 'cancel' },
               {
+                text: 'Free memory and load',
+                onPress: () => {
+                  deps.setAlertState(hideAlert());
+                  void freeMemory().then(() => attempt(true));
+                },
+              },
+              {
                 text: 'Load Anyway',
                 style: 'destructive',
                 onPress: () => {
@@ -64,11 +80,16 @@ export async function loadModelWithOverride(
         );
         return;
       }
-      deps.setAlertState(showAlert('Error', `Failed to load model: ${errorMessage(error)}`));
+      deps.setAlertState(showAlert('Error', `Failed to load model: ${errorMessage(error)}`, [
+        { text: 'OK', style: 'cancel' },
+        { text: 'Free memory and retry', onPress: () => { deps.setAlertState(hideAlert()); void freeMemory().then(() => attempt(true)); } },
+      ]));
       deps.onError?.(error instanceof Error ? error : new Error(errorMessage(error)));
     } finally {
       deps.onAttemptEnd?.();
     }
   };
+  // The switch in the model picker: free the memory first and skip the safeguards, for this one load.
+  if (takeForceLoad()) { await freeMemory(); await attempt(true); return; }
   await attempt(false);
 }

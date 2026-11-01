@@ -13,6 +13,7 @@ import { useLoadedTextModelPath } from '../../hooks/useLoadedTextModelPath';
 import { DownloadedModel, ONNXImageModel, RemoteModel } from '../../types';
 import { activeModelService, llmService, remoteServerManager } from '../../services';
 import { loadModelWithOverride } from '../../services/loadModelWithOverride';
+import { useForceLoad } from '../../services/forceLoad';
 import { CustomAlert, AlertState, initialAlertState, showAlert } from '../CustomAlert';
 import { createAllStyles } from './styles';
 import { TextTab } from './TextTab';
@@ -37,6 +38,19 @@ interface ModelSelectorModalProps {
   onAddServer?: () => void;
   onSelectionComplete?: () => void;
   onBrowseModels?: (tab: 'text' | 'image') => void;
+}
+
+/** The switch that makes the next load free memory first and skip the safeguards (see services/forceLoad). */
+function ForceLoadSwitch({ styles }: { styles: { tabBar: object; tabText: object } }) {
+  const { colors } = useTheme();
+  const forceLoad = useForceLoad();
+  return (
+    <TouchableOpacity style={styles.tabBar} onPress={() => forceLoad.set(!forceLoad.armed)} testID="model-force-load"
+      accessibilityRole="switch" accessibilityState={{ checked: forceLoad.armed }} accessibilityLabel="Force load: free memory first">
+      <Icon name={forceLoad.armed ? 'check-square' : 'square'} size={18} color={forceLoad.armed ? colors.primary : colors.textMuted} />
+      <Text style={styles.tabText}>Force load: free memory first, skip the safeguards</Text>
+    </TouchableOpacity>
+  );
 }
 
 export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
@@ -198,6 +212,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
 
   return (
     <AppSheet visible={visible} onClose={onClose} snapPoints={['40%', '75%']} title="Select Model">
+        <ForceLoadSwitch styles={styles} />
         <View style={styles.tabBar}>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'text' && styles.tabActive]}
