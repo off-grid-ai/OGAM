@@ -35,7 +35,6 @@
   "__tests__/integration/generation/engineParityRedflow.test.ts": 2,
   "__tests__/integration/generation/queuedSendFeedback.test.ts": 5,
   "__tests__/integration/generation/reloadRaceKeepsThinking.rendered.redflow.test.tsx": 1,
-  "__tests__/integration/generation/remoteFailureClearsLoading.test.ts": 1,
   "__tests__/integration/generation/remoteModelIndicator.rendered.happy.test.tsx": 1,
   "__tests__/integration/generation/remoteProviderRouting.test.ts": 5,
   "__tests__/integration/generation/sharePromptFlow.test.ts": 3,
