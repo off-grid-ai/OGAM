@@ -15,14 +15,11 @@ import { ProjectDetailScreen } from '../../../src/screens/ProjectDetailScreen';
 import { ProjectChatsScreen } from '../../../src/screens/ProjectChatsScreen';
 import { useChatStore, useProjectStore } from '../../../src/stores';
 import { createProject } from '../../utils/factories';
+import { withNavigator } from '../../harness/realNavigation';
 
 let routeProjectId = 'proj-1';
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn(), setOptions: jest.fn(), addListener: jest.fn(() => jest.fn()) }),
-  useRoute: () => ({ params: { projectId: routeProjectId } }),
-  useFocusEffect: jest.fn(),
-  useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 describe('Q9 — deleting a project orphans its chats (red-flow, real delete gesture)', () => {
   it('does not leave a chat pointing at a deleted project', async () => {
@@ -30,12 +27,12 @@ describe('Q9 — deleting a project orphans its chats (red-flow, real delete ges
     const convId = useChatStore.getState().createConversation('m', 'My filed chat', 'proj-1');
 
     // Precondition: the chat is visibly filed under the project (real ProjectChatsScreen list).
-    const list = render(<ProjectChatsScreen />);
+    const list = render(withNavigator(<ProjectChatsScreen />, { projectId: routeProjectId }));
     expect(list.getByText('My filed chat')).toBeTruthy();
     list.unmount();
 
     // User opens the project and deletes it the real way: tap "Delete Project" → confirm "Delete".
-    const detail = render(<ProjectDetailScreen />);
+    const detail = render(withNavigator(<ProjectDetailScreen />, { projectId: routeProjectId }));
     fireEvent.press(detail.getByText('Delete Project'));
     fireEvent.press(await waitFor(() => detail.getByText('Delete')));
 

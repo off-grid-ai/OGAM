@@ -9,17 +9,14 @@
  * Fakes sit at the device boundary only: this phone's address and `fetch` (the network).
  */
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 
-const mockNavigate = jest.fn();
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: mockNavigate, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useIsFocused: () => true,
-  useFocusEffect: () => {},
-}));
+// Real navigation: the app's own navigator, so the scan's navigate opens the real key entry screen.
+jest.unmock('@react-navigation/native');
 
-import { RemoteServersScreen } from '../../../src/screens/RemoteServersScreen';
-import { useRemoteServerStore } from '../../../src/stores';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { AppNavigator } from '../../../src/navigation';
+import { useAppStore, useRemoteServerStore } from '../../../src/stores';
 import { installLanProbe, gatewayModelList, type LanProbeHandle } from '../../harness/lanProbe';
 
 const PHONE_IP = '192.168.1.10';
@@ -29,7 +26,8 @@ describe('scanning a network whose Desktop needs an API key', () => {
   let lan: LanProbeHandle;
 
   beforeEach(() => {
-    mockNavigate.mockClear();
+    // A returning person: onboarding was finished on an earlier launch.
+    useAppStore.getState().setOnboardingComplete(true);
     useRemoteServerStore.setState({ servers: [], serverHealth: {}, discoveredModels: {} });
     const DeviceInfo = require('react-native-device-info');
     DeviceInfo.isEmulator = jest.fn(async () => false);
@@ -40,15 +38,17 @@ describe('scanning a network whose Desktop needs an API key', () => {
   afterEach(() => lan.uninstall());
 
   it('adds the computer and opens the key entry for it, instead of reporting an empty network', async () => {
-    const ui = render(<RemoteServersScreen />);
+    const navRef = createNavigationContainerRef();
+    const ui = render(<NavigationContainer ref={navRef}><AppNavigator /></NavigationContainer>);
+    act(() => navRef.navigate('RemoteServers' as never));
     expect(ui.queryByText('No servers yet')).not.toBeNull();
 
     fireEvent.press(ui.getByText('Scan network'));
 
-    await waitFor(() => { expect(ui.queryByText(`http://${MAC_IP}:7878`)).not.toBeNull(); }, { timeout: 8000 });
-    await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('RemoteServerEditor', expect.objectContaining({ needsKey: true }));
-    });
+    // The computer is added, and its key entry opens over the list.
+    await waitFor(() => { expect(navRef.getCurrentRoute()?.name).toBe('RemoteServerEditor'); }, { timeout: 8000 });
+    expect(ui.getByDisplayValue(`http://${MAC_IP}:7878`)).toBeTruthy();
+    expect(ui.getByTestId('server-needs-key')).toBeTruthy();
     expect(ui.queryByText(/No new servers answered/)).toBeNull();
   }, 20000);
 });
