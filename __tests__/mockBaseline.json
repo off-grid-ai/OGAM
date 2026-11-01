@@ -18,7 +18,6 @@
   "__tests__/unit/hooks/useVoiceRecording.test.ts": 1,
   "__tests__/unit/mcp/McpToolExtension.test.ts": 5,
   "__tests__/unit/services/tools/EmailCalendarExtension.test.ts": 1,
-  "__tests__/unit/stores/remoteServerStore.test.ts": 1,
   "__tests__/unit/stores/ttsStore.test.ts": 2,
   "__tests__/unit/sync/pairingEntitlementReplacementAdapter.test.ts": 4,
   "__tests__/unit/sync/repairDevice.test.ts": 4,

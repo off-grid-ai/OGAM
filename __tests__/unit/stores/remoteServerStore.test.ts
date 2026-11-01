@@ -13,13 +13,28 @@ import {
   resetRemoteServerStore,
   actStoreUpdate,
 } from '../../utils/testHelpers';
-import * as httpClient from '../../../src/services/httpClient';
+import { installKeyedServer, type KeyedServerHandle } from '../../harness/keyedRemoteServer';
 
-// Mock httpClient
-jest.mock('../../../src/services/httpClient', () => ({
-  testEndpoint: jest.fn(),
-  detectServerType: jest.fn(),
-}));
+// The store, its helpers and httpClient run for real. The network is faked at fetch: an Ollama
+// server (harness/keyedRemoteServer), or a network that cannot reach the host.
+let ollama: KeyedServerHandle | null = null;
+const realFetch = global.fetch;
+
+function serveOllama(origin = 'http://test:11434') {
+  ollama = installKeyedServer({ origin, flavour: 'ollama', apiKey: '', modelId: 'llama3' });
+  return ollama;
+}
+
+/** Nothing answers: fetch rejects the way React Native reports a refused or timed-out connection. */
+function unreachableNetwork(reason: unknown = new TypeError('Network request failed')) {
+  global.fetch = (async () => { throw reason; }) as typeof fetch;
+}
+
+afterEach(() => {
+  ollama?.restore();
+  ollama = null;
+  global.fetch = realFetch;
+});
 
 // Mock AsyncStorage
 jest.mock('@react-native-async-storage/async-storage', () => ({
@@ -326,13 +341,7 @@ describe('remoteServerStore', () => {
 
   describe('testConnection', () => {
     it('should test connection and return success', async () => {
-      (httpClient.testEndpoint as jest.Mock).mockResolvedValue({
-        success: true,
-        latency: 50,
-      });
-      (httpClient.detectServerType as jest.Mock).mockResolvedValue({
-        type: 'ollama',
-      });
+      serveOllama();
 
       let serverId = '';
       actStoreUpdate(() => {
@@ -349,14 +358,12 @@ describe('remoteServerStore', () => {
       });
 
       expect(result!.success).toBe(true);
-      expect(result!.latency).toBe(50);
+      expect(result!.latency).toEqual(expect.any(Number));
+      expect(result!.models?.map((m: { id: string }) => m.id)).toEqual(['llama3']);
     });
 
     it('should return error on connection failure', async () => {
-      (httpClient.testEndpoint as jest.Mock).mockResolvedValue({
-        success: false,
-        error: 'Connection refused',
-      });
+      unreachableNetwork(new TypeError('Connection refused'));
 
       let serverId = '';
       actStoreUpdate(() => {
@@ -379,10 +386,7 @@ describe('remoteServerStore', () => {
 
   describe('testConnectionByEndpoint', () => {
     it('should test connection without adding server', async () => {
-      (httpClient.testEndpoint as jest.Mock).mockResolvedValue({
-        success: true,
-        latency: 25,
-      });
+      serveOllama();
 
       let result;
       await act(async () => {
@@ -838,10 +842,8 @@ describe('remoteServerStore', () => {
       expect(result.error).toBe('Server not found');
     });
 
-    it('should catch errors and return error result', async () => {
-      (httpClient.testEndpoint as jest.Mock).mockRejectedValue(
-        new Error('Network failure'),
-      );
+    it('returns the network error when the host cannot be reached', async () => {
+      unreachableNetwork(new TypeError('Network failure'));
 
       let serverId = '';
       actStoreUpdate(() => {
@@ -863,9 +865,7 @@ describe('remoteServerStore', () => {
 
   describe('testConnectionByEndpoint error cases', () => {
     it('should handle network errors', async () => {
-      (httpClient.testEndpoint as jest.Mock).mockRejectedValue(
-        new Error('Connection timeout'),
-      );
+      unreachableNetwork(new Error('Connection timeout'));
 
       const result = await useRemoteServerStore
         .getState()
@@ -876,9 +876,7 @@ describe('remoteServerStore', () => {
     });
 
     it('should handle non-Error exceptions', async () => {
-      (httpClient.testEndpoint as jest.Mock).mockRejectedValue(
-        'Unknown failure',
-      );
+      unreachableNetwork('Unknown failure');
 
       const result = await useRemoteServerStore
         .getState()
