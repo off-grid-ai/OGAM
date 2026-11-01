@@ -23,7 +23,7 @@ class EnginePackStore(private val root: File) {
     data class AppBuild(val reactNative: String, val bridge: String, val abis: List<String>)
 
     /** What boot decided: the folder to load from (null = bundled), and why a pack was dropped. */
-    data class BootChoice(val packId: String?, val dir: File?, val llamaBuild: Int?, val trial: Boolean, val dropped: List<String>)
+    data class BootChoice(val packId: String?, val dir: File?, val llamaBuild: Int?, val engineVersion: String?, val trial: Boolean, val dropped: List<String>)
 
     private val stateFile = File(root, "state.json")
 
@@ -49,10 +49,10 @@ class EnginePackStore(private val root: File) {
             val onTrial = state.optJSONObject("trial")?.getString("id") == id
             if (onTrial) state.getJSONObject("trial").put("launches", state.getJSONObject("trial").optInt("launches") + 1)
             writeState(state)
-            return BootChoice(id, File(root, id), entry!!.optInt("llamaBuild").takeIf { it > 0 }, onTrial, dropped)
+            return BootChoice(id, File(root, id), entry!!.optInt("llamaBuild").takeIf { it > 0 }, entry.optString("engineVersion").ifEmpty { null }, onTrial, dropped)
         }
         writeState(state)
-        return BootChoice(null, null, null, false, dropped)
+        return BootChoice(null, null, null, null, false, dropped)
     }
 
     /**

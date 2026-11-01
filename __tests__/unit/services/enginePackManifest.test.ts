@@ -5,7 +5,7 @@
  */
 import nacl from 'tweetnacl';
 import { decodeUTF8, encodeBase64 } from 'tweetnacl-util';
-import { choosePack, packId, verifyManifest, type EnginePack } from '../../../src/services/enginePacks/manifest';
+import { choosePack, compareEngineVersions, packId, verifyManifest, type EnginePack } from '../../../src/services/enginePacks/manifest';
 
 const keys = nacl.sign.keyPair();
 const publicKey = encodeBase64(keys.publicKey);
@@ -94,16 +94,23 @@ describe('verifyManifest', () => {
 });
 
 describe('choosePack', () => {
-  const device = { reactNative: '0.83.1', bridge: 'bridge-1', abis: ['arm64-v8a'], currentBuild: 11385, rejected: new Set<string>() };
+  const device = { reactNative: '0.83.1', bridge: 'bridge-1', abis: ['arm64-v8a'], currentVersion: '0.13.0-b11385', rejected: new Set<string>() };
   const pack = (over: Partial<EnginePack> = {}): EnginePack => ({ ...expected, ...over });
 
-  it('picks the newest pack this app build can load', () => {
-    const packs = [pack({ llamaBuild: 11990 }), pack({ engineVersion: '0.15.0', llamaBuild: 12100 }), pack({ llamaBuild: 12050 })];
+  it('picks the newest version this app build can load', () => {
+    const packs = [pack({ engineVersion: '0.13.0-b12032' }), pack({ engineVersion: '0.15.0' }), pack({ engineVersion: '0.13.0-b12032.2' })];
     expect(choosePack(packs, device)?.engineVersion).toBe('0.15.0');
   });
 
+  it('picks a rebuild on the same llama.cpp, which ships fixes to the native glue', () => {
+    const running = { ...device, currentVersion: '0.13.0-b12032.1' };
+    expect(choosePack([pack({ engineVersion: '0.13.0-b12032.2', llamaBuild: 12032 })], running)?.engineVersion).toBe('0.13.0-b12032.2');
+  });
+
   it('picks none that is not newer than the running engine', () => {
-    expect(choosePack([pack({ llamaBuild: 11385 })], device)).toBeNull();
+    for (const engineVersion of ['0.13.0-b11385', '0.13.0-b11000', '0.12.9', 'not-a-version']) {
+      expect(choosePack([pack({ engineVersion })], device)).toBeNull();
+    }
   });
 
   it('picks none built for another React Native, bridge or ABI', () => {
@@ -122,5 +129,25 @@ describe('choosePack', () => {
 describe('packId', () => {
   it('names a pack by version and the first 12 hex of its zip hash, as the native store does', () => {
     expect(packId(expected)).toBe('0.13.0-b12032-aaaaaaaaaaaa');
+  });
+});
+
+describe('compareEngineVersions', () => {
+  it.each([
+    ['0.13.0-b12032.2', '0.13.0-b12032.1', 1],
+    ['0.13.0-b12032.1', '0.13.0-b12032', 1],
+    ['0.13.0-b12032', '0.13.0-b9999', 1],
+    ['0.13.0', '0.13.0-b12032', 1],
+    ['0.14.0-b1', '0.13.9', 1],
+    ['0.13.0-b12032', '0.13.0-b12032', 0],
+    ['0.13.0-rc.9', '0.13.0-b12032', 1],
+    ['0.13.0-b12032', '0.13.0', -1],
+  ])('%s against %s is %i', (a, b, order) => {
+    expect(compareEngineVersions(a, b)).toBe(order);
+    expect(compareEngineVersions(b, a)).toBe(order === 0 ? 0 : -order);
+  });
+
+  it('cannot order something that is not a version', () => {
+    expect(compareEngineVersions('latest', '0.13.0')).toBeNull();
   });
 });

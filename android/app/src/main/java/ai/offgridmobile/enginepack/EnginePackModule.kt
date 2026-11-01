@@ -1,6 +1,7 @@
 package ai.offgridmobile.enginepack
 
 import android.content.Intent
+import ai.offgridmobile.BuildConfig
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -28,6 +29,8 @@ class EnginePackModule(reactContext: ReactApplicationContext) : ReactContextBase
             map.putString("bootPackId", choice?.packId)
             map.putBoolean("trial", choice?.trial ?: false)
             if (choice?.llamaBuild != null) map.putInt("llamaBuild", choice.llamaBuild) else map.putNull("llamaBuild")
+            map.putString("engineVersion", choice?.engineVersion)
+            map.putString("bundledVersion", BuildConfig.LLAMA_ENGINE_VERSION)
             // "pack" or "bundled" once llama.rn has loaded its libraries; null before.
             map.putString("source", RNLlama.getNativeLibrarySource())
             map.putString("error", RNLlama.getEnginePackError())

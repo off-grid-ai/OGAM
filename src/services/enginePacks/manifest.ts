@@ -120,14 +120,48 @@ export function packId(pack: Pick<EnginePack, 'engineVersion' | 'sha256'>): stri
   return `${pack.engineVersion}-${pack.sha256.slice(0, 12)}`.replace(/[^A-Za-z0-9._-]/g, '_');
 }
 
+const ENGINE_VERSION = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.]+))?$/;
+
+/** One part of a pre-release: a number, or a llama.cpp tag (`b12032`) read as its build number. */
+function preReleasePart(part: string): number | string {
+  const tag = /^b(\d+)$/.exec(part);
+  if (tag) return Number(tag[1]);
+  return /^\d+$/.test(part) ? Number(part) : part;
+}
+
 /**
- * The newest pack this app build can load that carries a newer llama.cpp than the one it runs, or
+ * Orders two fork versions (`0.13.0-b12032.2`) as semver does, except that a `bN` tag compares by
+ * its build number, so b9999 < b12032. A rebuild on the same llama.cpp (`.2` after `.1`) is newer.
+ * Null when either is not a version.
+ */
+export function compareEngineVersions(a: string, b: string): number | null {
+  const [ma, mb] = [ENGINE_VERSION.exec(a), ENGINE_VERSION.exec(b)];
+  if (!ma || !mb) return null;
+  for (let i = 1; i <= 3; i++) {
+    const d = Number(ma[i]) - Number(mb[i]);
+    if (d !== 0) return Math.sign(d);
+  }
+  // A version with no pre-release is newer than any of its pre-releases.
+  if (!ma[4] || !mb[4]) return Number(!ma[4]) - Number(!mb[4]);
+  const [pa, pb] = [ma[4].split('.').map(preReleasePart), mb[4].split('.').map(preReleasePart)];
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    if (pa[i] === undefined || pb[i] === undefined) return pa[i] === undefined ? -1 : 1;
+    if (pa[i] === pb[i]) continue;
+    if (typeof pa[i] !== typeof pb[i]) return typeof pa[i] === 'number' ? -1 : 1;
+    return pa[i] < pb[i] ? -1 : 1;
+  }
+  return 0;
+}
+
+/**
+ * The newest pack this app build can load that is a newer engine version than the one it runs, or
  * null. A pack must match the app's React Native version and bridge exactly and the phone's ABI,
- * and never be one the phone rejected before.
+ * and never be one the phone rejected before. Version, not llama.cpp build: a `.N` rebuild on the
+ * same llama.cpp ships fixes to the native glue too.
  */
 export function choosePack(
   packs: readonly EnginePack[],
-  device: { reactNative: string; bridge: string; abis: readonly string[]; currentBuild: number; rejected: ReadonlySet<string> },
+  device: { reactNative: string; bridge: string; abis: readonly string[]; currentVersion: string; rejected: ReadonlySet<string> },
 ): EnginePack | null {
   // An app that does not know its bridge (an older package) takes no pack.
   if (!device.bridge) return null;
@@ -136,8 +170,11 @@ export function choosePack(
       p.reactNative === device.reactNative &&
       p.bridge === device.bridge &&
       device.abis.includes(p.abi) &&
-      p.llamaBuild > device.currentBuild &&
+      compareEngineVersions(p.engineVersion, device.currentVersion) === 1 &&
       !device.rejected.has(packId(p)),
   );
-  return fits.reduce<EnginePack | null>((best, p) => (best && best.llamaBuild >= p.llamaBuild ? best : p), null);
+  return fits.reduce<EnginePack | null>(
+    (best, p) => (best && compareEngineVersions(best.engineVersion, p.engineVersion)! >= 0 ? best : p),
+    null,
+  );
 }

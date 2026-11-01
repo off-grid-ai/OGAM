@@ -19,6 +19,7 @@ const MANIFEST = 'https://mobile-runtime.getoffgridai.co/android/manifest.json';
 const PACK_URL = 'https://mobile-runtime.getoffgridai.co/android/0.13.0-b12032/engine-pack-arm64-v8a.zip';
 const VERSION = '0.13.0-b12032';
 const BUNDLED_BUILD = 11385;
+const BUNDLED_VERSION = '0.13.0-b11385';
 const PACK_BUILD = 12032;
 const LFM3 = { minLlamaBuild: 11938 };
 const DAY = 24 * 60 * 60 * 1000;
@@ -44,17 +45,17 @@ const signed = (body: string) => encodeBase64(nacl.sign.detached(decodeUTF8(body
 /** The native store as the app sees it across launches (state mirrors EnginePackStore). */
 function nativeStore() {
   // A fresh store has written nothing yet: no rejected list, no packs.
-  const state: { trial?: { id: string; launches: number }; active?: string; rejected?: Record<string, string>; packs: Record<string, { llamaBuild: number }> } = { packs: {} };
-  let status = { bootPackId: null as string | null, trial: false, llamaBuild: null as number | null, source: null as string | null, error: null as string | null };
+  const state: { trial?: { id: string; launches: number }; active?: string; rejected?: Record<string, string>; packs: Record<string, { llamaBuild: number; engineVersion: string }> } = { packs: {} };
+  let status = { bootPackId: null as string | null, trial: false, llamaBuild: null as number | null, engineVersion: null as string | null, source: null as string | null, error: null as string | null };
   const installed: Array<{ staging: string; entry: Record<string, unknown> }> = [];
   let relaunches = 0;
   const module = {
-    getStatus: jest.fn(async () => ({ ...status, reactNative: '0.83.1', bridge: 'bridge-1', abis: ['arm64-v8a'], state: JSON.stringify(state) })),
+    getStatus: jest.fn(async () => ({ ...status, bundledVersion: BUNDLED_VERSION, reactNative: '0.83.1', bridge: 'bridge-1', abis: ['arm64-v8a'], state: JSON.stringify(state) })),
     install: jest.fn(async (staging: string, entryJson: string) => {
       const entry = JSON.parse(entryJson);
       const id = `${entry.engineVersion}-${String(entry.sha256).slice(0, 12)}`;
       installed.push({ staging, entry });
-      state.packs[id] = { llamaBuild: entry.llamaBuild };
+      state.packs[id] = { llamaBuild: entry.llamaBuild, engineVersion: entry.engineVersion };
       state.trial = { id, launches: 0 };
       return id;
     }),
@@ -75,8 +76,8 @@ function nativeStore() {
       const id = state.trial?.id ?? state.active ?? null;
       if (state.trial) state.trial.launches += 1;
       status = id
-        ? { bootPackId: id, trial: !!state.trial, llamaBuild: state.packs[id].llamaBuild, source: loads ? 'pack' : 'bundled', error }
-        : { bootPackId: null, trial: false, llamaBuild: null, source: 'bundled', error: null };
+        ? { bootPackId: id, trial: !!state.trial, ...state.packs[id], source: loads ? 'pack' : 'bundled', error }
+        : { bootPackId: null, trial: false, llamaBuild: null, engineVersion: null, source: 'bundled', error: null };
     },
   };
 }
@@ -240,13 +241,33 @@ it.each([
   ['a zip that does not match its sha256', { zip: 'PK something else' }],
   ['a pack download that fails', { zipStatus: 404 }],
   ['a manifest the host does not serve', { manifestStatus: 503 }],
-  ['no pack newer than the bundled engine', { body: manifestBody({ llamaBuild: BUNDLED_BUILD }) }],
+  ['the bundled engine version itself', { body: manifestBody({ version: BUNDLED_VERSION, llamaBuild: BUNDLED_BUILD }) }],
+  ['an older engine version', { body: manifestBody({ version: '0.12.9-b11000', llamaBuild: 11000 }) }],
 ])('%s installs nothing and the app keeps running', async (_label, opts) => {
   const w = await world(opts);
   w.store.launch();
   await expect(w.start(1 * DAY)).resolves.toBeUndefined();
   expect(w.store.installed).toEqual([]);
   expect(w.boundary.fs!.listFiles(w.boundary.fs!.module.CachesDirectoryPath)).toEqual([]);
+});
+
+// A rebuild on the same llama.cpp (.2 after .1) carries fixes to the native glue: it installs.
+it('a rebuild on the same llama.cpp installs over the running pack', async () => {
+  const w = await world({ body: manifestBody({ version: '0.13.0-b12032.2' }) });
+  w.store.state.packs['0.13.0-b12032.1-aaaaaaaaaaaa'] = { llamaBuild: PACK_BUILD, engineVersion: '0.13.0-b12032.1' };
+  w.store.state.active = '0.13.0-b12032.1-aaaaaaaaaaaa';
+  w.store.launch();
+  await w.start(1 * DAY);
+  expect(w.store.installed.map(i => i.entry.engineVersion)).toEqual(['0.13.0-b12032.2']);
+});
+
+it('the same version as the running pack installs nothing', async () => {
+  const w = await world();
+  w.store.state.packs['0.13.0-b12032-aaaaaaaaaaaa'] = { llamaBuild: PACK_BUILD, engineVersion: VERSION };
+  w.store.state.active = '0.13.0-b12032-aaaaaaaaaaaa';
+  w.store.launch();
+  await w.start(1 * DAY);
+  expect(w.store.installed).toEqual([]);
 });
 
 it('looks for a newer pack at most once a day, and not while one is on trial', async () => {

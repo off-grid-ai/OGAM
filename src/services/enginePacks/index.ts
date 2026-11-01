@@ -8,7 +8,7 @@ import { useAppStore } from '../../stores/appStore';
 import { isLiteRTModel } from '../../types';
 import { modelResidencyManager } from '../modelResidency';
 import { choosePack, packId, verifyManifest, type EnginePack } from './manifest';
-import { runningLlamaBuild, setLoadedPackBuild } from './running';
+import { setLoadedPackBuild } from './running';
 
 /**
  * Android engine packs: a newer llama.cpp reaches the phone without an app update. iOS cannot load
@@ -39,6 +39,10 @@ interface EnginePackStatus {
   bootPackId: string | null;
   trial: boolean;
   llamaBuild: number | null;
+  /** The @ogai/llama.rn version of the pack this launch chose, or null. */
+  engineVersion: string | null;
+  /** The @ogai/llama.rn version this APK bundles. */
+  bundledVersion: string;
   /** 'pack' or 'bundled' once llama.rn loaded its libraries. */
   source: 'pack' | 'bundled' | null;
   error: string | null;
@@ -133,7 +137,7 @@ async function checkForUpdate(engine: EnginePackNative, status: EnginePackStatus
     reactNative: status.reactNative,
     bridge: status.bridge,
     abis: status.abis,
-    currentBuild: runningLlamaBuild() ?? 0,
+    currentVersion: status.source === 'pack' && status.engineVersion ? status.engineVersion : status.bundledVersion,
     rejected: new Set(Object.keys(state.rejected ?? {})),
   });
   if (!pack) return false;
