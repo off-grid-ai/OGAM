@@ -108,7 +108,6 @@
   "__tests__/unit/audio/ttsDownloadProvider.test.ts": 2,
   "__tests__/unit/audio/ttsEngineSubscription.test.ts": 2,
   "__tests__/unit/audio/turnSpeech.test.ts": 7,
-  "__tests__/unit/hooks/useChatMessageHandlers.test.ts": 4,
   "__tests__/unit/hooks/useChatModelActions.test.ts": 5,
   "__tests__/unit/hooks/useVoiceRecording.test.ts": 1,
   "__tests__/unit/mcp/McpToolExtension.test.ts": 5,
