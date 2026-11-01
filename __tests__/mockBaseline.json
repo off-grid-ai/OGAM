@@ -9,8 +9,6 @@
   "__tests__/pro/audio/ttsStore.extra.test.ts": 3,
   "__tests__/pro/runtimeDeactivation.integration.test.ts": 20,
   "__tests__/rntl/components/ChatInput.test.tsx": 4,
-  "__tests__/rntl/screens/DownloadManagerScreen.test.tsx": 9,
-  "__tests__/rntl/screens/GalleryScreen.test.tsx": 8,
   "__tests__/rntl/screens/ProDetailScreen.test.tsx": 1,
   "__tests__/unit/audio/streamingSpeech.test.ts": 3,
   "__tests__/unit/audio/ttsDownloadProvider.test.ts": 2,
