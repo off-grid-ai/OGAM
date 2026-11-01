@@ -419,6 +419,14 @@ The **Build Atlas voices** workflow ran successfully on 2026-10-19, so `kitten-n
 - **Load the AI model now** button on the briefing screen and the Learn screen.
 - Not verified on a device: Whisper in lessons and calls on the tablet, voice variety, podcast autoplay, line gaps.
 
+## 8m. Calls, themes and small things (0.0.117)
+
+- **Learn practice call**: loads the AI model before the caller speaks; with none downloaded it says so and offers "Load the AI model now". The transcript no longer pushes End call off the screen (the likely reason you got stuck), the phone's Back button hangs up, and the screen stays on during the call.
+- **Colorful** now works in dark mode and with a chosen accent or background: pastel (dark: deep) tinted surfaces, each Home card in its own color, and each bottom tab in its own color.
+- **Two more layouts**: Grid (big square tiles, two across) and Focus (only Chat, Learn and the briefing). Four more backgrounds: High contrast, Lavender, Peach, Navy.
+- **Appearance**: "Surprise me" picks a random background and accent; "Reset the look" returns to the default (keeps your chat layout).
+- Not verified on a device.
+
 ## Build evidence and checks
 
 - New **Android unit tests** workflow runs the Kotlin/JVM tests (`:app:testDebugUnitTest`) on every push that
