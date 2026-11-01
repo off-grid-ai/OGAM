@@ -7,11 +7,11 @@ import { Platform } from 'react-native';
 import { FONTS, TYPOGRAPHY } from '../constants';
 import type { ThemeColors } from './palettes';
 
-export type PaletteId = 'classic' | 'black' | 'forest' | 'ocean' | 'dusk' | 'paper' | 'mocha' | 'mint' | 'sakura' | 'graphite' | 'sunset';
+export type PaletteId = 'classic' | 'black' | 'forest' | 'ocean' | 'dusk' | 'paper' | 'mocha' | 'mint' | 'sakura' | 'graphite' | 'sunset' | 'contrast' | 'lavender' | 'peach' | 'navy';
 export type AccentId = 'amber' | 'emerald' | 'blue' | 'violet' | 'rose' | 'teal' | 'red' | 'slate' | 'multi' | 'orange' | 'lime' | 'cyan' | 'indigo' | 'fuchsia' | 'gold';
 export type FontId = 'atlas' | 'sans' | 'serif' | 'mono' | 'condensed' | 'light' | 'medium' | 'casual';
 export type TextSizeId = 'small' | 'normal' | 'large' | 'xlarge';
-export type LayoutMode = 'standard' | 'simple' | 'compact' | 'colorful';
+export type LayoutMode = 'standard' | 'simple' | 'compact' | 'colorful' | 'grid' | 'focus';
 export type Density = 'comfortable' | 'compact' | 'spacious';
 /** How chat messages look: Clean = replies as plain text across the page with a bubble only for your own messages (like ChatGPT and Claude); Bubbles = every message in a box. */
 export type ChatLayout = 'clean' | 'bubbles';
@@ -23,7 +23,9 @@ export const LAYOUT_MODES: Array<{ id: LayoutMode; name: string; hint: string }>
   { id: 'standard', name: 'Standard', hint: 'Original Atlas home and layout' },
   { id: 'simple', name: 'Simple', hint: 'Large, labeled actions without clutter' },
   { id: 'compact', name: 'Compact', hint: 'Shortcuts and tighter spacing' },
-  { id: 'colorful', name: 'Colorful', hint: 'Pastel cards and lively accents' },
+  { id: 'colorful', name: 'Colorful', hint: 'Every part of the app in its own color' },
+  { id: 'grid', name: 'Grid', hint: 'Big square tiles, two across' },
+  { id: 'focus', name: 'Focus', hint: 'Only chat, learn and the briefing' },
 ];
 
 export interface Appearance {
@@ -73,6 +75,18 @@ export const PALETTES: Array<{ id: PaletteId; name: string; light?: Surfaces; da
   { id: 'sunset', name: 'Sunset',
     light: surfaces(['#FFF8F1', '#FDEBDA', '#F9DCC3', '#F4CCAB', '#F6D5BB', '#EBBF9F']),
     dark: surfaces(['#1A100C', '#261811', '#32211A', '#3F2B22', '#3A261D', '#4E352A']) },
+  { id: 'contrast', name: 'High contrast',
+    light: surfaces(['#FFFFFF', '#FFFFFF', '#F0F0F0', '#E0E0E0', '#000000', '#333333']),
+    dark: surfaces(['#000000', '#000000', '#141414', '#222222', '#FFFFFF', '#CCCCCC']) },
+  { id: 'lavender', name: 'Lavender',
+    light: surfaces(['#F7F5FF', '#ECE8FB', '#E0DAF6', '#D3CBF0', '#DAD3F2', '#C6BCE9']),
+    dark: surfaces(['#110F1E', '#1A1730', '#231F40', '#2E2951', '#28234A', '#3A3463']) },
+  { id: 'peach', name: 'Peach',
+    light: surfaces(['#FFF6F2', '#FDE8DF', '#F9D9CB', '#F4C9B6', '#F5D3C4', '#EBBDA9']),
+    dark: surfaces(['#1B100D', '#281813', '#34211A', '#412C23', '#3B261E', '#503529']) },
+  { id: 'navy', name: 'Navy',
+    light: surfaces(['#F3F5FA', '#E5E9F4', '#D6DDEE', '#C6D0E6', '#CED6EA', '#B7C2DD']),
+    dark: surfaces(['#070B17', '#0D1426', '#141D36', '#1C2745', '#18223D', '#26335A']) },
 ];
 
 type Accent = Pick<ThemeColors, 'primary' | 'primaryDark' | 'primaryLight'>;
@@ -137,14 +151,14 @@ export function applyAppearanceColors(base: ThemeColors, isDark: boolean, appear
   const accent = ACCENTS.find(a => a.id === appearance.accent);
   const bg = palette && (isDark ? palette.dark : palette.light);
   const ac = accent && (isDark ? accent.dark : accent.light);
-  const colorful = appearance.layoutMode === 'colorful' && !ac;
+  const colorful = appearance.layoutMode === 'colorful';
   const colorfulAccent = isDark ? ACCENTS[3].dark : ACCENTS[5].light;
   const colorfulSurfaces = isDark
     ? surfaces(['#11152B', '#211D38', '#252F43', '#303950', '#3E4160', '#545B77'])
     : surfaces(['#F3F6FF', '#FFF9EC', '#E8F6F3', '#DFF0FF', '#D4DEED', '#B6CEED']);
   if (!bg && !ac && !colorful) return base;
   return { ...base, ...(colorful && !bg ? colorfulSurfaces : {}), ...(bg ?? {}),
-    ...(colorful ? { ...colorfulAccent, borderFocus: colorfulAccent.primary } : {}),
+    ...(colorful && !ac ? { ...colorfulAccent, borderFocus: colorfulAccent.primary } : {}),
     ...(ac ? { ...ac, borderFocus: ac.primary } : {}) };
 }
 

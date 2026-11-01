@@ -87,7 +87,7 @@ const TAB_ICON_MAP: Record<string, string> = Object.fromEntries(NAV_ITEMS.map((i
 
 const TabBarIcon: React.FC<{ name: string; focused: boolean }> = ({ name, focused }) => {
   const { colors, isDark } = useTheme();
-  const multi = useAppStore((st) => st.settings.appearance?.accent === 'multi');
+  const multi = useAppStore((st) => st.settings.appearance?.accent === 'multi' || st.settings.appearance?.layoutMode === 'colorful');
   const tabStyles = useThemedStyles(createTabBarStyles);
   const scale = useSharedValue(focused ? 1.1 : 1);
 
