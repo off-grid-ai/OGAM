@@ -1,81 +1,96 @@
 /**
- * classifierProvisioning tests — auto-downloads + selects the default SmolLM2
- * classifier so LLM routing works out of the box.
+ * classifierProvisioning — downloads and selects the default SmolLM2 classifier so model routing works out
+ * of the box.
+ *
+ * Real: ensureDefaultClassifier, startModelDownload (the one download entry point), modelManager and the
+ * background download service, huggingFaceService, the stores. Faked (device / network): the native
+ * background downloader, the disk and storage (harness/modelManagerDevice), and the Hugging Face API at
+ * fetch (harness/hfModelApiServer).
  */
-let mockState: any;
-jest.mock('../../../src/stores', () => ({
-  useAppStore: { getState: () => mockState },
-}));
-
-jest.mock('../../../src/services/modelManager', () => ({
-  modelManager: {
-    isBackgroundDownloadSupported: () => true,
-  },
-}));
-
-// The classifier now downloads through THE single entry point (startModelDownload),
-// which registers the model AND clears the in-flight row on completion — the old
-// parallel downloadModelBackground + watchDownload left a phantom "downloading 100%"
-// row behind. The test drives startModelDownload's onRegistered hook.
-const mockStartModelDownload = jest.fn();
-jest.mock('../../../src/services/startModelDownload', () => ({
-  startModelDownload: (...a: any[]) => mockStartModelDownload(...a),
-}));
-
-const mockGetModelFiles = jest.fn();
-jest.mock('../../../src/services/huggingface', () => ({
-  huggingFaceService: { getModelFiles: (...a: any[]) => mockGetModelFiles(...a) },
-}));
-
-const mockUpdateSettings = jest.fn((patch: any) => { mockState.settings = { ...mockState.settings, ...patch }; });
+import { installModelManagerDevice, type ModelManagerDevice } from '../../harness/modelManagerDevice';
+import { serveHfModelApi, type HfModelApiServer } from '../../harness/hfModelApiServer';
+import { createDownloadedModel } from '../../utils/factories';
 
 const REPO = 'bartowski/SmolLM2-135M-Instruct-GGUF';
+const Q8 = 'SmolLM2-135M-Instruct-Q8_0.gguf';
+
+let device: ModelManagerDevice;
+let hf: HfModelApiServer;
+let useAppStore: any;
+let ensureDefaultClassifier: () => Promise<void>;
+
+beforeEach(async () => {
+  device = await installModelManagerDevice({ platform: 'android' });
+  hf = serveHfModelApi({
+    repos: {
+      [REPO]: [
+        { path: 'SmolLM2-135M-Instruct-Q4_K_M.gguf', size: 90 * 1024 * 1024 },
+        { path: Q8, size: 145 * 1024 * 1024 },
+      ],
+    },
+  });
+  ({ useAppStore } = require('../../../src/stores'));
+  ({ ensureDefaultClassifier } = require('../../../src/services/classifierProvisioning'));
+});
+
+afterEach(() => hf.restore());
+
+const classifierId = () => useAppStore.getState().settings.classifierModelId;
 
 describe('ensureDefaultClassifier', () => {
-  beforeEach(() => {
-    jest.resetModules();
-    jest.clearAllMocks();
-    mockState = {
-      settings: { classifierModelId: null },
-      downloadedModels: [],
-      updateSettings: mockUpdateSettings,
-    };
+  it('does nothing when a downloaded classifier is already chosen', async () => {
+    useAppStore.getState().addDownloadedModel(createDownloadedModel({ id: 'x/y.gguf' }));
+    useAppStore.getState().updateSettings({ classifierModelId: 'x/y.gguf' });
+
+    await ensureDefaultClassifier();
+
+    expect(classifierId()).toBe('x/y.gguf');
+    expect(device.nativeRows()).toHaveLength(0);
+    expect(hf.requests).toHaveLength(0);
   });
 
-  const load = () => require('../../../src/services/classifierProvisioning').ensureDefaultClassifier;
+  it('chooses the default classifier already on the phone instead of downloading it again', async () => {
+    useAppStore.getState().addDownloadedModel(createDownloadedModel({ id: `${REPO}/${Q8}` }));
 
-  it('no-ops when a usable classifier is already configured', async () => {
-    mockState.settings.classifierModelId = 'x/y.gguf';
-    mockState.downloadedModels = [{ id: 'x/y.gguf' }];
-    await load()();
-    expect(mockStartModelDownload).not.toHaveBeenCalled();
+    await ensureDefaultClassifier();
+
+    expect(classifierId()).toBe(`${REPO}/${Q8}`);
+    expect(device.nativeRows()).toHaveLength(0);
   });
 
-  it('selects an already-downloaded default instead of re-downloading', async () => {
-    mockState.downloadedModels = [{ id: `${REPO}/SmolLM2-135M-Instruct-Q8_0.gguf` }];
-    await load()();
-    expect(mockStartModelDownload).not.toHaveBeenCalled();
-    expect(mockUpdateSettings).toHaveBeenCalledWith({ classifierModelId: `${REPO}/SmolLM2-135M-Instruct-Q8_0.gguf` });
+  it('downloads the Q8_0 file in the background and chooses it once the download is registered', async () => {
+    await ensureDefaultClassifier();
+    await device.settle();
+
+    const rows = device.nativeRows();
+    expect(rows).toHaveLength(1);
+    expect(JSON.stringify(rows[0])).toContain(Q8);
+    expect(classifierId()).toBeFalsy(); // not chosen before it is on the phone
+
+    await device.finishDownload(rows[0].downloadId, 145 * 1024 * 1024);
+    await device.settle();
+
+    expect(useAppStore.getState().downloadedModels.map((m: any) => m.id)).toContain(`${REPO}/${Q8}`);
+    expect(classifierId()).toBe(`${REPO}/${Q8}`);
   });
 
-  it('downloads the Q8_0 GGUF through the single entry point and selects it on registration', async () => {
-    mockGetModelFiles.mockResolvedValue([
-      { name: 'SmolLM2-135M-Instruct-Q4_K_M.gguf', size: 90, downloadUrl: 'u1' },
-      { name: 'SmolLM2-135M-Instruct-Q8_0.gguf', size: 145, downloadUrl: 'u2' },
-    ]);
+  it('starts one download when asked twice while the first is running', async () => {
+    await Promise.all([ensureDefaultClassifier(), ensureDefaultClassifier()]);
+    await device.settle();
 
-    await load()();
+    expect(device.nativeRows()).toHaveLength(1);
+  });
 
-    // Routes through startModelDownload (which clears the in-flight row), NOT a parallel
-    // downloadModelBackground/watchDownload that would leave a phantom row behind.
-    expect(mockStartModelDownload).toHaveBeenCalledWith(
-      REPO,
-      expect.objectContaining({ name: 'SmolLM2-135M-Instruct-Q8_0.gguf' }),
-      expect.objectContaining({ onRegistered: expect.any(Function), onError: expect.any(Function) }),
-    );
-    // The registered model's id selects the classifier (uses the model, not a re-derived string).
-    const opts = mockStartModelDownload.mock.calls[0][2];
-    opts.onRegistered({ id: `${REPO}/SmolLM2-135M-Instruct-Q8_0.gguf` });
-    expect(mockUpdateSettings).toHaveBeenCalledWith({ classifierModelId: `${REPO}/SmolLM2-135M-Instruct-Q8_0.gguf` });
+  it('downloads nothing when Hugging Face does not answer, and can try again later', async () => {
+    hf.serve({ status: 503 });
+
+    await ensureDefaultClassifier();
+    await device.settle();
+    expect(device.nativeRows()).toHaveLength(0);
+
+    hf.serve({ repos: { [REPO]: [{ path: Q8, size: 145 * 1024 * 1024 }] } });
+    await ensureDefaultClassifier();
+    await device.settle();
+    expect(device.nativeRows()).toHaveLength(1);
   });
 });
