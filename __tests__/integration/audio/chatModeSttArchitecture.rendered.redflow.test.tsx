@@ -1,7 +1,7 @@
 /**
  * RED-FLOW (UI, rendered) — T080 / T075 / DEV-B26+B28: chat-mode voice input does NOT reliably transcribe
  * what the user said. Chat-mode hold-to-talk runs the REALTIME pipeline (useWhisperTranscription →
- * startRealtimeTranscription → transcribeRealtime), which on device captures NO audio (hasData:false) even
+ * startRealtimeTranscription → whisper.rn's realtime transcriber), which on device captures NO audio (hasData:false) even
  * when the user spoke — while voice-mode's FILE pipeline (transcribeFile) works (T079). Root (B28): three
  * divergent STT mechanisms; chat-mode is on the broken realtime one.
  *
@@ -30,13 +30,12 @@ describe('T080/T075 (rendered) — chat-mode STT must transcribe the recording t
     // The recording captured "hello world" (what a reliable file-transcribe of it yields)...
     h.boundary.whisper!.setFileTranscript('hello world');
 
-    // ...but chat-mode uses the realtime stream. Fire the REAL hold-to-talk gesture on the REAL mic, then
-    // emit the device-faithful realtime events: a partial with no data, then a FINAL with no data (B26 — the
-    // mic captured nothing even though the user spoke).
+    // ...but the live preview decoded nothing (B26 — the mic captured nothing live even though the user
+    // spoke). Fire the REAL hold-to-talk gesture on the REAL mic, deliver an empty slice, then let go.
     await h.tapMic();
     await h.rtl.waitFor(() => { expect(h.boundary.whisper!.hasRealtimeSubscriber()).toBe(true); });
-    h.boundary.whisper!.emitRealtime({ isCapturing: true, noData: true, recordingTime: 300 });
-    h.boundary.whisper!.emitRealtime({ isCapturing: false, noData: true, recordingTime: 900 });
+    h.boundary.whisper!.emitRealtime({ noData: true, recordingTime: 300 });
+    await h.releaseMic();
     await h.settle(300);
 
     // SPEC (OGAM ground truth): the spoken words are transcribed to TEXT in the input.

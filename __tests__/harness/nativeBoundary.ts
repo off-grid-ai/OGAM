@@ -1081,30 +1081,31 @@ function makeDownloadFake(handle: FakeEmitterHandle): DownloadFake {
 }
 
 // ---------------------------------------------------------------------------
-// Fake: whisper.rn (STT). initWhisper returns a driveable CONTEXT (whisperService calls
-// this.context.transcribeRealtime / transcribeFile). Realtime is the chat-mode hold-to-talk path; the
-// fake lets the test emit device-shaped RealtimeTranscribeEvents ({ isCapturing, data:{result}, ... }) so
-// the REAL whisperService → useWhisperTranscription → onTranscript → input wiring runs on top. transcribeFile
-// is the voice-mode path. Opt-in ({ whisper: true }); overrides the dumb global jest.setup whisper.rn mock.
+// Fake: whisper.rn (STT). initWhisper returns a driveable CONTEXT. Realtime is the chat-mode
+// hold-to-talk path: whisper.rn's RealtimeTranscriber (faked in jest.setup) delivers the live preview a
+// slice at a time, and on stop the recording is transcribed (context.transcribe) for the final text, so
+// the REAL whisperService → useWhisperTranscription → onTranscript → input wiring runs on top. The file
+// pass is also the voice-mode path. Opt-in ({ whisper: true }); overrides the dumb global whisper.rn mock.
 // ---------------------------------------------------------------------------
 
 export interface WhisperFake {
   module: Record<string, jest.Mock>;
-  /** Emit a device-shaped realtime event to the LIVE subscriber (isCapturing:true = partial; false = final).
-   *  Pass { noData: true } to model the B26 device symptom (spoke, but the mic captured no audio). */
+  /** The live realtime session decodes a slice: the preview the person sees while speaking. The final
+   *  text comes from the recording on stop (setFileTranscript). Pass { noData: true } for a slice that
+   *  decoded nothing. */
   emitRealtime(opts: {
     text?: string;
-    isCapturing: boolean;
+    sliceIndex?: number;
     recordingTime?: number;
     noData?: boolean;
   }): void;
-  /** Set what the NEXT transcribeFile resolves with (voice-mode path). */
+  /** Set what the NEXT file transcription resolves with: a stopped recording, or the voice-mode path. */
   setFileTranscript(text: string): void;
   /** True once whisperService has started a realtime session (subscribe wired). */
   hasRealtimeSubscriber(): boolean;
-  /** True while the native mic realtime session is CAPTURING — set on transcribeRealtime(), cleared on
-   *  its stop() or on release(). Models the device mic: capture continues until explicitly stopped, so a
-   *  leaked session (never stopped on navigate-away) reads true. The device-boundary residue for B11. */
+  /** True while the realtime session is CAPTURING — from its start() until its stop(). Capture continues
+   *  until explicitly stopped, so a leaked session (never stopped on navigate-away) reads true. The
+   *  device-boundary residue for B11. */
   realtimeActive(): boolean;
   /** HOLD the next model load (initWhisper) open until releaseLoad() — the device-shaped load window a
    *  real ggml init has (seconds on device), so an in-flight tap-triggered load is observable. One-shot. */
@@ -1119,9 +1120,12 @@ export interface WhisperFake {
 }
 
 function makeWhisperFake(): WhisperFake {
-  let realtimeCb: ((evt: unknown) => void) | null = null;
+  // whisper.rn's realtime sessions, from the jest.setup fake, in the registry whisperService runs in.
+  const lastSession = () => {
+    const sessions: any[] = require('whisper.rn/realtime-transcription/RealtimeTranscriber').__sessions;
+    return sessions[sessions.length - 1];
+  };
   let fileTranscript = 'Transcribed text';
-  let rtActive = false; // the native mic session is capturing until stop()/release()
   // Load hold: opens the in-flight model-load window a real (seconds-long) ggml init has.
   let loadHoldPending = false;
   let loadHoldRelease: (() => void) | null = null;
@@ -1149,22 +1153,12 @@ function makeWhisperFake(): WhisperFake {
       result: fileTranscript,
       segments: [{ text: fileTranscript, t0: 0, t1: 100 }],
     })),
-    transcribeRealtime: jest.fn(async () => {
-      rtActive = true; // native mic session starts capturing
-      return {
-        stop: jest.fn(async () => {
-          rtActive =
-            false; /* native stop; test drives the final event explicitly */
-        }),
-        subscribe: (cb: (evt: unknown) => void) => {
-          realtimeCb = cb;
-        },
-      };
-    }),
-    release: jest.fn(async () => {
-      realtimeCb = null;
-      rtActive = false;
-    }),
+    // whisper.rn's realtime transcriber decodes PCM slices through this.
+    transcribeData: jest.fn(() => ({
+      stop: jest.fn(async () => {}),
+      promise: Promise.resolve({ result: '', segments: [] }),
+    })),
+    release: jest.fn(async () => {}),
     bench: jest.fn(async () => ''),
   };
   const module: Record<string, jest.Mock> = {
@@ -1185,27 +1179,16 @@ function makeWhisperFake(): WhisperFake {
   };
   return {
     module,
-    emitRealtime: ({ text, isCapturing, recordingTime, noData }) => {
-      if (!realtimeCb) return;
-      // whisper.rn sends the final event when its capture has ended (stop, or the realtimeAudioSec cap).
-      if (!isCapturing) rtActive = false;
-      realtimeCb({
-        isCapturing,
-        data: noData
-          ? undefined
-          : {
-              result: text ?? '',
-              segments: text ? [{ text, t0: 0, t1: 100 }] : [],
-            },
-        processTime: 10,
-        recordingTime: recordingTime ?? 500,
-      });
+    emitRealtime: ({ text, sliceIndex, recordingTime, noData }) => {
+      const session = lastSession();
+      if (!session?.active) return;
+      session.emitSlice(noData ? undefined : text ?? '', sliceIndex ?? 0, recordingTime ?? 500);
     },
     setFileTranscript: t => {
       fileTranscript = t;
     },
-    hasRealtimeSubscriber: () => realtimeCb != null,
-    realtimeActive: () => rtActive,
+    hasRealtimeSubscriber: () => !!lastSession()?.active,
+    realtimeActive: () => !!lastSession()?.active,
     holdNextLoad: () => {
       loadHoldPending = true;
     },

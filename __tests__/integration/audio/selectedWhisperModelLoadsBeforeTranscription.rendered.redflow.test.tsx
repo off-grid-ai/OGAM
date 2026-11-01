@@ -61,7 +61,6 @@ describe('selected Whisper model identity', () => {
     const initCalls = h.boundary.whisper!.module.initWhisper.mock.calls;
     const lastLoadedPath = initCalls[initCalls.length - 1]?.[0]?.filePath;
     await h.rtl.act(async () => {
-      h.boundary.whisper!.emitRealtime({ text: 'test', isCapturing: false });
       await whisperService.stopTranscription();
     });
 
