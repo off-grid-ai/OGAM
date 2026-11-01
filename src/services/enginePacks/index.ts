@@ -33,7 +33,7 @@ const TEST_CONTEXT = 256;
 const TEST_TOKENS = 8;
 
 /** What the native store says this launch loaded (EnginePackModule.getStatus). */
-export interface EnginePackStatus {
+interface EnginePackStatus {
   bootPackId: string | null;
   trial: boolean;
   llamaBuild: number | null;
