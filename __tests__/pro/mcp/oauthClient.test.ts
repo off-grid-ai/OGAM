@@ -48,6 +48,7 @@ import type {
   OAuthServerMetadata,
   OAuthTokens,
 } from '@offgrid/pro/mcp/oauth/types';
+import { isUnder } from '../../harness/urlMatch';
 
 // ---- dumb in-memory native fakes (the injected seam, not the code under test) ----
 
@@ -146,10 +147,10 @@ function serveAuthServer(opts: {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     const method = init?.method ?? 'GET';
     requests.push({ method, url, body: typeof init?.body === 'string' ? init.body : '' });
-    if (url.startsWith('https://mcp.example.com/.well-known/oauth-protected-resource')) {
+    if (isUnder(url, 'https://mcp.example.com/.well-known/oauth-protected-resource')) {
       return json({ resource: 'https://mcp.example.com', authorization_servers: [AUTH.issuer] });
     }
-    if (url.startsWith(`${AUTH.issuer}/.well-known/`)) return json(meta);
+    if (isUnder(url, `${AUTH.issuer}/.well-known`)) return json(meta);
     if (method === 'POST' && url === meta.registration_endpoint) return json({ client_id: 'reg' }, 201);
     if (method === 'POST' && url === AUTH.tokenEndpoint) {
       const next = tokens.shift();

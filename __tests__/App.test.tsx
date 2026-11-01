@@ -7,6 +7,7 @@
  * the network reconnect watcher.
  */
 import { installNativeBoundary, requireRTL } from './harness/nativeBoundary';
+import { isUnder } from './harness/urlMatch';
 
 jest.mock('react-native-bootsplash', () => ({ hide: jest.fn(async () => {}) }), { virtual: true });
 
@@ -23,7 +24,7 @@ function installServer() {
   const realFetch = global.fetch;
   global.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (!url.startsWith(SERVER)) return realFetch(input);
+    if (!isUnder(url, SERVER)) return realFetch(input);
     requests.push(url);
     if (holding) await new Promise<void>(resolve => held.push(resolve));
     return new Response(JSON.stringify({ data: [{ id: 'remote-model' }] }), {

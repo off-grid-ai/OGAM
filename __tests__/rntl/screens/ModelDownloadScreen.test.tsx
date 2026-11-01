@@ -14,6 +14,7 @@ import { installModelManagerDevice, type ModelManagerDevice } from '../../harnes
 import { requireRTL, GB } from '../../harness/nativeBoundary';
 import { serveHfModelApi, type HfModelApiServer } from '../../harness/hfModelApiServer';
 import { installLanProbe, type LanProbeHandle } from '../../harness/lanProbe';
+import { isUnder } from '../../harness/urlMatch';
 
 const SERVER_HOST = '192.168.1.10:1234';
 const SERVER_ENDPOINT = `http://${SERVER_HOST}`;
@@ -56,7 +57,7 @@ function installNetwork(hosts: LiveHosts): (next: LiveHosts) => void {
     lan = installLanProbe(next);
     lanFetch = globalThis.fetch;
     globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) =>
-      String(input).startsWith('https://huggingface.co')
+      isUnder(String(input), 'https://huggingface.co')
         ? hfFetch(input, init)
         : lanFetch(input, init)) as typeof fetch;
   };
