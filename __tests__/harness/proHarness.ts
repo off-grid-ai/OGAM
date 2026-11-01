@@ -221,7 +221,18 @@ export async function startPairedPeer(options: {
   entitlement?: 'joiner' | 'licensed';
   /** Accept knowledge-document files the phone sends (they are kept in `receivedFiles`). */
   acceptFiles?: boolean;
-}) {
+  /**
+   * Answer an app channel other than `state`, the way this device's own app would (for example a
+   * Desktop answering `companion-task-call`). `peer` is this device: reply with `peer.engine.sendApp`
+   * and sync records back with `peer.record`.
+   */
+  onAppMessage?: (
+    peer: PairedPeer,
+    deviceId: string,
+    channel: string,
+    data: unknown,
+  ) => void;
+}): Promise<PairedPeer> {
   const {
     OpLog, StateSync, FileTransferManager, KNOWLEDGE_DOCUMENT_MIME,
   } = require('@offgrid/sync');
@@ -280,6 +291,7 @@ export async function startPairedPeer(options: {
     },
     onAppMessage: (deviceId: string, channel: string, data: unknown) => {
       if (channel === 'state') state.onMessage(deviceId, data);
+      else options.onAppMessage?.(self, deviceId, channel, data);
     },
   });
   state = new StateSync({
@@ -309,7 +321,7 @@ export async function startPairedPeer(options: {
   await peer.engine.start(0);
   device.port = peer.transport.boundPort ?? 0;
 
-  return {
+  const self: PairedPeer = {
     device,
     engine: peer.engine,
     log,
@@ -384,6 +396,35 @@ export async function startPairedPeer(options: {
       await peer.engine.stop();
     },
   };
+  return self;
+}
+
+/** Another device on the LAN, as `startPairedPeer` builds it. */
+export interface PairedPeer {
+  device: { id: string; name: string; platform: string; version: string; host: string; port: number };
+  engine: any;
+  log: any;
+  records: Map<string, Record<string, unknown>>;
+  receivedFiles: Array<{ request: Record<string, any>; bytes: Buffer }>;
+  connected: Set<string>;
+  pairWithPhone(view: any): Promise<string>;
+  record(
+    entity: string,
+    entityId: string,
+    kind: 'put' | 'delete',
+    fields?: Record<string, unknown>,
+  ): unknown;
+  findRecord(
+    entity: string,
+    matches: (fields: Record<string, unknown>) => boolean,
+  ): string | undefined;
+  sendFile(phoneId: string, file: {
+    fileName: string;
+    bytes: Uint8Array;
+    mimeType: string;
+    metadata: Record<string, unknown>;
+  }): Promise<void>;
+  stop(): Promise<void>;
 }
 
 function requireRTLForPeer() {
