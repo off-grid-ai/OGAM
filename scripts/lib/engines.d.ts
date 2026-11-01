@@ -60,3 +60,18 @@ export function heldSince(times: Record<string, string> | undefined, current: st
 export const HELD_ISSUE_DAYS: number;
 export function heldIssueTitle(id: string): string;
 export function heldIssue(result: EngineResult, now: number): { title: string; body: string } | null;
+export const BUMP_BRANCH: string;
+export const BOT_EMAIL: string;
+export interface BumpPr {
+  state: string;
+  headRefName: string;
+  baseRefName: string;
+  headRefOid: string;
+  isCrossRepository: boolean;
+  commits: Array<{ authors: Array<{ login?: string; email: string }> }>;
+  files: Array<{ path: string }>;
+  statusCheckRollup: Array<{ name?: string; context?: string; conclusion?: string | null; state?: string | null }>;
+}
+export function bumpMergeDecision(pr: BumpPr, sha: string): { action: 'merge' | 'skip' | 'refuse'; reason?: string };
+export const RELEASE_WORKFLOWS: string[];
+export function unfinishedRuns<T extends { status: string }>(runs: T[]): T[];

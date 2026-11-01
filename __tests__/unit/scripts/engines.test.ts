@@ -8,6 +8,8 @@ import {
   ENGINES,
   decide,
   githubDecision,
+  BOT_EMAIL,
+  bumpMergeDecision,
   gradlePin,
   heldIssue,
   npmPackage,
@@ -18,6 +20,7 @@ import {
   setGradlePin,
   specFor,
   summaryMarkdown,
+  unfinishedRuns,
   unmetPeers,
 } from '../../../scripts/lib/engines';
 
@@ -251,5 +254,59 @@ describe('heldIssue', () => {
   it('opens none for an engine that is not held, or whose hold has no date', () => {
     expect(heldIssue({ id: 'whisper.rn', what: 'stt', from: '0.5.5', status: 'bump', to: '0.7.4' }, Date.now())).toBeNull();
     expect(heldIssue({ ...executorchHeld, since: null }, Date.now())).toBeNull();
+  });
+});
+
+describe('bumpMergeDecision', () => {
+  const sha = 'a'.repeat(40);
+  const green = {
+    state: 'OPEN',
+    headRefName: 'chore/engine-updates',
+    baseRefName: 'main',
+    headRefOid: sha,
+    isCrossRepository: false,
+    commits: [{ authors: [{ login: 'github-actions[bot]', email: BOT_EMAIL }] }],
+    files: [{ path: 'package.json' }, { path: 'ios/Podfile.lock' }],
+    statusCheckRollup: [
+      { name: 'ci', conclusion: 'SUCCESS' },
+      { name: 'Copilot', conclusion: 'SKIPPED' },
+      { context: 'SonarCloud', state: 'SUCCESS' },
+    ],
+  };
+
+  it("merges the bot's own bump once every check on the tested commit passed", () => {
+    expect(bumpMergeDecision(green, sha)).toEqual({ action: 'merge' });
+  });
+
+  it.each([
+    ['another branch', { headRefName: 'feature/x' }, 'feature/x → main is not the engine bump PR'],
+    ['another base', { baseRefName: 'release/x' }, 'chore/engine-updates → release/x is not the engine bump PR'],
+    ['a fork', { isCrossRepository: true }, 'is not the engine bump PR'],
+    ['a commit by a person', { commits: [{ authors: [{ login: 'ali', email: 'ali@example.com' }] }] }, 'has commits by ali; a person merges it'],
+    ['an author with no login', { commits: [{ authors: [{ email: 'x@example.com' }] }] }, 'has commits by x@example.com'],
+    ['a pro bump', { files: [{ path: 'pro' }] }, 'merge mobile-pro first'],
+    ['a file under pro', { files: [{ path: 'pro/src/x.ts' }] }, 'merge mobile-pro first'],
+  ])('refuses %s', (_label, over, reason) => {
+    const verdict = bumpMergeDecision({ ...green, ...over }, sha);
+    expect(verdict.action).toBe('refuse');
+    expect(verdict.reason).toContain(reason);
+  });
+
+  it.each([
+    ['a closed PR', { state: 'CLOSED' }, 'is closed'],
+    ['a newer commit', { headRefOid: 'b'.repeat(40) }, 'has a newer commit'],
+    ['no checks', { statusCheckRollup: [] }, 'no checks ran'],
+    ['a failed check', { statusCheckRollup: [{ name: 'ci', conclusion: 'FAILURE' }] }, 'checks not green: ci FAILURE'],
+    ['a running check', { statusCheckRollup: [{ name: 'ci', conclusion: null }] }, 'checks not green: ci running'],
+  ])('waits on %s', (_label, over, reason) => {
+    const verdict = bumpMergeDecision({ ...green, ...over }, sha);
+    expect(verdict).toEqual({ action: 'skip', reason: expect.stringContaining(reason) });
+  });
+});
+
+describe('unfinishedRuns', () => {
+  it('keeps every run that has not completed', () => {
+    const runs = [{ status: 'completed' }, { status: 'in_progress' }, { status: 'queued' }, { status: 'waiting' }];
+    expect(unfinishedRuns(runs).map(r => r.status)).toEqual(['in_progress', 'queued', 'waiting']);
   });
 });

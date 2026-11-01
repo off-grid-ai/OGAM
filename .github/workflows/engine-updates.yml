@@ -10,7 +10,11 @@ name: Engine updates
 # issue per engine (scripts/engine-held-issues.js). Any failed step fails the run; the report is
 # written only when every step succeeded.
 #
-# The PR is pushed with PRO_SUBMODULE_PAT, not GITHUB_TOKEN: a push made with GITHUB_TOKEN does
+# When CI on the PR's head commit is green, the merge job merges it with a merge commit
+# (scripts/merge-engine-pr.js): only the bot's own bump, never one that moves pro, and never while a
+# nightly or store upload runs (it waits for them to end). Ali approved this for this PR only.
+#
+# The PR is pushed and merged with PRO_SUBMODULE_PAT, not GITHUB_TOKEN: a push made with GITHUB_TOKEN does
 # not start other workflows, so CI would never test the update.
 
 on:
@@ -21,6 +25,10 @@ on:
     # job (~35 min) plus CI (~2 h) still ends before 11:00 UTC with a 7 h delay.
     - cron: '23 21 * * *'
   workflow_dispatch:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [chore/engine-updates]
 
 permissions:
   contents: write
@@ -32,16 +40,16 @@ defaults:
     # -eo pipefail: any failed command, in a pipe or not, fails its step.
     shell: bash
 
-concurrency:
-  group: engine-updates
-  cancel-in-progress: false
-
 env:
   BRANCH: chore/engine-updates
 
 jobs:
   update:
+    if: ${{ github.event_name != 'workflow_run' }}
     runs-on: macos-latest
+    concurrency:
+      group: engine-updates
+      cancel-in-progress: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -125,3 +133,33 @@ jobs:
         if: always()
         run: |
           [ -f "$RUNNER_TEMP/engines.md" ] && cat "$RUNNER_TEMP/engines.md" >> "$GITHUB_STEP_SUMMARY" || true
+
+  merge:
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    # Waits up to 5 h for a nightly or upload to end.
+    timeout-minutes: 330
+    concurrency:
+      group: engine-merge
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+
+      - name: Merge the engine PR
+        env:
+          GH_TOKEN: ${{ secrets.PRO_SUBMODULE_PAT }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        # engines.js needs only semver.
+        run: |
+          npm install --no-save --no-audit --no-fund --ignore-scripts semver
+          node scripts/merge-engine-pr.js "$HEAD_SHA"

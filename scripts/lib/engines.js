@@ -216,6 +216,52 @@ function summaryMarkdown(results) {
   return lines.join('\n');
 }
 
+/** The branch the daily job pushes its bump to, and the identity its commits carry. */
+const BUMP_BRANCH = 'chore/engine-updates';
+const BOT_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com';
+
+/** Check results that count as passed. */
+const PASSED = new Set(['SUCCESS', 'NEUTRAL', 'SKIPPED']);
+
+/**
+ * Whether the daily engine PR may merge (`gh pr view --json …`) after CI on `sha` ended:
+ *   merge  — the bot's own bump into main, every check on `sha` passed
+ *   skip   — not now (closed, a newer commit, or a check not green); a later CI run decides
+ *   refuse — not a PR this job may merge (another branch or author, or it moves pro)
+ * A PR that lists held engines still merges the engines that moved.
+ */
+function bumpMergeDecision(pr, sha) {
+  if (pr.headRefName !== BUMP_BRANCH || pr.baseRefName !== 'main' || pr.isCrossRepository) {
+    return { action: 'refuse', reason: `${pr.headRefName} → ${pr.baseRefName} is not the engine bump PR` };
+  }
+  const strangers = pr.commits.flatMap(c => c.authors).filter(a => a.email !== BOT_EMAIL);
+  if (strangers.length > 0) {
+    return { action: 'refuse', reason: `has commits by ${strangers.map(a => a.login || a.email).join(', ')}; a person merges it` };
+  }
+  // The job never moves pro. A bump that does needs mobile-pro merged first, so a person merges it.
+  if (pr.files.some(f => f.path === 'pro' || f.path.startsWith('pro/'))) {
+    return { action: 'refuse', reason: 'moves the pro submodule; merge mobile-pro first, then this, by hand' };
+  }
+  if (pr.state !== 'OPEN') return { action: 'skip', reason: `is ${pr.state.toLowerCase()}` };
+  if (pr.headRefOid !== sha) return { action: 'skip', reason: 'has a newer commit; its own CI run decides' };
+  const checks = pr.statusCheckRollup.map(c => ({ name: c.name || c.context, result: c.conclusion || c.state }));
+  const notGreen = checks.filter(c => !PASSED.has(c.result));
+  if (checks.length === 0) return { action: 'skip', reason: 'no checks ran' };
+  if (notGreen.length > 0) {
+    const listed = notGreen.map(c => `${c.name} ${c.result ?? 'running'}`).join(', ');
+    return { action: 'skip', reason: `checks not green: ${listed}` };
+  }
+  return { action: 'merge' };
+}
+
+/** Workflows that build or upload a mobile release: nothing merges to main while one runs. */
+const RELEASE_WORKFLOWS = ['uat-dev.yml', 'release.yml', 'release-ios.yml'];
+
+/** The runs (`gh run list --json …`) that have not finished. */
+function unfinishedRuns(runs) {
+  return runs.filter(r => r.status !== 'completed');
+}
+
 function escape(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -237,4 +283,9 @@ module.exports = {
   heldIssue,
   heldIssueTitle,
   HELD_ISSUE_DAYS,
+  BUMP_BRANCH,
+  BOT_EMAIL,
+  bumpMergeDecision,
+  RELEASE_WORKFLOWS,
+  unfinishedRuns,
 };
