@@ -30,6 +30,8 @@ export interface CallState {
   /** The learner has said enough for a board call to count as done. */
   passed: boolean;
   corrections: Correction[] | null;
+  /** The AI model is not loaded and could not be: the call cannot start until it is. */
+  needsModel: boolean;
 }
 
 export interface Call {
@@ -64,7 +66,7 @@ export function createCall(scenario: Scenario): Call {
   const system = callSystemPrompt(scenario, language, level);
   // The caller keeps one voice for the whole call, different from the voices of other scenarios.
   const callerVoice = voiceForSlot(code, slotForText(scenario.id));
-  let s: CallState = { phase: 'ringing', turns: [], partial: '', note: null, hint: null, typing: false, passed: false, corrections: null };
+  let s: CallState = { phase: 'ringing', turns: [], partial: '', note: null, hint: null, typing: false, passed: false, corrections: null, needsModel: false };
   const listeners = new Set<() => void>();
   // Every new turn bumps this, so a late result from a turn that was interrupted or ended is ignored.
   let epoch = 0;
@@ -141,8 +143,20 @@ export function createCall(scenario: Scenario): Call {
   return {
     state: () => s,
     subscribe: (fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
-    start: () => { if (s.phase === 'ringing') reply(++epoch); },
-    talk: () => { listening?.cancel(); stopSpeech(); epoch++; listen(); },
+    start: () => {
+      if (s.phase !== 'ringing') return;
+      // The caller needs the AI to answer: load it before anything is said, and say so if it cannot be loaded.
+      set({ note: 'Loading the AI model...' });
+      model().then(() => { if (alive) { set({ note: null }); reply(++epoch); } })
+        .catch((e: any) => { if (alive) set({ phase: 'idle', needsModel: true, note: `${String(e?.message || e)} Load the model, then tap Talk.` }); });
+    },
+    talk: () => {
+      listening?.cancel(); stopSpeech(); epoch++;
+      if (!s.needsModel) { listen(); return; }
+      set({ note: 'Loading the AI model...' });
+      model().then(() => { if (alive) { set({ needsModel: false, note: null }); s.turns.length ? listen() : reply(++epoch); } })
+        .catch((e: any) => { if (alive) set({ note: String(e?.message || e) }); });
+    },
     doneTalking: () => listening?.stop(),
     say: (text) => { if (text.trim()) { epoch++; finishTurn(text, epoch); } },
     askHint: () => {

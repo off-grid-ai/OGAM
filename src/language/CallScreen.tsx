@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, BackHandler, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import { Button } from '../components/Button';
+import { ForceLoadModel } from '../components/ForceLoadModel';
 import { formatCallTime } from '../atlasVoice/AudioInput';
+import { keepScreenOn } from '../atlasVoice/tts';
 import { LANGUAGES, languageService } from './languageService';
 import { useLanguage } from './store';
 import { SCENARIOS, customScenario, type Scenario, type Turn } from './phoneCall';
@@ -161,6 +163,13 @@ export const CallScreen: React.FC = () => {
   const scroll = useRef<ScrollView>(null);
 
   useEffect(() => { call?.start(); return () => call?.dispose(); }, [call]);
+  // The phone's Back button hangs up a live call (it used to be the only way out), and the screen stays on during it.
+  useEffect(() => {
+    if (!call || state?.phase === 'ended') return;
+    keepScreenOn(true);
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => { call.hangUp(); return true; });
+    return () => { sub.remove(); keepScreenOn(false); };
+  }, [call, state?.phase === 'ended']); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!call || state?.phase === 'ended') return;
     const started = Date.now();
@@ -193,8 +202,9 @@ export const CallScreen: React.FC = () => {
         <Text style={styles.callTitle} numberOfLines={2}>{scenario!.title}</Text>
         <Text style={styles.meta} testID="call-timer">{formatCallTime(elapsed)}</Text>
         <Text style={styles.status} testID="call-status">{state.note ?? STATUS[state.phase]}</Text>
+        {state.needsModel && <ForceLoadModel testID="call-force-load" />}
       </View>
-      <ScrollView ref={scroll} contentContainerStyle={styles.transcript} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}>
+      <ScrollView ref={scroll} style={styles.transcriptScroll} contentContainerStyle={styles.transcript} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}>
         {state.turns.map((t, i) => (
           <Bubble key={i} turn={t} index={i} hidden={t.who === 'them' && !captions && !shown.includes(i)} onReveal={() => setShown((s) => [...s, i])} />
         ))}

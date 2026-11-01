@@ -103,3 +103,23 @@ it('listens with the Whisper transcription model, in the language being learned,
   const context = await require('../../../src/services/whisperService').whisperService['context'];
   expect(context.transcribe.mock.calls[0][1]).toEqual(expect.objectContaining({ language: 'es' }));
 }, 40000);
+
+it('with no AI model to answer, says so with a way to load it, and End call still leaves the call', async () => {
+  installNativeBoundary({ llama: true, fs: true, ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB } });
+  const rtl = requireRTL();
+  const React = require('react');
+  const { useAppStore } = require('../../../src/stores');
+  const { useLanguage } = require('../../../src/language/store');
+  const { CallScreen } = require('../../../src/language/CallScreen');
+  useAppStore.setState({ downloadedModels: [], activeModelId: null });
+  useLanguage.setState({ language: 'es-ES', level: 1, progress: {}, glossary: {}, memory: {} });
+
+  mockParams = { scenarioId: 'cafe' };
+  const screen = rtl.render(React.createElement(CallScreen));
+  expect(await screen.findByText(/No model downloaded/, {}, { timeout: 8000 })).toBeTruthy();
+  expect(screen.getByTestId('call-force-load')).toBeTruthy();
+  rtl.fireEvent.press(screen.getByTestId('call-end'));
+  expect(await screen.findByTestId('call-review', {}, { timeout: 8000 })).toBeTruthy();
+  rtl.fireEvent.press(screen.getByTestId('call-done'));
+  expect(mockNav.goBack).toHaveBeenCalled();
+}, 40000);

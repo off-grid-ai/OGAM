@@ -15,6 +15,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   avatarLive: { borderColor: colors.primary },
   callTitle: { ...TYPOGRAPHY.h2, color: colors.text, textAlign: 'center' as const, paddingHorizontal: SPACING.lg },
   status: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, textAlign: 'center' as const, paddingHorizontal: SPACING.lg },
+  transcriptScroll: { flex: 1 },
   transcript: { flexGrow: 1, padding: SPACING.lg, gap: SPACING.sm },
   bubble: { maxWidth: '85%' as const, padding: SPACING.md, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   bubbleMine: { alignSelf: 'flex-end' as const, borderColor: colors.primary },
