@@ -1,9 +1,12 @@
-jest.mock('../../../pro/sync/syncService', () => ({
-  syncService: {
-    onAppMessage: jest.fn(() => jest.fn()),
-    sendApp: jest.fn(() => false),
-  },
-}));
+// The real syncService loads; only its device edges (the TCP socket and LAN discovery) are faked.
+jest.mock('react-native-tcp-socket', () => {
+  const { createNativeTcpBoundary } = require('../../utils/nativeSyncBoundaries');
+  return { __esModule: true, default: createNativeTcpBoundary() };
+});
+jest.mock('react-native-zeroconf', () => {
+  const { createNativeDiscoveryBoundary } = require('../../utils/nativeSyncBoundaries');
+  return { __esModule: true, default: createNativeDiscoveryBoundary() };
+});
 
 import {
   CompanionTaskMesh,
@@ -21,6 +24,7 @@ const webUse = {
   },
 };
 
+/** The other device on the wire: it records what the phone sends and can stop answering. */
 class MeshBoundary implements CompanionTaskTransport {
   handler:
     | ((deviceId: string, channel: string, data: unknown) => void)

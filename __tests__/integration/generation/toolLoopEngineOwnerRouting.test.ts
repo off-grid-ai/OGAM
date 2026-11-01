@@ -1,161 +1,116 @@
 /**
  * DRY / single-owner — generationToolLoop routes through the ONE engine-caps owner (src/services/engines.ts).
  *
- * generationToolLoop used to re-derive "which engine is active" INLINE: isLiteRTActive() (line 423) read the
- * store AND conflated it with `liteRTService.isModelLoaded()`, instead of the owner getActiveEngineService()
- * (=== liteRTService), which defines "active engine" WITHOUT the loaded check (load-readiness is a separate
- * concern the sibling generationServiceHelpers.isLiteRTActive already treats separately). isUsingRemote /
+ * generationToolLoop used to re-derive "which engine is active" INLINE: isLiteRTActive() read the store AND
+ * conflated it with `liteRTService.isModelLoaded()`, instead of the owner getActiveEngineService()
+ * (=== liteRTService), which defines "active engine" WITHOUT the loaded check. isUsingRemote /
  * callLLMWithRetry / selectEffectiveSchemas each also re-inlined the activeServer+hasProvider+!localLoaded
  * rule that engines.isRemoteTextModelActive() OWNS. #510 (4d88c249) promised a single source for active caps.
  *
- * This test drives the REAL runToolLoop over the REAL engines.ts + REAL stores (only the native leaves
- * llm/litert and the provider transport are faked — the sanctioned integration boundary), and asserts the
- * loop's engine choice MATCHES the owner's verdict. The GUARD case is the exact input where the inline
- * derivation and the owner DISAGREE — a LiteRT model active but not yet reporting loaded: the owner names
- * `litert`, the old inline conflation names `llama`. On HEAD the loop follows its private conflated rule and
- * routes to llama → RED. Once the loop routes through the owner it follows getActiveEngineService() → GREEN.
+ * This test drives the REAL runToolLoop over the REAL engines.ts, llmService, liteRTService, providers and
+ * stores. Only the device and the network are faked (generationDevice: the LiteRT native module, llama.rn,
+ * the disk, RAM, and an OpenAI-compatible server on the LAN). It asserts the loop's engine choice — read off
+ * which native engine or server actually received the turn — MATCHES the owner's verdict. The GUARD case is
+ * the exact input where the inline derivation and the owner DISAGREE — a LiteRT model selected but not yet
+ * loaded: the owner names `litert`, the old inline conflation names `llama`.
  */
-jest.mock('../../../src/services/llm');
-jest.mock('../../../src/services/litert');
+import { launchGeneration, connectServer, type GenerationDevice, type ServerHandle } from '../../harness/generationDevice';
 
-import { runToolLoop, type ToolLoopContext } from '../../../src/services/generationToolLoop';
-import { liteRTService } from '../../../src/services/litert';
-import { llmService } from '../../../src/services/llm';
-import { getActiveEngineService, isRemoteTextModelActive } from '../../../src/services/engines';
-import { useAppStore } from '../../../src/stores/appStore';
-import { useRemoteServerStore } from '../../../src/stores/remoteServerStore';
-import { providerRegistry } from '../../../src/services/providers';
-import { resetStores, setupWithConversation } from '../../utils/testHelpers';
-import { createDownloadedModel, createMessage } from '../../utils/factories';
-import type { Message } from '../../../src/types';
+type Engine = 'litert' | 'remote' | 'llama';
 
-const mockLiteRT = liteRTService as jest.Mocked<typeof liteRTService>;
-const mockLlm = llmService as jest.Mocked<typeof llmService>;
+/** What each engine had received before the turn, so only this turn's traffic counts. */
+function snapshot(device: GenerationDevice, server?: ServerHandle) {
+  const litert = device.boundary.litert.calls;
+  return {
+    litert: litert.sendMessage.length + litert.sendMessageWithMedia.length,
+    llama: device.boundary.llama!.calls.completion.length,
+    remote: server?.requests.length ?? 0,
+  };
+}
 
-let remoteProviderGenerate: jest.Mock;
-
-/** The engine the loop ACTUALLY routed to, read off the native leaf that got driven. */
-function engineTheLoopUsed(): 'litert' | 'remote' | 'llama' {
-  if (mockLiteRT.generateRaw.mock.calls.length > 0) return 'litert';
-  if (remoteProviderGenerate?.mock.calls.length > 0) return 'remote';
-  if (mockLlm.generateResponseWithTools.mock.calls.length > 0) return 'llama';
-  throw new Error('no engine leaf was driven');
+/** The engine the loop ACTUALLY routed to, read off the native engine or server that got the turn. */
+function engineTheLoopUsed(device: GenerationDevice, before: ReturnType<typeof snapshot>, server?: ServerHandle): Engine {
+  const now = snapshot(device, server);
+  const used: Engine[] = [];
+  if (now.litert > before.litert) used.push('litert');
+  if (now.remote > before.remote) used.push('remote');
+  if (now.llama > before.llama) used.push('llama');
+  expect(used).toHaveLength(1);
+  return used[0];
 }
 
 /** The engine the OWNER (engines.ts) names as active — the single source of truth. */
-function engineOwnerNames(): 'litert' | 'remote' | 'llama' {
+function engineOwnerNames(device: GenerationDevice): Engine {
+  const { getActiveEngineService, isRemoteTextModelActive } = require('../../../src/services/engines');
   if (isRemoteTextModelActive()) return 'remote';
-  return getActiveEngineService() === liteRTService ? 'litert' : 'llama';
+  return getActiveEngineService() === device.liteRTService ? 'litert' : 'llama';
 }
 
-function makeCtx(conversationId: string): ToolLoopContext {
-  const userMsg: Message = createMessage({ role: 'user', content: 'what is the capital of France' });
-  return {
-    conversationId,
-    messages: [userMsg],
+async function runTurn(device: GenerationDevice): Promise<void> {
+  const { runToolLoop } = require('../../../src/services/generationToolLoop');
+  const thread = device.ask('what is the capital of France');
+  await runToolLoop({
+    conversationId: device.conversationId,
+    messages: thread,
     enabledToolIds: ['web_search'],
     isAborted: () => false,
     onThinkingDone: () => {},
     onStream: () => {},
     onFinalResponse: () => {},
-  };
-}
-
-/** Register a real provider record shaped like a registered remote provider whose generate() streams a
- *  plain answer (the network boundary). The registry + isRemoteTextModelActive run for real above it. */
-function registerRemoteProvider(serverId: string): void {
-  remoteProviderGenerate = jest.fn(async (_msgs: unknown, _opts: unknown, cbs: any) => {
-    cbs?.onToken?.('Paris');
-    cbs?.onComplete?.({ content: 'Paris' });
-    return { content: 'Paris', toolCalls: [] };
   });
-  const provider = {
-    generate: remoteProviderGenerate,
-    capabilities: { supportsThinking: false, supportsVision: false, supportsToolCalling: true },
-    isReady: async () => true,
-    getLoadedModelId: () => 'remote-model',
-    loadModel: jest.fn(async () => {}),
-  };
-  (providerRegistry as any).registerProvider(serverId, provider);
 }
-
-beforeEach(() => {
-  resetStores();
-  jest.clearAllMocks();
-  remoteProviderGenerate = undefined as unknown as jest.Mock;
-  mockLiteRT.prepareConversation.mockResolvedValue(undefined as never);
-  mockLiteRT.generateRaw.mockResolvedValue('Paris');
-  (mockLlm.supportsToolCalling as jest.Mock)?.mockReturnValue?.(false);
-  mockLlm.generateResponseWithTools.mockResolvedValue({ fullResponse: 'Paris', toolCalls: [] } as never);
-});
-
-afterEach(() => {
-  // The registry is a process-singleton (resetStores doesn't touch it) — drop any test provider.
-  for (const id of (providerRegistry as any).getProviderIds?.() ?? []) {
-    if (id !== 'local') (providerRegistry as any).unregisterProvider(id);
-  }
-});
 
 describe('generationToolLoop routes to the engine the engines.ts owner names', () => {
   it('GUARD (divergence input): a LiteRT model is active but not-yet-loaded — owner names litert, so the loop must route to LiteRT (not llama)', async () => {
     // The inline conflation `engine==='litert' && liteRTService.isModelLoaded()` disagrees with the owner
-    // getActiveEngineService() (which does NOT check loaded) exactly here. This is the drift the guard catches.
-    mockLlm.isModelLoaded.mockReturnValue(false);
-    mockLiteRT.isModelLoaded.mockReturnValue(false); // not loaded → old inline flips to llama; owner stays litert
-    useAppStore.setState({
-      downloadedModels: [createDownloadedModel({ id: 'lrt', engine: 'litert' })],
-      activeModelId: 'lrt',
-    });
-    const conversationId = setupWithConversation({ messages: [] });
+    // getActiveEngineService() (which does NOT check loaded) exactly here.
+    const device = await launchGeneration({ engine: 'litert', load: false });
+    device.boundary.litert.scriptTurn({ content: 'Paris' });
+    const before = snapshot(device);
 
-    await runToolLoop(makeCtx(conversationId));
+    // Nothing is loaded, so the engine the loop picked refuses the turn — and its refusal names it.
+    // liteRTService says "No LiteRT model loaded"; llmService (the old inline choice) says "No model loaded".
+    const outcome = await runTurn(device).then(() => null, (error: Error) => error);
 
-    expect(engineOwnerNames()).toBe('litert');
-    expect(engineTheLoopUsed()).toBe(engineOwnerNames());
+    expect(engineOwnerNames(device)).toBe('litert');
+    expect(outcome?.message).toBe('No LiteRT model loaded');
+    expect(device.boundary.llama!.calls.completion.length).toBe(before.llama);
   });
 
   it('LiteRT active and loaded: loop routes to LiteRT, matching getActiveEngineService()', async () => {
-    mockLlm.isModelLoaded.mockReturnValue(false);
-    mockLiteRT.isModelLoaded.mockReturnValue(true);
-    useAppStore.setState({
-      downloadedModels: [createDownloadedModel({ id: 'lrt', engine: 'litert' })],
-      activeModelId: 'lrt',
-    });
-    const conversationId = setupWithConversation({ messages: [] });
+    const device = await launchGeneration({ engine: 'litert' });
+    device.boundary.litert.scriptTurn({ content: 'Paris' });
+    const before = snapshot(device);
 
-    await runToolLoop(makeCtx(conversationId));
+    await runTurn(device);
 
-    expect(engineOwnerNames()).toBe('litert');
-    expect(engineTheLoopUsed()).toBe(engineOwnerNames());
+    expect(engineOwnerNames(device)).toBe('litert');
+    expect(engineTheLoopUsed(device, before)).toBe(engineOwnerNames(device));
   });
 
   it('llama active and loaded: loop routes to llama, matching getActiveEngineService()', async () => {
-    mockLlm.isModelLoaded.mockReturnValue(true);
-    mockLiteRT.isModelLoaded.mockReturnValue(false);
-    useAppStore.setState({
-      downloadedModels: [createDownloadedModel({ id: 'gg', engine: 'llama' })],
-      activeModelId: 'gg',
-    });
-    const conversationId = setupWithConversation({ messages: [] });
+    const device = await launchGeneration({ engine: 'llama' });
+    device.boundary.llama!.scriptCompletion({ text: 'Paris' });
+    const before = snapshot(device);
 
-    await runToolLoop(makeCtx(conversationId));
+    await runTurn(device);
 
-    expect(engineOwnerNames()).toBe('llama');
-    expect(engineTheLoopUsed()).toBe(engineOwnerNames());
+    expect(engineOwnerNames(device)).toBe('llama');
+    expect(engineTheLoopUsed(device, before)).toBe(engineOwnerNames(device));
   });
 
-  it('remote active (server registered, no local loaded): loop routes remote, matching isRemoteTextModelActive()', async () => {
-    mockLlm.isModelLoaded.mockReturnValue(false);
-    mockLiteRT.isModelLoaded.mockReturnValue(false);
-    const serverId = 'srv-1';
-    registerRemoteProvider(serverId);
-    useRemoteServerStore.setState({ activeServerId: serverId, activeRemoteTextModelId: 'remote-model' } as never);
-    useAppStore.setState({ downloadedModels: [], activeModelId: null });
-    const conversationId = setupWithConversation({ messages: [] });
+  it('remote active (server selected, no local loaded): loop routes remote, matching isRemoteTextModelActive()', async () => {
+    const device = await launchGeneration({ localModel: false });
+    const server = await connectServer(device);
+    server.reply({ content: ['Paris'] });
+    const before = snapshot(device, server);
 
-    await runToolLoop(makeCtx(conversationId));
-
-    expect(engineOwnerNames()).toBe('remote');
-    expect(engineTheLoopUsed()).toBe(engineOwnerNames());
+    try {
+      await runTurn(device);
+      expect(engineOwnerNames(device)).toBe('remote');
+      expect(engineTheLoopUsed(device, before, server)).toBe(engineOwnerNames(device));
+    } finally {
+      server.restore();
+    }
   });
 });

@@ -17,13 +17,10 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
+import { withNavigator } from '../../harness/realNavigation';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const CARD = 'transcription-model-card-qwen3-asr';
 const WEIGHTS = 'Qwen3-ASR-0.6B-Q8_0.gguf';
@@ -60,7 +57,7 @@ describe('Qwen3-ASR on the Transcription tab', () => {
     const { TranscriptionModelsTab } = require('../../../src/screens/ModelsScreen/TranscriptionModelsTab');
     registerCoreDownloadProviders();
 
-    const screen = render(React.createElement(TranscriptionModelsTab, { showRemoteModels: false }));
+    const screen = render(withNavigator(React.createElement(TranscriptionModelsTab, { showRemoteModels: false })));
     expect(screen.getByText('Qwen3-ASR 0.6B')).toBeTruthy();
     expect(screen.getByTestId(`${CARD}-download`)).toBeTruthy();
     expect(screen.queryByTestId(`${CARD}-delete`)).toBeNull();
@@ -101,7 +98,7 @@ describe('Qwen3-ASR on the Transcription tab', () => {
     const { render } = requireRTL();
     const { TranscriptionModelsTab } = require('../../../src/screens/ModelsScreen/TranscriptionModelsTab');
 
-    const screen = render(React.createElement(TranscriptionModelsTab, { showRemoteModels: false }));
+    const screen = render(withNavigator(React.createElement(TranscriptionModelsTab, { showRemoteModels: false })));
     expect(screen.getByTestId('transcription-model-card-0')).toBeTruthy();
     expect(screen.queryByText('Qwen3-ASR 0.6B')).toBeNull();
     expect(screen.queryByTestId(CARD)).toBeNull();
@@ -115,7 +112,7 @@ describe('Qwen3-ASR on the Transcription tab', () => {
     const { render } = requireRTL();
     const { TranscriptionModelsTab } = require('../../../src/screens/ModelsScreen/TranscriptionModelsTab');
 
-    const screen = render(React.createElement(TranscriptionModelsTab, { showRemoteModels: false }));
+    const screen = render(withNavigator(React.createElement(TranscriptionModelsTab, { showRemoteModels: false })));
     expect(screen.getByTestId('transcription-model-card-0')).toBeTruthy();
     expect(screen.queryByText('Qwen3-ASR 0.6B')).toBeNull();
   });
@@ -132,7 +129,7 @@ async function selectQwenAsr(h: Harness, opts: { whisperToo?: boolean } = {}) {
     h.boundary.fs!.seedFile(`${docs}/whisper-models/${name}`, catalogFile(name).sizeBytes);
   }
   if (opts.whisperToo) h.boundary.fs!.seedFile(`${docs}/whisper-models/ggml-tiny.en.bin`, 75 * 1024 * 1024);
-  const tab = h.rtl.render(React.createElement(TranscriptionModelsTab, { showRemoteModels: false }));
+  const tab = h.renderAside(React.createElement(TranscriptionModelsTab, { showRemoteModels: false }));
   const card = await h.rtl.waitFor(() => {
     expect(tab.getByTestId(`${CARD}-delete`)).toBeTruthy();
     return tab.getByTestId(CARD);
@@ -149,7 +146,7 @@ async function selectQwenAsr(h: Harness, opts: { whisperToo?: boolean } = {}) {
 async function chooseLanguage(h: Harness, code: string) {
   const React = require('react');
   const { TranscriptionLanguageSelect } = require('../../../src/components/TranscriptionLanguageSelect');
-  const select = h.rtl.render(React.createElement(TranscriptionLanguageSelect));
+  const select = h.renderAside(React.createElement(TranscriptionLanguageSelect));
   h.rtl.fireEvent.press(select.getByTestId('transcription-language-select'));
   h.rtl.fireEvent.press(await h.rtl.waitFor(() => select.getByTestId(`transcription-language-select-${code}`)));
   select.unmount();
@@ -170,7 +167,7 @@ describe('dictation with Qwen3-ASR selected', () => {
     // Auto-detect: the model names the language, then the words.
     { language: 'auto', modelSays: 'language English<asr_text>hello world' },
   ])('puts what was said in the composer (language $language)', async ({ language, modelSays }) => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android', whisper: true, llamaAudio: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android', whisper: true, llamaAudio: true });
     engineReportsShippedBuild();
     await selectQwenAsr(h);
     await chooseLanguage(h, language);
@@ -189,13 +186,13 @@ describe('dictation with Qwen3-ASR selected', () => {
   });
 
   it('offers Qwen3-ASR\'s own languages, and a pinned one reaches the model by the name it writes', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android', whisper: true, llamaAudio: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android', whisper: true, llamaAudio: true });
     engineReportsShippedBuild();
     await selectQwenAsr(h);
     // Filipino and Cantonese are Qwen3-ASR languages the Whisper list does not offer.
     const React = require('react');
     const { TranscriptionLanguageSelect } = require('../../../src/components/TranscriptionLanguageSelect');
-    const select = h.rtl.render(React.createElement(TranscriptionLanguageSelect));
+    const select = h.renderAside(React.createElement(TranscriptionLanguageSelect));
     h.rtl.fireEvent.press(select.getByTestId('transcription-language-select'));
     await h.rtl.waitFor(() => expect(select.getByTestId('transcription-language-select-yue')).toBeTruthy());
     select.unmount();
@@ -214,7 +211,7 @@ describe('dictation with Qwen3-ASR selected', () => {
   });
 
   it('says so in one line and lets Whisper transcribe when Qwen3-ASR fails', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android', whisper: true, llamaAudio: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android', whisper: true, llamaAudio: true });
     engineReportsShippedBuild();
     await selectQwenAsr(h, { whisperToo: true });
     h.render();
@@ -234,7 +231,7 @@ describe('dictation with Qwen3-ASR selected', () => {
   });
 
   it('says so in one line when Qwen3-ASR fails and no Whisper model is there', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android', whisper: true, llamaAudio: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android', whisper: true, llamaAudio: true });
     engineReportsShippedBuild();
     await selectQwenAsr(h);
     h.render();

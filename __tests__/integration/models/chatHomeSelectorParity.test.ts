@@ -13,37 +13,17 @@
  * "Load Anyway" override affordance (`loadModelWithOverride` / the chat's
  * override retry). The predictive check is no longer a divergent hard gate.
  *
- * These tests drive the REAL activeModelService + REAL modelResidencyManager +
- * REAL store, mocking ONLY the native boundaries (llm/hardware). They assert the
- * OUTCOME a user feels: does the model actually load (native loadModel called,
- * store activeModelId set), and is the residency manager's verdict — not the
- * predictive estimate — what gates it.
+ * These tests drive the REAL activeModelService, llmService, localDreamGenerator,
+ * hardwareService, imageModelIntegrity, modelResidencyManager and stores. Only the phone is
+ * faked (installNativeBoundary: llama.rn, the image-generation native module, the disk, the
+ * RAM sensor). They assert the OUTCOME a user feels: does the model actually load (llama.rn
+ * asked to open it, store activeModelId set), and is the residency manager's verdict — not
+ * the predictive estimate — what gates it.
  */
 
-import { useAppStore } from '../../../src/stores/appStore';
-import { activeModelService } from '../../../src/services/activeModelService';
-import { modelResidencyManager } from '../../../src/services/modelResidency';
-import { llmService } from '../../../src/services/llm';
-import { localDreamGeneratorService } from '../../../src/services/localDreamGenerator';
-import { hardwareService } from '../../../src/services/hardware';
-import { isOverridableMemoryError } from '../../../src/services/modelLoadErrors';
-import { resetStores, getAppState } from '../../utils/testHelpers';
-import { createDownloadedModel, createONNXImageModel, createDeviceInfo } from '../../utils/factories';
-
-// Import the REAL chat + Home selection entry points (only their alert/UI setters mocked).
-import { handleModelSelectFn } from '../../../src/screens/ChatScreen/useChatModelActions';
-
-jest.mock('../../../src/services/llm');
-jest.mock('../../../src/services/localDreamGenerator');
-jest.mock('../../../src/services/hardware');
-jest.mock('../../../src/services/imageModelIntegrity', () => ({
-  validateImageModelDir: jest.fn(async () => ({ complete: true, missing: [] })),
-  ensureImageExtractionComplete: jest.fn(async () => {}),
-}));
-
-const mockLlmService = llmService as jest.Mocked<typeof llmService>;
-const mockLocalDreamService = localDreamGeneratorService as jest.Mocked<typeof localDreamGeneratorService>;
-const mockHardwareService = hardwareService as jest.Mocked<typeof hardwareService>;
+import { installNativeBoundary, GB, type NativeBoundary } from '../../harness/nativeBoundary';
+import { SD_MNN_PACKAGE_FILES } from '../../harness/imageModelPackage';
+import { createDownloadedModel } from '../../utils/factories';
 
 // waitForRenderFrame uses InteractionManager + setTimeout(350). Flush it fast.
 (globalThis as any).requestAnimationFrame = (cb: (t: number) => void) => { cb(0); return 0; };
@@ -67,37 +47,37 @@ const mockHardwareService = hardwareService as jest.Mocked<typeof hardwareServic
 const TEXT_FILE_BYTES = 5 * 1024 * 1024 * 1024;
 const IMAGE_SIZE_BYTES = 3 * 1024 * 1024 * 1024;
 
-function setOD3Device() {
-  mockHardwareService.getDeviceInfo.mockResolvedValue(
-    createDeviceInfo({ totalMemory: 12 * 1024 * 1024 * 1024 }),
-  );
-  mockHardwareService.refreshMemoryInfo.mockResolvedValue({
-    totalMemory: 12 * 1024 * 1024 * 1024,
-    usedMemory: 2 * 1024 * 1024 * 1024,
-    availableMemory: 10 * 1024 * 1024 * 1024,
-  } as any);
-  mockHardwareService.getTotalMemoryGB.mockReturnValue(12);
-  // Plenty of REAL free RAM so the measured GGUF load (bounded by the physical
-  // cap for clean mmap weights) fits once the image model is evicted.
-  mockHardwareService.getAvailableMemoryGB.mockReturnValue(10);
-  mockHardwareService.estimateImageModelRam.mockImplementation(
-    (m: any) => (m?.size || 0) * 2.5,
-  );
-  mockHardwareService.preferGpuForImageGen.mockReturnValue(false);
-  mockHardwareService.getSoCInfo.mockResolvedValue({ hasNPU: false } as any);
+let boundary: NativeBoundary;
+let activeModelService: any;
+let residency: any;
+let useAppStore: any;
+let handleModelSelectFn: any;
+let isOverridableMemoryError: (e: unknown) => boolean;
+
+const appState = () => useAppStore.getState();
+/** How many times llama.rn was asked to open a text model. */
+const textLoads = () => boundary.llama!.calls.initLlama.filter(p => !p.embedding).length;
+
+/** A downloaded text model: its file on disk and its record added, as a finished download leaves it. */
+function addTextModel(id: string, fileSize: number) {
+  const filePath = `${boundary.fs!.DocumentDirectoryPath}/models/${id}.gguf`;
+  boundary.fs!.seedFile(filePath, fileSize);
+  const model = createDownloadedModel({ id, engine: 'llama' as any, filePath, fileName: `${id}.gguf`, fileSize });
+  appState().addDownloadedModel(model);
+  return model;
 }
 
 /** Load an image model so it's genuinely resident (the co-resident the pre-check counts). */
 async function makeImageResident(id = 'img-resident') {
-  const imageModel = createONNXImageModel({ id, size: IMAGE_SIZE_BYTES });
-  useAppStore.setState({
-    downloadedImageModels: [imageModel],
-    settings: { imageThreads: 4 } as any,
-  });
-  mockLocalDreamService.isModelLoaded.mockResolvedValue(true);
-  mockLocalDreamService.loadModel.mockResolvedValue(true);
-  mockLocalDreamService.unloadModel.mockResolvedValue(true);
+  const { modelManager } = require('../../../src/services/modelManager');
+  const modelPath = `${modelManager.getImageModelsDirectory()}/${id}`;
+  for (const name of SD_MNN_PACKAGE_FILES) boundary.fs!.seedFile(`${modelPath}/${name}`, 1024 * 1024);
+  const imageModel = { id, name: 'Resident Image', description: '', size: IMAGE_SIZE_BYTES, modelPath, backend: 'mnn' };
+  await modelManager.addDownloadedImageModel(imageModel);
+  appState().addDownloadedImageModel(imageModel);
+  appState().updateSettings({ imageThreads: 4 } as never);
   await activeModelService.loadImageModel(id);
+  expect(residency.isResident('image')).toBe(true);
   return imageModel;
 }
 
@@ -123,39 +103,25 @@ function makeChatDeps(model: any, overrides: Record<string, unknown> = {}) {
 
 describe('Chat <-> Home text-model selection parity (OD3)', () => {
   beforeEach(async () => {
-    resetStores();
-    jest.clearAllMocks();
-    modelResidencyManager._reset();
-    modelResidencyManager.setLoadPolicy('balanced');
-
-    mockLlmService.isModelLoaded.mockReturnValue(false);
-    mockLlmService.getLoadedModelPath.mockReturnValue(null);
-    mockLlmService.loadModel.mockResolvedValue(undefined);
-    mockLlmService.unloadModel.mockResolvedValue(undefined);
-    mockLlmService.getMultimodalSupport.mockReturnValue(null as any);
-
-    mockLocalDreamService.isModelLoaded.mockResolvedValue(false);
-
-    mockHardwareService.estimateModelRam.mockImplementation(
-      (m: any, mult = 1.5) => ((m?.fileSize || m?.size || 0) + (m?.mmProjFileSize || 0)) * mult,
-    );
-    mockHardwareService.getModelTotalSize.mockImplementation(
-      (m: any) => (m?.fileSize || m?.size || 0) + (m?.mmProjFileSize || 0),
-    );
-    setOD3Device();
-
-    await activeModelService.syncWithNativeState();
+    // A 12GB Android phone with plenty of REAL free RAM, so the measured GGUF load (bounded by the
+    // physical cap for clean mmap weights) fits once the image model is evicted.
+    boundary = installNativeBoundary({
+      llama: true, fs: true, ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 10 * GB },
+    });
+    ({ activeModelService } = require('../../../src/services/activeModelService'));
+    ({ modelResidencyManager: residency } = require('../../../src/services/modelResidency'));
+    ({ useAppStore } = require('../../../src/stores'));
+    ({ handleModelSelectFn } = require('../../../src/screens/ChatScreen/useChatModelActions'));
+    ({ isOverridableMemoryError } = require('../../../src/services/modelLoadErrors'));
+    await require('../../../src/services/hardware').hardwareService.refreshMemoryInfo();
+    residency.setLoadPolicy('balanced');
   });
 
   /** Sanity: with the image model co-resident, the predictive pre-check REJECTS
    *  the text model (the divergence exists). */
   it('the predictive checkMemoryForModel rejects the text model while an image model is resident (the divergence)', async () => {
     await makeImageResident();
-    const text = createDownloadedModel({ id: 'txt', engine: 'llama' as any, fileSize: TEXT_FILE_BYTES });
-    useAppStore.setState({
-      ...useAppStore.getState(),
-      downloadedModels: [text],
-    });
+    addTextModel('txt', TEXT_FILE_BYTES);
 
     const check = await activeModelService.checkMemoryForModel('txt', 'text');
     expect(check.canLoad).toBe(false);
@@ -172,18 +138,16 @@ describe('Chat <-> Home text-model selection parity (OD3)', () => {
    */
   it('HOME: the measured loader evicts the image model and loads the text model the pre-check rejected', async () => {
     await makeImageResident();
-    const text = createDownloadedModel({ id: 'txt', engine: 'llama' as any, fileSize: TEXT_FILE_BYTES });
-    useAppStore.setState({ ...useAppStore.getState(), downloadedModels: [text] });
-    mockLlmService.isModelLoaded.mockReturnValue(true);
+    addTextModel('txt', TEXT_FILE_BYTES);
 
     await activeModelService.loadTextModel('txt');
 
-    expect(mockLlmService.loadModel).toHaveBeenCalled();
-    expect(getAppState().activeModelId).toBe('txt');
-    expect(modelResidencyManager.isResident('text')).toBe(true);
-    // The image model was evicted to make room (evict-then-measure).
-    expect(modelResidencyManager.isResident('image')).toBe(false);
-    expect(mockLocalDreamService.unloadModel).toHaveBeenCalled();
+    expect(textLoads()).toBe(1);
+    expect(appState().activeModelId).toBe('txt');
+    expect(residency.isResident('text')).toBe(true);
+    // The image model was evicted to make room (evict-then-measure): the image engine unloaded it.
+    expect(residency.isResident('image')).toBe(false);
+    expect(boundary.diffusion.module.unloadModel).toHaveBeenCalled();
   });
 
   /**
@@ -192,20 +156,18 @@ describe('Chat <-> Home text-model selection parity (OD3)', () => {
    */
   it('CHAT: selection waits for first use before loading and evicting another model', async () => {
     await makeImageResident();
-    const text = createDownloadedModel({ id: 'txt', engine: 'llama' as any, fileSize: TEXT_FILE_BYTES });
-    useAppStore.setState({ ...useAppStore.getState(), downloadedModels: [text] });
-    mockLlmService.isModelLoaded.mockReturnValue(true);
+    const text = addTextModel('txt', TEXT_FILE_BYTES);
     const deps = makeChatDeps(text);
 
     await handleModelSelectFn(deps, text);
-    expect(getAppState().activeModelId).toBe('txt');
-    expect(mockLlmService.loadModel).not.toHaveBeenCalled();
-    expect(modelResidencyManager.isResident('image')).toBe(true);
+    expect(appState().activeModelId).toBe('txt');
+    expect(textLoads()).toBe(0);
+    expect(residency.isResident('image')).toBe(true);
 
     await activeModelService.loadTextModel('txt');
-    expect(mockLlmService.loadModel).toHaveBeenCalled();
-    expect(modelResidencyManager.isResident('text')).toBe(true);
-    expect(modelResidencyManager.isResident('image')).toBe(false);
+    expect(textLoads()).toBe(1);
+    expect(residency.isResident('text')).toBe(true);
+    expect(residency.isResident('image')).toBe(false);
   });
 
   /**
@@ -215,16 +177,15 @@ describe('Chat <-> Home text-model selection parity (OD3)', () => {
    */
   it('FALSE branch: a model too big even for the measured loader is refused (overridable) — not loaded', async () => {
     // 8GB file -> ~12GB estimated (x1.5) > the 8601MB budget. Refused even alone.
-    const model = createDownloadedModel({ id: 'too-big', engine: 'llama' as any, fileSize: 8 * 1024 * 1024 * 1024 });
-    useAppStore.setState({ downloadedModels: [model] });
+    addTextModel('too-big', 8 * GB);
 
     // Measured loader refuses with an OverridableMemoryError, and the native load
     // never runs (assert the CONSEQUENCE of the verdict, not that a gate was called).
     let caught: unknown;
     await activeModelService.loadTextModel('too-big').catch((e: unknown) => { caught = e; });
     expect(isOverridableMemoryError(caught)).toBe(true);
-    expect(mockLlmService.loadModel).not.toHaveBeenCalled();
-    expect(modelResidencyManager.isResident('text')).toBe(false);
+    expect(textLoads()).toBe(0);
+    expect(residency.isResident('text')).toBe(false);
   });
 
   /**
@@ -232,18 +193,15 @@ describe('Chat <-> Home text-model selection parity (OD3)', () => {
    * from chat (the immediate no-op close).
    */
   it('already-loaded fast path: re-selecting the loaded model does not reload it', async () => {
-    const model = createDownloadedModel({ id: 'loaded', engine: 'llama' as any, filePath: '/loaded.gguf', fileSize: TEXT_FILE_BYTES });
-    useAppStore.setState({ downloadedModels: [model] });
-    mockLlmService.isModelLoaded.mockReturnValue(true);
+    const model = addTextModel('loaded', TEXT_FILE_BYTES);
     await activeModelService.loadTextModel('loaded');
-    mockLlmService.loadModel.mockClear();
+    expect(textLoads()).toBe(1);
 
     // Chat: the model whose filePath is already the loaded path → immediate no-op.
-    mockLlmService.getLoadedModelPath.mockReturnValue('/loaded.gguf');
     const deps = makeChatDeps(model);
     await handleModelSelectFn(deps, model);
     await new Promise(resolve => setTimeout(resolve, 50));
-    expect(mockLlmService.loadModel).not.toHaveBeenCalled();
+    expect(textLoads()).toBe(1);
     expect(deps.setShowModelSelector).toHaveBeenCalledWith(false);
   });
 
@@ -253,20 +211,18 @@ describe('Chat <-> Home text-model selection parity (OD3)', () => {
    * the same affordance both surfaces offer via the shared override helper.
    */
   it('override parity: Load Anyway retries with override and the model loads', async () => {
-    const model = createDownloadedModel({ id: 'force', engine: 'llama' as any, fileSize: 8 * 1024 * 1024 * 1024 });
-    useAppStore.setState({ downloadedModels: [model] });
-    mockLlmService.isModelLoaded.mockReturnValue(true);
+    addTextModel('force', 8 * GB);
 
     // First attempt: refused, overridable, native load NOT called.
     let caught: unknown;
     await activeModelService.loadTextModel('force').catch((e: unknown) => { caught = e; });
     expect(isOverridableMemoryError(caught)).toBe(true);
-    expect(mockLlmService.loadModel).not.toHaveBeenCalled();
+    expect(textLoads()).toBe(0);
 
     // Load Anyway → override forces past the refusal (10GB real free RAM stays
     // above the survival floor).
     await activeModelService.loadTextModel('force', undefined, { override: true });
-    expect(mockLlmService.loadModel).toHaveBeenCalled();
-    expect(getAppState().activeModelId).toBe('force');
+    expect(textLoads()).toBe(1);
+    expect(appState().activeModelId).toBe('force');
   });
 });

@@ -3,79 +3,28 @@
  *
  * Tests the flow of selecting local vs remote models and ensuring
  * generationService correctly routes to the appropriate provider.
+ *
+ * The real remote server store, remoteServerManager, provider registry and providers run here;
+ * nothing of ours is mocked. Choosing a model only builds and activates a provider (no request
+ * goes to the server), so no network fake is needed.
  */
 
 import { useRemoteServerStore } from '../../../src/stores/remoteServerStore';
 import { providerRegistry } from '../../../src/services/providers/registry';
 import { remoteServerManager } from '../../../src/services/remoteServerManager';
 
-// Mock dependencies
-jest.mock('../../../src/services/llm', () => ({
-  llmService: {
-    isModelLoaded: jest.fn().mockReturnValue(false),
-    generateResponse: jest.fn(),
-    stopGeneration: jest.fn().mockResolvedValue(''),
-    getGpuInfo: jest.fn().mockReturnValue({ gpu: false, gpuBackend: null, gpuLayers: 0 }),
-    getPerformanceStats: jest.fn().mockReturnValue({}),
-  },
-}));
-
-jest.mock('../../../src/services/providers/registry', () => ({
-  providerRegistry: {
-    getProvider: jest.fn(),
-    getActiveProvider: jest.fn(),
-    setActiveProvider: jest.fn(),
-  },
-  getProviderForServer: jest.fn(),
-}));
-
-jest.mock('../../../src/stores/appStore', () => ({
-  useAppStore: {
-    getState: jest.fn().mockReturnValue({
-      settings: {
-        temperature: 0.7,
-        maxTokens: 1024,
-        topP: 0.9,
-      },
-      activeModelId: null,
-      hasEngagedSharePrompt: true,
-      incrementTextGenerationCount: jest.fn().mockReturnValue(1),
-    }),
-  },
-}));
-
-jest.mock('../../../src/stores/chatStore', () => ({
-  useChatStore: {
-    getState: jest.fn().mockReturnValue({
-      startStreaming: jest.fn(),
-      appendToStreamingMessage: jest.fn(),
-      appendToStreamingReasoningContent: jest.fn(),
-      finalizeStreamingMessage: jest.fn(),
-      clearStreamingMessage: jest.fn(),
-    }),
-  },
-}));
-
 describe('Unified Model Selection', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    // Reset remote server store
+    // Reset remote server store and drop any provider a previous test registered.
     useRemoteServerStore.getState().clearAllServers();
+    providerRegistry.setActiveProvider('local');
+    for (const id of providerRegistry.getProviderIds()) {
+      if (id !== 'local') providerRegistry.unregisterProvider(id);
+    }
   });
 
   describe('Remote model selection', () => {
     it('should set active server and model ID when selecting a remote text model', async () => {
-      const mockLoadModel = jest.fn().mockResolvedValue(undefined);
-      const mockProvider = {
-        loadModel: mockLoadModel,
-        isReady: jest.fn().mockResolvedValue(true),
-        generate: jest.fn(),
-        getLoadedModelId: jest.fn().mockReturnValue('llama2'),
-      };
-
-      (providerRegistry.getProvider as jest.Mock).mockReturnValue(mockProvider);
-      (providerRegistry.setActiveProvider as jest.Mock).mockReturnValue(true);
-
       // Add a server
       const serverId = useRemoteServerStore.getState().addServer({
         name: 'Test Ollama',
@@ -101,9 +50,9 @@ describe('Unified Model Selection', () => {
       expect(useRemoteServerStore.getState().activeServerId).toBe(serverId);
       expect(useRemoteServerStore.getState().activeRemoteTextModelId).toBe('llama2');
 
-      // Verify provider was updated
-      expect(providerRegistry.setActiveProvider).toHaveBeenCalledWith(serverId);
-      expect(mockLoadModel).toHaveBeenCalledWith('llama2');
+      // Verify the server's provider is the active one and carries the chosen model
+      expect(providerRegistry.getActiveProviderId()).toBe(serverId);
+      expect(providerRegistry.getProvider(serverId)?.getLoadedModelId()).toBe('llama2');
     });
 
     it('should clear remote selection when switching to local model', async () => {
@@ -113,9 +62,18 @@ describe('Unified Model Selection', () => {
         providerType: 'openai-compatible',
       });
 
-      // Set up remote selection first
-      useRemoteServerStore.getState().setActiveServerId(serverId);
-      useRemoteServerStore.getState().setActiveRemoteTextModelId('llama2');
+      // Set up remote selection first (the way the picker does it)
+      useRemoteServerStore.getState().setDiscoveredModels(serverId, [
+        {
+          id: 'llama2',
+          name: 'Llama 2',
+          serverId,
+          capabilities: { supportsVision: false, supportsToolCalling: true, supportsThinking: false },
+          lastUpdated: new Date().toISOString(),
+        },
+      ]);
+      await remoteServerManager.setActiveRemoteTextModel(serverId, 'llama2');
+      expect(providerRegistry.getActiveProviderId()).toBe(serverId);
 
       // Clear selection
       remoteServerManager.clearActiveRemoteModel();
@@ -123,7 +81,7 @@ describe('Unified Model Selection', () => {
       // Verify state was cleared
       expect(useRemoteServerStore.getState().activeServerId).toBeNull();
       expect(useRemoteServerStore.getState().activeRemoteTextModelId).toBeNull();
-      expect(providerRegistry.setActiveProvider).toHaveBeenCalledWith('local');
+      expect(providerRegistry.getActiveProviderId()).toBe('local');
     });
 
     it('should handle multiple servers with different models', async () => {
@@ -171,14 +129,6 @@ describe('Unified Model Selection', () => {
 
   describe('Vision model selection', () => {
     it('should set active remote image model for vision models', async () => {
-      const mockLoadModel = jest.fn().mockResolvedValue(undefined);
-      const mockProvider = {
-        loadModel: mockLoadModel,
-        isReady: jest.fn().mockResolvedValue(true),
-      };
-
-      (providerRegistry.getProvider as jest.Mock).mockReturnValue(mockProvider);
-
       const serverId = useRemoteServerStore.getState().addServer({
         name: 'Vision Server',
         endpoint: 'http://localhost:11434',
@@ -202,7 +152,8 @@ describe('Unified Model Selection', () => {
       // Generation reads the server's image model, so the pick must land there.
       expect(useRemoteServerStore.getState().getServerById(serverId)?.mediaModels?.image).toBe('llava');
       // An image pick never becomes the server's chat model.
-      expect(mockLoadModel).not.toHaveBeenCalled();
+      expect(providerRegistry.getProvider(serverId)?.getLoadedModelId() ?? null).not.toBe('llava');
+      expect(useRemoteServerStore.getState().activeRemoteTextModelId).not.toBe('llava');
     });
   });
 

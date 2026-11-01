@@ -9,18 +9,10 @@ import {
   GB,
 } from '../../harness/nativeBoundary';
 import { createDownloadedModel } from '../../utils/factories';
+import { withNavigator } from '../../harness/realNavigation';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: () => {},
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => ({ params: {} }),
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 describe('Model selector — selection is independent of transient free RAM', () => {
   it('keeps both models visible and lets the user select the model that fits the owned budget', async () => {
@@ -59,15 +51,14 @@ describe('Model selector — selection is independent of transient free RAM', ()
     });
     const onSelectModel = jest.fn();
 
-    const view = rtl.render(
+    const view = rtl.render(withNavigator(
       React.createElement(ModelSelectorModal, {
         visible: true,
         onClose: () => {},
         onSelectModel,
         onUnloadModel: () => {},
         isLoading: false,
-      }),
-    );
+      })));
 
     const fittingRow = await rtl.waitFor(
       () => view.getByTestId('text-model-row-gemma-e2b-gguf'),

@@ -15,18 +15,8 @@ import {
   holdImageGeneration,
 } from '../../harness/remoteImageServer';
 
-let mockGoBacks = 0;
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: () => {},
-    goBack: () => { mockGoBacks += 1; },
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 type Harness = Awaited<ReturnType<typeof setupChatScreen>>;
 
@@ -41,7 +31,7 @@ describe('deleting a chat while its image is being drawn', () => {
 
   /** Start drawing an image in a new chat and leave it in progress. */
   async function startDrawing(): Promise<Harness> {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     server = holdImageGeneration();
     h.boundary.fs!.serveRemoteFile(REMOTE_IMAGE_URL, {
       body: 'synthetic-png-bytes',
@@ -58,7 +48,7 @@ describe('deleting a chat while its image is being drawn', () => {
   async function expectNoImageLeft(h: Harness): Promise<void> {
     const React = require('react');
     const { GalleryScreen } = require('../../../src/screens/GalleryScreen');
-    const gallery = h.rtl.render(React.createElement(GalleryScreen));
+    const gallery = h.renderAside(React.createElement(GalleryScreen));
     expect(await gallery.findByText('No generated images yet')).toBeTruthy();
     expect(gallery.queryAllByTestId(/^gallery-image-/)).toHaveLength(0);
     const fs = h.boundary.fs!;
@@ -75,7 +65,7 @@ describe('deleting a chat while its image is being drawn', () => {
     await h.rtl.act(async () => { h.rtl.fireEvent.press(confirm); });
 
     // The drawing ended with the chat, without waiting for the server to answer.
-    await h.rtl.waitFor(() => { expect(mockGoBacks).toBe(1); });
+    await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('chat-screen')).toBeNull(); });
     expect(server.aborted).toBe(1);
     expect(h.view!.queryByText('Generating Image')).toBeNull();
     h.view!.unmount();
@@ -90,7 +80,7 @@ describe('deleting a chat while its image is being drawn', () => {
 
     const React = require('react');
     const { ChatsListScreen } = require('../../../src/screens/ChatsListScreen');
-    const chats = h.rtl.render(React.createElement(ChatsListScreen));
+    const chats = h.renderAside(React.createElement(ChatsListScreen));
     h.rtl.fireEvent.press(await chats.findByLabelText(/^Delete /));
     await chats.findByText('Delete Chat');
     await h.rtl.act(async () => { h.rtl.fireEvent.press(chats.getByText(/^Delete$/)); });

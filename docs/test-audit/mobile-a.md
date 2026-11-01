@@ -37,17 +37,26 @@ The baseline (368 files, 857 mocks at the split) is divided with no overlap:
 
 ## Real navigation
 
-156 test files use `chatHarness`, which rendered each screen on its own and faked `useRoute` through a
-shared `routeHolder`. `setupChatScreen({ navigation: 'real' })` instead mounts the app's own
-`NavigationContainer` and `AppNavigator`:
+Every `chatHarness` test now runs on real navigation. `setupChatScreen({ navigation: 'real' })` mounts the
+app's own `NavigationContainer` and `AppNavigator` in one root View, as App.tsx does:
 
 - Onboarding is finished with the store action Onboarding calls, and the downloaded model is learned the
   way Home learns it, so the app opens on Home as a returning person's does.
-- The model is picked on the real Home picker; New Chat opens the real Chat route.
+- The model is picked on the real Home picker. The app then waits on Home; `render()` taps New Chat, so
+  the chat mounts when the test opens it, after the test has set up the device (a denied mic, a stored chat).
 - `openConversation` hands Chat new params on the same mounted screen; `newChatViaHome` leaves with the
-  chat's own Back button and taps Home's New Chat; `openScreen(name)` opens one of the app's routes.
+  chat's own Back button and taps Home's New Chat; `openScreen(name)` opens one of the app's routes and
+  `openTab(tab)` one of Home's tabs; `mountBeside(element)` mounts a test-only reader beside the app.
+- `renderAside(element)` renders a settings section on its own, inside a real stack. RNTL fires events only
+  into its current screen (the last render), so unmounting the section makes the app the screen again.
+- `relaunchApp()` mounts the relaunched app on the Chats tab; tapping a row opens that chat.
 
-The test file calls `jest.unmock('@react-navigation/native')` and declares no navigation mock.
+A screen rendered on its own uses `harness/realNavigation`: `withNavigator(element, params)` puts it in a
+real stack, and `withNavigatorRoutes` adds the screen it was opened from and the routes it can
+go to, so a test reads where Back or a press really led instead of spying on `navigate` / `goBack`.
+
+The test file calls `jest.unmock('@react-navigation/native')` and declares no navigation mock. The global
+navigation stub in `jest.setup.ts` goes last, once no test leans on it.
 
 ## Progress
 
@@ -55,12 +64,17 @@ The test file calls `jest.unmock('@react-navigation/native')` and declares no na
 |---|---|---|
 | 1 | 13 chat tests on real navigation | smart budgeting, image disk-full and out-of-memory cards, image intent routing, the memory refusals, enhance-prompt streaming, draw failure title, stop unanswered desktop, load params per device |
 | 2 | useFastestSettings | Model Settings opened on its own route |
+| 3 | 22 chat tests | the chat opens when the test opens it; relaunch opens the real app on the Chats tab |
+| 4 | 27 files | project, model, server and settings screens in a real stack; deleting a chat from every surface in the real app; the residency probe beside the app; Pro tools screens; the Voice row opens Models on the Voice tab |
 
 ## Findings
 
-- **Back does nothing after an MTP or OpenCL model load** (`kvSessionOnChatSwitch`, cases "MTP on" and
-  "GPU (OpenCL)"). On real navigation, pressing the chat header's Back leaves the stack at
-  `[Main, Chat]`; the button's handler never runs, while `goBack` on the container works and the same
-  Back works in the file's other cases. Not yet explained; the file stays on its old stub until it is.
-- **Still failing on real navigation, to explain:** `qwen3AsrTranscription`, `slowDesktopNoDeadline`,
-  `chatDeleteImageFailure`, `desktopImageStopCancelsJob`, `queuedVideoIsItsOwnTurn`, `imageBackends`.
+- **Explained, not a product bug:** presses that "did nothing" on real navigation (the chat's Back after an
+  MTP or OpenCL load, and the files once listed here) were RNTL dropping events into a tree that was not
+  its current screen, after the test rendered a section on its own. `renderAside` fixes it; all of those
+  files now pass on real navigation.
+- **Tests that were wrong about the app:** `stopDuringPromptEnhancement` tapped image mode once to turn it
+  "off", but the composer resets Force to Auto after every send, so the tap turned Force on again. The old
+  stub hid it because the tap was dropped. The test now checks the Auto state the send leaves.
+- **Possible flake to watch:** `stopDuringPromptEnhancement` once saw the stop button still shown right
+  after the enhancement card cleared (1 run in 5, under 2 parallel workers). Not reproduced since.

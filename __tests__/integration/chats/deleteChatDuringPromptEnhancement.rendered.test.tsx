@@ -15,18 +15,8 @@ import {
   holdImageGeneration,
 } from '../../harness/remoteImageServer';
 
-let mockGoBacks = 0;
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: () => {},
-    goBack: () => { mockGoBacks += 1; },
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('deleting a chat while its image prompt is being enhanced', () => {
   let server: ReturnType<typeof holdImageGeneration>;
@@ -38,7 +28,7 @@ describe('deleting a chat while its image prompt is being enhanced', () => {
   });
 
   it('stops the enhancement, deletes the chat promptly and saves no image', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     server = holdImageGeneration();
     h.boundary.fs!.serveRemoteFile(REMOTE_IMAGE_URL, {
       body: 'synthetic-png-bytes',
@@ -60,7 +50,7 @@ describe('deleting a chat while its image prompt is being enhanced', () => {
     await h.rtl.act(async () => { h.rtl.fireEvent.press(confirm); });
 
     // The chat is gone without the text model ever answering, because its request was stopped.
-    await h.rtl.waitFor(() => { expect(mockGoBacks).toBe(1); });
+    await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('chat-screen')).toBeNull(); });
     const context = await h.boundary.llama!.module.initLlama.mock.results.at(-1)!.value;
     expect(context.stopCompletion).toHaveBeenCalled();
     expect(server.requests).toBe(0);
@@ -69,7 +59,7 @@ describe('deleting a chat while its image prompt is being enhanced', () => {
 
     const React = require('react');
     const { GalleryScreen } = require('../../../src/screens/GalleryScreen');
-    const gallery = h.rtl.render(React.createElement(GalleryScreen));
+    const gallery = h.renderAside(React.createElement(GalleryScreen));
     expect(await gallery.findByText('No generated images yet')).toBeTruthy();
     expect(gallery.queryAllByTestId(/^gallery-image-/)).toHaveLength(0);
     const fs = h.boundary.fs!;

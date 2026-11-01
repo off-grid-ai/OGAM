@@ -1,20 +1,20 @@
 /**
- * TTSSection tests — the pro TTS settings section (Interface Mode picker,
- * Enable-TTS toggle, Voice picker, Speed slider).
+ * TTSSection tests: the pro TTS settings section (Interface Mode picker, Enable-TTS toggle,
+ * Voice picker, Speed slider).
  *
- * Drives the REAL `useTTSStore` (via setState of real state) and the REAL
- * component. Asserts what the user SEES (the not-ready empty state vs the ready
- * controls; chat-mode-only toggle; the voice list; download progress vs the
- * ready check) and what pressing a control DOES to the store STATE (the mode
- * chip flips `settings.interfaceMode`; the switch flips `settings.enabled`;
- * tapping a voice sets `activeVoiceId`).
+ * Everything that is ours runs for real: the component, the real useTTSStore, the real Kokoro
+ * engine from the real registry with its executorch bridge mounted beside the section (as the app
+ * mounts it), the residency manager and the playback module. Each test starts a fresh module graph
+ * (installNativeBoundary), so the store starts from its real defaults, and state reaches it the way
+ * it does in the app: setEngine('kokoro'), downloadModels(), setVoice(), updateSettings().
  *
- * Mocks are limited to genuine boundaries: the vector-icons render shim and the
- * native TTS registry / audio-playback singletons the store's side-effects call.
- * The store under assertion is NEVER mocked.
+ * Faked: only the device edges. ExecuTorch's resource cache (installKokoroResourceBoundary) holds,
+ * fails or completes the file transfers a voice needs; the executorch speech hook (jest.setup)
+ * reports the model ready; RAM comes from installNativeBoundary. The icon font renders its name.
  */
-import React from 'react';
-import { render, fireEvent, act, waitFor } from '@testing-library/react-native';
+import type React from 'react';
+import { installNativeBoundary, requireRTL } from '../../../harness/nativeBoundary';
+import { installKokoroResourceBoundary } from '../../../harness/kokoroResourceBoundary';
 
 // Render each Feather icon as a Text carrying its name, so a test can assert
 // which glyph shows (check / check-circle / external-link) without reaching into
@@ -25,315 +25,269 @@ jest.mock('react-native-vector-icons/Feather', () => {
   return (props: { name: string }) => RC.createElement(Text, { testID: `icon-${props.name}` }, props.name);
 });
 
-// Native boundaries the store's real side-effects reach into (updateSettings →
-// stop() → ttsPlayback + ttsRegistry; interfaceMode='audio' → initializeEngine
-// → ttsRegistry). No active engine in jest, so these are inert; mocking keeps
-// the native audio/TTS singletons out of the test env. The store logic that
-// mutates `settings`/`activeVoiceId` still runs for real.
-// A minimal fake engine so the store's setVoice action proceeds (it bails when
-// there is no active engine). setVoice does the real optimistic state update
-// (activeVoiceId + voiceByEngine) before awaiting this boundary.
-const mockSetVoice = jest.fn(async () => {});
-const mockTTSEngine = {
-  id: 'kokoro',
-  displayName: 'Kokoro TTS',
-  capabilities: { peakRamMB: 82 },
-  setVoice: mockSetVoice,
-  stop: jest.fn(),
-  getPhase: () => 'ready',
-  getRequiredAssets: () => [{ id: 'a', sizeBytes: 82 * 1024 * 1024 }],
-  checkAssetStatus: jest.fn(async () => []),
-  getOverallDownloadProgress: () => 1,
-  isFullyDownloaded: () => true,
-  initialize: jest.fn(async () => {}),
-  release: jest.fn(async () => {}),
-};
-jest.mock('../../../../pro/audio/engine', () => ({
-  ttsRegistry: { getActiveEngine: () => mockTTSEngine, getRegisteredIds: () => ['kokoro'] },
-  OuteTTSEngine: class {},
-}));
+type Store = typeof import('@offgrid/pro/audio/ttsStore').useTTSStore;
 
-// The residency lock/hardware are native boundaries; the mode switch's
-// initializeEngine side-effect routes through them. Grant room so it proceeds
-// without touching real device memory.
-jest.mock('@offgrid/core/services/modelResidency', () => ({
-  modelResidencyManager: {
-    runExclusive: async (_label: string, fn: () => Promise<void>) => fn(),
-    makeRoomFor: async () => ({ fits: true, evicted: [] as string[] }),
-    register: jest.fn(),
-  },
-}));
-jest.mock('../../../../pro/audio/ttsPlayback', () => ({
-  playMessage: jest.fn(),
-  seekMessage: jest.fn(),
-  speakMessage: jest.fn(),
-  stopPlayback: jest.fn(),
-  pausePlayback: jest.fn(),
-  resumePlayback: jest.fn(),
-  stopStreamingPlayback: jest.fn(),
-  setPlaybackSpeed: jest.fn(),
-}));
+/** A fresh app module graph: the real store at its defaults, the real Kokoro registry. */
+function launch() {
+  installNativeBoundary();
+  const cache = installKokoroResourceBoundary();
+  const React = require('react');
+  const rtl = requireRTL();
+  const { TTSSection } = require('@offgrid/pro/audio/ui/TTSSection');
+  const { useTTSStore } = require('@offgrid/pro/audio/ttsStore') as { useTTSStore: Store };
+  const { ttsRegistry, KOKORO_VOICES } = require('@offgrid/pro/audio/engine');
+  const voice = (id: string) => KOKORO_VOICES.find((v: { id: string }) => v.id === id);
+  const store = () => useTTSStore.getState();
 
-import { TTSSection } from '@offgrid/pro/audio/ui/TTSSection';
-import { useTTSStore } from '@offgrid/pro/audio/ttsStore';
-
-const VOICES = [
-  { id: 'af_heart', label: 'Warm', metadata: { accent: 'English (US)', languageCode: 'en-US', gender: 'Female', persona: 'Friendly' } },
-  { id: 'bf_emma', label: 'Gentle', metadata: { accent: 'English (UK)', languageCode: 'en-GB', gender: '', persona: '' } },
-] as any;
-
-// Snapshot the pristine store so every test starts from the real defaults and
-// leaves nothing mutated for other suites.
-const INITIAL = useTTSStore.getState();
-
-const setStore = (patch: Partial<ReturnType<typeof useTTSStore.getState>>) =>
-  act(() => { useTTSStore.setState(patch); });
-
-describe('TTSSection', () => {
-  afterEach(() => {
-    act(() => { useTTSStore.setState(INITIAL, true); });
-    jest.clearAllMocks();
-  });
-
-  // ── Not-ready (empty) branch ─────────────────────────────────────────────
-  describe('when no voice model is ready', () => {
-    beforeEach(() => setStore({ ...INITIAL, isReady: false }));
-
-    it('shows the "download in TTS Settings" empty state and none of the controls', () => {
-      const { getByText, queryByTestId } = render(<TTSSection />);
-      expect(getByText(/No voice models downloaded/)).toBeTruthy();
-      // The ready-only controls are absent.
-      expect(queryByTestId('tts-speed')).toBeNull();
-      expect(queryByTestId('icon-check-circle')).toBeNull();
-    });
-
-    it('renders the TTS Settings link only when the navigate callback is provided, and pressing it calls back', () => {
-      const onNavigate = jest.fn();
-      const { getByText, getByTestId } = render(<TTSSection onNavigateToTTSSettings={onNavigate} />);
-      // The link row shows the external-link icon + label.
-      expect(getByTestId('icon-external-link')).toBeTruthy();
-      fireEvent.press(getByText('TTS Settings'));
-      expect(onNavigate).toHaveBeenCalledTimes(1);
-    });
-
-    it('omits the link entirely when no navigate callback is given', () => {
-      const { queryByText, queryByTestId } = render(<TTSSection />);
-      expect(queryByText('TTS Settings')).toBeNull();
-      expect(queryByTestId('icon-external-link')).toBeNull();
-    });
-  });
-
-  describe('when the voice model is downloaded but the engine is cold', () => {
-    it('shows the voice controls instead of the download empty state', () => {
-      setStore({
-        ...INITIAL,
-        isReady: false,
-        voices: VOICES,
-        activeVoiceId: 'af_heart',
-        settings: {
-          ...INITIAL.settings,
-          interfaceMode: 'chat',
-          modelDownloaded: { ...INITIAL.settings.modelDownloaded, kokoro: true },
-        },
+  return {
+    rtl,
+    cache,
+    store,
+    voice,
+    /** The Kokoro engine is chosen, as the voice settings screen does on open. */
+    async chooseKokoro() {
+      await rtl.act(async () => { await store().setEngine('kokoro'); });
+    },
+    /** The Kokoro model is downloaded through the store's own download action. */
+    async downloadKokoro() {
+      await rtl.act(async () => {
+        await store().setEngine('kokoro');
+        await store().downloadModels();
       });
+    },
+    /**
+     * Render the section. With `bridge`, the active engine's executorch bridge is mounted beside it
+     * (the engine warms up and reads ready); without it the engine stays cold.
+     */
+    render(props: Record<string, unknown> = {}, opts: { bridge?: boolean } = { bridge: true }) {
+      const Bridge = opts.bridge ? (ttsRegistry.getActiveEngine()?.getBridgeComponent() as React.FC | undefined) : undefined;
+      return rtl.render(
+        React.createElement(React.Fragment, null,
+          Bridge ? React.createElement(Bridge) : null,
+          React.createElement(TTSSection, props)),
+      );
+    },
+  };
+}
 
-      const { getByText, getByTestId, queryByText } = render(<TTSSection />);
+type App = ReturnType<typeof launch>;
+let app: App;
 
-      expect(queryByText(/No voice models downloaded/)).toBeNull();
-      expect(getByText('Interface Mode')).toBeTruthy();
-      expect(getByTestId('tts-speed-slider')).toBeTruthy();
-    });
+beforeEach(() => {
+  app = launch();
+});
+
+afterEach(async () => {
+  await app.rtl.act(async () => { app.store().stop(); });
+});
+
+// ── Not-ready (empty) branch ─────────────────────────────────────────────
+describe('when no voice model is ready', () => {
+  it('shows the "download in TTS Settings" empty state and none of the controls', () => {
+    const { getByText, queryByTestId } = app.render();
+    expect(getByText(/No voice models downloaded/)).toBeTruthy();
+    // The ready-only controls are absent.
+    expect(queryByTestId('tts-speed')).toBeNull();
+    expect(queryByTestId('icon-check-circle')).toBeNull();
   });
 
-  // ── Ready branch ─────────────────────────────────────────────────────────
-  describe('when a voice model is ready', () => {
-    beforeEach(() =>
-      setStore({
-        ...INITIAL,
-        isReady: true,
-        voices: VOICES,
-        activeVoiceId: 'af_heart',
-        settings: { ...INITIAL.settings, interfaceMode: 'chat', enabled: true, speed: 1.0 },
-      }),
+  it('renders the TTS Settings link only when the navigate callback is provided, and pressing it calls back', () => {
+    const onNavigate = jest.fn();
+    const { getByText, getByTestId } = app.render({ onNavigateToTTSSettings: onNavigate });
+    // The link row shows the external-link icon + label.
+    expect(getByTestId('icon-external-link')).toBeTruthy();
+    app.rtl.fireEvent.press(getByText('TTS Settings'));
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits the link entirely when no navigate callback is given', () => {
+    const { queryByText, queryByTestId } = app.render();
+    expect(queryByText('TTS Settings')).toBeNull();
+    expect(queryByTestId('icon-external-link')).toBeNull();
+  });
+});
+
+describe('when the voice model is downloaded but the engine is cold', () => {
+  it('shows the voice controls instead of the download empty state', async () => {
+    await app.downloadKokoro();
+    // No bridge mounted: the model is on disk but not loaded.
+    const { getByText, getByTestId, queryByText } = app.render({}, { bridge: false });
+
+    expect(app.store().isReady).toBe(false);
+    expect(queryByText(/No voice models downloaded/)).toBeNull();
+    expect(getByText('Interface Mode')).toBeTruthy();
+    expect(getByTestId('tts-speed-slider')).toBeTruthy();
+  });
+});
+
+// ── Ready branch ─────────────────────────────────────────────────────────
+describe('when a voice model is ready', () => {
+  beforeEach(async () => {
+    await app.downloadKokoro();
+    app.store().updateSettings({ interfaceMode: 'chat' });
+  });
+
+  /** Render with the bridge mounted and wait for the engine to read ready. */
+  async function renderReady(props: Record<string, unknown> = {}) {
+    const view = app.render(props);
+    await app.rtl.waitFor(() => expect(app.store().isReady).toBe(true));
+    return view;
+  }
+
+  it('shows the interface-mode picker, the voice list and the speed slider (not the empty state)', async () => {
+    const { getByText, getByTestId, queryByText } = await renderReady();
+    expect(queryByText(/No voice models downloaded/)).toBeNull();
+    expect(getByText('Interface Mode')).toBeTruthy();
+    expect(getByText('Chat')).toBeTruthy();
+    expect(getByText('Audio')).toBeTruthy();
+    // Voices of the active language only (US English), not the British ones.
+    expect(getByText(app.voice('af_heart').label)).toBeTruthy();
+    expect(queryByText(app.voice('bf_emma').label)).toBeNull();
+    expect(getByTestId('chat-tts-language')).toBeTruthy();
+    expect(getByTestId('tts-speed-slider')).toBeTruthy();
+  });
+
+  it('shows the Chat-mode description and the Enable-TTS toggle while in chat mode', async () => {
+    const { getByText } = await renderReady();
+    expect(getByText(/Chat Mode/)).toBeTruthy();
+    expect(getByText('Enable TTS')).toBeTruthy();
+  });
+
+  it('hides the Enable-TTS toggle and shows the Audio-mode description while in audio mode', async () => {
+    await app.rtl.act(async () => { app.store().updateSettings({ interfaceMode: 'audio' }); });
+    const { getByText, queryByText } = await renderReady();
+    expect(getByText(/Audio Mode/)).toBeTruthy();
+    expect(queryByText('Enable TTS')).toBeNull();
+  });
+
+  // ── Voice picker interaction (real store action) ───────────────────────
+  it('marks the active voice with a check and renders per-voice metadata', async () => {
+    const { getAllByTestId, getAllByText } = await renderReady();
+    // Exactly one row (the active af_heart) shows the check glyph; metadata joins accent + gender.
+    expect(getAllByTestId('icon-check')).toHaveLength(1);
+    const heart = app.voice('af_heart');
+    expect(getAllByText(`${heart.accent} · ${heart.gender}`).length).toBeGreaterThan(0);
+  });
+
+  it('shows the language download until the requested voice is ready', async () => {
+    const { getByText, getByTestId, queryByTestId } = await renderReady();
+    expect(app.store().activeVoiceId).toBe('af_heart');
+    // The voice file transfer reports 42% and then waits.
+    const finishSwitch = app.cache.holdNext(0.42);
+    app.rtl.fireEvent.press(getByTestId('chat-tts-language'));
+    await app.rtl.act(async () => { app.rtl.fireEvent.press(getByTestId('chat-tts-language-en-GB')); });
+
+    // The current voice stays active while the requested one is prepared.
+    expect(app.store().activeVoiceId).toBe('af_heart');
+    await app.rtl.waitFor(() => expect(app.store().pendingVoiceId).toBe('bf_emma'));
+    expect(getByTestId('chat-tts-language-download-status')).toBeTruthy();
+    expect(queryByTestId('icon-check-circle')).toBeNull();
+    // The fetcher reports a fraction only (no byte counts), so the rate reads unavailable.
+    await app.rtl.waitFor(() =>
+      expect(getByText('Downloading English (UK) voice - 42% · Rate unavailable')).toBeTruthy(),
     );
 
-    it('shows the interface-mode picker, the voice list and the speed slider (not the empty state)', () => {
-      const { getByText, getByTestId, queryByText } = render(<TTSSection />);
-      expect(queryByText(/No voice models downloaded/)).toBeNull();
-      expect(getByText('Interface Mode')).toBeTruthy();
-      expect(getByText('Chat')).toBeTruthy();
-      expect(getByText('Audio')).toBeTruthy();
-      expect(getByText('Warm')).toBeTruthy();
-      expect(queryByText('Gentle')).toBeNull();
-      expect(getByTestId('chat-tts-language')).toBeTruthy();
-      expect(getByTestId('tts-speed-slider')).toBeTruthy();
-    });
+    // A second selection cannot start while one voice is still being prepared.
+    expect(getByTestId('chat-tts-language')).toBeDisabled();
+    expect(queryByTestId('chat-tts-language-en-US')).toBeNull();
 
-    it('shows the Chat-mode description and the Enable-TTS toggle while in chat mode', () => {
-      const { getByText } = render(<TTSSection />);
-      expect(getByText(/Chat Mode/)).toBeTruthy();
-      expect(getByText('Enable TTS')).toBeTruthy();
-    });
-
-    it('hides the Enable-TTS toggle and shows the Audio-mode description while in audio mode', () => {
-      act(() => {
-        useTTSStore.setState({ settings: { ...useTTSStore.getState().settings, interfaceMode: 'audio' } });
-      });
-      const { getByText, queryByText } = render(<TTSSection />);
-      expect(getByText(/Audio Mode/)).toBeTruthy();
-      expect(queryByText('Enable TTS')).toBeNull();
-    });
-
-    // ── Voice picker interaction (real store action) ───────────────────────
-    it('marks the active voice with a check and renders per-voice metadata', () => {
-      const { getByText, getByTestId } = render(<TTSSection />);
-      // Active voice (af_heart) shows the check glyph; its metadata joins accent + gender.
-      expect(getByTestId('icon-check')).toBeTruthy();
-      expect(getByText('English (US) · Female')).toBeTruthy();
-    });
-
-    it('shows the language download until the requested voice is ready', async () => {
-      let finishSwitch!: () => void;
-      const pendingSwitch = new Promise<void>((resolve) => { finishSwitch = resolve; });
-      mockSetVoice.mockReturnValueOnce(pendingSwitch);
-      const realSetVoice = useTTSStore.getState().setVoice;
-      const setVoiceFromUI = jest.fn(realSetVoice);
-      setStore({ setVoice: setVoiceFromUI });
-      const { getByText, getByTestId, queryByTestId } = render(<TTSSection />);
-      expect(useTTSStore.getState().activeVoiceId).toBe('af_heart');
-      fireEvent.press(getByTestId('chat-tts-language'));
-      await act(async () => { fireEvent.press(getByTestId('chat-tts-language-en-GB')); });
-
-      expect(setVoiceFromUI).toHaveBeenCalledWith('bf_emma');
-      expect(mockSetVoice).toHaveBeenCalledWith('bf_emma');
-      expect(mockSetVoice.mock.results[0]?.value).toBe(pendingSwitch);
-      expect(useTTSStore.getState().activeVoiceId).toBe('af_heart');
-      await waitFor(() => expect(useTTSStore.getState().pendingVoiceId).toBe('bf_emma'));
-      expect(getByTestId('chat-tts-language-download-status')).toBeTruthy();
-      expect(getByText(/Downloading English \(UK\) voice/)).toBeTruthy();
-      expect(queryByTestId('icon-check-circle')).toBeNull();
-
-      // A second selection cannot start while one voice is still being prepared.
-      fireEvent.press(getByTestId('chat-tts-language'));
-      expect(queryByTestId('chat-tts-language-en-US')).toBeNull();
-
-      act(() => { useTTSStore.setState({ voiceSwitchProgress: 0.42 }); });
-      expect(getByText('Downloading English (UK) voice - 42% · Rate unavailable')).toBeTruthy();
-
-      act(() => {
-        useTTSStore.setState({
-          downloadCurrentBytes: 21 * 1024 * 1024,
-          downloadTotalBytes: 50 * 1024 * 1024,
-          downloadBytesPerSecond: 2 * 1024 * 1024,
-        });
-      });
-      expect(getByText('Downloading English (UK) voice - 42% · 21 MB / 50 MB · 2.0 MB/s')).toBeTruthy();
-
-      await act(async () => { finishSwitch(); await Promise.resolve(); });
-      await waitFor(() => expect(getByTestId('chat-tts-language-ready-status')).toBeTruthy());
-      expect(useTTSStore.getState().activeVoiceId).toBe('bf_emma');
-      expect(useTTSStore.getState().settings.voiceByEngine[useTTSStore.getState().settings.engineId]).toBe('bf_emma');
-      expect(getByText('Gentle')).toBeTruthy();
-    });
-
-    it('prepares a voice from cache when that voice completed before', async () => {
-      let finishSwitch!: () => void;
-      mockSetVoice.mockReturnValueOnce(new Promise<void>((resolve) => { finishSwitch = resolve; }));
-      setStore({
-        settings: {
-          ...useTTSStore.getState().settings,
-          voiceAssetsDownloaded: { kokoro: ['bf_emma'] },
-        },
-      });
-      const { getByText, getByTestId, queryByText } = render(<TTSSection />);
-
-      fireEvent.press(getByTestId('chat-tts-language'));
-      await act(async () => { fireEvent.press(getByTestId('chat-tts-language-en-GB')); });
-
-      expect(getByText('Preparing English (UK) voice')).toBeTruthy();
-      expect(queryByText(/Downloading English \(UK\) voice/)).toBeNull();
-
-      await act(async () => { finishSwitch(); await Promise.resolve(); });
-      await waitFor(() => expect(getByTestId('chat-tts-language-ready-status')).toBeTruthy());
-    });
-
-    it('shows a failed language download and retries it', async () => {
-      mockSetVoice
-        .mockRejectedValueOnce(new Error('network down'))
-        .mockResolvedValueOnce(undefined);
-      const { getByText, getByTestId } = render(<TTSSection />);
-
-      fireEvent.press(getByTestId('chat-tts-language'));
-      await act(async () => { fireEvent.press(getByTestId('chat-tts-language-en-GB')); });
-      await waitFor(() => expect(getByTestId('chat-tts-language-download-error')).toBeTruthy());
-      expect(getByText('Could not download the English (UK) voice. Check your connection and retry.')).toBeTruthy();
-      expect(useTTSStore.getState().activeVoiceId).toBe('af_heart');
-
-      await act(async () => { fireEvent.press(getByTestId('chat-tts-language-download-retry')); });
-      await waitFor(() => expect(useTTSStore.getState().activeVoiceId).toBe('bf_emma'));
-      expect(mockSetVoice).toHaveBeenCalledTimes(2);
-    });
-
-    // ── Mode picker interaction (real store action) ────────────────────────
-    it('tapping the Audio chip flips interfaceMode to "audio" in the REAL store', async () => {
-      const { getByText } = render(<TTSSection />);
-      expect(useTTSStore.getState().settings.interfaceMode).toBe('chat');
-      await act(async () => { fireEvent.press(getByText('Audio')); });
-      expect(useTTSStore.getState().settings.interfaceMode).toBe('audio');
-    });
-
-    it('tapping the Chat chip from audio mode flips interfaceMode back to "chat"', async () => {
-      act(() => { useTTSStore.setState({ settings: { ...useTTSStore.getState().settings, interfaceMode: 'audio' } }); });
-      const { getByText } = render(<TTSSection />);
-      await act(async () => { fireEvent.press(getByText('Chat')); });
-      expect(useTTSStore.getState().settings.interfaceMode).toBe('chat');
-    });
-
-    // ── Enable-TTS toggle interaction (real store action) ──────────────────
-    it('toggling the Enable switch flips settings.enabled in the REAL store', async () => {
-      const { UNSAFE_getByType } = render(<TTSSection />);
-      const { Switch } = require('react-native');
-      expect(useTTSStore.getState().settings.enabled).toBe(true);
-      await act(async () => { fireEvent(UNSAFE_getByType(Switch), 'valueChange', false); });
-      expect(useTTSStore.getState().settings.enabled).toBe(false);
-    });
-
-    // ── Speed slider interaction (real store action) ───────────────────────
-    it('committing the speed slider updates settings.speed in the REAL store', async () => {
-      const { getByTestId } = render(<TTSSection />);
-      await act(async () => { fireEvent(getByTestId('tts-speed-slider'), 'slidingComplete', 1.5); });
-      expect(useTTSStore.getState().settings.speed).toBe(1.5);
-    });
+    await app.rtl.act(async () => { finishSwitch(); });
+    await app.rtl.waitFor(() => expect(getByTestId('chat-tts-language-ready-status')).toBeTruthy());
+    expect(app.store().activeVoiceId).toBe('bf_emma');
+    expect(app.store().settings.voiceByEngine.kokoro).toBe('bf_emma');
+    expect([...app.cache.files].some(path => path.includes('bf_emma'))).toBe(true);
+    expect(getByText(app.voice('bf_emma').label)).toBeTruthy();
   });
 
-  // ── Voice-picker header status (downloading vs not-ready vs ready) ────────
-  describe('voice-picker header status', () => {
-    it('shows the download percentage while downloading', () => {
-      setStore({
-        ...INITIAL,
-        isReady: true, // section body renders
-        voices: VOICES,
-        activeVoiceId: 'af_heart',
-        isDownloading: true,
-        overallDownloadProgress: 0.42,
-        settings: { ...INITIAL.settings, interfaceMode: 'chat' },
-      });
-      const { getByText } = render(<TTSSection />);
-      expect(getByText('42%')).toBeTruthy();
-    });
+  it('prepares a voice from cache when that voice completed before', async () => {
+    const { getByText, getByTestId, queryByText } = await renderReady();
+    // British English was used before, then the user went back to US English.
+    for (const id of ['bf_emma', 'af_heart']) {
+      app.rtl.act(() => { app.store().setVoice(id); });
+      await app.rtl.waitFor(() => expect(app.store().activeVoiceId).toBe(id));
+      await app.rtl.waitFor(() => expect(app.store().isSwitchingVoice).toBe(false));
+    }
+    expect(app.store().settings.voiceAssetsDownloaded?.kokoro).toContain('bf_emma');
 
-    it('shows the ready check-circle when ready and not downloading', () => {
-      setStore({
-        ...INITIAL,
-        isReady: true,
-        voices: VOICES,
-        activeVoiceId: 'af_heart',
-        isDownloading: false,
-        settings: { ...INITIAL.settings, interfaceMode: 'chat' },
-      });
-      const { getByTestId, queryByText } = render(<TTSSection />);
-      expect(getByTestId('icon-check-circle')).toBeTruthy();
-      expect(queryByText('42%')).toBeNull();
-    });
+    const finishSwitch = app.cache.holdNext(0);
+    app.rtl.fireEvent.press(getByTestId('chat-tts-language'));
+    await app.rtl.act(async () => { app.rtl.fireEvent.press(getByTestId('chat-tts-language-en-GB')); });
+
+    expect(getByText('Preparing English (UK) voice')).toBeTruthy();
+    expect(queryByText(/Downloading English \(UK\) voice/)).toBeNull();
+
+    await app.rtl.act(async () => { finishSwitch(); });
+    await app.rtl.waitFor(() => expect(getByTestId('chat-tts-language-ready-status')).toBeTruthy());
+  });
+
+  it('shows a failed language download and retries it', async () => {
+    const { getByText, getByTestId } = await renderReady();
+
+    app.cache.failFetch(new Error('network down'));
+    app.rtl.fireEvent.press(getByTestId('chat-tts-language'));
+    await app.rtl.act(async () => { app.rtl.fireEvent.press(getByTestId('chat-tts-language-en-GB')); });
+    await app.rtl.waitFor(() => expect(getByTestId('chat-tts-language-download-error')).toBeTruthy());
+    expect(getByText('Could not download the English (UK) voice. Check your connection and retry.')).toBeTruthy();
+    expect(app.store().activeVoiceId).toBe('af_heart');
+
+    // The network is back: retry fetches the voice and switches to it.
+    app.cache.failFetch(undefined);
+    await app.rtl.act(async () => { app.rtl.fireEvent.press(getByTestId('chat-tts-language-download-retry')); });
+    await app.rtl.waitFor(() => expect(app.store().activeVoiceId).toBe('bf_emma'));
+    expect([...app.cache.files].some(path => path.includes('bf_emma'))).toBe(true);
+  });
+
+  // ── Mode picker interaction (real store action) ────────────────────────
+  it('tapping the Audio chip flips interfaceMode to "audio" in the REAL store', async () => {
+    const { getByText } = await renderReady();
+    expect(app.store().settings.interfaceMode).toBe('chat');
+    await app.rtl.act(async () => { app.rtl.fireEvent.press(getByText('Audio')); });
+    expect(app.store().settings.interfaceMode).toBe('audio');
+  });
+
+  it('tapping the Chat chip from audio mode flips interfaceMode back to "chat"', async () => {
+    await app.rtl.act(async () => { app.store().updateSettings({ interfaceMode: 'audio' }); });
+    const { getByText } = await renderReady();
+    await app.rtl.act(async () => { app.rtl.fireEvent.press(getByText('Chat')); });
+    expect(app.store().settings.interfaceMode).toBe('chat');
+  });
+
+  // ── Enable-TTS toggle interaction (real store action) ──────────────────
+  it('toggling the Enable switch flips settings.enabled in the REAL store', async () => {
+    const { UNSAFE_getByType } = await renderReady();
+    const { Switch } = require('react-native');
+    expect(app.store().settings.enabled).toBe(true);
+    await app.rtl.act(async () => { app.rtl.fireEvent(UNSAFE_getByType(Switch), 'valueChange', false); });
+    expect(app.store().settings.enabled).toBe(false);
+  });
+
+  // ── Speed slider interaction (real store action) ───────────────────────
+  it('committing the speed slider updates settings.speed in the REAL store', async () => {
+    const { getByTestId } = await renderReady();
+    await app.rtl.act(async () => { app.rtl.fireEvent(getByTestId('tts-speed-slider'), 'slidingComplete', 1.5); });
+    expect(app.store().settings.speed).toBe(1.5);
+  });
+});
+
+// ── Voice-picker header status (downloading vs not-ready vs ready) ────────
+describe('voice-picker header status', () => {
+  it('shows the download percentage while downloading', async () => {
+    // The model was downloaded before (the flag is saved), and a fresh download now reports 42%
+    // and waits - the re-download of a model whose files went missing.
+    await app.downloadKokoro();
+    const finish = app.cache.holdNext(0.42);
+    let download!: Promise<void>;
+    await app.rtl.act(async () => { download = app.store().downloadModels(); });
+    const { getByText } = app.render({}, { bridge: false });
+    expect(app.store().isDownloading).toBe(true);
+    await app.rtl.waitFor(() => expect(getByText('42%')).toBeTruthy());
+    await app.rtl.act(async () => { finish(); await download; });
+  });
+
+  it('shows the ready check-circle when ready and not downloading', async () => {
+    await app.downloadKokoro();
+    const { getByTestId, queryByText } = app.render();
+    await app.rtl.waitFor(() => expect(getByTestId('icon-check-circle')).toBeTruthy());
+    expect(queryByText('42%')).toBeNull();
   });
 });
