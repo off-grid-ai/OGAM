@@ -5,7 +5,8 @@
  * N is one past the last `v<version>-beta.<N>` tag, the store build number is a timestamp, and the
  * shared commit is ../shared's HEAD. It prints them as KEY=VALUE and appends them to $GITHUB_OUTPUT,
  * writes the notes where UAT_NOTES_OUT says, and pushes, commits and tags nothing. A later stage
- * without the plan's values refuses to run.
+ * without the plan's values refuses to run. A push hook's GIT_DIR never reaches the sandbox's git, so the
+ * repo being pushed is never touched.
  *
  * The real script runs in a sandbox: throwaway git remotes stand in for GitHub (the network boundary).
  */
@@ -17,9 +18,9 @@ import path from 'path';
 const UAT = path.join(__dirname, '../../scripts/uat.sh');
 // A push hook exports GIT_DIR and friends for the repo being pushed. Passed on, `git init --bare` in
 // the sandbox re-inits that real repo as bare, so the sandbox's git sees none of them.
-const sandboxEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+const sandboxEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
 const git = (cwd: string, ...args: string[]) =>
-  execFileSync('git', args, { cwd, encoding: 'utf8', env: { ...sandboxEnv, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } }).trim();
+  execFileSync('git', args, { cwd, encoding: 'utf8', env: { ...sandboxEnv(), GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } }).trim();
 
 /** A repository with one commit on main, pushed to a bare remote it tracks as origin. */
 function repo(dir: string, files: Record<string, string>) {
@@ -57,6 +58,23 @@ function sandbox() {
 const PATH = `${path.dirname(process.execPath)}:/usr/bin:/bin`;
 const run = (cwd: string, args: string[], env: Record<string, string> = {}) =>
   spawnSync('bash', ['scripts/uat.sh', ...args], { cwd, encoding: 'utf8', env: { HOME: os.tmpdir(), PATH, ...env } });
+
+it('a push hook\'s GIT_DIR never reaches the sandbox: the repo being pushed is untouched', () => {
+  const pushed = fs.mkdtempSync(path.join(os.tmpdir(), 'uat-pushed-'));
+  git(pushed, 'init', '-q', '-b', 'main');
+  const config = path.join(pushed, '.git', 'config');
+  const before = fs.readFileSync(config, 'utf8');
+  const hookEnv = { GIT_DIR: path.join(pushed, '.git'), GIT_WORK_TREE: pushed, GIT_INDEX_FILE: path.join(pushed, '.git', 'index') };
+  Object.assign(process.env, hookEnv);
+  try {
+    const { mobile } = sandbox();
+    expect(git(mobile, 'status', '--porcelain')).toBe('');
+  } finally {
+    for (const key of Object.keys(hookEnv)) delete process.env[key];
+  }
+  expect(fs.readFileSync(config, 'utf8')).toBe(before);
+  expect(git(pushed, 'config', '--get', 'core.bare')).toBe('false');
+});
 
 it('parses', () => {
   expect(spawnSync('bash', ['-n', UAT]).status).toBe(0);
