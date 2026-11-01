@@ -441,6 +441,11 @@ The **Build Atlas voices** workflow ran successfully on 2026-10-19, so `kitten-n
 - The briefing, Learn and practice-call screens already had **Load the AI model now**.
 - Not verified on a device.
 
+## 8p. Importing a model that is already in the folder (0.0.120)
+
+- Importing a .gguf whose name is already in the models folder no longer fails with "already exists" when the model is not in the list. A complete leftover copy is added to the list as it is (no second copy); a partial one is replaced. If the model really is in the list, it says so and names it.
+- Not verified on a device.
+
 ## Build evidence and checks
 
 - New **Android unit tests** workflow runs the Kotlin/JVM tests (`:app:testDebugUnitTest`) on every push that
