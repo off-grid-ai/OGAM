@@ -16,110 +16,19 @@
  *   excludes, and the Download control is disabled when incompatible). See the LOW-RAM case
  *   and the report for the details.
  *
- * Doctrine: mount the REAL ModelsScreen → arrive at the LiteRT detail view via real taps →
- * press the real Download control → assert the RENDERED CustomAlert text (present/absent).
- * REAL: ModelsScreen, TextModelsTab, ModelCard, CustomAlert, the curated registry, the
- * memory-budget math, the app/download stores. FAKE only device boundaries: navigation,
- * the HuggingFace/network layer, the native download service, the file/documents picker,
- * and the RAM sensor (hardwareService.getTotalMemoryGB) — which is how ramGB reaches the tab.
+ * Doctrine: mount the REAL ModelsScreen in a real React Navigation stack → arrive at the LiteRT
+ * detail view via real taps → press the real Download control → assert the RENDERED CustomAlert
+ * text (present/absent). REAL: ModelsScreen, TextModelsTab, ModelCard, CustomAlert, the curated
+ * registry, the memory-budget math, hardwareService, huggingFaceService, modelManager,
+ * backgroundDownloadService, the app/download stores. FAKE only the phone and the network: an
+ * Android phone's RAM sensor, disk and native downloader (installNativeBoundary), the Hugging Face
+ * API (hfModelApiServer, serving no repos), the safe-area native module and the documents picker.
  */
+import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
+import { serveHfModelApi } from '../../harness/hfModelApiServer';
+import { withNavigator } from '../../harness/realNavigation';
 
-import React from 'react';
-import { Platform } from 'react-native';
-import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
-import { NavigationContainer } from '@react-navigation/native';
-import { resetStores } from '../../utils/testHelpers';
-
-// The curated LiteRT parent only appears in the recommended list on Android. Flip the
-// platform sensor to Android (a genuine device boundary) without replacing the whole
-// Platform module (which breaks @react-navigation's requireActual).
-const originalOS = Platform.OS;
-beforeAll(() => { Platform.OS = 'android'; });
-afterAll(() => { Platform.OS = originalOS; });
-
-const mockNavigate = jest.fn();
-jest.mock('@react-navigation/native', () => {
-  const actual = jest.requireActual('@react-navigation/native');
-  return {
-    ...actual,
-    useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn(), setOptions: jest.fn(), addListener: jest.fn(() => jest.fn()) }),
-    useRoute: () => ({ params: {} }),
-    useIsFocused: () => true,
-    useFocusEffect: jest.fn((cb) => cb()),
-  };
-});
-
-// Network boundary — no recommended HF models, so the ONLY recommended card is the
-// curated LiteRT parent (Android). Keeps the list to the entry under test.
-jest.mock('../../../src/services/huggingface', () => ({
-  huggingFaceService: {
-    searchModels: jest.fn(() => Promise.resolve([])),
-    getModelFiles: jest.fn(() => Promise.resolve([])),
-    getModelDetails: jest.fn(() => Promise.resolve(null)),
-    downloadModel: jest.fn(),
-    downloadModelWithProgress: jest.fn(),
-    formatModelSize: jest.fn(() => '3.4 GB'),
-    formatFileSize: jest.fn((b: number) => `${(b / (1024 ** 3)).toFixed(1)} GB`),
-  },
-}));
-
-// Native download boundary — never runs native code. We assert on the RENDERED sheet,
-// not on this seam, so it is a dumb stub.
-jest.mock('../../../src/services/backgroundDownloadService', () => ({
-  backgroundDownloadService: {
-    queryDownload: jest.fn(() => Promise.resolve(null)),
-    cancelDownload: jest.fn(() => Promise.resolve()),
-    startDownload: jest.fn(() => Promise.resolve(1)),
-    isAvailable: jest.fn(() => Promise.resolve(true)),
-    startProgressPolling: jest.fn(),
-  },
-}));
-
-jest.mock('../../../src/services/modelManager', () => ({
-  modelManager: {
-    cancelDownload: jest.fn(),
-    deleteModel: jest.fn(),
-    deleteImageModel: jest.fn(),
-    getDownloadedModels: jest.fn(() => Promise.resolve([])),
-    getDownloadedImageModels: jest.fn(() => Promise.resolve([])),
-    addDownloadedImageModel: jest.fn(),
-    downloadModelWithMmProj: jest.fn(() => Promise.resolve()),
-    downloadModel: jest.fn(() => Promise.resolve()),
-    downloadCuratedLiteRT: jest.fn(() => Promise.resolve()),
-    importLocalModel: jest.fn(),
-    getActiveBackgroundDownloads: jest.fn(() => Promise.resolve([])),
-    watchDownload: jest.fn(),
-  },
-}));
-
-jest.mock('../../../src/services/huggingFaceModelBrowser', () => ({
-  fetchAvailableModels: jest.fn(() => Promise.resolve([])),
-  getVariantLabel: jest.fn(() => 'Standard'),
-  guessStyle: jest.fn(() => 'creative'),
-  getRecommendedSDImageModels: jest.fn(() => []),
-}));
-
-jest.mock('../../../src/services/coreMLModelBrowser', () => ({
-  fetchAvailableCoreMLModels: jest.fn(() => Promise.resolve([])),
-}));
-
-// RAM sensor boundary — the SINGLE knob for the device under test. ramGB reaches
-// TextModelsTab through hardwareService.getTotalMemoryGB(); the rest of hardware is
-// a faithful passthrough of the real formatting used by the recommendation banner.
-const mockGetTotalMemoryGB = jest.fn(() => 12);
-jest.mock('../../../src/services/hardware', () => ({
-  hardwareService: {
-    getDeviceInfo: jest.fn(() => Promise.resolve({
-      totalMemory: 12 * 1024 * 1024 * 1024, usedMemory: 4 * 1024 * 1024 * 1024,
-      availableMemory: 8 * 1024 * 1024 * 1024, deviceModel: 'Test', systemName: 'Android',
-      systemVersion: '13', isEmulator: false,
-    })),
-    formatBytes: jest.fn((b: number) => `${(b / (1024 ** 3)).toFixed(1)} GB`),
-    getTotalMemoryGB: () => mockGetTotalMemoryGB(),
-    getModelRecommendation: jest.fn(() => ({ recommendedQuantization: 'Q4_K_M', recommendedModels: [], warning: undefined })),
-    getImageModelRecommendation: jest.fn(() => Promise.resolve({ recommendedBackend: 'mnn', maxModelSizeMB: 2048, canRunSD: true, canRunQNN: false })),
-  },
-}));
+jest.unmock('@react-navigation/native');
 
 jest.mock('react-native-safe-area-context', () => {
   const React2 = require('react');
@@ -146,64 +55,61 @@ jest.mock('@react-native-documents/picker', () => ({
 
 (globalThis as any).requestAnimationFrame = (cb: () => void) => setTimeout(cb, 0);
 
-// Import AFTER mocks. REAL screen + REAL ModelCard + REAL CustomAlert (our own code — never mocked).
-import { ModelsScreen } from '../../../src/screens/ModelsScreen';
-
 const WARNING_MESSAGE = /may exceed your device's memory/;
 
-const openLiteRTDetail = async (utils: ReturnType<typeof render>) => {
-  const { getByText, getByTestId } = utils;
-  // The curated LiteRT parent recommended card.
-  await waitFor(() => expect(getByText('Gemma 4 LiteRT')).toBeTruthy());
-  await act(async () => { fireEvent.press(getByText('Gemma 4 LiteRT')); });
-  await waitFor(() => expect(getByTestId('model-detail-screen')).toBeTruthy());
-};
+/**
+ * An Android phone with `totalGB` of RAM (the curated LiteRT parent only appears in the recommended
+ * list on Android), Hugging Face recommending nothing, and the Models screen open.
+ */
+async function openModelsOn(totalGB: number) {
+  const boundary = installNativeBoundary({
+    download: true, fs: true, ram: { platform: 'android', totalBytes: totalGB * GB, availBytes: (totalGB / 2) * GB },
+  });
+  serveHfModelApi({ repos: {} });
+  const React = require('react');
+  const rtl = requireRTL();
+  await require('../../../src/services/hardware').hardwareService.refreshMemoryInfo();
+  const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
+  const utils = rtl.render(withNavigator(React.createElement(ModelsScreen)));
 
-const renderScreen = () => render(
-  <NavigationContainer>
-    <ModelsScreen />
-  </NavigationContainer>,
-);
+  // The curated LiteRT parent recommended card → its detail view.
+  await rtl.waitFor(() => expect(utils.getByText('Gemma 4 LiteRT')).toBeTruthy());
+  await rtl.act(async () => { rtl.fireEvent.press(utils.getByText('Gemma 4 LiteRT')); });
+  await rtl.waitFor(() => expect(utils.getByTestId('model-detail-screen')).toBeTruthy());
+  return { rtl, utils, boundary };
+}
 
 describe('curated LiteRT E4B download — device-aware memory warning (rendered)', () => {
-  beforeEach(() => {
-    resetStores();
-    jest.clearAllMocks();
-    mockGetTotalMemoryGB.mockReturnValue(12);
-  });
-
   it('HIGH-RAM device (12GB): tapping Download on E4B shows NO warning sheet — it just proceeds', async () => {
-    mockGetTotalMemoryGB.mockReturnValue(12); // E4B 3.4GB < 12 * 0.70 = 8.4GB → compatible
-
-    const utils = renderScreen();
-    await openLiteRTDetail(utils);
+    // E4B 3.4GB < 12 * 0.70 = 8.4GB → compatible
+    const { rtl, utils, boundary } = await openModelsOn(12);
     const { getByText, queryByText, getByTestId } = utils;
 
     // The E4B file card renders (it fits) and its Download control is present.
-    await waitFor(() => expect(getByText('Gemma 4 E4B')).toBeTruthy());
+    await rtl.waitFor(() => expect(getByText('Gemma 4 E4B')).toBeTruthy());
     // Precondition: the warning is NOT already on screen before we tap.
     expect(queryByText(WARNING_MESSAGE)).toBeNull();
 
     // The E4B card is second (E2B sorts first, small-first). Its download control:
-    await act(async () => { fireEvent.press(getByTestId('file-card-1-download')); });
+    await rtl.act(async () => { rtl.fireEvent.press(getByTestId('file-card-1-download')); });
 
     // Terminal artifact: no warning sheet appeared — the capable device downloads directly.
-    await waitFor(() => expect(queryByText(WARNING_MESSAGE)).toBeNull());
+    await rtl.waitFor(() => expect(queryByText(WARNING_MESSAGE)).toBeNull());
     // And Cancel / Download anyway (the warning's buttons) are absent.
     expect(queryByText('Download anyway')).toBeNull();
+    // The download reached the phone's downloader.
+    await rtl.waitFor(() => expect(boundary.download!.active().length).toBeGreaterThan(0));
   });
 
   it('LOW-RAM device (4GB): the over-budget E4B is not offered — no warning fires because the device-aware gate refuses it upstream (see GAP below)', async () => {
-    mockGetTotalMemoryGB.mockReturnValue(4); // E4B 3.4GB > 4 * 0.50 = 2.0GB → exceeds budget
-
-    const utils = renderScreen();
-    await openLiteRTDetail(utils);
+    // E4B 3.4GB > 4 * 0.50 = 2.0GB → exceeds budget
+    const { rtl, utils } = await openModelsOn(4);
     const { getByText, queryByText } = utils;
 
     // Device-aware outcome: at 4GB BOTH curated files (E2B 2.4GB, E4B 3.4GB) exceed the
     // budget (4 * modelBudgetFraction(4)=0.50 → 2.0GB), so the detail list's device-fit
     // filter excludes them and the screen shows the empty-state instead of a file card.
-    await waitFor(() => expect(getByText('No compatible files found for this model.')).toBeTruthy());
+    await rtl.waitFor(() => expect(getByText('No compatible files found for this model.')).toBeTruthy());
     // Therefore the E4B download card never renders on this device...
     expect(queryByText('Gemma 4 E4B')).toBeNull();
     // ...and the "may exceed your device's memory" sheet cannot appear.
