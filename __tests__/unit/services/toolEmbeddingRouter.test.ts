@@ -69,6 +69,11 @@ describe('toolEmbeddingRouter (F6 — persistent embedding cache)', () => {
     await storage().clear();
   });
 
+  // The router saves its cache 1 s after its last change. A case ends while that save is still pending,
+  // and it would land in the next case's storage (a stale vector the next relaunch must re-embed). Let
+  // each case's own save finish inside the case.
+  afterEach(() => new Promise(resolve => setTimeout(resolve, 1_100)));
+
   it('on a cold cache embeds the question once and each tool once, and keeps the tools the question is about', async () => {
     const { device, router } = launch();
 
