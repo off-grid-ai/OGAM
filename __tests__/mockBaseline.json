@@ -26,7 +26,6 @@
   "__tests__/integration/generation/toolLoopEngineOwnerRouting.test.ts": 2,
   "__tests__/integration/generation/unifiedModelSelection.test.ts": 4,
   "__tests__/integration/generation/voiceNoteTranscriptOnly.test.ts": 3,
-  "__tests__/integration/image/stopDuringPromptEnhancement.rendered.test.tsx": 1,
   "__tests__/integration/licensing/keygenAutomaticReplacement.test.ts": 1,
   "__tests__/integration/memory/sharedResidencyPolicy.rendered.happy.test.tsx": 1,
   "__tests__/integration/models/chatHomeSelectorParity.test.ts": 4,
