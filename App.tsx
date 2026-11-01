@@ -13,6 +13,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { NavigationContainer } from '@react-navigation/native';
 import { openPendingImprove, startScribeEntry } from './src/services/scribeEntry';
 import { AppNavigator } from './src/navigation';
+import { getRegisteredScreens } from './src/navigation/screenRegistry';
 import {
   appNavigationRef,
   useProExpiryRedirect,
@@ -155,7 +156,13 @@ function App() {
   const applyPendingProRedirect = useProExpiryRedirect();
   // "Improve" from another app's selection menu or Share sheet.
   useEffect(
-    () => startScribeEntry(appNavigationRef as unknown as Parameters<typeof startScribeEntry>[0]),
+    () =>
+      startScribeEntry({
+        isReady: () => appNavigationRef.isReady(),
+        navigate: (name, params) =>
+          (appNavigationRef.navigate as unknown as (route: string, args?: object) => void)(name, params),
+        hasRoute: name => getRegisteredScreens().some(screen => screen.name === name),
+      }),
     [],
   );
   const [isInitializing, setIsInitializing] = useState(true);

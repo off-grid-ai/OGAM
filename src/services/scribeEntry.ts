@@ -5,7 +5,6 @@ import {
   NativeModules,
   Platform,
 } from 'react-native';
-import { getRegisteredScreens } from '../navigation/screenRegistry';
 import logger from '../utils/logger';
 
 /**
@@ -25,10 +24,12 @@ interface ScribeEntryNative {
   finish(id: string, text: string | null): Promise<boolean>;
 }
 
-/** The app's navigator, handed in by App so this service never imports the navigation tree. */
+/** The app's navigator, handed in by App so this service never imports the navigation layer. */
 export interface ImproveNavigator {
   isReady(): boolean;
   navigate(name: string, params?: object): void;
+  /** Whether a screen is registered: Improve is Pro, so without Pro it is not. */
+  hasRoute(name: string): boolean;
 }
 
 const native: ScribeEntryNative | undefined = NativeModules.ScribeEntryModule;
@@ -44,7 +45,7 @@ export async function openPendingImprove(): Promise<void> {
   // A request still open on screen is answered with nothing, so its caller is never left waiting.
   if (current) await finishImprove(null);
   const navigate = navigator.navigate.bind(navigator);
-  if (!getRegisteredScreens().some(s => s.name === 'ScribeImprove')) {
+  if (!navigator.hasRoute('ScribeImprove')) {
     await native.finish(request.id, null);
     navigate('ProDetail');
     return;
