@@ -184,6 +184,24 @@ describe('image models', () => {
     expect(d.useAppStore.getState().activeImageModelId).toBe('img-2');
   });
 
+  it('keeps the first image model and does not load the second when the native unload fails', async () => {
+    d = await launchGeneration({ load: false });
+    addImageModel('img-1');
+    addImageModel('img-2');
+    await d.activeModelService.loadImageModel('img-1');
+    // The native module says the first model is still in use and was not released.
+    native().unloadModel.mockResolvedValueOnce(false);
+
+    await expect(d.activeModelService.loadImageModel('img-2')).rejects.toThrow(/could not be unloaded/);
+
+    expect(native().loadModel).toHaveBeenCalledTimes(1);
+    expect(d.activeModelService.getLoadedModelIds().imageModelId).toBe('img-1');
+    expect(d.useAppStore.getState().activeImageModelId).toBe('img-1');
+    // A retry once the model is free switches as usual.
+    await d.activeModelService.loadImageModel('img-2');
+    expect(d.activeModelService.getLoadedModelIds().imageModelId).toBe('img-2');
+  });
+
   it('reloads the same image model when the thread count changed', async () => {
     d = await launchGeneration({ load: false });
     addImageModel('img-1');
