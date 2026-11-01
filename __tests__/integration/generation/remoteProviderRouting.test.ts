@@ -2,98 +2,21 @@
  * Generation Service Provider Routing Integration Tests
  *
  * Tests for routing between local and remote providers in the generation service.
+ *
+ * The real provider registry, local provider, OpenAI-compatible provider, llmService and remote server
+ * store run here. Nothing of ours is mocked; the one test that needs a running model loads it on the
+ * llama.rn fake (generationDevice).
  */
 
 import { providerRegistry, localProvider } from '../../../src/services/providers';
 import { useRemoteServerStore } from '../../../src/stores';
 import { OpenAICompatibleProvider } from '../../../src/services/providers/openAICompatibleProvider';
-
-// Mock stores
-jest.mock('../../../src/stores', () => ({
-  useAppStore: {
-    getState: jest.fn(() => ({
-      settings: {
-        systemPrompt: 'You are helpful.',
-        temperature: 0.7,
-        maxTokens: 1024,
-        topP: 0.9,
-      },
-      downloadedModels: [],
-      activeModelId: null,
-    })),
-  },
-  useChatStore: {
-    getState: jest.fn(() => ({
-      startStreaming: jest.fn(),
-      appendToStreamingMessage: jest.fn(),
-      appendToStreamingReasoningContent: jest.fn(),
-      finalizeStreamingMessage: jest.fn(),
-      clearStreamingMessage: jest.fn(),
-      setStreamingMessage: jest.fn(),
-      setIsThinking: jest.fn(),
-      addMessage: jest.fn(),
-    })),
-  },
-  useRemoteServerStore: {
-    getState: jest.fn(() => ({
-      activeServerId: null,
-      servers: [],
-      setActiveServerId: jest.fn(),
-      getActiveServer: jest.fn(),
-    })),
-  },
-}));
-
-// Mock llmService
-jest.mock('../../../src/services/llm', () => ({
-  llmService: {
-    isModelLoaded: jest.fn(() => true),
-    isCurrentlyGenerating: jest.fn(() => false),
-    supportsVision: jest.fn(() => false),
-    supportsToolCalling: jest.fn(() => true),
-    supportsThinking: jest.fn(() => false),
-    getGpuInfo: jest.fn(() => ({ gpu: false, gpuBackend: 'CPU', gpuLayers: 0 })),
-    getPerformanceStats: jest.fn(() => ({
-      lastTokensPerSecond: 10,
-      lastDecodeTokensPerSecond: 8,
-      lastTimeToFirstToken: 0.5,
-      lastGenerationTime: 1000,
-      lastTokenCount: 10,
-    })),
-    generateResponse: jest.fn(),
-    generateResponseWithTools: jest.fn(),
-    stopGeneration: jest.fn(),
-    loadModel: jest.fn(),
-  },
-}));
-
-// Mock llmToolGeneration
-jest.mock('../../../src/services/llmToolGeneration', () => ({
-  generateWithToolsImpl: jest.fn(),
-}));
-
-// Mock tools
-jest.mock('../../../src/services/tools', () => ({
-  getToolsAsOpenAISchema: jest.fn(() => []),
-  executeToolCall: jest.fn(),
-}));
-
-// Mock sharePrompt
-jest.mock('../../../src/utils/sharePrompt', () => ({
-  shouldShowSharePrompt: jest.fn(() => false),
-  emitSharePrompt: jest.fn(),
-}));
+import { launchGeneration } from '../../harness/generationDevice';
 
 describe('Generation Service Provider Routing', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    // Reset active server
-    (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
-      activeServerId: null,
-      servers: [],
-      setActiveServerId: jest.fn(),
-      getActiveServer: jest.fn(),
-    });
+    // No remote server active (the store's own action).
+    useRemoteServerStore.getState().setActiveServerId(null);
   });
 
   describe('Local Provider (Default)', () => {
@@ -230,9 +153,7 @@ describe('Generation Service Provider Routing', () => {
 
   describe('Generation Service isUsingRemoteProvider', () => {
     it('should return false when no remote server is active', () => {
-      (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
-        activeServerId: null,
-      });
+      useRemoteServerStore.getState().setActiveServerId(null);
 
       // generationService.isUsingRemoteProvider() should return false
       // This is tested indirectly through the local generation path
@@ -240,9 +161,7 @@ describe('Generation Service Provider Routing', () => {
     });
 
     it('should return true when remote server is active', () => {
-      (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
-        activeServerId: 'remote-server',
-      });
+      useRemoteServerStore.getState().setActiveServerId('remote-server');
 
       // Create and register remote provider
       const remoteProvider = new OpenAICompatibleProvider('remote-server', {
@@ -272,9 +191,6 @@ describe('Generation Service Provider Routing', () => {
     });
 
     it('should delegate to llmService for model loading', async () => {
-      const { llmService } = require('../../../src/services/llm');
-      (llmService.loadModel as jest.Mock).mockResolvedValue(undefined);
-
       await localProvider.loadModel('/path/to/model.gguf');
 
       // loadModel on localProvider just tracks the ID
@@ -282,13 +198,20 @@ describe('Generation Service Provider Routing', () => {
       expect(localProvider.getLoadedModelId()).toBe('/path/to/model.gguf');
     });
 
-    it('should delegate stopGeneration to llmService', async () => {
-      const { llmService } = require('../../../src/services/llm');
-      (llmService.stopGeneration as jest.Mock).mockResolvedValue(undefined);
+    it('should delegate stopGeneration to llmService (the running native completion stops)', async () => {
+      // A model is loaded and answering: its native completion is still streaming.
+      const device = await launchGeneration({ engine: 'llama' });
+      const { localProvider: provider } = require('../../../src/services/providers');
+      device.boundary.llama!.scriptCompletion({ text: 'Half of an answer and more', pauseAfter: 'Half of' });
+      const reply = device.generationService.generateResponse(device.conversationId, device.ask('Hi')).catch(() => {});
+      while (!device.llmService.isCurrentlyGenerating()) await new Promise(resolve => setTimeout(resolve, 5));
 
-      await localProvider.stopGeneration();
+      await provider.stopGeneration();
 
-      expect(llmService.stopGeneration).toHaveBeenCalled();
+      expect(device.nativeContext()!.stopCompletion).toHaveBeenCalled();
+      device.boundary.llama!.releaseStream();
+      await reply;
+      expect(device.llmService.isCurrentlyGenerating()).toBe(false);
     });
   });
 
