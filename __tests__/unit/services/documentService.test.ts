@@ -3,30 +3,27 @@
  *
  * Tests for which documents can be attached.
  * Priority: P1 - Document attachment support.
+ *
+ * documentService and pdfExtractor run for real. The only device piece is the native PDF reader
+ * (NativeModules.PDFExtractorModule): absent by default, present where a test says so.
  */
 
 
-// Mock pdfExtractor - must be defined inline due to Jest hoisting
-jest.mock('../../../src/services/pdfExtractor', () => ({
-  pdfExtractor: {
-    isAvailable: jest.fn(() => false),
-    extractText: jest.fn(),
-  },
-}));
-
+import { NativeModules } from 'react-native';
 import { documentService } from '../../../src/services/documentService';
-import { pdfExtractor } from '../../../src/services/pdfExtractor';
 
-const mockedPdfExtractor = pdfExtractor as jest.Mocked<typeof pdfExtractor>;
+/** documentService as loaded on a phone whose native PDF reader is present. */
+function documentServiceWithPdfReader(): typeof documentService {
+  let service!: typeof documentService;
+  jest.isolateModules(() => {
+    NativeModules.PDFExtractorModule = { extractText: async () => '', extractPages: async () => ({ pageCount: 0, pages: [] }) };
+    service = require('../../../src/services/documentService').documentService;
+  });
+  delete NativeModules.PDFExtractorModule;
+  return service;
+}
 
 describe('DocumentService', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    // Reset pdfExtractor mock to default (unavailable)
-    mockedPdfExtractor.isAvailable.mockReturnValue(false);
-    mockedPdfExtractor.extractText.mockReset();
-  });
-
   // ========================================================================
   // isSupported
   // ========================================================================
@@ -52,8 +49,11 @@ describe('DocumentService', () => {
     });
 
     it('returns false for .pdf files when native module unavailable', () => {
-      // PDFExtractorModule is not mocked, so isAvailable() returns false
       expect(documentService.isSupported('document.pdf')).toBe(false);
+    });
+
+    it('returns true for .pdf files on a phone with the native PDF reader', () => {
+      expect(documentServiceWithPdfReader().isSupported('document.pdf')).toBe(true);
     });
 
     it('returns false for .docx files', () => {
@@ -92,6 +92,10 @@ describe('DocumentService', () => {
     it('does not include .pdf when native module is unavailable', () => {
       const extensions = documentService.getSupportedExtensions();
       expect(extensions).not.toContain('.pdf');
+    });
+
+    it('includes .pdf when the native PDF reader is present', () => {
+      expect(documentServiceWithPdfReader().getSupportedExtensions()).toContain('.pdf');
     });
   });
 
