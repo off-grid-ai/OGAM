@@ -346,8 +346,8 @@ jobs:
           path: ~/Library/Developer/Xcode/DerivedData/ModuleCache.noindex
           key: xcode-modules-release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ios/Podfile.lock') }}
           restore-keys: xcode-modules-release-${{ runner.os }}-${{ runner.arch }}-
-      # ccache's default macOS directory: React Native's clang wrapper points ccache at its own
-      # config file, so the cache must be where ccache looks by default.
+      # Outside the checkout: uat.sh refuses a dirty tree. scripts/xcode-ccache.sh writes this
+      # directory into its wrappers.
       - name: Locate the ccache directory
         run: echo "CCACHE_DIR=$HOME/Library/Caches/ccache" >> "$GITHUB_ENV"
       - name: Setup ccache
@@ -358,20 +358,14 @@ jobs:
           max-size: 2G
           # Keep only what this build used, so the saved cache does not grow run after run.
           evict-old-files: job
-      # Route every C/C++/Objective-C compile through ccache with React Native's own wrapper.
-      # XCODE_XCCONFIG_FILE overrides the build settings of every target from the environment, so
-      # the tracked Xcode project stays as committed (uat.sh refuses a dirty tree).
+      # Route every C/C++/Objective-C compile through ccache. XCODE_XCCONFIG_FILE overrides the
+      # build settings of every target from the environment, so the tracked Xcode project stays as
+      # committed (uat.sh refuses a dirty tree).
       - name: Route clang through ccache
-        run: |
-          {
-            echo "CC = $GITHUB_WORKSPACE/node_modules/react-native/scripts/xcode/ccache-clang.sh"
-            echo "CXX = $GITHUB_WORKSPACE/node_modules/react-native/scripts/xcode/ccache-clang++.sh"
-            echo "CCACHE_BINARY = $(command -v ccache)"
-          } > "$RUNNER_TEMP/ccache.xcconfig"
-          cat "$RUNNER_TEMP/ccache.xcconfig"
+        run: bash scripts/xcode-ccache.sh "$RUNNER_TEMP/xcode-ccache"
       - name: Build iOS (scripts/uat.sh --build-only --ios)
         env:
-          XCODE_XCCONFIG_FILE: ${{ runner.temp }}/ccache.xcconfig
+          XCODE_XCCONFIG_FILE: ${{ runner.temp }}/xcode-ccache/ccache.xcconfig
           # iOS signing (imported into a temp keychain by the Fastfile's setup_signing)
           ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
