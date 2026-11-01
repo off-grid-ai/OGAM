@@ -162,4 +162,26 @@ describe('Stop mid-generation keeps the shown partial (never discards output) â€
     h.rtl.fireEvent.press(h.view!.getByTestId('assistant-work-toggle'));
     expect(h.view!.queryByTestId('tool-result-label-calculator')).not.toBeNull();
   });
+
+  // Nord, 2026-11-02 (LFM3-VL): a token already queued to JS arrived after Stop. The app sends Stop
+  // again from that token, and chained .catch on stopCompletion(), which llama.rn's JSI returns as
+  // undefined: "Cannot read property 'catch' of undefined" ended the turn in a red error.
+  it('a token that arrives after Stop ends the turn as stopped, keeping what was shown', async () => {
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
+    h.render();
+    const view = h.view!;
+    await h.send('what is the capital of France?', {
+      text: `${PARTIAL} sits on the Seine.`,
+      pauseAfter: PARTIAL,
+      tokensAfterStop: 1,
+    } as never);
+    await h.rtl.waitFor(() => { expect(view.queryByTestId('stop-button')).not.toBeNull(); }, { timeout: 4000 });
+
+    await h.rtl.act(async () => { h.rtl.fireEvent.press(view.getByTestId('stop-button')); });
+
+    await h.rtl.waitFor(() => { expect(view.queryByTestId('stop-button')).toBeNull(); }, { timeout: 4000 });
+    await h.settle(50);
+    expect(view.queryByText(new RegExp(PARTIAL))).not.toBeNull();
+    expect(h.boundary.llama!.tokenCallbackErrors).toEqual([]);
+  });
 });

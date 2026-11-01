@@ -339,6 +339,8 @@ export interface LlamaCompletionScript {
   throwMessage?: string;
   throwAfter?: string;
   pauseAfter?: string;
+  /** Tokens llama.cpp already decoded and queued to JS when Stop landed: they still arrive after it. */
+  tokensAfterStop?: number;
   holdBeforeStream?: boolean;
   thinkingText?: string;
   reasoning?: string;
@@ -356,6 +358,8 @@ export type LlamaBenchBackend = 'cpu' | 'htp' | 'opencl' | 'metal';
 export type LlamaBenchOutcome = number | 'fail' | 'hang' | { cpuFallback: number };
 
 export interface LlamaFake {
+  /** Errors the app's token callback threw: uncaught on a phone, never a rejected completion. */
+  tokenCallbackErrors: unknown[];
   /** Set the result the NEXT context.completion() resolves with (text drives the text tool-call parser).
    *  Pass { throwMessage } to make completion REJECT (e.g. a native context-overflow error).
    *  Pass { thinkingText } to model a reasoning-capable model: when the request carries
@@ -459,6 +463,7 @@ function makeLlamaFake(
   // `interrupted: true` (the exact device wire shape: predicted stops, stopped_eos=false). The flag
   // is per-completion (a fresh completion starts un-stopped), matching the native abort behavior.
   let stopRequested = false;
+  const tokenCallbackErrors: unknown[] = [];
   let htpUnavailable = false; // when true, the registry has no HTP device (session probe failed)
   let gpuInitFails = false; // when true, initLlama with n_gpu_layers>0 rejects (GPU/HTP init timeout → CPU fallback)
   let initFails = false; // when true, EVERY initLlama attempt rejects (a model that fails to load on any backend)
@@ -574,8 +579,10 @@ function makeLlamaFake(
           const chars = [...outText];
           let acc = '';
           let paused = false;
+          let lateTokens = scripted.tokensAfterStop ?? 0;
           for (const c of chars) {
-            if (stopRequested) break; // native abort: no further tokens after stopCompletion()
+            // Native abort: no further decode after stopCompletion(), only tokens already queued to JS.
+            if (stopRequested && lateTokens-- <= 0) break;
             if (backendFault) break; // the GPU refused the next decode (app went to background)
             acc += c;
             streamed = acc;
@@ -647,14 +654,25 @@ function makeLlamaFake(
         onToken?: (data: { token: string; content?: string; reasoning_content?: string }) => void,
       ) => {
         completionInFlight = true;
+        // llama.rn's JSI calls the token callback from native: a throw there never rejects the
+        // completion, it is an uncaught error on the JS thread (a red screen in a dev build).
+        const fromNative = onToken && ((data: { token: string; content?: string; reasoning_content?: string }) => {
+          try {
+            onToken(data);
+          } catch (error) {
+            tokenCallbackErrors.push(error);
+          }
+        });
         try {
-          return await runCompletion(params, onToken);
+          return await runCompletion(params, fromNative);
         } finally {
           completionInFlight = false;
         }
       },
     ),
-    stopCompletion: jest.fn(async () => {
+    // llama.rn types stopCompletion() as a Promise, but its JSI (llamaStopCompletion) sets the
+    // interrupt flag and returns undefined, synchronously. The fake does the same.
+    stopCompletion: jest.fn(() => {
       stopRequested = true;
       const f = releaseFn;
       releaseFn = null;
@@ -813,7 +831,7 @@ function makeLlamaFake(
     }),
     releaseContext: jest.fn().mockResolvedValue(undefined),
     completion: jest.fn().mockResolvedValue({ text: '' }),
-    stopCompletion: jest.fn().mockResolvedValue(undefined),
+    stopCompletion: jest.fn(() => undefined),
     tokenize: jest.fn().mockResolvedValue({ tokens: [1, 2, 3] }),
     detokenize: jest.fn().mockResolvedValue({ text: '' }),
   };
@@ -821,6 +839,7 @@ function makeLlamaFake(
   return {
     module,
     calls,
+    tokenCallbackErrors,
     osAppStateChanged: state => {
       // iOS refuses Metal command buffers once the app is in background; 'inactive' keeps the GPU.
       if (state !== 'background' || !completionInFlight || initBackend !== 'metal') return;
