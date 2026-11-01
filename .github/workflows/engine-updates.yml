@@ -5,19 +5,32 @@ name: Engine updates
 # PR for CI to test. iOS cannot load downloaded native code (App Store 2.5.2), so there a new engine
 # reaches people in the next nightly + TestFlight; Android also takes signed llama.cpp engine packs
 # over the air, with the bundled engine as the fallback.
-# A release that needs peer dependencies the app does not meet is held and listed in the PR.
+# A release that needs peer dependencies the app does not meet, or would drop a local patch, is
+# held: the PR body names it, its blocker and its next step, and a hold older than 3 days gets one
+# issue per engine (scripts/engine-held-issues.js). Any failed step fails the run; the report is
+# written only when every step succeeded.
 #
 # The PR is pushed with PRO_SUBMODULE_PAT, not GITHUB_TOKEN: a push made with GITHUB_TOKEN does
 # not start other workflows, so CI would never test the update.
 
 on:
   schedule:
-    - cron: '0 6 * * *'
+    # 21:23 UTC (02:53 IST), so the PR's CI is done before the mobile nightly. That nightly
+    # (uat-dev.yml) has no cron: it is dispatched by hand, never before ~11:00 UTC so far. GitHub
+    # starts round-hour crons late (the 06:00 run began at 12:54), hence an off-hour minute; the
+    # job (~35 min) plus CI (~2 h) still ends before 11:00 UTC with a 7 h delay.
+    - cron: '23 21 * * *'
   workflow_dispatch:
 
 permissions:
   contents: write
   pull-requests: write
+  issues: write
+
+defaults:
+  run:
+    # -eo pipefail: any failed command, in a pipe or not, fails its step.
+    shell: bash
 
 concurrency:
   group: engine-updates
@@ -80,11 +93,15 @@ jobs:
           # stable-diffusion.cpp is read from GitHub's API; the token lifts the anonymous rate limit.
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          # No pipe: a failed npm or pod install fails this step, before any PR is opened.
-          node scripts/update-engines.js --pods --summary "$RUNNER_TEMP/engines.md" > "$RUNNER_TEMP/engines.json"
-          cat "$RUNNER_TEMP/engines.json"
+          # engines.json is written only when every engine was checked and every install succeeded.
+          node scripts/update-engines.js --pods --summary "$RUNNER_TEMP/engines.md" --json "$RUNNER_TEMP/engines.json"
           git status --porcelain -- package.json package-lock.json ios/Podfile.lock android/app/build.gradle scripts/video/revision > "$RUNNER_TEMP/changed.txt"
           if [ -s "$RUNNER_TEMP/changed.txt" ]; then echo "changed=true" >> "$GITHUB_OUTPUT"; else echo "changed=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Keep held-engine issues current
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/engine-held-issues.js "$RUNNER_TEMP/engines.json"
 
       - name: Open or update the engine PR
         if: ${{ steps.engines.outputs.changed == 'true' }}
