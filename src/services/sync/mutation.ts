@@ -7,10 +7,16 @@ import {
   TASK_LAUNCH_ENTITY,
   TASK_CONTROL_ENTITY,
   TASK_RUN_ENTITY,
+  WRITING_LEARNED_ENTITY,
+  WRITING_PREFERENCE_ENTITY,
+  WRITING_STYLE_GUIDE_ENTITY,
   createKnowledgeDocumentStateFields,
+  createWritingLearnedFields,
+  writingLearnedEntityId,
   createSharedFileStateFields,
   isRuntimeOnlyMessage,
   type SharedFileDescriptor,
+  type WritingLearned,
 } from '@offgrid/sync';
 import type { Conversation, Message, Project } from '../../types';
 import type { KnowledgeDocumentSnapshot } from './knowledgeDocument';
@@ -30,6 +36,10 @@ export const CORE_SYNC_ENTITIES = {
   taskLaunch: TASK_LAUNCH_ENTITY,
   taskRun: TASK_RUN_ENTITY,
   taskControl: TASK_CONTROL_ENTITY,
+  // Scribe (Pro): learned words and muted rules, Scribe-wide preferences, style guides.
+  writingLearned: WRITING_LEARNED_ENTITY,
+  writingPreference: WRITING_PREFERENCE_ENTITY,
+  writingStyleGuide: WRITING_STYLE_GUIDE_ENTITY,
 } as const;
 
 export type CoreSyncEntity =
@@ -282,6 +292,18 @@ export function deleteSyncMutation(
 }
 
 /** Core commits first; Pro optionally records the resulting canonical mutation. */
+/** A learned word or muted rule as a sync record: a put learns it, a delete forgets it. */
+export function writingLearnedMutation(
+  item: WritingLearned,
+  kind: 'put' | 'delete',
+  learnedAt = Date.now(),
+): SyncMutation {
+  const entityId = writingLearnedEntityId(item);
+  return kind === 'put'
+    ? { entity: CORE_SYNC_ENTITIES.writingLearned, entityId, kind, fields: createWritingLearnedFields(item, learnedAt) }
+    : { entity: CORE_SYNC_ENTITIES.writingLearned, entityId, kind };
+}
+
 export function emitSyncMutation(mutation: SyncMutation | null): void {
   if (!mutation) return;
   try {
