@@ -348,7 +348,7 @@ describe('modelManager registry', () => {
   });
 
   describe('path helpers', () => {
-    const { resolveStoredPath } = require('../../../../src/services/modelManager/storage') as typeof import('../../../../src/services/modelManager/storage');
+    const { resolveStoredPath } = require('../../../../src/services/modelManager/reconcileStoredPaths') as typeof import('../../../../src/services/modelManager/reconcileStoredPaths');
     const { isMMProjFile } = require('../../../../src/services/modelManager/scan') as typeof import('../../../../src/services/modelManager/scan');
 
     it('rebases a stored path onto the current container, or answers null', () => {

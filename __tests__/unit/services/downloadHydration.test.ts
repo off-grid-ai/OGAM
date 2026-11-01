@@ -6,11 +6,9 @@
 import { installNativeBoundary, type DownloadRow } from '../../harness/nativeBoundary';
 
 type Hydration = typeof import('../../../src/services/downloadHydration');
-type Persistence = typeof import('../../../src/services/activeDownloadPersistence');
 type Stores = typeof import('../../../src/stores/downloadStore');
 
 let hydrateDownloadStore: Hydration['hydrateDownloadStore'];
-let saveActiveDownloads: Persistence['saveActiveDownloads'];
 let useDownloadStore: Stores['useDownloadStore'];
 
 /** A relaunch: the native downloader holds `rows` (or the platform has none), the app starts. */
@@ -18,9 +16,16 @@ async function relaunch(rows: DownloadRow[] | 'no downloader' = []) {
   const boundary = installNativeBoundary({ fs: true, download: rows !== 'no downloader' });
   if (rows !== 'no downloader') rows.forEach(row => boundary.download!.seedActive(row));
   ({ hydrateDownloadStore } = require('../../../src/services/downloadHydration'));
-  ({ saveActiveDownloads } = require('../../../src/services/activeDownloadPersistence'));
   ({ useDownloadStore } = require('../../../src/stores/downloadStore'));
   return boundary;
+}
+
+/** The previous run: launch persistence, as the app does, and the download it had in flight. */
+async function lastRunHad(entry: Record<string, unknown>) {
+  await relaunch([entry as unknown as DownloadRow]);
+  require('../../../src/services/activeDownloadPersistence').initActiveDownloadPersistence();
+  require('../../../src/stores/downloadStore').useDownloadStore.getState().add(entry);
+  await new Promise(resolve => setImmediate(resolve));
 }
 
 // The phone's storage outlives a relaunch; each test starts from an empty phone.
@@ -184,8 +189,7 @@ describe('hydrateDownloadStore', () => {
     // Cold kill: in-memory store empty (beforeEach), native snapshot empty (task dropped), but the
     // in-flight download survives in the durable snapshot loadActiveDownloads() reads.
     // The last run saved its in-flight download; the kill dropped the native task.
-    await relaunch();
-    await saveActiveDownloads([inflight]);
+    await lastRunHad(inflight);
     await relaunch([]);
 
     await hydrateDownloadStore();
@@ -199,8 +203,7 @@ describe('hydrateDownloadStore', () => {
   it('does NOT strand when the native snapshot still reports the row (Android survives a kill)', async () => {
     // Android WorkManager survives a kill → the row reappears in the native snapshot → the persisted
     // snapshot must be ignored for that key, never flip a live download to a false "failed".
-    await relaunch();
-    await saveActiveDownloads([inflight]);
+    await lastRunHad(inflight);
     await relaunch([{ ...inflight, bytesDownloaded: 2_000_000_000 }]);
 
     await hydrateDownloadStore();

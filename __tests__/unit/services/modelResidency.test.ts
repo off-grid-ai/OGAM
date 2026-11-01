@@ -5,12 +5,15 @@
  * residency policy (@offgrid/models): models co-reside while they fit, pinned
  * models are never evicted, and lowest-priority LRU eviction frees room for an
  * incoming model. See docs/design/MODEL_ROUTING.md.
+ *
+ * The manager runs for real over the phone's memory leaf only: the RAM sensor (react-native-device-info's
+ * total, and DeviceMemoryModule's live per-process headroom) and the platform, set per test with
+ * ram(). The app's own hardwareService reads them. The `unload` callbacks registered here stand for
+ * the engine releasing a model; where a release gives memory back, the callback updates the sensor.
  */
-import { Platform } from 'react-native';
 import { planEviction, type Resident } from '@offgrid/models';
 import { computeBudgetMB } from '../../../src/services/modelResidency/budget';
-import { modelResidencyManager } from '../../../src/services/modelResidency';
-import { hardwareService } from '../../../src/services/hardware';
+import { installNativeBoundary, GB, type NativeBoundary } from '../../harness/nativeBoundary';
 
 const R = (
   key: string,
@@ -329,8 +332,26 @@ describe('planEviction', () => {
   });
 });
 
+type Manager = typeof import('../../../src/services/modelResidency').modelResidencyManager;
+type Hardware = typeof import('../../../src/services/hardware').hardwareService;
+
 describe('ModelResidencyManager', () => {
-  beforeEach(() => {
+  let boundary: NativeBoundary;
+  let modelResidencyManager: Manager;
+  let hardwareService: Hardware;
+
+  /** The phone's memory as the OS reports it now; the app re-reads it the way it does before a load. */
+  async function ram(totalGB: number, availGB: number, platform: 'ios' | 'android' = 'ios') {
+    boundary.setRam({ platform, totalBytes: totalGB * GB, availBytes: availGB * GB });
+    await hardwareService.refreshMemoryInfo();
+  }
+
+  beforeEach(async () => {
+    // An iPhone with 12 GB, 8 GB free, until a test says otherwise.
+    boundary = installNativeBoundary({ ram: { platform: 'ios', totalBytes: 12 * GB, availBytes: 8 * GB } });
+    ({ modelResidencyManager } = require('../../../src/services/modelResidency'));
+    ({ hardwareService } = require('../../../src/services/hardware'));
+    await hardwareService.getDeviceInfo();
     modelResidencyManager._reset();
     modelResidencyManager.setBudgetOverrideMB(1000);
   });
@@ -485,10 +506,9 @@ describe('ModelResidencyManager', () => {
 
   describe('reclaimSttForGeneration (memory-tight sequencing)', () => {
     beforeEach(() => modelResidencyManager._reset());
-    afterEach(() => jest.restoreAllMocks());
-
+    
     it('frees the idle Whisper model before generation on a tight (≤6GB) device', async () => {
-      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(4);
+      await ram(4, 2);
       const unload = jest.fn().mockResolvedValue(undefined);
       modelResidencyManager.register(
         { key: 'whisper', type: 'whisper', sizeMB: 466 },
@@ -501,7 +521,7 @@ describe('ModelResidencyManager', () => {
     });
 
     it('keeps Whisper warm on a roomy (>6GB) device', async () => {
-      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(8);
+      await ram(8, 4);
       const unload = jest.fn().mockResolvedValue(undefined);
       modelResidencyManager.register(
         { key: 'whisper', type: 'whisper', sizeMB: 466 },
@@ -514,14 +534,14 @@ describe('ModelResidencyManager', () => {
     });
 
     it('is a no-op when Whisper is not resident', async () => {
-      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(4);
+      await ram(4, 2);
       await expect(
         modelResidencyManager.reclaimSttForGeneration(),
       ).resolves.toBeUndefined();
     });
 
     it('honors the canEvict veto — does NOT unload Whisper while it is in use', async () => {
-      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(4);
+      await ram(4, 2);
       const unload = jest.fn().mockResolvedValue(undefined);
       // canEvict returns false → the owner vetoes (e.g. still finalizing a transcription).
       modelResidencyManager.register(
@@ -535,7 +555,7 @@ describe('ModelResidencyManager', () => {
     });
 
     it('serializes the reclaim behind an in-flight load (F3: no unload while the lock is held)', async () => {
-      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(4);
+      await ram(4, 2);
       const order: string[] = [];
       const unload = jest.fn().mockImplementation(async () => {
         order.push('reclaim:unload');
@@ -572,15 +592,10 @@ describe('ModelResidencyManager', () => {
     beforeEach(() => {
       modelResidencyManager._reset();
     });
-    afterEach(() => jest.restoreAllMocks());
-
+    
     it('budgets against PHYSICAL RAM, not os_proc dirty headroom — a big mmap GGUF loads on a high-RAM phone even when instantaneous available is low', async () => {
       modelResidencyManager.setBudgetOverrideMB(null);
-      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(12);
-      jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(2); // low DIRTY headroom (os_proc)
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
+      await ram(12, 2); // low DIRTY headroom (os_proc)
       // An 8GB GGUF fits a 12GB phone's physical cap (0.78*12 ≈ 9.6GB). Its mmap'd
       // weights are clean/file-backed, so the low instantaneous os_proc available
       // (dirty headroom) must NOT refuse it — the bug that broke E2B/E4B on a 12GB phone.
@@ -595,11 +610,7 @@ describe('ModelResidencyManager', () => {
 
     it('REGRESSION: under dirty pressure, a clean sidecar is REFUSED when live RAM is low (the jetsam fix)', async () => {
       modelResidencyManager.setBudgetOverrideMB(null);
-      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(12);
-      jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(0.3); // ~300MB free during the image compile spike
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
+      await ram(12, 0.3); // ~300MB free during the image compile spike
       // A 7GB dirty image model is resident and generating (vetoes its own eviction).
       modelResidencyManager.register(
         {
@@ -626,11 +637,7 @@ describe('ModelResidencyManager', () => {
 
     it('the same sidecar co-loads under dirty pressure when live RAM is healthy (no false refusal)', async () => {
       modelResidencyManager.setBudgetOverrideMB(null);
-      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(12);
-      jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(3); // healthy free RAM
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
+      await ram(12, 3); // healthy free RAM
       modelResidencyManager.register(
         {
           key: 'image',
@@ -652,9 +659,6 @@ describe('ModelResidencyManager', () => {
 
     it("does NOT evict (don't strand) when the model can't fit even after full eviction", async () => {
       modelResidencyManager.setBudgetOverrideMB(1000);
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
       const unloadImg = jest.fn().mockResolvedValue(undefined);
       modelResidencyManager.register(
         { key: 'image', type: 'image', sizeMB: 400 },
@@ -674,9 +678,6 @@ describe('ModelResidencyManager', () => {
 
     it('keeps both co-resident (no eviction) when the incoming fits the budget', async () => {
       modelResidencyManager.setBudgetOverrideMB(2000);
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
       const unloadImg = jest.fn().mockResolvedValue(undefined);
       modelResidencyManager.register(
         { key: 'image', type: 'image', sizeMB: 500 },
@@ -697,16 +698,10 @@ describe('ModelResidencyManager', () => {
     // background-app reclaim admitted diffusion beside text at ~1GB available and
     // Android killed the foreground app instead of freeing enough memory.
     describe('dirty model fit under live Android memory pressure', () => {
-      const originalOS = Platform.OS;
-      afterEach(() => { Platform.OS = originalOS; });
-
       it('refuses a 5.2GB dirty LiteRT model when only 4.6GB is available', async () => {
-        Platform.OS = 'android';
         modelResidencyManager._reset();
         modelResidencyManager.setBudgetOverrideMB(null);
-        jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(11297 / 1024);
-        jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(4590 / 1024); // raw snapshot reads low
-        jest.spyOn(hardwareService, 'refreshMemoryInfo').mockResolvedValue(undefined as never);
+        await ram(11297 / 1024, 4590 / 1024, 'android'); // raw snapshot reads low
 
         const { fits, evicted } = await modelResidencyManager.makeRoomFor({
           key: 'text',
@@ -721,12 +716,9 @@ describe('ModelResidencyManager', () => {
       });
 
       it('iOS is unchanged — the same dirty model on the same raw availMem is still refused (no background reclaim)', async () => {
-        Platform.OS = 'ios';
         modelResidencyManager._reset();
         modelResidencyManager.setBudgetOverrideMB(null);
-        jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(11297 / 1024);
-        jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(4590 / 1024);
-        jest.spyOn(hardwareService, 'refreshMemoryInfo').mockResolvedValue(undefined as never);
+        await ram(11297 / 1024, 4590 / 1024, 'ios');
 
         const { fits } = await modelResidencyManager.makeRoomFor({
           key: 'text', type: 'text', modelId: 'gemma-4-E4B', sizeMB: 5235, dirtyMemory: true,
@@ -745,19 +737,11 @@ describe('ModelResidencyManager', () => {
       const TOTAL_GB = 12;
       const ceilingMB = computeBudgetMB(TOTAL_GB * 1024, { policy: 'balanced' });
       const sizeMB = Math.round(ceilingMB * 0.7); // 1x = 0.7*ceiling (fits), 2x = 1.4*ceiling (exceeds)
-      const origPlatform = Platform.OS;
-
-      beforeEach(() => {
-        Platform.OS = 'android';
+      beforeEach(async () => {
         modelResidencyManager._reset();
         modelResidencyManager.setBudgetOverrideMB(null);
-        jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(TOTAL_GB);
-        jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(TOTAL_GB); // healthy free RAM — isolate the dirty-ceiling path
-        jest.spyOn(hardwareService, 'refreshMemoryInfo').mockResolvedValue(undefined as never);
+        await ram(TOTAL_GB, TOTAL_GB, 'android'); // healthy free RAM — isolate the dirty-ceiling path
       });
-      // Don't leak Platform.OS into sibling suites (the override-survival tests read the ambient
-      // platform for Android reclaim credit).
-      afterEach(() => { Platform.OS = origPlatform; });
 
       it('KEEPS an already-resident dirty image model on reload (fits — footprint counted once)', async () => {
         modelResidencyManager.register(
@@ -788,15 +772,10 @@ describe('ModelResidencyManager', () => {
     beforeEach(() => {
       modelResidencyManager._reset();
     });
-    afterEach(() => jest.restoreAllMocks());
-
+    
     it('LOADS an override regardless of the old survival floor, while the SAME normal load refuses (background apps case)', async () => {
       modelResidencyManager.setBudgetOverrideMB(null);
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
-      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(12);
-      jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(0.8); // ~820MB free — starved
+      await ram(12, 0.8); // ~820MB free — starved
       // A DIRTY model: the normal path gates on live free RAM (~820MB), so it refuses.
       const spec = {
         key: 'text',
@@ -817,11 +796,7 @@ describe('ModelResidencyManager', () => {
 
     it('ALLOWS the same override load when there is survival headroom', async () => {
       modelResidencyManager.setBudgetOverrideMB(null);
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
-      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(12);
-      jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(4); // 4GB free — safe
+      await ram(12, 4); // 4GB free — safe
       const { fits } = await modelResidencyManager.makeRoomFor(
         { key: 'text', type: 'text', sizeMB: 8000 },
         { override: true },
@@ -838,16 +813,11 @@ describe('ModelResidencyManager', () => {
     // after its unload (iOS reclaim).
     it('override load SUCCEEDS after evicting a resident whose unload reclaims RAM (fails on the pre-eviction prediction)', async () => {
       modelResidencyManager.setBudgetOverrideMB(null);
-      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(8);
-      let residentLoaded = true; // reclaim model: free RAM depends on what's resident
-      jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockImplementation(
-        () => (residentLoaded ? 1.0 : 5.0), // ~1GB while loaded → ~5GB after the unload reclaims
-      );
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
+      // Free RAM depends on what is resident: ~1GB while the small model is loaded, ~5GB once the
+      // engine releases it.
+      await ram(8, 1.0);
       const unloadSmall = jest.fn().mockImplementation(async () => {
-        residentLoaded = false;
+        boundary.setRam({ platform: 'ios', totalBytes: 8 * GB, availBytes: 5.0 * GB });
       });
       // A smaller CLEAN model is resident (the "load a small model first" the user did).
       modelResidencyManager.register(
@@ -869,16 +839,9 @@ describe('ModelResidencyManager', () => {
 
     it('override LOADS an oversized dirty model (evicting everything first) even where a normal load refuses', async () => {
       modelResidencyManager.setBudgetOverrideMB(null);
-      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(8);
-      let residentLoaded = true;
-      jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockImplementation(
-        () => (residentLoaded ? 1.0 : 4.0), // rises to ~4GB after unload
-      );
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
+      await ram(8, 1.0);
       const unloadSmall = jest.fn().mockImplementation(async () => {
-        residentLoaded = false;
+        boundary.setRam({ platform: 'ios', totalBytes: 8 * GB, availBytes: 4.0 * GB }); // rises to ~4GB after unload
       });
       modelResidencyManager.register(
         { key: 'text', type: 'text', sizeMB: 1500 },
@@ -894,7 +857,7 @@ describe('ModelResidencyManager', () => {
 
       // Fails-before: a NORMAL load of this 6GB dirty model refuses (physics floor for the safe path).
       expect((await modelResidencyManager.makeRoomFor(huge)).fits).toBe(false);
-      residentLoaded = true; // restore the pre-eviction condition for the override attempt
+      await ram(8, 1.0); // the pre-eviction condition for the override attempt (nothing was evicted)
 
       // Passes-after: "Load Anyway" is unconditional — it evicts everything first, then loads.
       const { fits, evicted } = await modelResidencyManager.makeRoomFor(huge, {
@@ -911,9 +874,6 @@ describe('ModelResidencyManager', () => {
     // under override — not the iOS jetsam floor, not the Android oversized-OOM guard. Every one of
     // these dirty models, on either OS, LOADS under override regardless of the raw availMem read.
     describe('platform-aware override floor', () => {
-      const RN = require('react-native');
-      const originalOS = RN.Platform.OS;
-      afterEach(() => { RN.Platform.OS = originalOS; });
 
       // Same real seam (makeRoomFor with override on a dirty model) on a 12GB device whose raw
       // availMem reads ~4.5GB. Under override, size and platform no longer gate the load: even a
@@ -925,11 +885,8 @@ describe('ModelResidencyManager', () => {
         { os: 'android', sizeMB: 9000, expected: true, why: 'override always loads (no oversized OOM guard under override)' },
         { os: 'ios', sizeMB: 3700, expected: true, why: 'override always loads (no iOS jetsam floor under override)' },
       ])('$os: a $sizeMB MB dirty model under override → fits=$expected ($why)', async ({ os, sizeMB, expected }) => {
-        RN.Platform.OS = os;
         modelResidencyManager.setBudgetOverrideMB(null);
-        jest.spyOn(hardwareService, 'refreshMemoryInfo').mockResolvedValue(undefined as never);
-        jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(12);
-        jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(4.5); // ~4500MB physical
+        await ram(12, 4.5, os as 'ios' | 'android'); // ~4500MB physical
         const { fits } = await modelResidencyManager.makeRoomFor(
           { key: 'text', type: 'text', sizeMB, dirtyMemory: true },
           { override: true },
@@ -943,8 +900,7 @@ describe('ModelResidencyManager', () => {
     beforeEach(() => {
       modelResidencyManager._reset();
     });
-    afterEach(() => jest.restoreAllMocks());
-
+    
     const tooBig = {
       key: 'text',
       type: 'text' as const,
@@ -954,9 +910,6 @@ describe('ModelResidencyManager', () => {
 
     it('remembers an explicit override so the SAME model auto-overrides next time (no re-prompt)', async () => {
       modelResidencyManager.setBudgetOverrideMB(1000); // 2000MB model can never fit the budget
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
 
       // Fails-before: without override the oversized model is refused.
       expect((await modelResidencyManager.makeRoomFor(tooBig)).fits).toBe(
@@ -981,9 +934,6 @@ describe('ModelResidencyManager', () => {
 
     it('does NOT leak the override to a different model', async () => {
       modelResidencyManager.setBudgetOverrideMB(1000);
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
       await modelResidencyManager.makeRoomFor(tooBig, { override: true });
       // A different oversized model is still gated (its own approval required).
       const other = {
@@ -997,9 +947,6 @@ describe('ModelResidencyManager', () => {
 
     it('_reset clears session overrides (relaunch asks again)', async () => {
       modelResidencyManager.setBudgetOverrideMB(1000);
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
       await modelResidencyManager.makeRoomFor(tooBig, { override: true });
       expect(modelResidencyManager.hasSessionOverride('org/big-model')).toBe(
         true,
@@ -1013,8 +960,7 @@ describe('ModelResidencyManager', () => {
 
   describe('canEvict veto (residency ↔ audio seam)', () => {
     beforeEach(() => modelResidencyManager._reset());
-    afterEach(() => jest.restoreAllMocks());
-
+    
     it('memory warning reclaims an idle sidecar but spares one vetoing via canEvict', async () => {
       const idleUnload = jest.fn().mockResolvedValue(undefined);
       const busyUnload = jest.fn().mockResolvedValue(undefined);
@@ -1028,7 +974,9 @@ describe('ModelResidencyManager', () => {
         busyUnload,
         2,
       );
-      await modelResidencyManager.handleMemoryWarning();
+      // The OS raises its memory warning; the app's own AppState listener runs the reclaim.
+      boundary.emitMemoryWarning();
+      await new Promise(resolve => setImmediate(resolve));
       expect(idleUnload).toHaveBeenCalled();
       expect(modelResidencyManager.isResident('whisper')).toBe(false);
       expect(busyUnload).not.toHaveBeenCalled(); // TTS playing → owner vetoes
@@ -1042,15 +990,14 @@ describe('ModelResidencyManager', () => {
         textUnload,
         1,
       );
-      await modelResidencyManager.handleMemoryWarning();
+      // The OS raises its memory warning; the app's own AppState listener runs the reclaim.
+      boundary.emitMemoryWarning();
+      await new Promise(resolve => setImmediate(resolve));
       expect(textUnload).not.toHaveBeenCalled();
       expect(modelResidencyManager.isResident('text')).toBe(true);
     });
 
     it('capacity eviction never unloads a model vetoing via canEvict', async () => {
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
       modelResidencyManager.setBudgetOverrideMB(1000);
       const ttsUnload = jest.fn().mockResolvedValue(undefined);
       modelResidencyManager.register(
@@ -1076,7 +1023,6 @@ describe('ModelResidencyManager', () => {
       modelResidencyManager.setLoadPolicy('balanced');
     });
     afterEach(() => {
-      jest.restoreAllMocks();
       modelResidencyManager.setLoadPolicy('balanced'); // never leak policy across suites
     });
 
@@ -1088,9 +1034,6 @@ describe('ModelResidencyManager', () => {
 
     it('conservative keeps ONE model at a time — evicts a co-resident that would otherwise fit', async () => {
       modelResidencyManager.setBudgetOverrideMB(8000); // roomy: both would co-reside under balanced
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
       const unloadImg = jest.fn().mockResolvedValue(undefined);
       modelResidencyManager.register(
         { key: 'image', type: 'image', sizeMB: 400 },
@@ -1114,9 +1057,6 @@ describe('ModelResidencyManager', () => {
 
     it('balanced keeps co-residency for the same inputs (no forced eviction)', async () => {
       modelResidencyManager.setBudgetOverrideMB(8000);
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
       const unloadImg = jest.fn().mockResolvedValue(undefined);
       modelResidencyManager.register(
         { key: 'image', type: 'image', sizeMB: 400 },
@@ -1136,9 +1076,6 @@ describe('ModelResidencyManager', () => {
 
     it('conservative single-model still spares a pinned classifier', async () => {
       modelResidencyManager.setBudgetOverrideMB(8000);
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
       modelResidencyManager.register(
         { key: 'smol', type: 'classifier', sizeMB: 100, pinned: true },
         jest.fn().mockResolvedValue(undefined),
@@ -1163,11 +1100,7 @@ describe('ModelResidencyManager', () => {
 
     it('fails-before/passes-after: a 21GB GGUF is refused on a 24GB phone under balanced, fits under aggressive', async () => {
       modelResidencyManager.setBudgetOverrideMB(null);
-      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(24);
-      jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(8);
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
+      await ram(24, 8);
       const spec = { key: 'text', type: 'text' as const, sizeMB: 21 * 1024 };
 
       // Balanced: 24GB * 0.70 ≈ 16.8GB budget → 21GB does not fit (Nico's Qwen3 MoE).
@@ -1182,9 +1115,6 @@ describe('ModelResidencyManager', () => {
 
     it('override forces a load that still will not fit, evicting everything evictable first', async () => {
       modelResidencyManager.setBudgetOverrideMB(1000); // tiny budget so nothing big fits
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
       const unloadImg = jest.fn().mockResolvedValue(undefined);
       modelResidencyManager.register(
         { key: 'image', type: 'image', sizeMB: 400 },
@@ -1217,9 +1147,6 @@ describe('ModelResidencyManager', () => {
       // Extreme mode is single-model by design: even though 500 + 1000 fits in 2000,
       // override evicts the co-resident so the incoming model gets the whole budget.
       modelResidencyManager.setBudgetOverrideMB(2000);
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
       const unloadImg = jest.fn().mockResolvedValue(undefined);
       modelResidencyManager.register(
         { key: 'image', type: 'image', sizeMB: 500 },
@@ -1237,12 +1164,8 @@ describe('ModelResidencyManager', () => {
 
     it('aggressive holds a leaner dirty headroom so a dirty load the balanced guard refuses is allowed', async () => {
       modelResidencyManager.setBudgetOverrideMB(null);
-      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(12);
       // ~3.4GB free: balanced dirty headroom (1024) → budget ≈ 2.4GB; aggressive (512) → ≈ 2.9GB.
-      jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(3.4);
-      jest
-        .spyOn(hardwareService, 'refreshMemoryInfo')
-        .mockResolvedValue(undefined as never);
+      await ram(12, 3.4);
       // A resident dirty model creates dirty pressure so the live-RAM branch is used.
       modelResidencyManager.register(
         {

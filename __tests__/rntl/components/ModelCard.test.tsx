@@ -29,15 +29,6 @@ import {
 } from '../../utils/factories';
 
 // Mock huggingFaceService for formatFileSize
-jest.mock('../../../src/services/huggingface', () => ({
-  huggingFaceService: {
-    formatFileSize: jest.fn((bytes: number) => {
-      if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-      if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
-      return `${bytes} B`;
-    }),
-  },
-}));
 
 describe('ModelCard', () => {
   const baseModel = {
@@ -134,7 +125,7 @@ describe('ModelCard', () => {
       const { getByText } = render(
         <ModelCard model={baseModel} file={file} />
       );
-      expect(getByText('4.0 GB')).toBeTruthy();
+      expect(getByText('4.00 GB')).toBeTruthy();
     });
 
     it('renders quantization badge', () => {
@@ -187,7 +178,7 @@ describe('ModelCard', () => {
       const { getByText } = render(
         <ModelCard model={baseModel} downloadedModel={downloadedModel} />
       );
-      expect(getByText('3.0 GB')).toBeTruthy();
+      expect(getByText('3.00 GB')).toBeTruthy();
     });
 
     it('renders quantization from downloadedModel', () => {
@@ -556,8 +547,8 @@ describe('ModelCard', () => {
       const { getByText } = render(
         <ModelCard model={baseModel} file={visionFile} />
       );
-      // 4GB + 500MB = ~4.5GB
-      expect(getByText('4.5 GB')).toBeTruthy();
+      // 4GB + 500MB = 4.49 GB, as the app formats sizes (two decimals)
+      expect(getByText('4.49 GB')).toBeTruthy();
     });
 
     it('shows single size for text-only models', () => {
@@ -565,7 +556,7 @@ describe('ModelCard', () => {
       const { getByText } = render(
         <ModelCard model={baseModel} file={file} />
       );
-      expect(getByText('3.0 GB')).toBeTruthy();
+      expect(getByText('3.00 GB')).toBeTruthy();
     });
 
     it('shows downloaded model size including mmproj', () => {
@@ -576,8 +567,8 @@ describe('ModelCard', () => {
       const { getByText } = render(
         <ModelCard model={baseModel} downloadedModel={visionModel} />
       );
-      // 2GB + 300MB ~ 2.3 GB
-      expect(getByText('2.3 GB')).toBeTruthy();
+      // 2GB + 300MB = 2.29 GB
+      expect(getByText('2.29 GB')).toBeTruthy();
     });
 
     it('shows size range for models with multiple files', () => {
@@ -592,7 +583,7 @@ describe('ModelCard', () => {
         <ModelCard model={model} />
       );
       // Should show size range
-      expect(getByText('2.0 GB - 5.0 GB')).toBeTruthy();
+      expect(getByText('2.00 GB - 5.00 GB')).toBeTruthy();
       expect(getByText('2 files')).toBeTruthy();
     });
 
@@ -607,7 +598,7 @@ describe('ModelCard', () => {
       const { getByText } = render(
         <ModelCard model={model} />
       );
-      expect(getByText('4.0 GB')).toBeTruthy();
+      expect(getByText('4.00 GB')).toBeTruthy();
     });
 
     it('shows "1 file" for single file model', () => {

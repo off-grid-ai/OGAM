@@ -1,485 +1,167 @@
 /**
- * PassphraseSetupScreen Tests
+ * Passphrase sheet — set a new passphrase, or change the current one.
  *
- * Tests for the passphrase setup/change screen including:
- * - Title display for new setup vs change mode
- * - Input fields rendering
- * - Cancel button behavior
- * - Form validation (too short, too long, mismatch)
- * - Successful submit for new passphrase
- * - Successful submit for change passphrase
- * - Error states (wrong current passphrase, service failure)
- * - Button disabled while submitting
+ * The real sheet runs with the real authService and auth store. Only the device keychain is faked,
+ * with a stateful one that really stores the hash (deviceKeychain); a test can make its write
+ * fail or hang, as a locked or busy keychain does. A small host stands in for the
+ * Security screen that opens the sheet: it shows whether the sheet closed as done or cancelled. The
+ * saved passphrase is read back through authService.
  */
+jest.mock('react-native-keychain', () => require('../../harness/deviceKeychain').deviceKeychainModule());
 
-import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react-native';
-
-jest.mock('../../../src/components', () => ({
-  Card: ({ children, style }: any) => {
-    const { View } = require('react-native');
-    return <View style={style}>{children}</View>;
-  },
-  Button: ({ title, onPress, disabled }: any) => {
-    const { TouchableOpacity, Text } = require('react-native');
-    return (
-      <TouchableOpacity onPress={onPress} disabled={disabled} testID={`button-${title}`}>
-        <Text>{title}</Text>
-      </TouchableOpacity>
-    );
-  },
-}));
-
-jest.mock('../../../src/components/Button', () => ({
-  Button: ({ title, onPress, disabled }: any) => {
-    const { TouchableOpacity, Text } = require('react-native');
-    return (
-      <TouchableOpacity onPress={onPress} disabled={disabled} testID={`button-${title}`}>
-        <Text>{title}</Text>
-      </TouchableOpacity>
-    );
-  },
-}));
-
-const mockShowAlert = jest.fn((_t: string, _m: string, _b?: any) => ({
-  visible: true,
-  title: _t,
-  message: _m,
-  buttons: _b || [],
-}));
-
-jest.mock('../../../src/components/CustomAlert', () => ({
-  CustomAlert: ({ visible, title, message }: any) => {
-    if (!visible) return null;
-    const { View, Text } = require('react-native');
-    return (
-      <View testID="custom-alert">
-        <Text testID="alert-title">{title}</Text>
-        <Text testID="alert-message">{message}</Text>
-      </View>
-    );
-  },
-  showAlert: (...args: any[]) => (mockShowAlert as any)(...args),
-  hideAlert: jest.fn(() => ({ visible: false, title: '', message: '', buttons: [] })),
-  initialAlertState: { visible: false, title: '', message: '', buttons: [] },
-}));
-
-jest.mock('../../../src/components/AnimatedEntry', () => ({
-  AnimatedEntry: ({ children }: any) => children,
-}));
-
-const mockSetPassphrase = jest.fn(() => Promise.resolve(true));
-const mockChangePassphrase = jest.fn(() => Promise.resolve(true));
-
-jest.mock('../../../src/services/authService', () => ({
-  authService: {
-    setPassphrase: (...args: any[]) => (mockSetPassphrase as any)(...args),
-    changePassphrase: (...args: any[]) => (mockChangePassphrase as any)(...args),
-  },
-}));
-
-const mockSetEnabled = jest.fn();
-jest.mock('../../../src/stores/authStore', () => ({
-  useAuthStore: jest.fn(() => ({
-    setEnabled: mockSetEnabled,
-  })),
-}));
-
-jest.mock('../../../src/stores', () => ({
-  useAppStore: jest.fn((selector?: any) => {
-    const state = {
-      themeMode: 'system',
-    };
-    return selector ? selector(state) : state;
-  }),
-}));
-
-jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children, ...props }: any) => {
-    const { View } = require('react-native');
-    return <View {...props}>{children}</View>;
-  },
-}));
-
-jest.mock('react-native-vector-icons/Feather', () => {
-  const { Text } = require('react-native');
-  return ({ name }: any) => <Text>{name}</Text>;
-});
-
+import React, { useState } from 'react';
+import { Text } from 'react-native';
+import * as rtl from '@testing-library/react-native';
 import { PassphraseSetupScreen } from '../../../src/screens/PassphraseSetupScreen';
+import { useAuthStore } from '../../../src/stores/authStore';
+import { authService } from '../../../src/services/authService';
+import { resetKeychain } from '../../harness/keyedRemoteServer';
+import { holdKeychainWrites, refuseKeychainWrites, resetKeychainWrites } from '../../harness/deviceKeychain';
+import { submitPassphraseForm, PASSPHRASE_PLACEHOLDERS } from '../../harness/passphraseForm';
 
-const defaultProps = {
-  onComplete: jest.fn(),
-  onCancel: jest.fn(),
-};
+const { act, fireEvent, render, waitFor } = rtl;
+
+/** The screen that opens the sheet: it shows how the sheet closed. */
+function Opener({ isChanging }: { isChanging?: boolean }) {
+  const [closed, setClosed] = useState<string | null>(null);
+  return closed ? (
+    <Text>{`Sheet closed: ${closed}`}</Text>
+  ) : (
+    <PassphraseSetupScreen
+      isChanging={isChanging}
+      onComplete={() => setClosed('done')}
+      onCancel={() => setClosed('cancelled')}
+    />
+  );
+}
 
 describe('PassphraseSetupScreen', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    resetKeychain();
+    resetKeychainWrites();
+    useAuthStore.setState(useAuthStore.getInitialState());
   });
 
-  // ---- Rendering tests ----
+  describe('setting a passphrase', () => {
+    it('shows the setup form: Passphrase and Confirm fields, tips and Enable Lock', () => {
+      const view = render(<Opener />);
 
-  it('renders "Set Up Passphrase" title for new setup', () => {
-    const { getByText } = render(<PassphraseSetupScreen {...defaultProps} />);
-    expect(getByText('Set Up Passphrase')).toBeTruthy();
-  });
-
-  it('renders passphrase input fields', () => {
-    const { getByPlaceholderText } = render(
-      <PassphraseSetupScreen {...defaultProps} />,
-    );
-    expect(
-      getByPlaceholderText('Enter passphrase (min 6 characters)'),
-    ).toBeTruthy();
-  });
-
-  it('shows confirm passphrase field', () => {
-    const { getByPlaceholderText } = render(
-      <PassphraseSetupScreen {...defaultProps} />,
-    );
-    expect(getByPlaceholderText('Re-enter passphrase')).toBeTruthy();
-  });
-
-  it('shows current passphrase field when isChanging=true', () => {
-    const { getAllByText, getByText, getByPlaceholderText } = render(
-      <PassphraseSetupScreen {...defaultProps} isChanging={true} />,
-    );
-    expect(getAllByText('Change Passphrase').length).toBeGreaterThanOrEqual(1);
-    expect(getByText('Current Passphrase')).toBeTruthy();
-    expect(
-      getByPlaceholderText('Enter current passphrase'),
-    ).toBeTruthy();
-  });
-
-  it('cancel button calls onCancel', () => {
-    const { getByText } = render(<PassphraseSetupScreen {...defaultProps} />);
-    fireEvent.press(getByText('Cancel'));
-    expect(defaultProps.onCancel).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows "Enable Lock" button text for new setup', () => {
-    const { getByText } = render(<PassphraseSetupScreen {...defaultProps} />);
-    expect(getByText('Enable Lock')).toBeTruthy();
-  });
-
-  it('shows "Change Passphrase" button text when isChanging', () => {
-    const { getAllByText } = render(
-      <PassphraseSetupScreen {...defaultProps} isChanging />,
-    );
-    // Title and button both say "Change Passphrase"
-    expect(getAllByText('Change Passphrase').length).toBeGreaterThanOrEqual(2);
-  });
-
-  it('renders tips section', () => {
-    const { getByText } = render(<PassphraseSetupScreen {...defaultProps} />);
-    expect(getByText('Tips for a good passphrase:')).toBeTruthy();
-    expect(getByText(/Use a mix of words/)).toBeTruthy();
-  });
-
-  it('shows description for new setup', () => {
-    const { getByText } = render(<PassphraseSetupScreen {...defaultProps} />);
-    expect(getByText(/Create a passphrase to lock the app/)).toBeTruthy();
-  });
-
-  it('shows description for change mode', () => {
-    const { getByText } = render(
-      <PassphraseSetupScreen {...defaultProps} isChanging />,
-    );
-    expect(getByText(/Enter your current passphrase/)).toBeTruthy();
-  });
-
-  // ---- Validation tests ----
-
-  it('shows validation error when passphrase is too short', async () => {
-    const { getByPlaceholderText, getByText } = render(
-      <PassphraseSetupScreen {...defaultProps} />,
-    );
-
-    fireEvent.changeText(
-      getByPlaceholderText('Enter passphrase (min 6 characters)'),
-      'abc',
-    );
-    fireEvent.changeText(getByPlaceholderText('Re-enter passphrase'), 'abc');
-
-    await act(async () => {
-      fireEvent.press(getByText('Enable Lock'));
+      expect(view.getByText('Set Up Passphrase')).toBeTruthy();
+      expect(view.getByText(/Create a passphrase to lock the app/)).toBeTruthy();
+      expect(view.getByText('Passphrase')).toBeTruthy();
+      expect(view.queryByText('New Passphrase')).toBeNull();
+      expect(view.queryByPlaceholderText(PASSPHRASE_PLACEHOLDERS.current)).toBeNull();
+      expect(view.getByPlaceholderText(PASSPHRASE_PLACEHOLDERS.next)).toBeTruthy();
+      expect(view.getByPlaceholderText(PASSPHRASE_PLACEHOLDERS.confirm)).toBeTruthy();
+      expect(view.getByText('Tips for a good passphrase:')).toBeTruthy();
+      expect(view.getByText(/Use a mix of words/)).toBeTruthy();
+      expect(view.getByText('Enable Lock')).toBeTruthy();
     });
 
-    expect(mockShowAlert).toHaveBeenCalledWith(
-      'Invalid Passphrase',
-      'Passphrase must be at least 6 characters',
-    );
-    expect(mockSetPassphrase).not.toHaveBeenCalled();
-  });
+    it('Cancel closes the sheet without saving anything', async () => {
+      const view = render(<Opener />);
 
-  it('shows validation error when passphrase is too long', async () => {
-    const longPass = 'a'.repeat(51);
-    const { getByPlaceholderText, getByText } = render(
-      <PassphraseSetupScreen {...defaultProps} />,
-    );
+      fireEvent.press(view.getByText('Cancel'));
 
-    fireEvent.changeText(
-      getByPlaceholderText('Enter passphrase (min 6 characters)'),
-      longPass,
-    );
-    fireEvent.changeText(getByPlaceholderText('Re-enter passphrase'), longPass);
-
-    await act(async () => {
-      fireEvent.press(getByText('Enable Lock'));
+      expect(view.getByText('Sheet closed: cancelled')).toBeTruthy();
+      expect(await authService.hasPassphrase()).toBe(false);
     });
 
-    expect(mockShowAlert).toHaveBeenCalledWith(
-      'Invalid Passphrase',
-      'Passphrase must be 50 characters or less',
-    );
-    expect(mockSetPassphrase).not.toHaveBeenCalled();
-  });
+    it.each([
+      ['shorter than 6 characters', 'abc', 'Passphrase must be at least 6 characters'],
+      ['longer than 50 characters', 'a'.repeat(51), 'Passphrase must be 50 characters or less'],
+    ])('refuses a passphrase %s', async (_case, passphrase, message) => {
+      const view = render(<Opener />);
 
-  it('shows mismatch error when passphrases do not match', async () => {
-    const { getByPlaceholderText, getByText } = render(
-      <PassphraseSetupScreen {...defaultProps} />,
-    );
+      await submitPassphraseForm(rtl, view, { next: passphrase });
 
-    fireEvent.changeText(
-      getByPlaceholderText('Enter passphrase (min 6 characters)'),
-      'password123',
-    );
-    fireEvent.changeText(
-      getByPlaceholderText('Re-enter passphrase'),
-      'differentpassword',
-    );
-
-    await act(async () => {
-      fireEvent.press(getByText('Enable Lock'));
+      expect(view.getByText('Invalid Passphrase')).toBeTruthy();
+      expect(view.getByText(message)).toBeTruthy();
+      expect(view.queryByText(/Sheet closed/)).toBeNull();
+      expect(await authService.hasPassphrase()).toBe(false);
     });
 
-    expect(mockShowAlert).toHaveBeenCalledWith(
-      'Mismatch',
-      'Passphrases do not match',
-    );
-    expect(mockSetPassphrase).not.toHaveBeenCalled();
-  });
+    it('refuses a confirmation that does not match', async () => {
+      const view = render(<Opener />);
 
-  // ---- Successful submit tests ----
+      await submitPassphraseForm(rtl, view, { next: 'password123', confirm: 'different456' });
 
-  it('calls setPassphrase on valid new setup', async () => {
-    mockSetPassphrase.mockResolvedValue(true);
-
-    const { getByPlaceholderText, getByText } = render(
-      <PassphraseSetupScreen {...defaultProps} />,
-    );
-
-    fireEvent.changeText(
-      getByPlaceholderText('Enter passphrase (min 6 characters)'),
-      'securepass123',
-    );
-    fireEvent.changeText(
-      getByPlaceholderText('Re-enter passphrase'),
-      'securepass123',
-    );
-
-    await act(async () => {
-      fireEvent.press(getByText('Enable Lock'));
+      expect(view.getByText('Mismatch')).toBeTruthy();
+      expect(view.getByText('Passphrases do not match')).toBeTruthy();
+      expect(await authService.hasPassphrase()).toBe(false);
     });
 
-    expect(mockSetPassphrase).toHaveBeenCalledWith('securepass123');
-    expect(mockSetEnabled).toHaveBeenCalledWith(true);
-    expect(defaultProps.onComplete).toHaveBeenCalled();
-  });
+    it('saves a valid passphrase, turns the lock on and closes the sheet', async () => {
+      const view = render(<Opener />);
+      expect(useAuthStore.getState().isEnabled).toBe(false);
 
-  it('calls changePassphrase on valid change', async () => {
-    mockChangePassphrase.mockResolvedValue(true);
+      await submitPassphraseForm(rtl, view, { next: 'securepass123' });
 
-    const { getByPlaceholderText, getAllByText } = render(
-      <PassphraseSetupScreen {...defaultProps} isChanging />,
-    );
-
-    fireEvent.changeText(
-      getByPlaceholderText('Enter current passphrase'),
-      'oldpassword',
-    );
-    fireEvent.changeText(
-      getByPlaceholderText('Enter passphrase (min 6 characters)'),
-      'newpassword',
-    );
-    fireEvent.changeText(
-      getByPlaceholderText('Re-enter passphrase'),
-      'newpassword',
-    );
-
-    // Press "Change Passphrase" button (last one)
-    const buttons = getAllByText('Change Passphrase');
-    await act(async () => {
-      fireEvent.press(buttons[buttons.length - 1]);
+      await waitFor(() => expect(view.getByText('Sheet closed: done')).toBeTruthy());
+      expect(useAuthStore.getState().isEnabled).toBe(true);
+      expect(await authService.verifyPassphrase('securepass123')).toBe(true);
     });
 
-    expect(mockChangePassphrase).toHaveBeenCalledWith('oldpassword', 'newpassword');
-    expect(defaultProps.onComplete).toHaveBeenCalled();
-  });
+    it('shows Saving... while the keychain is still writing', async () => {
+      const finish = holdKeychainWrites();
+      const view = render(<Opener />);
 
-  // ---- Error handling tests ----
+      await submitPassphraseForm(rtl, view, { next: 'securepass123' });
 
-  it('shows error when current passphrase is incorrect on change', async () => {
-    mockChangePassphrase.mockResolvedValue(false);
-
-    const { getByPlaceholderText, getAllByText } = render(
-      <PassphraseSetupScreen {...defaultProps} isChanging />,
-    );
-
-    fireEvent.changeText(
-      getByPlaceholderText('Enter current passphrase'),
-      'wrongpassword',
-    );
-    fireEvent.changeText(
-      getByPlaceholderText('Enter passphrase (min 6 characters)'),
-      'newpassword',
-    );
-    fireEvent.changeText(
-      getByPlaceholderText('Re-enter passphrase'),
-      'newpassword',
-    );
-
-    const buttons = getAllByText('Change Passphrase');
-    await act(async () => {
-      fireEvent.press(buttons[buttons.length - 1]);
+      expect(view.getByText('Saving...')).toBeTruthy();
+      expect(view.queryByText('Enable Lock')).toBeNull();
+      await act(async () => { finish(); });
+      await waitFor(() => expect(view.getByText('Sheet closed: done')).toBeTruthy());
     });
 
-    expect(mockShowAlert).toHaveBeenCalledWith(
-      'Error',
-      'Current passphrase is incorrect',
-    );
-    expect(defaultProps.onComplete).not.toHaveBeenCalled();
-  });
+    it('says it failed when the keychain refuses the write, and leaves the lock off', async () => {
+      refuseKeychainWrites('Keychain write refused');
+      const view = render(<Opener />);
 
-  it('shows error when setPassphrase fails', async () => {
-    mockSetPassphrase.mockResolvedValue(false);
+      await submitPassphraseForm(rtl, view, { next: 'securepass123' });
 
-    const { getByPlaceholderText, getByText } = render(
-      <PassphraseSetupScreen {...defaultProps} />,
-    );
-
-    fireEvent.changeText(
-      getByPlaceholderText('Enter passphrase (min 6 characters)'),
-      'validpass123',
-    );
-    fireEvent.changeText(
-      getByPlaceholderText('Re-enter passphrase'),
-      'validpass123',
-    );
-
-    await act(async () => {
-      fireEvent.press(getByText('Enable Lock'));
-    });
-
-    expect(mockShowAlert).toHaveBeenCalledWith(
-      'Error',
-      'Failed to set passphrase',
-    );
-    expect(defaultProps.onComplete).not.toHaveBeenCalled();
-  });
-
-  it('shows generic error when setPassphrase throws', async () => {
-    mockSetPassphrase.mockRejectedValue(new Error('Network error'));
-
-    const { getByPlaceholderText, getByText } = render(
-      <PassphraseSetupScreen {...defaultProps} />,
-    );
-
-    fireEvent.changeText(
-      getByPlaceholderText('Enter passphrase (min 6 characters)'),
-      'validpass123',
-    );
-    fireEvent.changeText(
-      getByPlaceholderText('Re-enter passphrase'),
-      'validpass123',
-    );
-
-    await act(async () => {
-      fireEvent.press(getByText('Enable Lock'));
-    });
-
-    expect(mockShowAlert).toHaveBeenCalledWith(
-      'Error',
-      'An error occurred. Please try again.',
-    );
-  });
-
-  it('shows "Saving..." button text while submitting', async () => {
-    // Make setPassphrase hang to observe loading state
-    let resolveSetPassphrase: (value: boolean) => void;
-    mockSetPassphrase.mockImplementation(
-      () => new Promise((resolve) => { resolveSetPassphrase = resolve; }),
-    );
-
-    const { getByPlaceholderText, getByText, queryByText } = render(
-      <PassphraseSetupScreen {...defaultProps} />,
-    );
-
-    fireEvent.changeText(
-      getByPlaceholderText('Enter passphrase (min 6 characters)'),
-      'validpass123',
-    );
-    fireEvent.changeText(
-      getByPlaceholderText('Re-enter passphrase'),
-      'validpass123',
-    );
-
-    // Start submit
-    await act(async () => {
-      fireEvent.press(getByText('Enable Lock'));
-    });
-
-    // During submission, button text changes
-    expect(queryByText('Saving...')).toBeTruthy();
-
-    // Resolve
-    await act(async () => {
-      resolveSetPassphrase!(true);
+      await waitFor(() => expect(view.getByText('Failed to set passphrase')).toBeTruthy());
+      expect(view.getByText('Enable Lock')).toBeTruthy();
+      expect(view.queryByText(/Sheet closed/)).toBeNull();
+      expect(useAuthStore.getState().isEnabled).toBe(false);
     });
   });
 
-  it('does not call setEnabled when setting passphrase in change mode', async () => {
-    mockChangePassphrase.mockResolvedValue(true);
-
-    const { getByPlaceholderText, getAllByText } = render(
-      <PassphraseSetupScreen {...defaultProps} isChanging />,
-    );
-
-    fireEvent.changeText(
-      getByPlaceholderText('Enter current passphrase'),
-      'oldpass',
-    );
-    fireEvent.changeText(
-      getByPlaceholderText('Enter passphrase (min 6 characters)'),
-      'newpass123',
-    );
-    fireEvent.changeText(
-      getByPlaceholderText('Re-enter passphrase'),
-      'newpass123',
-    );
-
-    const buttons = getAllByText('Change Passphrase');
-    await act(async () => {
-      fireEvent.press(buttons[buttons.length - 1]);
+  describe('changing the passphrase', () => {
+    beforeEach(async () => {
+      await authService.setPassphrase('oldpassword');
     });
 
-    // setEnabled should NOT be called in change mode
-    expect(mockSetEnabled).not.toHaveBeenCalled();
-  });
+    it('shows the change form: Current and New Passphrase fields and a Change Passphrase button', () => {
+      const view = render(<Opener isChanging />);
 
-  it('shows Passphrase label for new setup', () => {
-    const { getByText, queryByText } = render(
-      <PassphraseSetupScreen {...defaultProps} />,
-    );
-    expect(getByText('Passphrase')).toBeTruthy();
-    expect(queryByText('New Passphrase')).toBeNull();
-  });
+      expect(view.getAllByText('Change Passphrase')).toHaveLength(2);
+      expect(view.getByText(/Enter your current passphrase/)).toBeTruthy();
+      expect(view.getByText('Current Passphrase')).toBeTruthy();
+      expect(view.getByText('New Passphrase')).toBeTruthy();
+      expect(view.getByPlaceholderText(PASSPHRASE_PLACEHOLDERS.current)).toBeTruthy();
+      expect(view.queryByText('Enable Lock')).toBeNull();
+    });
 
-  it('shows New Passphrase label for change mode', () => {
-    const { getByText } = render(
-      <PassphraseSetupScreen {...defaultProps} isChanging />,
-    );
-    expect(getByText('New Passphrase')).toBeTruthy();
+    it('saves the new passphrase and closes the sheet, without touching the lock switch', async () => {
+      const view = render(<Opener isChanging />);
+
+      await submitPassphraseForm(rtl, view, { current: 'oldpassword', next: 'newpassword' });
+
+      await waitFor(() => expect(view.getByText('Sheet closed: done')).toBeTruthy());
+      expect(await authService.verifyPassphrase('newpassword')).toBe(true);
+      expect(await authService.verifyPassphrase('oldpassword')).toBe(false);
+      expect(useAuthStore.getState().isEnabled).toBe(false);
+    });
+
+    it('refuses a wrong current passphrase and keeps the old one', async () => {
+      const view = render(<Opener isChanging />);
+
+      await submitPassphraseForm(rtl, view, { current: 'wrongpassword', next: 'newpassword' });
+
+      await waitFor(() => expect(view.getByText('Current passphrase is incorrect')).toBeTruthy());
+      expect(view.queryByText(/Sheet closed/)).toBeNull();
+      expect(await authService.verifyPassphrase('oldpassword')).toBe(true);
+    });
   });
 });

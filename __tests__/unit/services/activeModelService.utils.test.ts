@@ -1,98 +1,116 @@
 /**
- * Unit tests for activeModelService/utils.ts
- * Focuses on syncWithNativeState LiteRT branch.
+ * activeModelService/utils — syncWithNativeState, which lines the loaded-model ids up with what the engines
+ * actually hold (after a JS reload the engines can hold a model the service has no id for).
+ *
+ * The engines' state is real: the model is loaded through activeModelService (the residency lock) on the
+ * native fakes, or nothing is loaded. The target is the plain record the caller hands in, read back after.
+ *
+ * Real: syncWithNativeState, activeModelService, llmService, liteRTService, localDreamGenerator, the stores.
+ * Faked (device, harness/generationDevice): llama.rn, the LiteRT and diffusion native modules, the
+ * filesystem, RAM.
  */
+import { launchGeneration, type GenerationDevice } from '../../harness/generationDevice';
+import { createONNXImageModel } from '../../utils/factories';
 
-import { syncWithNativeState } from '../../../src/services/activeModelService/utils';
+let d: GenerationDevice;
 
-jest.mock('../../../src/services/llm', () => ({
-  llmService: { isModelLoaded: jest.fn() },
-}));
+beforeEach(async () => {
+  const mod = require('@react-native-async-storage/async-storage');
+  await (mod.default ?? mod).clear(); // each test is a fresh install
+});
 
-jest.mock('../../../src/services/litert', () => ({
-  liteRTService: { isModelLoaded: jest.fn() },
-}));
-
-jest.mock('../../../src/services/localDreamGenerator', () => ({
-  localDreamGeneratorService: { isModelLoaded: jest.fn(() => Promise.resolve(false)) },
-}));
-
-jest.mock('../../../src/stores', () => ({
-  useAppStore: {
-    getState: jest.fn(() => ({
-      activeModelId: 'model-abc',
-      activeImageModelId: null,
-      downloadedModels: [],
-      downloadedImageModels: [],
-    })),
-  },
-}));
-
-jest.mock('../../../src/services/hardware', () => ({
-  hardwareService: {
-    refreshMemoryInfo: jest.fn(() =>
-      Promise.resolve({ usedMemory: 0, totalMemory: 0, availableMemory: 0 }),
-    ),
-  },
-}));
-
-import { llmService } from '../../../src/services/llm';
-import { liteRTService } from '../../../src/services/litert';
-
-const mockedLlm = llmService as jest.Mocked<typeof llmService>;
-const mockedLiteRT = liteRTService as jest.Mocked<typeof liteRTService>;
-
-function makeTarget(overrides: Partial<{ loadedTextModelId: string | null; loadedImageModelId: string | null }> = {}) {
+/** The caller's record of loaded ids, as syncWithNativeState writes it. */
+function target(ids: { text?: string | null; image?: string | null } = {}) {
   const t = {
-    loadedTextModelId: overrides.loadedTextModelId ?? null,
-    loadedImageModelId: overrides.loadedImageModelId ?? null,
-    setLoadedTextModelId: jest.fn((id: string | null) => { t.loadedTextModelId = id; }),
-    setLoadedImageModelId: jest.fn((id: string | null) => { t.loadedImageModelId = id; }),
-    setLoadedImageModelThreads: jest.fn(),
+    loadedTextModelId: ids.text ?? null,
+    loadedImageModelId: ids.image ?? null,
+    loadedImageModelThreads: 4 as number | null,
+    setLoadedTextModelId: (id: string | null) => { t.loadedTextModelId = id; },
+    setLoadedImageModelId: (id: string | null) => { t.loadedImageModelId = id; },
+    setLoadedImageModelThreads: (n: number | null) => { t.loadedImageModelThreads = n; },
   };
   return t;
 }
+const sync = (t: ReturnType<typeof target>) =>
+  require('../../../src/services/activeModelService/utils').syncWithNativeState(t);
 
 describe('syncWithNativeState', () => {
-  beforeEach(() => jest.clearAllMocks());
+  it('takes the chosen model id when a LiteRT model is loaded and the record has none', async () => {
+    d = await launchGeneration({ engine: 'litert' });
+    expect(d.liteRTService.isModelLoaded()).toBe(true);
+    const t = target();
 
-  it('sets loadedTextModelId when only liteRTService is loaded and target has no id', async () => {
-    mockedLiteRT.isModelLoaded.mockReturnValue(true);
-    mockedLlm.isModelLoaded.mockReturnValue(false);
+    await sync(t);
 
-    const target = makeTarget({ loadedTextModelId: null });
-    await syncWithNativeState(target);
-
-    expect(target.setLoadedTextModelId).toHaveBeenCalledWith('model-abc');
+    expect(t.loadedTextModelId).toBe('m');
   });
 
-  it('clears loadedTextModelId when both services are not loaded', async () => {
-    mockedLiteRT.isModelLoaded.mockReturnValue(false);
-    mockedLlm.isModelLoaded.mockReturnValue(false);
+  it('takes the chosen model id when a llama model is loaded and the record has none', async () => {
+    d = await launchGeneration();
+    expect(d.llmService.isModelLoaded()).toBe(true);
+    const t = target();
 
-    const target = makeTarget({ loadedTextModelId: 'old-model' });
-    await syncWithNativeState(target);
+    await sync(t);
 
-    expect(target.setLoadedTextModelId).toHaveBeenCalledWith(null);
+    expect(t.loadedTextModelId).toBe('m');
   });
 
-  it('does not overwrite existing loadedTextModelId when liteRTService is loaded', async () => {
-    mockedLiteRT.isModelLoaded.mockReturnValue(true);
-    mockedLlm.isModelLoaded.mockReturnValue(false);
+  it('keeps an id the record already has while a model is loaded', async () => {
+    d = await launchGeneration({ engine: 'litert' });
+    const t = target({ text: 'already-set' });
 
-    const target = makeTarget({ loadedTextModelId: 'already-set' });
-    await syncWithNativeState(target);
+    await sync(t);
 
-    expect(target.setLoadedTextModelId).not.toHaveBeenCalled();
+    expect(t.loadedTextModelId).toBe('already-set');
   });
 
-  it('sets loadedTextModelId when only llmService is loaded and target has no id', async () => {
-    mockedLiteRT.isModelLoaded.mockReturnValue(false);
-    mockedLlm.isModelLoaded.mockReturnValue(true);
+  it('clears the text and image ids when no engine holds a model', async () => {
+    d = await launchGeneration({ load: false });
+    d.boundary.diffusion.module.isModelLoaded.mockResolvedValue(false);
+    const t = target({ text: 'old-model', image: 'old-image' });
 
-    const target = makeTarget({ loadedTextModelId: null });
-    await syncWithNativeState(target);
+    await sync(t);
 
-    expect(target.setLoadedTextModelId).toHaveBeenCalledWith('model-abc');
+    expect(t).toEqual(expect.objectContaining({
+      loadedTextModelId: null,
+      loadedImageModelId: null,
+      loadedImageModelThreads: null,
+    }));
+  });
+
+  it('takes the chosen image model id when native holds an image model and the record has none', async () => {
+    d = await launchGeneration({ load: false });
+    d.useAppStore.getState().addDownloadedImageModel(createONNXImageModel({ id: 'img', backend: 'mnn' }));
+    d.useAppStore.getState().setActiveImageModelId('img');
+    d.boundary.diffusion.module.isModelLoaded.mockResolvedValue(true);
+    const t = target();
+
+    await sync(t);
+
+    expect(t.loadedImageModelId).toBe('img');
+  });
+
+  it('through activeModelService, leaves a model it loaded itself as loaded', async () => {
+    d = await launchGeneration();
+
+    await d.activeModelService.syncWithNativeState();
+
+    expect(d.activeModelService.getLoadedModelIds().textModelId).toBe('m');
+    expect(d.useAppStore.getState().loadedTextModelId).toBe('m');
+  });
+});
+
+describe('getResourceUsage', () => {
+  it('reports the device memory and the estimated memory of the chosen text and image models', async () => {
+    d = await launchGeneration({ load: false });
+    d.useAppStore.getState().addDownloadedImageModel(createONNXImageModel({ id: 'img', size: 1000 }));
+    d.useAppStore.getState().setActiveImageModelId('img');
+    const textSize = d.useAppStore.getState().downloadedModels[0].fileSize;
+
+    const usage = await d.activeModelService.getResourceUsage();
+
+    expect(usage.memoryTotal).toBeGreaterThan(0);
+    expect(usage.memoryUsagePercent).toBeCloseTo((usage.memoryUsed / usage.memoryTotal) * 100);
+    expect(usage.estimatedModelMemory).toBeCloseTo(textSize * 1.2 + 1000 * 1.3);
   });
 });

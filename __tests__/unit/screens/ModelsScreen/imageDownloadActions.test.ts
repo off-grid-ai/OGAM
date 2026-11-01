@@ -274,7 +274,7 @@ describe('a Core ML multi-file download', () => {
     boundary.fs!.serveRemoteFile('https://huggingface.co/apple/coreml-sd/resolve/main/merges.txt', { body: '#version: 0.2' });
     boundary.fs!.serveRemoteFile('https://huggingface.co/apple/coreml-sd/resolve/main/vocab.json', { body: '{}' });
 
-    await actions.downloadCoreMLMultiFile(model, deps());
+    await actions.proceedWithDownload(model, deps());
 
     expect(await boundary.fs!.exists(`${modelDir}/unet.mlmodelc`)).toBe(true);
     expect(await boundary.fs!.exists(`${modelDir}/vae.mlmodelc`)).toBe(true);
@@ -290,7 +290,7 @@ describe('a Core ML multi-file download', () => {
     const model = coreMLModel();
     device.serve('https://example.com/unet', { hold: true });
 
-    const done = actions.downloadCoreMLMultiFile(model, deps());
+    const done = actions.proceedWithDownload(model, deps());
     await until(() => device.running().length === 1);
     expect(JSON.parse(row('image:test-coreml-model').metadataJson!).imageModelCoremlFiles).toEqual(model.coremlFiles);
 

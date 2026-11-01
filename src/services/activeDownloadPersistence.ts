@@ -29,7 +29,7 @@ function serializeActiveDownloads(downloads: Record<ModelKey, DownloadEntry>): D
 
 /** Thin adapter: write the projection durably. Best-effort — never throws (a failed write must not
  *  wedge downloads), logged under [DL-SM] so a lost snapshot is diagnosable. */
-export async function saveActiveDownloads(entries: DownloadEntry[]): Promise<void> {
+async function saveActiveDownloads(entries: DownloadEntry[]): Promise<void> {
   try {
     if (entries.length === 0) await AsyncStorage.removeItem(ACTIVE_DOWNLOADS_KEY);
     else await AsyncStorage.setItem(ACTIVE_DOWNLOADS_KEY, JSON.stringify(entries));

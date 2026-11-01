@@ -31,7 +31,7 @@ async function scanDirForMmProj(modelFilePath: string): Promise<RNFS.ReadDirResI
   return mmProjFiles.find(f => f.name === chosen);
 }
 
-export async function resolveMmProjPath(
+async function resolveMmProjPath(
   model: LlamaDownloadedModel,
   modelId: string,
 ): Promise<string | undefined> {
