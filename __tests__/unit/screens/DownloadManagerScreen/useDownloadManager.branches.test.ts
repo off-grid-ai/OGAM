@@ -292,7 +292,9 @@ describe('deleting a downloaded model', () => {
     act(() => result.current.handleDeleteItem(completed('text', model.id)!));
     await press('Delete');
 
-    expect(result.current.alertState.title).toBe('Error');
+    expect(result.current.alertState.title).toBe('Model not removed');
+    expect(result.current.alertState.message).toBe("Couldn't remove the model files. Try again.");
+    expect(result.current.alertState.buttons?.map(b => b.text)).toEqual(['Cancel', 'Retry']);
     expect(completed('text', model.id)).toBeDefined();
   });
 
