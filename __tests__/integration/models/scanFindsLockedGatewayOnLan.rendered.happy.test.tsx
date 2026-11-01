@@ -16,6 +16,7 @@ jest.unmock('@react-navigation/native');
 
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { AppNavigator } from '../../../src/navigation';
+import type { RootStackParamList } from '../../../src/navigation/types';
 import { useAppStore, useRemoteServerStore } from '../../../src/stores';
 import { installLanProbe, gatewayModelList, type LanProbeHandle } from '../../harness/lanProbe';
 
@@ -38,9 +39,9 @@ describe('scanning a network whose Desktop needs an API key', () => {
   afterEach(() => lan.uninstall());
 
   it('adds the computer and opens the key entry for it, instead of reporting an empty network', async () => {
-    const navRef = createNavigationContainerRef();
+    const navRef = createNavigationContainerRef<RootStackParamList>();
     const ui = render(<NavigationContainer ref={navRef}><AppNavigator /></NavigationContainer>);
-    act(() => navRef.navigate('RemoteServers' as never));
+    act(() => navRef.navigate('RemoteServers'));
     expect(ui.queryByText('No servers yet')).not.toBeNull();
 
     fireEvent.press(ui.getByText('Scan network'));
