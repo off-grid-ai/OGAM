@@ -26,11 +26,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 /** Invoke the onPress bound to a testID host node's nearest pressable ancestor (AnimatedPressable's
  *  onPress lives on the composite above the host — same helper as the sibling reload-banner tests). */
@@ -49,7 +46,7 @@ function pressByWalkingUp(node: unknown): void {
 function selectBackendViaUI(h: Awaited<ReturnType<typeof setupChatScreen>>, backendId: string) {
    
   const { BackendSelector } = require('../../../src/components/settings/textGenAdvancedSections');
-  const s = h.rtl.render(h.React.createElement(BackendSelector, {}));
+  const s = h.renderAside(h.React.createElement(BackendSelector, {}));
   h.rtl.fireEvent.press(s.getByTestId(`backend-${backendId}-button`));
   s.unmount();
 }
@@ -59,7 +56,7 @@ const REASON_AFTER = 'Post-reload reasoning: seventeen has no divisors below its
 
 describe('reload race — a send during the load window keeps thinking (device 2026-07-13 18:50)', () => {
   it('renders the thinking block for a turn sent while the reload is still detecting capabilities', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     // Device boundary: an Adreno (Qualcomm) SoC so the OpenCL backend choice is allowed (as on device).
      
     const DeviceInfo = require('react-native-device-info');
