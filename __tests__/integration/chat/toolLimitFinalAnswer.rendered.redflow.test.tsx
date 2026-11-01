@@ -1,23 +1,14 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: () => {},
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const STATIC_LIMIT_NOTICE = /This response reached the 1-step tool limit/i;
 const FINAL_ANSWER = /The completed calculation result is 4\./i;
 
 describe('tool-call limit final answer', () => {
   it('shows the llama model answer after the last allowed tool result', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'ios' });
     h.enableToolViaUI('calculator');
     h.setTextSettingViaUI('maxToolCalls', 1);
     h.render();
@@ -49,7 +40,7 @@ describe('tool-call limit final answer', () => {
   });
 
   it('shows the LiteRT model answer after the last allowed tool result', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android' });
     h.enableToolViaUI('calculator');
     h.setTextSettingViaUI('maxToolCalls', 1);
     h.render();

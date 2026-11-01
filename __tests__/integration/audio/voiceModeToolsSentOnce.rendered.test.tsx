@@ -11,15 +11,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('voice mode: tools sent in request', () => {
   it('shows the row once under a plain spoken reply to a turn that sent tools', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android', whisper: true, pro: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android', whisper: true, pro: true });
     await h.setupWhisperModel();
     h.enableToolViaUI('calculator');
     h.render();

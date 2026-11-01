@@ -13,21 +13,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: () => {},
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('T038 (rendered) — thinking + tool-result + answer all render in a reason→tool→answer turn', () => {
   it('shows the reasoning in the thinking block, the tool-result bubble, and the final answer', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android' });
     h.enableToolViaUI('calculator'); // real Tools-screen switch
     h.render();
     // Precondition via a REAL gesture (not updateSettings): open the composer quick-settings and flip Thinking on.
@@ -76,7 +67,7 @@ describe('T038 (rendered) — thinking + tool-result + answer all render in a re
   });
 
   it('shows only the current reasoning segment after a completed tool round', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.enableToolViaUI('calculator');
     h.render();
     h.rtl.fireEvent.press(
@@ -170,7 +161,7 @@ describe('T038 (rendered) — thinking + tool-result + answer all render in a re
   });
 
   it('updates the grouped work row while a later thinking segment is still streaming', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.enableToolViaUI('calculator');
     h.render();
     h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByTestId('quick-settings-button')));

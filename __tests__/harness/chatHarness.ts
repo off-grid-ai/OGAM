@@ -435,12 +435,13 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
 
   // GESTURE: with the model now selected, tap "New Chat" on Home — the real way a user starts a chat. A new
   // chat has NO conversation yet; it is created on the first message (real app behavior). No createConversation.
-  rtl.fireEvent.press(
-    await rtl.waitFor(() => home.getByTestId('new-chat-button')),
-  );
-  // Real navigation keeps the app mounted: New Chat has opened the Chat screen in it.
-  if (realNav) await rtl.waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('Chat'));
-  else home.unmount();
+  // Real navigation keeps the app mounted and waits on Home: render() taps New Chat, so the chat screen
+  // mounts when the test opens it, after the test has set up the device (a denied mic, a seeded chat).
+  const newChatButton = await rtl.waitFor(() => home.getByTestId('new-chat-button'));
+  if (!realNav) {
+    rtl.fireEvent.press(newChatButton);
+    home.unmount();
+  }
 
   // Load via the REAL load path (the app loads lazily on the first send; we trigger the same path so the
   // readiness gate passes deterministically). This is the real native-faked load, not a state shortcut.
@@ -979,6 +980,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
         this.view = home;
         const params = require('./chatHarness').routeHolder.params;
         if (Object.keys(params).length) rtl.act(() => navRef.navigate('Chat', params));
+        else if (navRef.getCurrentRoute()?.name !== 'Chat') rtl.fireEvent.press(home.getByTestId('new-chat-button'));
         return this.view;
       }
       this.view = rtl.render(this.screenTree());

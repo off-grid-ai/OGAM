@@ -6,21 +6,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: () => {},
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe.each(['ios', 'android'] as const)('chat mic with the microphone denied (%s)', platform => {
   it('shows the mic as unavailable, opens Settings, and recovers once access is allowed', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform, whisper: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform, whisper: true });
     await h.setupWhisperModel('tiny.en');
     h.boundary.setMicPermission('Denied');
     h.render();
@@ -57,7 +48,7 @@ describe.each(['ios', 'android'] as const)('chat mic with the microphone denied 
 describe('chat mic after an Android "Don\'t ask again" denial', () => {
   it('turns into the unavailable mic as soon as the request is refused', async () => {
     // Android reads a permanent denial back as Undetermined, so the mic starts out normal.
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android', whisper: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android', whisper: true });
     await h.setupWhisperModel('tiny.en');
     h.boundary.setMicPermission('Undetermined');
     h.render();
@@ -75,7 +66,7 @@ describe('chat mic after an Android "Don\'t ask again" denial', () => {
 
 describe('chat mic when the permission cannot be read', () => {
   it('stays a normal mic rather than claiming access is off', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'ios', whisper: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'ios', whisper: true });
     await h.setupWhisperModel('tiny.en');
     h.boundary.setMicPermission('Unreadable');
     h.render();
