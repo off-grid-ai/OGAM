@@ -1,70 +1,70 @@
 /**
- * startModelDownload ↔ real downloadStore ↔ real appStore.
+ * startModelDownload ↔ real modelManager ↔ real downloadStore ↔ real appStore.
  *
- * The unit test mocks the stores; this exercises the REAL stores so the shared
- * download action's actual mutations are validated: a completed download registers
- * the model in appStore AND clears its in-flight downloadStore entry; the duplicate
- * guard reads the real store; a watch error flips the real entry to 'failed'. Only the
- * native boundary (modelManager.downloadModelBackground/watchDownload) is mocked.
+ * The unit test mocks the stores; this exercises the REAL download pipeline so the shared download
+ * action's actual mutations are validated: a completed download registers the model in appStore AND
+ * clears its in-flight downloadStore entry; the duplicate guard reads the real store; a native error
+ * flips the real entry to 'failed'. Only the phone is faked (modelManagerDevice: the native background
+ * downloader, the disk, async-storage); modelManager, backgroundDownloadService and the stores run for real.
  */
-let mockOnComplete: ((m: any) => void) | undefined;
-let mockOnError: ((e: Error) => void) | undefined;
-const mockDownloadModelBackground = jest.fn();
-jest.mock('../../../src/services/modelManager', () => ({
-  modelManager: {
-    downloadModelBackground: (...a: unknown[]) => mockDownloadModelBackground(...a),
-    watchDownload: (_id: string, c: (m: any) => void, e: (err: Error) => void) => { mockOnComplete = c; mockOnError = e; },
-  },
-}));
+import { installModelManagerDevice, type ModelManagerDevice } from '../../harness/modelManagerDevice';
 
-import { startModelDownload } from '../../../src/services/startModelDownload';
-import { useDownloadStore, DownloadEntry } from '../../../src/stores/downloadStore';
-import { useAppStore } from '../../../src/stores';
-import { makeModelKey } from '../../../src/utils/modelKey';
-import { createDownloadedModel } from '../../utils/factories';
+const FILE = {
+  name: 'model.gguf',
+  size: 1000,
+  quantization: 'Q4_K_M',
+  downloadUrl: 'https://huggingface.co/author/model/resolve/main/model.gguf',
+} as any;
 
-const FILE = { name: 'model.gguf' } as any;
-const KEY = makeModelKey('author/model', 'model.gguf');
+let device: ModelManagerDevice;
+let startModelDownload: typeof import('../../../src/services/startModelDownload').startModelDownload;
+let useDownloadStore: typeof import('../../../src/stores/downloadStore').useDownloadStore;
+let useAppStore: typeof import('../../../src/stores').useAppStore;
+let KEY: string;
 
-const inflightEntry = (over: Partial<DownloadEntry> = {}): DownloadEntry => ({
-  modelKey: KEY, downloadId: 'dl-1', modelId: 'author/model', fileName: 'model.gguf',
-  quantization: 'Q4_K_M', modelType: 'text', status: 'pending',
-  bytesDownloaded: 0, totalBytes: 1000, combinedTotalBytes: 1000, progress: 0, createdAt: 1000,
-  ...over,
+beforeEach(async () => {
+  device = await installModelManagerDevice();
+  ({ startModelDownload } = require('../../../src/services/startModelDownload'));
+  ({ useDownloadStore } = require('../../../src/stores/downloadStore'));
+  ({ useAppStore } = require('../../../src/stores'));
+  KEY = require('../../../src/utils/modelKey').makeModelKey('author/model', 'model.gguf');
 });
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  mockOnComplete = undefined;
-  mockOnError = undefined;
-  useDownloadStore.setState({ downloads: {}, downloadIdIndex: {} });
-  useAppStore.setState({ downloadedModels: [] });
-});
+/** The one native transfer the app started for this model. */
+function nativeDownloadId(): string {
+  const rows = device.nativeRows().filter(row => row.fileName === 'model.gguf');
+  expect(rows).toHaveLength(1);
+  return rows[0].downloadId;
+}
 
 describe('startModelDownload flow (real stores)', () => {
   it('completion registers the model in appStore and clears the in-flight entry', async () => {
-    mockDownloadModelBackground.mockResolvedValue({ downloadId: 'dl-1' });
     await startModelDownload('author/model', FILE);
-    // startModelDownload already published a queued placeholder row; download.ts (mocked
-    // here) reconciles it to the real downloadId via retryEntry — simulate that.
-    useDownloadStore.getState().retryEntry(KEY, 'dl-1');
+    await device.settle();
 
-    mockOnComplete!(createDownloadedModel({ id: 'author/model/model.gguf' }));
+    await device.finishDownload(nativeDownloadId(), FILE.size);
 
-    expect(useAppStore.getState().downloadedModels.some(m => m.id === 'author/model/model.gguf')).toBe(true);
+    expect(useAppStore.getState().downloadedModels.some(m => m.fileName === 'model.gguf')).toBe(true);
     expect(useDownloadStore.getState().downloads[KEY]).toBeUndefined();
   });
 
   it('does not start a second download when one is already active (real-store guard)', async () => {
-    useDownloadStore.getState().add(inflightEntry({ status: 'running' }));
+    useDownloadStore.getState().add({
+      modelKey: KEY, downloadId: 'dl-earlier', modelId: 'author/model', fileName: 'model.gguf',
+      quantization: 'Q4_K_M', modelType: 'text', status: 'running',
+      bytesDownloaded: 0, totalBytes: 1000, combinedTotalBytes: 1000, progress: 0, createdAt: 1000,
+    });
+
     await startModelDownload('author/model', FILE);
-    expect(mockDownloadModelBackground).not.toHaveBeenCalled();
+    await device.settle();
+
+    // Nothing reached the native downloader.
+    expect(device.nativeRows()).toHaveLength(0);
   });
 
-  it('publishes a real queued (pending) row up-front so screens can show it', async () => {
-    // Never resolve the start → the download stays "queued"; the row must still exist.
-    mockDownloadModelBackground.mockReturnValue(new Promise(() => {}));
-    startModelDownload('author/model', FILE);
+  it('publishes a real queued (pending) row up-front so screens can show it', () => {
+    // The row is published before the native start is even asked for.
+    startModelDownload('author/model', FILE).catch(() => {});
     const entry = useDownloadStore.getState().downloads[KEY];
     expect(entry).toBeDefined();
     expect(entry.status).toBe('pending');
@@ -72,21 +72,22 @@ describe('startModelDownload flow (real stores)', () => {
   });
 
   it('dedups a rapid second tap while the first is still queued (real store)', async () => {
-    mockDownloadModelBackground.mockReturnValue(new Promise(() => {}));
-    startModelDownload('author/model', FILE); // queues, publishes pending row
+    startModelDownload('author/model', FILE).catch(() => {}); // queues, publishes pending row
     await startModelDownload('author/model', FILE); // second tap
-    expect(mockDownloadModelBackground).toHaveBeenCalledTimes(1);
+    await device.settle();
+
+    // One native transfer, not two.
+    expect(device.nativeRows().filter(row => row.fileName === 'model.gguf')).toHaveLength(1);
   });
 
-  it('flips the real entry to failed when the watch reports an error', async () => {
-    mockDownloadModelBackground.mockResolvedValue({ downloadId: 'dl-1' });
+  it('flips the real entry to failed when the native download reports an error', async () => {
     await startModelDownload('author/model', FILE);
-    // Reconcile the queued placeholder to the real id (download.ts does this), then let
-    // native progress mark it running — the state the watch error fires against.
-    useDownloadStore.getState().retryEntry(KEY, 'dl-1');
-    useDownloadStore.getState().setStatus('dl-1', 'running');
+    await device.settle();
+    const id = nativeDownloadId();
+    // Native progress marks it running — the state the error fires against.
+    await device.reportProgress(id, 100, FILE.size);
 
-    mockOnError!(new Error('net'));
+    await device.failDownload(id, 'net');
 
     expect(useDownloadStore.getState().downloads[KEY].status).toBe('failed');
   });
