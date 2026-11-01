@@ -11,20 +11,10 @@ import {
   requireRTL,
 } from '../../harness/nativeBoundary';
 import { setupChatScreen } from '../../harness/chatHarness';
+import { withNavigator } from '../../harness/realNavigation';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: (screen: string, params?: Record<string, unknown>) =>
-      require('../../harness/chatHarness').recordNavigation(screen, params),
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  // The route the screen was opened with (chatHarness.routeHolder; empty unless a step navigated).
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 type DeleteGesture = 'swipe delete' | 'select and delete';
 
@@ -81,7 +71,7 @@ describe.each<DeleteGesture>(['swipe delete', 'select and delete'])('Deleting a 
     });
 
     const { ChatsListScreen } = require('../../../src/screens/ChatsListScreen');
-    const chats = rtl.render(React.createElement(ChatsListScreen));
+    const chats = rtl.render(withNavigator(React.createElement(ChatsListScreen)));
     expect(chats.getByText('Trip photos')).toBeTruthy();
 
     if (gesture === 'swipe delete') {
@@ -105,7 +95,7 @@ describe.each<DeleteGesture>(['swipe delete', 'select and delete'])('Deleting a 
     // Retry from the Gallery: the image that stayed is listed, and deleting it now succeeds.
     locked = false;
     const { GalleryScreen } = require('../../../src/screens/GalleryScreen');
-    const gallery = rtl.render(React.createElement(GalleryScreen));
+    const gallery = rtl.render(withNavigator(React.createElement(GalleryScreen)));
     rtl.fireEvent.press(await gallery.findByTestId('gallery-image-img-locked'));
     expect(gallery.queryByTestId('gallery-image-img-free')).toBeNull();
     rtl.fireEvent.press(gallery.getByText('Delete'));
@@ -132,39 +122,25 @@ type DeleteSurface = 'Home recents' | 'project detail';
 
 describe.each<DeleteSurface>(['Home recents', 'project detail'])('Deleting a chat from %s', surface => {
   it('removes its images from the Gallery and the disk, and reports an image that could not be removed', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
-    const { rtl, React } = h;
-    const harness = require('../../harness/chatHarness');
-    const navigatedTo = () => harness.navHolder.last as { screen: string; params?: Record<string, unknown> };
-    const homeNavigation = { navigate: harness.recordNavigation, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} };
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
+    const { rtl } = h;
 
-    let projectId: string | undefined;
     if (surface !== 'Home recents') {
-      // Make a project through its form, open it from the Projects list, and start a chat in it.
-      const { ProjectEditScreen } = require('../../../src/screens/ProjectEditScreen');
-      harness.routeHolder.params = {};
-      const form = rtl.render(React.createElement(ProjectEditScreen, {}));
+      // Make a project through its form, open it from the Projects tab, and start a chat in it.
+      const form = await h.openScreen('ProjectEdit');
       rtl.fireEvent.changeText(form.getByTestId('project-edit-name'), 'Trip');
       rtl.fireEvent.changeText(
         form.getByPlaceholderText('Enter the instructions or context for the AI...'),
         'You help plan trips.',
       );
       rtl.fireEvent.press(form.getByTestId('project-edit-save'));
-      form.unmount();
-      const { ProjectsScreen } = require('../../../src/screens/ProjectsScreen');
-      const projects = rtl.render(React.createElement(ProjectsScreen, {}));
+      const projects = await h.openTab('ProjectsTab');
       rtl.fireEvent.press(await rtl.waitFor(() => projects.getByText('Trip')));
-      projects.unmount();
-      expect(navigatedTo().screen).toBe('ProjectDetail');
-      projectId = navigatedTo().params!.projectId as string;
-      harness.routeHolder.params = { projectId };
-      const { ProjectDetailScreen } = require('../../../src/screens/ProjectDetailScreen');
-      const detail = rtl.render(React.createElement(ProjectDetailScreen, {}));
-      rtl.fireEvent.press(await rtl.waitFor(() => detail.getByTestId('project-start-chat')));
-      detail.unmount();
-      expect(navigatedTo().screen).toBe('Chat');
-      harness.routeHolder.params = navigatedTo().params!;
+      await rtl.waitFor(() => expect(h.currentRoute()).toBe('ProjectDetail'));
+      rtl.fireEvent.press(await rtl.waitFor(() => projects.getByTestId('project-start-chat')));
+      await rtl.waitFor(() => expect(h.currentRoute()).toBe('Chat'));
     }
+    h.render();
 
     // Draw two images in the chat.
     await h.generateImageViaUI({ prompt: 'a lake at dawn' });
@@ -172,7 +148,6 @@ describe.each<DeleteSurface>(['Home recents', 'project detail'])('Deleting a cha
     await rtl.waitFor(() => expect(h.view!.queryByTestId('image-mode-force-badge')).not.toBeNull());
     await h.tapSend('a lake at dusk');
     await rtl.waitFor(() => expect(h.view!.queryAllByTestId('generated-image')).toHaveLength(2));
-    h.view!.unmount();
     const fs = h.boundary.fs!;
     const lockedImage = `${fs.DocumentDirectoryPath}/generated_images/img-1.png`;
     const freeImage = `${fs.DocumentDirectoryPath}/generated_images/img-2.png`;
@@ -180,13 +155,10 @@ describe.each<DeleteSurface>(['Home recents', 'project detail'])('Deleting a cha
     expect(await fs.exists(freeImage)).toBe(true);
 
     // Before: the Gallery has both images.
-    const { GalleryScreen } = require('../../../src/screens/GalleryScreen');
-    harness.routeHolder.params = {};
-    let gallery = rtl.render(React.createElement(GalleryScreen));
+    let gallery = await h.openScreen('Gallery');
     await rtl.waitFor(() => expect(gallery.queryAllByTestId(/^gallery-image-/)).toHaveLength(2));
     expect(gallery.queryByTestId('gallery-image-img-1')).not.toBeNull();
     expect(gallery.queryByTestId('gallery-image-img-2')).not.toBeNull();
-    gallery.unmount();
 
     // The device refuses to remove one file.
     const unlink = fs.module.unlink.getMockImplementation()!;
@@ -199,14 +171,13 @@ describe.each<DeleteSurface>(['Home recents', 'project detail'])('Deleting a cha
     const title = 'a lake at dawn';
     let screen: ReturnType<typeof rtl.render>;
     if (surface === 'Home recents') {
-      const { HomeScreen } = require('../../../src/screens/HomeScreen');
-      screen = rtl.render(React.createElement(HomeScreen, { navigation: homeNavigation }));
+      screen = await h.openTab('HomeTab');
       expect(await screen.findByText(title)).toBeTruthy();
       rtl.fireEvent.press(screen.getByTestId('delete-conversation-button'));
     } else {
-      harness.routeHolder.params = { projectId };
-      const { ProjectDetailScreen } = require('../../../src/screens/ProjectDetailScreen');
-      screen = rtl.render(React.createElement(ProjectDetailScreen, {}));
+      screen = await h.openTab('ProjectsTab');
+      rtl.fireEvent.press(await rtl.waitFor(() => screen.getByText('Trip')));
+      await rtl.waitFor(() => expect(h.currentRoute()).toBe('ProjectDetail'));
       expect(await screen.findByText(title)).toBeTruthy();
       rtl.fireEvent.press(screen.getByLabelText(`Delete ${title}`));
     }
@@ -217,17 +188,15 @@ describe.each<DeleteSurface>(['Home recents', 'project detail'])('Deleting a cha
     expect(await screen.findByText('Some images were not deleted')).toBeTruthy();
     expect(screen.getByText(/1 image from the deleted chat could not be removed/)).toBeTruthy();
     expect(screen.queryByText(title)).toBeNull();
-    screen.unmount();
+    rtl.fireEvent.press(screen.getByText('OK'));
 
     // The image that could be removed is off the disk and out of the Gallery; the one that stayed is listed.
     expect(await fs.exists(freeImage)).toBe(false);
     expect(await fs.exists(lockedImage)).toBe(true);
-    harness.routeHolder.params = {};
-    gallery = rtl.render(React.createElement(GalleryScreen));
+    gallery = await h.openScreen('Gallery');
     await rtl.waitFor(() => expect(gallery.queryAllByTestId(/^gallery-image-/)).toHaveLength(1));
     expect(gallery.queryByTestId('gallery-image-img-1')).not.toBeNull();
     expect(gallery.queryByTestId('gallery-image-img-2')).toBeNull();
-    gallery.unmount();
     await rtl.act(() => new Promise(resolve => setTimeout(resolve, 250)));
   });
 });

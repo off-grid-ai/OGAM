@@ -117,18 +117,6 @@ export function renderedThread(view: { queryAllByTestId: (id: RegExp) => unknown
 export const CHAT_STORE_KEY = 'local-llm-chat-storage';
 
 /**
- * Where the screen asked to go. A test's navigation mock forwards `navigate` here
- * (`navigate: (...a) => require('<harness>/chatHarness').recordNavigation(...a)`), so a tap on a chat
- * row can be followed to the chat it opens.
- */
-export const navHolder: { last: { screen: string; params?: Record<string, unknown> } | null } = {
-  last: null,
-};
-export function recordNavigation(screen: string, params?: Record<string, unknown>) {
-  navHolder.last = { screen, params };
-}
-
-/**
  * BOUNDARY: the next read of `key` from AsyncStorage fails, once, as an unreadable store does on device;
  * every other read, and every later read of `key`, goes to the stored data. Patches the AsyncStorage
  * module of the CURRENT module graph, so call it after a module reset and before the stores are required.
@@ -336,15 +324,19 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
   const realNav = opts.navigation === 'real';
   const nav = realNav ? require('@react-navigation/native') : undefined;
   const navRef = nav?.createNavigationContainerRef();
-  const appShell = (): React.ReactElement => {
+  const appShell = (beside: React.ReactElement | null = null): React.ReactElement => {
     const { AppNavigator } = require('../../src/navigation');
     const { getSlot, SLOTS } = require('../../src/bootstrap/slotRegistry');
     const AppRoot = opts.pro ? getSlot(SLOTS.appRoot) : undefined;
+    // One host root, as App.tsx has: RNTL queries from the first host root, so an element mounted beside
+    // the app (mountBeside) is only found inside it.
+    const { View } = require('react-native');
     return React.createElement(
-      React.Fragment,
-      null,
+      View,
+      { style: { flex: 1 } },
       AppRoot ? React.createElement(AppRoot, {}) : null,
       React.createElement(nav.NavigationContainer, { ref: navRef }, React.createElement(AppNavigator)),
+      beside,
     );
   };
   /**
@@ -997,13 +989,32 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       return home;
     },
 
-    /** Real navigation only: open the Chats tab in the mounted app, as tapping it does; returns the app's view. */
-    async openChatList() {
-      if (!realNav) throw new Error("openChatList needs setupChatScreen({ navigation: 'real' })");
-      await rtl.act(async () => navRef.navigate('Main', { screen: 'ChatsTab' }));
-      await rtl.waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('ChatsTab'));
+    /**
+     * Real navigation only: mount an element beside the app, as one more child of the app's root (a probe
+     * that reads the stores). The app stays mounted where it is.
+     */
+    mountBeside(element: React.ReactElement) {
+      if (!realNav) throw new Error("mountBeside needs setupChatScreen({ navigation: 'real' })");
+      shell!.rerender(appShell(element));
+    },
+
+    /** Real navigation only: open one of Home's tabs (ChatsTab, ProjectsTab, ...), as tapping it does. */
+    async openTab(tab: string) {
+      if (!realNav) throw new Error("openTab needs setupChatScreen({ navigation: 'real' })");
+      await rtl.act(async () => navRef.navigate('Main', { screen: tab }));
+      await rtl.waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe(tab));
       this.view = home;
       return home;
+    },
+
+    /** Real navigation only: open the Chats tab in the mounted app; returns the app's view. */
+    openChatList() {
+      return this.openTab('ChatsTab');
+    },
+
+    /** Real navigation only: the route the app is on (the leaf route, inside Home's tabs). */
+    currentRoute(): string | undefined {
+      return navRef?.getCurrentRoute()?.name;
     },
 
     /** The mounted tree: ChatScreen, plus the app.root slot when pro is active. Fresh elements each call. */
