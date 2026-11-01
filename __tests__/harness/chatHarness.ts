@@ -190,30 +190,28 @@ export async function relaunchApp(relaunch: { failFirstReadOf?: string } = {}) {
   if (readFailure) await readFailure.failed;
   else await rtl.waitFor(() => expect(useChatStore.persist.hasHydrated()).toBe(true));
   await rtl.act(() => new Promise(resolve => setTimeout(resolve, 0)));
+  // The relaunched app itself is mounted with real navigation: the list and the chat are its routes.
+  const nav = require('@react-navigation/native');
+  const navRef = nav.createNavigationContainerRef();
+  const { useAppStore } = require('../../src/stores');
+  await rtl.waitFor(() => expect(useAppStore.persist.hasHydrated()).toBe(true));
   return {
     React,
     rtl,
-    /** Mount the real chat list (the Chats tab). */
+    /** Mount the relaunched app on the Chats tab. */
     renderChatList() {
-      const { ChatsListScreen } = require('../../src/screens/ChatsListScreen');
-      return rtl.render(React.createElement(ChatsListScreen));
+      const { AppNavigator } = require('../../src/navigation');
+      const app = rtl.render(
+        React.createElement(nav.NavigationContainer, { ref: navRef }, React.createElement(AppNavigator)),
+      );
+      rtl.act(() => navRef.navigate('Main', { screen: 'ChatsTab' }));
+      return app;
     },
-    /**
-     * Tap a chat's row on the mounted chat list and open the chat it navigates to: the real ChatScreen
-     * with the route params the row handed to navigation.
-     */
+    /** Tap a chat's row on the mounted chat list; the app opens that chat. Returns the app's view. */
     async openChatFromList(list: ReturnType<typeof rtl.render>, title: string) {
-      require('./chatHarness').navHolder.last = null;
       rtl.fireEvent.press(list.getByText(title));
-      const target = require('./chatHarness').navHolder.last as {
-        screen: string;
-        params?: Record<string, unknown>;
-      } | null;
-      expect(target?.screen).toBe('Chat');
-      list.unmount();
-      require('./chatHarness').routeHolder.params = target!.params ?? {};
-      const { ChatScreen } = require('../../src/screens/ChatScreen');
-      return rtl.render(React.createElement(ChatScreen, {}));
+      await rtl.waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('Chat'));
+      return list;
     },
   };
 }
@@ -435,12 +433,13 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
 
   // GESTURE: with the model now selected, tap "New Chat" on Home — the real way a user starts a chat. A new
   // chat has NO conversation yet; it is created on the first message (real app behavior). No createConversation.
-  rtl.fireEvent.press(
-    await rtl.waitFor(() => home.getByTestId('new-chat-button')),
-  );
-  // Real navigation keeps the app mounted: New Chat has opened the Chat screen in it.
-  if (realNav) await rtl.waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('Chat'));
-  else home.unmount();
+  // Real navigation keeps the app mounted and waits on Home: render() taps New Chat, so the chat screen
+  // mounts when the test opens it, after the test has set up the device (a denied mic, a seeded chat).
+  const newChatButton = await rtl.waitFor(() => home.getByTestId('new-chat-button'));
+  if (!realNav) {
+    rtl.fireEvent.press(newChatButton);
+    home.unmount();
+  }
 
   // Load via the REAL load path (the app loads lazily on the first send; we trigger the same path so the
   // readiness gate passes deterministically). This is the real native-faked load, not a state shortcut.
@@ -979,6 +978,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
         this.view = home;
         const params = require('./chatHarness').routeHolder.params;
         if (Object.keys(params).length) rtl.act(() => navRef.navigate('Chat', params));
+        else if (navRef.getCurrentRoute()?.name !== 'Chat') rtl.fireEvent.press(home.getByTestId('new-chat-button'));
         return this.view;
       }
       this.view = rtl.render(this.screenTree());
@@ -993,6 +993,15 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       if (!realNav) throw new Error("openScreen needs setupChatScreen({ navigation: 'real' })");
       await rtl.act(async () => navRef.navigate(name, params));
       await rtl.waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe(name));
+      this.view = home;
+      return home;
+    },
+
+    /** Real navigation only: open the Chats tab in the mounted app, as tapping it does; returns the app's view. */
+    async openChatList() {
+      if (!realNav) throw new Error("openChatList needs setupChatScreen({ navigation: 'real' })");
+      await rtl.act(async () => navRef.navigate('Main', { screen: 'ChatsTab' }));
+      await rtl.waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('ChatsTab'));
       this.view = home;
       return home;
     },

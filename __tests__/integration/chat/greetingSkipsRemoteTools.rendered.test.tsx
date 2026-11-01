@@ -1,14 +1,11 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('greeting with remote tools enabled', () => {
   it('answers on the selected model without sending unrelated remote tools', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'ios', pro: true, backupModel: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'ios', pro: true, backupModel: true });
     h.boundary.fs!.seedFile(`${h.boundary.fs!.DocumentDirectoryPath}/all-MiniLM-L6-v2-Q8_0.gguf`, 25 * 1024 * 1024);
     const { useMcpStore } = require('../../../pro/mcp/mcpStore');
     const mcp = useMcpStore.getState();
