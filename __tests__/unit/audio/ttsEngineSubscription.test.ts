@@ -8,16 +8,22 @@
  * status while engine.pause()/resume() hit a null bridge). Also covers the existing
  * preparing→playing and →paused promotions, and the file-player-owns-playback case.
  */
-jest.mock('@offgrid/core/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
-jest.mock('../../../pro/audio/audioFilePlayer', () => ({ audioFilePlayer: { isActive: jest.fn(() => false) } }));
-
 import { subscribeToEngine } from '../../../pro/audio/ttsEngineSubscription';
 import { audioFilePlayer } from '../../../pro/audio/audioFilePlayer';
-const mockFilePlayer = audioFilePlayer as unknown as { isActive: jest.Mock };
+
+// subscribeToEngine and the real audioFilePlayer run; the player plays over react-native-audio-api's
+// AudioContext (faked in jest.setup). The engine below is a test emitter of the engine event contract.
+
+/** A voice note is playing through the file player (it owns playback until stopped). */
+async function playVoiceNote() {
+  // The device decodes the file into a 3 s buffer (the jest.setup context has no decoder).
+  const api = require('react-native-audio-api') as { AudioContext: jest.Mock };
+  const makeContext = api.AudioContext.getMockImplementation()!;
+  api.AudioContext.mockImplementation(() => ({ ...makeContext(), decodeAudioData: async () => ({ duration: 3 }) }));
+  void audioFilePlayer.play('/docs/voice-note.wav').catch(() => {});
+  for (let i = 0; i < 20 && !audioFilePlayer.isActive(); i += 1) await new Promise(resolve => setImmediate(resolve));
+  expect(audioFilePlayer.isActive()).toBe(true);
+}
 
 type Cb = (...args: any[]) => void;
 function makeEngine() {
@@ -36,9 +42,10 @@ const deps = () => ({
   phaseToFlags: () => ({}),
 });
 
+afterEach(() => audioFilePlayer.stop());
+
 beforeEach(() => {
-  jest.clearAllMocks();
-  mockFilePlayer.isActive.mockReturnValue(false);
+  expect(audioFilePlayer.isActive()).toBe(false);
   state = { currentMessageId: 'm1', playbackStatus: 'playing', playbackElapsed: 5, currentAmplitude: 0.3, error: null };
 });
 
@@ -60,8 +67,8 @@ describe('engine death reflects into the unified state (pause/play fix)', () => 
     expect(state.currentMessageId).toBeNull();
   });
 
-  it('does NOT touch unified state when the file player owns playback', () => {
-    mockFilePlayer.isActive.mockReturnValue(true);
+  it('does NOT touch unified state when the file player owns playback', async () => {
+    await playVoiceNote();
     const engine = makeEngine();
     subscribeToEngine(engine as any, deps());
     engine.emit('phaseChange', 'idle');

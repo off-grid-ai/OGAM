@@ -1,14 +1,11 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('opening a new chat with a selected local model', () => {
   it('waits for the first message before loading the model', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'ios', deferInitialLoad: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'ios', deferInitialLoad: true });
     h.render();
 
     await h.settle(500);

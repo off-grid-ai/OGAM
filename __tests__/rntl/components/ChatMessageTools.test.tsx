@@ -16,10 +16,6 @@ import { createMessage } from '../../utils/factories';
 import type { Message } from '../../../src/types';
 
 // Mock stripControlTokens utility
-jest.mock('../../../src/utils/messageContent', () => ({
-  ...jest.requireActual('../../../src/utils/messageContent'),
-  stripControlTokens: (content: string) => content,
-}));
 
 const makeMessage = (overrides: Partial<Message>): Message =>
   createMessage({ id: 'msg-1', content: 'test', ...overrides } as any);

@@ -6,12 +6,9 @@
  * Launch 3 reads storage normally: the Projects screen lists both, and the saved one was not overwritten
  * by the launch defaults. A relaunch is a fresh module graph over the saved AsyncStorage (real persist).
  */
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => ({ params: {} }), // new project (no projectId)
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
+import { withNavigator } from '../../harness/realNavigation';
 
 const PROJECT_STORE_KEY = 'local-llm-project-storage';
 
@@ -33,7 +30,7 @@ async function launch(opts: { failFirstRead?: boolean } = {}) {
     /** Create a project the way the user does: type a name and instructions into the form, tap Save. */
     async createProject(name: string) {
       const { ProjectEditScreen } = require('../../../src/screens/ProjectEditScreen');
-      const form = rtl.render(React.createElement(ProjectEditScreen, {}));
+      const form = rtl.render(withNavigator(React.createElement(ProjectEditScreen, {})));
       rtl.fireEvent.changeText(form.getByPlaceholderText('e.g., Spanish Learning, Code Review'), name);
       rtl.fireEvent.changeText(
         form.getByPlaceholderText('Enter the instructions or context for the AI...'),
@@ -45,7 +42,7 @@ async function launch(opts: { failFirstRead?: boolean } = {}) {
     },
     renderProjects() {
       const { ProjectsScreen } = require('../../../src/screens/ProjectsScreen');
-      return rtl.render(React.createElement(ProjectsScreen, {}));
+      return rtl.render(withNavigator(React.createElement(ProjectsScreen, {})));
     },
   };
 }

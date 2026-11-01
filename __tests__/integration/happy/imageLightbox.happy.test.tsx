@@ -10,16 +10,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('happy — image lightbox (tap a generated image → viewer + controls)', () => {
   it('tapping the generated image opens the fullscreen viewer; Close dismisses it', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' });
     await h.generateImageViaUI({ prompt: 'a fox in the snow' });
 
     // The viewer is not open yet — no Save/Close controls on screen.
@@ -39,7 +35,7 @@ describe('happy — image lightbox (tap a generated image → viewer + controls)
   });
 
   it('Save in the viewer writes the image to the gallery and confirms', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' });
     await h.generateImageViaUI({ prompt: 'a fox in the snow' });
 
     h.rtl.fireEvent.press(h.view!.getByTestId('generated-image'));

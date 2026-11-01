@@ -6,17 +6,10 @@ import {
   installNativeBoundary,
   requireRTL,
 } from '../../harness/nativeBoundary';
+import { withNavigator } from '../../harness/realNavigation';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: () => {},
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 describe('Chats list search and bulk delete', () => {
   it('selects and deletes only the chats in the filtered list', async () => {
@@ -59,7 +52,7 @@ describe('Chats list search and bulk delete', () => {
     const { useChatStore } = require('../../../src/stores/chatStore');
     await useChatStore.persist.rehydrate();
     const { ChatsListScreen } = require('../../../src/screens/ChatsListScreen');
-    const chats = rtl.render(React.createElement(ChatsListScreen));
+    const chats = rtl.render(withNavigator(React.createElement(ChatsListScreen)));
 
     rtl.fireEvent.press(chats.getByLabelText('Select chats'));
     expect(chats.getByLabelText('Cancel selection')).toBeTruthy();

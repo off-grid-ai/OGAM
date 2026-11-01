@@ -22,15 +22,13 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useIsFocused: () => true,
-  useFocusEffect: () => {},
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 import { RemoteServersScreen } from '../../../src/screens/RemoteServersScreen';
 import { useRemoteServerStore } from '../../../src/stores';
 import { installLanProbe, gatewayModelList, type LanProbeHandle } from '../../harness/lanProbe';
+import { withNavigator } from '../../harness/realNavigation';
 
 /** The addresses the device session actually used. */
 const PHONE_IP = '192.168.1.10';
@@ -60,7 +58,7 @@ describe('scanning a network that has an Off Grid AI Desktop on it', () => {
   });
 
   it('adds the server it found, shows its address, and says how many it added', async () => {
-    const ui = render(<RemoteServersScreen />);
+    const ui = render(withNavigator(<RemoteServersScreen />));
 
     // BEFORE — the list is genuinely empty, so a row appearing later cannot be something that was
     // always on screen.
@@ -85,7 +83,7 @@ describe('scanning a network that has an Off Grid AI Desktop on it', () => {
   }, 20000);
 
   it('asks the gateway port on every address, so a Mac anywhere on the subnet is found', async () => {
-    const ui = render(<RemoteServersScreen />);
+    const ui = render(withNavigator(<RemoteServersScreen />));
     fireEvent.press(ui.getByText('Scan network'));
 
     await waitFor(

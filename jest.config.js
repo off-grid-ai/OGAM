@@ -36,7 +36,7 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   testMatch: ['**/__tests__/**/*.test.ts', '**/__tests__/**/*.test.tsx'],
   testPathIgnorePatterns: [
-    '/node_modules/', '/android/', '/ios/', '/e2e/', 'App.test.tsx',
+    '/node_modules/', '/android/', '/ios/', '/e2e/',
     // pro/ ships its own suite run in the pro repo's CI — never run those from here.
     // Anchored to <rootDir>/pro/ so it ignores ONLY the submodule's own tests, NOT this
     // repo's __tests__/pro/** pro-dependent suites (a bare '/pro/' matched both).

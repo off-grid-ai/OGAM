@@ -10,17 +10,13 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const nativeReject = (code: string, message: string) => Object.assign(new Error(message), { code });
 
 async function openChatWithImageModeOn() {
-  const h = await setupChatScreen({ engine: 'litert', platform: 'android' });
+  const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android' });
   h.render();
   await h.placeImageModel({ backend: 'mnn' });
   await h.cycleImageMode();

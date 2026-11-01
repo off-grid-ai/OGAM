@@ -1,737 +1,451 @@
 /**
  * GalleryScreen Tests
  *
- * Tests for the gallery screen including:
- * - Title rendering
- * - Empty state when no images
- * - Back button navigation
- * - Image grid rendering with images present
- * - Image tap opens viewer modal
- * - Delete image flow (including onPress callback)
- * - Multi-select mode
- * - Select all / delete selected (including onPress callback)
- * - Conversation-filtered gallery title
- * - Sync from disk
- * - Toggle image selection
- * - Save image
- * - Cancel generation
- * - Modal close / details sheet
- * - Generation banner
+ * The real Gallery over the real app and chat stores, the real image-generation service and the real
+ * on-device image store (localDreamGenerator), inside a real React Navigation stack opened from Home.
+ *
+ * Faked: only the device boundary (harness/nativeBoundary): the diffusion native module (the native
+ * image store, generation and cancel), react-native-fs over an in-memory disk, the OS share sheet, RAM.
+ * Images enter the way the app adds them (the store's addGeneratedImage, or the native gallery scan),
+ * with their PNG on the disk where the native module saves it.
  */
+import type { NativeBoundary } from '../../harness/nativeBoundary';
+import { GB, installNativeBoundary, requireRTL } from '../../harness/nativeBoundary';
+import { withNavigatorRoutes } from '../../harness/realNavigation';
 
-import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react-native';
-import { TouchableOpacity, Platform } from 'react-native';
+jest.unmock('@react-navigation/native');
 
-jest.mock('../../../src/hooks/useFocusTrigger', () => ({
-  useFocusTrigger: () => 0,
-}));
+interface SeedImage {
+  id: string;
+  prompt: string;
+  negativePrompt?: string;
+  width: number;
+  height: number;
+  steps: number;
+  seed: number;
+  createdAt: string;
+  conversationId?: string;
+}
 
-jest.mock('../../../src/components', () => ({
-  Card: ({ children, style }: any) => {
-    const { View } = require('react-native');
-    return <View style={style}>{children}</View>;
-  },
-  Button: ({ title, onPress, disabled }: any) => {
-    const { TouchableOpacity: Btn, Text } = require('react-native');
-    return (
-      <Btn onPress={onPress} disabled={disabled}>
-        <Text>{title}</Text>
-      </Btn>
-    );
-  },
-}));
-
-jest.mock('../../../src/components/AnimatedEntry', () => ({
-  AnimatedEntry: ({ children }: any) => children,
-}));
-
-const mockShowAlert = jest.fn((_t: string, _m: string, _b?: any) => ({
-  visible: true,
-  title: _t,
-  message: _m,
-  buttons: _b || [],
-}));
-
-const mockHideAlert = jest.fn(() => ({ visible: false, title: '', message: '', buttons: [] }));
-
-jest.mock('../../../src/components/CustomAlert', () => ({
-  CustomAlert: ({ visible, title, message, buttons, onClose }: any) => {
-    if (!visible) return null;
-    const { View, Text, TouchableOpacity: Btn } = require('react-native');
-    return (
-      <View testID="custom-alert">
-        <Text testID="alert-title">{title}</Text>
-        <Text testID="alert-message">{message}</Text>
-        {buttons?.map((btn: any) => (
-          <Btn key={btn.text} testID={`alert-button-${btn.text}`} onPress={btn.onPress}>
-            <Text>{btn.text}</Text>
-          </Btn>
-        ))}
-        <Btn testID="alert-close" onPress={onClose}>
-          <Text>CloseAlert</Text>
-        </Btn>
-      </View>
-    );
-  },
-  showAlert: (...args: any[]) => (mockShowAlert as any)(...args),
-  hideAlert: (...args: any[]) => (mockHideAlert as any)(...args),
-  initialAlertState: { visible: false, title: '', message: '', buttons: [] },
-}));
-
-jest.mock('../../../src/components/Button', () => ({
-  Button: ({ title, onPress, disabled }: any) => {
-    const { TouchableOpacity: Btn, Text } = require('react-native');
-    return (
-      <Btn onPress={onPress} disabled={disabled}>
-        <Text>{title}</Text>
-      </Btn>
-    );
-  },
-}));
-
-const mockGoBack = jest.fn();
-let mockRouteParams: any = {};
-
-jest.mock('@react-navigation/native', () => {
-  const actual = jest.requireActual('@react-navigation/native');
-  return {
-    ...actual,
-    useNavigation: () => ({
-      navigate: jest.fn(),
-      goBack: mockGoBack,
-      setOptions: jest.fn(),
-      addListener: jest.fn(() => jest.fn()),
-    }),
-    useRoute: () => ({ params: mockRouteParams }),
-  };
-});
-
-const mockGeneratedImages: any[] = [];
-const mockRemoveGeneratedImage = jest.fn();
-const mockAddGeneratedImage = jest.fn();
-
-jest.mock('../../../src/stores', () => ({
-  useAppStore: Object.assign(
-    jest.fn(() => ({
-      generatedImages: mockGeneratedImages,
-      removeGeneratedImage: mockRemoveGeneratedImage,
-      addGeneratedImage: mockAddGeneratedImage,
-    })),
-    {
-      getState: jest.fn(() => ({
-        generatedImages: mockGeneratedImages,
-        addGeneratedImage: mockAddGeneratedImage,
-      })),
-    },
-  ),
-  useChatStore: jest.fn((selector?: any) => {
-    const state = { conversations: [] };
-    return selector ? selector(state) : state;
-  }),
-}));
-
-const mockDeleteGeneratedImage = jest.fn(() => Promise.resolve(true));
-const mockGetGeneratedImages = jest.fn(() => Promise.resolve([]));
-const mockCancelGeneration = jest.fn(() => Promise.resolve());
-let mockImageGenState = {
-  isGenerating: false,
-  prompt: null as string | null,
-  previewPath: null as string | null,
-  progress: null as any,
-};
-let _mockSubscribeCallback: any = null;
-
-jest.mock('../../../src/services', () => ({
-  imageGenerationService: {
-    subscribe: jest.fn((cb: any) => {
-      _mockSubscribeCallback = cb;
-      return jest.fn();
-    }),
-    getState: jest.fn(() => mockImageGenState),
-    cancelGeneration: jest.fn(() => mockCancelGeneration()),
-  },
-  onnxImageGeneratorService: {
-    subscribe: jest.fn(() => jest.fn()),
-    getGeneratedImages: jest.fn(() => mockGetGeneratedImages()),
-    deleteGeneratedImage: jest.fn((...args: any[]) => (mockDeleteGeneratedImage as any)(...args)),
-  },
-}));
-
-import { GalleryScreen } from '../../../src/screens/GalleryScreen';
-import { Share } from 'react-native';
-
-const sampleImages = [
-  {
-    id: 'img-1',
-    prompt: 'A sunset over mountains',
-    imagePath: '/mock/generated/sunset.png',
-    width: 512,
-    height: 512,
-    steps: 20,
-    seed: 12345,
-    modelId: 'sd-model',
-    createdAt: '2026-01-15T10:00:00.000Z',
-  },
-  {
-    id: 'img-2',
-    prompt: 'A cat sitting on a chair',
-    negativePrompt: 'ugly, blurry',
-    imagePath: '/mock/generated/cat.png',
-    width: 512,
-    height: 512,
-    steps: 25,
-    seed: 67890,
-    modelId: 'sd-model',
-    createdAt: '2026-01-16T10:00:00.000Z',
-  },
-  {
-    id: 'img-3',
-    prompt: 'A futuristic city',
-    imagePath: '/mock/generated/city.png',
-    width: 768,
-    height: 768,
-    steps: 30,
-    seed: 11111,
-    modelId: 'sd-model',
-    createdAt: '2026-01-17T10:00:00.000Z',
-  },
+const sampleImages: SeedImage[] = [
+  { id: 'img-1', prompt: 'A sunset over mountains', width: 512, height: 512, steps: 20, seed: 12345, createdAt: '2026-01-15T10:00:00.000Z' },
+  { id: 'img-2', prompt: 'A cat sitting on a chair', negativePrompt: 'ugly, blurry', width: 512, height: 512, steps: 25, seed: 67890, createdAt: '2026-01-16T10:00:00.000Z' },
+  { id: 'img-3', prompt: 'A futuristic city', width: 768, height: 768, steps: 30, seed: 11111, createdAt: '2026-01-17T10:00:00.000Z' },
 ];
 
-const getGridItems = (result: any) => {
-  const touchables = result.UNSAFE_getAllByType(TouchableOpacity);
-  return touchables.filter((t: any) => t.props.activeOpacity === 0.8);
-};
+interface Gallery {
+  boundary: NativeBoundary;
+  rtl: ReturnType<typeof requireRTL>;
+  view: ReturnType<ReturnType<typeof requireRTL>['render']>;
+  useAppStore: any;
+  imagePath(id: string): string;
+}
+
+/** Where the native module saves a generated image: <documents>/generated_images/<id>.png. */
+const imagePathFor = (boundary: NativeBoundary, id: string) =>
+  `${boundary.fs!.DocumentDirectoryPath}/generated_images/${id}.png`;
+
+/**
+ * The phone, the images it already holds (added through the store's own action, the PNG on disk),
+ * and the Gallery opened from Home. `before` runs after the services load and before the mount.
+ */
+async function openGallery(opts: {
+  images?: SeedImage[];
+  params?: Record<string, unknown>;
+  platform?: 'ios' | 'android';
+  /** May return the route params, when they name something it created (a chat). */
+  before?: (ctx: { boundary: NativeBoundary; useAppStore: any; imagePath(id: string): string }) =>
+    void | Record<string, unknown> | Promise<void | Record<string, unknown>>;
+} = {}): Promise<Gallery> {
+  const boundary = installNativeBoundary({
+    fs: true,
+    ram: { platform: opts.platform ?? 'android', totalBytes: 8 * GB, availBytes: 5 * GB },
+  });
+  const AsyncStorage = require('@react-native-async-storage/async-storage');
+  await AsyncStorage.clear();
+  const React = require('react');
+  const rtl = requireRTL();
+  const { useAppStore } = require('../../../src/stores/appStore');
+  const { GalleryScreen } = require('../../../src/screens/GalleryScreen');
+  const imagePath = (id: string) => imagePathFor(boundary, id);
+  // Oldest first: the store puts a new image at the top, as the Gallery shows them.
+  for (const image of opts.images ?? []) {
+    boundary.fs!.seedFile(imagePath(image.id), 1024);
+    useAppStore.getState().addGeneratedImage({ ...image, imagePath: imagePath(image.id), modelId: 'sd-model' });
+  }
+  const params = (await opts.before?.({ boundary, useAppStore, imagePath })) ?? opts.params;
+  const view = rtl.render(
+    withNavigatorRoutes(React.createElement(GalleryScreen), { params, openedFrom: 'Home' }),
+  );
+  await view.findByTestId('gallery-screen');
+  // The mount's scan of the native image store settles before the test acts.
+  await rtl.act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  return { boundary, rtl, view, useAppStore, imagePath };
+}
+
+/** On iOS: a downloaded, selected Core ML image model, and a generation held inside native generateImage. */
+async function startHeldGeneration(g: Gallery, prompt: string) {
+  const { createONNXImageModel } = require('../../utils/factories');
+  const modelPath = `${g.boundary.fs!.DocumentDirectoryPath}/image_models/sd`;
+  g.boundary.fs!.seedFile(`${modelPath}/model.mlmodelc`, 8 * 1024 * 1024);
+  const store = g.useAppStore.getState();
+  store.addDownloadedImageModel(createONNXImageModel({ id: 'sd', name: 'SD', modelPath, backend: 'coreml' }));
+  store.setActiveImageModelId('sd');
+  store.updateSettings({ imageSteps: 20 });
+  const { imageGenerationService } = require('../../../src/services');
+  g.boundary.diffusion.holdNextGeneration();
+  const run = imageGenerationService.generateImage({ prompt });
+  await g.rtl.waitFor(() => expect(g.boundary.diffusion.generationHeld()).toBe(true));
+  // Wrapped: an async function returning the bare promise would wait for the generation to end.
+  return { run };
+}
 
 describe('GalleryScreen', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockRouteParams = {};
-    mockGeneratedImages.length = 0;
-    mockImageGenState = {
-      isGenerating: false,
-      prompt: null,
-      previewPath: null,
-      progress: null,
-    };
-    _mockSubscribeCallback = null;
-    mockGetGeneratedImages.mockResolvedValue([]);
+  it('renders "Gallery" title', async () => {
+    const { view } = await openGallery();
+    expect(view.getByText('Gallery')).toBeTruthy();
   });
 
-  it('renders "Gallery" title', () => {
-    const { getByText } = render(<GalleryScreen />);
-    expect(getByText('Gallery')).toBeTruthy();
+  it('shows empty state when no images', async () => {
+    const { view } = await openGallery();
+    expect(view.getByText('No generated images yet')).toBeTruthy();
+    expect(view.getByText('Generate images from any chat conversation.')).toBeTruthy();
   });
 
-  it('shows empty state when no images', () => {
-    const { getByText } = render(<GalleryScreen />);
-    expect(getByText('No generated images yet')).toBeTruthy();
-    expect(getByText('Generate images from any chat conversation.')).toBeTruthy();
+  it('Back returns to the screen the Gallery was opened from', async () => {
+    const { view, rtl } = await openGallery();
+    rtl.fireEvent.press(view.getByTestId('gallery-back'));
+    expect(await view.findByTestId('route-Home')).toBeTruthy();
   });
 
-  it('back button calls goBack', () => {
-    const { UNSAFE_getAllByType } = render(<GalleryScreen />);
-    const touchables = UNSAFE_getAllByType(TouchableOpacity);
-    fireEvent.press(touchables[0]);
-    expect(mockGoBack).toHaveBeenCalled();
+  it('renders image grid when images exist', async () => {
+    const { view } = await openGallery({ images: sampleImages });
+    expect(view.queryByText('No generated images yet')).toBeNull();
+    for (const image of sampleImages) expect(view.getByTestId(`gallery-image-${image.id}`)).toBeTruthy();
   });
 
-  it('renders image grid when images exist', () => {
-    mockGeneratedImages.push(...sampleImages);
-
-    const { queryByText } = render(<GalleryScreen />);
-    expect(queryByText('No generated images yet')).toBeNull();
+  it('shows image count badge when images exist', async () => {
+    const { view } = await openGallery({ images: sampleImages });
+    expect(view.getByText('3')).toBeTruthy();
   });
 
-  it('shows image count badge when images exist', () => {
-    mockGeneratedImages.push(...sampleImages);
-
-    const { getByText } = render(<GalleryScreen />);
-    expect(getByText('3')).toBeTruthy();
+  it('tapping an image opens the viewer modal', async () => {
+    const { view, rtl } = await openGallery({ images: sampleImages });
+    rtl.fireEvent.press(view.getByTestId('gallery-image-img-1'));
+    expect(view.getByText('Info')).toBeTruthy();
+    expect(view.getByText('Save')).toBeTruthy();
+    expect(view.getByText('Delete')).toBeTruthy();
+    expect(view.getByText('Close')).toBeTruthy();
   });
 
-  it('tapping an image opens the viewer modal', () => {
-    mockGeneratedImages.push(...sampleImages);
+  it('pressing delete in viewer asks for confirmation and deletes nothing yet', async () => {
+    const g = await openGallery({ images: sampleImages });
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-image-img-1'));
+    g.rtl.fireEvent.press(g.view.getByText('Delete'));
 
-    const result = render(<GalleryScreen />);
-    const gridItems = getGridItems(result);
-
-    if (gridItems.length > 0) {
-      fireEvent.press(gridItems[0]);
-      expect(result.getByText('Info')).toBeTruthy();
-      expect(result.getByText('Save')).toBeTruthy();
-      expect(result.getByText('Delete')).toBeTruthy();
-      expect(result.getByText('Close')).toBeTruthy();
-    }
+    expect(await g.view.findByText('Delete Image')).toBeTruthy();
+    expect(g.view.getByText('Are you sure you want to delete this image?')).toBeTruthy();
+    expect(await g.boundary.fs!.exists(g.imagePath('img-1'))).toBe(true);
+    expect(g.useAppStore.getState().generatedImages).toHaveLength(3);
   });
 
-  it('pressing delete in viewer shows confirmation alert', () => {
-    mockGeneratedImages.push(...sampleImages);
-
-    const result = render(<GalleryScreen />);
-    const gridItems = getGridItems(result);
-
-    if (gridItems.length > 0) {
-      fireEvent.press(gridItems[0]);
-      fireEvent.press(result.getByText('Delete'));
-
-      expect(mockShowAlert).toHaveBeenCalledWith(
-        'Delete Image',
-        'Are you sure you want to delete this image?',
-        expect.any(Array),
-      );
-    }
+  it('pressing close in viewer closes the modal', async () => {
+    const { view, rtl } = await openGallery({ images: sampleImages });
+    rtl.fireEvent.press(view.getByTestId('gallery-image-img-1'));
+    rtl.fireEvent.press(view.getByText('Close'));
+    expect(view.queryByText('Save')).toBeNull();
   });
 
-  it('pressing close in viewer closes the modal', () => {
-    mockGeneratedImages.push(...sampleImages);
-
-    const result = render(<GalleryScreen />);
-    const gridItems = getGridItems(result);
-
-    if (gridItems.length > 0) {
-      fireEvent.press(gridItems[0]);
-      expect(result.getByText('Close')).toBeTruthy();
-
-      fireEvent.press(result.getByText('Close'));
-      expect(result.queryByText('Save')).toBeNull();
-    }
+  it('pressing Info toggles details view', async () => {
+    const { view, rtl } = await openGallery({ images: sampleImages });
+    rtl.fireEvent.press(view.getByTestId('gallery-image-img-1'));
+    rtl.fireEvent.press(view.getByText('Info'));
+    expect(view.getByText('Image Details')).toBeTruthy();
+    expect(view.getByText('PROMPT')).toBeTruthy();
+    // The prompt shows in the grid item's label and in the details sheet.
+    expect(view.getByText('A sunset over mountains')).toBeTruthy();
   });
 
-  it('pressing Info toggles details view', () => {
-    mockGeneratedImages.push(...sampleImages);
-
-    const result = render(<GalleryScreen />);
-    const gridItems = getGridItems(result);
-
-    if (gridItems.length > 0) {
-      fireEvent.press(gridItems[0]);
-      fireEvent.press(result.getByText('Info'));
-      expect(result.getByText('Image Details')).toBeTruthy();
-      expect(result.getByText('PROMPT')).toBeTruthy();
-      expect(result.getByText('A sunset over mountains')).toBeTruthy();
-    }
+  it('shows "Chat Media" title when conversationId is provided', async () => {
+    const { view } = await openGallery({
+      images: [{ ...sampleImages[0], conversationId: 'conv-123' }],
+      params: { conversationId: 'conv-123' },
+    });
+    expect(view.getByText('Chat Media')).toBeTruthy();
   });
 
-  it('shows "Chat Media" title when conversationId is provided', () => {
-    mockRouteParams = { conversationId: 'conv-123' };
-    mockGeneratedImages.push({
-      ...sampleImages[0],
-      conversationId: 'conv-123',
+  it('shows chat-specific empty state when no images match conversation', async () => {
+    const { view } = await openGallery({ params: { conversationId: 'conv-456' } });
+    expect(view.getByText('No images in this chat')).toBeTruthy();
+  });
+
+  it('long press on image enters select mode', async () => {
+    const { view, rtl } = await openGallery({ images: sampleImages });
+    rtl.fireEvent(view.getByTestId('gallery-image-img-1'), 'onLongPress');
+    expect(view.getByText('1 selected')).toBeTruthy();
+    expect(view.getByText('All')).toBeTruthy();
+  });
+
+  it('select all selects all images', async () => {
+    const { view, rtl } = await openGallery({ images: sampleImages });
+    rtl.fireEvent(view.getByTestId('gallery-image-img-1'), 'onLongPress');
+    expect(view.getByText('1 selected')).toBeTruthy();
+    rtl.fireEvent.press(view.getByText('All'));
+    expect(view.getByText('3 selected')).toBeTruthy();
+  });
+
+  it('does not offer select mode when gallery is empty', async () => {
+    const { view } = await openGallery();
+    expect(view.queryByLabelText('Select images')).toBeNull();
+    expect(view.queryByText('0 selected')).toBeNull();
+  });
+
+  it('filters images by conversationId', async () => {
+    const { view } = await openGallery({
+      images: [
+        { ...sampleImages[0], conversationId: 'conv-123' },
+        { ...sampleImages[1], conversationId: 'conv-999' },
+      ],
+      params: { conversationId: 'conv-123' },
+    });
+    expect(view.getByText('1')).toBeTruthy();
+    expect(view.getByTestId('gallery-image-img-1')).toBeTruthy();
+    expect(view.queryByTestId('gallery-image-img-2')).toBeNull();
+  });
+
+  it('confirming delete removes the image from the Gallery, the store and the disk', async () => {
+    const g = await openGallery({ images: sampleImages });
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-image-img-1'));
+    g.rtl.fireEvent.press(g.view.getByText('Delete'));
+    await g.view.findByText('Delete Image');
+    await g.rtl.act(async () => {
+      g.rtl.fireEvent.press(g.view.getByLabelText('Delete'));
     });
 
-    const { getByText } = render(<GalleryScreen />);
-    expect(getByText('Chat Media')).toBeTruthy();
+    await g.rtl.waitFor(() => expect(g.view.queryByTestId('gallery-image-img-1')).toBeNull());
+    expect(g.useAppStore.getState().generatedImages.map((i: { id: string }) => i.id)).toEqual(['img-3', 'img-2']);
+    expect(await g.boundary.fs!.exists(g.imagePath('img-1'))).toBe(false);
+    expect(await g.boundary.fs!.exists(g.imagePath('img-2'))).toBe(true);
+    // The viewer closed with it.
+    expect(g.view.queryByText('Save')).toBeNull();
   });
 
-  it('shows chat-specific empty state when no images match conversation', () => {
-    mockRouteParams = { conversationId: 'conv-456' };
+  it('toggling select mode off clears the selection', async () => {
+    const { view, rtl } = await openGallery({ images: sampleImages });
+    rtl.fireEvent(view.getByTestId('gallery-image-img-1'), 'onLongPress');
+    expect(view.getByText('1 selected')).toBeTruthy();
 
-    const { getByText } = render(<GalleryScreen />);
-    expect(getByText('No images in this chat')).toBeTruthy();
+    rtl.fireEvent.press(view.getByLabelText('Exit selection'));
+    expect(view.getByText('Gallery')).toBeTruthy();
+    expect(view.queryByText('1 selected')).toBeNull();
+
+    // Selecting again starts from nothing.
+    rtl.fireEvent.press(view.getByLabelText('Select images'));
+    expect(view.getByText('0 selected')).toBeTruthy();
   });
 
-  it('long press on image enters select mode', () => {
-    mockGeneratedImages.push(...sampleImages);
+  it('tapping image in select mode toggles selection', async () => {
+    const { view, rtl } = await openGallery({ images: sampleImages });
+    rtl.fireEvent(view.getByTestId('gallery-image-img-1'), 'onLongPress');
+    expect(view.getByText('1 selected')).toBeTruthy();
 
-    const result = render(<GalleryScreen />);
-    const gridItems = getGridItems(result);
+    rtl.fireEvent.press(view.getByTestId('gallery-image-img-2'));
+    expect(view.getByText('2 selected')).toBeTruthy();
 
-    if (gridItems.length > 0) {
-      fireEvent(gridItems[0], 'onLongPress');
-      expect(result.getByText('1 selected')).toBeTruthy();
-      expect(result.getByText('All')).toBeTruthy();
-    }
+    rtl.fireEvent.press(view.getByTestId('gallery-image-img-2'));
+    expect(view.getByText('1 selected')).toBeTruthy();
   });
 
-  it('select all selects all images', () => {
-    mockGeneratedImages.push(...sampleImages);
+  it('deleting every selected image removes them all from the Gallery, the store and the disk', async () => {
+    const g = await openGallery({ images: sampleImages });
+    g.rtl.fireEvent(g.view.getByTestId('gallery-image-img-1'), 'onLongPress');
+    g.rtl.fireEvent.press(g.view.getByText('All'));
+    expect(g.view.getByText('3 selected')).toBeTruthy();
 
-    const result = render(<GalleryScreen />);
-    const gridItems = getGridItems(result);
+    g.rtl.fireEvent.press(g.view.getByLabelText('Delete selected images'));
+    expect(await g.view.findByText('Delete Images')).toBeTruthy();
+    expect(g.view.getByText('Are you sure you want to delete 3 images?')).toBeTruthy();
 
-    if (gridItems.length > 0) {
-      fireEvent(gridItems[0], 'onLongPress');
-      expect(result.getByText('1 selected')).toBeTruthy();
-
-      fireEvent.press(result.getByText('All'));
-      expect(result.getByText('3 selected')).toBeTruthy();
-    }
-  });
-
-  it('does not show select button when gallery is empty', () => {
-    const { queryByText } = render(<GalleryScreen />);
-    expect(queryByText('0 selected')).toBeNull();
-  });
-
-  it('filters images by conversationId', () => {
-    mockRouteParams = { conversationId: 'conv-123' };
-    mockGeneratedImages.push(
-      { ...sampleImages[0], conversationId: 'conv-123' },
-      { ...sampleImages[1], conversationId: 'conv-999' },
-    );
-
-    const { getByText } = render(<GalleryScreen />);
-    expect(getByText('1')).toBeTruthy();
-  });
-
-  // ===== NEW TESTS FOR COVERAGE =====
-
-  it('confirming delete image removes it and clears selected image', async () => {
-    mockGeneratedImages.push(...sampleImages);
-
-    const result = render(<GalleryScreen />);
-    const gridItems = getGridItems(result);
-
-    // Open viewer
-    fireEvent.press(gridItems[0]);
-    // Press delete
-    fireEvent.press(result.getByText('Delete'));
-
-    // Confirm delete
-    await act(async () => {
-      fireEvent.press(result.getByTestId('alert-button-Delete'));
+    await g.rtl.act(async () => {
+      g.rtl.fireEvent.press(g.view.getByLabelText('Delete'));
     });
 
-    expect(mockDeleteGeneratedImage).toHaveBeenCalledWith(
-      'img-1',
-      '/mock/generated/sunset.png',
-    );
-    expect(mockRemoveGeneratedImage).toHaveBeenCalledWith('img-1');
+    await g.rtl.waitFor(() => expect(g.view.getByText('No generated images yet')).toBeTruthy());
+    expect(g.useAppStore.getState().generatedImages).toEqual([]);
+    for (const image of sampleImages) expect(await g.boundary.fs!.exists(g.imagePath(image.id))).toBe(false);
+    expect(g.view.queryByText('0 selected')).toBeNull();
   });
 
-  it('toggling select mode off clears selected IDs', () => {
-    mockGeneratedImages.push(...sampleImages);
+  it('the delete-selected button is disabled when nothing is selected', async () => {
+    const { view, rtl } = await openGallery({ images: sampleImages });
+    rtl.fireEvent(view.getByTestId('gallery-image-img-1'), 'onLongPress');
+    rtl.fireEvent.press(view.getByTestId('gallery-image-img-1'));
+    expect(view.getByText('0 selected')).toBeTruthy();
 
-    const result = render(<GalleryScreen />);
-    const gridItems = getGridItems(result);
-
-    // Enter select mode
-    fireEvent(gridItems[0], 'onLongPress');
-    expect(result.getByText('1 selected')).toBeTruthy();
-
-    // Find the X button in select mode header (first touchable)
-    const touchables = result.UNSAFE_getAllByType(TouchableOpacity);
-    // The first touchable in select mode is the close/X button
-    fireEvent.press(touchables[0]);
-
-    // Should be back to normal mode
-    expect(result.getByText('Gallery')).toBeTruthy();
+    const trash = view.getByLabelText('Delete selected images');
+    expect(trash.props.accessibilityState?.disabled).toBe(true);
+    rtl.fireEvent.press(trash);
+    expect(view.queryByText('Delete Images')).toBeNull();
   });
 
-  it('tapping image in select mode toggles selection', () => {
-    mockGeneratedImages.push(...sampleImages);
-
-    const result = render(<GalleryScreen />);
-    let gridItems = getGridItems(result);
-
-    // Enter select mode
-    fireEvent(gridItems[0], 'onLongPress');
-    expect(result.getByText('1 selected')).toBeTruthy();
-
-    // Tap second image to select it
-    gridItems = getGridItems(result);
-    fireEvent.press(gridItems[1]);
-    expect(result.getByText('2 selected')).toBeTruthy();
-
-    // Tap second image again to deselect
-    gridItems = getGridItems(result);
-    fireEvent.press(gridItems[1]);
-    expect(result.getByText('1 selected')).toBeTruthy();
-  });
-
-  it('delete selected images with confirmation', async () => {
-    mockGeneratedImages.push(...sampleImages);
-
-    const result = render(<GalleryScreen />);
-    const gridItems = getGridItems(result);
-
-    // Enter select mode
-    fireEvent(gridItems[0], 'onLongPress');
-    // Select all
-    fireEvent.press(result.getByText('All'));
-    expect(result.getByText('3 selected')).toBeTruthy();
-
-    // The header's trash button, by its label (pressing every header button in turn would also
-    // press the Videos tab, which ends image select mode).
-    fireEvent.press(result.getByLabelText('Delete selected images'));
-
-    expect(mockShowAlert).toHaveBeenCalledWith(
-      'Delete Images',
-      expect.stringContaining('3'),
-      expect.any(Array),
-    );
-
-    // Confirm deletion
-    await act(async () => {
-      fireEvent.press(result.getByTestId('alert-button-Delete'));
-    });
-
-    expect(mockDeleteGeneratedImage).toHaveBeenCalledTimes(3);
-    expect(mockRemoveGeneratedImage).toHaveBeenCalledTimes(3);
-  });
-
-  it('handleDeleteSelected does nothing when no items selected', () => {
-    mockGeneratedImages.push(...sampleImages);
-
-    const result = render(<GalleryScreen />);
-    const gridItems = getGridItems(result);
-
-    // Enter select mode
-    fireEvent(gridItems[0], 'onLongPress');
-    // Deselect the item
-    const updatedGridItems = getGridItems(result);
-    fireEvent.press(updatedGridItems[0]);
-    expect(result.getByText('0 selected')).toBeTruthy();
-
-    // Try to delete with nothing selected - the button should be disabled
-    // The trash icon has disabled prop when selectedIds.size === 0
-    const touchables = result.UNSAFE_getAllByType(TouchableOpacity);
-    const disabledButtons = touchables.filter((t: any) => t.props.disabled === true);
-    expect(disabledButtons.length).toBeGreaterThan(0);
-  });
-
-  it('syncs images from disk into store on mount', async () => {
-    const diskImages = [
-      {
-        id: 'disk-img-1',
-        prompt: 'From disk',
-        imagePath: '/disk/image.png',
-        width: 512,
-        height: 512,
-        steps: 10,
-        seed: 999,
-        modelId: 'test',
-        createdAt: '2026-01-01T00:00:00.000Z',
+  it('adds the images the native store holds to the Gallery on mount', async () => {
+    const g = await openGallery({
+      images: [sampleImages[0]],
+      before: ({ boundary, imagePath }) => {
+        boundary.fs!.seedFile(imagePath('disk-img-1'), 1024);
+        boundary.diffusion.seedGeneratedImages([
+          // Already in the Gallery: not added twice.
+          { id: 'img-1', prompt: 'A sunset over mountains', imagePath: imagePath('img-1'), createdAt: '2026-01-15T10:00:00.000Z' },
+          { id: 'disk-img-1', prompt: 'From disk', imagePath: imagePath('disk-img-1'), width: 512, height: 512, steps: 10, seed: 999, modelId: 'test', createdAt: '2026-01-01T00:00:00.000Z' },
+        ]);
       },
-    ];
-    mockGetGeneratedImages.mockResolvedValue(diskImages as any);
-
-    render(<GalleryScreen />);
-
-    await act(async () => {
-      await Promise.resolve();
     });
 
-    // The mock getGeneratedImages should have been called
-    expect(mockGetGeneratedImages).toHaveBeenCalled();
+    expect(await g.view.findByTestId('gallery-image-disk-img-1')).toBeTruthy();
+    expect(g.useAppStore.getState().generatedImages.map((i: { id: string }) => i.id).sort()).toEqual(['disk-img-1', 'img-1']);
+    expect(g.view.getByText('2')).toBeTruthy();
   });
 
-  it('handles save image on iOS using Share', async () => {
-    const originalPlatform = Platform.OS;
-    Object.defineProperty(Platform, 'OS', { value: 'ios', writable: true });
-
-    const shareSpy = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' } as any);
-
-    mockGeneratedImages.push(...sampleImages);
-
-    const result = render(<GalleryScreen />);
-    const gridItems = getGridItems(result);
-
-    // Open viewer
-    fireEvent.press(gridItems[0]);
-    // Press Save
-    await act(async () => {
-      fireEvent.press(result.getByText('Save'));
-    });
-
-    expect(shareSpy).toHaveBeenCalledWith({
-      url: 'file:///mock/generated/sunset.png',
-    });
-
-    shareSpy.mockRestore();
-    Object.defineProperty(Platform, 'OS', { value: originalPlatform, writable: true });
-  });
-
-  it('shows generation banner when generating', () => {
-    mockImageGenState = {
-      isGenerating: true,
-      prompt: 'A beautiful landscape',
-      previewPath: null,
-      progress: { step: 5, totalSteps: 20 },
+  it('on iOS, Save hands the image file to the share sheet', async () => {
+    const g = await openGallery({ images: sampleImages, platform: 'ios' });
+    const { Share } = require('react-native');
+    // The OS share sheet is the device boundary: record what reached it.
+    const shared: unknown[] = [];
+    Share.share = async (content: unknown) => {
+      shared.push(content);
+      return { action: 'sharedAction' };
     };
 
-    const { getByText } = render(<GalleryScreen />);
-    expect(getByText('Generating...')).toBeTruthy();
-    expect(getByText('A beautiful landscape')).toBeTruthy();
-    expect(getByText('5/20')).toBeTruthy();
-  });
-
-  it('shows "Refining..." when preview path exists', () => {
-    mockImageGenState = {
-      isGenerating: true,
-      prompt: 'A landscape',
-      previewPath: 'file:///preview.png',
-      progress: { step: 15, totalSteps: 20 },
-    };
-
-    const { getByText } = render(<GalleryScreen />);
-    expect(getByText('Refining...')).toBeTruthy();
-  });
-
-  it('cancel generation button calls cancelGeneration', () => {
-    const { cancelGeneration: mockCancelGen } = jest.requireMock('../../../src/services').imageGenerationService;
-
-    mockImageGenState = {
-      isGenerating: true,
-      prompt: 'A landscape',
-      previewPath: null,
-      progress: null,
-    };
-
-    const { UNSAFE_getAllByType } = render(<GalleryScreen />);
-    const touchables = UNSAFE_getAllByType(TouchableOpacity);
-    // The banner has: [close button (header)], then [cancel button in banner]
-    // The cancel button is a small button inside the genBanner
-    // Try pressing each non-grid touchable until cancelGeneration is called
-    for (const t of touchables) {
-      if (t.props.activeOpacity === 0.8) continue; // skip grid items
-      fireEvent.press(t);
-      if (mockCancelGen.mock.calls.length > 0) break;
-    }
-    expect(mockCancelGen).toHaveBeenCalled();
-  });
-
-  it('modal onRequestClose clears selected image and details', () => {
-    mockGeneratedImages.push(...sampleImages);
-
-    const result = render(<GalleryScreen />);
-    const gridItems = getGridItems(result);
-
-    // Open viewer
-    fireEvent.press(gridItems[0]);
-    expect(result.getByText('Info')).toBeTruthy();
-
-    // Find the Modal and trigger onRequestClose
-    result.UNSAFE_root.findAll((node: any) =>
-      node.type && (node.type.name === 'Modal' || node.type === 'Modal' ||
-        (typeof node.type === 'string' && node.type.toLowerCase() === 'modal'))
-    );
-    // Alternatively, use the backdrop press
-    const touchables = result.UNSAFE_getAllByType(TouchableOpacity);
-    // The backdrop is in the viewerContainer - it's the one with activeOpacity === 1
-    const backdrop = touchables.find((t: any) => t.props.activeOpacity === 1);
-    if (backdrop) {
-      fireEvent.press(backdrop);
-      // After pressing, the modal should close
-      expect(result.queryByText('Save')).toBeNull();
-    }
-  });
-
-  it('details sheet shows negative prompt when present', () => {
-    mockGeneratedImages.push(...sampleImages);
-
-    const result = render(<GalleryScreen />);
-    const gridItems = getGridItems(result);
-
-    // Open viewer for image with negative prompt (img-2)
-    fireEvent.press(gridItems[1]);
-    // Press Info
-    fireEvent.press(result.getByText('Info'));
-
-    expect(result.getByText('NEGATIVE')).toBeTruthy();
-    expect(result.getByText('ugly, blurry')).toBeTruthy();
-  });
-
-  it('details sheet Done button closes details', () => {
-    mockGeneratedImages.push(...sampleImages);
-
-    const result = render(<GalleryScreen />);
-    const gridItems = getGridItems(result);
-
-    // Open viewer
-    fireEvent.press(gridItems[0]);
-    // Open details
-    fireEvent.press(result.getByText('Info'));
-    expect(result.getByText('Image Details')).toBeTruthy();
-
-    // Press Done
-    fireEvent.press(result.getByText('Done'));
-    // Details sheet should close
-    expect(result.queryByText('Image Details')).toBeNull();
-  });
-
-  it('alert onClose calls hideAlert', () => {
-    mockGeneratedImages.push(...sampleImages);
-
-    const result = render(<GalleryScreen />);
-    const gridItems = getGridItems(result);
-
-    // Open viewer and delete
-    fireEvent.press(gridItems[0]);
-    fireEvent.press(result.getByText('Delete'));
-
-    // Close alert
-    fireEvent.press(result.getByTestId('alert-close'));
-    expect(mockHideAlert).toHaveBeenCalled();
-  });
-
-  it('filters images by chat attachment IDs', () => {
-    const { useChatStore } = jest.requireMock('../../../src/stores');
-    useChatStore.mockImplementation((selector?: any) => {
-      const state = {
-        conversations: [
-          {
-            id: 'conv-123',
-            messages: [
-              {
-                id: 'msg-1',
-                attachments: [
-                  { id: 'img-1', type: 'image' },
-                ],
-              },
-            ],
-          },
-        ],
-      };
-      return selector ? selector(state) : state;
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-image-img-1'));
+    await g.rtl.act(async () => {
+      g.rtl.fireEvent.press(g.view.getByText('Save'));
     });
 
-    mockRouteParams = { conversationId: 'conv-123' };
-    mockGeneratedImages.push(...sampleImages);
-
-    const { getByText } = render(<GalleryScreen />);
-    // img-1 should be included because it's in the chat attachments
-    expect(getByText('1')).toBeTruthy();
-
-    // Reset
-    useChatStore.mockImplementation((selector?: any) => {
-      const state = { conversations: [] };
-      return selector ? selector(state) : state;
-    });
+    expect(shared).toEqual([{ url: `file://${g.imagePath('img-1')}` }]);
   });
 
-  it('formatDate handles timestamp strings', () => {
-    mockGeneratedImages.push({
-      ...sampleImages[0],
-      createdAt: String(Date.now()), // numeric timestamp as string
+  it('shows the generating banner with the prompt and the native progress', async () => {
+    const g = await openGallery({ platform: 'ios' });
+    const { run } = await startHeldGeneration(g, 'A beautiful landscape');
+
+    expect(await g.view.findByText('Generating...')).toBeTruthy();
+    expect(g.view.getByText('A beautiful landscape')).toBeTruthy();
+
+    await g.rtl.act(async () => {
+      g.boundary.litertEvents.emit('LocalDreamProgress', { step: 5, totalSteps: 20, progress: 0.25 });
     });
+    expect(await g.view.findByText('5/20')).toBeTruthy();
 
-    const result = render(<GalleryScreen />);
-    const gridItems = getGridItems(result);
-
-    // Open viewer and details
-    fireEvent.press(gridItems[0]);
-    fireEvent.press(result.getByText('Info'));
-
-    // The date should be rendered (any format)
-    expect(result.getByText('PROMPT')).toBeTruthy();
+    g.boundary.diffusion.releaseGeneration();
+    await g.rtl.act(async () => { await run; });
   });
 
-  it('long press does not re-enter select mode if already in select mode', () => {
-    mockGeneratedImages.push(...sampleImages);
+  it('shows "Refining..." once native sends a preview', async () => {
+    const g = await openGallery({ platform: 'ios' });
+    const { run } = await startHeldGeneration(g, 'A landscape');
 
-    const result = render(<GalleryScreen />);
-    let gridItems = getGridItems(result);
+    await g.rtl.act(async () => {
+      g.boundary.litertEvents.emit('LocalDreamProgress', {
+        step: 15, totalSteps: 20, progress: 0.75, previewPath: '/tmp/preview.png',
+      });
+    });
+    expect(await g.view.findByText('Refining...')).toBeTruthy();
 
-    // Enter select mode
-    fireEvent(gridItems[0], 'onLongPress');
-    expect(result.getByText('1 selected')).toBeTruthy();
+    g.boundary.diffusion.releaseGeneration();
+    await g.rtl.act(async () => { await run; });
+  });
 
-    // Long press again on a different item while already in select mode
-    gridItems = getGridItems(result);
-    fireEvent(gridItems[1], 'onLongPress');
-    // Should still be in select mode, not re-entered
-    expect(result.getByText('1 selected')).toBeTruthy();
+  it('the banner cancel stops the native generation, and no image is added', async () => {
+    const g = await openGallery({ platform: 'ios' });
+    const { run } = await startHeldGeneration(g, 'A landscape');
+    await g.view.findByText('Generating...');
+
+    await g.rtl.act(async () => {
+      g.rtl.fireEvent.press(g.view.getByLabelText('Stop image generation'));
+    });
+    await g.rtl.act(async () => { await run; });
+
+    expect(g.boundary.diffusion.cancelCount()).toBe(1);
+    await g.rtl.waitFor(() => expect(g.view.queryByText('Generating...')).toBeNull());
+    expect(g.useAppStore.getState().generatedImages).toEqual([]);
+    expect(g.view.getByText('No generated images yet')).toBeTruthy();
+  });
+
+  it('the system back gesture closes the viewer', async () => {
+    const { view, rtl } = await openGallery({ images: sampleImages });
+    const { Modal } = require('react-native');
+    rtl.fireEvent.press(view.getByTestId('gallery-image-img-1'));
+    expect(view.getByText('Info')).toBeTruthy();
+
+    const viewer = view.UNSAFE_getAllByType(Modal).find((m: any) => m.props.visible && m.props.transparent);
+    rtl.fireEvent(viewer!, 'requestClose');
+    expect(view.queryByText('Save')).toBeNull();
+  });
+
+  it('details sheet shows negative prompt when present', async () => {
+    const { view, rtl } = await openGallery({ images: sampleImages });
+    rtl.fireEvent.press(view.getByTestId('gallery-image-img-2'));
+    rtl.fireEvent.press(view.getByText('Info'));
+    expect(view.getByText('NEGATIVE')).toBeTruthy();
+    expect(view.getByText('ugly, blurry')).toBeTruthy();
+  });
+
+  it('details sheet Done button closes details', async () => {
+    const { view, rtl } = await openGallery({ images: sampleImages });
+    rtl.fireEvent.press(view.getByTestId('gallery-image-img-1'));
+    rtl.fireEvent.press(view.getByText('Info'));
+    expect(view.getByText('Image Details')).toBeTruthy();
+    rtl.fireEvent.press(view.getByText('Done'));
+    expect(view.queryByText('Image Details')).toBeNull();
+  });
+
+  it('cancelling the delete alert closes it and keeps the image', async () => {
+    const g = await openGallery({ images: sampleImages });
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-image-img-1'));
+    g.rtl.fireEvent.press(g.view.getByText('Delete'));
+    await g.view.findByText('Delete Image');
+
+    g.rtl.fireEvent.press(g.view.getByLabelText('Cancel'));
+    await g.rtl.waitFor(() => expect(g.view.queryByText('Delete Image')).toBeNull());
+    expect(g.useAppStore.getState().generatedImages).toHaveLength(3);
+    expect(await g.boundary.fs!.exists(g.imagePath('img-1'))).toBe(true);
+  });
+
+  it('in a chat, includes images attached to its messages', async () => {
+    const { view } = await openGallery({
+      images: sampleImages,
+      before: () => {
+        // The chat as the app writes it: a conversation, and a message carrying img-1 as an attachment.
+        const { useChatStore } = require('../../../src/stores');
+        const conversationId = useChatStore.getState().createConversation('model-1', 'Chat');
+        useChatStore.getState().addMessage(conversationId, {
+          role: 'user',
+          content: 'look',
+          attachments: [{ id: 'img-1', type: 'image', uri: 'file:///x.png' }],
+        });
+        return { conversationId };
+      },
+    });
+    expect(view.getByText('1')).toBeTruthy();
+    expect(view.getByTestId('gallery-image-img-1')).toBeTruthy();
+    expect(view.queryByTestId('gallery-image-img-2')).toBeNull();
+  });
+
+  it('shows the date of an image saved with a numeric timestamp', async () => {
+    const createdAt = String(Date.UTC(2026, 0, 15, 10));
+    const { view, rtl } = await openGallery({ images: [{ ...sampleImages[0], createdAt }] });
+    const { formatDate } = require('../../../src/screens/GalleryScreen/useGalleryActions');
+    rtl.fireEvent.press(view.getByTestId('gallery-image-img-1'));
+    rtl.fireEvent.press(view.getByText('Info'));
+    expect(view.getByText(formatDate(createdAt))).toBeTruthy();
+    expect(formatDate(createdAt)).toContain('2026');
+  });
+
+  it('long press does not re-enter select mode if already in select mode', async () => {
+    const { view, rtl } = await openGallery({ images: sampleImages });
+    rtl.fireEvent(view.getByTestId('gallery-image-img-1'), 'onLongPress');
+    expect(view.getByText('1 selected')).toBeTruthy();
+    rtl.fireEvent(view.getByTestId('gallery-image-img-2'), 'onLongPress');
+    expect(view.getByText('1 selected')).toBeTruthy();
   });
 });

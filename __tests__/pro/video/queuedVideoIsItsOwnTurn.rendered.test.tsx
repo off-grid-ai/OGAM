@@ -19,11 +19,8 @@ import {
   type DesktopVideoJobs,
 } from '../../harness/desktopVideoServer';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const CLIP = 'a paper boat on a pond';
 const COMBINED_REPLY = 'Both questions, answered together.';
@@ -37,7 +34,7 @@ afterEach(() => {
 });
 
 it('queued questions go together and a queued video prompt goes alone', async () => {
-  const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+  const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
   const { rtl } = h;
   desktop = serveDesktopVideoJobs(h.boundary.fs!);
 
@@ -107,7 +104,7 @@ it('queued questions go together and a queued video prompt goes alone', async ()
 });
 
 it('Send now on a queued question stops the running video and sends the question', async () => {
-  const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+  const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
   const { rtl } = h;
   desktop = serveDesktopVideoJobs(h.boundary.fs!);
   const { remoteServerManager } = require('../../../src/services/remoteServerManager');

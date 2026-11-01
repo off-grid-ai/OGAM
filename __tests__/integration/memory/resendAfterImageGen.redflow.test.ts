@@ -14,7 +14,7 @@ afterEach(() => resetDeviceMemory());
 
 describe('M11 — resend after image-gen (co-reside under balanced)', () => {
   it('reloads the clean text model alongside the resident image model (co-reside, no swap)', async () => {
-    setDeviceMemory({ platform: 'android', totalGB: 12, availGB: 7 });
+    await setDeviceMemory({ platform: 'android', totalGB: 12, availGB: 7 });
     // Image gen just ran → the image model is dirty-resident.
     makeResident({ key: 'image', type: 'image', modelId: 'sd', sizeMB: 2369, dirtyMemory: true });
 

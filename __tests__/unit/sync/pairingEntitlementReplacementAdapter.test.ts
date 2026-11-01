@@ -1,6 +1,11 @@
 import { PersonalMeshEntitlementError } from '@offgrid/sync';
 import { createPairingEntitlementReplacementAdapter } from '../../../pro/sync/pairingEntitlementReplacementAdapter';
+import type { PairedDevice } from '@offgrid/sync';
 import { pairingSecretStore } from '../../../pro/sync/pairingSecretStore';
+import { resetKeychain } from '../../harness/keyedRemoteServer';
+
+// The phone's keychain: it really stores what the pairing store persists.
+jest.mock('react-native-keychain', () => require('../../harness/deviceKeychain').deviceKeychainModule());
 
 /**
  * The local half of an eviction, in the four steps it is actually driven through.
@@ -13,6 +18,9 @@ import { pairingSecretStore } from '../../../pro/sync/pairingSecretStore';
  *
  * That makes this the only place their behaviour is stated. If the announcement is ever moved (and it
  * should be - see docs/GAPS_BACKLOG.md), these are the rules the flow has to come back to.
+ *
+ * The adapter and the real pairing store run. Trust is written by pairing; transactions are opened,
+ * committed and rolled back through the adapter itself.
  */
 describe('the local half of an eviction', () => {
   const installation = {
@@ -23,6 +31,10 @@ describe('the local half of an eviction', () => {
     lastActiveAt: 1_700_000_000_000,
     createdAt: 1_700_000_000_000,
   };
+  const desktop: PairedDevice = {
+    id: 'desktop-peer', name: 'Off Grid AI Desktop', platform: 'macos', version: '1',
+    host: '192.168.1.20', port: 7878, sharedSecret: 'secret', membershipId: 'generation-7', pairedAt: 1,
+  };
 
   const retired: Array<[string, string | undefined]> = [];
   const adapter = createPairingEntitlementReplacementAdapter(
@@ -31,107 +43,86 @@ describe('the local half of an eviction', () => {
     },
   );
 
-  beforeEach(() => {
+  beforeEach(async () => {
     retired.length = 0;
-    jest.restoreAllMocks();
+    resetKeychain();
+    pairingSecretStore.resetCache();
+    await pairingSecretStore.load();
   });
 
-  it('opens the transaction the store gives it', async () => {
-    const prepare = jest
-      .spyOn(pairingSecretStore, 'prepareCapacityReplacement')
-      .mockResolvedValue('transaction-1');
+  /** This phone paired with the desktop: it holds trust under membership generation-7. */
+  async function pairedWithDesktop() {
+    await pairingSecretStore.beginPairing(desktop);
+    await pairingSecretStore.commitPairing(desktop);
+  }
 
-    await expect(adapter.prepareEviction(installation)).resolves.toBe(
-      'transaction-1',
-    );
-    expect(prepare).toHaveBeenCalledWith(installation);
+  it('opens the transaction in the store, carrying the membership this phone trusts', async () => {
+    await pairedWithDesktop();
+
+    const id = await adapter.prepareEviction(installation);
+
+    expect(pairingSecretStore.capacityReplacement(id)).toEqual(expect.objectContaining({
+      id, installation, membershipId: 'generation-7', state: 'prepared',
+    }));
   });
 
   it('retires the trust the transaction was carrying, then closes it', async () => {
-    jest.spyOn(pairingSecretStore, 'capacityReplacement').mockReturnValue({
-      id: 'transaction-1',
-      installation,
-      membershipId: 'generation-7',
-      state: 'committed',
-      createdAt: 1_700_000_000_000,
-    });
-    const complete = jest
-      .spyOn(pairingSecretStore, 'completeCapacityReplacement')
-      .mockResolvedValue(undefined);
+    await pairedWithDesktop();
+    const id = await adapter.prepareEviction(installation);
+    await adapter.commitEviction(id);
 
-    await adapter.finalizeEviction('transaction-1');
+    await adapter.finalizeEviction(id);
 
     expect(retired).toEqual([['desktop-peer', 'generation-7']]);
-    expect(complete).toHaveBeenCalledWith('transaction-1');
+    expect(pairingSecretStore.capacityReplacement(id)).toBeUndefined();
   });
 
   it('closes an eviction that had no trust to retire', async () => {
-    jest.spyOn(pairingSecretStore, 'capacityReplacement').mockReturnValue({
-      id: 'transaction-1',
-      installation,
-      state: 'committed',
-      createdAt: 1_700_000_000_000,
-    });
-    jest
-      .spyOn(pairingSecretStore, 'completeCapacityReplacement')
-      .mockResolvedValue(undefined);
+    const id = await adapter.prepareEviction(installation);
+    await adapter.commitEviction(id);
 
-    await adapter.finalizeEviction('transaction-1');
+    await adapter.finalizeEviction(id);
 
     // Evicting a device this phone never paired with: the seat is released and there is no membership to
     // withdraw. `undefined` reaches finalizeMembershipEviction, which owns the rule that it is a no-op.
     expect(retired).toEqual([['desktop-peer', undefined]]);
+    expect(pairingSecretStore.capacityReplacement(id)).toBeUndefined();
   });
 
   it('treats an already-closed transaction as done rather than broken', async () => {
-    jest
-      .spyOn(pairingSecretStore, 'capacityReplacement')
-      .mockReturnValue(undefined);
-    const complete = jest.spyOn(
-      pairingSecretStore,
-      'completeCapacityReplacement',
-    );
+    await pairedWithDesktop();
+    const id = await adapter.prepareEviction(installation);
+    await adapter.commitEviction(id);
+    await adapter.finalizeEviction(id);
+    retired.length = 0;
 
-    await expect(
-      adapter.finalizeEviction('transaction-1'),
-    ).resolves.toBeUndefined();
+    await expect(adapter.finalizeEviction(id)).resolves.toBeUndefined();
 
     // This is the branch the app actually takes. Reporting a failure here is what made a completed
     // eviction announce `replacement_failed` after it had entirely succeeded.
     expect(retired).toEqual([]);
-    expect(complete).not.toHaveBeenCalled();
   });
 
   it('still refuses to close a transaction that was never committed', async () => {
-    jest.spyOn(pairingSecretStore, 'capacityReplacement').mockReturnValue({
-      id: 'transaction-1',
-      installation,
-      membershipId: 'generation-7',
-      state: 'prepared',
-      createdAt: 1_700_000_000_000,
-    });
+    await pairedWithDesktop();
+    const id = await adapter.prepareEviction(installation);
 
     // Tolerating a MISSING transaction is not the same as tolerating an unfinished one: a prepared record
     // means the registry side never happened, and finishing anyway would retire trust for a seat that was
     // never released.
-    await expect(adapter.finalizeEviction('transaction-1')).rejects.toThrow(
-      PersonalMeshEntitlementError,
-    );
+    await expect(adapter.finalizeEviction(id)).rejects.toThrow(PersonalMeshEntitlementError);
     expect(retired).toEqual([]);
+    expect(pairingSecretStore.capacityReplacement(id)?.state).toBe('prepared');
   });
 
   it('rolls back and commits through the store', async () => {
-    const rollback = jest
-      .spyOn(pairingSecretStore, 'rollbackCapacityReplacement')
-      .mockResolvedValue(undefined);
-    const commit = jest
-      .spyOn(pairingSecretStore, 'commitCapacityReplacement')
-      .mockResolvedValue(undefined);
+    const abandoned = await adapter.prepareEviction(installation);
+    const kept = await adapter.prepareEviction(installation);
 
-    await adapter.rollbackEviction('transaction-1');
-    await adapter.commitEviction('transaction-1');
+    await adapter.rollbackEviction(abandoned);
+    await adapter.commitEviction(kept);
 
-    expect(rollback).toHaveBeenCalledWith('transaction-1');
-    expect(commit).toHaveBeenCalledWith('transaction-1');
+    expect(pairingSecretStore.capacityReplacement(abandoned)).toBeUndefined();
+    expect(pairingSecretStore.capacityReplacement(kept)?.state).toBe('committed');
   });
 });

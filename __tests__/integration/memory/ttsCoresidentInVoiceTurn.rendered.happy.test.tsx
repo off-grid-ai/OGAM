@@ -12,15 +12,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('T120 (rendered) — TTS co-resides during a voice turn (In Memory UI)', () => {
   it('lists the TTS sidecar with its RAM after a spoken voice turn, alongside the text model', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android', whisper: true, pro: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android', whisper: true, pro: true });
     await h.setupWhisperModel();
     h.render();
      
@@ -38,7 +35,7 @@ describe('T120 (rendered) — TTS co-resides during a voice turn (In Memory UI)'
 
     // Result via the In Memory UI (rendered AFTER the voice turn): the TTS sidecar is listed with its RAM,
     // co-resident with the active text model.
-    const sel = h.rtl.render(React.createElement(ModelsManagerSheet, {
+    const sel = h.renderAside(React.createElement(ModelsManagerSheet, {
       visible: true, onClose: () => {}, labels: { text: '—', image: '—', voice: '—', speech: '—' },
       loadingState: { isLoading: false }, isEjecting: false, hasActiveModel: false,
       onOpenRow: () => {}, onEject: () => {},

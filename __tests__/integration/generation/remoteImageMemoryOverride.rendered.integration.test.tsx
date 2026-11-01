@@ -1,11 +1,7 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('remote image memory refusal in Chat', () => {
   const originalFetch = global.fetch;
@@ -16,7 +12,7 @@ describe('remote image memory refusal in Chat', () => {
   });
 
   it('routes a remote-only image, shows the server reason, and sends Run anyway only after a tap', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android' });
     const { remoteServerManager } = require('../../../src/services/remoteServerManager');
     const { useRemoteServerStore } = require('../../../src/stores/remoteServerStore');
     const server = await remoteServerManager.addServer({
@@ -60,7 +56,7 @@ describe('remote image memory refusal in Chat', () => {
   });
 
   it('shows an ordinary provider rejection without a memory override', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android' });
     const { remoteServerManager } = require('../../../src/services/remoteServerManager');
     const { useRemoteServerStore } = require('../../../src/stores/remoteServerStore');
     const server = await remoteServerManager.addServer({
@@ -108,7 +104,7 @@ describe.each([
   });
 
   it('shows the reason without the code, and Run anyway draws the image with the override', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android' });
     const desktop = serveDesktopImageJobs({ memoryReason: REASON, failWithCode });
     restore = desktop.restore;
     await chooseDesktopImageModel(h);

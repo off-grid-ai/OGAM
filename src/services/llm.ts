@@ -47,6 +47,9 @@ class LLMService {
   private loadedWithMtp: boolean = false;
   private isGenerating: boolean = false;
   private activeCompletionPromise: Promise<void> | null = null;
+  /** A Stop asked for during the current turn. llama.rn drops a stop sent before its completion starts
+   *  (the turn may still be preparing its messages), so the turn checks this when the completion begins. */
+  private stopRequested = false;
   /**
    * Every native call on the context that is running or about to start. Release waits for all of
    * them: freeing the context under a completion that was still being set up crashed the app inside
@@ -94,6 +97,31 @@ class LLMService {
     return work;
   }
   /** The loaded context, or an error when there is none or it is being released. */
+  /** The context with a completion that honours a Stop asked for before it started, or as it starts. */
+  private stopAware(ctx: LlamaContext): LlamaContext {
+    const complete = (params: unknown, onToken?: (data: any) => void) => {
+      if (this.stopRequested) {
+        logger.log('[LLM] Stop arrived before the completion started; not starting it');
+        return Promise.resolve({ text: '', content: '', interrupted: true, tokens_predicted: 0 });
+      }
+      let resent = false;
+      return ctx.completion(params as any, (data: any) => {
+        // A Stop that landed while the native completion was starting was cleared by it: send it again.
+        if (this.stopRequested && !resent) {
+          resent = true;
+          ctx.stopCompletion().catch(() => {});
+        }
+        onToken?.(data);
+      });
+    };
+    return new Proxy(ctx, {
+      get: (target, key) => {
+        if (key === 'completion') return complete;
+        const value = Reflect.get(target, key);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+  }
   private usableContext(): LlamaContext {
     if (!this.context || this.releasingContext) throw new Error('No model loaded');
     return this.context;
@@ -218,7 +246,8 @@ class LLMService {
         this.context = null; this.currentModelPath = null; this.nativeConversationId = null; this.multimodalSupport = null;
         this.toolCallingSupported = false; this.thinkingSupported = false;
         Object.assign(this, { gpuEnabled: false, gpuReason: '', activeGpuLayers: 0, gpuDevices: [], requestedGpuLayers: 0, gpuAttemptFailed: false });
-        throw new Error(error?.message || 'Unknown error loading model');
+        // Keep the original error: it carries why the load failed (llmHelpers' loadFailure).
+        throw error instanceof Error ? error : new Error(error?.message || 'Unknown error loading model');
       }
     } finally {
       mutex.release();
@@ -362,9 +391,10 @@ class LLMService {
   getLoadedModelPath(): string | null { return this.currentModelPath; }
   async generateResponse(messages: Message[], options?: { onStream?: StreamCallback; onComplete?: CompleteCallback; disableThinking?: boolean }): Promise<string> {
     const { onStream, onComplete, ...opts } = options ?? {};
-    const ctx = this.usableContext();
+    const ctx = this.stopAware(this.usableContext());
     if (this.isGenerating) throw new Error('Generation already in progress');
     this.isGenerating = true;
+    this.stopRequested = false;
     const completionWork = this.trackNativeWork((async () => {
       const managed = await this.manageContextWindow(messages);
       const usable = await this.dropMissingImageAttachments(managed);
@@ -419,8 +449,9 @@ class LLMService {
   }
   async generateResponseWithTools(messages: Message[], options: { tools: any[]; onStream?: StreamCallback; onComplete?: CompleteCallback }): Promise<{ fullResponse: string; toolCalls: ToolCall[]; interrupted?: boolean }> {
     if (this.releasingContext) throw new Error('No model loaded');
+    if (!this.isGenerating) this.stopRequested = false;
     const work = this.trackNativeWork(generateWithToolsImpl({
-      context: this.context, isGenerating: this.isGenerating,
+      context: this.context ? this.stopAware(this.context) : null, isGenerating: this.isGenerating,
       isThinkingEnabled: this.isThinkingEnabled(),
       isGemma4Model: this.isGemma4Model(),
       disableCtxShift: this.shouldDisableCtxShift(),
@@ -469,9 +500,10 @@ class LLMService {
   }
   /** Generate a completion with a hard token cap (used for summarization, not user-facing). */
   async generateWithMaxTokens(messages: Message[], maxTokens: number): Promise<string> {
-    const ctx = this.usableContext();
+    const ctx = this.stopAware(this.usableContext());
     if (this.isGenerating) throw new Error('Generation already in progress');
     this.isGenerating = true;
+    this.stopRequested = false;
     let fullResponse = '';
     // Registered before the attachment check awaits, so an unload in that gap waits for this call.
     const completionWork = this.trackNativeWork((async () => {
@@ -502,6 +534,7 @@ class LLMService {
     }
   }
   async stopGeneration(): Promise<void> {
+    if (this.isGenerating || this.activeCompletionPromise !== null) this.stopRequested = true;
     if (this.context) { try { await this.context.stopCompletion(); } catch (e) { logger.log('[LLM] Stop error:', e); } }
     // Declare idle only AFTER the in-flight completion actually unwinds — llama cannot honor a
     // stop during prefill (a 2.6k-token KB prefill unwound ~9s on-device), so clearing the flag

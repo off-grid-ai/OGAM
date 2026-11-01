@@ -1,33 +1,22 @@
 /**
- * Real tests for the MCP OAuth flow: pkce.ts + tokenStore.ts + oauthClient.ts.
+ * Real tests for the MCP OAuth flow: pkce.ts + tokenStore.ts + metadata.ts + oauthClient.ts.
  *
- * Boundaries mocked (only genuine ones):
- *   - global.fetch            — the token endpoint / registration network calls
- *   - @modelcontextprotocol/sdk auth.js — discovery (a network+spec black box)
- *   - Date.now                — the expiry clock (for isAccessTokenExpired branches)
- * Everything else runs for REAL: the pkce encoding, the token-store cache + parsing,
- * the whole oauthClient orchestration. The native adapters (browser/crypto/storage) are
- * injected through the DESIGNED seam (`configureOAuthAdapters`) with dumb in-memory fakes
- * — that is not a mock of the code under test, it is the intended dependency-injection
- * point (see adapters.ts). Deleting any orchestration branch fails a test here.
+ * Faked (device and network edges only):
+ *   - global.fetch: the MCP server and its authorization server answer over HTTP: the
+ *     protected-resource and authorization-server metadata, dynamic client registration, and the
+ *     token endpoint (see serveAuthServer below).
+ *   - Date.now: the expiry clock (for isAccessTokenExpired branches).
+ *   - The native adapters (sign-in browser, Keychain, crypto), through configureOAuthAdapters.
+ * Discovery runs the real MCP SDK over that fetch: the app loads the SDK's ESM build with a
+ * dynamic import(), which jest's CommonJS VM cannot run, so the same SDK's CommonJS build is
+ * served in its place. Everything that is ours runs for real.
  */
 
-// Discovery (discoverProtectedResource / discoverAuthServer) is the SDK+network boundary:
-// it lazy-`import()`s @modelcontextprotocol/sdk, which jest's CJS VM cannot dynamically
-// import. We stub ONLY those two discovery fns and keep everything else in metadata.ts
-// REAL — crucially registerClient (real DCR HTTP via global.fetch) still runs, and it is
-// exercised by the authorize tests. So oauthClient's orchestration is driven for real; we
-// replace only the un-runnable network/SDK seam.
-const mockDiscoverProtectedResource = jest.fn();
-const mockDiscoverAuthServer = jest.fn();
-jest.mock('@offgrid/pro/mcp/oauth/metadata', () => {
-  const actual = jest.requireActual('@offgrid/pro/mcp/oauth/metadata');
-  return {
-    ...actual,
-    discoverProtectedResource: (...a: any[]) => mockDiscoverProtectedResource(...a),
-    discoverAuthServer: (...a: any[]) => mockDiscoverAuthServer(...a),
-  };
-});
+jest.mock(
+  '@modelcontextprotocol/sdk/dist/esm/client/auth.js',
+  () => require('../../../node_modules/@modelcontextprotocol/sdk/dist/cjs/client/auth.js'),
+  { virtual: true },
+);
 
 import {
   base64UrlEncode,
@@ -59,6 +48,7 @@ import type {
   OAuthServerMetadata,
   OAuthTokens,
 } from '@offgrid/pro/mcp/oauth/types';
+import { isUnder } from '../../harness/urlMatch';
 
 // ---- dumb in-memory native fakes (the injected seam, not the code under test) ----
 
@@ -120,6 +110,67 @@ function metadata(over: Partial<AuthServerMetadata> = {}): OAuthServerMetadata {
   };
 }
 
+/** One request the app made to the fake MCP / authorization server. */
+interface AuthRequest {
+  method: string;
+  url: string;
+  body: string;
+}
+
+/**
+ * The MCP server at https://mcp.example.com and its authorization server, over fetch. The MCP
+ * server publishes protected-resource metadata naming the authorization server; that server
+ * publishes its metadata, registers clients, and answers the token endpoint with `tokens` in order.
+ * Returns every request the app made, in order.
+ */
+function serveAuthServer(opts: {
+  metadata?: Record<string, unknown>;
+  noRegistration?: boolean;
+  tokens?: Array<Record<string, unknown>>;
+} = {}): AuthRequest[] {
+  const requests: AuthRequest[] = [];
+  const tokens = [...(opts.tokens ?? [])];
+  const meta: Record<string, unknown> = {
+    issuer: AUTH.issuer,
+    authorization_endpoint: AUTH.authorizationEndpoint,
+    token_endpoint: AUTH.tokenEndpoint,
+    registration_endpoint: AUTH.registrationEndpoint,
+    scopes_supported: AUTH.scopesSupported,
+    token_endpoint_auth_methods_supported: ['none'],
+    response_types_supported: ['code'],
+    ...opts.metadata,
+  };
+  if (opts.noRegistration) delete meta.registration_endpoint;
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+  jest.spyOn(global, 'fetch').mockImplementation(async (input, init) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const method = init?.method ?? 'GET';
+    requests.push({ method, url, body: typeof init?.body === 'string' ? init.body : '' });
+    if (isUnder(url, 'https://mcp.example.com/.well-known/oauth-protected-resource')) {
+      return json({ resource: 'https://mcp.example.com', authorization_servers: [AUTH.issuer] });
+    }
+    if (isUnder(url, `${AUTH.issuer}/.well-known`)) return json(meta);
+    if (method === 'POST' && url === meta.registration_endpoint) return json({ client_id: 'reg' }, 201);
+    if (method === 'POST' && url === AUTH.tokenEndpoint) {
+      const next = tokens.shift();
+      return next ? json(next) : json({ error: 'invalid_grant' }, 400);
+    }
+    return new Response('not found', { status: 404 });
+  });
+  return requests;
+}
+
+/** The form body the app posted to the token endpoint (the code exchange). */
+function exchangeBody(requests: AuthRequest[]): string {
+  const exchange = requests.find(r => r.method === 'POST' && r.url === AUTH.tokenEndpoint);
+  if (!exchange) throw new Error('the app never called the token endpoint');
+  return exchange.body;
+}
+
+const registrations = (requests: AuthRequest[]) =>
+  requests.filter(r => r.method === 'POST' && r.url === AUTH.registrationEndpoint);
+
 let idCounter = 0;
 /** Unique serverId per test so the module-level tokenCache never bleeds across tests. */
 function sid(): string {
@@ -137,8 +188,6 @@ beforeEach(() => {
     redirectUri: 'offgrid://oauth/callback',
     clientName: 'Off Grid AI',
   });
-  mockDiscoverProtectedResource.mockReset();
-  mockDiscoverAuthServer.mockReset();
 });
 
 afterEach(() => {
@@ -335,17 +384,17 @@ describe('exchangeCodeForTokens / refreshAccessToken (token endpoint)', () => {
 // ============================ oauthClient.ts ============================
 
 describe('authorizeServer (interactive flow)', () => {
-  function stubDiscovery() {
-    mockDiscoverProtectedResource.mockResolvedValue({
-      resource: 'https://mcp.example.com',
-      authorizationServer: 'https://auth.example.com',
+  /** The browser returns to the app with `query`, carrying the state the app sent when asked. */
+  function signInReturns(query: (state: string) => string) {
+    browserAuthorize.mockImplementation(async (authUrl: string) => {
+      const state = new URL(authUrl).searchParams.get('state')!;
+      return `offgrid://oauth/callback${query(state)}`;
     });
-    mockDiscoverAuthServer.mockResolvedValue({ ...AUTH });
   }
 
   it('runs discover -> register(DCR) -> browser -> exchange -> store and returns metadata + saves tokens', async () => {
     const id = sid();
-    stubDiscovery();
+    const requests = serveAuthServer({ tokens: [{ access_token: 'ACCESS', refresh_token: 'REFRESH' }] });
     browserAuthorize.mockImplementation(async (authUrl: string) => {
       // Verify the URL carries PKCE + our state; echo back the real state so it matches.
       const state = new URL(authUrl).searchParams.get('state')!;
@@ -353,42 +402,33 @@ describe('authorizeServer (interactive flow)', () => {
       expect(new URL(authUrl).searchParams.get('scope')).toBe('read write');
       return `offgrid://oauth/callback?code=AUTHCODE&state=${state}`;
     });
-    // 1st fetch: DCR registration. 2nd fetch: token exchange.
-    const fetchMock = jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValueOnce(fetchOk({ client_id: 'reg-client-1' }))
-      .mockResolvedValueOnce(fetchOk({ access_token: 'ACCESS', refresh_token: 'REFRESH' }));
 
     const result = await authorizeServer(id, 'https://mcp.example.com');
 
-    expect(result.client.clientId).toBe('reg-client-1');
+    expect(result.client.clientId).toBe('reg');
     expect(result.auth.tokenEndpoint).toBe(AUTH.tokenEndpoint);
     // tokens actually persisted through the real store
     await expect(loadTokens(id)).resolves.toMatchObject({ accessToken: 'ACCESS', refreshToken: 'REFRESH' });
-    // exchange body carried our authorization code + the registered client id
-    const exchangeBody = (fetchMock.mock.calls[1][1] as RequestInit).body as string;
-    expect(exchangeBody).toContain('code=AUTHCODE');
-    expect(exchangeBody).toContain('client_id=reg-client-1');
+    // the app registered once, then exchanged our authorization code with the registered client id
+    expect(registrations(requests)).toHaveLength(1);
+    expect(exchangeBody(requests)).toContain('code=AUTHCODE');
+    expect(exchangeBody(requests)).toContain('client_id=reg');
   });
 
-  it('uses a manualClient and skips DCR (only the exchange fetch runs)', async () => {
+  it('uses a manualClient and skips DCR (only the exchange reaches the authorization server)', async () => {
     const id = sid();
-    stubDiscovery();
-    browserAuthorize.mockImplementation(async (authUrl: string) => {
-      const state = new URL(authUrl).searchParams.get('state')!;
-      return `offgrid://oauth/callback?code=CODE2&state=${state}`;
-    });
-    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(fetchOk({ access_token: 'MAN_ACCESS' }));
+    const requests = serveAuthServer({ tokens: [{ access_token: 'MAN_ACCESS' }] });
+    signInReturns(state => `?code=CODE2&state=${state}`);
 
     const result = await authorizeServer(id, 'https://mcp.example.com', {
       manualClient: { clientId: 'manual-id', clientSecret: 'manual-secret' },
     });
 
     expect(result.client).toEqual({ clientId: 'manual-id', clientSecret: 'manual-secret' });
-    // only ONE fetch (the exchange) — no registration call
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const body = (fetchMock.mock.calls[0][1] as RequestInit).body as string;
-    expect(body).toContain('client_id=manual-id');
+    // no registration call; exactly one token exchange
+    expect(registrations(requests)).toHaveLength(0);
+    expect(requests.filter(r => r.url === AUTH.tokenEndpoint)).toHaveLength(1);
+    expect(exchangeBody(requests)).toContain('client_id=manual-id');
     await expect(loadTokens(id)).resolves.toMatchObject({ accessToken: 'MAN_ACCESS' });
   });
 
@@ -402,26 +442,17 @@ describe('authorizeServer (interactive flow)', () => {
 
   it('throws no_dcr when there is neither a manual client nor a registration endpoint', async () => {
     const id = sid();
-    mockDiscoverProtectedResource.mockResolvedValue({
-      resource: 'https://mcp.example.com',
-      authorizationServer: 'https://auth.example.com',
-    });
-    // AuthServerMetadata with NO registrationEndpoint -> no DCR path.
-    mockDiscoverAuthServer.mockResolvedValue({
-      issuer: 'https://auth.example.com',
-      authorizationEndpoint: AUTH.authorizationEndpoint,
-      tokenEndpoint: AUTH.tokenEndpoint,
-    });
+    // The authorization server publishes NO registration_endpoint -> no DCR path.
+    serveAuthServer({ noRegistration: true });
     await expect(authorizeServer(id, 'https://mcp.example.com')).rejects.toMatchObject({ code: 'no_dcr' });
   });
 
   it('surfaces an authorization-denied error from the callback', async () => {
     const id = sid();
-    stubDiscovery();
+    serveAuthServer();
     browserAuthorize.mockResolvedValue(
       'offgrid://oauth/callback?error=access_denied&error_description=user%20said%20no',
     );
-    jest.spyOn(global, 'fetch').mockResolvedValue(fetchOk({ client_id: 'reg' }));
     await expect(authorizeServer(id, 'https://mcp.example.com')).rejects.toMatchObject({
       code: 'access_denied',
       message: expect.stringContaining('user said no'),
@@ -430,10 +461,9 @@ describe('authorizeServer (interactive flow)', () => {
 
   it('falls back to the raw error code when error_description is absent (?? branch)', async () => {
     const id = sid();
-    stubDiscovery();
+    serveAuthServer();
     // no error_description -> message uses the bare `error` value
     browserAuthorize.mockResolvedValue('offgrid://oauth/callback?error=server_error');
-    jest.spyOn(global, 'fetch').mockResolvedValue(fetchOk({ client_id: 'reg' }));
     await expect(authorizeServer(id, 'https://mcp.example.com')).rejects.toMatchObject({
       code: 'server_error',
       message: expect.stringContaining('server_error'),
@@ -442,15 +472,13 @@ describe('authorizeServer (interactive flow)', () => {
 
   it('builds an auth URL with & when the endpoint already has a query, and omits scope when none advertised', async () => {
     const id = sid();
-    mockDiscoverProtectedResource.mockResolvedValue({
-      resource: 'https://mcp.example.com',
-      authorizationServer: 'https://auth.example.com',
-    });
-    // endpoint already carries a query string; and no scopesSupported -> no `scope` param
-    mockDiscoverAuthServer.mockResolvedValue({
-      ...AUTH,
-      authorizationEndpoint: 'https://auth.example.com/authorize?ui=dark',
-      scopesSupported: undefined,
+    // endpoint already carries a query string; and no scopes_supported -> no `scope` param
+    serveAuthServer({
+      metadata: {
+        authorization_endpoint: 'https://auth.example.com/authorize?ui=dark',
+        scopes_supported: undefined,
+      },
+      tokens: [{ access_token: 'A' }],
     });
     let captured = '';
     browserAuthorize.mockImplementation(async (authUrl: string) => {
@@ -458,10 +486,6 @@ describe('authorizeServer (interactive flow)', () => {
       const state = new URL(authUrl).searchParams.get('state')!;
       return `offgrid://oauth/callback?code=Z&state=${state}`;
     });
-    jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValueOnce(fetchOk({ client_id: 'reg' }))
-      .mockResolvedValueOnce(fetchOk({ access_token: 'A' }));
 
     await authorizeServer(id, 'https://mcp.example.com');
     // existing query preserved, params appended with & (not a second ?)
@@ -471,47 +495,32 @@ describe('authorizeServer (interactive flow)', () => {
 
   it('throws state_mismatch when the callback state does not match (CSRF guard)', async () => {
     const id = sid();
-    stubDiscovery();
+    serveAuthServer();
     browserAuthorize.mockResolvedValue('offgrid://oauth/callback?code=X&state=WRONG');
-    jest.spyOn(global, 'fetch').mockResolvedValue(fetchOk({ client_id: 'reg' }));
     await expect(authorizeServer(id, 'https://mcp.example.com')).rejects.toMatchObject({ code: 'state_mismatch' });
   });
 
   it('treats a callback with no query string as empty params (state_mismatch)', async () => {
     const id = sid();
-    stubDiscovery();
+    serveAuthServer();
     // no '?' at all -> parseCallbackParams returns {} -> params.state (undefined) !== state
     browserAuthorize.mockResolvedValue('offgrid://oauth/callback');
-    jest.spyOn(global, 'fetch').mockResolvedValue(fetchOk({ client_id: 'reg' }));
     await expect(authorizeServer(id, 'https://mcp.example.com')).rejects.toMatchObject({ code: 'state_mismatch' });
   });
 
   it('skips malformed callback pairs that have no = and still reads the valid ones', async () => {
     const id = sid();
-    stubDiscovery();
-    browserAuthorize.mockImplementation(async (authUrl: string) => {
-      const state = new URL(authUrl).searchParams.get('state')!;
-      // "junk" pair (no '=') is skipped; code + state still parsed
-      return `offgrid://oauth/callback?junk&code=GOODCODE&state=${state}`;
-    });
-    jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValueOnce(fetchOk({ client_id: 'reg' }))
-      .mockResolvedValueOnce(fetchOk({ access_token: 'A' }));
-    const fetchMock = global.fetch as jest.Mock;
+    const requests = serveAuthServer({ tokens: [{ access_token: 'A' }] });
+    // "junk" pair (no '=') is skipped; code + state still parsed
+    signInReturns(state => `?junk&code=GOODCODE&state=${state}`);
     await authorizeServer(id, 'https://mcp.example.com');
-    const exchangeBody = (fetchMock.mock.calls[1][1] as RequestInit).body as string;
-    expect(exchangeBody).toContain('code=GOODCODE');
+    expect(exchangeBody(requests)).toContain('code=GOODCODE');
   });
 
   it('throws no_code when the callback has a matching state but no code', async () => {
     const id = sid();
-    stubDiscovery();
-    browserAuthorize.mockImplementation(async (authUrl: string) => {
-      const state = new URL(authUrl).searchParams.get('state')!;
-      return `offgrid://oauth/callback?state=${state}`;
-    });
-    jest.spyOn(global, 'fetch').mockResolvedValue(fetchOk({ client_id: 'reg' }));
+    serveAuthServer();
+    signInReturns(state => `?state=${state}`);
     await expect(authorizeServer(id, 'https://mcp.example.com')).rejects.toMatchObject({ code: 'no_code' });
   });
 });
@@ -625,22 +634,18 @@ describe('integration: connect, use, refresh, disconnect (real cross-module path
     const meta = metadata();
 
     // 1) connect: discovery + DCR + browser + exchange, all real orchestration
-    mockDiscoverProtectedResource.mockResolvedValue({
-      resource: 'https://mcp.example.com',
-      authorizationServer: 'https://auth.example.com',
+    let now = 1_000_000;
+    jest.spyOn(Date, 'now').mockImplementation(() => now);
+    serveAuthServer({
+      tokens: [
+        { access_token: 'T1', refresh_token: 'R1', expires_in: 3600 }, // exchange
+        { access_token: 'T2' }, // refresh later
+      ],
     });
-    mockDiscoverAuthServer.mockResolvedValue({ ...AUTH });
     browserAuthorize.mockImplementation(async (authUrl: string) => {
       const state = new URL(authUrl).searchParams.get('state')!;
       return `offgrid://oauth/callback?code=C&state=${state}`;
     });
-    let now = 1_000_000;
-    jest.spyOn(Date, 'now').mockImplementation(() => now);
-    jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValueOnce(fetchOk({ client_id: 'reg' })) // DCR
-      .mockResolvedValueOnce(fetchOk({ access_token: 'T1', refresh_token: 'R1', expires_in: 3600 })) // exchange
-      .mockResolvedValueOnce(fetchOk({ access_token: 'T2' })); // refresh later
 
     const resolved = await authorizeServer(id, 'https://mcp.example.com');
     expect(resolved.client.clientId).toBe('reg');

@@ -24,12 +24,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 /** A LiteRT reply that has streamed a partial and is still in flight - never completes on its own. */
 async function streamingLiteRTReply(h: Awaited<ReturnType<typeof setupChatScreen>>) {
@@ -45,7 +41,7 @@ async function streamingLiteRTReply(h: Awaited<ReturnType<typeof setupChatScreen
 
 describe('stopping a LiteRT reply that is still streaming', () => {
   it('deleting the conversation tells the LiteRT engine to stop', async () => {
-    const h = await setupChatScreen({ engine: 'litert' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
     await streamingLiteRTReply(h);
 
     // Delete the conversation from the chat's own menu, confirming the alert - the real path.

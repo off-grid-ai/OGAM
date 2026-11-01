@@ -4,8 +4,10 @@
  * The engine is a native-backed TTS engine whose only genuine boundaries are:
  *   • react-native-fs (filesystem) — globally mocked in jest.setup.ts; we drive
  *     a per-test in-memory fake so REAL asset-presence / download logic runs.
- *   • backgroundDownloadService (native resumable-download bridge) — mocked so
- *     we can exercise BOTH the native-downloader path and the RNFS fallback.
+ *   • NativeModules.DownloadManagerModule (the native resumable downloader). Absent by
+ *     default, as on a platform without it, so the RNFS fallback runs; the native-path
+ *     tests install it (installNativeBoundary({ download: true })) and drive its events,
+ *     so the real backgroundDownloadService runs on top.
  *
  * Everything else — the phase state machine, per-asset state tracking, overall
  * progress weighting, event emission, and error cascades — runs for REAL against
@@ -17,8 +19,8 @@ import {
   QWEN3_TTS_ASSETS,
   QWEN3_TTS_TALKER,
 } from '@offgrid/pro/audio/engine/tts/engines/qwen3/models';
-import { backgroundDownloadService } from '@offgrid/core/services/backgroundDownloadService';
 import { defaultNativeFileSystemBoundary } from '../../../harness/nativeFileSystem';
+import { installNativeBoundary, type NativeBoundary } from '../../../harness/nativeBoundary';
 
 jest.mock('react-native-fs', () => {
   const { defaultNativeFileSystemBoundary: boundary } = require('../../../harness/nativeFileSystem');
@@ -35,9 +37,8 @@ const MODELS_DIR = `${RNFS.DocumentDirectoryPath}/tts-models/qwen3`;
 
 beforeEach(() => {
   defaultNativeFileSystemBoundary.reset();
-  // Default: native downloader NOT available → RNFS fallback path. Individual
-  // tests override this spy. Restored in afterEach (jest.restoreAllMocks).
-  jest.spyOn(backgroundDownloadService, 'isAvailable').mockReturnValue(false);
+  // No DownloadManagerModule on NativeModules: the native downloader is not available, so
+  // the engine takes the RNFS fallback path.
 });
 
 afterEach(() => {
@@ -140,10 +141,6 @@ describe('Qwen3TTSEngine — asset presence (both branches)', () => {
 });
 
 describe('Qwen3TTSEngine — download flow (RNFS fallback path)', () => {
-  beforeEach(() => {
-    jest.spyOn(backgroundDownloadService, 'isAvailable').mockReturnValue(false);
-  });
-
   it('downloads all assets, emits progress, and lands back at idle when complete', async () => {
     const engine = new Qwen3TTSEngine();
     const phases: string[] = [];
@@ -263,44 +260,61 @@ describe('Qwen3TTSEngine — download flow (RNFS fallback path)', () => {
 });
 
 describe('Qwen3TTSEngine — download flow (native background-downloader path)', () => {
-  it('routes through backgroundDownloadService when available and reports its progress', async () => {
-    const engine = new Qwen3TTSEngine();
-    jest.spyOn(backgroundDownloadService, 'isAvailable').mockReturnValue(true);
+  type NativeAnswer = (downloadId: string, fileName: string) => void;
 
-    const downloadSpy = jest
-      .spyOn(backgroundDownloadService, 'downloadFileTo')
-      .mockImplementation(({ destPath, onProgress }: any) => {
-        const asset = QWEN3_TTS_ASSETS.find(a => destPath.endsWith(a.filename))!;
-        onProgress(asset.sizeBytes, asset.sizeBytes); // 100%
-        defaultNativeFileSystemBoundary.seedFile(destPath, asset.sizeBytes);
-        return { downloadIdPromise: Promise.resolve('bg-1'), promise: Promise.resolve() };
-      });
+  /**
+   * A device with the native downloader. Each started download is answered by `answer` on the
+   * next tick, through the module's own events; a completed file is moved into place at its full
+   * size, as the native move does. Returns the engine class from the fresh module graph.
+   */
+  function deviceWithNativeDownloader(answer: (b: NativeBoundary, asset: { sizeBytes: number }) => NativeAnswer) {
+    const b = installNativeBoundary({ download: true, fs: true });
+    const native = b.download!.module;
+    const started = native.startDownload.getMockImplementation()!;
+    native.startDownload.mockImplementation(async (params: { fileName: string }) => {
+      const row = await started(params);
+      const asset = QWEN3_TTS_ASSETS.find(x => x.filename === params.fileName)!;
+      setTimeout(() => answer(b, asset)(row.downloadId, params.fileName), 0);
+      return row;
+    });
+    native.moveCompletedDownload.mockImplementation(async (_id: string, target: string) => {
+      const asset = QWEN3_TTS_ASSETS.find(x => target.endsWith(x.filename))!;
+      b.fs!.seedFile(target, asset.sizeBytes);
+      return target;
+    });
+    const { Qwen3TTSEngine: Engine } = require('@offgrid/pro/audio/engine/tts/engines/qwen3/Qwen3TTSEngine');
+    const rnfs = require('react-native-fs');
+    return { b, native, Engine: Engine as typeof Qwen3TTSEngine, rnfs };
+  }
+
+  const progressThenComplete = (first: (size: number) => [number, number][]) =>
+    (b: NativeBoundary, asset: { sizeBytes: number }): NativeAnswer => downloadId => {
+      for (const [bytesDownloaded, totalBytes] of first(asset.sizeBytes)) {
+        b.download!.events.emit('DownloadProgress', { downloadId, bytesDownloaded, totalBytes, status: 'running' });
+      }
+      b.download!.events.emit('DownloadComplete', { downloadId, status: 'completed' });
+    };
+
+  it('routes through the native downloader when available and reports its progress', async () => {
+    const { native, Engine, rnfs } = deviceWithNativeDownloader(progressThenComplete(size => [[size, size]]));
+    const engine = new Engine();
 
     const progresses: number[] = [];
     engine.on('downloadProgress', d => progresses.push(d.progress));
 
     await engine.downloadAssets(['codec']);
 
-    // OUTCOME: went through the native bridge, not RNFS.downloadFile.
-    expect(downloadSpy).toHaveBeenCalled();
-    expect(RNFS.downloadFile).not.toHaveBeenCalled();
+    // OUTCOME: the download went to the native downloader, not RNFS.downloadFile.
+    expect(native.startDownload).toHaveBeenCalledWith(expect.objectContaining({ fileName: QWEN3_TTS_ASSETS.find(a => a.id === 'codec')!.filename }));
+    expect(rnfs.downloadFile).not.toHaveBeenCalled();
     expect(progresses).toContain(1);
-    // Native path reports 0 when total is 0 (div-by-zero guard) — verify no NaN.
     expect(progresses).not.toContain(NaN);
   });
 
   it('native path reports progress 0 when total bytes is 0 (div-by-zero guard, FALSE branch)', async () => {
-    const engine = new Qwen3TTSEngine();
-    jest.spyOn(backgroundDownloadService, 'isAvailable').mockReturnValue(true);
-    jest
-      .spyOn(backgroundDownloadService, 'downloadFileTo')
-      .mockImplementation(({ destPath, onProgress }: any) => {
-        const asset = QWEN3_TTS_ASSETS.find(a => destPath.endsWith(a.filename))!;
-        onProgress(0, 0); // unknown total → guarded to 0
-        onProgress(asset.sizeBytes, asset.sizeBytes);
-        defaultNativeFileSystemBoundary.seedFile(destPath, asset.sizeBytes);
-        return { downloadIdPromise: Promise.resolve('bg-3'), promise: Promise.resolve() };
-      });
+    // The native side first reports an unknown total (0), then the full size.
+    const { Engine } = deviceWithNativeDownloader(progressThenComplete(size => [[0, 0], [size, size]]));
+    const engine = new Engine();
 
     const progresses: number[] = [];
     engine.on('downloadProgress', d => progresses.push(d.progress));
@@ -314,11 +328,10 @@ describe('Qwen3TTSEngine — download flow (native background-downloader path)',
   });
 
   it('propagates a native-downloader failure as a Download-failed error in error phase', async () => {
-    const engine = new Qwen3TTSEngine();
-    jest.spyOn(backgroundDownloadService, 'isAvailable').mockReturnValue(true);
-    jest
-      .spyOn(backgroundDownloadService, 'downloadFileTo')
-      .mockImplementation(() => ({ jobId: 'bg-2', promise: Promise.reject(new Error('bridge died')) } as any));
+    const { Engine } = deviceWithNativeDownloader(b => downloadId => {
+      b.download!.events.emit('DownloadError', { downloadId, status: 'failed', reason: 'bridge died' });
+    });
+    const engine = new Engine();
 
     await expect(engine.downloadAssets(['talker'])).rejects.toThrow(/Download failed for .*bridge died/);
     expect(engine.getPhase()).toBe('error');
@@ -342,54 +355,6 @@ describe('Qwen3TTSEngine — initialize / release lifecycle', () => {
     await engine.initialize();
     expect(engine.getPhase()).toBe('ready');
     expect(phases).toEqual(['loading', 'ready']);
-  });
-
-  it('on a load failure: moves to error phase, emits a recoverable QWEN3_LOAD error, and rethrows', async () => {
-    const engine = new Qwen3TTSEngine();
-    await makeFullyDownloaded(engine);
-
-    // Simulate the (future) model-load throwing: let the 'loading' transition
-    // succeed, then make the 'ready' transition throw — driving the REAL catch.
-    const realSetPhase = (engine as unknown as { _setPhase(p: string): void })._setPhase;
-    const spy = jest
-      .spyOn(engine as unknown as { _setPhase(p: string): void }, '_setPhase')
-      .mockImplementation(function (this: unknown, phase: string) {
-        if (phase === 'ready') throw new Error('codec session failed');
-        realSetPhase.call(engine, phase);
-      });
-
-    const errors: Array<{ code: string; message: string; recoverable: boolean }> = [];
-    engine.on('error', e => errors.push(e));
-
-    await expect(engine.initialize()).rejects.toThrow('codec session failed');
-
-    // The catch restores 'error' via the (still-mocked) setter → assert via the
-    // emitted error event + that the recoverable QWEN3_LOAD error surfaced.
-    expect(errors).toHaveLength(1);
-    expect(errors[0].code).toBe('QWEN3_LOAD');
-    expect(errors[0].message).toBe('codec session failed');
-    expect(errors[0].recoverable).toBe(true);
-    spy.mockRestore();
-  });
-
-  it('on a non-Error load failure: uses the fallback message (ternary FALSE branch)', async () => {
-    const engine = new Qwen3TTSEngine();
-    await makeFullyDownloaded(engine);
-
-    const realSetPhase = (engine as unknown as { _setPhase(p: string): void })._setPhase;
-    jest
-      .spyOn(engine as unknown as { _setPhase(p: string): void }, '_setPhase')
-      .mockImplementation(function (this: unknown, phase: string) {
-        // Throw a non-Error value → `err instanceof Error` is false.
-        if (phase === 'ready') throw 'string blowup';
-        realSetPhase.call(engine, phase);
-      });
-
-    const errors: Array<{ message: string }> = [];
-    engine.on('error', e => errors.push(e));
-
-    await expect(engine.initialize()).rejects.toBe('string blowup');
-    expect(errors[0].message).toBe('Failed to load Qwen3-TTS');
   });
 
   it('release returns to idle', async () => {

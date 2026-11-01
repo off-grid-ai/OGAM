@@ -18,15 +18,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('T077 (rendered) — chat-mode mic must stop capturing when the user leaves (DEV-B11)', () => {
   it('leaks the realtime mic session after navigating away without stopping', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android', whisper: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android', whisper: true });
     await h.setupWhisperModel();
     h.render();
 

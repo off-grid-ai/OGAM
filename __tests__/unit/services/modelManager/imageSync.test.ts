@@ -1,319 +1,200 @@
 /**
- * imageSync Unit Tests
+ * syncCompletedImageDownloads: image downloads that finished natively while the app was closed.
  *
- * Tests for syncCompletedImageDownloads and related helpers.
+ * Fakes: the native background downloader and the native unzip (harness/imageDownloadDevice), the disk
+ * (react-native-fs in memory, which also answers the tokenizer file downloads) and async-storage
+ * (harness/modelManagerDevice). imageSync, backgroundDownloadService and the Core ML helpers run for
+ * real. A finished download is a completed row in the native set; moving it out writes the file.
  */
+import { installModelManagerDevice, type ModelManagerDevice } from '../../../harness/modelManagerDevice';
+import { installImageDownloadDevice, type ImageDownloadDevice } from '../../../harness/imageDownloadDevice';
+import type { ONNXImageModel, PersistedDownloadInfo } from '../../../../src/types';
 
-jest.mock('react-native-fs', () => ({
-  exists: jest.fn(),
-  mkdir: jest.fn(),
-  unlink: jest.fn(),
-}));
-
-jest.mock('react-native-zip-archive', () => ({
-  unzip: jest.fn(),
-}));
-
-jest.mock('../../../../src/services/backgroundDownloadService', () => ({
-  backgroundDownloadService: {
-    getActiveDownloads: jest.fn(),
-    moveCompletedDownload: jest.fn(),
-  },
-}));
-
-jest.mock('../../../../src/utils/coreMLModelUtils', () => ({
-  resolveCoreMLModelDir: jest.fn(),
-  downloadCoreMLTokenizerFiles: jest.fn(),
-}));
-
-import RNFS from 'react-native-fs';
-import { unzip } from 'react-native-zip-archive';
-import { backgroundDownloadService } from '../../../../src/services/backgroundDownloadService';
-import { resolveCoreMLModelDir, downloadCoreMLTokenizerFiles } from '../../../../src/utils/coreMLModelUtils';
-import { syncCompletedImageDownloads } from '../../../../src/services/modelManager/imageSync';
-
-const mockExists = RNFS.exists as jest.Mock;
-const mockMkdir = RNFS.mkdir as jest.Mock;
-const mockUnlink = RNFS.unlink as jest.Mock;
-const mockUnzip = unzip as jest.Mock;
-const mockGetActiveDownloads = backgroundDownloadService.getActiveDownloads as jest.Mock;
-const mockMoveCompletedDownload = backgroundDownloadService.moveCompletedDownload as jest.Mock;
-const mockResolveCoreMLModelDir = resolveCoreMLModelDir as jest.Mock;
-const mockDownloadCoreMLTokenizerFiles = downloadCoreMLTokenizerFiles as jest.Mock;
-
-const baseOpts = {
-  imageModelsDir: '/models/images',
-  persistedDownloads: {} as Record<number, any>,
-  clearDownloadCallback: jest.fn(),
-  getDownloadedImageModels: jest.fn(),
-  addDownloadedImageModel: jest.fn(),
-};
-
-function makeOpts(overrides: Partial<typeof baseOpts> = {}) {
-  return {
-    ...baseOpts,
-    clearDownloadCallback: jest.fn(),
-    getDownloadedImageModels: jest.fn().mockResolvedValue([]),
-    addDownloadedImageModel: jest.fn().mockResolvedValue(undefined),
-    ...overrides,
-  };
-}
+type ImageSyncModule = typeof import('../../../../src/services/modelManager/imageSync');
 
 describe('syncCompletedImageDownloads', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockExists.mockResolvedValue(true);
-    mockMkdir.mockResolvedValue(undefined);
-    mockUnlink.mockResolvedValue(undefined);
-    mockUnzip.mockResolvedValue(undefined);
-    mockMoveCompletedDownload.mockResolvedValue(undefined);
-    mockResolveCoreMLModelDir.mockResolvedValue('/models/images/model1/coreml');
-    mockDownloadCoreMLTokenizerFiles.mockResolvedValue(undefined);
+  let device: ModelManagerDevice;
+  let images: ImageDownloadDevice;
+  let sync: ImageSyncModule['syncCompletedImageDownloads'];
+
+  beforeEach(async () => {
+    device = await installModelManagerDevice({ platform: 'android' });
+    images = installImageDownloadDevice(device.boundary);
+    ({ syncCompletedImageDownloads: sync } = require('../../../../src/services/modelManager/imageSync') as ImageSyncModule);
   });
 
-  it('returns empty array when no active downloads', async () => {
-    mockGetActiveDownloads.mockResolvedValue([]);
-    const result = await syncCompletedImageDownloads(makeOpts());
-    expect(result).toEqual([]);
+  const meta = (extra: Partial<PersistedDownloadInfo>): PersistedDownloadInfo => ({
+    modelId: 'image:model1', fileName: 'model1', quantization: '', author: 'image', totalBytes: 500, ...extra,
   });
 
-  it('skips non-completed downloads', async () => {
-    mockGetActiveDownloads.mockResolvedValue([
-      { downloadId: 1, status: 'running', modelId: 'image:model1' },
-    ]);
-    const opts = makeOpts({
-      persistedDownloads: {
-        1: { modelId: 'image:model1', imageDownloadType: 'multifile', imageModelName: 'M1' },
-      },
+  /** Run the sync against an image registry that starts with `installed`. */
+  async function run(persistedDownloads: Record<string, PersistedDownloadInfo>, installed: Array<Partial<ONNXImageModel>> = []) {
+    const registry = [...installed] as ONNXImageModel[];
+    const cleared: string[] = [];
+    const result = await sync({
+      imageModelsDir: device.imageModelsDir,
+      persistedDownloads,
+      clearDownloadCallback: id => cleared.push(id),
+      getDownloadedImageModels: async () => registry,
+      addDownloadedImageModel: async model => { registry.push(model); },
     });
-    const result = await syncCompletedImageDownloads(opts);
+    return { result, registry, cleared };
+  }
+
+  it('returns nothing when no download finished', async () => {
+    const { result, cleared } = await run({});
     expect(result).toEqual([]);
-    expect(opts.addDownloadedImageModel).not.toHaveBeenCalled();
+    expect(cleared).toEqual([]);
   });
 
-  it('skips downloads with no metadata', async () => {
-    mockGetActiveDownloads.mockResolvedValue([
-      { downloadId: 99, status: 'completed' },
-    ]);
-    const opts = makeOpts({ persistedDownloads: {} });
-    const result = await syncCompletedImageDownloads(opts);
-    expect(result).toEqual([]);
-  });
+  it('skips a download still running, one it has no metadata for, a text model and one with no image type', async () => {
+    device.boundary.download!.seedActive({ downloadId: 'running', status: 'running', modelId: 'image:model1' });
+    images.seedCompleted({ downloadId: 'unknown' }, { bytes: 10 });
+    images.seedCompleted({ downloadId: 'text' }, { bytes: 10 });
+    images.seedCompleted({ downloadId: 'untyped' }, { bytes: 10 });
 
-  it('skips metadata where modelId does not start with image:', async () => {
-    mockGetActiveDownloads.mockResolvedValue([
-      { downloadId: 1, status: 'completed' },
-    ]);
-    const opts = makeOpts({
-      persistedDownloads: {
-        1: { modelId: 'text:model1', imageDownloadType: 'multifile' },
-      },
+    const { result, registry, cleared } = await run({
+      running: meta({ imageDownloadType: 'multifile', imageModelName: 'M1' }),
+      text: meta({ modelId: 'text:model1', imageDownloadType: 'multifile' }),
+      untyped: meta({}),
     });
-    const result = await syncCompletedImageDownloads(opts);
+
     expect(result).toEqual([]);
+    expect(registry).toEqual([]);
+    expect(cleared).toEqual([]);
   });
 
-  it('skips metadata with no imageDownloadType', async () => {
-    mockGetActiveDownloads.mockResolvedValue([
-      { downloadId: 1, status: 'completed' },
-    ]);
-    const opts = makeOpts({
-      persistedDownloads: {
-        1: { modelId: 'image:model1' }, // no imageDownloadType
-      },
-    });
-    const result = await syncCompletedImageDownloads(opts);
+  it('clears a finished download whose model is already installed, without adding it again', async () => {
+    images.seedCompleted({ downloadId: 'one' }, { bytes: 10 });
+
+    const { result, registry, cleared } = await run(
+      { one: meta({ imageDownloadType: 'multifile' }) },
+      [{ id: 'model1' }],
+    );
+
     expect(result).toEqual([]);
+    expect(registry).toHaveLength(1);
+    expect(cleared).toEqual(['one']);
   });
 
-  it('clears and skips already-downloaded models', async () => {
-    mockGetActiveDownloads.mockResolvedValue([
-      { downloadId: 1, status: 'completed' },
-    ]);
-    const clearDownloadCallback = jest.fn();
-    const opts = makeOpts({
-      persistedDownloads: {
-        1: { modelId: 'image:model1', imageDownloadType: 'multifile' },
-      },
-      clearDownloadCallback,
-      getDownloadedImageModels: jest.fn().mockResolvedValue([{ id: 'model1' }]),
+  it('recovers a multifile download and registers it', async () => {
+    images.seedCompleted({ downloadId: 'one' }, { bytes: 10 });
+
+    const { result, registry, cleared } = await run({
+      one: meta({
+        imageDownloadType: 'multifile', imageModelName: 'Model One', imageModelDescription: 'A model',
+        imageModelSize: 500, imageModelStyle: 'realistic', imageModelBackend: 'mnn',
+      }),
     });
-    const result = await syncCompletedImageDownloads(opts);
-    expect(result).toEqual([]);
-    expect(clearDownloadCallback).toHaveBeenCalledWith(1);
+
+    expect(result.map(m => [m.id, m.name, m.description, m.modelPath, m.size, m.style])).toEqual([
+      ['model1', 'Model One', 'A model', `${device.imageModelsDir}/model1`, 500, 'realistic'],
+    ]);
+    expect(registry.map(m => m.id)).toEqual(['model1']);
+    expect(cleared).toEqual(['one']);
   });
 
-  it('recovers a multifile download and adds model', async () => {
-    mockGetActiveDownloads.mockResolvedValue([
-      { downloadId: 1, status: 'completed' },
-    ]);
-    const opts = makeOpts({
-      persistedDownloads: {
-        1: {
-          modelId: 'image:model1',
-          imageDownloadType: 'multifile',
-          imageModelName: 'Model One',
-          imageModelDescription: 'A model',
-          imageModelSize: 500,
-          imageModelStyle: 'realistic',
-          imageModelBackend: 'mnn',
-        },
-      },
+  it('recovers a zip download: moves the zip in, extracts it, and removes the zip', async () => {
+    images.seedCompleted({ downloadId: 'two' }, { zip: { 'unet.mnn': 400, 'clip.mnn': 100 } });
+    const dir = device.imageModelsDir;
+
+    const { result } = await run({
+      two: meta({
+        modelId: 'image:model2', imageDownloadType: 'zip', fileName: 'model2.zip',
+        imageModelName: 'Model Two', imageModelSize: 1000, imageModelBackend: 'mnn',
+      }),
     });
-    const result = await syncCompletedImageDownloads(opts);
+
+    expect(result.map(m => m.modelPath)).toEqual([`${dir}/model2`]);
+    expect(device.fs.listFiles(`${dir}/model2`).sort()).toEqual([`${dir}/model2/clip.mnn`, `${dir}/model2/unet.mnn`]);
+    expect(await device.fs.exists(`${dir}/model2.zip`)).toBe(false);
+  });
+
+  it('points a Core ML zip at the folder that holds the compiled models', async () => {
+    images.seedCompleted({ downloadId: 'three' }, { zip: { 'resolved/Unet.mlmodelc': 800 } });
+
+    const { result } = await run({
+      three: meta({
+        modelId: 'image:model3', imageDownloadType: 'zip', fileName: 'model3.zip',
+        imageModelName: 'CoreML Model', imageModelBackend: 'coreml', imageModelSize: 800,
+      }),
+    });
+
+    expect(result.map(m => m.modelPath)).toEqual([`${device.imageModelsDir}/model3/resolved`]);
+  });
+
+  it('fetches the tokenizer files for a Core ML multifile download that names its repo', async () => {
+    images.seedCompleted({ downloadId: 'four' }, { bytes: 10 });
+    device.fs.serveRemoteFile('https://huggingface.co/org/repo/resolve/main/merges.txt', { body: 'merges' });
+    device.fs.serveRemoteFile('https://huggingface.co/org/repo/resolve/main/vocab.json', { body: '{}' });
+    const dir = `${device.imageModelsDir}/model4`;
+
+    await run({
+      four: meta({
+        modelId: 'image:model4', imageDownloadType: 'multifile', imageModelName: 'CoreML Multi',
+        imageModelBackend: 'coreml', imageModelRepo: 'org/repo', imageModelSize: 600,
+      }),
+    });
+
+    expect(await device.fs.module.readFile(`${dir}/merges.txt`, 'utf8')).toBe('merges');
+    expect(await device.fs.module.readFile(`${dir}/vocab.json`, 'utf8')).toBe('{}');
+  });
+
+  it('fetches no tokenizer files when the Core ML download names no repo', async () => {
+    images.seedCompleted({ downloadId: 'five' }, { bytes: 10 });
+    const dir = `${device.imageModelsDir}/model5`;
+
+    const { result } = await run({
+      five: meta({
+        modelId: 'image:model5', imageDownloadType: 'multifile', imageModelName: 'CoreML No Repo',
+        imageModelBackend: 'coreml', imageModelSize: 600,
+      }),
+    });
+
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('model1');
-    expect(result[0].name).toBe('Model One');
-    expect(result[0].modelPath).toBe('/models/images/model1');
-    expect(opts.addDownloadedImageModel).toHaveBeenCalledWith(expect.objectContaining({ id: 'model1' }));
-    expect(opts.clearDownloadCallback).toHaveBeenCalledWith(1);
+    expect(await device.fs.exists(`${dir}/merges.txt`)).toBe(false);
+    expect(await device.fs.exists(`${dir}/vocab.json`)).toBe(false);
   });
 
-  it('recovers a zip download and adds model', async () => {
-    mockGetActiveDownloads.mockResolvedValue([
-      { downloadId: 2, status: 'completed' },
-    ]);
-    const opts = makeOpts({
-      persistedDownloads: {
-        2: {
-          modelId: 'image:model2',
-          imageDownloadType: 'zip',
-          fileName: 'model2.zip',
-          imageModelName: 'Model Two',
-          imageModelDescription: 'A zip model',
-          imageModelSize: 1000,
-          imageModelBackend: 'mnn',
-        },
-      },
+  it('names a model by its id when the metadata has no name', async () => {
+    images.seedCompleted({ downloadId: 'six' }, { bytes: 10 });
+
+    const { result } = await run({
+      six: meta({ modelId: 'image:unnamed-model', imageDownloadType: 'multifile', imageModelSize: 200, imageModelBackend: 'mnn' }),
     });
-    const result = await syncCompletedImageDownloads(opts);
-    expect(mockMoveCompletedDownload).toHaveBeenCalledWith(2, '/models/images/model2.zip');
-    expect(mockUnzip).toHaveBeenCalledWith('/models/images/model2.zip', '/models/images/model2');
-    expect(mockUnlink).toHaveBeenCalledWith('/models/images/model2.zip');
-    expect(result[0].modelPath).toBe('/models/images/model2');
+
+    expect(result.map(m => m.name)).toEqual(['unnamed-model']);
   });
 
-  it('uses resolveCoreMLModelDir for coreml zip download', async () => {
-    mockGetActiveDownloads.mockResolvedValue([
-      { downloadId: 3, status: 'completed' },
-    ]);
-    mockResolveCoreMLModelDir.mockResolvedValue('/models/images/model3/resolved');
-    const opts = makeOpts({
-      persistedDownloads: {
-        3: {
-          modelId: 'image:model3',
-          imageDownloadType: 'zip',
-          fileName: 'model3.zip',
-          imageModelName: 'CoreML Model',
-          imageModelBackend: 'coreml',
-          imageModelSize: 800,
-        },
-      },
-    });
-    const result = await syncCompletedImageDownloads(opts);
-    expect(mockResolveCoreMLModelDir).toHaveBeenCalledWith('/models/images/model3');
-    expect(result[0].modelPath).toBe('/models/images/model3/resolved');
-  });
+  it('keeps the metadata for a later retry when the zip cannot be moved out and is not on disk', async () => {
+    // The row says completed, but the native layer has no file to hand over.
+    device.boundary.download!.seedActive({ downloadId: 'seven', status: 'completed' });
 
-  it('downloads tokenizer files for coreml multifile with repo', async () => {
-    mockGetActiveDownloads.mockResolvedValue([
-      { downloadId: 4, status: 'completed' },
-    ]);
-    const opts = makeOpts({
-      persistedDownloads: {
-        4: {
-          modelId: 'image:model4',
-          imageDownloadType: 'multifile',
-          imageModelName: 'CoreML Multi',
-          imageModelBackend: 'coreml',
-          imageModelRepo: 'org/repo',
-          imageModelSize: 600,
-        },
-      },
+    const { result, registry, cleared } = await run({
+      seven: meta({
+        modelId: 'image:broken', imageDownloadType: 'zip', fileName: 'broken.zip',
+        imageModelName: 'Broken', imageModelBackend: 'mnn', imageModelSize: 100,
+      }),
     });
-    await syncCompletedImageDownloads(opts);
-    expect(mockDownloadCoreMLTokenizerFiles).toHaveBeenCalledWith('/models/images/model4', 'org/repo');
-  });
 
-  it('does not call downloadCoreMLTokenizerFiles when no repo', async () => {
-    mockGetActiveDownloads.mockResolvedValue([
-      { downloadId: 5, status: 'completed' },
-    ]);
-    const opts = makeOpts({
-      persistedDownloads: {
-        5: {
-          modelId: 'image:model5',
-          imageDownloadType: 'multifile',
-          imageModelName: 'CoreML No Repo',
-          imageModelBackend: 'coreml',
-          imageModelSize: 600,
-          // no imageModelRepo
-        },
-      },
-    });
-    await syncCompletedImageDownloads(opts);
-    expect(mockDownloadCoreMLTokenizerFiles).not.toHaveBeenCalled();
-  });
-
-  it('falls back to modelId as name when imageModelName is missing', async () => {
-    mockGetActiveDownloads.mockResolvedValue([
-      { downloadId: 6, status: 'completed' },
-    ]);
-    const opts = makeOpts({
-      persistedDownloads: {
-        6: {
-          modelId: 'image:unnamed-model',
-          imageDownloadType: 'multifile',
-          imageModelSize: 200,
-          imageModelBackend: 'mnn',
-        },
-      },
-    });
-    const result = await syncCompletedImageDownloads(opts);
-    expect(result[0].name).toBe('unnamed-model');
-  });
-
-  it('silently skips on recovery error', async () => {
-    mockGetActiveDownloads.mockResolvedValue([
-      { downloadId: 7, status: 'completed' },
-    ]);
-    mockMoveCompletedDownload.mockRejectedValue(new Error('move failed'));
-    mockExists.mockResolvedValue(false); // zip doesn't exist either
-    const opts = makeOpts({
-      persistedDownloads: {
-        7: {
-          modelId: 'image:broken',
-          imageDownloadType: 'zip',
-          fileName: 'broken.zip',
-          imageModelName: 'Broken',
-          imageModelBackend: 'mnn',
-          imageModelSize: 100,
-        },
-      },
-    });
-    const result = await syncCompletedImageDownloads(opts);
     expect(result).toEqual([]);
-    expect(opts.addDownloadedImageModel).not.toHaveBeenCalled();
+    expect(registry).toEqual([]);
+    expect(cleared).toEqual([]);
   });
 
-  it('creates imageModelsDir if it does not exist (zip path)', async () => {
-    mockGetActiveDownloads.mockResolvedValue([
-      { downloadId: 8, status: 'completed' },
-    ]);
-    mockExists.mockResolvedValue(false);
-    const opts = makeOpts({
-      persistedDownloads: {
-        8: {
-          modelId: 'image:model8',
-          imageDownloadType: 'zip',
-          fileName: 'model8.zip',
-          imageModelName: 'Model 8',
-          imageModelBackend: 'mnn',
-          imageModelSize: 100,
-        },
-      },
+  it('creates the image folder when it does not exist yet (zip path)', async () => {
+    images.seedCompleted({ downloadId: 'eight' }, { zip: { 'unet.mnn': 100 } });
+    const dir = device.imageModelsDir;
+    expect(await device.fs.exists(dir)).toBe(false);
+
+    const { result } = await run({
+      eight: meta({
+        modelId: 'image:model8', imageDownloadType: 'zip', fileName: 'model8.zip',
+        imageModelName: 'Model 8', imageModelBackend: 'mnn', imageModelSize: 100,
+      }),
     });
-    await syncCompletedImageDownloads(opts);
-    expect(mockMkdir).toHaveBeenCalledWith('/models/images');
+
+    expect(result).toHaveLength(1);
+    expect(await device.fs.exists(`${dir}/model8/unet.mnn`)).toBe(true);
   });
 });

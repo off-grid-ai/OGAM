@@ -14,10 +14,6 @@
  * Drives the REAL dispatchPlayback transition table (from @offgrid/pro) over a tiny
  * in-memory store that mirrors the Zustand shape — no mock of the machine under test.
  */
-jest.mock('@offgrid/core/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
 import { dispatchPlayback, PlaybackStatus } from '../../pro/audio/playbackMachine';
 

@@ -13,12 +13,6 @@ import React from 'react';
 import { Platform } from 'react-native';
 import { render, fireEvent, screen } from '@testing-library/react-native';
 
-const mockColors = {
-  text: '#000', textMuted: '#999', textSecondary: '#666', textDisabled: '#bbb',
-  primary: '#1DB954', error: '#E00', warning: '#F90',
-  background: '#FFF', surface: '#F5F5F5', surfaceLight: '#EEE', border: '#E0E0E0',
-  overlay: 'rgba(0,0,0,0.4)',
-};
 
 // Font glyph component can't render in jest; shim to a queryable Text of the icon name.
 jest.mock('react-native-vector-icons/Feather', () => {
@@ -26,9 +20,6 @@ jest.mock('react-native-vector-icons/Feather', () => {
   return ({ name }: { name: string }) => <Text>{`icon:${name}`}</Text>;
 });
 
-jest.mock('@offgrid/core/theme', () => ({
-  useTheme: () => ({ colors: mockColors }),
-}));
 
 import { McpToolPickerSheet } from '@offgrid/pro/ui/McpToolPickerSheet';
 import { useMcpStore } from '@offgrid/pro/mcp/mcpStore';

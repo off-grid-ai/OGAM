@@ -16,11 +16,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 // Mistral 7B's chat template: a plain [INST] tool/chat template with NO reasoning delimiters.
 const MISTRAL_TEMPLATE = "{{ bos_token }}{% for message in messages %}{% if message['role'] == 'user' %}[INST] {{ message['content'] }} [/INST]{% else %}{{ message['content'] }}{% endif %}{% endfor %}";
@@ -29,7 +26,7 @@ const THINKING_TEMPLATE = "{{ bos_token }}<think>\n{{ reasoning }}\n</think>{{ c
 
 describe('Thinking toggle visibility follows the model chat_template, not Jinja support — device 2026-07-14', () => {
   it('a model with NO reasoning markers in its template (Mistral 7B) shows NO Thinking toggle', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android', chatTemplate: MISTRAL_TEMPLATE });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android', chatTemplate: MISTRAL_TEMPLATE });
     h.render();
     const view = h.view!;
 
@@ -43,7 +40,7 @@ describe('Thinking toggle visibility follows the model chat_template, not Jinja 
   });
 
   it('a model whose template carries a <think> delimiter DOES show the Thinking toggle (falsification)', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android', chatTemplate: THINKING_TEMPLATE });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android', chatTemplate: THINKING_TEMPLATE });
     h.render();
     const view = h.view!;
 

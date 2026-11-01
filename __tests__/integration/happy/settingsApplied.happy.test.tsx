@@ -8,16 +8,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('happy — text sampler settings reach the engine (heavy entry point)', () => {
   it('applies the dragged temperature to the native resetConversation', async () => {
-    const h = await setupChatScreen({ engine: 'litert' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
     // Arrive-via-UI: set the LiteRT Temperature via its real slider's numeric input — not updateSettings
     // seeding. (Temperature is the basic sampler control; topP lives in the advanced section.)
     h.setTextSettingViaUI('liteRTTemperature', 0.33);

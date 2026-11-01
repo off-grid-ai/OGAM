@@ -12,10 +12,6 @@ import { render } from '@testing-library/react-native';
 import { ChatMessage } from '../../../src/components/ChatMessage';
 import { createUserMessage, createAudioAttachment } from '../../utils/factories';
 
-jest.mock('../../../src/utils/messageContent', () => ({
-  ...jest.requireActual('../../../src/utils/messageContent'),
-  stripControlTokens: (content: string) => content,
-}));
 
 describe('MessageAttachments — audio transcription', () => {
   it('renders the transcription once, outside the Voice message badge', () => {

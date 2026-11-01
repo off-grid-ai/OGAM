@@ -14,26 +14,23 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('T116 (rendered) — text + whisper allowed co-residence (In Memory UI)', () => {
   it('lists BOTH the text model and the whisper sidecar as in-memory on a roomy device', async () => {
     // Roomy device so both the heavy and the sidecar fit (co-residence is about the RULE, not the budget).
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android', whisper: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android', whisper: true });
     h.render();
      
     const React = require('react');
     const { ModelsManagerSheet } = require('../../../src/components/models/ModelsManagerSheet');
      
-    const openSelector = () => h.rtl.render(React.createElement(ModelsManagerSheet, {
+    const openSelector = () => h.rtl.render(h.inNavigator(React.createElement(ModelsManagerSheet, {
       visible: true, onClose: () => {}, labels: { text: '—', image: '—', voice: '—', speech: '—' },
       loadingState: { isLoading: false }, isEjecting: false, hasActiveModel: false,
       onOpenRow: () => {}, onEject: () => {},
-    }));
+    })));
 
     // Precondition via the SAME real UI: only the text model is in memory (no whisper yet).
     const before = openSelector();

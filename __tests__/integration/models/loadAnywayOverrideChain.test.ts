@@ -7,12 +7,12 @@
  *      → activeModelService.loadTextModel(..., { override })  (the single load gateway)
  *         → modelResidencyManager.makeRoomFor({ override })    (the memory gate + eviction)
  *
- * Only the two things we physically cannot run in-process are mocked — the `llm`
- * native module and the `hardware` RAM sensor. `loadModelWithOverride`,
- * `activeModelService`, `modelResidencyManager`, the residency policy, the store,
- * and the real `CustomAlert` state helpers all run for real. We assert the OUTCOME
- * the user feels (model loaded / refused, which dialog they see), never
- * `expect(gate).toHaveBeenCalled()`.
+ * Only the phone is faked (installNativeBoundary): llama.rn and whisper.rn (the native engines),
+ * the disk and the RAM sensor. `loadModelWithOverride`, `activeModelService`, llmService,
+ * whisperStore and whisperService, `modelResidencyManager`, the residency policy, hardwareService,
+ * the stores, and the real alert state helpers all run for real. We assert the OUTCOME the user
+ * feels (model loaded / refused, which dialog they see) and what the native engines were asked to
+ * open and release, never `expect(gate).toHaveBeenCalled()`.
  *
  * The ratified contract: "Load Anyway" (override) is UNCONDITIONAL. When the user
  * taps it, makeRoomFor evicts every evictable resident to free the maximum RAM and
@@ -26,41 +26,36 @@
  * override it evicts and loads. An approved override is then remembered for the
  * session so repeated evict→reload swaps don't re-prompt.
  *
- * The RAM mock is DYNAMIC — free RAM is low BEFORE the eviction unload fires and high
- * AFTER (modelling iOS reclaiming the unloaded clean pages) — so the eviction is a real
- * unload the residency manager observes, not a static number.
+ * The RAM sensor is DYNAMIC — free RAM is low BEFORE the eviction unload fires and (in the
+ * reclaim case) high AFTER, the way iOS reclaims an unloaded model's pages — so the eviction is a
+ * real native release the residency manager observes, not a static number.
  */
+import { installNativeBoundary, GB, MB, type NativeBoundary } from '../../harness/nativeBoundary';
+import { createDownloadedModel } from '../../utils/factories';
 
-import { useAppStore } from '../../../src/stores/appStore';
-import { activeModelService } from '../../../src/services/activeModelService';
-import { modelResidencyManager } from '../../../src/services/modelResidency';
-import { llmService } from '../../../src/services/llm';
-import { hardwareService } from '../../../src/services/hardware';
-import { loadModelWithOverride } from '../../../src/services/loadModelWithOverride';
-import type { AlertState } from '../../../src/components/CustomAlert';
-import {
-  resetStores,
-  flushPromises,
-  getAppState,
-} from '../../utils/testHelpers';
-import { createDownloadedModel, createDeviceInfo } from '../../utils/factories';
+interface AlertState {
+  visible: boolean;
+  title: string;
+  buttons?: Array<{ text: string; onPress?: () => void }>;
+}
 
-// Boundary mocks ONLY — the native LLM engine and the hardware RAM sensor.
-jest.mock('../../../src/services/llm');
-jest.mock('../../../src/services/litert');
-jest.mock('../../../src/services/localDreamGenerator');
-jest.mock('../../../src/services/hardware');
+const LOW_RAM = { platform: 'ios' as const, totalBytes: 12 * GB, availBytes: 1 * GB };
 
-const mockLlmService = llmService as jest.Mocked<typeof llmService>;
-const mockHardwareService = hardwareService as jest.Mocked<
-  typeof hardwareService
->;
+let boundary: NativeBoundary;
+let activeModelService: any;
+let residency: any;
+let useAppStore: any;
+let loadModelWithOverride: any;
+
+const flush = async () => { for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve)); };
+/** How many times llama.rn was asked to open a text model. */
+const textLoads = () => boundary.llama!.calls.initLlama.filter(p => !p.embedding).length;
 
 /**
- * Drives the exact override chain a screen runs: hand loadModelWithOverride a thunk
- * that loads through the real activeModelService, capture every alert the helper
- * raises, and expose a `tapLoadAnyway()` that presses the real "Load Anyway" button
- * (and awaits the fire-and-forget retry the helper kicks off).
+ * Drives the exact override chain a screen runs: hand loadModelWithOverride a thunk that loads
+ * through the real activeModelService, capture every alert the helper raises, and expose a
+ * `tapLoadAnyway()` that presses the real "Load Anyway" button (and awaits the fire-and-forget
+ * retry the helper kicks off).
  */
 function driveLoad(modelId: string) {
   const alerts: AlertState[] = [];
@@ -69,140 +64,96 @@ function driveLoad(modelId: string) {
     lastLoad = activeModelService.loadTextModel(modelId, undefined, opts);
     return lastLoad;
   };
-  const start = () =>
-    loadModelWithOverride(load, { setAlertState: a => alerts.push(a) });
-
+  const start = () => loadModelWithOverride(load, { setAlertState: (a: AlertState) => alerts.push(a) });
   const lastVisible = () => [...alerts].reverse().find(a => a.visible);
-
   const tapLoadAnyway = async () => {
     const prompt = lastVisible();
     const btn = prompt?.buttons?.find(b => b.text === 'Load Anyway');
-    if (!btn?.onPress) {
-      throw new Error(
-        `No "Load Anyway" button on the last alert (title=${prompt?.title})`,
-      );
-    }
+    if (!btn?.onPress) throw new Error(`No "Load Anyway" button on the last alert (title=${prompt?.title})`);
     btn.onPress(); // fires `void attempt(true)` — lastLoad is reassigned synchronously
-    await flushPromises();
+    await flush();
     await lastLoad?.catch(() => {});
-    await flushPromises();
+    await flush();
   };
-
   return { alerts, start, tapLoadAnyway, lastVisible };
 }
 
+/**
+ * A speech-to-text model is resident — the evictable victim. When the native whisper context is
+ * released, the phone's free RAM becomes `afterReleaseGB` (iOS reclaiming its pages).
+ */
+async function loadWhisperVictim(afterReleaseGB: number): Promise<{ released: () => boolean }> {
+  const { useWhisperStore } = require('../../../src/stores/whisperStore');
+  const { whisperService } = require('../../../src/services/whisperService');
+  boundary.fs!.seedFile(whisperService.getModelPath('small'), 466 * MB);
+  await useWhisperStore.getState().selectModel('small');
+  expect(residency.isResident('whisper')).toBe(true);
+
+  const context = await boundary.whisper!.module.initWhisper.mock.results[0].value;
+  const release = context.release.getMockImplementation();
+  let released = false;
+  context.release.mockImplementation(async () => {
+    await release?.();
+    released = true;
+    boundary.setRam({ ...LOW_RAM, availBytes: afterReleaseGB * GB });
+  });
+  return { released: () => released };
+}
+
+beforeEach(async () => {
+  boundary = installNativeBoundary({ llama: true, whisper: true, fs: true, ram: LOW_RAM });
+  ({ activeModelService } = require('../../../src/services/activeModelService'));
+  ({ modelResidencyManager: residency } = require('../../../src/services/modelResidency'));
+  ({ useAppStore } = require('../../../src/stores'));
+  ({ loadModelWithOverride } = require('../../../src/services/loadModelWithOverride'));
+  await require('../../../src/services/hardware').hardwareService.refreshMemoryInfo();
+
+  // A GGUF (clean) text model whose estimated RAM (~3 GB) exceeds the forced budget, downloaded.
+  const filePath = `${boundary.fs!.DocumentDirectoryPath}/models/big.gguf`;
+  boundary.fs!.seedFile(filePath, 500 * MB);
+  useAppStore.getState().addDownloadedModel(createDownloadedModel({
+    id: 'big-gguf', engine: 'llama', fileName: 'big.gguf', filePath, fileSize: 2 * GB,
+  }));
+
+  // Force a small residency budget so the ~3 GB model can't fit without eviction —
+  // deterministic, independent of the device-RAM heuristics under test elsewhere.
+  residency.setBudgetOverrideMB(2000);
+});
+
+afterEach(() => {
+  residency.setBudgetOverrideMB(null);
+});
+
 describe('Load Anyway override chain (UI helper → service → residency)', () => {
-  /** A clean (mmap, dirtyMemory:false) resident to be evicted — the crux of the bug:
-   *  the old predictive floor credited 0 MB for evicting a clean model. Its unload
-   *  flips `reclaimed` so the RAM sensor reports the memory iOS frees on unload. */
-  let reclaimed = false;
-  const registerCleanVictim = (sizeMB = 4000) => {
-    const unload = jest.fn(async () => {
-      reclaimed = true;
-    });
-    modelResidencyManager.register(
-      {
-        key: 'whisper',
-        type: 'whisper',
-        modelId: 'stt-1',
-        sizeMB,
-        dirtyMemory: false,
-      },
-      unload,
-    );
-    return unload;
-  };
-
-  // A GGUF (clean) text model whose estimated RAM (~3 GB) exceeds the forced budget.
-  const bigGguf = () =>
-    createDownloadedModel({
-      id: 'big-gguf',
-      engine: 'llama' as any,
-      fileName: 'big.gguf',
-      filePath: '/big.gguf',
-      fileSize: 2 * 1024 * 1024 * 1024, // ×1.5 estimate ⇒ ~3072 MB
-    });
-
-  beforeEach(async () => {
-    resetStores();
-    jest.clearAllMocks();
-    modelResidencyManager._reset();
-    reclaimed = false;
-
-    mockLlmService.isModelLoaded.mockReturnValue(false);
-    mockLlmService.getLoadedModelPath.mockReturnValue(null);
-    mockLlmService.loadModel.mockResolvedValue(undefined);
-    mockLlmService.unloadModel.mockResolvedValue(undefined);
-
-    mockHardwareService.getDeviceInfo.mockResolvedValue(
-      createDeviceInfo({ totalMemory: 12 * 1024 * 1024 * 1024 }),
-    );
-    mockHardwareService.refreshMemoryInfo.mockResolvedValue({
-      totalMemory: 12 * 1024 * 1024 * 1024,
-      usedMemory: 11 * 1024 * 1024 * 1024,
-      availableMemory: 1 * 1024 * 1024 * 1024,
-    } as any);
-    mockHardwareService.getModelTotalSize.mockImplementation(
-      (m: any) => (m?.fileSize || m?.size || 0) + (m?.mmProjFileSize || 0),
-    );
-    mockHardwareService.estimateModelRam.mockImplementation(
-      (m: any, mult = 1.5) =>
-        ((m?.fileSize || m?.size || 0) + (m?.mmProjFileSize || 0)) * mult,
-    );
-    mockHardwareService.getTotalMemoryGB.mockReturnValue(12);
-    // DYNAMIC: low free RAM until the clean victim's unload fires, then the memory
-    // iOS reclaims. This is what a static mock cannot express — and what makes the
-    // pre-evict-vs-post-evict ordering observable.
-    mockHardwareService.getAvailableMemoryGB.mockImplementation(() =>
-      reclaimed ? 6 : 1,
-    );
-
-    // Force a small residency budget so the ~3 GB model can't fit without eviction —
-    // deterministic, independent of the device-RAM heuristics under test elsewhere.
-    modelResidencyManager.setBudgetOverrideMB(2000);
-
-    await activeModelService.syncWithNativeState();
-  });
-
-  afterEach(() => {
-    modelResidencyManager.setBudgetOverrideMB(null);
-  });
-
   it('first load (no override) surfaces an overridable "Insufficient Memory" prompt with a Load Anyway button, and does NOT touch native or evict', async () => {
-    registerCleanVictim();
-    useAppStore.setState({ downloadedModels: [bigGguf()] });
+    await loadWhisperVictim(6);
 
     const ui = driveLoad('big-gguf');
     await ui.start();
 
     const prompt = ui.lastVisible();
     expect(prompt?.title).toBe('Insufficient Memory');
-    expect(prompt?.buttons?.map(b => b.text)).toEqual([
-      'Cancel',
-      'Load Anyway',
-    ]);
+    expect(prompt?.buttons?.map(b => b.text)).toEqual(['Cancel', 'Load Anyway']);
     // A refusal is NOT a load and NOT an eviction — the victim must survive so the
     // user's Load-Anyway retry still has room to reclaim.
-    expect(mockLlmService.loadModel).not.toHaveBeenCalled();
-    expect(modelResidencyManager.isResident('whisper')).toBe(true);
-    expect(getAppState().activeModelId).not.toBe('big-gguf');
+    expect(textLoads()).toBe(0);
+    expect(residency.isResident('whisper')).toBe(true);
+    expect(useAppStore.getState().activeModelId).not.toBe('big-gguf');
   });
 
   it('tapping Load Anyway evicts the clean resident and unconditionally loads the model, even with pre-eviction free RAM very low', async () => {
-    const victimUnload = registerCleanVictim();
-    useAppStore.setState({ downloadedModels: [bigGguf()] });
+    const victim = await loadWhisperVictim(6);
 
     const ui = driveLoad('big-gguf');
     await ui.start(); // → "Insufficient Memory"
-    mockLlmService.isModelLoaded.mockReturnValue(true); // native reports loaded after the forced load
     await ui.tapLoadAnyway();
 
-    // OUTCOME: the clean victim was actually evicted (freeing real RAM)...
-    expect(victimUnload).toHaveBeenCalledTimes(1);
-    expect(modelResidencyManager.isResident('whisper')).toBe(false);
+    // OUTCOME: the victim was actually evicted (its native context released, freeing real RAM)...
+    expect(victim.released()).toBe(true);
+    expect(residency.isResident('whisper')).toBe(false);
     // ...and the model loaded through the native engine and became active.
-    expect(mockLlmService.loadModel).toHaveBeenCalledTimes(1);
-    expect(getAppState().activeModelId).toBe('big-gguf');
+    expect(textLoads()).toBe(1);
+    expect(useAppStore.getState().activeModelId).toBe('big-gguf');
     // The user never saw an "Error" dialog — the retry succeeded.
     expect(ui.alerts.map(a => a.title)).not.toContain('Error');
   });
@@ -211,64 +162,51 @@ describe('Load Anyway override chain (UI helper → service → residency)', () 
     // Free RAM stays very low even after the eviction unload fires. Under the OLD
     // survival-floor behaviour this was a hard Error; the ratified behaviour is that
     // "Load Anyway" is UNCONDITIONAL — it evicts everything and loads regardless.
-    mockHardwareService.getAvailableMemoryGB.mockImplementation(() =>
-      reclaimed ? 1.1 : 1,
-    );
-    const victimUnload = registerCleanVictim();
-    useAppStore.setState({ downloadedModels: [bigGguf()] });
+    const victim = await loadWhisperVictim(1.1);
 
     // CONTRAST — WITHOUT override the normal memory gate refuses: an overridable
     // "Insufficient Memory" prompt, native never touched, the victim survives.
     const gated = driveLoad('big-gguf');
     await gated.start();
     expect(gated.lastVisible()?.title).toBe('Insufficient Memory');
-    expect(mockLlmService.loadModel).not.toHaveBeenCalled();
-    expect(modelResidencyManager.isResident('whisper')).toBe(true);
-    expect(getAppState().activeModelId).not.toBe('big-gguf');
+    expect(textLoads()).toBe(0);
+    expect(residency.isResident('whisper')).toBe(true);
+    expect(useAppStore.getState().activeModelId).not.toBe('big-gguf');
 
     // WITH override (tapping Load Anyway) it evicts the victim and loads unconditionally.
-    mockLlmService.isModelLoaded.mockReturnValue(true); // native reports loaded after the forced load
     await gated.tapLoadAnyway();
 
-    expect(victimUnload).toHaveBeenCalledTimes(1);
-    expect(modelResidencyManager.isResident('whisper')).toBe(false);
-    expect(mockLlmService.loadModel).toHaveBeenCalledTimes(1);
-    expect(getAppState().activeModelId).toBe('big-gguf');
+    expect(victim.released()).toBe(true);
+    expect(residency.isResident('whisper')).toBe(false);
+    expect(textLoads()).toBe(1);
+    expect(useAppStore.getState().activeModelId).toBe('big-gguf');
     // The override never dead-ends in an Error, and it only offered Load Anyway once.
     expect(gated.alerts.map(a => a.title)).not.toContain('Error');
-    const overridePrompts = gated.alerts.filter(
-      a => a.title === 'Insufficient Memory',
-    );
-    expect(overridePrompts).toHaveLength(1);
+    expect(gated.alerts.filter(a => a.title === 'Insufficient Memory')).toHaveLength(1);
   });
 
   it('session memory: after a Load-Anyway succeeds for a model, re-loading the SAME model skips the gate entirely (no second prompt)', async () => {
-    registerCleanVictim();
-    useAppStore.setState({ downloadedModels: [bigGguf()] });
+    await loadWhisperVictim(6);
 
     // First run: prompt → Load Anyway → loads.
     const first = driveLoad('big-gguf');
     await first.start();
-    mockLlmService.isModelLoaded.mockReturnValue(true);
     await first.tapLoadAnyway();
-    expect(getAppState().activeModelId).toBe('big-gguf');
-    expect(modelResidencyManager.hasSessionOverride('big-gguf')).toBe(true);
+    expect(useAppStore.getState().activeModelId).toBe('big-gguf');
+    expect(residency.hasSessionOverride('big-gguf')).toBe(true);
 
-    // Simulate the model later being evicted (RAM pressure) so a reload is a real load.
-    mockLlmService.isModelLoaded.mockReturnValue(false);
-    mockLlmService.loadModel.mockClear();
+    // The model is later ejected from memory (it stays selected), so a reload is a real load.
+    await activeModelService.ejectAll();
+    boundary.setRam(LOW_RAM);
 
     // Second run: the session override is remembered → NO "Insufficient Memory" prompt,
     // it just loads. The user is not re-interrogated every swap.
     const second = driveLoad('big-gguf');
     await second.start();
-    mockLlmService.isModelLoaded.mockReturnValue(true);
-    await flushPromises();
+    await flush();
 
-    expect(second.alerts.some(a => a.title === 'Insufficient Memory')).toBe(
-      false,
-    );
-    expect(mockLlmService.loadModel).toHaveBeenCalledTimes(1);
-    expect(getAppState().activeModelId).toBe('big-gguf');
+    expect(second.alerts.some(a => a.title === 'Insufficient Memory')).toBe(false);
+    expect(textLoads()).toBe(2);
+    expect(useAppStore.getState().activeModelId).toBe('big-gguf');
   });
 });

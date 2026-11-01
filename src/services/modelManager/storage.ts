@@ -13,10 +13,6 @@ import { useAppStore } from '../../stores';
 import { isLiteRTFileName } from '../../utils/modelHelpers';
 import { CATALOG, splitGgufPartNames } from '@offgrid/models';
 
-// Re-exported because this module was the published home of these helpers before they were extracted
-// into the one place both registries share.
-export { resolveStoredPath };
-
 const MODELS_STORAGE_KEY = '@local_llm/downloaded_models';
 const IMAGE_MODELS_STORAGE_KEY = '@local_llm/downloaded_image_models';
 

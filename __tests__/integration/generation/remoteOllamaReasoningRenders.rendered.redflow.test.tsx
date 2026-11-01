@@ -16,11 +16,8 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { installRemoteModel, installRemoteStream } from '../../harness/remoteHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 // Captured Ollama native /api/chat NDJSON: reasoning in message.thinking, then the answer, then done.
 const OLLAMA_NDJSON =
@@ -30,7 +27,7 @@ const OLLAMA_NDJSON =
 
 describe('T051 (rendered) — remote Ollama reasoning RENDERS (contrast to LM Studio T049)', () => {
   it('renders both the Ollama answer and the thinking it streamed', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     // Endpoint :11434 → the native Ollama path (handleOllamaChatLine), which renders message.thinking.
     await installRemoteModel({ name: 'Ollama', endpoint: 'http://localhost:11434', caps: { supportsThinking: false } });
     installRemoteStream(OLLAMA_NDJSON);

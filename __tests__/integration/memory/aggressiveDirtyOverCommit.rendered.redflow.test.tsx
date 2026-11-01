@@ -39,12 +39,8 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { GB } from '../../harness/nativeBoundary';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 // On-disk bytes chosen so the Android 2.5× estimate lands the residency spec at EXACTLY 9216MB (9GB) dirty.
 const NINE_GB_DIRTY_ON_DISK_BYTES = Math.round((9216 * 1024 * 1024) / 2.5); // 3,865,470,566
@@ -52,7 +48,7 @@ const NINE_GB_DIRTY_ON_DISK_BYTES = Math.round((9216 * 1024 * 1024) / 2.5); // 3
 describe('T103 / M6 (rendered) — aggressive policy over-commits a 9GB dirty image model (In Memory UI)', () => {
   it('refuses the 9GB dirty image load on 12GB@3GB-free Android aggressive (RED: it is admitted/resident)', async () => {
     // Generous RAM so the text-model setup (select + lazy load) succeeds before we drop the device.
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android' });
     h.render();
 
      

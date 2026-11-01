@@ -31,7 +31,7 @@ async function scanDirForMmProj(modelFilePath: string): Promise<RNFS.ReadDirResI
   return mmProjFiles.find(f => f.name === chosen);
 }
 
-export async function resolveMmProjPath(
+async function resolveMmProjPath(
   model: LlamaDownloadedModel,
   modelId: string,
 ): Promise<string | undefined> {
@@ -289,7 +289,14 @@ export async function doLoadImageModel(ctx: ImageLoadContext): Promise<void> {
       ctx.loadedImageModelId &&
       (ctx.loadedImageModelId !== ctx.modelId || ctx.needsThreadReload)
     ) {
-      await onnxImageGeneratorService.unloadModel();
+      if (!(await onnxImageGeneratorService.unloadModel())) {
+        // The model in use is still in memory: keep it as the loaded one and do not load a second
+        // image model on top of it. The caller surfaces this, and a retry can switch again.
+        throw Object.assign(
+          new Error('The image model in use could not be unloaded, so the other one was not loaded. Try again.'),
+          { keepLoaded: true },
+        );
+      }
       ctx.onError(); // resets loadedImageModelId/threads to null
     }
 
@@ -340,7 +347,7 @@ export async function doLoadImageModel(ctx: ImageLoadContext): Promise<void> {
     ctx.onLoaded(ctx.modelId, ctx.imageThreads);
     ctx.store.setActiveImageModelId(ctx.modelId);
   } catch (error) {
-    ctx.onError();
+    if (!(error as { keepLoaded?: boolean })?.keepLoaded) ctx.onError();
     throw error;
   } finally {
     ctx.onFinally();

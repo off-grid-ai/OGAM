@@ -10,41 +10,32 @@
  *   - phaseChange('error') top-level set PRESERVES the existing error string
  *   - the returned unsubscribe fn detaches EVERY handler (no more projection)
  *
- * Boundaries mocked: audioFilePlayer (native audio bridge) and logger. Everything
- * else — the playback machine, the stream clock, the smLog sink — runs for real.
+ * Everything that is ours runs for real: the playback machine, the stream clock, the smLog
+ * sink, the real audioFilePlayer (idle, so not active) and the real logger, whose error line
+ * reaches the console (a jest.fn in jest.setup). The engine is the real OnDeviceEngineEmitter
+ * event plumbing every engine extends; the test publishes the events a native engine raises.
  * Deleting the handler under test makes each assertion fail.
  */
-jest.mock('@offgrid/core/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
-jest.mock('@offgrid/pro/audio/audioFilePlayer', () => ({
-  audioFilePlayer: { isActive: jest.fn(() => false) },
-}));
-
 import { subscribeToEngine } from '@offgrid/pro/audio/ttsEngineSubscription';
-import { audioFilePlayer } from '@offgrid/pro/audio/audioFilePlayer';
+import { OnDeviceEngineEmitter } from '@offgrid/pro/audio/engine';
 import { getStreamBase, setStreamBase, resetStreamBase } from '@offgrid/pro/audio/streamPlaybackClock';
-import logger from '@offgrid/core/utils/logger';
 
-const mockFilePlayer = audioFilePlayer as unknown as { isActive: jest.Mock };
-const mockLogger = logger as unknown as { error: jest.Mock };
+const consoleError = console.error as jest.Mock;
 
-type Cb = (...args: any[]) => void;
-function makeEngine(overallProgress = 1) {
-  const listeners: Record<string, Cb[]> = {};
-  return {
-    on: (evt: string, cb: Cb) => {
-      (listeners[evt] ||= []).push(cb);
-      return () => {
-        listeners[evt] = (listeners[evt] || []).filter((l) => l !== cb);
-      };
-    },
-    emit: (evt: string, ...args: any[]) => (listeners[evt] || []).forEach((cb) => cb(...args)),
-    getOverallDownloadProgress: () => overallProgress,
-  };
+/** An engine on the real emitter: the test raises the events the native side would. */
+class EngineEvents extends OnDeviceEngineEmitter {
+  constructor(private readonly overallProgress: number) {
+    super();
+  }
+  publish(evt: string, ...args: any[]): void {
+    this.emit(evt, ...args);
+  }
+  getOverallDownloadProgress(): number {
+    return this.overallProgress;
+  }
 }
+
+const makeEngine = (overallProgress = 1) => new EngineEvents(overallProgress);
 
 // Real store-shaped state driven by the REAL playback machine via set/get.
 let state: Record<string, any>;
@@ -55,7 +46,7 @@ const deps = () => ({
 });
 
 beforeEach(() => {
-  mockFilePlayer.isActive.mockReturnValue(false);
+  consoleError.mockClear();
   resetStreamBase();
   state = {
     currentMessageId: 'm1',
@@ -81,7 +72,7 @@ describe('downloadProgress → store projection', () => {
   it('projects the engine overall download progress on each event', () => {
     const engine = makeEngine(0.42);
     subscribeToEngine(engine as any, deps());
-    engine.emit('downloadProgress');
+    engine.publish('downloadProgress');
     expect(state.overallDownloadProgress).toBe(0.42);
   });
 
@@ -89,7 +80,7 @@ describe('downloadProgress → store projection', () => {
     state.isSwitchingVoice = true;
     const engine = makeEngine(0.42);
     subscribeToEngine(engine as any, deps());
-    engine.emit('downloadProgress');
+    engine.publish('downloadProgress');
     expect(state.voiceSwitchProgress).toBe(0.42);
   });
 
@@ -100,12 +91,12 @@ describe('downloadProgress → store projection', () => {
     const engine = makeEngine(0.5);
     subscribeToEngine(engine as any, deps());
 
-    engine.emit('downloadProgress', {
+    engine.publish('downloadProgress', {
       assetId: 'voice', progress: 0.25, bytesWritten: 250, totalBytes: 1_000,
     });
     expect(state.downloadBytesPerSecond).toBeUndefined();
 
-    engine.emit('downloadProgress', {
+    engine.publish('downloadProgress', {
       assetId: 'voice', progress: 0.5, bytesWritten: 500, totalBytes: 1_000,
     });
     expect(state.downloadCurrentBytes).toBe(500);
@@ -119,7 +110,7 @@ describe('amplitudeChange → store projection', () => {
   it('projects the emitted amplitude value', () => {
     const engine = makeEngine();
     subscribeToEngine(engine as any, deps());
-    engine.emit('amplitudeChange', 0.75);
+    engine.publish('amplitudeChange', 0.75);
     expect(state.currentAmplitude).toBe(0.75);
   });
 });
@@ -130,7 +121,7 @@ describe('playbackTick → real machine position + flowing promotion', () => {
     expect(getStreamBase()).toBe(3);
     const engine = makeEngine();
     subscribeToEngine(engine as any, deps());
-    engine.emit('playbackTick', 2); // base(3) + 2 = 5
+    engine.publish('playbackTick', 2); // base(3) + 2 = 5
     expect(state.playbackElapsed).toBe(5);
     expect(state.playbackStatus).toBe('playing'); // flowing promoted preparing → playing
   });
@@ -138,7 +129,7 @@ describe('playbackTick → real machine position + flowing promotion', () => {
   it('with no stream base tracks raw elapsed and keeps playing once flowing', () => {
     const engine = makeEngine();
     subscribeToEngine(engine as any, deps());
-    engine.emit('playbackTick', 4); // base 0 + 4
+    engine.publish('playbackTick', 4); // base 0 + 4
     expect(state.playbackElapsed).toBe(4);
     expect(state.playbackStatus).toBe('playing');
   });
@@ -150,7 +141,7 @@ describe('playbackTick → real machine position + flowing promotion', () => {
     setStreamBase(1);
     const engine = makeEngine();
     subscribeToEngine(engine as any, deps());
-    engine.emit('playbackTick', 6); // 1 + 6
+    engine.publish('playbackTick', 6); // 1 + 6
     expect(state.playbackElapsed).toBe(7);
     expect(state.playbackStatus).toBe('playing');
   });
@@ -160,9 +151,9 @@ describe('error event → store projection + logger', () => {
   it('sets the error message and logs it with code + message', () => {
     const engine = makeEngine();
     subscribeToEngine(engine as any, deps());
-    engine.emit('error', { code: 'E_BRIDGE', message: 'bridge died' });
+    engine.publish('error', { code: 'E_BRIDGE', message: 'bridge died' });
     expect(state.error).toBe('bridge died');
-    expect(mockLogger.error).toHaveBeenCalledWith('[TTS Store] Engine error:', 'E_BRIDGE', 'bridge died');
+    expect(consoleError).toHaveBeenCalledWith('[TTS Store] Engine error:', 'E_BRIDGE', 'bridge died');
   });
 });
 
@@ -170,7 +161,7 @@ describe('voiceChanged → store projection', () => {
   it('projects the active voice id', () => {
     const engine = makeEngine();
     subscribeToEngine(engine as any, deps());
-    engine.emit('voiceChanged', 'af_heart');
+    engine.publish('voiceChanged', 'af_heart');
     expect(state.activeVoiceId).toBe('af_heart');
   });
 
@@ -179,7 +170,7 @@ describe('voiceChanged → store projection', () => {
     state.activeVoiceId = 'af_heart';
     const engine = makeEngine();
     subscribeToEngine(engine as any, deps());
-    engine.emit('voiceChanged', 'bf_emma');
+    engine.publish('voiceChanged', 'bf_emma');
     expect(state.activeVoiceId).toBe('af_heart');
   });
 });
@@ -191,7 +182,7 @@ describe('phaseChange error branch preserves the existing error', () => {
     state.error = 'previous failure';
     const engine = makeEngine();
     subscribeToEngine(engine as any, deps());
-    engine.emit('phaseChange', 'error');
+    engine.publish('phaseChange', 'error');
     // The top set preserved the prior error string...
     expect(state.phase).toBe('error');
     // ...but the machine then went idle via 'failed', writing error = get().error
@@ -204,7 +195,7 @@ describe('phaseChange error branch preserves the existing error', () => {
     state.error = 'stale error';
     const engine = makeEngine();
     subscribeToEngine(engine as any, deps());
-    engine.emit('phaseChange', 'ready'); // not error, and not a completion (was preparing)
+    engine.publish('phaseChange', 'ready'); // not error, and not a completion (was preparing)
     expect(state.error).toBeNull();
   });
 });
@@ -214,17 +205,17 @@ describe('unsubscribe detaches every handler', () => {
     const engine = makeEngine(0.9);
     const unsub = subscribeToEngine(engine as any, deps());
     unsub();
-    engine.emit('downloadProgress');
-    engine.emit('amplitudeChange', 0.5);
-    engine.emit('voiceChanged', 'bf_emma');
-    engine.emit('error', { code: 'X', message: 'later' });
-    engine.emit('playbackTick', 10);
+    engine.publish('downloadProgress');
+    engine.publish('amplitudeChange', 0.5);
+    engine.publish('voiceChanged', 'bf_emma');
+    engine.publish('error', { code: 'X', message: 'later' });
+    engine.publish('playbackTick', 10);
     // Nothing changed from the initial state — all handlers were removed.
     expect(state.overallDownloadProgress).toBe(0);
     expect(state.currentAmplitude).toBe(0);
     expect(state.activeVoiceId).toBeNull();
     expect(state.error).toBeNull();
     expect(state.playbackElapsed).toBe(0);
-    expect(mockLogger.error).not.toHaveBeenCalled();
+    expect(consoleError).not.toHaveBeenCalled();
   });
 });

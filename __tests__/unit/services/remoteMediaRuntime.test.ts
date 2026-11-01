@@ -1,61 +1,72 @@
-import { remoteMediaRuntime } from '../../../src/services/remoteMediaRuntime';
-import * as Keychain from 'react-native-keychain';
-import { useRemoteServerStore } from '../../../src/stores/remoteServerStore';
-import { whisperService } from '../../../src/services/whisperService';
+/**
+ * Remote media runtime, on the real stack: servers and their keys are saved through the real
+ * remoteServerManager into the device Keychain (a stateful fake of the native module), and requests go to a
+ * fake media server at the fetch boundary. The written speech file lands in an in-memory file system.
+ */
+jest.mock('react-native-keychain', () =>
+  require('../../harness/keyedRemoteServer').keychainModule(),
+);
+jest.mock('react-native-fs', () => {
+  const { defaultNativeFileSystemBoundary: boundary } = require('../../harness/nativeFileSystem');
+  return { __esModule: true, default: boundary.module, ...boundary.module };
+});
+
+import { Buffer } from 'buffer';
 import RNFS from 'react-native-fs';
+import { remoteMediaRuntime } from '../../../src/services/remoteMediaRuntime';
+import { remoteServerManager } from '../../../src/services/remoteServerManager';
+import { whisperService } from '../../../src/services/whisperService';
 import {
   activeRemoteVoiceServer,
   synthesizeRemoteVoiceFile,
 } from '../../../src/services/remoteVoicePlayback';
+import { remoteServerCapabilities, type RemoteServer } from '../../../src/types';
+import { resetKeychain } from '../../harness/keyedRemoteServer';
+import { defaultNativeFileSystemBoundary } from '../../harness/nativeFileSystem';
 import {
-  remoteServerCapabilities,
-  type RemoteServer,
-} from '../../../src/types';
+  installRemoteMediaServer,
+  type RemoteMediaServerHandle,
+} from '../../harness/remoteMediaServer';
 
-const server: RemoteServer = {
-  id: 'desktop-study',
-  name: 'Study Mac',
-  endpoint: 'http://192.168.1.30:7878/',
-  providerType: 'openai-compatible',
-  createdAt: '2026-08-29T00:00:00.000Z',
-  mediaModels: {
-    image: 'flux-schnell',
-    transcription: 'whisper-large-v3',
-    voice: 'kokoro',
-  },
+const LAN = 'http://192.168.1.30:7878';
+const mediaModels = {
+  image: 'flux-schnell',
+  transcription: 'whisper-large-v3',
+  voice: 'kokoro',
 };
 
-function jsonResponse(payload: unknown, status = 200): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    headers: { get: () => 'application/json' },
-    json: async () => payload,
-    text: async () => JSON.stringify(payload),
-    arrayBuffer: async () => new ArrayBuffer(0),
-  } as unknown as Response;
+/** Pair a server the way the app does: the record in the store, the key in the Keychain. */
+function addServer(input: {
+  name?: string;
+  endpoint: string;
+  apiKey?: string;
+  mediaModels?: RemoteServer['mediaModels'];
+}): Promise<RemoteServer> {
+  return remoteServerManager.addServer({
+    name: input.name ?? 'Study Mac',
+    endpoint: input.endpoint,
+    providerType: 'openai-compatible',
+    mediaModels: input.mediaModels ?? mediaModels,
+    ...(input.apiKey ? { apiKey: input.apiKey } : {}),
+  });
 }
 
 describe('remoteMediaRuntime', () => {
-  const originalFetch = global.fetch;
+  let server: RemoteMediaServerHandle | null = null;
 
   beforeEach(async () => {
-    useRemoteServerStore.getState().clearAllServers();
-    jest.spyOn(Keychain, 'getGenericPassword').mockResolvedValue({
-      service: `ai.offgridmobile.servers.${server.id}`,
-      storage: 'AES_GCM',
-      username: `server_${server.id}`,
-      password: 'device-secret',
-    } as never);
+    resetKeychain();
+    defaultNativeFileSystemBoundary.reset();
+    await remoteServerManager.clearAllServers();
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
-    global.fetch = originalFetch;
+    server?.restore();
+    server = null;
   });
 
   it('derives media capabilities from the server model IDs', () => {
-    expect(remoteServerCapabilities(server)).toEqual({
+    expect(remoteServerCapabilities({ mediaModels })).toEqual({
       imageGeneration: true,
       transcription: true,
       videoGeneration: false,
@@ -64,94 +75,82 @@ describe('remoteMediaRuntime', () => {
     expect(
       remoteServerCapabilities({ mediaModels: { video: 'wan2.1' } }).videoGeneration,
     ).toBe(true);
-    expect(remoteServerCapabilities({ mediaModels: { image: '   ' } })).toEqual(
-      {
+    expect(remoteServerCapabilities({ mediaModels: { image: '   ' } })).toEqual({
       imageGeneration: false,
       transcription: false,
       videoGeneration: false,
       voice: false,
-      },
-    );
+    });
   });
 
   it('sends the saved key to a private-LAN HTTP gateway and rejects redirects', async () => {
-    const calls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
-    global.fetch = jest.fn(async (url, init) => {
-      calls.push([url, init]);
-      return jsonResponse({ data: [{ b64_json: 'image-bytes' }] });
-    }) as typeof fetch;
+    server = installRemoteMediaServer({ origin: LAN, apiKey: 'device-secret', image: 'image-bytes' });
+    const paired = await addServer({ endpoint: `${LAN}/`, apiKey: 'device-secret' });
 
     await expect(
-      remoteMediaRuntime.generateImage(server, { prompt: 'A quiet desk' }),
+      remoteMediaRuntime.generateImage(paired, { prompt: 'A quiet desk' }),
     ).resolves.toEqual({ base64: 'image-bytes', url: undefined });
 
-    expect(calls[0]?.[0]).toBe(
-      'http://192.168.1.30:7878/v1/images/generations',
-    );
-    expect(calls[0]?.[1]?.headers).toMatchObject({
-      'Content-Type': 'application/json',
-    });
-    expect(calls[0]?.[1]?.headers).toHaveProperty(
-      'Authorization',
-      'Bearer device-secret',
-    );
-    expect(calls[0]?.[1]?.redirect).toBe('error');
-    expect(JSON.parse(String(calls[0]?.[1]?.body))).toMatchObject({
-      model: 'flux-schnell',
-      prompt: 'A quiet desk',
-    });
-    expect(server).not.toHaveProperty('apiKey');
+    expect(server.requests).toHaveLength(1);
+    const [sent] = server.requests;
+    expect(sent.path).toBe('/v1/images/generations');
+    expect(sent.headers['Content-Type']).toBe('application/json');
+    expect(sent.headers.Authorization).toBe('Bearer device-secret');
+    expect(sent.redirect).toBe('error');
+    expect(sent.body).toMatchObject({ model: 'flux-schnell', prompt: 'A quiet desk' });
+    // The key lives only in the Keychain, never on the saved server record.
+    expect(paired).not.toHaveProperty('apiKey');
+    expect(remoteServerManager.getServer(paired.id)).not.toHaveProperty('apiKey');
   });
 
-  it('sends a stored credential only to an HTTPS endpoint', async () => {
-    const calls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
-    global.fetch = jest.fn(async (url, init) => {
-      calls.push([url, init]);
-      return jsonResponse({ data: [{ b64_json: 'image-bytes' }] });
-    }) as typeof fetch;
-    await remoteMediaRuntime.generateImage(
-      { ...server, endpoint: 'https://desktop.example.test' },
-      { prompt: 'A quiet desk' },
-    );
-    expect(calls[0]?.[1]?.headers).toMatchObject({
-      Authorization: 'Bearer device-secret',
-    });
-    expect(calls[0]?.[1]?.redirect).toBe('error');
+  it('sends a stored credential to an HTTPS endpoint', async () => {
+    const origin = 'https://desktop.example.test';
+    server = installRemoteMediaServer({ origin, apiKey: 'device-secret', image: 'image-bytes' });
+    const paired = await addServer({ endpoint: origin, apiKey: 'device-secret' });
+
+    await expect(
+      remoteMediaRuntime.generateImage(paired, { prompt: 'A quiet desk' }),
+    ).resolves.toEqual({ base64: 'image-bytes', url: undefined });
+    expect(server.requests[0].headers.Authorization).toBe('Bearer device-secret');
+    expect(server.requests[0].redirect).toBe('error');
   });
 
   it('uses the transcription endpoint and reports an empty server response', async () => {
-    global.fetch = jest.fn(async () => jsonResponse({})) as typeof fetch;
+    server = installRemoteMediaServer({ origin: LAN });
+    const paired = await addServer({ endpoint: `${LAN}/` });
 
     await expect(
-      remoteMediaRuntime.transcribe(server, {
-        fileUri: 'file:///recording.wav',
-      }),
+      remoteMediaRuntime.transcribe(paired, { fileUri: 'file:///recording.wav' }),
     ).rejects.toThrow('Remote server returned no transcript');
+    expect(server.requests.map(r => `${r.method} ${r.path}`)).toEqual([
+      'POST /v1/audio/transcriptions',
+    ]);
   });
 
   it('routes file transcription through the active server without a local Whisper model', async () => {
-    global.fetch = jest.fn(async () =>
-      jsonResponse({ text: 'Private meeting notes' }),
-    ) as typeof fetch;
-    const store = useRemoteServerStore.getState();
-    const serverId = store.addServer({
-      name: server.name,
-      endpoint: server.endpoint,
-      providerType: server.providerType,
+    server = installRemoteMediaServer({ origin: LAN, transcript: 'Private meeting notes' });
+    const paired = await addServer({
+      endpoint: `${LAN}/`,
       mediaModels: { transcription: 'whisper-large-v3' },
     });
-    store.setActiveRemoteMediaServerId('transcription', serverId);
+    await remoteServerManager.setActiveRemoteMediaModel(
+      paired.id,
+      'transcription',
+      'whisper-large-v3',
+    );
 
     await expect(
       whisperService.transcribeFile('file:///recording.wav'),
     ).resolves.toBe('Private meeting notes');
+    expect(server.requests.map(r => r.path)).toEqual(['/v1/audio/transcriptions']);
   });
 
   it('cancels an in-flight voice request through AbortSignal', async () => {
-    global.fetch = jest.fn(() => new Promise(() => undefined)) as typeof fetch;
+    server = installRemoteMediaServer({ origin: LAN, hang: true });
+    const paired = await addServer({ endpoint: `${LAN}/` });
     const controller = new AbortController();
     const pending = remoteMediaRuntime.synthesizeVoice(
-      server,
+      paired,
       { text: 'Your summary is ready.' },
       { signal: controller.signal },
     );
@@ -161,26 +160,23 @@ describe('remoteMediaRuntime', () => {
   });
 
   it('writes remote speech into the file-backed playback seam for the active Desktop', async () => {
-    const audio = Uint8Array.from([1, 2, 3, 4]).buffer;
-    global.fetch = jest.fn(
-      async () =>
-        ({
-      ...jsonResponse({}, 200),
-      headers: { get: () => 'audio/mpeg' },
-      arrayBuffer: async () => audio,
-        } as unknown as Response),
-    ) as typeof fetch;
-    const store = useRemoteServerStore.getState();
-    const id = store.addServer({
+    const bytes = Uint8Array.from([1, 2, 3, 4]);
+    server = installRemoteMediaServer({
+      origin: LAN,
+      speech: { bytes, contentType: 'audio/mpeg' },
+    });
+    const paired = await addServer({
       name: 'Studio Mac',
-      endpoint: server.endpoint,
-      providerType: server.providerType,
+      endpoint: `${LAN}/`,
       mediaModels: { voice: 'kokoro' },
     });
-    store.setActiveRemoteMediaServerId('voice', id);
+    expect(activeRemoteVoiceServer()).toBeNull();
+    await remoteServerManager.setActiveRemoteMediaModel(paired.id, 'voice', 'kokoro');
 
     const active = activeRemoteVoiceServer();
     expect(active?.name).toBe('Studio Mac');
+    const path = '/mock/caches/remote_voice/message_1.mp3';
+    expect(await RNFS.exists(path)).toBe(false);
     await expect(
       synthesizeRemoteVoiceFile({
         server: active!,
@@ -189,21 +185,14 @@ describe('remoteMediaRuntime', () => {
         voice: 'hf_alpha',
         signal: new AbortController().signal,
       }),
-    ).resolves.toBe('/mock/caches/remote_voice/message_1.mp3');
-    expect(global.fetch).toHaveBeenCalledWith(
-      'http://192.168.1.30:7878/v1/audio/speech',
-      expect.objectContaining({
-        body: JSON.stringify({
-          model: 'kokoro',
-          input: 'Your summary is ready.',
-          voice: 'hf_alpha',
-        }),
-      }),
-    );
-    expect(RNFS.writeFile).toHaveBeenCalledWith(
-      '/mock/caches/remote_voice/message_1.mp3',
-      Buffer.from(audio).toString('base64'),
-      'base64',
-    );
+    ).resolves.toBe(path);
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests[0].path).toBe('/v1/audio/speech');
+    expect(server.requests[0].body).toEqual({
+      model: 'kokoro',
+      input: 'Your summary is ready.',
+      voice: 'hf_alpha',
+    });
+    expect(await RNFS.readFile(path, 'base64')).toBe(Buffer.from(bytes).toString('base64'));
   });
 });

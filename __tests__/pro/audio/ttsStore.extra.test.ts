@@ -1,553 +1,373 @@
 /**
- * ttsStore — extra coverage for the uncovered branches.
+ * ttsStore — engine loading, download, voice restore, cache and persistence branches.
  *
- * These tests drive the REAL ttsStore actions AND the REAL modelResidencyManager
- * (only the native memory numbers on hardwareService are stubbed) so the
- * residency invariant is asserted as observable STATE (isResident/getResidents),
- * never "a function was called". The only mocked boundaries are:
- *   - the engine registry (a dumb stub engine — the native TTS bridge boundary)
- *   - hardwareService memory readings (native), pinned via setBudgetOverrideMB
- *   - logger (noise)
- * Everything else — the store, the residency manager, the persist migration —
- * runs for real. Deleting the branch under test makes these fail.
+ * Ours runs for real: the store actions, the registry's Kokoro engine and its executorch bridge
+ * (mounted by EngineBridge), the residency manager, the hardware service and the persist migration.
+ * Faked (harness/speechDevice): RAM at the native memory leaf, ExecuTorch's resource cache, the
+ * executorch speech runtime and the audio output. State is seeded through the store's own actions,
+ * or through what a previous launch saved to device storage.
+ *
+ * The residency invariant is asserted as observable state (isResident/getResidents), what the
+ * runtime has loaded, and what the cache holds — never that a function was called.
  */
+import { GB } from '../../harness/nativeBoundary';
+import { launchSpeech, type SpeechApp, type SpeechLaunchOptions } from '../../harness/speechDevice';
 
-// ── Dumb stub engine — the native TTS bridge boundary ───────────────────────
-type Voice = { id: string; label: string; metadata: Record<string, unknown> };
+let app: SpeechApp | undefined;
 
-function makeEngine(overrides: Partial<Record<string, unknown>> = {}) {
-  return {
-    id: 'mock-tts',
-    displayName: 'Mock TTS',
-    capabilities: {
-      streaming: false,
-      voiceCloning: false,
-      pauseResume: true,
-      generateAndSave: true,
-      peakRamMB: 100,
-    },
-    getPhase: jest.fn(() => 'ready' as const),
-    on: jest.fn(() => jest.fn()),
-    off: jest.fn(),
-    once: jest.fn(() => jest.fn()),
-    isSupported: jest.fn(() => true),
-    initialize: jest.fn().mockResolvedValue(undefined),
-    release: jest.fn().mockResolvedValue(undefined),
-    destroy: jest.fn().mockResolvedValue(undefined),
-    hydrateDownloaded: jest.fn(),
-    getRequiredAssets: jest.fn(() => [] as Array<{ sizeBytes: number }>),
-    checkAssetStatus: jest.fn().mockResolvedValue([]),
-    downloadAssets: jest.fn().mockResolvedValue(undefined),
-    deleteAssets: jest.fn().mockResolvedValue(undefined),
-    getOverallDownloadProgress: jest.fn(() => 1),
-    isFullyDownloaded: jest.fn(() => true),
-    getBridgeComponent: jest.fn(() => null),
-    getVoices: jest.fn(
-      () => [{ id: 'default', label: 'Default', metadata: {} }] as Voice[],
-    ),
-    getActiveVoice: jest.fn(() => ({ id: 'default', label: 'Default', metadata: {} }) as Voice),
-    setVoice: jest.fn().mockResolvedValue(undefined),
-    speak: jest.fn().mockResolvedValue(undefined),
-    generateAndSave: jest.fn().mockResolvedValue({
-      filePath: '/cache/c1/m1.pcm',
-      durationSeconds: 2.5,
-      waveformData: new Array(4).fill(0.1),
-    }),
-    stop: jest.fn(),
-    pause: jest.fn(),
-    resume: jest.fn(),
-    setSpeed: jest.fn(),
-    ...overrides,
-  };
+async function launch(options: SpeechLaunchOptions = {}) {
+  app = await launchSpeech(options);
+  return app;
 }
 
-let mockCurrentEngine = makeEngine();
+afterEach(async () => {
+  await app?.close();
+  app = undefined;
+});
 
-jest.mock('../../../pro/audio/engine', () => ({
-  ttsRegistry: {
-    register: jest.fn(),
-    has: jest.fn(() => true),
-    getEngine: jest.fn(() => mockCurrentEngine),
-    setActiveEngine: jest.fn(() => Promise.resolve(mockCurrentEngine)),
-    getActiveEngine: jest.fn(() => mockCurrentEngine),
-    getActiveEngineId: jest.fn(() => 'mock-tts'),
-    getRegisteredIds: jest.fn(() => ['mock-tts']),
-  },
-  // OuteTTSEngine is compared with `instanceof` in refreshCacheSize/clearAudioCache.
-  // A real class here means an instance is a genuine OuteTTS and the plain stub is not,
-  // so BOTH sides of the instanceof branch are exercised for real. Defined inside the
-  // factory (class decls aren't hoisted, so a top-level one is in the TDZ at mock time).
-  OuteTTSEngine: class MockOuteTTSEngine {
-    getAudioCacheSizeMB = jest.fn().mockResolvedValue(12.5);
-    clearAudioCache = jest.fn().mockResolvedValue(undefined);
-  },
-}));
+/** The voice model was freed (as residency does under memory pressure): the engine is cold. */
+async function coolEngine(a: SpeechApp) {
+  await a.rtl.act(async () => { await a.store().releaseEngine(); });
+  await a.rtl.waitFor(() => expect(a.store().isReady).toBe(false));
+}
 
-jest.mock('@offgrid/core/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), error: jest.fn(), warn: jest.fn() },
-}));
+/** A text model resident at `sizeMB`; reports whether residency unloaded it. */
+function residentTextModel(a: SpeechApp, sizeMB: number) {
+  const state = { unloaded: false };
+  a.residency.register({ key: 'text', type: 'text', sizeMB }, async () => { state.unloaded = true; });
+  return state;
+}
 
-import { useTTSStore } from '@offgrid/pro/audio/ttsStore';
-import { modelResidencyManager } from '@offgrid/core/services/modelResidency';
-import { hardwareService } from '@offgrid/core/services/hardware';
-import { OuteTTSEngine } from '@offgrid/pro/audio/engine';
+// ── initializeEngine (residency-gated load) ──────────────────────────────
 
-const getState = () => useTTSStore.getState();
+describe('initializeEngine', () => {
+  it('bails with no active engine — no residency load, no error', async () => {
+    const a = await launch({ selectEngine: false });
 
-// Keep the store's own persisted settings coherent between tests.
-const baseSettings = {
-  interfaceMode: 'chat' as const,
-  enabled: true,
-  speed: 1.0,
-  engineId: 'mock-tts',
-  voiceByEngine: {} as Record<string, string>,
-  modelDownloaded: {} as Record<string, boolean>,
-  voiceAssetsDownloaded: {} as Record<string, string[]>,
-};
+    await a.run(() => a.store().initializeEngine());
 
-describe('ttsStore — extra branch coverage', () => {
-  let availSpy: jest.SpyInstance;
-
-  beforeEach(() => {
-    mockCurrentEngine = makeEngine();
-    // Restore the registry default (some tests point getActiveEngine at an OuteTTS
-    // instance via mockReturnValue, which clearAllMocks does NOT undo).
-    const { ttsRegistry } = jest.requireMock('../../../pro/audio/engine');
-    ttsRegistry.getActiveEngine.mockImplementation(() => mockCurrentEngine);
-    useTTSStore.setState({
-      phase: 'ready',
-      currentMessageId: null,
-      currentAudioPath: null,
-      currentAmplitude: 0,
-      playbackElapsed: 0,
-      playbackDuration: 0,
-      playSessionId: 0,
-      error: null,
-      playbackStatus: 'idle',
-      isStreaming: false,
-      isReady: true,
-      isDownloading: false,
-      isLoading: false,
-      isSpeaking: false,
-      isPaused: false,
-      isGeneratingAudio: false,
-      assets: [],
-      overallDownloadProgress: 1,
-      voices: [{ id: 'default', label: 'Default', metadata: {} }],
-      activeVoiceId: 'default',
-      isSwitchingVoice: false,
-      audioCacheSizeMB: 0,
-      settings: { ...baseSettings, voiceByEngine: {}, modelDownloaded: {} },
-    });
-    // Plenty of free RAM so the override survival-floor (1200MB) always clears;
-    // the budget itself is pinned per-test via setBudgetOverrideMB.
-    jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(12);
-    availSpy = jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(6);
-    jest
-      .spyOn(hardwareService, 'refreshMemoryInfo')
-      .mockResolvedValue(undefined as unknown as ReturnType<typeof hardwareService.refreshMemoryInfo>);
+    expect(a.residency.isResident('tts')).toBe(false);
+    expect(a.runtime.loaded()).toEqual([]);
+    expect(a.store().error).toBeNull();
   });
 
-  afterEach(() => {
-    // No pollution: reset the shared residency manager + restore all spies.
-    modelResidencyManager._reset();
-    modelResidencyManager.setBudgetOverrideMB(null);
-    jest.restoreAllMocks();
-    jest.clearAllMocks();
+  it('speak turn: fits → the voice model is loaded AND resident at its working-set size', async () => {
+    const a = await launch();
+    await coolEngine(a);
+
+    await a.run(() => a.store().initializeEngine({ speak: true }));
+
+    await a.rtl.waitFor(() => expect(a.store().isReady).toBe(true));
+    expect(a.runtime.loaded()).toEqual(['af_heart']);
+    // Kokoro's executorch working set (320 MB), not its 82 MB file.
+    expect(a.residency.getResidents().find(r => r.key === 'tts')?.sizeMB).toBe(320);
+    expect(a.store().error).toBeNull();
   });
 
-  // ── initializeEngine (residency-gated load) ──────────────────────────────
+  it('warm/preload: NO room → skips quietly (not resident, no error, nothing loaded)', async () => {
+    const a = await launch({ ram: { platform: 'android', totalBytes: 4 * GB, availBytes: 2 * GB } });
+    await coolEngine(a);
+    const text = residentTextModel(a, a.residency.getBudgetMB());
 
-  describe('initializeEngine', () => {
-    it('bails with no active engine — no residency load, no error', async () => {
-      const { ttsRegistry } = jest.requireMock('../../../pro/audio/engine');
-      ttsRegistry.getActiveEngine.mockReturnValueOnce(null);
+    await a.run(() => a.store().initializeEngine()); // override defaults to false
 
-      await getState().initializeEngine();
+    expect(a.runtime.loaded()).toEqual([]);
+    expect(a.residency.isResident('tts')).toBe(false);
+    expect(a.residency.isResident('text')).toBe(true); // a warm never evicts
+    expect(text.unloaded).toBe(false);
+    expect(a.store().error).toBeNull();
+  });
 
-      expect(mockCurrentEngine.initialize).not.toHaveBeenCalled();
-      expect(modelResidencyManager.isResident('tts')).toBe(false);
-      expect(getState().error).toBeNull();
+  it('Load Anyway (override): loads even with ~500 MB free (Load Anyway always loads)', async () => {
+    const a = await launch();
+    await coolEngine(a);
+    a.boundary.setRam({ platform: 'android', totalBytes: 12 * GB, availBytes: 0.5 * GB });
+
+    await a.run(() => a.store().initializeEngine({ override: true }));
+
+    await a.rtl.waitFor(() => expect(a.store().isReady).toBe(true));
+    expect(a.residency.isResident('tts')).toBe(true);
+    expect(a.runtime.loaded()).toEqual(['af_heart']);
+    expect(a.store().error).toBeNull();
+  });
+
+  it('the TTS resident cannot be evicted while it plays, and can when idle', async () => {
+    const a = await launch();
+    await coolEngine(a);
+    await a.run(() => a.store().initializeEngine({ speak: true }));
+    await a.rtl.waitFor(() => expect(a.store().isReady).toBe(true));
+
+    // Playing: a text load that needs the room cannot take it.
+    let speech!: Promise<void>;
+    await a.rtl.act(async () => { speech = a.store().speak('a long reply', 'm1'); });
+    await a.rtl.waitFor(() => expect(a.store().playbackStatus).toBe('playing'));
+    await a.rtl.act(async () => {
+      await a.residency.makeRoomFor({ key: 'llm', type: 'text', sizeMB: a.residency.getBudgetMB() - 100 });
     });
+    expect(a.residency.isResident('tts')).toBe(true);
+    expect(a.runtime.loaded()).toEqual(['af_heart']);
 
-    it('override load: fits → engine initialized AND tts becomes resident', async () => {
-      modelResidencyManager.setBudgetOverrideMB(4000); // room for the 100MB voice model
-      mockCurrentEngine.capabilities.peakRamMB = 100;
-
-      await getState().initializeEngine({ override: true });
-
-      // The OUTCOME a user feels: the voice model is actually in RAM.
-      expect(mockCurrentEngine.initialize).toHaveBeenCalledTimes(1);
-      expect(modelResidencyManager.isResident('tts')).toBe(true);
-      expect(modelResidencyManager.getResidents().map(r => r.key)).toContain('tts');
-      expect(getState().error).toBeNull();
+    // Idle: the same load evicts it.
+    await a.play(1);
+    await a.rtl.act(async () => { await speech; });
+    await a.rtl.act(async () => {
+      await a.residency.makeRoomFor({ key: 'llm', type: 'text', sizeMB: a.residency.getBudgetMB() - 100 });
     });
+    expect(a.residency.isResident('tts')).toBe(false);
+  });
 
-    it('warm/preload: NO room → skips quietly (not resident, no error, engine NOT initialized)', async () => {
-      // A resident 3800MB model + a 1024MB budget leaves no room to co-reside 300MB TTS.
-      modelResidencyManager.setBudgetOverrideMB(1024);
-      modelResidencyManager.register(
-        { key: 'llm', type: 'text', sizeMB: 3800 },
-        () => Promise.resolve(),
-      );
-      mockCurrentEngine.capabilities.peakRamMB = 300;
+  it('eviction releases the engine: the runtime is unloaded and the engine reads cold', async () => {
+    const a = await launch();
+    await coolEngine(a);
+    await a.run(() => a.store().initializeEngine({ speak: true }));
+    await a.rtl.waitFor(() => expect(a.residency.isResident('tts')).toBe(true));
 
-      await getState().initializeEngine(); // override defaults to false
-
-      // The false branch of `fits`: warm must NOT load and must NOT surface an error.
-      expect(mockCurrentEngine.initialize).not.toHaveBeenCalled();
-      expect(modelResidencyManager.isResident('tts')).toBe(false);
-      expect(modelResidencyManager.isResident('llm')).toBe(true); // resident not evicted for a warm
-      expect(getState().error).toBeNull();
-    });
-
-    it('override load: bypasses the budget → evicts everything else and initializes (Load Anyway always loads)', async () => {
-      // Load Anyway is UNCONDITIONAL: makeRoomFor under override always returns fits=true (no
-      // survival floor — the user accepted the risk), so even at ~500MB real free RAM the override
-      // load proceeds — evict, initialize, tts becomes resident. (The old "override still refuses
-      // below the floor" behavior was removed.)
-      modelResidencyManager.setBudgetOverrideMB(4000);
-      availSpy.mockReturnValue(0.5); // ~500MB free — tight, but override ignores the budget
-      mockCurrentEngine.capabilities.peakRamMB = 100;
-
-      await getState().initializeEngine({ override: true });
-
-      expect(mockCurrentEngine.initialize).toHaveBeenCalled();
-      expect(modelResidencyManager.isResident('tts')).toBe(true);
-      expect(getState().error).toBeNull();
-    });
-
-    it('derives sizeMB from required-asset bytes when peakRamMB is 0', async () => {
-      // peakRamMB 0 forces the `|| assets.reduce(...)/MB` fallback (line 249).
-      modelResidencyManager.setBudgetOverrideMB(4000);
-      mockCurrentEngine.capabilities.peakRamMB = 0;
-      mockCurrentEngine.getRequiredAssets.mockReturnValue([
-        { sizeBytes: 200 * 1024 * 1024 },
-        { sizeBytes: 100 * 1024 * 1024 },
-      ]);
-
-      await getState().initializeEngine({ override: true });
-
-      expect(modelResidencyManager.isResident('tts')).toBe(true);
-      // The registered resident carries the derived size (~300MB), proving the
-      // fallback fed the residency spec — not the 0 peakRamMB.
-      const tts = modelResidencyManager.getResidents().find(r => r.key === 'tts');
-      expect(tts?.sizeMB).toBe(300);
-    });
-
-    it('registered TTS canEvict tracks playbackStatus (veto while playing, evictable when idle)', async () => {
-      modelResidencyManager.setBudgetOverrideMB(4000);
-      mockCurrentEngine.capabilities.peakRamMB = 100;
-      await getState().initializeEngine({ override: true });
-
-      // canEvict is a runtime field on the resident spec that getResidents()'s stripped
-      // type omits — narrow it here to assert the real in-use veto behavior.
-      const tts = modelResidencyManager.getResidents().find(r => r.key === 'tts') as
-        (undefined | { canEvict?: () => boolean });
-      // idle → evictable
-      useTTSStore.setState({ playbackStatus: 'idle' });
-      expect(tts?.canEvict?.()).toBe(true);
-      // playing → residency must NOT evict active playback
-      useTTSStore.setState({ playbackStatus: 'playing' });
-      expect(tts?.canEvict?.()).toBe(false);
-    });
-
-    it('registered TTS unload fn releases the engine when residency evicts it', async () => {
-      // Load TTS as a resident (idle → evictable), then force a load that needs the
-      // room so residency fires the tts unload fn. Asserts the OUTCOME: the engine is
-      // released and tts is no longer resident (line 276 — the eviction unload).
-      modelResidencyManager.setBudgetOverrideMB(2000);
-      mockCurrentEngine.capabilities.peakRamMB = 500;
-      useTTSStore.setState({ playbackStatus: 'idle' });
-      await getState().initializeEngine({ override: true });
-      expect(modelResidencyManager.isResident('tts')).toBe(true);
-
-      // A larger override load evicts every evictable resident (single-model), running
-      // tts's registered unload fn (which calls engine.release()).
-      await modelResidencyManager.runExclusive('load:llm', async () => {
-        await modelResidencyManager.makeRoomFor(
-          { key: 'llm', type: 'text', sizeMB: 1800 },
-          { override: true },
-        );
+    await a.rtl.act(async () => {
+      await a.residency.runExclusive('load:llm', async () => {
+        await a.residency.makeRoomFor({ key: 'llm', type: 'text', sizeMB: 1800 }, { override: true });
       });
-
-      expect(modelResidencyManager.isResident('tts')).toBe(false);
-      expect(mockCurrentEngine.release).toHaveBeenCalled();
-    });
-  });
-
-  // ── stopStreaming delegation ─────────────────────────────────────────────
-
-  describe('stopStreaming', () => {
-    it('runs the streaming-stop path without throwing (delegates to the playback owner)', () => {
-      // Real delegation into ttsPlayback/streamingSpeech (not a native boundary) —
-      // line 376. From idle it is a safe no-op; the outcome is a stable idle state.
-      expect(() => getState().stopStreaming()).not.toThrow();
-      expect(getState().playbackStatus).toBe('idle');
-    });
-  });
-
-  // ── setEngine: restore a saved voice ─────────────────────────────────────
-
-  describe('setEngine saved-voice restore', () => {
-    it('re-applies a persisted voice that exists on the engine', async () => {
-      mockCurrentEngine.getVoices.mockReturnValue([
-        { id: 'default', label: 'Default', metadata: {} },
-        { id: 'nova', label: 'Nova', metadata: {} },
-      ]);
-      useTTSStore.setState({
-        settings: { ...baseSettings, voiceByEngine: { 'mock-tts': 'nova' } },
-      });
-
-      await getState().setEngine('mock-tts');
-
-      // Line 224: the saved voice is re-applied on the engine and reflected in state.
-      expect(mockCurrentEngine.setVoice).toHaveBeenCalledWith('nova');
-      expect(getState().activeVoiceId).toBe('nova');
     });
 
-    it('does NOT re-apply a saved voice the engine no longer offers (falls to engine default)', async () => {
-      mockCurrentEngine.getVoices.mockReturnValue([{ id: 'default', label: 'Default', metadata: {} }]);
-      useTTSStore.setState({
-        settings: { ...baseSettings, voiceByEngine: { 'mock-tts': 'ghost-voice' } },
-      });
-
-      await getState().setEngine('mock-tts');
-
-      // The other side of the `voices.some(...)` branch: no re-apply.
-      expect(mockCurrentEngine.setVoice).not.toHaveBeenCalled();
-      // activeVoiceId still reflects the (now invalid) saved id per the store's `savedVoice ?? ...`.
-      expect(getState().activeVoiceId).toBe('ghost-voice');
-    });
-  });
-
-  // ── checkDownloadStatus backfill ─────────────────────────────────────────
-
-  describe('checkDownloadStatus flag backfill', () => {
-    it('backfills modelDownloaded when the disk scan finds the model present', async () => {
-      mockCurrentEngine.isFullyDownloaded.mockReturnValue(true);
-      useTTSStore.setState({
-        settings: { ...baseSettings, modelDownloaded: {} },
-      });
-
-      await getState().checkDownloadStatus();
-
-      // Lines 308-315: flag backfilled from a confirmed present model.
-      expect(getState().settings.modelDownloaded?.['mock-tts']).toBe(true);
-    });
-
-    it('does NOT backfill when the model is not fully downloaded', async () => {
-      mockCurrentEngine.isFullyDownloaded.mockReturnValue(false);
-      useTTSStore.setState({ settings: { ...baseSettings, modelDownloaded: {} } });
-
-      await getState().checkDownloadStatus();
-
-      expect(getState().settings.modelDownloaded?.['mock-tts']).toBeUndefined();
-    });
-  });
-
-  // ── downloadModels ───────────────────────────────────────────────────────
-
-  describe('downloadModels', () => {
-    it('persists the modelDownloaded flag after a successful download', async () => {
-      mockCurrentEngine.isFullyDownloaded.mockReturnValue(true);
-      useTTSStore.setState({
-        isDownloading: false,
-        settings: { ...baseSettings, modelDownloaded: {} },
-      });
-
-      await getState().downloadModels();
-
-      expect(mockCurrentEngine.downloadAssets).toHaveBeenCalledTimes(1);
-      expect(getState().settings.modelDownloaded?.['mock-tts']).toBe(true);
-      expect(getState().settings.voiceAssetsDownloaded?.['mock-tts']).toEqual(['default']);
-      expect(getState().error).toBeNull();
-    });
-
-    it('does NOT persist the flag when the model is still incomplete after download', async () => {
-      mockCurrentEngine.isFullyDownloaded.mockReturnValue(false);
-      useTTSStore.setState({ isDownloading: false, settings: { ...baseSettings, modelDownloaded: {} } });
-
-      await getState().downloadModels();
-
-      expect(getState().settings.modelDownloaded?.['mock-tts']).toBeUndefined();
-    });
-
-    it('surfaces an error when the download rejects', async () => {
-      mockCurrentEngine.downloadAssets.mockRejectedValueOnce(new Error('network down'));
-      useTTSStore.setState({ isDownloading: false });
-
-      await getState().downloadModels();
-
-      expect(getState().error).toBe('network down');
-    });
-
-    it('is a no-op guard while a download is already in flight', async () => {
-      useTTSStore.setState({ isDownloading: true });
-
-      await getState().downloadModels();
-
-      expect(mockCurrentEngine.downloadAssets).not.toHaveBeenCalled();
-    });
-  });
-
-  // ── deleteModels ─────────────────────────────────────────────────────────
-
-  describe('deleteModels', () => {
-    it('clears the downloaded flag, zeroes progress, and drops any voice-switch', async () => {
-      useTTSStore.setState({
-        isSwitchingVoice: true,
-        overallDownloadProgress: 1,
-        settings: { ...baseSettings, modelDownloaded: { 'mock-tts': true } },
-      });
-
-      await getState().deleteModels();
-
-      expect(mockCurrentEngine.deleteAssets).toHaveBeenCalledTimes(1);
-      expect(getState().settings.modelDownloaded?.['mock-tts']).toBe(false);
-      expect(getState().overallDownloadProgress).toBe(0);
-      expect(getState().isSwitchingVoice).toBe(false);
-    });
-  });
-
-  // ── releaseEngine ──────────────────────────────────────────────────────────
-
-  describe('releaseEngine', () => {
-    it('releases the active engine', async () => {
-      await getState().releaseEngine();
-      expect(mockCurrentEngine.release).toHaveBeenCalledTimes(1);
-    });
-
-    it('is a no-op when there is no active engine', async () => {
-      const { ttsRegistry } = jest.requireMock('../../../pro/audio/engine');
-      ttsRegistry.getActiveEngine.mockReturnValueOnce(null);
-      await expect(getState().releaseEngine()).resolves.toBeUndefined();
-      expect(mockCurrentEngine.release).not.toHaveBeenCalled();
-    });
-  });
-
-  // ── generateAndSave capability guard ─────────────────────────────────────
-
-  describe('generateAndSave capability guard', () => {
-    it('throws when the active engine cannot generateAndSave', async () => {
-      mockCurrentEngine.capabilities.generateAndSave = false;
-
-      await expect(getState().generateAndSave('hi', 'c1', 'm1')).rejects.toThrow(
-        /does not support audio generation/i,
-      );
-      expect(mockCurrentEngine.generateAndSave).not.toHaveBeenCalled();
-    });
-
-    it('throws when there is no active engine', async () => {
-      const { ttsRegistry } = jest.requireMock('../../../pro/audio/engine');
-      ttsRegistry.getActiveEngine.mockReturnValueOnce(null);
-
-      await expect(getState().generateAndSave('hi', 'c1', 'm1')).rejects.toThrow(
-        /no active tts engine/i,
-      );
-    });
-  });
-
-  // ── refreshCacheSize / clearAudioCache (OuteTTS-only) ────────────────────
-
-  describe('cache actions gate on OuteTTSEngine', () => {
-    it('refreshCacheSize reads the size only for an OuteTTS engine', async () => {
-      const oute = new OuteTTSEngine() as unknown as typeof mockCurrentEngine & {
-        getAudioCacheSizeMB: jest.Mock;
-      };
-      const { ttsRegistry } = jest.requireMock('../../../pro/audio/engine');
-      ttsRegistry.getActiveEngine.mockReturnValue(oute);
-
-      await getState().refreshCacheSize();
-
-      expect(oute.getAudioCacheSizeMB).toHaveBeenCalled();
-      expect(getState().audioCacheSizeMB).toBe(12.5);
-    });
-
-    it('refreshCacheSize is a no-op for a non-OuteTTS engine', async () => {
-      useTTSStore.setState({ audioCacheSizeMB: 7 });
-      // mockCurrentEngine (mock stub) is NOT an OuteTTSEngine → the instanceof is false.
-      await getState().refreshCacheSize();
-      expect(getState().audioCacheSizeMB).toBe(7); // untouched
-    });
-
-    it('clearAudioCache clears + zeroes size for an OuteTTS engine', async () => {
-      const oute = new OuteTTSEngine() as unknown as typeof mockCurrentEngine & {
-        clearAudioCache: jest.Mock;
-      };
-      const { ttsRegistry } = jest.requireMock('../../../pro/audio/engine');
-      ttsRegistry.getActiveEngine.mockReturnValue(oute);
-      useTTSStore.setState({ audioCacheSizeMB: 42 });
-
-      await getState().clearAudioCache();
-
-      expect(oute.clearAudioCache).toHaveBeenCalled();
-      expect(getState().audioCacheSizeMB).toBe(0);
-    });
-
-    it('clearAudioCache is a no-op for a non-OuteTTS engine', async () => {
-      useTTSStore.setState({ audioCacheSizeMB: 42 });
-      await getState().clearAudioCache();
-      expect(getState().audioCacheSizeMB).toBe(42); // instanceof false → untouched
-    });
+    expect(a.residency.isResident('tts')).toBe(false);
+    await a.rtl.waitFor(() => expect(a.runtime.loaded()).toEqual([]));
+    expect(a.store().isReady).toBe(false);
   });
 });
 
-// ── onRehydrateStorage migration ────────────────────────────────────────────
-// The migration mutates the draft state in place; drive it directly via the
-// persist option so both the legacy backfills and the flat→per-engine mapping
-// are exercised as real transformations.
-describe('ttsStore persist migration (onRehydrateStorage)', () => {
-  const runMigration = (settings: Record<string, unknown>) => {
-    const opts = (useTTSStore as unknown as {
-      persist: { getOptions: () => { onRehydrateStorage: () => (s: unknown) => void } };
-    }).persist.getOptions();
-    const state = { settings } as unknown;
-    opts.onRehydrateStorage()(state);
-    return (state as { settings: Record<string, unknown> }).settings;
-  };
+// ── stopStreaming delegation ─────────────────────────────────────────────
 
-  it('returns early (no throw) when there is no persisted state', () => {
-    const opts = (useTTSStore as unknown as {
-      persist: { getOptions: () => { onRehydrateStorage: () => (s: unknown) => void } };
-    }).persist.getOptions();
-    expect(() => opts.onRehydrateStorage()(undefined)).not.toThrow();
+describe('stopStreaming', () => {
+  it('is a safe no-op from idle', async () => {
+    const a = await launch();
+    expect(() => a.store().stopStreaming()).not.toThrow();
+    expect(a.store().playbackStatus).toBe('idle');
+  });
+});
+
+// ── setEngine: restore a saved voice ─────────────────────────────────────
+
+describe('setEngine saved-voice restore', () => {
+  it('re-applies, after a relaunch, the voice the person picked', async () => {
+    const first = await launch();
+    await first.rtl.act(async () => { first.store().setVoice('am_michael').catch(() => {}); });
+    await first.rtl.waitFor(() => expect(first.store().activeVoiceId).toBe('am_michael'), { timeout: 8000 });
+    const files = first.cache.files;
+    await first.close();
+
+    const next = await launch({ preserveStorage: true, files, download: false });
+
+    expect(next.engine()?.getActiveVoice()?.id).toBe('am_michael');
+    expect(next.store().activeVoiceId).toBe('am_michael');
   });
 
-  it('backfills voice and download records when missing', () => {
-    const s = runMigration({ engineId: 'kokoro' });
+  it('does NOT re-apply a saved voice the engine does not offer (the engine keeps its default)', async () => {
+    const storage = require('@react-native-async-storage/async-storage');
+    await storage.setItem('tts-store', JSON.stringify({
+      state: { settings: { engineId: 'kokoro', voiceByEngine: { kokoro: 'ghost-voice' } } },
+      version: 0,
+    }));
+
+    const a = await launch({ preserveStorage: true, download: false });
+
+    expect(a.engine()?.getActiveVoice()?.id).toBe('af_heart');
+    // The store still reports the saved id (its `savedVoice ?? …` projection).
+    expect(a.store().activeVoiceId).toBe('ghost-voice');
+  });
+});
+
+// ── checkDownloadStatus backfill ─────────────────────────────────────────
+
+describe('checkDownloadStatus flag backfill', () => {
+  it('backfills modelDownloaded when the completed files are found on the device', async () => {
+    const a = await launch({ download: false });
+    expect(a.store().settings.modelDownloaded?.kokoro).toBe(false);
+
+    a.cache.seedVoice(); // an earlier install completed these transfers
+    await a.rtl.act(async () => { await a.store().checkDownloadStatus(); });
+
+    expect(a.store().settings.modelDownloaded?.kokoro).toBe(true);
+  });
+
+  it('does NOT backfill when the files are not on the device', async () => {
+    const a = await launch({ download: false });
+
+    await a.rtl.act(async () => { await a.store().checkDownloadStatus(); });
+
+    expect(a.store().settings.modelDownloaded?.kokoro).toBe(false);
+  });
+});
+
+// ── downloadModels ───────────────────────────────────────────────────────
+
+describe('downloadModels', () => {
+  it('persists the downloaded flags after a successful download, with the files in the cache', async () => {
+    const a = await launch({ download: false });
+
+    await a.rtl.act(async () => { await a.store().downloadModels(); });
+
+    expect(a.store().settings.modelDownloaded?.kokoro).toBe(true);
+    expect(a.store().settings.voiceAssetsDownloaded?.kokoro).toEqual(['af_heart']);
+    expect([...a.cache.files].some(path => path.endsWith('af_heart.bin'))).toBe(true);
+    expect(a.store().error).toBeNull();
+  });
+
+  it('surfaces an error and persists nothing when the download fails', async () => {
+    const a = await launch({ download: false });
+    a.cache.failFetch(new Error('network down'));
+
+    await a.rtl.act(async () => { await a.store().downloadModels(); });
+
+    expect(a.store().error).toBe('network down');
+    expect(a.store().settings.modelDownloaded?.kokoro).toBe(false);
+  });
+
+  it('a second tap while a download is in flight changes nothing', async () => {
+    const a = await launch({ download: false });
+    const finish = a.cache.holdNext(0.4);
+    let first!: Promise<void>;
+    await a.rtl.act(async () => { first = a.store().downloadModels(); });
+    await a.rtl.waitFor(() => expect(a.store().isDownloading).toBe(true));
+    await a.rtl.waitFor(() => expect(a.store().overallDownloadProgress).toBe(0.4));
+
+    await a.rtl.act(async () => { await a.store().downloadModels(); });
+
+    // Returned at once: the first transfer is still in flight, untouched.
+    expect(a.store().isDownloading).toBe(true);
+    expect(a.store().overallDownloadProgress).toBe(0.4);
+    expect(a.cache.files.size).toBe(0);
+
+    await a.rtl.act(async () => { finish(); await first; });
+    expect(a.store().settings.modelDownloaded?.kokoro).toBe(true);
+  });
+});
+
+// ── deleteModels ─────────────────────────────────────────────────────────
+
+describe('deleteModels', () => {
+  it('clears the downloaded flag and the files, zeroes progress, and drops an in-flight voice switch', async () => {
+    const a = await launch();
+    a.cache.holdNext(0.2); // the new voice's files are still transferring
+    await a.rtl.act(async () => { a.store().setVoice('am_michael').catch(() => {}); });
+    await a.rtl.waitFor(() => expect(a.store().isSwitchingVoice).toBe(true));
+
+    await a.rtl.act(async () => { await a.store().deleteModels(); });
+
+    expect(a.store().settings.modelDownloaded?.kokoro).toBe(false);
+    expect(a.store().overallDownloadProgress).toBe(0);
+    expect(a.store().isSwitchingVoice).toBe(false);
+    expect([...a.cache.files].some(path => path.endsWith('synthesizer.pte'))).toBe(false);
+    // The voice the person used until the switch is gone too, not just the one being switched to.
+    expect([...a.cache.files].filter(path => path.endsWith('.bin'))).toEqual([]);
+  });
+
+  it('removes every voice the person downloaded, not just the active one', async () => {
+    const a = await launch();
+    await a.run(() => a.store().setVoice('am_michael'));
+    const voices = () => [...a.cache.files].filter(path => path.endsWith('.bin'));
+    expect(voices().some(path => path.endsWith('af_heart.bin'))).toBe(true);
+    expect(voices().some(path => path.endsWith('am_michael.bin'))).toBe(true);
+
+    await a.rtl.act(async () => { await a.store().deleteModels(); });
+
+    expect(voices()).toEqual([]);
+    expect(a.store().settings.modelDownloaded?.kokoro).toBe(false);
+  });
+});
+
+// ── releaseEngine ──────────────────────────────────────────────────────────
+
+describe('releaseEngine', () => {
+  it('releases the active engine: the runtime is unloaded', async () => {
+    const a = await launch();
+    expect(a.runtime.loaded()).toEqual(['af_heart']);
+
+    await a.rtl.act(async () => { await a.store().releaseEngine(); });
+
+    await a.rtl.waitFor(() => expect(a.runtime.loaded()).toEqual([]));
+    expect(a.store().isReady).toBe(false);
+  });
+
+  it('is a no-op when there is no active engine', async () => {
+    const a = await launch({ selectEngine: false });
+    await expect(a.store().releaseEngine()).resolves.toBeUndefined();
+  });
+});
+
+// ── generateAndSave capability guard ─────────────────────────────────────
+
+describe('generateAndSave capability guard', () => {
+  it('rejects for Kokoro, which streams and cannot save audio', async () => {
+    const a = await launch();
+    await expect(a.store().generateAndSave('hi', 'c1', 'm1')).rejects.toThrow(/does not support audio generation/i);
+    expect(a.runtime.spoken).toEqual([]);
+  });
+
+  it('rejects when there is no active engine', async () => {
+    const a = await launch({ selectEngine: false });
+    await expect(a.store().generateAndSave('hi', 'c1', 'm1')).rejects.toThrow(/no active tts engine/i);
+  });
+});
+
+// ── refreshCacheSize / clearAudioCache (OuteTTS-only) ────────────────────
+
+describe('cache actions only apply to an engine with an audio cache', () => {
+  it('refreshCacheSize reports no audio cache for Kokoro', async () => {
+    const a = await launch();
+    await a.rtl.act(async () => { await a.store().refreshCacheSize(); });
+    expect(a.store().audioCacheSizeMB).toBe(0);
+  });
+
+  it('clearAudioCache is a safe no-op for Kokoro', async () => {
+    const a = await launch();
+    await a.rtl.act(async () => { await a.store().clearAudioCache(); });
+    expect(a.store().audioCacheSizeMB).toBe(0);
+    expect(a.store().error).toBeNull();
+  });
+});
+
+// ── Persisted settings migration ────────────────────────────────────────────
+// What an older build saved is read back by a fresh launch; the migration runs on that read.
+
+describe('ttsStore persisted settings migration', () => {
+  /** Save `settings` the way an older build did, then start the app and read them back. */
+  async function relaunchWith(settings: Record<string, unknown> | null) {
+    const storage = require('@react-native-async-storage/async-storage');
+    if (settings) await storage.setItem('tts-store', JSON.stringify({ state: { settings }, version: 0 }));
+    const a = await launch({ preserveStorage: true, selectEngine: false });
+    return a.store().settings as unknown as Record<string, unknown>;
+  }
+
+  it('starts from the defaults when nothing was saved', async () => {
+    const storage = require('@react-native-async-storage/async-storage');
+    await storage.removeItem('tts-store');
+    const s = await relaunchWith(null);
+    expect(s.engineId).toBe('kokoro');
+    expect(s.voiceByEngine).toEqual({});
+  });
+
+  it('backfills voice and download records when missing', async () => {
+    const s = await relaunchWith({ engineId: 'kokoro' });
     expect(s.voiceByEngine).toEqual({});
     expect(s.modelDownloaded).toEqual({});
     expect(s.voiceAssetsDownloaded).toEqual({});
   });
 
-  it('migrates flat kokoroVoiceId and voiceId into voiceByEngine', () => {
-    const s = runMigration({
-      engineId: 'kokoro',
-      kokoroVoiceId: 'af_bella',
-      voiceId: 'legacy-oute',
-    });
+  it('migrates flat kokoroVoiceId and voiceId into voiceByEngine', async () => {
+    const s = await relaunchWith({ engineId: 'kokoro', kokoroVoiceId: 'af_bella', voiceId: 'legacy-oute' });
     expect((s.voiceByEngine as Record<string, string>).kokoro).toBe('af_bella');
     expect((s.voiceByEngine as Record<string, string>).outetts).toBe('legacy-oute');
-    // The flat keys are deleted after mapping.
     expect(s.kokoroVoiceId).toBeUndefined();
     expect(s.voiceId).toBeUndefined();
   });
 
-  it('does NOT overwrite an existing per-engine voice with the flat legacy key', () => {
-    const s = runMigration({
-      engineId: 'kokoro',
-      voiceByEngine: { kokoro: 'keep-me' },
-      kokoroVoiceId: 'af_bella',
-    });
-    // The `&& !vbe.kokoro` guard: existing per-engine voice wins, flat key untouched.
+  it('does NOT overwrite an existing per-engine voice with the flat legacy key', async () => {
+    const s = await relaunchWith({ engineId: 'kokoro', voiceByEngine: { kokoro: 'keep-me' }, kokoroVoiceId: 'af_bella' });
     expect((s.voiceByEngine as Record<string, string>).kokoro).toBe('keep-me');
     expect(s.kokoroVoiceId).toBe('af_bella');
   });
 
-  it('defaults engineId to kokoro when absent', () => {
-    const s = runMigration({ voiceByEngine: {} });
+  it('defaults engineId to kokoro when absent', async () => {
+    const s = await relaunchWith({ voiceByEngine: {} });
     expect(s.engineId).toBe('kokoro');
   });
 });

@@ -357,8 +357,9 @@ class ImageGenerationService {
         }
         return this.resetFor(job);
       }
-      this.updateState(completedImageGenerationState(result));
-      return await saveImageGenerationResult(result, {
+      // Publish the result message BEFORE announcing 'done': whoever reacts to 'done' (voice mode
+      // speaks the finished turn) reads the chat, and the reply must already be in it.
+      const saved = saveImageGenerationResult(result, {
         params,
         activeImageModel,
         messageId: this.state.messageId,
@@ -367,6 +368,8 @@ class ImageGenerationService {
         useOpenCL,
         startTime,
       });
+      this.updateState(completedImageGenerationState(result));
+      return await saved;
     } catch (error: any) {
       const errorMsg = error?.message || 'Image generation failed';
       if (errorMsg.includes('cancelled') || !this.isLive(job)) {

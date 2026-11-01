@@ -20,12 +20,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const SHEET_TITLE = 'Support Open-Source AI';
 
@@ -35,7 +31,7 @@ const RATE_LABEL = /^Rate on (the App Store|Google Play)$/;
 
 describe('happy — support-share sheet dismisses after rating and does not re-nag (T096)', () => {
   it('llama.cpp: 2nd generation shows the sheet; rating dismisses it; the 10th does not re-nag', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.render();
 
     // The X-share device leaf. Same module graph as the freshly-required SharePromptSheet (installNativeBoundary
@@ -87,7 +83,7 @@ describe('happy — support-share sheet dismisses after rating and does not re-n
   }, 60000);
 
   it("llama.cpp: Don't show again dismisses the sheet and keeps it hidden in a new session", async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.render();
 
     await h.send('first opt-out prompt', { text: 'reply one' });

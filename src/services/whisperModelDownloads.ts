@@ -48,6 +48,8 @@ interface ActiveDownloadOwner {
   nativeDownloadId: string | null;
   nativeCancel: Promise<void> | null;
   queuePublished: boolean;
+  /** Why the download failed (unset for a success or a cancel). */
+  failure?: unknown;
 }
 
 function createDownloadOwner(modelKey: string): ActiveDownloadOwner {
@@ -88,8 +90,10 @@ export class WhisperModelDownloads {
     owner: ActiveDownloadOwner,
     path: string,
   ): Promise<void> {
-    const activeOwner = this.activeDownloads.get(modelId);
-    if (activeOwner && activeOwner !== owner) return;
+    // Only the download that still owns the model may remove its file. A stale owner whose replacement has
+    // already finished must not delete the finished model (there is no active owner then, which the old
+    // check took as permission).
+    if (this.activeDownloads.get(modelId) !== owner) return;
     await RNFS.unlink(path);
   }
 
@@ -126,12 +130,15 @@ export class WhisperModelDownloads {
         owner,
         onProgress,
       });
+    } catch (error) {
+      // A failure (not a cancel) keeps its row as failed, so the Download Manager offers Retry, the same
+      // as a failed row restored after a relaunch. Removing it here made a mid-session failure vanish.
+      if (!(error as { cancelled?: boolean })?.cancelled) owner.failure = error;
+      throw error;
     } finally {
       if (this.activeDownloads.get(modelId) === owner) {
         this.activeDownloads.delete(modelId);
-        if (owner.queuePublished) {
-          useDownloadStore.getState().remove(owner.modelKey);
-        }
+        if (owner.queuePublished) this.settleRow(owner);
       }
     }
   }
@@ -270,6 +277,18 @@ export class WhisperModelDownloads {
           : 'unknown error';
       throw new Error(`Downloaded model file is invalid: ${reason}`);
     }
+  }
+
+  /** A finished or cancelled download leaves the list; a failed one stays as failed, with its reason. */
+  private settleRow(owner: ActiveDownloadOwner): void {
+    const store = useDownloadStore.getState();
+    const entry = store.downloads[owner.modelKey];
+    if (owner.failure === undefined || !entry) {
+      store.remove(owner.modelKey);
+      return;
+    }
+    const message = owner.failure instanceof Error ? owner.failure.message : String(owner.failure);
+    store.setStatus(entry.downloadId, 'failed', { message });
   }
 
   listDownloadedModels(): Promise<DownloadedWhisperModel[]> {

@@ -14,19 +14,16 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => ({ params: undefined }),
-  useIsFocused: () => true, useFocusEffect: () => {},
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 import { RemoteServerEditorScreen } from '../../../src/screens/RemoteServerEditorScreen';
 import { ModelSelectorModal } from '../../../src/components/ModelSelectorModal';
 import { useRemoteServerStore } from '../../../src/stores';
+import { withNavigator } from '../../harness/realNavigation';
 
-const openSelector = () => render(
-  <ModelSelectorModal visible onClose={() => {}} onSelectModel={() => {}} onUnloadModel={() => {}} isLoading={false} />,
-);
+const openSelector = () => render(withNavigator(
+  <ModelSelectorModal visible onClose={() => {}} onSelectModel={() => {}} onUnloadModel={() => {}} isLoading={false} />));
 
 describe('T053 (rendered) — remote model is marked in the selector (cloud indicator)', () => {
   beforeEach(() => {
@@ -48,7 +45,7 @@ describe('T053 (rendered) — remote model is marked in the selector (cloud indi
 
     // Real gesture: add a remote server via the modal (T046 flow) → real addServer + testConnection
     // populate the store (serverHealth healthy + discoveredModels from /v1/models).
-    const servers = render(<RemoteServerEditorScreen />);
+    const servers = render(withNavigator(<RemoteServerEditorScreen />));
     fireEvent.changeText(await waitFor(() => servers.getByPlaceholderText('Off Grid AI Desktop')), 'My LM Studio');
     fireEvent.changeText(servers.getByPlaceholderText('http://192.168.1.50:7878'), 'http://localhost:1234');
     fireEvent.press(servers.getByTestId('test-connection'));

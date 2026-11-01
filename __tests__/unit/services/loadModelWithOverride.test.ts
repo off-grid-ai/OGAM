@@ -3,10 +3,6 @@ import { OverridableMemoryError } from '../../../src/services/modelLoadErrors';
 
 // Mock only the alert boundary (CustomAlert builds RN alert state); the helper's
 // real retry/branch logic runs for real.
-jest.mock('../../../src/components/CustomAlert', () => ({
-  showAlert: (title: string, message: string, buttons?: any[]) => ({ visible: true, title, message, buttons }),
-  hideAlert: () => ({ visible: false, title: '', message: '', buttons: [] }),
-}));
 
 const makeDeps = () => ({
   setAlertState: jest.fn(),

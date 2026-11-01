@@ -8,23 +8,19 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('selected Whisper model identity', () => {
   it('loads the newly downloaded model before the next transcription', async () => {
-    const h = await setupChatScreen({ engine: 'llama', whisper: true, download: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', whisper: true, download: true });
     await h.setupWhisperModel('tiny.en');
 
     const React = require('react');
     const { TranscriptionModelsTab } = require('../../../src/screens/ModelsScreen/TranscriptionModelsTab');
     const { useWhisperStore } = require('../../../src/stores/whisperStore');
     const { whisperService } = require('../../../src/services/whisperService');
-    const modelTab = h.rtl.render(React.createElement(TranscriptionModelsTab));
+    const modelTab = h.renderAside(React.createElement(TranscriptionModelsTab));
 
     // Large v3 Turbo is catalogue index 8. Download it through the real model-card action.
     await h.rtl.act(async () => {

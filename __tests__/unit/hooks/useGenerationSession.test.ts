@@ -8,7 +8,6 @@ import { renderHook, act } from '@testing-library/react-native';
 import { generationSession } from '../../../src/services/generationSession';
 import { useGeneratingConversationId } from '../../../src/hooks/useGenerationSession';
 
-jest.mock('../../../src/utils/logger', () => ({ __esModule: true, default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
 
 beforeEach(() => generationSession._reset());
 

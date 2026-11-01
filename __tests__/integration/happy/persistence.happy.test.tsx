@@ -8,12 +8,9 @@
  * No mock of the persistence logic, no createProject() shortcut. (Conversations use the same persist
  * middleware; the project proves the round trip.)
  */
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => ({ params: {} }), // new project (no projectId)
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
+import { withNavigator } from '../../harness/realNavigation';
 
 describe('happy — a user-created project survives a relaunch (real persist + real form)', () => {
   it('create via the form → relaunch → the project is still on the Projects screen', async () => {
@@ -30,7 +27,7 @@ describe('happy — a user-created project survives a relaunch (real persist + r
       await useProjectStore.persist?.rehydrate?.();
       await waitFor(() => expect(useProjectStore.persist?.hasHydrated?.()).toBe(true));
 
-      const form = render(React.createElement(ProjectEditScreen, {}));
+      const form = render(withNavigator(React.createElement(ProjectEditScreen, {})));
       fireEvent.changeText(form.getByPlaceholderText('e.g., Spanish Learning, Code Review'), 'Persisted Project');
       fireEvent.changeText(form.getByPlaceholderText('Enter the instructions or context for the AI...'), 'You are a helpful research assistant.');
       fireEvent.press(form.getByText('Save'));
@@ -52,7 +49,7 @@ describe('happy — a user-created project survives a relaunch (real persist + r
     await waitFor(() => { expect(useProjectStore.getState().projects.length).toBeGreaterThan(0); });
 
     // The project the user created survived the relaunch and renders on the Projects screen.
-    const view = render(React.createElement(ProjectsScreen, {}));
+    const view = render(withNavigator(React.createElement(ProjectsScreen, {})));
     await waitFor(() => expect(view.getByText('Persisted Project')).toBeTruthy());
   }, 30_000);
 });

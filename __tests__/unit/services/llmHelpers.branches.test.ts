@@ -24,10 +24,6 @@ import { INFERENCE_BACKENDS } from '../../../src/types';
 import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 
-jest.mock('../../../src/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
 

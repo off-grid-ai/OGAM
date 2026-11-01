@@ -16,13 +16,15 @@ import { Text } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 import { AnimatedPressable } from '../../../src/components/AnimatedPressable';
 
-jest.mock('../../../src/utils/haptics', () => ({
+// The device's haptic engine is the boundary: the real haptics helper calls it.
+jest.mock('react-native-haptic-feedback', () => ({
   __esModule: true,
-  triggerHaptic: jest.fn(),
+  default: { trigger: jest.fn() },
 }));
 
- 
-const { triggerHaptic: mockTriggerHaptic } = require('../../../src/utils/haptics');
+const { default: hapticEngine } = require('react-native-haptic-feedback');
+/** The haptic the device was asked to play, by type. */
+const played = () => (hapticEngine.trigger as jest.Mock).mock.calls.map(([type]) => type);
  
 const Reanimated = require('react-native-reanimated');
 
@@ -120,7 +122,7 @@ describe('AnimatedPressable', () => {
       </AnimatedPressable>,
     );
     fireEvent(getByTestId('pressable'), 'pressIn');
-    expect(mockTriggerHaptic).toHaveBeenCalledWith('impactLight');
+    expect(played()).toContain('impactLight');
   });
 
   it('does not trigger haptic feedback when hapticType is not provided', () => {
@@ -130,7 +132,7 @@ describe('AnimatedPressable', () => {
       </AnimatedPressable>,
     );
     fireEvent(getByTestId('pressable'), 'pressIn');
-    expect(mockTriggerHaptic).not.toHaveBeenCalled();
+    expect(played()).toEqual([]);
   });
 
   // ============================================================================
@@ -171,7 +173,7 @@ describe('AnimatedPressable', () => {
       </AnimatedPressable>,
     );
     fireEvent(getByTestId('pressable'), 'pressIn');
-    expect(mockTriggerHaptic).toHaveBeenCalledWith('impactMedium');
+    expect(played()).toContain('impactMedium');
   });
 
   // ============================================================================

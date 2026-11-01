@@ -1,248 +1,142 @@
 /**
- * OnboardingScreen Tests
+ * Onboarding — the welcome slides shown on first launch.
  *
- * Tests for the onboarding screen including:
- * - First slide content rendering
- * - Navigation dots
- * - Get Started / Next button
+ * The real screen runs on a real stack navigator with the real slides, buttons and app store. A
+ * swipe between slides is the pager's momentum-scroll-end event, as the OS reports it. Opening a link
+ * hands it to the OS (Linking), which is faked to record the URL. Each test reads what the person sees
+ * and which screen the app moves to.
  */
+jest.unmock('@react-navigation/native');
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
-
-// Navigation is globally mocked in jest.setup.ts
-
-jest.mock('../../../src/hooks/useFocusTrigger', () => ({
-  useFocusTrigger: () => 0,
-}));
-
-jest.mock('../../../src/components', () => ({
-  Card: ({ children, style }: any) => {
-    const { View } = require('react-native');
-    return <View style={style}>{children}</View>;
-  },
-  Button: ({ title, onPress, disabled, testID }: any) => {
-    const { TouchableOpacity, Text } = require('react-native');
-    return (
-      <TouchableOpacity onPress={onPress} disabled={disabled} testID={testID}>
-        <Text>{title}</Text>
-      </TouchableOpacity>
-    );
-  },
-}));
-
-jest.mock('../../../src/components/AnimatedEntry', () => ({
-  AnimatedEntry: ({ children }: any) => children,
-}));
-
-jest.mock('../../../src/components/CustomAlert', () => ({
-  CustomAlert: () => null,
-  showAlert: jest.fn(() => ({ visible: true })),
-  hideAlert: jest.fn(() => ({ visible: false })),
-  initialAlertState: { visible: false },
-}));
-
-jest.mock('../../../src/components/Button', () => ({
-  Button: ({ title, onPress, disabled, testID }: any) => {
-    const { TouchableOpacity, Text } = require('react-native');
-    return (
-      <TouchableOpacity onPress={onPress} disabled={disabled} testID={testID}>
-        <Text>{title}</Text>
-      </TouchableOpacity>
-    );
-  },
-}));
-
-const mockSetOnboardingComplete = jest.fn();
-
-jest.mock('../../../src/stores', () => {
-  // Getters resolve lazily at access time so the `mock*` closures are defined by then.
-  const state = {
-    get setOnboardingComplete() { return mockSetOnboardingComplete; },
-  };
-  const useAppStore: any = jest.fn((selector?: any) => (selector ? selector(state) : state));
-  useAppStore.getState = () => state;
-  return { useAppStore };
-});
-
-jest.mock('../../../src/constants', () => ({
-  ...jest.requireActual('../../../src/constants'),
-  ONBOARDING_SLIDES: [
-    {
-      id: 'slide1',
-      keyword: 'Welcome',
-      title: 'Off Grid',
-      description: 'Your AI companion',
-      accentColor: '#0066FF',
-    },
-    {
-      id: 'slide2',
-      keyword: 'Private',
-      title: 'On-Device',
-      description: 'Everything stays local',
-      accentColor: '#00CC66',
-    },
-  ],
-}));
-
+import { Dimensions, FlatList, Linking, Text } from 'react-native';
+import { act, fireEvent, render, waitFor, type RenderResult } from '@testing-library/react-native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { OnboardingScreen } from '../../../src/screens/OnboardingScreen';
-import { WEDNESDAY_URL } from '../../../src/constants';
+import { useAppStore } from '../../../src/stores/appStore';
+import { ONBOARDING_SLIDES } from '../../../src/constants';
 
-const mockNavigate = jest.fn();
-const mockReset = jest.fn();
-const mockReplace = jest.fn();
-const navigation = {
-  navigate: mockNavigate,
-  reset: mockReset,
-  replace: mockReplace,
-} as any;
+const Stack = createNativeStackNavigator();
+const AutoSetupStub = () => <Text>AutoSetup screen</Text>;
+const LAST = ONBOARDING_SLIDES.length - 1;
 
-describe('OnboardingScreen', () => {
-  it('never clips the slides of its animated pager', () => {
-    const { FlatList } = require('react-native');
-    const { UNSAFE_getAllByType } = render(<OnboardingScreen navigation={navigation} />);
-    const pager = UNSAFE_getAllByType(FlatList).find((list: any) => list.props.horizontal);
-    expect(pager?.props.removeClippedSubviews).toBe(false);
-  });
+function mount() {
+  const ref = createNavigationContainerRef<Record<string, undefined>>();
+  const view = render(
+    <NavigationContainer ref={ref}>
+      <Stack.Navigator>
+        <Stack.Screen name="Onboarding" component={OnboardingScreen as React.ComponentType<any>} />
+        <Stack.Screen name="AutoSetup" component={AutoSetupStub} />
+      </Stack.Navigator>
+    </NavigationContainer>,
+  );
+  return { view, route: () => ref.getCurrentRoute()?.name };
+}
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+const pager = (view: RenderResult) =>
+  view.UNSAFE_getAllByType(FlatList).find(list => list.props.horizontal)!;
 
-  it('renders first slide content', () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByText('Welcome')).toBeTruthy();
-    expect(getByText('Off Grid')).toBeTruthy();
-    expect(getByText('Your AI companion')).toBeTruthy();
-  });
-
-  it('renders second slide content', () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByText('Private')).toBeTruthy();
-    expect(getByText('On-Device')).toBeTruthy();
-    expect(getByText('Everything stays local')).toBeTruthy();
-  });
-
-  it('shows navigation dots', () => {
-    const { getByTestId } = render(
-      <OnboardingScreen navigation={navigation} />,
-    );
-    expect(getByTestId('onboarding-screen')).toBeTruthy();
-  });
-
-  it('shows Next button on first slide', () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByText('Next')).toBeTruthy();
-  });
-
-  it('shows Skip button on non-last slide', () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByText('Skip')).toBeTruthy();
-  });
-
-  it('calls completeOnboarding when Skip is pressed', () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText('Skip'));
-
-    expect(mockSetOnboardingComplete).toHaveBeenCalledWith(true);
-    expect(mockReplace).toHaveBeenCalledWith('AutoSetup');
-  });
-
-  it('does not complete onboarding when Next is pressed on non-last slide', () => {
-    // Note: scrollToIndex throws in test env, but the branch is covered
-    try {
-      const { getByText } = render(
-        <OnboardingScreen navigation={navigation} />,
-      );
-      fireEvent.press(getByText('Next'));
-    } catch {
-      // scrollToIndex invariant error is expected in test env
-    }
-
-    // Should not complete onboarding on first slide
-    expect(mockSetOnboardingComplete).not.toHaveBeenCalled();
-    expect(mockReplace).not.toHaveBeenCalled();
-  });
-
-  it('updates currentIndex on scroll end (onMomentumScrollEnd → setCurrentIndex)', async () => {
-    const { act: reactAct } = require('@testing-library/react-native');
-    const { Dimensions, FlatList } = require('react-native');
-    const width = Dimensions.get('window').width;
-
-    const { getByText, queryByText, UNSAFE_getAllByType } = render(
-      <OnboardingScreen navigation={navigation} />,
-    );
-
-    // On the first slide the footer button reads "Next" (not the last slide).
-    expect(getByText('Next')).toBeTruthy();
-    expect(queryByText('Get Started')).toBeNull();
-
-    // Scroll to the last slide (index 1 of the 2-slide mock) via onMomentumScrollEnd.
-    const flatLists = UNSAFE_getAllByType(FlatList);
-    await reactAct(async () => {
-      flatLists[0].props.onMomentumScrollEnd({
-        nativeEvent: { contentOffset: { x: width } },
+/** The OS lays the pager out: the list is one screen wide and each slide sits one screen to the right of the last. */
+async function layOut(view: RenderResult) {
+  const { width, height } = Dimensions.get('window');
+  await act(async () => {
+    fireEvent(pager(view), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width, height } } });
+    ONBOARDING_SLIDES.forEach((slide, index) => {
+      fireEvent(view.getByTestId(`onboarding-slide-${slide.id}`).parent!, 'layout', {
+        nativeEvent: { layout: { x: index * width, y: 0, width, height } },
       });
     });
+  });
+}
 
-    // currentIndex advanced → isLastSlide flips the button to "Get Started". This FAILS
-    // if onMomentumScrollEnd no longer updates currentIndex (the coverage the gutted
-    // test had dropped).
-    expect(getByText('Get Started')).toBeTruthy();
-    expect(queryByText('Next')).toBeNull();
+/** Swipe the pager so it comes to rest on this slide. */
+async function swipeTo(view: RenderResult, index: number) {
+  const { width } = Dimensions.get('window');
+  await act(async () => {
+    fireEvent(pager(view), 'momentumScrollEnd', { nativeEvent: { contentOffset: { x: index * width, y: 0 } } });
+  });
+}
+
+describe('OnboardingScreen', () => {
+  beforeEach(() => {
+    useAppStore.getState().setOnboardingComplete(false);
   });
 
-  it('shows onboarding-skip testID', () => {
-    const { getByTestId } = render(
-      <OnboardingScreen navigation={navigation} />,
-    );
-    expect(getByTestId('onboarding-skip')).toBeTruthy();
+  it('shows every slide, with Skip and Next on the first one', () => {
+    const { view } = mount();
+
+    expect(view.getByTestId('onboarding-screen')).toBeTruthy();
+    expect(view.getByTestId('onboarding-dots')).toBeTruthy();
+    for (const slide of ONBOARDING_SLIDES) {
+      expect(view.getByTestId(`onboarding-slide-${slide.id}`)).toBeTruthy();
+      expect(view.getByText(slide.keyword)).toBeTruthy();
+      expect(view.getByText(slide.title)).toBeTruthy();
+    }
+    expect(view.getByTestId('onboarding-skip')).toBeTruthy();
+    expect(view.getByText('Next')).toBeTruthy();
+    expect(view.queryByText('Get Started')).toBeNull();
   });
 
-  it('shows onboarding-next testID', () => {
-    const { getByTestId } = render(
-      <OnboardingScreen navigation={navigation} />,
-    );
-    expect(getByTestId('onboarding-next')).toBeTruthy();
+  it('never clips the slides of its animated pager', () => {
+    const { view } = mount();
+    expect(pager(view).props.removeClippedSubviews).toBe(false);
   });
 
-  it('opens correct Wednesday URL when tapping Made with love', () => {
-    const { Linking } = require('react-native');
-    const spy = jest
-      .spyOn(Linking, 'openURL')
-      .mockImplementation(() => Promise.resolve());
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText('Wednesday'));
-    expect(spy).toHaveBeenCalledWith(WEDNESDAY_URL);
-    expect(WEDNESDAY_URL).toBe('https://wednesday.is');
-    spy.mockRestore();
+  it('Skip finishes onboarding and opens model setup', async () => {
+    const { view, route } = mount();
+    expect(route()).toBe('Onboarding');
+
+    fireEvent.press(view.getByText('Skip'));
+
+    await waitFor(() => expect(route()).toBe('AutoSetup'));
+    expect(useAppStore.getState().hasCompletedOnboarding).toBe(true);
   });
 
-  it('completes onboarding when Get Started pressed on last slide', async () => {
-    const { act: reactAct } = require('@testing-library/react-native');
-    const { Dimensions } = require('react-native');
-    const width = Dimensions.get('window').width;
+  it('swiping to the last slide turns Next into Get Started and hides Skip', async () => {
+    const { view } = mount();
+    expect(view.getByText('Next')).toBeTruthy();
 
-    const { getByTestId, UNSAFE_getAllByType } = render(
-      <OnboardingScreen navigation={navigation} />,
-    );
+    await swipeTo(view, LAST);
 
-    // Simulate scrolling to last slide (index 1) via onMomentumScrollEnd
-    const { FlatList } = require('react-native');
-    const flatLists = UNSAFE_getAllByType(FlatList);
+    expect(view.getByText('Get Started')).toBeTruthy();
+    expect(view.queryByText('Next')).toBeNull();
+    expect(view.queryByTestId('onboarding-skip')).toBeNull();
+  });
 
-    await reactAct(async () => {
-      if (flatLists.length > 0 && flatLists[0].props.onMomentumScrollEnd) {
-        flatLists[0].props.onMomentumScrollEnd({
-          nativeEvent: { contentOffset: { x: width } },
-        });
-      }
-    });
+  it('a slide before the last keeps Next, and Next there does not finish onboarding', async () => {
+    const { view, route } = mount();
+    await layOut(view);
+    await swipeTo(view, LAST - 1);
+    expect(view.getByText('Next')).toBeTruthy();
 
-    // Now on last slide, press Get Started to complete onboarding
-    fireEvent.press(getByTestId('onboarding-next'));
+    fireEvent.press(view.getByTestId('onboarding-next'));
 
-    expect(mockSetOnboardingComplete).toHaveBeenCalledWith(true);
-    expect(mockReplace).toHaveBeenCalledWith('AutoSetup');
+    expect(route()).toBe('Onboarding');
+    expect(useAppStore.getState().hasCompletedOnboarding).toBe(false);
+  });
+
+  it('Get Started on the last slide finishes onboarding and opens model setup', async () => {
+    const { view, route } = mount();
+    await swipeTo(view, LAST);
+
+    fireEvent.press(view.getByTestId('onboarding-next'));
+
+    await waitFor(() => expect(route()).toBe('AutoSetup'));
+    expect(useAppStore.getState().hasCompletedOnboarding).toBe(true);
+  });
+
+  it('"made with love by Wednesday" opens wednesday.is', () => {
+    const opened: string[] = [];
+    const openURL = jest.spyOn(Linking, 'openURL').mockImplementation(async url => { opened.push(url); });
+    try {
+      const { view } = mount();
+
+      fireEvent.press(view.getByText('Wednesday'));
+
+      expect(opened).toEqual(['https://wednesday.is']);
+    } finally {
+      openURL.mockRestore();
+    }
   });
 });

@@ -14,12 +14,8 @@
  *  - the core race guard: a SUPERSEDED session's late `ended`/`position` is ignored.
  *  - IDLE_RESET clears messageId / elapsed / duration / amplitude / audioPath.
  *
- * smLog is mocked to a no-op (logger mocked) so we assert state, not log strings.
+ * The logger runs for real (console is silenced in tests), so we assert state, not log strings.
  */
-jest.mock('@offgrid/core/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
 import { dispatchPlayback, PlaybackStatus } from '../../../pro/audio/playbackMachine';
 

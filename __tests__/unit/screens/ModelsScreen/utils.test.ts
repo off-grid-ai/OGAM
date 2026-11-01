@@ -1,17 +1,13 @@
 import { formatNumber, formatBytes, getDirectorySize, getModelType, matchesSdVersionFilter, getImageModelCompatibility, hfModelToDescriptor } from '../../../../src/screens/ModelsScreen/utils';
-import RNFS from 'react-native-fs';
+import type { NativeFileSystemBoundary } from '../../../harness/nativeFileSystem';
 
-jest.mock('react-native-fs', () => ({
-  readDir: jest.fn(),
-}));
-
-jest.mock('../../../../src/services/huggingFaceModelBrowser', () => ({
-  guessStyle: jest.fn((name: string) => {
-    if (name.includes('anime')) return 'anime';
-    if (name.includes('real')) return 'photorealistic';
-    return 'creative';
-  }),
-}));
+// The utils run for real (huggingFaceModelBrowser included). The disk is the in-memory nativeFileSystem.
+jest.mock('react-native-fs', () => {
+  const disk = require('../../../harness/nativeFileSystem').createNativeFileSystemBoundary();
+  (globalThis as unknown as { __modelsUtilsDisk: unknown }).__modelsUtilsDisk = disk;
+  return disk.module;
+});
+const disk = (globalThis as unknown as { __modelsUtilsDisk: NativeFileSystemBoundary }).__modelsUtilsDisk;
 
 describe('ModelsScreen/utils', () => {
   // ==========================================================================
@@ -64,46 +60,34 @@ describe('ModelsScreen/utils', () => {
   // getDirectorySize
   // ==========================================================================
   describe('getDirectorySize', () => {
-    it('sums file sizes in a flat directory', async () => {
-      (RNFS.readDir as jest.Mock).mockResolvedValue([
-        { isDirectory: () => false, size: 100, path: '/a/file1' },
-        { isDirectory: () => false, size: 200, path: '/a/file2' },
-      ]);
+    beforeEach(() => disk.reset());
 
-      const size = await getDirectorySize('/a');
-      expect(size).toBe(300);
+    it('sums file sizes in a flat directory', async () => {
+      disk.seedFile('/a/file1', 100);
+      disk.seedFile('/a/file2', 200);
+
+      expect(await getDirectorySize('/a')).toBe(300);
     });
 
     it('recurses into subdirectories', async () => {
-      (RNFS.readDir as jest.Mock)
-        .mockResolvedValueOnce([
-          { isDirectory: () => true, path: '/a/sub' },
-          { isDirectory: () => false, size: 50, path: '/a/file1' },
-        ])
-        .mockResolvedValueOnce([
-          { isDirectory: () => false, size: 150, path: '/a/sub/file2' },
-        ]);
+      disk.seedFile('/a/file1', 50);
+      disk.seedFile('/a/sub/file2', 150);
 
-      const size = await getDirectorySize('/a');
-      expect(size).toBe(200);
+      expect(await getDirectorySize('/a')).toBe(200);
     });
 
-    it('handles string size values', async () => {
-      (RNFS.readDir as jest.Mock).mockResolvedValue([
-        { isDirectory: () => false, size: '500', path: '/a/file1' },
-      ]);
+    it('handles a size the platform reports as a string', async () => {
+      disk.seedFile('/a/file1', 500);
+      disk.setReportedFileSize('/a/file1', '500');
 
-      const size = await getDirectorySize('/a');
-      expect(size).toBe(500);
+      expect(await getDirectorySize('/a')).toBe(500);
     });
 
-    it('handles missing size (defaults to 0)', async () => {
-      (RNFS.readDir as jest.Mock).mockResolvedValue([
-        { isDirectory: () => false, size: undefined, path: '/a/file1' },
-      ]);
+    it('counts a size the platform reports as empty as 0', async () => {
+      disk.seedFile('/a/file1', 500);
+      disk.setReportedFileSize('/a/file1', '');
 
-      const size = await getDirectorySize('/a');
-      expect(size).toBe(0);
+      expect(await getDirectorySize('/a')).toBe(0);
     });
   });
 

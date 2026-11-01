@@ -14,12 +14,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 /** Invoke the onPress bound to a testID host node's nearest pressable ancestor — for an AnimatedPressable
  *  (createAnimatedComponent(TouchableOpacity)) whose onPress lives on the composite above the host, which
@@ -41,14 +37,14 @@ function pressByWalkingUp(node: unknown): void {
 function selectBackendViaUI(h: Awaited<ReturnType<typeof setupChatScreen>>, backendId: string) {
    
   const { BackendSelector } = require('../../../src/components/settings/textGenAdvancedSections');
-  const s = h.rtl.render(h.React.createElement(BackendSelector, {}));
+  const s = h.renderAside(h.React.createElement(BackendSelector, {}));
   h.rtl.fireEvent.press(s.getByTestId(`backend-${backendId}-button`));
   s.unmount();
 }
 
 describe('T014 — GPU/OpenCL backend → GenerationMeta shows GPU layers offloaded (heavy entry point)', () => {
   it('selecting OpenCL + reloading renders a GPU-offloaded backend, not CPU', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     // Device boundary: an Adreno (Qualcomm) GPU — getOpenCLCapability keys off DeviceInfo.getHardware.
     // The seeded 'unknown' device would (correctly) refuse OpenCL, so seed the real device's SoC family.
      
@@ -83,7 +79,7 @@ describe('T014 — GPU/OpenCL backend → GenerationMeta shows GPU layers offloa
   }, 120000); // reload can queue behind the broad push-hook journeys — allow for it under load
 
   it('falsify: CPU backend renders "CPU" with no offloaded layers', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
      
     const DeviceInfo = require('react-native-device-info');
     (DeviceInfo.getHardware as jest.Mock).mockResolvedValue('qcom');
@@ -103,7 +99,7 @@ describe('T014 — GPU/OpenCL backend → GenerationMeta shows GPU layers offloa
   });
 
   it('shows native prompt usage, not the reply token count, in generation details', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'ios' });
     h.enableToolViaUI('calculator');
     h.enableGenerationDetailsViaUI();
     h.render();

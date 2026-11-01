@@ -17,7 +17,7 @@ jest.mock('react-native-keychain', () => ({
   },
 }));
 
-import { authService } from '../../../src/services/authService';
+import { authService, PassphraseCheckUnavailable } from '../../../src/services/authService';
 import * as Keychain from 'react-native-keychain';
 
 describe('AuthService', () => {
@@ -114,14 +114,14 @@ describe('AuthService', () => {
       expect(result).toBe(false);
     });
 
-    it('returns false when keychain retrieval fails', async () => {
+    it('says it could not check, not "wrong", when keychain retrieval fails', async () => {
+      // A keychain that cannot be read is not a wrong passphrase: answering false charged the person an
+      // attempt toward the lockout for typing the right one.
       (Keychain.getGenericPassword as jest.Mock).mockRejectedValue(
         new Error('Keychain error'),
       );
 
-      const result = await authService.verifyPassphrase('anyPassphrase');
-
-      expect(result).toBe(false);
+      await expect(authService.verifyPassphrase('anyPassphrase')).rejects.toBeInstanceOf(PassphraseCheckUnavailable);
     });
   });
 

@@ -1,5 +1,10 @@
+import type { PairedDevice } from '@offgrid/sync';
 import { repairDevice } from '../../../pro/sync/repairDevice';
 import { pairingSecretStore } from '../../../pro/sync/pairingSecretStore';
+import { resetKeychain } from '../../harness/keyedRemoteServer';
+
+// The phone's keychain: it really stores the pairing trust the store writes and reads back.
+jest.mock('react-native-keychain', () => require('../../harness/deviceKeychain').deviceKeychainModule());
 
 /**
  * Repairing a device the peer did not recognise, without demanding the code first.
@@ -11,14 +16,30 @@ import { pairingSecretStore } from '../../../pro/sync/pairingSecretStore';
  *
  * Three outcomes, and the difference between the last two is the point: no credential means the code is
  * genuinely required, while a credential the peer refuses means we tried and the code is required anyway.
+ *
+ * repairDevice and the real pairing store run; the credential is written by pairing (begin + commit).
  */
 describe('repairing a device that was not recognised', () => {
-  beforeEach(() => {
-    jest.restoreAllMocks();
+  const desktop: PairedDevice = {
+    id: 'desktop-peer', name: 'Off Grid AI Desktop', platform: 'macos', version: '1',
+    host: '192.168.1.20', port: 7878, sharedSecret: 'a-shared-secret', membershipId: 'generation-1', pairedAt: 1,
+  };
+
+  beforeEach(async () => {
+    resetKeychain();
+    pairingSecretStore.resetCache();
+    await pairingSecretStore.load();
   });
 
+  /** The user paired with the desktop once, entering the code. */
+  async function pairedEarlier() {
+    await pairingSecretStore.beginPairing(desktop);
+    await pairingSecretStore.commitPairing(desktop);
+    expect(pairingSecretStore.get('desktop-peer')).toBe('a-shared-secret');
+  }
+
   it('reconnects with the credential it already holds', async () => {
-    jest.spyOn(pairingSecretStore, 'get').mockReturnValue('a-shared-secret');
+    await pairedEarlier();
     const dialled: string[] = [];
 
     const outcome = await repairDevice('desktop-peer', async deviceId => {
@@ -30,7 +51,7 @@ describe('repairing a device that was not recognised', () => {
   });
 
   it('asks for the code when it holds no credential, without dialling', async () => {
-    jest.spyOn(pairingSecretStore, 'get').mockReturnValue(undefined);
+    expect(pairingSecretStore.get('desktop-peer')).toBeUndefined();
     const dialled: string[] = [];
 
     const outcome = await repairDevice('desktop-peer', async deviceId => {
@@ -44,19 +65,22 @@ describe('repairing a device that was not recognised', () => {
   });
 
   it('asks for the code after trying, when the peer refuses what it holds', async () => {
-    jest.spyOn(pairingSecretStore, 'get').mockReturnValue('a-shared-secret');
+    await pairedEarlier();
+    const dialled: string[] = [];
 
-    const outcome = await repairDevice('desktop-peer', async () => {
+    const outcome = await repairDevice('desktop-peer', async deviceId => {
+      dialled.push(deviceId);
       throw new Error('the other device did not recognise this one');
     });
 
     // Same answer as having no credential, reached the other way round - and only after the cheap attempt
     // that would have spared the user typing anything.
+    expect(dialled).toEqual(['desktop-peer']);
     expect(outcome).toBe('needs_code');
   });
 
   it('treats a non-Error rejection as a refusal too', async () => {
-    jest.spyOn(pairingSecretStore, 'get').mockReturnValue('a-shared-secret');
+    await pairedEarlier();
 
     const outcome = await repairDevice('desktop-peer', async () => {
       // A native module can reject with a string. Repair still has to reach a decision.

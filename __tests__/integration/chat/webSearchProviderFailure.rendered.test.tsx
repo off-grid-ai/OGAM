@@ -12,12 +12,8 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { installWebSearchFake, type WebSearchFake } from '../../harness/webSearchFake';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const QUERY = 'Off Grid AI release notes';
 const REPLY = 'I could not search the web just now.';
@@ -33,7 +29,7 @@ describe('web search provider failure in a chat turn', () => {
     ['litert', 403],
     ['litert', 503],
   ] as const)('on %s, a search answered with HTTP %i shows as a failed search', async (engine, status) => {
-    const h = await setupChatScreen({ engine, platform: engine === 'llama' ? 'ios' : 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine, platform: engine === 'llama' ? 'ios' : 'android' });
     search = installWebSearchFake(status);
     // Web search is on by default for a new install, so the user has nothing to enable.
     h.render();

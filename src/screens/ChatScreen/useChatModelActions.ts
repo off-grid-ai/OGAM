@@ -238,6 +238,9 @@ export async function ensureModelLoadedFn(
     return { ok: true };
   }
   deps.setSupportsVision(loadedModelVision(activeModel)); // LiteRT: known from the flag pre-load
+  // The model is resident without its projector: a plain load returns at once ("already loaded"), so free
+  // it first (keeping the selection) and the load below starts it again with the projector.
+  if (needsVisionRepair && isModelReady(activeModel)) await activeModelService.unloadTextModel(true);
   const outcome = await initiateModelLoad(deps, activeModelService.getActiveModels().text.isLoading, onLoadedResume);
   if (!outcome.ok) return outcome;
   // Post-verify against native truth — catches a load that reported ok but left no resident model.

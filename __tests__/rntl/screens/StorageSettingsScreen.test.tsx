@@ -7,584 +7,344 @@
  * - Storage info rendering
  * - Breakdown section with model counts
  * - Model category summary
- * - Auto Setup entry
  * - Orphaned files section
  * - Stale downloads section
  * - Delete orphaned file flow
  * - Conversation count display
+ *
+ * Everything that is ours runs for real: the screen and its components (Card, Button, CustomAlert),
+ * the real app, chat and download stores, the real modelManager scanning the disk for orphaned files,
+ * and a real React Navigation stack (the screen is opened from Settings). State reaches the stores
+ * through their own actions.
+ *
+ * Faked: only the device disk (react-native-fs over an in-memory file system).
  */
 
 import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react-native';
-import { TouchableOpacity } from 'react-native';
-
-// Navigation is globally mocked in jest.setup.ts
-
-jest.mock('../../../src/hooks/useFocusTrigger', () => ({
-  useFocusTrigger: () => 0,
-}));
-
-jest.mock('../../../src/components', () => ({
-  Card: ({ children, style }: any) => {
-    const { View } = require('react-native');
-    return <View style={style}>{children}</View>;
-  },
-  Button: ({ title, onPress, disabled }: any) => {
-    const { TouchableOpacity: TO, Text } = require('react-native');
-    return (
-      <TO onPress={onPress} disabled={disabled}>
-        <Text>{title}</Text>
-      </TO>
-    );
-  },
-}));
-
-jest.mock('../../../src/components/AnimatedEntry', () => ({
-  AnimatedEntry: ({ children }: any) => children,
-}));
-
-const mockShowAlert = jest.fn((_t: string, _m: string, _b?: any) => ({
-  visible: true,
-  title: _t,
-  message: _m,
-  buttons: _b || [],
-}));
-
-jest.mock('../../../src/components/CustomAlert', () => ({
-  CustomAlert: ({ visible, title, message, buttons }: any) => {
-    if (!visible) return null;
-    const { View, Text, TouchableOpacity: TO } = require('react-native');
-    return (
-      <View testID="custom-alert">
-        <Text testID="alert-title">{title}</Text>
-        <Text testID="alert-message">{message}</Text>
-        {buttons && buttons.map((btn: any, i: number) => (
-          <TO key={i} testID={`alert-button-${btn.text}`} onPress={btn.onPress}>
-            <Text>{btn.text}</Text>
-          </TO>
-        ))}
-      </View>
-    );
-  },
-  showAlert: (...args: any[]) => (mockShowAlert as any)(...args),
-  hideAlert: jest.fn(() => ({ visible: false, title: '', message: '', buttons: [] })),
-  initialAlertState: { visible: false, title: '', message: '', buttons: [] },
-}));
-
-jest.mock('../../../src/components/Button', () => ({
-  Button: ({ title, onPress, disabled }: any) => {
-    const { TouchableOpacity: TO, Text } = require('react-native');
-    return (
-      <TO onPress={onPress} disabled={disabled}>
-        <Text>{title}</Text>
-      </TO>
-    );
-  },
-}));
-
-let mockDownloadedModels: any[] = [];
-let mockDownloadedImageModels: any[] = [];
-let mockConversations: any[] = [];
-let mockStaleDownloadStoreEntries: any[] = [];
-const mockRemoveFromStore = jest.fn();
-const mockNoVideos: any[] = [];
-const mockNoImages: any[] = [];
-const mockAppState = () => ({
-  downloadedModels: mockDownloadedModels,
-  downloadedImageModels: mockDownloadedImageModels,
-  downloadedVideoModels: mockNoVideos,
-  generatedImages: mockNoImages,
-  generatedVideos: mockNoVideos,
-});
-
-jest.mock('../../../src/stores', () => ({
-  // The screen reads the store whole, through selectors and through getState (the video count and
-  // the storage breakdown, 8bc6073e3), as the real store allows. Empty lists keep one identity, as
-  // the real store's do between renders.
-  useAppStore: Object.assign(
-    jest.fn((selector?: any) => (selector ? selector(mockAppState()) : mockAppState())),
-    { getState: () => mockAppState() },
-  ),
-  useChatStore: jest.fn((selector?: any) => {
-    const state = { conversations: mockConversations };
-    return selector ? selector(state) : state;
-  }),
-}));
-
-jest.mock('../../../src/stores/downloadStore', () => ({
-  useDownloadStore: (selector?: any) => {
-    const entries: Record<string, any> = {};
-    mockStaleDownloadStoreEntries.forEach((e, i) => { entries[`key-${i}`] = e; });
-    const state = {
-      downloads: entries,
-      remove: mockRemoveFromStore,
-    };
-    return typeof selector === 'function' ? selector(state) : state;
-  },
-}));
-
-const mockFormatBytes = jest.fn((bytes: number) => {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(i > 1 ? 2 : 0)} ${sizes[i]}`;
-});
-
-const mockGetOrphanedFiles = jest.fn<Promise<any[]>, any[]>(() => Promise.resolve([]));
-const mockDeleteOrphanedFile = jest.fn(() => Promise.resolve());
-
-jest.mock('../../../src/services', () => ({
-  hardwareService: {
-    getFreeDiskStorageGB: jest.fn(() => 50),
-    formatModelSize: jest.fn(() => '4.00 GB'),
-    formatBytes: (...args: any[]) => (mockFormatBytes as any)(...args),
-  },
-  modelManager: {
-    getStorageUsed: jest.fn(() => Promise.resolve(4 * 1024 * 1024 * 1024)),
-    getAvailableStorage: jest.fn(() => Promise.resolve(50 * 1024 * 1024 * 1024)),
-    getOrphanedFiles: (...args: any[]) => (mockGetOrphanedFiles as any)(...args),
-    deleteOrphanedFile: (...args: any[]) => (mockDeleteOrphanedFile as any)(...args),
-  },
-}));
-
+import { render, fireEvent, act, waitFor } from '@testing-library/react-native';
 import { StorageSettingsScreen } from '../../../src/screens/StorageSettingsScreen';
+import { useAppStore } from '../../../src/stores/appStore';
+import { useChatStore } from '../../../src/stores/chatStore';
+import { useDownloadStore } from '../../../src/stores/downloadStore';
+import { withNavigatorRoutes } from '../../harness/realNavigation';
+import { defaultNativeFileSystemBoundary as disk } from '../../harness/nativeFileSystem';
+import { createDownloadedModel, createONNXImageModel } from '../../utils/factories';
 
-const mockGoBack = jest.fn();
+jest.unmock('@react-navigation/native');
 
-jest.mock('@react-navigation/native', () => {
-  const actual = jest.requireActual('@react-navigation/native');
-  return {
-    ...actual,
-    useNavigation: () => ({
-      navigate: jest.fn(),
-      goBack: mockGoBack,
-      setOptions: jest.fn(),
-      addListener: jest.fn(() => jest.fn()),
-    }),
-    useRoute: () => ({ params: {} }),
-  };
+jest.mock('react-native-fs', () => {
+  const { defaultNativeFileSystemBoundary: boundary } = require('../../harness/nativeFileSystem');
+  return { __esModule: true, default: boundary.module, ...boundary.module };
 });
+
+const MODELS_DIR = `${disk.DocumentDirectoryPath}/models`;
+
+/** A download-store entry missing the fields needed to show or finish it. */
+const staleEntry = (modelKey: string, downloadId: string, fileName = '') =>
+  ({ modelKey, downloadId, modelId: '', fileName, combinedTotalBytes: 0, status: 'failed' }) as any;
+
+const renderStorage = () =>
+  render(withNavigatorRoutes(<StorageSettingsScreen />, { openedFrom: 'Settings' }));
+
+/** Let the first orphan scan of the disk finish. */
+const scanned = async (view: ReturnType<typeof renderStorage>) => {
+  await waitFor(() => expect(view.queryByText('Scanning...')).toBeNull());
+};
 
 describe('StorageSettingsScreen', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    mockDownloadedModels = [];
-    mockDownloadedImageModels = [];
-    mockStaleDownloadStoreEntries = [];
-    mockConversations = [];
-    mockGetOrphanedFiles.mockResolvedValue([]);
+    disk.reset();
+    const app = useAppStore.getState();
+    app.setDownloadedModels([]);
+    app.setDownloadedImageModels([]);
+    for (const c of useChatStore.getState().conversations) useChatStore.getState().deleteConversation(c.id);
+    for (const key of Object.keys(useDownloadStore.getState().downloads)) useDownloadStore.getState().remove(key);
   });
 
   // ---- Rendering tests ----
 
   it('renders "Storage" title', () => {
-    const { getByText } = render(<StorageSettingsScreen />);
+    const { getByText } = renderStorage();
     expect(getByText('Storage')).toBeTruthy();
   });
 
-  it('back button calls goBack', () => {
-    const { UNSAFE_getAllByType } = render(<StorageSettingsScreen />);
-    const touchables = UNSAFE_getAllByType(TouchableOpacity);
-    // The first TouchableOpacity is the back button
-    fireEvent.press(touchables[0]);
-    expect(mockGoBack).toHaveBeenCalled();
+  it('back button returns to the screen it was opened from', async () => {
+    const view = renderStorage();
+    fireEvent.press(view.UNSAFE_getByProps({ name: 'arrow-left' }));
+    await waitFor(() => expect(view.queryByText('Storage Usage')).toBeNull());
   });
 
   it('shows storage info sections', () => {
-    const { getByText } = render(<StorageSettingsScreen />);
+    const { getByText } = renderStorage();
     expect(getByText('Storage Usage')).toBeTruthy();
     expect(getByText('Breakdown')).toBeTruthy();
   });
 
   it('shows hint text at the bottom', () => {
-    const { getByText } = render(<StorageSettingsScreen />);
+    const { getByText } = renderStorage();
     expect(getByText(/To free up space/)).toBeTruthy();
   });
 
   // ---- Breakdown section tests ----
 
   it('shows LLM Models count in breakdown', () => {
-    mockDownloadedModels = [
-      { id: 'm1', name: 'Model 1', author: 'a', fileName: 'f', filePath: '/p', fileSize: 1024, quantization: 'Q4', downloadedAt: '' },
-      { id: 'm2', name: 'Model 2', author: 'a', fileName: 'f', filePath: '/p', fileSize: 2048, quantization: 'Q8', downloadedAt: '' },
-    ];
+    useAppStore.getState().setDownloadedModels([
+      createDownloadedModel({ id: 'm1', name: 'Model 1', fileSize: 1024, quantization: 'Q4' }),
+      createDownloadedModel({ id: 'm2', name: 'Model 2', fileSize: 2048, quantization: 'Q8' }),
+    ]);
 
-    const { getAllByText } = render(<StorageSettingsScreen />);
+    const { getAllByText } = renderStorage();
     // "LLM Models" appears in breakdown AND section title
     expect(getAllByText('LLM Models').length).toBeGreaterThanOrEqual(1);
     expect(getAllByText('2').length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows Image Models count in breakdown', () => {
-    mockDownloadedImageModels = [
-      { id: 'i1', name: 'Img Model', description: '', modelPath: '/p', downloadedAt: '', size: 1024, style: 'creative', backend: 'mnn' },
-    ];
+    useAppStore.getState().setDownloadedImageModels([
+      createONNXImageModel({ id: 'i1', name: 'Img Model', size: 1024, style: 'creative', backend: 'mnn' } as any),
+    ]);
 
-    const { getAllByText } = render(<StorageSettingsScreen />);
+    const { getAllByText } = renderStorage();
     // "Image Models" appears in breakdown AND section title
     expect(getAllByText('Image Models').length).toBeGreaterThanOrEqual(1);
     expect(getAllByText('1').length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows Conversations count in breakdown', () => {
-    mockConversations = [
-      { id: 'c1', title: 'Conv 1', messages: [], modelId: 'm1', createdAt: '', updatedAt: '' },
-      { id: 'c2', title: 'Conv 2', messages: [], modelId: 'm1', createdAt: '', updatedAt: '' },
-      { id: 'c3', title: 'Conv 3', messages: [], modelId: 'm1', createdAt: '', updatedAt: '' },
-    ];
+    for (let i = 0; i < 3; i++) useChatStore.getState().createConversation('m1');
 
-    const { getByText } = render(<StorageSettingsScreen />);
+    const { getByText } = renderStorage();
     expect(getByText('Conversations')).toBeTruthy();
     expect(getByText('3')).toBeTruthy();
   });
 
   it('shows Model Storage label in breakdown', () => {
-    const { getByText } = render(<StorageSettingsScreen />);
+    const { getByText } = renderStorage();
     expect(getByText('Model Storage')).toBeTruthy();
   });
 
   // ---- Model summary tests ----
 
   it('does not show LLM Models section when no models', () => {
-    const { queryAllByText } = render(<StorageSettingsScreen />);
+    const { queryAllByText } = renderStorage();
     // "LLM Models" appears once in breakdown
     const llmTexts = queryAllByText('LLM Models');
     expect(llmTexts.length).toBe(1); // Only breakdown, no separate section
   });
 
   it('shows "No orphaned files found" after scan completes', async () => {
-    mockGetOrphanedFiles.mockResolvedValue([]);
-    const result = render(<StorageSettingsScreen />);
-
-    // Wait for async scan to complete
-    await act(async () => {
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
-    });
-
-    expect(result.getByText('No orphaned files found')).toBeTruthy();
+    const view = renderStorage();
+    await scanned(view);
+    expect(view.getByText('No orphaned files found')).toBeTruthy();
   });
 
   it('shows orphaned files when they exist', async () => {
-    mockGetOrphanedFiles.mockResolvedValue([
-      { name: 'stale-model.gguf', path: '/p/stale-model.gguf', size: 1024 * 1024 },
-    ]);
+    // A model file on disk that no downloaded model claims.
+    disk.seedFile(`${MODELS_DIR}/stale-model.gguf`, 1024 * 1024);
 
-    const result = render(<StorageSettingsScreen />);
+    const view = renderStorage();
 
-    await act(async () => {
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
-    });
-
-    expect(result.getByText('stale-model.gguf')).toBeTruthy();
-    expect(result.getByText('Delete All Orphaned Files')).toBeTruthy();
+    expect(await view.findByText('stale-model.gguf')).toBeTruthy();
+    expect(view.getByText('Delete All Orphaned Files')).toBeTruthy();
   });
 
   it('shows warning text when orphaned files exist', async () => {
-    mockGetOrphanedFiles.mockResolvedValue([
-      { name: 'orphan.gguf', path: '/p/orphan.gguf', size: 512 },
-    ]);
+    disk.seedFile(`${MODELS_DIR}/orphan.gguf`, 512);
 
-    const result = render(<StorageSettingsScreen />);
+    const view = renderStorage();
 
-    await act(async () => {
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
-    });
-
-    expect(result.getByText(/files\/folders exist on disk but aren't tracked/)).toBeTruthy();
+    expect(await view.findByText(/files\/folders exist on disk but aren't tracked/)).toBeTruthy();
   });
 
   // ---- Stale downloads section tests ----
 
-  it('shows stale downloads when they exist', async () => {
-    mockStaleDownloadStoreEntries = [
-      { modelKey: 'stale-key-1', downloadId: 'dl-123', modelId: '', fileName: '', combinedTotalBytes: 0, status: 'failed' },
-    ];
+  it('shows stale downloads when they exist', () => {
+    useDownloadStore.getState().add(staleEntry('stale-key-1', 'dl-123'));
 
-    const { getByText } = render(<StorageSettingsScreen />);
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
-    });
+    const { getByText } = renderStorage();
     expect(getByText('Stale Downloads')).toBeTruthy();
     expect(getByText('Clear All')).toBeTruthy();
-  }, 15000);
+  });
 
   it('shows stale download with missing modelId', () => {
-    mockStaleDownloadStoreEntries = [
-      { modelKey: 'stale-key-456', downloadId: 'dl-456', modelId: '', fileName: 'partial.gguf', combinedTotalBytes: 0, status: 'failed' },
-    ];
+    useDownloadStore.getState().add(staleEntry('stale-key-456', 'dl-456', 'partial.gguf'));
 
-    const { getByText } = render(<StorageSettingsScreen />);
+    const { getByText } = renderStorage();
     expect(getByText('Stale Downloads')).toBeTruthy();
     expect(getByText(/Download #dl-456/)).toBeTruthy();
   });
 
   it('does not show stale downloads section when none exist', () => {
-    const { queryByText } = render(<StorageSettingsScreen />);
+    const { queryByText } = renderStorage();
     expect(queryByText('Stale Downloads')).toBeNull();
   });
 
-  it('clearing a stale download calls remove with the modelKey', () => {
-    mockStaleDownloadStoreEntries = [
-      { modelKey: 'stale-key-789', downloadId: 'dl-789', modelId: '', fileName: '', combinedTotalBytes: 0, status: 'failed' },
-    ];
+  it('clearing a stale download removes it from the download store', async () => {
+    useDownloadStore.getState().add(staleEntry('stale-key-789', 'dl-789'));
 
-    const { UNSAFE_getAllByType } = render(<StorageSettingsScreen />);
-    const touchables = UNSAFE_getAllByType(TouchableOpacity);
-    const deleteButtons = touchables.filter((t: any) =>
-      t.props.testID === undefined && !t.props.disabled,
-    );
+    const view = renderStorage();
+    fireEvent.press(view.UNSAFE_getByProps({ name: 'x' }));
 
-    if (deleteButtons.length > 2) {
-      fireEvent.press(deleteButtons[deleteButtons.length - 1]);
-      expect(mockRemoveFromStore).toHaveBeenCalledWith('stale-key-789');
-    }
+    expect(useDownloadStore.getState().downloads['stale-key-789']).toBeUndefined();
+    await waitFor(() => expect(view.queryByText('Stale Downloads')).toBeNull());
   });
 
   it('clear all stale downloads shows confirmation', () => {
-    mockStaleDownloadStoreEntries = [
-      { modelKey: 'stale-1', downloadId: 'dl-100', modelId: '', fileName: '', combinedTotalBytes: 0, status: 'failed' },
-      { modelKey: 'stale-2', downloadId: 'dl-200', modelId: '', fileName: '', combinedTotalBytes: 0, status: 'failed' },
-    ];
+    useDownloadStore.getState().add(staleEntry('stale-1', 'dl-100'));
+    useDownloadStore.getState().add(staleEntry('stale-2', 'dl-200'));
 
-    const { getByText } = render(<StorageSettingsScreen />);
+    const { getByText } = renderStorage();
     fireEvent.press(getByText('Clear All'));
 
-    expect(mockShowAlert).toHaveBeenCalledWith(
-      'Clear Stale Downloads',
-      expect.stringContaining('2'),
-      expect.any(Array),
-    );
+    expect(getByText('Clear Stale Downloads')).toBeTruthy();
+    expect(getByText('Clear 2 stale download entry(s)?')).toBeTruthy();
   });
 
   // ---- Storage legend tests ----
 
   it('shows Used and Free labels in storage legend', () => {
-    const { getByText } = render(<StorageSettingsScreen />);
+    const { getByText } = renderStorage();
     expect(getByText(/Used:/)).toBeTruthy();
     expect(getByText(/Free:/)).toBeTruthy();
   });
 
-  // ---- Multiple models tests ----
-
   it('Orphaned Files section has scan button', () => {
-    const { getByText } = render(<StorageSettingsScreen />);
-    expect(getByText('Orphaned Files')).toBeTruthy();
-    // The scan/refresh button exists (icon-only, but section header is rendered)
+    const view = renderStorage();
+    expect(view.getByText('Orphaned Files')).toBeTruthy();
   });
 
   // ---- Delete orphaned file flow ----
 
+  /** Press the trash button on the one orphaned file row (not the Delete All button's icon). */
+  const pressRowTrash = (view: ReturnType<typeof renderStorage>) => {
+    const icons = view.UNSAFE_getAllByProps({ name: 'trash-2' });
+    fireEvent.press(icons[0]);
+  };
+
   it('shows delete confirmation when orphaned file delete pressed', async () => {
-    mockGetOrphanedFiles.mockResolvedValue([
-      { name: 'orphan.gguf', path: '/p/orphan.gguf', size: 1024 * 1024 },
-    ]);
+    disk.seedFile(`${MODELS_DIR}/orphan.gguf`, 1024 * 1024);
 
-    const result = render(<StorageSettingsScreen />);
+    const view = renderStorage();
+    await view.findByText('orphan.gguf');
 
-    await act(async () => {
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
-    });
+    pressRowTrash(view);
 
-    // The trash icon button for individual orphaned files is within the orphanedRow
-    // It's a TouchableOpacity with the trash icon. We need to find the right one.
-    // The buttons are: back, scan/refresh, individual-trash, delete-all
-    // The individual trash is before the "Delete All" button
-    const touchables = result.UNSAFE_getAllByType(TouchableOpacity);
-    // Find trash button by excluding known buttons
-    // Try pressing each one until we get the right alert
-    for (const btn of touchables) {
-      mockShowAlert.mockClear();
-      fireEvent.press(btn);
-      if (mockShowAlert.mock.calls.length > 0 &&
-          mockShowAlert.mock.calls[0][0] === 'Delete Orphaned File') {
-        break;
-      }
-    }
-
-    expect(mockShowAlert).toHaveBeenCalledWith(
-      'Delete Orphaned File',
-      expect.stringContaining('orphan.gguf'),
-      expect.any(Array),
-    );
+    expect(view.getByText('Delete Orphaned File')).toBeTruthy();
+    expect(view.getByText(/^Delete "orphan\.gguf"\?/)).toBeTruthy();
   });
 
   it('deletes orphaned file when confirmed', async () => {
-    mockGetOrphanedFiles.mockResolvedValue([
-      { name: 'orphan.gguf', path: '/p/orphan.gguf', size: 1024 * 1024 },
-    ]);
+    disk.seedFile(`${MODELS_DIR}/orphan.gguf`, 1024 * 1024);
 
-    const result = render(<StorageSettingsScreen />);
+    const view = renderStorage();
+    await view.findByText('orphan.gguf');
+    pressRowTrash(view);
 
     await act(async () => {
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
+      fireEvent.press(view.getByRole('button', { name: 'Delete' }));
     });
 
-    // Find and press the individual trash button
-    const touchables = result.UNSAFE_getAllByType(TouchableOpacity);
-    for (const btn of touchables) {
-      mockShowAlert.mockClear();
-      fireEvent.press(btn);
-      if (mockShowAlert.mock.calls.length > 0 &&
-          mockShowAlert.mock.calls[0][0] === 'Delete Orphaned File') {
-        break;
-      }
-    }
-
-    // Get the Delete button callback from showAlert
-    const alertButtons = mockShowAlert.mock.calls[0]?.[2];
-    const deleteButton = alertButtons?.find((b: any) => b.text === 'Delete');
-
-    if (deleteButton?.onPress) {
-      await act(async () => {
-        await deleteButton.onPress();
-      });
-      expect(mockDeleteOrphanedFile).toHaveBeenCalledWith('/p/orphan.gguf');
-    }
+    // The file is gone from the disk, and from the list.
+    await waitFor(() => expect(view.queryByText('orphan.gguf')).toBeNull());
+    expect(await disk.exists(`${MODELS_DIR}/orphan.gguf`)).toBe(false);
   });
 
   it('handles delete orphaned file error', async () => {
-    mockGetOrphanedFiles.mockResolvedValue([
-      { name: 'orphan.gguf', path: '/p/orphan.gguf', size: 1024 * 1024 },
-    ]);
-    mockDeleteOrphanedFile.mockRejectedValueOnce(new Error('Delete failed'));
+    disk.seedFile(`${MODELS_DIR}/orphan.gguf`, 1024 * 1024);
+    // The device refuses to delete the file.
+    disk.module.unlink.mockRejectedValueOnce(new Error('Delete failed'));
 
-    const result = render(<StorageSettingsScreen />);
+    const view = renderStorage();
+    await view.findByText('orphan.gguf');
+    pressRowTrash(view);
 
     await act(async () => {
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
+      fireEvent.press(view.getByRole('button', { name: 'Delete' }));
     });
 
-    // Find and press the individual trash button
-    const touchables = result.UNSAFE_getAllByType(TouchableOpacity);
-    for (const btn of touchables) {
-      mockShowAlert.mockClear();
-      fireEvent.press(btn);
-      if (mockShowAlert.mock.calls.length > 0 &&
-          mockShowAlert.mock.calls[0][0] === 'Delete Orphaned File') {
-        break;
-      }
-    }
-
-    const alertButtons = mockShowAlert.mock.calls[0]?.[2];
-    const deleteButton = alertButtons?.find((b: any) => b.text === 'Delete');
-
-    if (deleteButton?.onPress) {
-      await act(async () => {
-        await deleteButton.onPress();
-      });
-      // Should show error alert
-      expect(mockShowAlert).toHaveBeenCalledWith('Error', 'Failed to delete file');
-    }
+    // Should show error alert
+    expect(await view.findByText('Failed to delete file')).toBeTruthy();
+    expect(view.getByText('Error')).toBeTruthy();
+    expect(await disk.exists(`${MODELS_DIR}/orphan.gguf`)).toBe(true);
   });
 
   it('deletes all orphaned files when confirmed', async () => {
-    mockGetOrphanedFiles.mockResolvedValue([
-      { name: 'orphan1.gguf', path: '/p/orphan1.gguf', size: 1024 },
-      { name: 'orphan2.gguf', path: '/p/orphan2.gguf', size: 2048 },
-    ]);
+    disk.seedFile(`${MODELS_DIR}/orphan1.gguf`, 1024);
+    disk.seedFile(`${MODELS_DIR}/orphan2.gguf`, 2048);
 
-    const result = render(<StorageSettingsScreen />);
+    const view = renderStorage();
+    await view.findByText('orphan1.gguf');
 
+    fireEvent.press(view.getByText('Delete All Orphaned Files'));
     await act(async () => {
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
+      fireEvent.press(view.getByRole('button', { name: 'Delete All' }));
     });
 
-    // Press "Delete All Orphaned Files" button
-    fireEvent.press(result.getByText('Delete All Orphaned Files'));
-
-    const alertButtons = mockShowAlert.mock.calls[0]?.[2];
-    const deleteAllButton = alertButtons?.find((b: any) => b.text === 'Delete All');
-
-    if (deleteAllButton?.onPress) {
-      await act(async () => {
-        await deleteAllButton.onPress();
-      });
-      expect(mockDeleteOrphanedFile).toHaveBeenCalledTimes(2);
-    }
+    await waitFor(() => expect(view.getByText('No orphaned files found')).toBeTruthy());
+    expect(await disk.exists(`${MODELS_DIR}/orphan1.gguf`)).toBe(false);
+    expect(await disk.exists(`${MODELS_DIR}/orphan2.gguf`)).toBe(false);
   });
 
   it('does not show delete all alert when no orphaned files', () => {
     // handleDeleteAllOrphaned returns early if orphanedFiles.length === 0
     // Since orphanedFiles is initially empty, the button is not shown
-    const { queryByText } = render(<StorageSettingsScreen />);
+    const { queryByText } = renderStorage();
     expect(queryByText('Delete All Orphaned Files')).toBeNull();
   });
 
   it('handles error during scan for orphaned files', async () => {
-    mockGetOrphanedFiles.mockRejectedValueOnce(new Error('Scan failed'));
+    disk.seedFile(`${MODELS_DIR}/orphan.gguf`, 512);
+    // The disk cannot be read during the scan.
+    disk.module.readDir.mockRejectedValue(new Error('Scan failed'));
 
-    const result = render(<StorageSettingsScreen />);
-
-    await act(async () => {
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
-    });
+    const view = renderStorage();
+    await scanned(view);
 
     // Should still render without crashing
-    expect(result.getByText('No orphaned files found')).toBeTruthy();
+    expect(view.getByText('No orphaned files found')).toBeTruthy();
+    disk.module.readDir.mockReset();
   });
 
-  it('clears all stale downloads when confirmed', () => {
-    mockStaleDownloadStoreEntries = [
-      { modelKey: 'stale-1', downloadId: 'dl-100', modelId: '', fileName: '', combinedTotalBytes: 0, status: 'failed' },
-      { modelKey: 'stale-2', downloadId: 'dl-200', modelId: '', fileName: '', combinedTotalBytes: 0, status: 'failed' },
-    ];
+  it('clears all stale downloads when confirmed', async () => {
+    useDownloadStore.getState().add(staleEntry('stale-1', 'dl-100'));
+    useDownloadStore.getState().add(staleEntry('stale-2', 'dl-200'));
 
-    const { getByText } = render(<StorageSettingsScreen />);
-    fireEvent.press(getByText('Clear All'));
+    const view = renderStorage();
+    fireEvent.press(view.getByText('Clear All'));
+    fireEvent.press(view.getByRole('button', { name: 'Clear All' }));
 
-    const alertButtons = mockShowAlert.mock.calls[0]?.[2];
-    const clearAllButton = alertButtons?.find((b: any) => b.text === 'Clear All');
-
-    if (clearAllButton?.onPress) {
-      clearAllButton.onPress();
-      expect(mockRemoveFromStore).toHaveBeenCalledWith('stale-1');
-      expect(mockRemoveFromStore).toHaveBeenCalledWith('stale-2');
-    }
+    expect(useDownloadStore.getState().downloads['stale-1']).toBeUndefined();
+    expect(useDownloadStore.getState().downloads['stale-2']).toBeUndefined();
+    await waitFor(() => expect(view.queryByText('Stale Downloads')).toBeNull());
   });
 
   it('rescans for orphaned files when scan button pressed', async () => {
-    mockGetOrphanedFiles.mockResolvedValue([]);
-    const result = render(<StorageSettingsScreen />);
+    const view = renderStorage();
+    await scanned(view);
+    expect(view.getByText('No orphaned files found')).toBeTruthy();
 
-    await act(async () => {
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
-    });
+    // A file appears on disk after the first scan; the scan button finds it.
+    disk.seedFile(`${MODELS_DIR}/late.gguf`, 1024);
+    fireEvent.press(view.UNSAFE_getByProps({ name: 'refresh-cw' }));
 
-    // Clear first call from initial render
-    mockGetOrphanedFiles.mockClear();
-
-    // Press scan/refresh button
-    const touchables = result.UNSAFE_getAllByType(TouchableOpacity);
-    // The scan button is typically the second button (after back button)
-    // Let's find the one in the orphaned files section
-    for (const btn of touchables) {
-      if (!btn.props.disabled) {
-        fireEvent.press(btn);
-      }
-    }
-
-    await act(async () => {
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
-    });
+    expect(await view.findByText('late.gguf')).toBeTruthy();
   });
 
   it('shows scanning text while scanning', async () => {
-    // Make getOrphanedFiles take time to resolve
-    let resolveOrphaned: any;
-    mockGetOrphanedFiles.mockReturnValue(new Promise(resolve => {
-      resolveOrphaned = resolve;
-    }));
+    // The disk read is slow to answer.
+    let answerRead!: () => void;
+    const read = disk.module.readDir.getMockImplementation()!;
+    disk.module.readDir.mockImplementationOnce(async (dir: string) => {
+      await new Promise<void>(resolve => { answerRead = resolve; });
+      return read(dir);
+    });
 
-    const result = render(<StorageSettingsScreen />);
+    const view = renderStorage();
 
     // While scanning, "Scanning..." should appear
-    expect(result.getByText(/Scanning/)).toBeTruthy();
+    expect(await view.findByText(/Scanning/)).toBeTruthy();
 
-    // Resolve to complete scanning
-    await act(async () => {
-      resolveOrphaned([]);
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
-    });
+    await act(async () => { answerRead?.(); });
+    await scanned(view);
   });
 });

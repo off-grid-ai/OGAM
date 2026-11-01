@@ -11,14 +11,11 @@
 import { installNativeBoundary, GB } from '../../harness/nativeBoundary';
 import { makeGenDeps } from '../../harness/genDeps';
 import { createProject } from '../../utils/factories';
+import { withNavigator } from '../../harness/realNavigation';
 
 let mockRouteProjectId = 'proj-1';
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn(), setOptions: jest.fn(), addListener: jest.fn(() => jest.fn()) }),
-  useRoute: () => ({ params: { projectId: mockRouteProjectId } }),
-  useFocusEffect: jest.fn(),
-  useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 describe('Q11 (rendered) — context-full "New chat" drops the project', () => {
   it('shows the continuation chat under its project after a context-full New chat', async () => {
@@ -51,7 +48,7 @@ describe('Q11 (rendered) — context-full "New chat" drops the project', () => {
     expect(alert).toBeDefined();
     alert!.buttons!.find(b => b.text === 'New chat')!.onPress!();
 
-    const view = render(React.createElement(ProjectChatsScreen, {}));
+    const view = render(withNavigator(React.createElement(ProjectChatsScreen, {}), { projectId: mockRouteProjectId }));
     // Load-proof: the original filed chat renders under the project (screen mounted + filter works).
     expect(view.getByText('In project')).toBeTruthy();
     // Correct: the continuation is filed under the same project and shows here. Today it's unfiled → RED.

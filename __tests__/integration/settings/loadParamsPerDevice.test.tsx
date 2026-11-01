@@ -17,12 +17,8 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { GB, MB } from '../../harness/nativeBoundary';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 jest.mock('@react-native-community/slider', () => ({
   __esModule: true,
@@ -68,7 +64,7 @@ function batchShown(section: { getByTestId: (id: string) => { props: { children?
 
 describe('load params follow the model header and the device', () => {
   it('Android 12 GB, CPU, a Q4_0 model: mmap off, auto batch 512', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       deferInitialLoad: true,
       modelFileName: 'qwen3-1.7b-q4.gguf', // the name does not say Q4_0: the header does
@@ -86,7 +82,7 @@ describe('load params follow the model header and the device', () => {
   });
 
   it('Android 4 GB, a Q4_0 model: mmap stays on (low-RAM phone)', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       deferInitialLoad: true,
       ram: { platform: 'android', totalBytes: 4 * GB, availBytes: 2.5 * GB },
@@ -99,7 +95,7 @@ describe('load params follow the model header and the device', () => {
   });
 
   it('Android 8 GB, a Q4_0 model: mmap off', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       deferInitialLoad: true,
       ram: { platform: 'android', totalBytes: 8 * GB, availBytes: 5 * GB },
@@ -112,7 +108,7 @@ describe('load params follow the model header and the device', () => {
   });
 
   it('Android, an F16 model (not repacked): mmap stays on', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       deferInitialLoad: true,
       modelFileName: 'tiny-Q4_0-named-but-f16.gguf', // a misleading name must not switch mmap off
@@ -124,7 +120,7 @@ describe('load params follow the model header and the device', () => {
   });
 
   it('Android with an NPU: choosing the NPU shows "Auto (128)" and loads on HTP0 with batch 128', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       deferInitialLoad: true,
       deviceHardware: 'qcom',
@@ -150,7 +146,7 @@ describe('load params follow the model header and the device', () => {
   });
 
   it('a batch you chose yourself is used as-is, and the slider stops saying Auto', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       deferInitialLoad: true,
       modelFileSizeBytes: 500 * MB,
@@ -168,7 +164,7 @@ describe('load params follow the model header and the device', () => {
   });
 
   it('iOS, a Q4_0 model: mmap stays on, auto batch 512, four threads', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       platform: 'ios',
       deferInitialLoad: true,

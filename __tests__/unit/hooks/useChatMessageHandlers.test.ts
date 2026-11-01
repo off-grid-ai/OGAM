@@ -1,96 +1,85 @@
 /**
- * Unit tests for useChatMessageHandlers — the resend/retry + edit-and-resend
- * handlers.
+ * useChatMessageHandlers — Resend/Retry and edit-and-resend with no model.
  *
- * Regression: ejecting all models then tapping Resend/Retry used to silently
- * no-op (no message, no feedback). Now it alerts "No Model Selected", mirroring
- * the send path (handleSendFn). See handleRetryMessageFn / handleEditMessageFn.
+ * Regression: ejecting every model and then tapping Resend/Retry used to do nothing at all (no message, no
+ * feedback). Now it shows "No Model Selected", as the send path does, and leaves the chat as it was.
+ *
+ * Real: the handlers, the chat store (a real conversation and its actions), the residency manager and
+ * hardware readings they log, the alert builder. Nothing is faked: the no-model path bails before any
+ * device work. The alert setter is the screen's own state setter.
  */
-
 import { handleRetryMessageFn, handleEditMessageFn } from '../../../src/screens/ChatScreen/useChatMessageHandlers';
-import * as generationActions from '../../../src/screens/ChatScreen/useChatGenerationActions';
-import { createMessage } from '../../utils/factories';
+import { useChatStore } from '../../../src/stores';
 
-// Light mocks — the no-model path bails before any of these are touched, but
-// they still need to exist so the module imports cleanly.
-jest.mock('../../../src/services/modelResidency', () => ({
-  modelResidencyManager: { getResidents: jest.fn(() => []), reclaimSttForGeneration: jest.fn() },
-}));
-jest.mock('../../../src/services/hardware', () => ({
-  hardwareService: { getAvailableMemoryGB: jest.fn(() => 4), getTotalMemoryGB: jest.fn(() => 8) },
-}));
+/** A chat with one question and its answer, through the store's own actions. */
+function chatWithOneTurn() {
+  const store = useChatStore.getState();
+  const conversationId = store.createConversation('m');
+  store.addMessage(conversationId, { role: 'user', content: 'hi' });
+  store.addMessage(conversationId, { role: 'assistant', content: 'hello' });
+  const thread = () => useChatStore.getState().getConversationMessages(conversationId);
+  return { conversationId, thread, question: thread()[0] };
+}
 
-const makeDeps = (overrides: Partial<any> = {}): any => ({
-  setAlertState: jest.fn(),
-  ...overrides,
-});
+/** The screen's alert state, as the handlers set it. */
+function screen() {
+  const s = { alert: null as any };
+  return { s, genDeps: { setAlertState: (a: any) => { s.alert = a; } } as any };
+}
 
-describe('handleRetryMessageFn — no active model', () => {
-  let regenSpy: jest.SpyInstance;
+const contents = (messages: Array<{ role: string; content: string }>) => messages.map(m => `${m.role}:${m.content}`);
 
-  beforeEach(() => {
-    regenSpy = jest.spyOn(generationActions, 'regenerateResponseFn').mockResolvedValue(undefined);
-  });
-  afterEach(() => jest.restoreAllMocks());
+describe('handleRetryMessageFn — no model', () => {
+  it('shows "No Model Selected" and leaves the chat as it was', async () => {
+    const chat = chatWithOneTurn();
+    const before = contents(chat.thread());
+    const { s, genDeps } = screen();
 
-  it('alerts "No Model Selected" and does not regenerate when no model is loaded', async () => {
-    const genDeps = makeDeps();
-    const message = createMessage({ role: 'user', content: 'hi' });
-
-    await handleRetryMessageFn(message, genDeps, {
-      activeConversationId: 'conv-1',
+    await handleRetryMessageFn(chat.question, genDeps, {
+      activeConversationId: chat.conversationId,
       hasActiveModel: false,
-      deleteMessagesAfter: jest.fn(),
-      setDebugInfo: jest.fn(),
+      deleteMessagesAfter: useChatStore.getState().deleteMessagesAfter,
+      setDebugInfo: () => {},
     });
 
-    expect(genDeps.setAlertState).toHaveBeenCalledWith(
-      expect.objectContaining({ visible: true, title: 'No Model Selected' }),
-    );
-    expect(regenSpy).not.toHaveBeenCalled();
+    expect(s.alert).toEqual(expect.objectContaining({ visible: true, title: 'No Model Selected' }));
+    expect(contents(chat.thread())).toEqual(before); // the answer is not deleted, nothing new is asked
   });
 
-  it('does NOT alert and bails quietly when a model exists but there is no conversation', async () => {
-    const genDeps = makeDeps();
-    const message = createMessage({ role: 'user', content: 'hi' });
+  it('with a model but no open chat, does nothing and shows no alert', async () => {
+    const chat = chatWithOneTurn();
+    const before = contents(chat.thread());
+    const { s, genDeps } = screen();
 
-    await handleRetryMessageFn(message, genDeps, {
+    await handleRetryMessageFn(chat.question, genDeps, {
       activeConversationId: null,
       hasActiveModel: true,
-      deleteMessagesAfter: jest.fn(),
-      setDebugInfo: jest.fn(),
+      deleteMessagesAfter: useChatStore.getState().deleteMessagesAfter,
+      setDebugInfo: () => {},
     });
 
-    expect(genDeps.setAlertState).not.toHaveBeenCalled();
-    expect(regenSpy).not.toHaveBeenCalled();
+    expect(s.alert).toBeNull();
+    expect(contents(chat.thread())).toEqual(before);
   });
 });
 
-describe('handleEditMessageFn — no active model', () => {
-  let regenSpy: jest.SpyInstance;
-
-  beforeEach(() => {
-    regenSpy = jest.spyOn(generationActions, 'regenerateResponseFn').mockResolvedValue(undefined);
-  });
-  afterEach(() => jest.restoreAllMocks());
-
-  it('alerts "No Model Selected" and does not regenerate when no model is loaded', async () => {
-    const genDeps = makeDeps();
-    const message = createMessage({ role: 'user', content: 'original' });
+describe('handleEditMessageFn — no model', () => {
+  it('shows "No Model Selected" and keeps the question as it was', async () => {
+    const chat = chatWithOneTurn();
+    const before = contents(chat.thread());
+    const { s, genDeps } = screen();
 
     await handleEditMessageFn(genDeps, {
-      message,
+      message: chat.question,
       newContent: 'edited',
-      activeConversationId: 'conv-1',
+      activeConversationId: chat.conversationId,
       hasActiveModel: false,
-      updateMessageContent: jest.fn(),
-      deleteMessagesAfter: jest.fn(),
-      setDebugInfo: jest.fn(),
+      updateMessageContent: useChatStore.getState().updateMessageContent,
+      deleteMessagesAfter: useChatStore.getState().deleteMessagesAfter,
+      setDebugInfo: () => {},
     });
 
-    expect(genDeps.setAlertState).toHaveBeenCalledWith(
-      expect.objectContaining({ visible: true, title: 'No Model Selected' }),
-    );
-    expect(regenSpy).not.toHaveBeenCalled();
+    expect(s.alert).toEqual(expect.objectContaining({ visible: true, title: 'No Model Selected' }));
+    expect(contents(chat.thread())).toEqual(before); // no edited version, no new reply
   });
 });

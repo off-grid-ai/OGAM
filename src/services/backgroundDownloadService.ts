@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- cohesive download admission-control service: the concurrency cap, FIFO queue, slot accounting, native-bridge calls, and event fan-out are one tightly-coupled unit; splitting it would scatter the shared activeIds/startQueue state. */
+ 
 import { NativeModules, NativeEventEmitter, Platform, Alert } from 'react-native';
 import { BackgroundDownloadInfo, BackgroundDownloadStatus } from '../types';
 import logger from '../utils/logger';
@@ -25,6 +25,10 @@ const { DownloadManagerModule } = NativeModules;
  */
 const MAX_CONCURRENT_DOWNLOADS = 3;
 
+function cancelledError(): Error & { cancelled: boolean } {
+  return Object.assign(new Error('Download cancelled'), { cancelled: true });
+}
+
 interface QueuedStart {
   params: DownloadParams;
   /** Stable per-model key, used to coalesce a double-tap on an already-queued model. */
@@ -45,6 +49,9 @@ class BackgroundDownloadService {
   private activeIds = new Set<string>();
   /** Starts waiting for a free slot, in FIFO order. */
   private startQueue: QueuedStart[] = [];
+  /** Starts announced with expectStart() that have not reached startDownload yet (they check the disk
+   *  first), mapped to whether their "Queued" row was cancelled meanwhile. A cancelled one is refused. */
+  private pendingStarts = new Map<string, boolean>();
   /** Monotonic counter for unique in-flight reservation tokens. */
   private startSeq = 0;
   /** Set once cleanup() runs, so a beginDownload() still awaiting the native start can't
@@ -75,6 +82,7 @@ class BackgroundDownloadService {
     if (params.isSidecar) {
       return this.beginDownload(params, false);
     }
+    if (this.takeEarlyCancel(this.keyFor(params))) throw cancelledError();
     // Under the cap → start immediately. At the cap → queue and resolve when a slot
     // frees. Callers `await` this and only then attach onComplete/onError to the
     // returned downloadId, so a queued start simply resolves later — listeners still
@@ -289,13 +297,30 @@ class BackgroundDownloadService {
    */
   cancelQueued(key: string): boolean {
     const idx = this.startQueue.findIndex((q) => q.key === key);
-    if (idx === -1) return false;
+    if (idx === -1) {
+      // An announced start may not have reached the queue yet: mark it, and it is refused when it arrives.
+      if (this.pendingStarts.has(key)) this.pendingStarts.set(key, true);
+      return false;
+    }
     const [removed] = this.startQueue.splice(idx, 1);
     this.persistQueue(); // a cancelled queued start must not resurrect on relaunch
-    const error = new Error('Download cancelled') as Error & { cancelled?: boolean };
-    error.cancelled = true;
-    removed.reject(error);
+    removed.reject(cancelledError());
     return true;
+  }
+
+  /**
+   * Announce a start for `key` that will reach startDownload after some checks, so a cancel of its
+   * "Queued" row in the meantime wins (startModelDownload calls this as it publishes that row).
+   */
+  expectStart(key: string): void {
+    this.pendingStarts.set(key, false);
+  }
+
+  /** Whether the announced start for `key` was cancelled before it arrived (and forget it either way). */
+  private takeEarlyCancel(key: string): boolean {
+    const cancelled = this.pendingStarts.get(key) === true;
+    this.pendingStarts.delete(key);
+    return cancelled;
   }
 
   async pauseDownload(downloadId: string): Promise<void> {

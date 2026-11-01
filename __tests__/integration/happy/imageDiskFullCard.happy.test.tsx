@@ -9,12 +9,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 // The message CoreMLDiffusionModule.storageShortfallMessage builds (sizes from ByteCountFormatter).
 const STORAGE_MESSAGE =
@@ -27,7 +23,7 @@ function nativeReject(code: string, message: string): Error {
 }
 
 async function openChatWithImageModeOn() {
-  const h = await setupChatScreen({ engine: 'litert', platform: 'ios' });
+  const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' });
   h.render();
   await h.placeImageModel({ backend: 'coreml' });
   await h.cycleImageMode(); // auto → ON(force); also activates the downloaded image model

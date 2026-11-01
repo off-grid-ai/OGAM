@@ -22,15 +22,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('send/resend parity — resending an image turn with no image model falls back to text (like send)', () => {
   it('shows a text reply, not "No image model loaded.", when the image turn is resent after the image model is gone', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' });
     h.render();
     await h.placeImageModel();
 

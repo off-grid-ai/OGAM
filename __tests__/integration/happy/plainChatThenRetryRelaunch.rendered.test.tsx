@@ -17,18 +17,8 @@ import {
   setupChatScreen,
 } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: (screen: string, params?: Record<string, unknown>) =>
-      require('../../harness/chatHarness').recordNavigation(screen, params),
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 type View = { queryAllByTestId: (id: RegExp) => unknown[] };
 const expectThread = (view: View, ...lines: string[]) =>
@@ -40,7 +30,7 @@ const VERSION_LABEL = /^\d+\/\d+$/;
 describe('happy — a plain chat gets a version switcher only once it is retried', () => {
   it('llama.cpp: no switcher before or after a relaunch; Regenerate then shows 2/2, Previous 1/2, and both versions and the choice survive a relaunch', async () => {
     // --- Launch 1: a plain two-turn chat ---
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     h.render();
     await h.send('plain one', { text: 'First plain answer.' });
     await h.rtl.waitFor(() => expect(h.view!.queryByText(/First plain answer\./)).not.toBeNull());
@@ -58,16 +48,9 @@ describe('happy — a plain chat gets a version switcher only once it is retried
 
     // --- Launch 2: relaunch with the model, open the chat from the list ---
     await closeApp();
-    const r = await setupChatScreen({ engine: 'llama', relaunched: true });
-    const { ChatsListScreen } = require('../../../src/screens/ChatsListScreen');
-    const list = r.rtl.render(r.React.createElement(ChatsListScreen));
-    const row = await r.rtl.waitFor(() => list.getByText('plain one'));
-    const nav = require('../../harness/chatHarness');
-    nav.navHolder.last = null;
-    r.rtl.fireEvent.press(row);
-    expect(nav.navHolder.last?.screen).toBe('Chat');
-    list.unmount();
-    nav.routeHolder.params = nav.navHolder.last!.params ?? {};
+    const r = await setupChatScreen({ navigation: 'real', engine: 'llama', relaunched: true });
+    const list = await r.openChatList();
+    r.rtl.fireEvent.press(await r.rtl.waitFor(() => list.getByText('plain one')));
     r.render();
     const v = () => r.view!;
     await r.rtl.waitFor(() =>

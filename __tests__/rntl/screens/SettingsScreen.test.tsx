@@ -16,117 +16,66 @@ import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { FOLLOW_X_URL, SLACK_INVITE_URL } from '../../../src/utils/sharePrompt';
 import { SUPPORT_EMAIL } from '../../../src/utils/supportEmail';
 
-jest.mock('react-native-fs', () => ({
-  getFSInfo: jest.fn(async () => ({ freeSpace: 8 * 1024 * 1024 * 1024 })),
-}));
-
-// Navigation is globally mocked in jest.setup.ts
-
-jest.mock('../../../src/hooks/useFocusTrigger', () => ({
-  useFocusTrigger: () => 0,
-}));
-
-jest.mock('../../../src/components', () => ({
-  Card: ({ children, style }: any) => {
-    const { View } = require('react-native');
-    return <View style={style}>{children}</View>;
-  },
-}));
-
-jest.mock('../../../src/components/AnimatedEntry', () => ({
-  AnimatedEntry: ({ children }: any) => children,
-}));
-
-jest.mock('../../../src/components/AnimatedListItem', () => ({
-  AnimatedListItem: ({ children, onPress, style }: any) => {
-    const { TouchableOpacity } = require('react-native');
-    return (
-      <TouchableOpacity style={style} onPress={onPress}>
-        {children}
-      </TouchableOpacity>
-    );
-  },
-}));
-
-// The version on screen comes from the BUILD (Android versionName / iOS MARKETING_VERSION) via
-// react-native-device-info, which jest.setup fakes at that native boundary. package.json is the live
-// production version and is deliberately not what the app reads - see src/utils/appVersion.ts.
-
-const mockSetOnboardingComplete = jest.fn();
-const mockSetThemeMode = jest.fn();
-const mockCompleteChecklistStep = jest.fn();
-// Mutated per-test to drive Pro banner visibility. `mock`-prefixed so jest.mock's
-// hoisted factory is allowed to reference it.
-const mockProState = { hasRegisteredPro: false, proBannerDismissed: false };
-jest.mock('../../../src/stores', () => ({
-  useAppStore: Object.assign(jest.fn((selector?: any) => {
-    const state = {
-      setOnboardingComplete: mockSetOnboardingComplete,
-      themeMode: 'system',
-      setThemeMode: mockSetThemeMode,
-      completeChecklistStep: mockCompleteChecklistStep,
-      setProBannerDismissed: jest.fn(),
-      hasRegisteredPro: mockProState.hasRegisteredPro,
-      proBannerDismissed: mockProState.proBannerDismissed,
-    };
-    return selector ? selector(state) : state;
-  }), {
-    getState: () => ({ downloadedModels: [], activeModelId: null }),
-  }),
-  useRemoteServerStore: {
-    getState: () => ({ activeServerId: null }),
-  },
-}));
-
 import { SettingsScreen } from '../../../src/screens/SettingsScreen';
+import { useAppStore } from '../../../src/stores/appStore';
+import { withNavigatorRoutes } from '../../harness/realNavigation';
 
-const mockNavigate = jest.fn();
-const mockDispatch = jest.fn();
-jest.mock('@react-navigation/native', () => ({
-  ...jest.requireActual('@react-navigation/native'),
-  useNavigation: () => ({
-    navigate: mockNavigate,
-    getParent: () => ({
-      dispatch: mockDispatch,
+// The screen runs on a real React Navigation stack (inside a parent stack, as the Settings tab sits
+// inside the app's root stack), on the real app store and the real components. The version on screen
+// comes from the BUILD (Android versionName / iOS MARKETING_VERSION) via react-native-device-info,
+// which jest.setup fakes at that native boundary. package.json is the live production version and is
+// deliberately not what the app reads - see src/utils/appVersion.ts.
+jest.unmock('@react-navigation/native');
+
+// The device disk (the feedback mail reports its free space).
+jest.mock('react-native-fs', () => {
+  const { defaultNativeFileSystemBoundary: boundary } = require('../../harness/nativeFileSystem');
+  return { __esModule: true, default: boundary.module, ...boundary.module };
+});
+
+const SETTINGS_ROUTES = ['ModelSettings', 'RemoteServers', 'SecuritySettings', 'DeviceInfo', 'StorageSettings'];
+
+const renderSettings = () =>
+  render(
+    withNavigatorRoutes(<SettingsScreen />, {
+      destinations: SETTINGS_ROUTES,
+      parentDestinations: ['Onboarding'],
     }),
-  }),
-  CommonActions: {
-    reset: jest.fn((params: any) => params),
-  },
-}));
+  );
 
 describe('SettingsScreen', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    mockProState.hasRegisteredPro = false;
-    mockProState.proBannerDismissed = false;
+    const app = useAppStore.getState();
+    app.setHasRegisteredPro(false);
+    app.setProBannerDismissed(false);
+    app.setOnboardingComplete(true);
   });
 
   it('shows the Pro upsell banner when Pro is not active and not dismissed', () => {
-    const { getByText } = render(<SettingsScreen />);
+    const { getByText } = renderSettings();
     expect(
       getByText('Keep your work in context with memory, Sync, and actions you approve.'),
     ).toBeTruthy();
   });
 
   it('hides the Pro upsell banner once Pro is active', () => {
-    mockProState.hasRegisteredPro = true;
-    const { queryByText } = render(<SettingsScreen />);
+    useAppStore.getState().setHasRegisteredPro(true);
+    const { queryByText } = renderSettings();
     expect(queryByText(/democratized/i)).toBeNull();
   });
 
   it('renders "Settings" title', () => {
-    const { getByText } = render(<SettingsScreen />);
+    const { getByText } = renderSettings();
     expect(getByText('Settings')).toBeTruthy();
   });
 
   it('renders version number', () => {
-    const { getByText } = render(<SettingsScreen />);
+    const { getByText } = renderSettings();
     expect(getByText(/Version 0\.0\.103/)).toBeTruthy();
   });
 
   it('renders navigation items', () => {
-    const { getByText } = render(<SettingsScreen />);
+    const { getByText } = renderSettings();
     expect(getByText('Model Settings')).toBeTruthy();
     expect(getByText('Remote Servers')).toBeTruthy();
     expect(getByText('Security')).toBeTruthy();
@@ -135,14 +84,14 @@ describe('SettingsScreen', () => {
   });
 
   it('does not render the removed Voice Transcription / Text to Speech rows', () => {
-    const { queryByText } = render(<SettingsScreen />);
+    const { queryByText } = renderSettings();
     expect(queryByText('Voice Transcription')).toBeNull();
     expect(queryByText('Text to Speech')).toBeNull();
     expect(queryByText('On-device speech to text')).toBeNull();
   });
 
   it('renders navigation item descriptions', () => {
-    const { getByText } = render(<SettingsScreen />);
+    const { getByText } = renderSettings();
     expect(getByText('System prompt, generation, and performance')).toBeTruthy();
     expect(getByText('Connect to Off Grid AI Desktop, Ollama, LM Studio, and more')).toBeTruthy();
     expect(getByText('Passphrase and app lock')).toBeTruthy();
@@ -150,42 +99,30 @@ describe('SettingsScreen', () => {
     expect(getByText('Models and data usage')).toBeTruthy();
   });
 
-  it('navigates to correct screen when nav item is pressed', () => {
-    const { getByText } = render(<SettingsScreen />);
+  it('navigates to correct screen when nav item is pressed', async () => {
+    const { getByText, findByTestId } = renderSettings();
     fireEvent.press(getByText('Model Settings'));
-    expect(mockNavigate).toHaveBeenCalledWith('ModelSettings');
+    expect(await findByTestId('route-ModelSettings')).toBeTruthy();
   });
 
-  it('navigates to each settings screen', () => {
-    const { getByText } = render(<SettingsScreen />);
-
-    fireEvent.press(getByText('Remote Servers'));
-    expect(mockNavigate).toHaveBeenCalledWith('RemoteServers');
-
-    fireEvent.press(getByText('Security'));
-    expect(mockNavigate).toHaveBeenCalledWith('SecuritySettings');
-
-    fireEvent.press(getByText('Device Information'));
-    expect(mockNavigate).toHaveBeenCalledWith('DeviceInfo');
-
-    fireEvent.press(getByText('Storage'));
-    expect(mockNavigate).toHaveBeenCalledWith('StorageSettings');
+  it.each([
+    ['Remote Servers', 'RemoteServers'],
+    ['Security', 'SecuritySettings'],
+    ['Device Information', 'DeviceInfo'],
+    ['Storage', 'StorageSettings'],
+  ])('navigates to its settings screen when %s is pressed', async (label, route) => {
+    const { getByText, findByTestId } = renderSettings();
+    fireEvent.press(getByText(label));
+    expect(await findByTestId(`route-${route}`)).toBeTruthy();
   });
 
   it('renders theme selector with system/light/dark options', () => {
-    const { getByText } = render(<SettingsScreen />);
+    const { getByText } = renderSettings();
     expect(getByText('Appearance')).toBeTruthy();
   });
 
-  it('calls setThemeMode when theme option is pressed', () => {
-    render(<SettingsScreen />);
-    // The theme options are the first three TouchableOpacity elements in the theme selector
-    // We can't easily target them by text since they use icons, but pressing them calls setThemeMode
-    // The three theme options are rendered - pressing one calls setThemeMode
-  });
-
   it('renders the Analytics section with both consent toggles off by default', () => {
-    const { getByText, getByLabelText } = render(<SettingsScreen />);
+    const { getByText, getByLabelText } = renderSettings();
     expect(getByText('Analytics')).toBeTruthy();
     expect(Boolean(getByLabelText('Anonymous stats').props.on ?? getByLabelText('Anonymous stats').props.value)).toBe(false);
     expect(Boolean(getByLabelText('Crash reports').props.on ?? getByLabelText('Crash reports').props.value)).toBe(false);
@@ -194,13 +131,13 @@ describe('SettingsScreen', () => {
   });
 
   it('renders about section text', () => {
-    const { getByText } = render(<SettingsScreen />);
+    const { getByText } = renderSettings();
     expect(getByText('About')).toBeTruthy();
     expect(getByText(/Version/)).toBeTruthy();
   });
 
   it('renders the "Stay in the loop" card with the Follow-on-X and Join-Slack items', () => {
-    const { getByText, getByTestId } = render(<SettingsScreen />);
+    const { getByText, getByTestId } = renderSettings();
     expect(getByText('Stay in the loop')).toBeTruthy();
     expect(getByText('Follow @alichherawalla on X')).toBeTruthy();
     // The two affordances are present and tappable.
@@ -210,7 +147,7 @@ describe('SettingsScreen', () => {
 
   it('opens the X profile URL when Follow-on-X is tapped', () => {
     const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
-    const { getByTestId } = render(<SettingsScreen />);
+    const { getByTestId } = renderSettings();
     fireEvent.press(getByTestId('follow-on-x'));
     // Terminal artifact of a link tap: the OS is handed the exact X profile URL (the shared constant).
     expect(openURL).toHaveBeenCalledWith(FOLLOW_X_URL);
@@ -219,7 +156,7 @@ describe('SettingsScreen', () => {
 
   it('opens the Slack invite URL when Join-Slack is tapped', () => {
     const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
-    const { getByTestId } = render(<SettingsScreen />);
+    const { getByTestId } = renderSettings();
     fireEvent.press(getByTestId('join-slack'));
     expect(openURL).toHaveBeenCalledWith(SLACK_INVITE_URL);
     openURL.mockRestore();
@@ -227,7 +164,7 @@ describe('SettingsScreen', () => {
 
   it('sends feedback to the shared support address', async () => {
     const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
-    const { getByText } = render(<SettingsScreen />);
+    const { getByText } = renderSettings();
 
     fireEvent.press(getByText('Send Feedback'));
 
@@ -238,27 +175,22 @@ describe('SettingsScreen', () => {
   });
 
   it('no longer renders the removed Pro Tools row', () => {
-    const { queryByText } = render(<SettingsScreen />);
+    const { queryByText } = renderSettings();
     // Pro Tools was removed from Settings — it must not surface (mirrors the Voice/TTS removal guard).
     expect(queryByText('Pro Tools')).toBeNull();
   });
 
   it('keeps Reset Onboarding in development mode without the removed checklist reset', () => {
-    const { getByText, queryByText } = render(<SettingsScreen />);
+    const { getByText, queryByText } = renderSettings();
     expect(getByText('Reset Onboarding')).toBeTruthy();
     expect(queryByText('Reset Onboarding Checklist')).toBeNull();
   });
 
-  it('calls setOnboardingComplete and dispatches reset on Reset Onboarding press', () => {
-    const { CommonActions } = require('@react-navigation/native');
-    const { getByText } = render(<SettingsScreen />);
+  it('resets onboarding and returns the root stack to Onboarding on Reset Onboarding press', async () => {
+    const { getByText, findByTestId } = renderSettings();
     fireEvent.press(getByText('Reset Onboarding'));
 
-    expect(mockSetOnboardingComplete).toHaveBeenCalledWith(false);
-    expect(CommonActions.reset).toHaveBeenCalledWith({
-      index: 0,
-      routes: [{ name: 'Onboarding' }],
-    });
-    expect(mockDispatch).toHaveBeenCalled();
+    expect(useAppStore.getState().hasCompletedOnboarding).toBe(false);
+    expect(await findByTestId('route-Onboarding')).toBeTruthy();
   });
 });

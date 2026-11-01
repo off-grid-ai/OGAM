@@ -12,17 +12,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: () => {},
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 type Harness = Awaited<ReturnType<typeof setupChatScreen>>;
 
@@ -72,7 +63,7 @@ describe.each(['ios', 'android'] as const)(
   'microphone permission is not asked until the mic is tapped (%s)',
   platform => {
     it('opens the chat with the normal mic and no prompt; one tap prompts, then records', async () => {
-      const h = await setupChatScreen({ engine: 'llama', platform, whisper: true });
+      const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform, whisper: true });
       await h.setupWhisperModel('tiny.en');
       const stub = installPermissionPromptStub(h, platform);
       h.render();
@@ -96,7 +87,7 @@ describe.each(['ios', 'android'] as const)(
     }, 30000);
 
     it('enters voice mode with the normal mic and no prompt; one tap prompts, then records', async () => {
-      const h = await setupChatScreen({ engine: 'llama', platform, whisper: true, pro: true });
+      const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform, whisper: true, pro: true });
       await h.setupWhisperModel('tiny.en');
       const stub = installPermissionPromptStub(h, platform);
       h.render();
