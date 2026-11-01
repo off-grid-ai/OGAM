@@ -1,21 +1,12 @@
 /**
- * Unit tests for openAICompatibleStream.ts
- * Covers ThinkTagParser and processDelta branch paths.
+ * openAICompatibleStream — the reasoning/answer split of a streamed reply (ThinkTagParser, processDelta) and
+ * Ollama's native chat stream (generateOllamaChatImpl).
+ *
+ * Real: the stream code, httpClient's NDJSON streaming request and parser, the logger. Faked (network,
+ * harness/chatStreamServer): Ollama's /api/chat at the streaming XMLHttpRequest.
  */
-
-jest.mock('../../../../src/services/httpClient', () => ({
-  createNDJSONStreamingRequest: jest.fn(),
-}));
-
-jest.mock('../../../../src/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 import { ThinkTagParser, processDelta, generateOllamaChatImpl } from '../../../../src/services/providers/openAICompatibleStream';
-import { createNDJSONStreamingRequest } from '../../../../src/services/httpClient';
-
-const mockedNDJSON = createNDJSONStreamingRequest as jest.Mock;
+import { installChatStreamServer, type ChatStreamServer } from '../../../harness/chatStreamServer';
 import type { OpenAIStreamState } from '../../../../src/services/providers/openAICompatibleTypes';
 
 function makeState(overrides: Partial<OpenAIStreamState> = {}): OpenAIStreamState {
@@ -223,142 +214,171 @@ describe('processDelta', () => {
 });
 
 // ---------------------------------------------------------------------------
-// generateOllamaChatImpl — tests handleOllamaChatLine branches indirectly
+// generateOllamaChatImpl — Ollama's native /api/chat
 // ---------------------------------------------------------------------------
 
-function makeOllamaReq(overrides: any = {}) {
-  const callbacks = {
-    onToken: jest.fn(),
-    onReasoning: jest.fn(),
-    onError: jest.fn(),
-    onComplete: jest.fn(),
-  };
-  const controller = new AbortController();
-  return {
-    options: { enableThinking: true },
-    callbacks,
-    signal: controller.signal,
-    endpoint: 'http://localhost:11434',
-    modelId: 'llama3',
-    abort: jest.fn(),
-    controller,
-    ...overrides,
-  };
-}
-
 describe('generateOllamaChatImpl', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
+  let server: ChatStreamServer;
+  beforeEach(() => { server = installChatStreamServer(); });
+  afterEach(() => server.restore());
+
+  /** One chat request to the Ollama server, with what the provider reports collected. */
+  function ollamaRequest(options: Record<string, unknown> = { enableThinking: true }, opts: { endpoint?: string } = {}) {
+    const controller = new AbortController();
+    const seen = { tokens: [] as string[], reasoning: [] as string[], done: [] as any[], errors: [] as Error[] };
+    const req = {
+      options,
+      callbacks: {
+        onToken: (t: string) => seen.tokens.push(t),
+        onReasoning: (r: string) => seen.reasoning.push(r),
+        onComplete: (r: any) => seen.done.push(r),
+        onError: (e: Error) => seen.errors.push(e),
+      },
+      signal: controller.signal,
+      endpoint: opts.endpoint ?? 'http://localhost:11434',
+      modelId: 'llama3',
+      abort: () => controller.abort(),
+    };
+    return { req, seen, controller };
+  }
+
+  it('posts the chat to /api/chat, streams the answer and completes with it at done', async () => {
+    server.reply({ ndjson: [
+      { message: { role: 'assistant', content: 'hel' }, done: false },
+      { message: { role: 'assistant', content: 'lo' }, done: false },
+      { message: { role: 'assistant', content: '' }, done: true, done_reason: 'stop' },
+    ] });
+    const { req, seen } = ollamaRequest({ enableThinking: true, temperature: 0.4, topP: 0.8 }, { endpoint: 'http://localhost:11434//' });
+
+    await generateOllamaChatImpl([{ role: 'user', content: 'hi' }] as any, req as any);
+
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests[0].url).toBe('http://localhost:11434/api/chat');
+    expect(server.requests[0].body).toEqual(expect.objectContaining({
+      model: 'llama3', stream: true, think: true,
+      messages: [{ role: 'user', content: 'hi' }],
+      options: { temperature: 0.4, top_p: 0.8 },
+    }));
+    expect(seen.tokens.join('')).toBe('hello');
+    expect(seen.done).toHaveLength(1);
+    expect(seen.done[0].content).toBe('hello');
+    expect(seen.errors).toEqual([]);
   });
 
-  it('calls onComplete with content when done=true line received', async () => {
-    const req = makeOllamaReq();
-    mockedNDJSON.mockImplementation(async (_url: string, _opts: any, handler: (line: any) => void) => {
-      handler({ message: { role: 'assistant', content: 'hello' }, done: false });
-      handler({ done: true });
-    });
+  it('reports an error line from Ollama and stops the request', async () => {
+    server.reply({ ndjson: [{ error: 'model not found' }] });
+    const { req, seen, controller } = ollamaRequest();
 
-    await generateOllamaChatImpl([], req);
-    expect(req.callbacks.onToken).toHaveBeenCalledWith('hello');
-    expect(req.callbacks.onComplete).toHaveBeenCalledWith(expect.objectContaining({ content: 'hello' }));
+    await generateOllamaChatImpl([], req as any);
+
+    expect(seen.errors.map(e => e.message)).toEqual([expect.stringContaining('model not found')]);
+    expect(controller.signal.aborted).toBe(true);
+    expect(seen.done).toEqual([]);
   });
 
-  it('calls onError when error field present in line', async () => {
-    const req = makeOllamaReq();
-    mockedNDJSON.mockImplementation(async (_url: string, _opts: any, handler: (line: any) => void) => {
-      handler({ error: 'model not found' });
-    });
+  it('sends nothing for a chat stopped before it was sent, and completes it empty', async () => {
+    const { req, seen, controller } = ollamaRequest();
+    controller.abort();
 
-    await generateOllamaChatImpl([], req);
-    expect(req.callbacks.onError).toHaveBeenCalledWith(expect.any(Error));
-    expect(req.abort).toHaveBeenCalled();
+    await generateOllamaChatImpl([{ role: 'user', content: 'hi' }] as any, req as any);
+
+    expect(server.requests).toHaveLength(0);
+    expect(seen.done.map(r => r.content)).toEqual(['']);
+    expect(seen.errors).toEqual([]);
   });
 
-  it('calls onComplete with empty content when signal is aborted on throw', async () => {
-    const req = makeOllamaReq();
-    req.controller.abort();
-    mockedNDJSON.mockRejectedValue(new Error('aborted'));
+  it('reports a dropped connection as an error', async () => {
+    server.reply({ networkError: true });
+    const { req, seen } = ollamaRequest();
 
-    await generateOllamaChatImpl([], req);
-    expect(req.callbacks.onComplete).toHaveBeenCalledWith(expect.objectContaining({ content: '' }));
-    expect(req.callbacks.onError).not.toHaveBeenCalled();
+    await generateOllamaChatImpl([], req as any);
+
+    expect(seen.errors.map(e => e.message)).toEqual(['Network error']);
+    expect(seen.done).toEqual([]);
   });
 
-  it('calls onError on non-abort throw', async () => {
-    const req = makeOllamaReq();
-    mockedNDJSON.mockRejectedValue(new Error('network error'));
+  it('reports an HTTP error status as an error', async () => {
+    server.reply({ status: 500, body: JSON.stringify({ error: 'boom' }) });
+    const { req, seen } = ollamaRequest();
 
-    await generateOllamaChatImpl([], req);
-    expect(req.callbacks.onError).toHaveBeenCalledWith(expect.any(Error));
+    await generateOllamaChatImpl([], req as any);
+
+    expect(seen.errors).toHaveLength(1);
+    expect(seen.done).toEqual([]);
   });
 
-  it('calls onComplete after stream if completeCalled is false', async () => {
-    const req = makeOllamaReq();
-    mockedNDJSON.mockImplementation(async (_url: string, _opts: any, handler: (line: any) => void) => {
-      handler({ message: { content: 'partial' }, done: false });
-      // no done:true line
-    });
+  it('completes with what streamed when the stream ends without a done line', async () => {
+    server.reply({ ndjson: [{ message: { content: 'partial' }, done: false }] });
+    const { req, seen } = ollamaRequest();
 
-    await generateOllamaChatImpl([], req);
-    expect(req.callbacks.onComplete).toHaveBeenCalledWith(expect.objectContaining({ content: 'partial' }));
+    await generateOllamaChatImpl([], req as any);
+
+    expect(seen.done.map(r => r.content)).toEqual(['partial']);
   });
 
-  it('accumulates tool_calls from Ollama message chunks', async () => {
-    const req = makeOllamaReq();
-    mockedNDJSON.mockImplementation(async (_url: string, _opts: any, handler: (line: any) => void) => {
-      handler({ message: { tool_calls: [{ function: { name: 'search', arguments: { query: 'test' } } }] }, done: false });
-      handler({ done: true });
-    });
+  it('completes with the tool calls Ollama streamed', async () => {
+    server.reply({ ndjson: [
+      { message: { tool_calls: [{ function: { name: 'search', arguments: { query: 'test' } } }] }, done: false },
+      { done: true },
+    ] });
+    const { req, seen } = ollamaRequest({ enableThinking: true, tools: [{ type: 'function', function: { name: 'search' } }] });
 
-    await generateOllamaChatImpl([], req);
-    const result = req.callbacks.onComplete.mock.calls[0][0];
-    expect(result.toolCalls).toHaveLength(1);
-    expect(result.toolCalls[0].name).toBe('search');
+    await generateOllamaChatImpl([], req as any);
+
+    expect(server.requests[0].body.tools).toEqual([{ type: 'function', function: { name: 'search' } }]);
+    expect(seen.done[0].toolCalls).toHaveLength(1);
+    expect(seen.done[0].toolCalls[0].name).toBe('search');
+    expect(JSON.parse(seen.done[0].toolCalls[0].arguments)).toEqual({ query: 'test' });
   });
 
-  it('strips base64 prefix from image_url content parts', async () => {
-    const req = makeOllamaReq();
-    mockedNDJSON.mockImplementation(async (_url: string, _opts: any, handler: (line: any) => void) => {
-      handler({ done: true });
-    });
+  it('sends images as raw base64 in the message images list', async () => {
+    const { req } = ollamaRequest();
 
-    const messages = [{
+    await generateOllamaChatImpl([{
       role: 'user',
       content: [
         { type: 'text', text: 'describe this' },
         { type: 'image_url', image_url: { url: 'data:image/png;base64,abc123' } },
       ],
-    }] as any;
+    }] as any, req as any);
 
-    await generateOllamaChatImpl(messages, req);
-    // If we got here without error the conversion ran — check onComplete was called
-    expect(req.callbacks.onComplete).toHaveBeenCalled();
+    expect(server.requests[0].body.messages).toEqual([{ role: 'user', content: 'describe this', images: ['abc123'] }]);
   });
 
-  it('converts tool_call arguments from JSON string to object', async () => {
-    const req = makeOllamaReq();
-    mockedNDJSON.mockImplementation(async (_url: string, _opts: any, handler: (line: any) => void) => {
-      handler({ done: true });
-    });
+  it('sends earlier tool-call arguments as objects, the way Ollama reads them', async () => {
+    const { req } = ollamaRequest();
 
-    const messages = [{
-      role: 'assistant',
-      content: '',
-      tool_calls: [{ id: 'c1', type: 'function', function: { name: 'fn', arguments: '{"k":"v"}' } }],
-    }] as any;
+    await generateOllamaChatImpl([
+      { role: 'assistant', content: '', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'fn', arguments: '{"k":"v"}' } }] },
+      { role: 'tool', content: 'result', tool_call_id: 'c1' },
+    ] as any, req as any);
 
-    await generateOllamaChatImpl(messages, req);
-    expect(req.callbacks.onComplete).toHaveBeenCalled();
+    const [assistant, tool] = server.requests[0].body.messages;
+    expect(assistant.tool_calls[0].function.arguments).toEqual({ k: 'v' });
+    expect(tool).toEqual({ role: 'tool', content: 'result', tool_call_id: 'c1' });
   });
 
-  it('routes thinking content to onReasoning', async () => {
-    const req = makeOllamaReq();
-    mockedNDJSON.mockImplementation(async (_url: string, _opts: any, handler: (line: any) => void) => {
-      handler({ message: { thinking: 'internal thought', content: '' }, done: false });
-      handler({ done: true });
-    });
+  it('streams Ollama thinking to onReasoning and keeps it beside the answer', async () => {
+    server.reply({ ndjson: [
+      { message: { thinking: 'internal thought', content: '' }, done: false },
+      { message: { content: 'answer' }, done: false },
+      { done: true },
+    ] });
+    const { req, seen } = ollamaRequest();
 
-    await generateOllamaChatImpl([], req);
-    expect(req.callbacks.onReasoning).toHaveBeenCalledWith('internal thought');
+    await generateOllamaChatImpl([], req as any);
+
+    expect(seen.reasoning.join('')).toBe('internal thought');
+    expect(seen.done[0].content).toBe('answer');
+  });
+
+  it('asks a levels-only model for a thinking level from the reasoning budget', async () => {
+    const levels: Array<[number | undefined, string]> = [[undefined, 'medium'], [512, 'low'], [2048, 'medium'], [8192, 'high']];
+    for (const [budget] of levels) {
+      const { req } = ollamaRequest({ enableThinking: true, reasoningBudget: budget });
+      await generateOllamaChatImpl([], { ...req, thinkingLevelsOnly: true } as any);
+    }
+
+    expect(server.requests.map(r => r.body.think)).toEqual(levels.map(([, level]) => level));
   });
 });
