@@ -24,6 +24,9 @@ type EngineModule = typeof import('../../../pro/scribe/writingEngine');
 
 const describePro = proIsPresent() ? describe : describe.skip;
 
+/** Improve, in the text's own tone and layout, as plain text. */
+const IMPROVE = { action: 'improve', tone: null, layout: 'keep', format: 'plain' } as const;
+
 const MODEL_PATH = '/models/small.gguf';
 
 function rewrites(): RewriteModule {
@@ -69,7 +72,7 @@ describePro('Improve rewrites from the phone\'s model', () => {
 
     boundary.llama!.scriptCompletion({ text: 'The draft I wrote, made clearer.' });
     const progress: string[] = [];
-    const version = await service.rewriteVersion('the draft i wrote', 'improve', [], p => progress.push(p));
+    const version = await service.rewriteVersion('the draft i wrote', IMPROVE, [], p => progress.push(p));
 
     expect(version).toBe('The draft I wrote, made clearer.');
     expect(progress.length).toBeGreaterThan(1);
@@ -82,7 +85,7 @@ describePro('Improve rewrites from the phone\'s model', () => {
     const service = rewrites();
 
     boundary.llama!.scriptCompletion({ text: 'A third way to say it.' });
-    await service.rewriteVersion('a draft', 'improve', ['First way.', 'Second way.'], () => undefined);
+    await service.rewriteVersion('a draft', IMPROVE, ['First way.', 'Second way.'], () => undefined);
 
     const sent = JSON.stringify(boundary.llama!.calls.completion.at(-1));
     expect(sent).toContain('Versions already shown');
@@ -99,7 +102,7 @@ describePro('Improve rewrites from the phone\'s model', () => {
       text: '<think>The person wants it clearer. Maybe shorter.</think>\nOne clearer line.',
     });
     const progress: string[] = [];
-    const version = await service.rewriteVersion('a draft', 'improve', [], p => progress.push(p));
+    const version = await service.rewriteVersion('a draft', IMPROVE, [], p => progress.push(p));
 
     expect(version).toBe('One clearer line.');
     for (const partial of progress) expect(partial).not.toMatch(/think|wants it|Maybe shorter/i);
@@ -114,7 +117,7 @@ describePro('Improve rewrites from the phone\'s model', () => {
     const service = rewrites();
 
     boundary.llama!.scriptCompletion({ text: `${LONG_THINKING}One clearer line.`, charsPerToken: 4 });
-    const version = await service.rewriteVersion('a draft', 'improve', [], () => undefined);
+    const version = await service.rewriteVersion('a draft', IMPROVE, [], () => undefined);
 
     expect(version).toBe('One clearer line.');
   });
@@ -133,7 +136,7 @@ describePro('Improve rewrites from the phone\'s model', () => {
 
     const endless = `<think>${'I weigh one more word. '.repeat(800)}</think>\nOne`;
     boundary.llama!.scriptCompletion({ text: endless, charsPerToken: 4 });
-    await expect(service.rewriteVersion('a draft', 'improve', [], () => undefined)).rejects.toBeInstanceOf(
+    await expect(service.rewriteVersion('a draft', IMPROVE, [], () => undefined)).rejects.toBeInstanceOf(
       service.ThinkingOnlyError,
     );
     expect(service.thinkingOnlyReadiness()).toEqual({
@@ -213,7 +216,7 @@ describePro('Improve rewrites from the phone\'s model', () => {
     expect(service.quickModelOffer()).toBeNull();
 
     boundary.llama!.scriptCompletion({ text: '<think>Weighing it.</think>\nOne clearer line.' });
-    await service.rewriteVersion('a draft', 'improve', [], () => undefined);
+    await service.rewriteVersion('a draft', IMPROVE, [], () => undefined);
 
     const { devicePicks } = require('../../../src/services/devicePicks');
     const { hardwareService } = require('../../../src/services/hardware');

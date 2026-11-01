@@ -35,6 +35,9 @@ type NoteFileDescriptor = import('@offgrid/sync').NoteFileDescriptor;
 
 const describePro = proIsPresent() ? describe : describe.skip;
 
+/** Improve, in the text's own tone and layout, as plain text. */
+const IMPROVE = { action: 'improve', tone: null, layout: 'keep', format: 'plain' } as const;
+
 const APPLIED_KEY = 'offgrid-style-guide-sync-applied-v1';
 const MODEL_PATH = '/models/small.gguf';
 const GUIDE = 'brand_voice.md';
@@ -122,7 +125,7 @@ async function installPhone() {
   /** The prompt the phone's model receives for the next Improve rewrite. */
   const nextRewritePrompt = async (): Promise<string> => {
     boundary.llama!.scriptCompletion({ text: 'A clearer line.' });
-    await rewrites.rewriteVersion('a draft line', 'improve', [], () => undefined);
+    await rewrites.rewriteVersion('a draft line', IMPROVE, [], () => undefined);
     const [params] = boundary.llama!.calls.completion.at(-1) as [{ messages: Array<{ content: string }> }];
     return params.messages.map(message => message.content).join('\n');
   };
