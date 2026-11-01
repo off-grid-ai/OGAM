@@ -21,7 +21,7 @@ export interface UnmetPeer {
 export type Decision =
   | { status: 'current' }
   | { status: 'bump'; to: string }
-  | { status: 'held'; to: string; reason: string };
+  | { status: 'held'; to: string; reason: string; next: string };
 export interface EngineResult {
   id: string;
   what: string;
@@ -29,8 +29,12 @@ export interface EngineResult {
   status: 'current' | 'bump' | 'held';
   to?: string;
   reason?: string;
+  next?: string;
+  /** ISO time the hold began (the oldest newer release's publish time). */
+  since?: string | null;
 }
 export const ENGINES: Engine[];
+export function npmPackage(spec: string | undefined, pkg: string): string;
 export function pinnedVersion(spec: string | undefined): string | null;
 export function specFor(oldSpec: string, version: string): string;
 export function unmetPeers(
@@ -52,3 +56,7 @@ export function gradlePin(gradle: string, group: string, artifact: string): stri
 export function setGradlePin(gradle: string, group: string, artifact: string, version: string): string;
 export function summaryMarkdown(results: EngineResult[]): string;
 export function githubDecision(input: { current: string | null; latest: string | null; status: string | null }): Decision;
+export function heldSince(times: Record<string, string> | undefined, current: string | null): string | null;
+export const HELD_ISSUE_DAYS: number;
+export function heldIssueTitle(id: string): string;
+export function heldIssue(result: EngineResult, now: number): { title: string; body: string } | null;

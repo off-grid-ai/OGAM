@@ -13,9 +13,9 @@ const semver = require('semver');
 
 /** Every native engine in the app, and where its version is pinned. */
 const ENGINES = [
-  // Our fork, on llama.cpp's newest release. The app imports it as `llama.rn` through an npm alias
-  // (`"llama.rn": "npm:@offgrid/llama.rn@…"`), so `dep` names the package.json key.
-  { id: '@offgrid/llama.rn', what: 'chat models (llama.cpp)', source: 'npm', pkg: '@offgrid/llama.rn', dep: 'llama.rn' },
+  // The app imports llama.cpp as `llama.rn`. Once package.json aliases it to our fork
+  // (`"llama.rn": "npm:@offgrid/llama.rn@…"`), the check follows the alias (npmPackage).
+  { id: 'llama.rn', what: 'chat models (llama.cpp)', source: 'npm', pkg: 'llama.rn' },
   { id: 'whisper.rn', what: 'speech to text (whisper.cpp)', source: 'npm', pkg: 'whisper.rn' },
   {
     id: 'react-native-executorch',
@@ -51,6 +51,12 @@ function splitAlias(spec) {
   return m ? { head: m[1], version: m[2] } : { head: '', version: String(spec || '').trim() };
 }
 
+/** The package a dependency spec installs: an alias's target ("npm:@x/y@1" → "@x/y"), else `pkg`. */
+function npmPackage(spec, pkg) {
+  const { head } = splitAlias(spec);
+  return head ? head.slice('npm:'.length, -1) : pkg;
+}
+
 /** The version a dependency spec pins ("^0.7.4" or "npm:@x/y@0.7.4" → "0.7.4"), or null for a range or a path. */
 function pinnedVersion(spec) {
   const m = PREFIX.exec(splitAlias(spec).version);
@@ -79,29 +85,78 @@ function unmetPeers(peerDependencies, peerDependenciesMeta, installed) {
   });
 }
 
+/** What unblocks a held engine; the daily job then bumps it by itself. */
+const THEN = 'The next daily run then moves it.';
+
 /**
  * Whether the newest release replaces the pinned one:
  *   current — the pin is already the newest release (or newer)
  *   bump    — the newest release installs as is
  *   held    — the newest release needs peers the app does not meet, or the pinned version
  *             carries a local fix (a patch-package patch) that a new version would drop;
- *             `reason` says which
+ *             `reason` says which, `next` what unblocks it
  */
 function decide({ current, latest, peerDependencies, peerDependenciesMeta, installed, patch }) {
   if (!latest || !semver.valid(latest) || (current && !semver.gt(latest, current))) {
     return { status: 'current' };
   }
   if (patch) {
-    return { status: 'held', to: latest, reason: `carries a local fix (${patch}); port the fix or drop the patch first` };
+    return {
+      status: 'held',
+      to: latest,
+      reason: `carries a local fix (${patch}); port the fix or drop the patch first`,
+      next: `Port ${patch} to ${latest}, or drop it if ${latest} has the fix. ${THEN}`,
+    };
   }
   const unmet = unmetPeers(peerDependencies, peerDependenciesMeta, installed || {});
   if (unmet.length > 0) {
     const reason = unmet
       .map(p => `${p.name} ${p.range} (the app has ${p.have ?? 'none'})`)
       .join(', ');
-    return { status: 'held', to: latest, reason: `needs ${reason}` };
+    const moves = unmet.map(p => `${p.name} to ${p.range}`).join(', ');
+    return { status: 'held', to: latest, reason: `needs ${reason}`, next: `Move ${moves} in its own PR. ${THEN}` };
   }
   return { status: 'bump', to: latest };
+}
+
+/**
+ * When an engine's hold began: the publish time of the oldest stable release newer than the pin
+ * (npm's `time` map), so a hold that outlives several releases keeps its first date. Null when
+ * none is newer.
+ */
+function heldSince(times, current) {
+  const newer = Object.entries(times || {})
+    .filter(([v]) => semver.valid(v) && !semver.prerelease(v) && (!current || semver.gt(v, current)))
+    .map(([, at]) => at)
+    .sort();
+  return newer[0] ?? null;
+}
+
+/** Days a hold may last before it gets an issue of its own. */
+const HELD_ISSUE_DAYS = 3;
+
+/** The issue title for a held engine: one issue per engine, found again by this title. */
+function heldIssueTitle(id) {
+  return `Engine held: ${id}`;
+}
+
+/** The issue for a held engine whose hold is older than HELD_ISSUE_DAYS, or null. */
+function heldIssue(result, now) {
+  if (result.status !== 'held' || !result.since) return null;
+  const days = Math.floor((now - Date.parse(result.since)) / 86_400_000);
+  if (Number.isNaN(days) || days <= HELD_ISSUE_DAYS) return null;
+  return {
+    title: heldIssueTitle(result.id),
+    body: [
+      `**${result.id}** (${result.what}) is on ${result.from}. ${result.to} has been out since ${result.since.slice(0, 10)} (${days} days) and cannot install as is.`,
+      '',
+      `**Blocker:** ${result.reason}`,
+      '',
+      `**Next step:** ${result.next}`,
+      '',
+      'The daily Engine updates workflow keeps this issue current and closes it once the engine moves.',
+    ].join('\n'),
+  };
 }
 
 /** The patch-package file name for a package at a version ("@scope/name" → "@scope+name+1.2.3.patch"). */
@@ -151,7 +206,10 @@ function summaryMarkdown(results) {
   }
   if (held.length > 0) {
     lines.push('## Held', '', 'A newer release exists but cannot install as is. It needs its own upgrade.', '');
-    for (const r of held) lines.push(`- **${r.id}** ${r.from} → ${r.to}: ${r.reason}`);
+    for (const r of held) {
+      const since = r.since ? ` Held since ${r.since.slice(0, 10)}.` : '';
+      lines.push(`- **${r.id}** ${r.from} → ${r.to}: ${r.reason}.${since} Next: ${r.next}`);
+    }
     lines.push('');
   }
   if (lines.length === 0) lines.push('Every engine is on its newest release.');
@@ -164,6 +222,7 @@ function escape(text) {
 
 module.exports = {
   ENGINES,
+  npmPackage,
   pinnedVersion,
   specFor,
   unmetPeers,
@@ -174,4 +233,8 @@ module.exports = {
   setGradlePin,
   summaryMarkdown,
   githubDecision,
+  heldSince,
+  heldIssue,
+  heldIssueTitle,
+  HELD_ISSUE_DAYS,
 };

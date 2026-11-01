@@ -2,13 +2,15 @@
 'use strict';
 // Moves the app's native engines (scripts/lib/engines.js) to their newest upstream releases.
 // A release that needs peer dependencies the app does not meet, or that would drop a local
-// patch-package fix, is held and reported, never half-installed.
+// patch-package fix, is held and reported (with its blocker and next step), never half-installed.
+// An engine that cannot be checked fails the run before anything changes.
 //
-//   node scripts/update-engines.js [--check] [--pods] [--summary <file.md>]
+//   node scripts/update-engines.js [--check] [--pods] [--summary <file.md>] [--json <file.json>]
 //
 //   --check     report only; change nothing (scripts/uat.sh runs this before a beta)
 //   --pods      after a bump, run `pod install` so ios/Podfile.lock matches
 //   --summary   write a Markdown summary (the daily PR's body)
+//   --json      write the report to a file, only once every step has succeeded
 //
 // Prints one line of JSON: { "changed": [...], "held": [...], "current": [...] }.
 
@@ -23,6 +25,14 @@ const CHECK = args.includes('--check');
 const PODS = args.includes('--pods');
 const summaryAt = args.indexOf('--summary');
 const SUMMARY = summaryAt >= 0 ? args[summaryAt + 1] : null;
+const jsonAt = args.indexOf('--json');
+const JSON_OUT = jsonAt >= 0 ? args[jsonAt + 1] : null;
+
+/** Writes a whole file or none: a reader never sees half of it. */
+function writeWhole(file, text) {
+  fs.writeFileSync(`${file}.tmp`, text);
+  fs.renameSync(`${file}.tmp`, file);
+}
 
 function npmView(spec, fields) {
   const out = execFileSync('npm', ['view', spec, ...fields, '--json'], { cwd: ROOT, encoding: 'utf8' });
@@ -41,11 +51,12 @@ function installedVersion(name, pkg) {
 
 function npmEngine(engine, pkg) {
   const spec = pkg.dependencies[engine.dep ?? engine.pkg];
+  const name = engines.npmPackage(spec, engine.pkg);
   const current = engines.pinnedVersion(spec);
-  const latest = npmView(engine.pkg, ['dist-tags.latest']);
-  const release = latest ? npmView(`${engine.pkg}@${latest}`, ['peerDependencies', 'peerDependenciesMeta']) : {};
+  const latest = npmView(name, ['dist-tags.latest']);
+  const release = latest ? npmView(`${name}@${latest}`, ['peerDependencies', 'peerDependenciesMeta']) : {};
   const peers = release?.peerDependencies ?? {};
-  const installed = Object.fromEntries(Object.keys(peers).map(name => [name, installedVersion(name, pkg)]));
+  const installed = Object.fromEntries(Object.keys(peers).map(peer => [peer, installedVersion(peer, pkg)]));
   const patch = current ? path.join('patches', engines.patchFileName(engine.dep ?? engine.pkg, current)) : null;
   const decision = engines.decide({
     current,
@@ -55,6 +66,7 @@ function npmEngine(engine, pkg) {
     peerDependenciesMeta: release?.peerDependenciesMeta,
     installed,
   });
+  if (decision.status === 'held') decision.since = engines.heldSince(npmView(name, ['time']), current);
   return { decision, from: current ?? spec };
 }
 
@@ -111,16 +123,18 @@ async function main() {
   const pkgFile = path.join(ROOT, 'package.json');
   const pkg = JSON.parse(fs.readFileSync(pkgFile, 'utf8'));
   const results = [];
+  const failed = [];
   for (const engine of engines.ENGINES) {
     try {
       const { decision, from } =
         engine.source === 'npm' ? npmEngine(engine, pkg) : engine.source === 'github' ? await githubEngine(engine) : await mavenEngine(engine);
       results.push({ id: engine.id, what: engine.what, from, ...decision });
     } catch (error) {
-      // A registry that does not answer leaves that engine where it is, and says so.
-      results.push({ id: engine.id, what: engine.what, from: '?', status: 'held', to: '?', reason: `could not check: ${error.message}` });
+      failed.push(`${engine.id}: ${error.message}`);
     }
   }
+  // An engine nobody checked is neither current nor held: fail before anything changes.
+  if (failed.length > 0) throw new Error(`Could not check every engine:\n  ${failed.join('\n  ')}`);
 
   // npm and CocoaPods log to stderr here: stdout carries only the one JSON line the workflow reads.
   const logToStderr = ['ignore', 2, 2];
@@ -145,9 +159,11 @@ async function main() {
     }
   }
 
-  if (SUMMARY) fs.writeFileSync(SUMMARY, engines.summaryMarkdown(results));
+  if (SUMMARY) writeWhole(SUMMARY, engines.summaryMarkdown(results));
   const pick = status => results.filter(r => r.status === status);
-  console.log(JSON.stringify({ changed: pick('bump'), held: pick('held'), current: pick('current').map(r => r.id) }));
+  const report = JSON.stringify({ changed: pick('bump'), held: pick('held'), current: pick('current').map(r => r.id) });
+  if (JSON_OUT) writeWhole(JSON_OUT, `${report}\n`);
+  console.log(report);
 }
 
 main().catch(error => {

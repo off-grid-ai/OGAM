@@ -1,5 +1,5 @@
 /**
- * The rule behind the weekly engine PR and the beta's engine warning: a newer engine release
+ * The rule behind the daily engine PR and the beta's engine warning: a newer engine release
  * replaces the pinned one only when it installs as is, and is held, with the reason, when it needs
  * peer dependencies the app does not meet (ExecuTorch 0.10 needing react-native-worklets 0.10 is
  * the case that made this rule).
@@ -9,6 +9,9 @@ import {
   decide,
   githubDecision,
   gradlePin,
+  heldIssue,
+  npmPackage,
+  heldSince,
   mavenRelease,
   patchFileName,
   pinnedVersion,
@@ -20,7 +23,7 @@ import {
 
 describe('the engines the app ships', () => {
   it('lists every native inference engine once', () => {
-    expect(ENGINES.map(e => e.id)).toEqual(['@offgrid/llama.rn', 'whisper.rn', 'react-native-executorch', 'litertlm-android', 'stable-diffusion.cpp']);
+    expect(ENGINES.map(e => e.id)).toEqual(['llama.rn', 'whisper.rn', 'react-native-executorch', 'litertlm-android', 'stable-diffusion.cpp']);
   });
 });
 
@@ -57,6 +60,8 @@ describe('pinnedVersion and specFor', () => {
     expect(specFor('^0.7.4', '0.8.0')).toBe('^0.8.0');
     expect(specFor('~0.7.4', '0.7.5')).toBe('~0.7.5');
     expect(specFor('0.13.0-rc.7', '0.13.0')).toBe('0.13.0');
+    // A dependency with no spec yet takes the version exactly.
+    expect(specFor('', '0.13.0')).toBe('0.13.0');
   });
 
   it('keeps an npm alias, so the app still imports llama.rn', () => {
@@ -64,9 +69,11 @@ describe('pinnedVersion and specFor', () => {
     expect(specFor('npm:@offgrid/llama.rn@^0.14.0', '0.15.0')).toBe('npm:@offgrid/llama.rn@^0.15.0');
   });
 
-  it('tracks the fork under the package.json key the app imports', () => {
-    const llama = ENGINES.find(e => e.id === '@offgrid/llama.rn');
-    expect(llama).toMatchObject({ pkg: '@offgrid/llama.rn', dep: 'llama.rn' });
+  it('checks the package the app installs: upstream llama.rn today, the fork once aliased', () => {
+    const llama = ENGINES.find(e => e.id === 'llama.rn');
+    expect(npmPackage('0.13.0-rc.9', llama!.pkg!)).toBe('llama.rn');
+    expect(npmPackage('npm:@offgrid/llama.rn@0.14.0', llama!.pkg!)).toBe('@offgrid/llama.rn');
+    expect(npmPackage('npm:llama.rn@0.14.0', 'x')).toBe('llama.rn');
   });
 });
 
@@ -107,6 +114,7 @@ describe('decide', () => {
       to: '0.10.6',
       reason:
         'needs react-native-worklets >=0.10.0 <0.14.0 (the app has 0.7.3), react-native-blob-util >=0.24.11 (the app has none)',
+      next: 'Move react-native-worklets to >=0.10.0 <0.14.0, react-native-blob-util to >=0.24.11 in its own PR. The next daily run then moves it.',
     });
   });
 });
@@ -122,6 +130,7 @@ describe('a pinned engine with a local fix', () => {
       status: 'held',
       to: '0.7.4',
       reason: 'carries a local fix (patches/whisper.rn+0.5.5.patch); port the fix or drop the patch first',
+      next: 'Port patches/whisper.rn+0.5.5.patch to 0.7.4, or drop it if 0.7.4 has the fix. The next daily run then moves it.',
     });
   });
 
@@ -168,21 +177,79 @@ describe('Maven and Gradle', () => {
   });
 });
 
+const executorchHeld = {
+  id: 'react-native-executorch',
+  what: 'Kokoro voice (ExecuTorch)',
+  from: '0.9.3',
+  status: 'held' as const,
+  to: '0.10.6',
+  reason: 'needs react-native-worklets >=0.10.0 (the app has 0.7.3)',
+  next: 'Move react-native-worklets to >=0.10.0 in its own PR. The next daily run then moves it.',
+  since: '2026-10-20T08:00:00.000Z',
+};
+
 describe('summaryMarkdown', () => {
-  it('lists what moved and what was held, with the reason', () => {
+  it('lists what moved, and each held engine with its blocker, since when, and the next step', () => {
     const md = summaryMarkdown([
       { id: 'whisper.rn', what: 'speech to text (whisper.cpp)', from: '0.5.5', status: 'bump', to: '0.7.4' },
-      { id: 'react-native-executorch', what: 'Kokoro voice (ExecuTorch)', from: '0.9.3', status: 'held', to: '0.10.6', reason: 'needs react-native-worklets >=0.10.0' },
+      executorchHeld,
       { id: 'llama.rn', what: 'chat models (llama.cpp)', from: '0.13.0-rc.7', status: 'current' },
     ]);
     expect(md).toContain('| whisper.rn | speech to text (whisper.cpp) | 0.5.5 | **0.7.4** |');
-    expect(md).toContain('- **react-native-executorch** 0.9.3 → 0.10.6: needs react-native-worklets >=0.10.0');
+    expect(md).toContain(
+      '- **react-native-executorch** 0.9.3 → 0.10.6: needs react-native-worklets >=0.10.0 (the app has 0.7.3). Held since 2026-10-20. Next: Move react-native-worklets to >=0.10.0 in its own PR.',
+    );
     expect(md).not.toContain('llama.rn');
+  });
+
+  it('still names a held engine whose start is unknown', () => {
+    expect(summaryMarkdown([{ ...executorchHeld, since: null }])).toContain('(the app has 0.7.3). Next: Move');
   });
 
   it('says so when every engine is current', () => {
     expect(summaryMarkdown([{ id: 'llama.rn', what: 'chat', from: '1.0.0', status: 'current' }])).toBe(
       'Every engine is on its newest release.',
     );
+  });
+});
+
+describe('heldSince', () => {
+  const times = {
+    created: '2024-01-01T00:00:00.000Z',
+    '0.9.3': '2026-09-01T00:00:00.000Z',
+    '0.10.0-rc.1': '2026-09-20T00:00:00.000Z',
+    '0.10.0': '2026-10-01T00:00:00.000Z',
+    '0.10.6': '2026-10-25T00:00:00.000Z',
+  };
+
+  it('dates a hold from the oldest stable release newer than the pin, so a new release does not reset it', () => {
+    expect(heldSince(times, '0.9.3')).toBe('2026-10-01T00:00:00.000Z');
+  });
+
+  it('has no date when nothing newer is published, or npm gave no times', () => {
+    expect(heldSince(times, '0.10.6')).toBeNull();
+    expect(heldSince(undefined, '0.9.3')).toBeNull();
+  });
+});
+
+describe('heldIssue', () => {
+  const day = 86_400_000;
+  const since = Date.parse(executorchHeld.since);
+
+  it('opens no issue for a hold of 3 days or less', () => {
+    expect(heldIssue(executorchHeld, since + 3 * day)).toBeNull();
+  });
+
+  it('opens one issue per engine after 3 days, naming the blocker and the next step', () => {
+    const issue = heldIssue(executorchHeld, since + 4 * day);
+    expect(issue?.title).toBe('Engine held: react-native-executorch');
+    expect(issue?.body).toContain('0.10.6 has been out since 2026-10-20 (4 days)');
+    expect(issue?.body).toContain('**Blocker:** needs react-native-worklets >=0.10.0 (the app has 0.7.3)');
+    expect(issue?.body).toContain('**Next step:** Move react-native-worklets to >=0.10.0 in its own PR.');
+  });
+
+  it('opens none for an engine that is not held, or whose hold has no date', () => {
+    expect(heldIssue({ id: 'whisper.rn', what: 'stt', from: '0.5.5', status: 'bump', to: '0.7.4' }, Date.now())).toBeNull();
+    expect(heldIssue({ ...executorchHeld, since: null }, Date.now())).toBeNull();
   });
 });
