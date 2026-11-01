@@ -14,47 +14,31 @@
  * request or hallucinate. The single owning decision point is
  * OpenAICompatibleProvider.buildRequestBody (invoked from generate()).
  *
- * These tests drive the REAL OpenAICompatibleProvider.generate() and inspect the
- * REAL request body handed to the (boundary-mocked) HTTP client. The only mock is
- * the network transport (createStreamingRequest) — the request-building logic under
+ * These tests drive the REAL OpenAICompatibleProvider.generate() over the REAL HTTP client and
+ * inspect the request body that reached the network. The only fake is the server at the
+ * XMLHttpRequest boundary (remoteHarness.recordRemoteStream) — the request-building logic under
  * assertion runs for real, so deleting/altering the gate would fail these tests.
  */
 
 import { OpenAICompatibleProvider } from '../../src/services/providers/openAICompatibleProvider';
-import * as httpClient from '../../src/services/httpClient';
-
-// Boundary mock: the network transport only. The provider's request-building
-// logic (buildRequestBody / capability gating) runs for real.
-jest.mock('../../src/services/httpClient', () => ({
-  createStreamingRequest: jest.fn(),
-  createNDJSONStreamingRequest: jest.fn(),
-  imageToBase64DataUrl: jest.fn(),
-  fetchWithTimeout: jest.fn(),
-  parseOpenAIMessage: jest.fn((event: { data: string }) => {
-    if (typeof event.data !== 'string') return null;
-    const data = event.data.trim();
-    if (data === '[DONE]') return { object: 'done' };
-    try {
-      return JSON.parse(data);
-    } catch {
-      return null;
-    }
-  }),
-}));
+import { recordRemoteStream } from '../harness/remoteHarness';
 
 const TOOLS = [
   { type: 'function' as const, function: { name: 'web_search', description: 'Search', parameters: {} } },
 ];
 
 /**
- * Runs generate() through the real provider and returns the request body that was
- * actually sent to the OpenAI /v1/chat/completions transport. Uses a NON-Ollama
- * endpoint (not port 11434) so the code takes the buildRequestBody path.
+ * Runs generate() through the real provider and returns the request body the server received on
+ * /v1/chat/completions. Uses a NON-Ollama endpoint (not port 11434) so the code takes the
+ * buildRequestBody path.
  */
 async function captureRequestBody(opts: {
   supportsToolCalling?: boolean;
   tools?: typeof TOOLS;
 }): Promise<Record<string, unknown>> {
+  const server = recordRemoteStream(
+    'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+  );
   const provider = new OpenAICompatibleProvider('srv', {
     endpoint: 'http://192.168.1.50:1234', // NOT :11434 → OpenAI path, carries `tools`
     modelId: 'some-model',
@@ -65,24 +49,24 @@ async function captureRequestBody(opts: {
     provider.updateCapabilities({ supportsToolCalling: opts.supportsToolCalling });
   }
 
-  const mock = httpClient.createStreamingRequest as jest.Mock;
-  mock.mockImplementation((_url, _req, onEvent) => {
-    onEvent({ data: '{"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}' });
-    return Promise.resolve();
+  let reply = '';
+  await new Promise<void>((resolve, reject) => {
+    provider
+      .generate(
+        [{ id: '1', role: 'user', content: 'Hi', timestamp: 0 }],
+        { tools: opts.tools },
+        { onToken: token => { reply += token; }, onComplete: () => resolve(), onError: reject },
+      )
+      .catch(reject);
   });
+  expect(reply).toBe('ok');
 
-  await provider.generate(
-    [{ id: '1', role: 'user', content: 'Hi', timestamp: 0 }],
-    { tools: opts.tools },
-    { onToken: jest.fn(), onComplete: jest.fn(), onError: jest.fn() },
-  );
-
-  return mock.mock.calls[0][1].body as Record<string, unknown>;
+  const chat = server.requests.filter(request => request.url.endsWith('/v1/chat/completions'));
+  expect(chat).toHaveLength(1);
+  return chat[0].body!;
 }
 
 describe('Batch 8 — remote server tool-calling capability gate (request builder)', () => {
-  beforeEach(() => jest.clearAllMocks());
-
   // COVERED-REAL baseline (mirrors existing provider test, kept as the "before" side
   // of the contract): tools present + capable server → tools go on the wire.
   it('includes tools + tool_choice when the server supports tool calling and tools are provided', async () => {

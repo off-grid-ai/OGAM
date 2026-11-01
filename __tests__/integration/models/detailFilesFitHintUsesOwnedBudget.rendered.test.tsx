@@ -9,15 +9,17 @@
  * This mounts the REAL ModelsScreen, arrives at a model's detail via a real search+tap, and asserts the
  * rendered file list against `fileExceedsBudget`'s verdict for each file: the under-budget quant renders,
  * the over-budget quant is absent. Boundary fakes only: native download + fs + RAM (installNativeBoundary)
- * and the HuggingFace network transport. The budget math, screen, hooks, ModelCard all run REAL.
+ * and the Hugging Face API at the network edge (hfModelApiServer). huggingFaceService, the budget math, screen, hooks, ModelCard all run REAL.
  *
  * Falsification (DRY): the expected present/absent set is computed from `fileExceedsBudget` itself, so if
  * a caller's inline copy of the formula drifts from the owner (different fraction, wrong comparison, a
  * unit slip), the rendered list stops matching the owner's verdict and this test goes red.
  */
 import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
+import { serveHfModelApi } from '../../harness/hfModelApiServer';
 
 const MODEL_ID = 'org/fit-hint';
+const BOUNDARY_ID = 'org/boundary-model';
 
 describe('detail Available Files fit hint matches the owned fileExceedsBudget verdict (rendered)', () => {
   it('offers exactly the files fileExceedsBudget says fit — hides the over-budget quant', async () => {
@@ -25,19 +27,10 @@ describe('detail Available Files fit hint matches the owned fileExceedsBudget ve
     installNativeBoundary({ download: true, fs: true, ram: { platform: 'android', totalBytes: 6 * GB, availBytes: 4 * GB } });
 
     // Two quant files straddling the budget: a 2GB (fits) and a 5GB (exceeds).
-    const fitFile = { name: 'model-Q4_K_M.gguf', size: 2 * GB, quantization: 'Q4_K_M', downloadUrl: `https://hf.co/${MODEL_ID}/resolve/main/model-Q4_K_M.gguf` };
-    const bigFile = { name: 'model-Q8_0.gguf', size: 5 * GB, quantization: 'Q8_0', downloadUrl: `https://hf.co/${MODEL_ID}/resolve/main/model-Q8_0.gguf` };
-    const modelInfo = { id: MODEL_ID, name: 'Fit Hint Model', author: 'org', description: 'test', downloads: 50, likes: 1, tags: [], lastModified: '', files: [fitFile, bigFile] };
-    jest.doMock('../../../src/services/huggingface', () => ({
-      huggingFaceService: {
-        searchModels: jest.fn(async () => [modelInfo]),
-        getModelFiles: jest.fn(async () => [fitFile, bigFile]),
-        getModelDetails: jest.fn(async () => modelInfo),
-        getDownloadUrl: (m: string, f: string, r = 'main') => `https://hf.co/${m}/resolve/${r}/${f}`,
-        formatModelSize: jest.fn(() => '2.0 GB'),
-        formatFileSize: jest.fn((b: number) => `${(b / GB).toFixed(1)} GB`),
-      },
-    }));
+    const fitFile = { name: 'model-Q4_K_M.gguf', size: 2 * GB };
+    const bigFile = { name: 'model-Q8_0.gguf', size: 5 * GB };
+    // The Hugging Face API is the network: it serves the repo's two files with their sizes.
+    serveHfModelApi({ repos: { [MODEL_ID]: [fitFile, bigFile].map(f => ({ path: f.name, size: f.size })) } });
 
      
     const React = require('react');
@@ -62,8 +55,8 @@ describe('detail Available Files fit hint matches the owned fileExceedsBudget ve
       fireEvent(getByTestId('search-input'), 'submitEditing');
       await new Promise((r) => setTimeout(r, 600));
     });
-    await waitFor(() => expect(getByText('Fit Hint Model')).toBeTruthy(), { timeout: 6000 });
-    await act(async () => { fireEvent.press(getByText('Fit Hint Model')); });
+    await waitFor(() => expect(getByText('fit-hint')).toBeTruthy(), { timeout: 6000 });
+    await act(async () => { fireEvent.press(getByText('fit-hint')); });
     await waitFor(() => expect(getByTestId('model-detail-screen')).toBeTruthy(), { timeout: 4000 });
 
     // Wait for the files to load (the fitting file card renders).
@@ -85,19 +78,9 @@ describe('detail Available Files fit hint matches the owned fileExceedsBudget ve
      
     // The shared fit rule's ceiling on a 4 GB phone: 4 × 0.5 × 1e9 = exactly 2,000,000,000 bytes.
     const budgetBytes = 4 * PHONE_FIT_BUDGET.ceil * 1e9;
-    const atBudget = { name: 'model-atbudget.gguf', size: budgetBytes, quantization: 'Q5', downloadUrl: `https://hf.co/${MODEL_ID}/resolve/main/model-atbudget.gguf` };
-    const underBudget = { name: 'model-under.gguf', size: budgetBytes - 1, quantization: 'Q4', downloadUrl: `https://hf.co/${MODEL_ID}/resolve/main/model-under.gguf` };
-    const modelInfo = { id: MODEL_ID, name: 'Boundary Model', author: 'org', description: 'test', downloads: 50, likes: 1, tags: [], lastModified: '', files: [underBudget, atBudget] };
-    jest.doMock('../../../src/services/huggingface', () => ({
-      huggingFaceService: {
-        searchModels: jest.fn(async () => [modelInfo]),
-        getModelFiles: jest.fn(async () => [underBudget, atBudget]),
-        getModelDetails: jest.fn(async () => modelInfo),
-        getDownloadUrl: (m: string, f: string, r = 'main') => `https://hf.co/${m}/resolve/${r}/${f}`,
-        formatModelSize: jest.fn(() => '2.0 GB'),
-        formatFileSize: jest.fn((b: number) => `${(b / GB).toFixed(2)} GB`),
-      },
-    }));
+    const atBudget = { name: 'model-atbudget.gguf', size: budgetBytes };
+    const underBudget = { name: 'model-under.gguf', size: budgetBytes - 1 };
+    serveHfModelApi({ repos: { [BOUNDARY_ID]: [underBudget, atBudget].map(f => ({ path: f.name, size: f.size })) } });
 
      
     const React = require('react');
@@ -116,8 +99,8 @@ describe('detail Available Files fit hint matches the owned fileExceedsBudget ve
     const { getByTestId, getByText, queryByText } = render(React.createElement(ModelsScreen, {}));
     await act(async () => { fireEvent.changeText(getByTestId('search-input'), 'boundary'); });
     await act(async () => { fireEvent(getByTestId('search-input'), 'submitEditing'); await new Promise((r) => setTimeout(r, 600)); });
-    await waitFor(() => expect(getByText('Boundary Model')).toBeTruthy(), { timeout: 6000 });
-    await act(async () => { fireEvent.press(getByText('Boundary Model')); });
+    await waitFor(() => expect(getByText('boundary-model')).toBeTruthy(), { timeout: 6000 });
+    await act(async () => { fireEvent.press(getByText('boundary-model')); });
     await waitFor(() => expect(getByTestId('model-detail-screen')).toBeTruthy(), { timeout: 4000 });
     await waitFor(() => expect(getByText('model-under')).toBeTruthy(), { timeout: 4000 });
 
