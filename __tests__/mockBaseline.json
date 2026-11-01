@@ -77,7 +77,6 @@
   "__tests__/pro/audio/ttsPlayback.extra.test.ts": 3,
   "__tests__/pro/audio/ttsStore.extra.test.ts": 3,
   "__tests__/pro/audio/ui/QuickSettingsAudioRow.test.tsx": 1,
-  "__tests__/pro/mcp/mcpService.test.ts": 2,
   "__tests__/pro/runtimeDeactivation.integration.test.ts": 20,
   "__tests__/pro/ui/McpGuideScreen.test.tsx": 1,
   "__tests__/pro/ui/McpSettingsSection.test.tsx": 1,
