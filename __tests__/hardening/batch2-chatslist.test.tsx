@@ -15,6 +15,8 @@
  */
 import { installNativeBoundary, requireRTL, GB } from '../harness/nativeBoundary';
 import { withNavigator } from '../harness/realNavigation';
+// Pure date formatting: the same module the list renders with, for the expected text.
+import { formatShortDate, formatWeekday } from '../../src/utils/localTime';
 
 jest.unmock('@react-navigation/native');
 
@@ -82,7 +84,7 @@ describe('batch2 ChatsListScreen — sort, timestamp format, delete, empty', () 
     const threeDaysAgo = chatDaysAgo(app, 'Recent Chat', now, 3);
 
     const { getByText } = app.render();
-    const expectedWeekday = app.localTime.formatWeekday(threeDaysAgo);
+    const expectedWeekday = formatWeekday(threeDaysAgo);
     expect(getByText(expectedWeekday)).toBeTruthy();
     // guard: a weekday short name is not a HH:MM clock
     expect(expectedWeekday).not.toMatch(/^\d{1,2}:\d{2}/);
@@ -96,7 +98,7 @@ describe('batch2 ChatsListScreen — sort, timestamp format, delete, empty', () 
     const twoWeeksAgo = chatDaysAgo(app, 'Old Chat', now, 14);
 
     const { getByText } = app.render();
-    expect(getByText(app.localTime.formatShortDate(twoWeeksAgo))).toBeTruthy();
+    expect(getByText(formatShortDate(twoWeeksAgo))).toBeTruthy();
   });
 
   // Cases 25/30: most-recently-active conversation is at position 1 (row index 0).
