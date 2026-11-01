@@ -1275,7 +1275,7 @@ describe('ChatInput', () => {
       await waitFor(() => expect(view.getByTestId('chat-input').props.value).toBe('No chat yet'));
     });
 
-    it.failing('a dictation that finishes after the person switched chats does not land in the new chat', async () => {
+    it('a dictation that finishes after the person switched chats does not land in the new chat', async () => {
       await serveRemoteTranscription('Meant for chat one');
       const view = render(<ChatInput {...defaultProps} conversationId="conv-1" />);
       await waitFor(() => expect(view.getByTestId('voice-record-button')).toBeTruthy());
