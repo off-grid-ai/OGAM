@@ -142,8 +142,7 @@ describe('initTurnSpeech (image generation → speak)', () => {
     } as never);
   }
 
-  // FINDING: 'done' is announced before the result message is in the chat, so the turn is not spoken.
-  it.failing('speaks the result once when image generation transitions to done', async () => {
+  it('speaks the result once when image generation transitions to done', async () => {
     const stop = turnSpeech.initTurnSpeech();
     await setupImageModel();
     const { imageGenerationService } = require('../../../src/services/imageGenerationService');
