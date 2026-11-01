@@ -119,7 +119,6 @@
   "__tests__/unit/screens/ModelsScreen/importHelpers.test.ts": 2,
   "__tests__/unit/screens/ModelsScreen/utils.test.ts": 1,
   "__tests__/unit/services/classifierProvisioning.test.ts": 4,
-  "__tests__/unit/services/contextCompaction.test.ts": 2,
   "__tests__/unit/services/documentService.test.ts": 1,
   "__tests__/unit/services/hardware.test.ts": 4,
   "__tests__/unit/services/imageDownloadProvider.test.ts": 4,
