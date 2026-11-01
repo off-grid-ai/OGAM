@@ -1,130 +1,107 @@
 /**
  * startModelDownload — the single download action shared by the Models screen and
- * the onboarding ModelDownloadScreen. Verifies the duplicate guard, the
- * downloadModelBackground→watchDownload wiring, register+clear on completion, and the
- * error path (failed status + onError).
+ * the onboarding ModelDownloadScreen. Verifies the duplicate guard, the queued row published up front,
+ * register+clear on completion, and the error paths (failed status + onError).
+ *
+ * The phone is the boundary: the native background downloader (it can refuse a start, report a failure,
+ * or finish a transfer), the disk and storage (harness/modelManagerDevice). startModelDownload, modelManager,
+ * the background download service and the stores run for real.
  */
-const mockDownloadModelBackground = jest.fn();
-const mockWatchDownload = jest.fn();
-jest.mock('../../../src/services/modelManager', () => ({
-  modelManager: {
-    downloadModelBackground: (...a: unknown[]) => mockDownloadModelBackground(...a),
-    watchDownload: (...a: unknown[]) => mockWatchDownload(...a),
-  },
-}));
-
-const mockStore: { downloads: Record<string, { status: string }>; add: jest.Mock; remove: jest.Mock; setStatus: jest.Mock } = {
-  downloads: {}, add: jest.fn(), remove: jest.fn(), setStatus: jest.fn(),
-};
-jest.mock('../../../src/stores/downloadStore', () => ({
-  useDownloadStore: { getState: () => mockStore },
-  isActiveStatus: (s: string) => ['pending', 'running', 'retrying', 'waiting_for_network', 'processing'].includes(s),
-}));
-
-const mockAddDownloadedModel = jest.fn();
-jest.mock('../../../src/stores', () => ({
-  useAppStore: { getState: () => ({ addDownloadedModel: mockAddDownloadedModel }) },
-}));
-jest.mock('../../../src/utils/modelKey', () => ({ makeModelKey: (id: string, f: string) => `${id}/${f}` }));
-
-import { startModelDownload } from '../../../src/services/startModelDownload';
+import { installModelManagerDevice, type ModelManagerDevice } from '../../harness/modelManagerDevice';
+import { createModelFile, createModelFileWithMmProj } from '../../utils/factories';
 
 const MODEL_ID = 'author/model';
-const FILE = { name: 'model.gguf' } as any;
 const KEY = 'author/model/model.gguf';
+const SIZE = 1_000_000;
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  mockStore.downloads = {};
+let device: ModelManagerDevice;
+let startModelDownload: typeof import('../../../src/services/startModelDownload')['startModelDownload'];
+let row: () => Record<string, any> | undefined;
+
+beforeEach(async () => {
+  device = await installModelManagerDevice();
+  ({ startModelDownload } = require('../../../src/services/startModelDownload'));
+  const { useDownloadStore } = require('../../../src/stores/downloadStore');
+  row = () => useDownloadStore.getState().downloads[KEY];
 });
 
+const file = () => createModelFile({ name: 'model.gguf', size: SIZE });
+const registered = () => require('../../../src/stores').useAppStore.getState().downloadedModels as Array<{ id: string }>;
+
 describe('startModelDownload', () => {
-  it('starts the download and wires watchDownload; completion registers + clears + onRegistered', async () => {
-    mockDownloadModelBackground.mockResolvedValue({ downloadId: 'dl-1' });
-    let onComplete: ((m: any) => void) | undefined;
-    mockWatchDownload.mockImplementation((_id, c) => { onComplete = c; });
+  it('starts the download; completion registers the model, clears the row and calls onRegistered', async () => {
     const onRegistered = jest.fn();
+    await startModelDownload(MODEL_ID, file(), { onRegistered });
+    await device.settle();
+    const [native] = device.nativeRows();
+    expect(native).toEqual(expect.objectContaining({ fileName: 'model.gguf', modelId: MODEL_ID }));
 
-    await startModelDownload(MODEL_ID, FILE, { onRegistered });
-
-    expect(mockDownloadModelBackground).toHaveBeenCalledWith(MODEL_ID, FILE);
-    expect(mockWatchDownload).toHaveBeenCalled();
-
-    const dm = { id: KEY };
-    onComplete!(dm);
-    expect(mockAddDownloadedModel).toHaveBeenCalledWith(dm);
-    expect(mockStore.remove).toHaveBeenCalledWith(KEY);
-    expect(onRegistered).toHaveBeenCalledWith(dm);
+    await device.finishDownload(native.downloadId, SIZE);
+    expect(registered().map(m => m.id)).toContain(KEY);
+    expect(row()).toBeUndefined();
+    expect(onRegistered).toHaveBeenCalledWith(expect.objectContaining({ id: KEY }));
   });
 
   it('is a no-op when a download is already active (duplicate guard)', async () => {
-    mockStore.downloads = { [KEY]: { status: 'running' } };
-    await startModelDownload(MODEL_ID, FILE, {});
-    expect(mockDownloadModelBackground).not.toHaveBeenCalled();
+    await startModelDownload(MODEL_ID, file(), {});
+    await device.settle();
+    await startModelDownload(MODEL_ID, file(), {});
+    await device.settle();
+    expect(device.nativeRows()).toHaveLength(1);
   });
 
   it('surfaces a start failure via onError and fails the queued placeholder row', async () => {
-    mockDownloadModelBackground.mockRejectedValue(new Error('boom'));
+    // The phone refuses to start the transfer.
+    device.boundary.download!.module.startDownload.mockRejectedValueOnce(new Error('boom'));
     const onError = jest.fn();
-    await startModelDownload(MODEL_ID, FILE, { onError });
+    await startModelDownload(MODEL_ID, file(), { onError });
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'boom' }));
-    // The failure target before a real native id exists is the queued placeholder row.
-    expect(mockStore.setStatus).toHaveBeenCalledWith(`queued:${KEY}`, 'failed', { message: 'boom' });
+    expect(row()).toEqual(expect.objectContaining({ status: 'failed', errorMessage: 'boom' }));
   });
 
   it('swallows a cancellation of a still-queued start and removes the placeholder row', async () => {
-    // Cancelling a "Queued" row rejects the awaited start with `.cancelled` — it is not
-    // an error, so it must NOT surface onError, and the placeholder row must be removed.
-    const cancelled = Object.assign(new Error('Download cancelled'), { cancelled: true });
-    mockDownloadModelBackground.mockRejectedValue(cancelled);
+    // Three other downloads fill the phone's download slots, so this one waits in the queue.
+    for (const n of [1, 2, 3]) await startModelDownload(`other/m${n}`, createModelFile({ name: `m${n}.gguf`, size: SIZE }), {});
+    await device.settle();
     const onError = jest.fn();
-    await startModelDownload(MODEL_ID, FILE, { onError });
+    const starting = startModelDownload(MODEL_ID, file(), { onError });
+    await device.settle();
+    // Cancel the "Queued" row before the transfer starts, as its card's Cancel does.
+    await require('../../../src/services/backgroundDownloadService').backgroundDownloadService.cancelDownload(`queued:${KEY}`);
+    await starting;
+    await device.settle();
     expect(onError).not.toHaveBeenCalled();
-    expect(mockStore.setStatus).not.toHaveBeenCalled();
-    expect(mockStore.remove).toHaveBeenCalledWith(KEY);
+    expect(row()).toBeUndefined();
   });
 
-  it('publishes a QUEUED (pending) store row up-front, before the native start', async () => {
-    // The row must exist immediately so the Models/onboarding screens (which read the
-    // store) can show "Queued" while the download waits for a concurrency slot.
-    let resolveStart: (v: any) => void;
-    mockDownloadModelBackground.mockReturnValue(new Promise(res => { resolveStart = res; }));
-
-    const p = startModelDownload(MODEL_ID, FILE, {});
-    // add() was called synchronously, before downloadModelBackground resolved.
-    expect(mockStore.add).toHaveBeenCalledWith(expect.objectContaining({
-      modelKey: KEY, downloadId: `queued:${KEY}`, status: 'pending', modelType: 'text',
-    }));
-    resolveStart!({ downloadId: 'dl-1' });
-    await p;
+  it('publishes a QUEUED (pending) store row up front, before the native start', async () => {
+    const starting = startModelDownload(MODEL_ID, file(), {});
+    // The row exists at once, so the Models/onboarding screens can show "Queued".
+    expect(row()).toEqual(expect.objectContaining({ downloadId: `queued:${KEY}`, status: 'pending', modelType: 'text' }));
+    await starting;
   });
 
   it('stores the mmproj FILENAME (not the main gguf name) on a vision queued row', async () => {
-    mockDownloadModelBackground.mockReturnValue(new Promise(() => {}));
-    startModelDownload(MODEL_ID, { name: 'model.gguf', mmProjFile: { size: 500 } } as any, {});
-    expect(mockStore.add).toHaveBeenCalledWith(expect.objectContaining({
-      mmProjFileName: 'model-mmproj.gguf', mmProjFileSize: 500,
-    }));
+    const vision = createModelFileWithMmProj({ name: 'model.gguf', size: SIZE, mmProjName: 'model-mmproj.gguf', mmProjSize: 500 });
+    const starting = startModelDownload(MODEL_ID, vision, {});
+    expect(row()).toEqual(expect.objectContaining({ mmProjFileName: 'model-mmproj.gguf', mmProjFileSize: 500 }));
+    await starting;
   });
 
   it('is a no-op on a second tap while the first is still QUEUED (dedup)', async () => {
-    // Simulate the first tap having published the queued row (status pending).
-    mockStore.downloads = { [KEY]: { status: 'pending' } };
-    await startModelDownload(MODEL_ID, FILE, {});
-    expect(mockDownloadModelBackground).not.toHaveBeenCalled();
-    expect(mockStore.add).not.toHaveBeenCalled();
+    const first = startModelDownload(MODEL_ID, file(), {});
+    const second = startModelDownload(MODEL_ID, file(), {});
+    await Promise.all([first, second]);
+    await device.settle();
+    expect(device.nativeRows()).toHaveLength(1);
   });
 
-  it('marks the entry failed + calls onError when watchDownload reports an error', async () => {
-    mockDownloadModelBackground.mockResolvedValue({ downloadId: 'dl-1' });
-    let onErr: ((e: Error) => void) | undefined;
-    mockWatchDownload.mockImplementation((_id, _c, e) => { onErr = e; });
+  it('marks the entry failed + calls onError when the transfer fails', async () => {
     const onError = jest.fn();
-
-    await startModelDownload(MODEL_ID, FILE, { onError });
-    onErr!(new Error('net'));
-
-    expect(mockStore.setStatus).toHaveBeenCalledWith('dl-1', 'failed', { message: 'net' });
-    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'net' }));
+    await startModelDownload(MODEL_ID, file(), { onError });
+    await device.settle();
+    await device.failDownload(device.nativeRows()[0].downloadId, 'net');
+    expect(row()?.status).toBe('failed');
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('net') }));
   });
 });
