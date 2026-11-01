@@ -326,7 +326,7 @@ const mockKokoroConfig = (voice: string, language: string) => ({
     neuralModelSource: `https://example.test/kokoro/${language}/phonemizer.pte`,
   },
 });
-jest.mock('react-native-executorch', () => ({
+jest.mock('react-native-executorch/legacy', () => ({
   // Faithful init leaf for the executorch native runtime (a genuine external native boundary):
   // initExecutorch registers the resource fetcher so the runtime is ready to load models through
   // it. With models faked at the fetcher + useTextToSpeech boundary there is nothing further to
