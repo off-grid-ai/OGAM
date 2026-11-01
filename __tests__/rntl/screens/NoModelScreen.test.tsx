@@ -1,48 +1,82 @@
 /**
- * NoModelScreen — the empty state shown before a model is active.
+ * NoModelScreen — the empty state a new chat shows before a model is chosen.
  *
- * Model loading is shown in the Chat message area. This component only owns
- * the empty state before a model is selected.
+ * Model loading is shown in the Chat message area; this component owns only the empty state. It runs
+ * for real on a real stack navigator, with the real model selector sheet, theme and chat styles. A
+ * small host holds the sheet's open state, as the Chat screen does.
  */
-import React from 'react';
-import { render } from '@testing-library/react-native';
+jest.unmock('@react-navigation/native');
 
-jest.mock('../../../src/components', () => ({
-  ModelSelectorModal: () => null,
-}));
-jest.mock('../../../src/services', () => ({
-  llmService: { getLoadedModelPath: () => null },
-}));
-
+import React, { useState } from 'react';
+import { Text } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { NavigationContainer, createNavigationContainerRef, useNavigation } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NoModelScreen } from '../../../src/screens/ChatScreen/ChatScreenComponents';
 import { createStyles } from '../../../src/screens/ChatScreen/styles';
-import { getTheme } from '../../../src/theme';
+import { useTheme } from '../../../src/theme';
 
-const theme = getTheme('light');
-const colors = theme.colors;
-const styles = createStyles(colors, theme.shadows);
+const Stack = createNativeStackNavigator();
+const noop = () => {};
 
-function renderScreen(overrides: Partial<React.ComponentProps<typeof NoModelScreen>> = {}) {
-  return render(
-    <NoModelScreen
-      styles={styles}
-      colors={colors}
-      navigation={{ goBack: jest.fn() }}
-      hasAvailableModels
-      showModelSelector={false}
-      setShowModelSelector={jest.fn()}
-      onSelectModel={jest.fn()}
-      onUnloadModel={jest.fn()}
-      isModelLoading={false}
-      {...overrides}
-    />,
+function mount(hasAvailableModels: boolean) {
+  function ChatHost() {
+    const navigation = useNavigation();
+    const theme = useTheme();
+    const [showModelSelector, setShowModelSelector] = useState(false);
+    return (
+      <NoModelScreen
+        styles={createStyles(theme.colors, theme.shadows)}
+        colors={theme.colors}
+        navigation={navigation}
+        hasAvailableModels={hasAvailableModels}
+        showModelSelector={showModelSelector}
+        setShowModelSelector={setShowModelSelector}
+        onSelectModel={noop}
+        onUnloadModel={noop}
+        isModelLoading={false}
+      />
+    );
+  }
+  const ref = createNavigationContainerRef<Record<string, undefined>>();
+  const view = render(
+    <NavigationContainer ref={ref}>
+      <Stack.Navigator initialRouteName="ChatsTab">
+        <Stack.Screen name="ChatsTab" component={() => <Text>Chats screen</Text>} />
+        <Stack.Screen name="Chat" component={ChatHost} />
+      </Stack.Navigator>
+    </NavigationContainer>,
   );
+  act(() => { ref.navigate('Chat'); });
+  return { view, route: () => ref.getCurrentRoute()?.name };
 }
 
 describe('NoModelScreen', () => {
-  it('shows the "Select Model" prompt when idle (not loading)', () => {
-    const { getByText } = renderScreen({ isModelLoading: false });
-    expect(getByText('No Model Selected')).toBeTruthy();
-    expect(getByText('Select Model')).toBeTruthy();
+  it('with models on the phone, asks to select one; Select Model opens the model sheet', async () => {
+    const { view } = mount(true);
+
+    expect(view.getByText('No Model Selected')).toBeTruthy();
+    expect(view.getByText('Select a text or image model to get started.')).toBeTruthy();
+    expect(view.queryByText('TEXT MODEL')).toBeNull();
+
+    fireEvent.press(view.getByText('Select Model'));
+
+    await waitFor(() => expect(view.getByText('TEXT MODEL')).toBeTruthy());
+  });
+
+  it('with no models, says to download one and offers no Select Model', () => {
+    const { view } = mount(false);
+
+    expect(view.getByText('Download a text or image model from the Models tab to get started.')).toBeTruthy();
+    expect(view.queryByText('Select Model')).toBeNull();
+  });
+
+  it('Back returns to the chat list', async () => {
+    const { view, route } = mount(true);
+    expect(route()).toBe('Chat');
+
+    fireEvent.press(view.getByLabelText('Back'));
+
+    await waitFor(() => expect(route()).toBe('ChatsTab'));
   });
 });

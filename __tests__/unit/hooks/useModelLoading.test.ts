@@ -1,136 +1,110 @@
 /**
- * useModelLoading Hook Unit Tests
+ * useModelLoading — the Home screen's model picks and unloads.
  *
- * Selecting a model only MARKS it active (no eager load); the load is deferred
- * to the first message in chat. Unload still tears down immediately.
+ * Picking a model only MARKS it active (no load: the first chat message loads it). Unloading frees it at
+ * once and the screen shows a loading card meanwhile.
+ *
+ * Real: the hook, activeModelService (loads and unloads through the residency lock), llmService,
+ * localDreamGenerator, the stores, the alert builder. Faked (device, harness/generationDevice): llama.rn,
+ * the diffusion native module, the filesystem, RAM. The setters are the screen's own state setters.
  */
+import { launchGeneration, type GenerationDevice } from '../../harness/generationDevice';
+import { requireRTL } from '../../harness/nativeBoundary';
+import { SD_MNN_PACKAGE_FILES } from '../../harness/imageModelPackage';
+import { createONNXImageModel } from '../../utils/factories';
 
-import { renderHook, act } from '@testing-library/react-native';
-import { useModelLoading } from '../../../src/screens/HomeScreen/hooks/useModelLoading';
+let d: GenerationDevice;
+let rtl: ReturnType<typeof requireRTL>;
 
-// ─── Mocks ────────────────────────────────────────────────────────────────────
+beforeEach(async () => {
+  const mod = require('@react-native-async-storage/async-storage');
+  await (mod.default ?? mod).clear(); // each test is a fresh install
+});
 
-jest.mock('../../../src/services', () => ({
-  activeModelService: {
-    // The model-selection seam, from the one place it is defined.
-    ...require('../../utils/activeModelServiceStub').activeModelSelectionStub(),
-    loadTextModel: jest.fn().mockResolvedValue(undefined),
-    unloadTextModel: jest.fn().mockResolvedValue(undefined),
-    loadImageModel: jest.fn().mockResolvedValue(undefined),
-    unloadImageModel: jest.fn().mockResolvedValue(undefined),
-  },
-}));
-
-jest.mock('../../../src/components', () => ({
-  showAlert: jest.fn((title: string, message: string, buttons?: any[]) => ({
-    visible: true, title, message, buttons: buttons ?? [],
-  })),
-}));
-
-const mockSetActiveModelId = jest.fn();
-const mockSetLastTextModelId = jest.fn();
-const mockSetActiveImageModelId = jest.fn();
-jest.mock('../../../src/stores', () => ({
-  useAppStore: {
-    getState: () => ({
-      setActiveModelId: mockSetActiveModelId,
-      setLastTextModelId: mockSetLastTextModelId,
-      setActiveImageModelId: mockSetActiveImageModelId,
-    }),
-  },
-}));
-
-const { activeModelService } = require('../../../src/services');
-const mockUnloadTextModel: jest.Mock = activeModelService.unloadTextModel;
-const mockLoadImageModel: jest.Mock = activeModelService.loadImageModel;
-const mockUnloadImageModel: jest.Mock = activeModelService.unloadImageModel;
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function makeImageModel(overrides: Partial<any> = {}): any {
-  return { id: 'img-1', name: 'SDXL', ...overrides };
+async function phone(opts: { load?: boolean } = {}) {
+  d = await launchGeneration({ load: opts.load });
+  rtl = requireRTL();
+  const modelPath = `${d.boundary.fs!.DocumentDirectoryPath}/image_models/img-1`;
+  for (const f of SD_MNN_PACKAGE_FILES) d.boundary.fs!.seedFile(`${modelPath}/${f}`, 1024);
+  const image = createONNXImageModel({ id: 'img-1', name: 'SDXL', modelPath, backend: 'mnn', size: 512 * 1024 * 1024 });
+  d.useAppStore.getState().addDownloadedImageModel(image);
+  return image;
 }
 
-function makeSetters() {
-  return {
-    setLoadingState: jest.fn(),
-    setPickerType: jest.fn(),
-    setAlertState: jest.fn(),
-  };
+/** The Home screen's state, as the hook sets it. */
+function homeScreen() {
+  const { useModelLoading } = require('../../../src/screens/HomeScreen/hooks/useModelLoading');
+  const screen = { loading: [] as any[], picker: 'unset' as unknown, alert: null as any };
+  const view = rtl.renderHook(() => useModelLoading({
+    setLoadingState: (s: any) => screen.loading.push(s),
+    setPickerType: (t: unknown) => { screen.picker = t; },
+    setAlertState: (a: any) => { screen.alert = a; },
+  }));
+  return { screen, hook: () => view.result.current };
 }
-
-// ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('useModelLoading', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
+  it('picking a text model marks it active and closes the picker, without loading it', async () => {
+    await phone({ load: false });
+    d.useAppStore.getState().addDownloadedModel({ ...d.useAppStore.getState().downloadedModels[0], id: 'other' });
+    const { screen, hook } = homeScreen();
+
+    rtl.act(() => hook().handleSelectTextModel({ id: 'other' }));
+
+    expect(d.useAppStore.getState().activeModelId).toBe('other');
+    expect(screen.picker).toBeNull();
+    expect(d.boundary.llama!.calls.initLlama).toHaveLength(0);
   });
 
-  describe('handleSelectTextModel', () => {
-    // (Removed: asserted the hook writes activeModelId directly via setActiveModelId. The single-owner
-    // migration (f540bf76) moved that write into activeModelService.selectTextModel — the hook now
-    // dispatches the select intent, so the store-setter mock is no longer the writer. Selection making
-    // a model active (without eager load) is covered by the rendered model-selection integration tests.)
+  it('picking an image model marks it active and closes the picker, without loading it', async () => {
+    const image = await phone();
+    const { screen, hook } = homeScreen();
+
+    rtl.act(() => hook().handleSelectImageModel(image));
+
+    expect(d.useAppStore.getState().activeImageModelId).toBe('img-1');
+    expect(screen.picker).toBeNull();
+    expect(d.boundary.diffusion.module.loadModel).not.toHaveBeenCalled();
   });
 
-  describe('handleSelectImageModel', () => {
-    it('marks the image model active without loading it', () => {
-      const setters = makeSetters();
-      const { result } = renderHook(() => useModelLoading(setters));
+  it('unloading the text model frees it, with the loading card shown meanwhile', async () => {
+    await phone();
+    expect(d.llmService.isModelLoaded()).toBe(true);
+    const { screen, hook } = homeScreen();
 
-      act(() => {
-        result.current.handleSelectImageModel(makeImageModel());
-      });
+    await rtl.act(async () => { await hook().handleUnloadTextModel(); });
 
-      expect(mockSetActiveImageModelId).toHaveBeenCalledWith('img-1');
-      expect(setters.setPickerType).toHaveBeenCalledWith(null);
-      expect(mockLoadImageModel).not.toHaveBeenCalled();
-    });
+    expect(d.llmService.isModelLoaded()).toBe(false);
+    expect(d.useAppStore.getState().activeModelId).toBeNull();
+    expect(screen.loading).toEqual([
+      { isLoading: true, type: 'text', modelName: null },
+      { isLoading: false, type: null, modelName: null },
+    ]);
+    expect(screen.alert).toBeNull();
   });
 
-  describe('handleUnloadTextModel', () => {
-    it('unloads text model and resets loading state', async () => {
-      const setters = makeSetters();
-      const { result } = renderHook(() => useModelLoading(setters));
+  it('unloading the image model frees it natively', async () => {
+    await phone();
+    await d.activeModelService.loadImageModel('img-1');
+    const { screen, hook } = homeScreen();
 
-      await act(async () => {
-        const p = result.current.handleUnloadTextModel();
-        jest.advanceTimersByTime(800);
-        await p;
-      });
+    await rtl.act(async () => { await hook().handleUnloadImageModel(); });
 
-      expect(mockUnloadTextModel).toHaveBeenCalled();
-    });
-
-    it('shows error alert when unload throws', async () => {
-      mockUnloadTextModel.mockRejectedValueOnce(new Error('fail'));
-      const setters = makeSetters();
-      const { result } = renderHook(() => useModelLoading(setters));
-
-      await act(async () => {
-        const p = result.current.handleUnloadTextModel();
-        jest.advanceTimersByTime(800);
-        await p;
-      });
-
-      expect(setters.setAlertState).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Error' }),
-      );
-    });
+    expect(d.boundary.diffusion.module.unloadModel).toHaveBeenCalled();
+    expect(d.activeModelService.getLoadedModelIds().imageModelId).toBeNull();
+    expect(screen.loading.at(-1)).toEqual({ isLoading: false, type: null, modelName: null });
+    expect(screen.alert).toBeNull();
   });
 
-  describe('handleUnloadImageModel', () => {
-    it('unloads image model', async () => {
-      const setters = makeSetters();
-      const { result } = renderHook(() => useModelLoading(setters));
+  it('shows an error alert when the image model cannot be unloaded, and clears the loading card', async () => {
+    await phone();
+    await d.activeModelService.loadImageModel('img-1');
+    d.boundary.diffusion.module.unloadModel.mockResolvedValue(false); // native: still in use
+    const { screen, hook } = homeScreen();
 
-      await act(async () => {
-        const p = result.current.handleUnloadImageModel();
-        jest.advanceTimersByTime(800);
-        await p;
-      });
+    await rtl.act(async () => { await hook().handleUnloadImageModel(); });
 
-      expect(mockUnloadImageModel).toHaveBeenCalled();
-    });
+    expect(screen.alert).toEqual(expect.objectContaining({ visible: true, title: 'Error', message: 'Failed to unload model' }));
+    expect(screen.loading.at(-1)).toEqual({ isLoading: false, type: null, modelName: null });
   });
 });

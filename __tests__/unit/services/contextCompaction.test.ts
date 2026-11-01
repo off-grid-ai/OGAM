@@ -1,124 +1,112 @@
 /**
- * Context Compaction Service Unit Tests
+ * Context compaction — when a chat no longer fits the model's context, keep the recent turns and replace
+ * the older ones with a summary the model writes.
  *
- * Tests for LLM-based summarization and token-aware message trimming
- * when context is full.
- * Priority: P1 — Prevents generation failures on long conversations.
+ * Real: contextCompactionService, llmService (token counts, the KV cache, the summary completion),
+ * activeModelService (the model loads through the residency lock), the chat store. Faked (device,
+ * harness/generationDevice): llama.rn — its tokenizer, KV cache and completion — the filesystem, RAM.
  */
-
-import { contextCompactionService } from '../../../src/services/contextCompaction';
-import { llmService } from '../../../src/services/llm';
-import { useChatStore } from '../../../src/stores/chatStore';
+import { launchGeneration, type GenerationDevice } from '../../harness/generationDevice';
 import { createMessage } from '../../utils/factories';
 import type { Message } from '../../../src/types';
 
-jest.mock('../../../src/services/llm', () => ({
-  llmService: {
-    clearKVCache: jest.fn().mockResolvedValue(undefined),
-    getTokenCount: jest.fn().mockImplementation((text: string) =>
-      Promise.resolve(Math.ceil(text.length / 4)),
-    ),
-    getPerformanceSettings: jest.fn().mockReturnValue({ contextLength: 2048 }),
-    generateWithMaxTokens: jest.fn().mockResolvedValue('Summary of conversation'),
-  },
-}));
+let d: GenerationDevice;
+let compaction: any;
 
-jest.mock('../../../src/stores/chatStore', () => ({
-  useChatStore: {
-    getState: jest.fn().mockReturnValue({
-      updateCompactionState: jest.fn(),
-    }),
-  },
-}));
-
-const mockedLlmService = llmService as jest.Mocked<typeof llmService>;
-const mockedUpdateCompactionState = jest.fn();
-
-/** Mock tokenizer: 10 tokens for 'System', customizable for other text */
-function mockTokenCounts(nonSystemTokens = 500) {
-  mockedLlmService.getTokenCount.mockImplementation((text: string) =>
-    text === 'System' ? Promise.resolve(10) : Promise.resolve(nonSystemTokens),
-  );
-}
-
-/** Shorthand for compact() with default conversationId and systemPrompt */
-function compactWith(messages: Message[], extra?: { previousSummary?: string }) {
-  return contextCompactionService.compact({
-    conversationId: 'conv-1',
-    systemPrompt: 'System',
-    allMessages: messages,
-    ...extra,
-  });
-}
-
-beforeEach(() => {
-  jest.clearAllMocks();
-  mockedLlmService.getTokenCount.mockImplementation((text: string) =>
-    Promise.resolve(Math.ceil(text.length / 4)),
-  );
-  mockedLlmService.getPerformanceSettings.mockReturnValue({ contextLength: 2048 } as any);
-  mockedLlmService.generateWithMaxTokens.mockResolvedValue('Summary of conversation');
-  mockedUpdateCompactionState.mockClear();
-  (useChatStore.getState as jest.Mock).mockReturnValue({
-    updateCompactionState: mockedUpdateCompactionState,
-  });
+beforeEach(async () => {
+  const mod = require('@react-native-async-storage/async-storage');
+  await (mod.default ?? mod).clear(); // each test is a fresh install
+  d = await launchGeneration();
+  compaction = require('../../../src/services/contextCompaction').contextCompactionService;
 });
+
+/** The native tokenizer: 10 tokens for the system prompt, `perMessage` for anything else. */
+function tokenizer(perMessage: number) {
+  d.nativeContext()!.tokenize.mockImplementation(async (text: string) => ({
+    tokens: new Array(text === 'System' ? 10 : perMessage).fill(1),
+  }));
+}
+
+const compactWith = (messages: Message[], extra: { previousSummary?: string } = {}) =>
+  compaction.compact({ conversationId: d.conversationId, systemPrompt: 'System', allMessages: messages, ...extra });
+const conversation = () =>
+  d.useChatStore.getState().conversations.find((c: any) => c.id === d.conversationId);
 
 describe('isContextFullError', () => {
   it.each([
-    ['Context is full', true],
-    ['Not enough context space', true],
-    ['CONTEXT IS FULL', true],
-    ['Failed: context is full, cannot continue', true],
-    ['context window exceeded', true],
-    ['context length exceeded', true],
-    ['context is full', true],
-  ])('"%s" → %s', (msg, expected) => {
-    const input = typeof msg === 'string' ? new Error(msg) : msg;
-    expect(contextCompactionService.isContextFullError(input)).toBe(expected);
+    'Context is full',
+    'Not enough context space',
+    'CONTEXT IS FULL',
+    'Failed: context is full, cannot continue',
+    'context window exceeded',
+    'context length exceeded',
+  ])('"%s" is a context-full error', msg => {
+    expect(compaction.isContextFullError(new Error(msg))).toBe(true);
   });
 
-  it('returns false for unrelated errors', () => {
-    expect(contextCompactionService.isContextFullError(new Error('No model loaded'))).toBe(false);
-  });
-
-  it('handles string errors', () => {
-    expect(contextCompactionService.isContextFullError('context is full')).toBe(true);
+  it('is false for an unrelated error, and reads a plain string too', () => {
+    expect(compaction.isContextFullError(new Error('No model loaded'))).toBe(false);
+    expect(compaction.isContextFullError('context is full')).toBe(true);
   });
 });
 
 describe('compact', () => {
-  it('clears KV cache before compacting', async () => {
-    const messages = [
-      createMessage({ role: 'system', content: 'System' }),
-      createMessage({ role: 'user', content: 'Hello' }),
-    ];
-
-    await compactWith(messages);
-    expect(mockedLlmService.clearKVCache).toHaveBeenCalledWith(true);
-  });
-
-  it('keeps recent messages that fit within recent token budget', async () => {
+  it('clears the native KV cache, and keeps a chat that fits as it is', async () => {
+    tokenizer(5);
     const messages = [
       createMessage({ role: 'system', content: 'System' }),
       createMessage({ role: 'user', content: 'msg 1' }),
       createMessage({ role: 'assistant', content: 'reply 1' }),
-      createMessage({ role: 'user', content: 'msg 2' }),
-      createMessage({ role: 'assistant', content: 'reply 2' }),
       createMessage({ role: 'user', content: 'latest question' }),
     ];
 
     const result = await compactWith(messages);
 
-    expect(result[0].role).toBe('system');
-    expect(result[0].content).toBe('System');
-    expect(result[result.length - 1].content).toBe('latest question');
+    expect(d.boundary.llama!.calls.clearCache).toContain(true);
+    expect(result.map((m: Message) => m.content)).toEqual(['System', 'msg 1', 'reply 1', 'latest question']);
+    expect(conversation().compactionSummary).toBeUndefined();
   });
 
-  it('falls back to trim-only on summarization failure', async () => {
-    mockTokenCounts(500);
-    mockedLlmService.generateWithMaxTokens.mockRejectedValue(new Error('generation failed'));
+  it('summarizes the older turns with the model, keeps the latest, and stores the summary on the chat', async () => {
+    tokenizer(2000); // only the latest turn fits beside the summary
+    d.boundary.llama!.scriptCompletion({ text: 'Summary of conversation' });
+    const old = createMessage({ role: 'assistant', content: 'old reply' });
+    const messages = [
+      createMessage({ role: 'system', content: 'System' }),
+      createMessage({ role: 'user', content: 'old msg' }),
+      old,
+      createMessage({ role: 'user', content: 'latest' }),
+    ];
 
+    const result = await compactWith(messages);
+
+    expect(result.map((m: Message) => m.content)).toEqual([
+      'System',
+      '[Previous conversation summary]\nSummary of conversation',
+      'latest',
+    ]);
+    expect(conversation()).toEqual(expect.objectContaining({
+      compactionSummary: 'Summary of conversation',
+      compactionCutoffMessageId: old.id,
+    }));
+    expect(d.thread().at(-1)).toEqual(expect.objectContaining({ isSystemInfo: true, content: expect.stringContaining('Compacted') }));
+    // The model was asked to summarize the old turns, not the latest.
+    const sent = JSON.stringify((d.boundary.llama!.calls.completion.at(-1)![0] as any).messages);
+    expect(sent).toContain('old msg');
+    expect(sent).not.toContain('latest');
+  });
+
+  it('keeps an earlier summary when nothing new needs summarizing', async () => {
+    tokenizer(5);
+
+    const result = await compactWith([createMessage({ role: 'user', content: 'Hello' })], { previousSummary: 'Earlier talk' });
+
+    expect(result.map((m: Message) => m.content)).toEqual(['System', '[Previous conversation summary]\nEarlier talk', 'Hello']);
+  });
+
+  it('trims without a summary when the model fails to write one, and stores nothing', async () => {
+    tokenizer(2000);
+    d.boundary.llama!.scriptCompletion({ throwMessage: 'generation failed' });
     const messages = [
       createMessage({ role: 'system', content: 'System' }),
       createMessage({ role: 'user', content: 'old msg' }),
@@ -128,60 +116,56 @@ describe('compact', () => {
 
     const result = await compactWith(messages);
 
-    expect(result[0].role).toBe('system');
-    expect(result[0].content).toBe('System');
-    expect(result.find(m => m.id === 'compaction-summary')).toBeUndefined();
-    expect(mockedUpdateCompactionState).not.toHaveBeenCalled();
+    expect(result.map((m: Message) => m.content)).toEqual(['System', 'latest']);
+    expect(conversation().compactionSummary).toBeUndefined();
   });
 
-  it('falls back to char estimate when tokenizer fails', async () => {
-    mockedLlmService.getTokenCount.mockRejectedValue(new Error('tokenizer unavailable'));
-    mockedLlmService.generateWithMaxTokens.mockRejectedValue(new Error('no tokenizer'));
+  it('counts by characters when the native tokenizer fails', async () => {
+    d.nativeContext()!.tokenize.mockRejectedValue(new Error('tokenizer unavailable'));
 
-    const messages = [
+    const result = await compactWith([
       createMessage({ role: 'system', content: 'System' }),
       createMessage({ role: 'user', content: 'Hello' }),
-    ];
+    ]);
 
-    const result = await compactWith(messages);
-    expect(result.length).toBeGreaterThanOrEqual(2);
+    expect(result.map((m: Message) => m.content)).toEqual(['System', 'Hello']);
   });
 });
 
 describe('clearSummary', () => {
-  it('clears persisted compaction state from store', () => {
-    contextCompactionService.clearSummary('conv-1');
+  it('removes the stored summary from the chat', async () => {
+    d.useChatStore.getState().updateCompactionState(d.conversationId, 'a summary', 'm1');
 
-    expect(mockedUpdateCompactionState).toHaveBeenCalledWith('conv-1', undefined, undefined);
+    compaction.clearSummary(d.conversationId);
+
+    expect(conversation().compactionSummary).toBeUndefined();
+    expect(conversation().compactionCutoffMessageId).toBeUndefined();
   });
 });
 
-describe('compacting state', () => {
-  it('sets isCompacting during compact flow', async () => {
+describe('the compacting state', () => {
+  it('is on while compacting and off after', async () => {
+    tokenizer(5);
     const states: boolean[] = [];
-    const unsub = contextCompactionService.subscribeCompacting(v => states.push(v));
+    const unsub = compaction.subscribeCompacting((v: boolean) => states.push(v));
 
     await compactWith([createMessage({ role: 'user', content: 'Hello' })]);
     unsub();
 
     expect(states[0]).toBe(false);
     expect(states).toContain(true);
-    expect(states[states.length - 1]).toBe(false);
+    expect(states.at(-1)).toBe(false);
   });
 
-  it('resets isCompacting even on error', async () => {
-    mockedLlmService.clearKVCache.mockRejectedValueOnce(new Error('cache error'));
-
+  it('goes off again when clearing the native KV cache fails', async () => {
+    d.nativeContext()!.clearCache.mockRejectedValueOnce(new Error('cache error'));
     const states: boolean[] = [];
-    const unsub = contextCompactionService.subscribeCompacting(v => states.push(v));
+    const unsub = compaction.subscribeCompacting((v: boolean) => states.push(v));
 
-    try {
-      await compactWith([]);
-    } catch {
-      // expected
-    }
+    await compactWith([]).catch(() => undefined);
     unsub();
 
-    expect(states[states.length - 1]).toBe(false);
+    expect(states).toContain(true);
+    expect(states.at(-1)).toBe(false);
   });
 });

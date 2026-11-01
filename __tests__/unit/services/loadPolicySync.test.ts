@@ -97,34 +97,31 @@ describe('startLoadPolicySync', () => {
     expect(modelResidencyManager.getLoadPolicy()).toBe('balanced');
   });
 
-  it('is a singleton — calling twice does NOT stack subscriptions (leak guard)', () => {
+  it('is a singleton: a second start returns the same subscription, so one unsubscribe ends all syncing', () => {
     const first = startLoadPolicySync();
     const second = startLoadPolicySync();
-    expect(second).toBe(first); // same live unsubscribe returned, not a new subscription
-    unsubscribe = first;
+    expect(second).toBe(first); // the same live unsubscribe, not a new subscription
 
-    const spy = jest.spyOn(modelResidencyManager, 'setLoadPolicy');
-    // One mode change → setLoadPolicy fires exactly once, not once-per-start.
+    first();
     useAppStore.getState().updateSettings({ modelLoadingMode: 'aggressive' });
-    expect(spy).toHaveBeenCalledTimes(1);
-    spy.mockRestore();
+
+    // A stacked second subscription would still have projected the change.
+    expect(modelResidencyManager.getLoadPolicy()).toBe('balanced');
   });
 
-  it('does not fire setLoadPolicy when the resolved policy is unchanged (only on a real policy change)', () => {
+  it('projects only when the resolved policy changes, not on every settings write', () => {
     unsubscribe = startLoadPolicySync();
-    const spy = jest.spyOn(modelResidencyManager, 'setLoadPolicy');
-    // Change unrelated settings — resolved policy stays 'balanced'.
+    // The manager's policy moved by another path; a settings write that leaves the resolved policy as it
+    // was must not write it back.
+    modelResidencyManager.setLoadPolicy('conservative');
     useAppStore.getState().updateSettings({ temperature: 0.5 });
     useAppStore.getState().updateSettings({ maxTokens: 2048 });
-    expect(spy).not.toHaveBeenCalled();
-    // Flipping the legacy boolean while modelLoadingMode='balanced' is set does NOT
-    // change the resolved policy (the explicit mode wins) → still no setLoadPolicy.
+    // The legacy boolean does not change the resolved policy while an explicit mode is set.
     useAppStore.getState().updateSettings({ aggressiveModelLoading: true });
-    expect(spy).not.toHaveBeenCalled();
-    // Actually changing the mode DOES fire it, with the resolved policy.
+    expect(modelResidencyManager.getLoadPolicy()).toBe('conservative');
+
+    // A real mode change projects.
     useAppStore.getState().updateSettings({ modelLoadingMode: 'aggressive' });
-    expect(spy).toHaveBeenCalledWith('aggressive');
-    expect(spy).toHaveBeenCalledTimes(1);
-    spy.mockRestore();
+    expect(modelResidencyManager.getLoadPolicy()).toBe('aggressive');
   });
 });

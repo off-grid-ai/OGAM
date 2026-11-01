@@ -1,393 +1,129 @@
 /**
- * ProjectEditScreen Tests
+ * Project editor — create a project, or edit one.
  *
- * Tests for the project edit screen including:
- * - Edit screen title display
- * - New project title display
- * - Name and description input fields
- * - System prompt input field
- * - Form editing (changeText)
- * - Save handler (update existing project)
- * - Save handler (create new project)
- * - Validation: empty name shows alert
- * - Validation: empty system prompt shows alert
- * - Cancel button calls goBack
- * - Hint and tip text display
- * - Label display
- *
- * Priority: P1 (High)
+ * The real editor runs as a modal over the real Projects tab on a real stack navigator
+ * (projectsApp), with the real project store. A new project is made the way a person makes one:
+ * Projects → New → fill in → Save. Each test reads what the person sees: the editor's fields, its
+ * alerts, and the Projects list it returns to.
  */
+jest.unmock('@react-navigation/native');
 
-import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { mountProjectsApp, PROJECT_FIELDS, type ProjectsApp } from '../../harness/projectsApp';
 
-const mockGoBack = jest.fn();
+/** Projects → New: the editor opens empty. */
+async function openNew(app: ProjectsApp) {
+  app.rtl.fireEvent.press(app.view.getByTestId('new-project-button'));
+  await app.rtl.waitFor(() => expect(app.view.getByText('New Project')).toBeTruthy());
+}
 
-let mockRouteParams: any = { projectId: 'proj1' };
-
-jest.mock('@react-navigation/native', () => {
-  const actual = jest.requireActual('@react-navigation/native');
-  return {
-    ...actual,
-    useNavigation: () => ({
-      navigate: jest.fn(),
-      goBack: mockGoBack,
-      setOptions: jest.fn(),
-      addListener: jest.fn(() => jest.fn()),
-    }),
-    useRoute: () => ({
-      params: mockRouteParams,
-    }),
-    useFocusEffect: jest.fn(),
-    useIsFocused: () => true,
-  };
-});
-
-const mockProject = {
-  id: 'proj1',
-  name: 'Test Project',
-  description: 'Test desc',
-  systemPrompt: 'Be helpful',
-  createdAt: 1000000,
-  updatedAt: 1000000,
-};
-
-const mockGetProject = jest.fn(() => mockProject);
-const mockUpdateProject = jest.fn();
-const mockCreateProject = jest.fn(() => 'proj-new');
-
-jest.mock('../../../src/stores', () => ({
-  useProjectStore: jest.fn(() => ({
-    getProject: mockGetProject,
-    updateProject: mockUpdateProject,
-    createProject: mockCreateProject,
-  })),
-  useAppStore: jest.fn((selector?: any) => {
-    const state = {
-      themeMode: 'system',
-    };
-    return selector ? selector(state) : state;
-  }),
-}));
-
-const mockShowAlert = jest.fn((title: string, message: string, buttons?: any[]) => ({
-  visible: true,
-  title,
-  message,
-  buttons: buttons || [],
-}));
-
-jest.mock('../../../src/components', () => ({
-  Card: ({ children, style }: any) => {
-    const { View } = require('react-native');
-    return <View style={style}>{children}</View>;
-  },
-  Button: ({ title, onPress, disabled }: any) => {
-    const { TouchableOpacity, Text } = require('react-native');
-    return (
-      <TouchableOpacity onPress={onPress} disabled={disabled}>
-        <Text>{title}</Text>
-      </TouchableOpacity>
-    );
-  },
-}));
-
-jest.mock('../../../src/components/Button', () => ({
-  Button: ({ title, onPress, disabled }: any) => {
-    const { TouchableOpacity, Text } = require('react-native');
-    return (
-      <TouchableOpacity onPress={onPress} disabled={disabled}>
-        <Text>{title}</Text>
-      </TouchableOpacity>
-    );
-  },
-}));
-
-jest.mock('../../../src/components/CustomAlert', () => ({
-  CustomAlert: ({ visible, title, message }: any) => {
-    if (!visible) return null;
-    const { View, Text } = require('react-native');
-    return (
-      <View testID="custom-alert">
-        <Text testID="alert-title">{title}</Text>
-        <Text testID="alert-message">{message}</Text>
-      </View>
-    );
-  },
-  showAlert: (...args: any[]) => (mockShowAlert as any)(...args),
-  hideAlert: jest.fn(() => ({ visible: false, title: '', message: '', buttons: [] })),
-  initialAlertState: { visible: false, title: '', message: '', buttons: [] },
-}));
-
-jest.mock('../../../src/components/AnimatedEntry', () => ({
-  AnimatedEntry: ({ children }: any) => children,
-}));
-
-jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children, ...props }: any) => {
-    const { View } = require('react-native');
-    return <View {...props}>{children}</View>;
-  },
-}));
-
-jest.mock('react-native-vector-icons/Feather', () => {
-  const { Text } = require('react-native');
-  return ({ name }: any) => <Text>{name}</Text>;
-});
-
-import { ProjectEditScreen } from '../../../src/screens/ProjectEditScreen';
+/** Make a project through the editor and return its id. */
+async function makeProject(app: ProjectsApp, fields: { name: string; description?: string; systemPrompt: string }) {
+  await openNew(app);
+  await app.fillAndSave(fields);
+  await app.rtl.waitFor(() => expect(app.route()?.name).toBe('ProjectsTab'));
+  return app.useProjectStore.getState().projects.find(p => p.name === fields.name)!.id;
+}
 
 describe('ProjectEditScreen', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockRouteParams = { projectId: 'proj1' };
-    mockGetProject.mockReturnValue(mockProject);
-  });
+  describe('a new project', () => {
+    it('opens empty under "New Project", with the labels, hint and tip', async () => {
+      const app = await mountProjectsApp();
+      await openNew(app);
+      const { view } = app;
 
-  // ============================================================================
-  // Rendering - Edit Mode
-  // ============================================================================
-  describe('edit mode rendering', () => {
-    it('renders edit screen title', () => {
-      const { getByText } = render(<ProjectEditScreen />);
-      expect(getByText('Edit Project')).toBeTruthy();
+      expect(view.getByText('Cancel')).toBeTruthy();
+      expect(view.getByText('Save')).toBeTruthy();
+      expect(view.getByText('Name *')).toBeTruthy();
+      expect(view.getByText('Description')).toBeTruthy();
+      expect(view.getByText('System Prompt *')).toBeTruthy();
+      expect(view.getByText(/This context is sent to the AI at the start of every chat/)).toBeTruthy();
+      expect(view.getByText(/Tip: Be specific about what you want the AI to do/)).toBeTruthy();
+      for (const placeholder of Object.values(PROJECT_FIELDS)) {
+        expect(view.getByPlaceholderText(placeholder).props.value).toBe('');
+      }
     });
 
-    it('shows name and description inputs', () => {
-      const { getByDisplayValue } = render(<ProjectEditScreen />);
-      expect(getByDisplayValue('Test Project')).toBeTruthy();
-      expect(getByDisplayValue('Test desc')).toBeTruthy();
+    it('Save creates it with trimmed fields and returns to Projects, which lists it', async () => {
+      const app = await mountProjectsApp();
+      await openNew(app);
+
+      await app.fillAndSave({ name: '  My New Project  ', description: '  A description  ', systemPrompt: '  You are helpful  ' });
+
+      await app.rtl.waitFor(() => expect(app.route()?.name).toBe('ProjectsTab'));
+      expect(app.view.getByText('My New Project')).toBeTruthy();
+      expect(app.view.getByText('A description')).toBeTruthy();
+      const saved = app.useProjectStore.getState().projects.find(p => p.name === 'My New Project');
+      expect(saved).toEqual(expect.objectContaining({ description: 'A description', systemPrompt: 'You are helpful' }));
     });
 
-    it('shows system prompt input', () => {
-      const { getByDisplayValue } = render(<ProjectEditScreen />);
-      expect(getByDisplayValue('Be helpful')).toBeTruthy();
-    });
+    it('Cancel returns to Projects without making anything', async () => {
+      const app = await mountProjectsApp();
+      const before = app.useProjectStore.getState().projects.length;
+      await openNew(app);
+      app.rtl.fireEvent.changeText(app.view.getByPlaceholderText(PROJECT_FIELDS.name), 'Abandoned');
 
-    it('shows labels for all fields', () => {
-      const { getByText } = render(<ProjectEditScreen />);
-      expect(getByText('Name *')).toBeTruthy();
-      expect(getByText('Description')).toBeTruthy();
-      expect(getByText('System Prompt *')).toBeTruthy();
-    });
+      app.rtl.fireEvent.press(app.view.getByTestId('project-edit-cancel'));
 
-    it('shows hint text for system prompt', () => {
-      const { getByText } = render(<ProjectEditScreen />);
-      expect(
-        getByText(/This context is sent to the AI at the start of every chat/),
-      ).toBeTruthy();
-    });
-
-    it('shows tip text', () => {
-      const { getByText } = render(<ProjectEditScreen />);
-      expect(
-        getByText(/Tip: Be specific about what you want the AI to do/),
-      ).toBeTruthy();
-    });
-
-    it('shows Cancel and Save buttons in header', () => {
-      const { getByText } = render(<ProjectEditScreen />);
-      expect(getByText('Cancel')).toBeTruthy();
-      expect(getByText('Save')).toBeTruthy();
+      await app.rtl.waitFor(() => expect(app.route()?.name).toBe('ProjectsTab'));
+      expect(app.view.queryByText('Abandoned')).toBeNull();
+      expect(app.useProjectStore.getState().projects).toHaveLength(before);
     });
   });
 
-  // ============================================================================
-  // Rendering - New Project Mode
-  // ============================================================================
-  describe('new project mode rendering', () => {
-    it('renders "New Project" title when no projectId', () => {
-      mockRouteParams = {};
-      mockGetProject.mockReturnValue(null as any);
-      const { getByText } = render(<ProjectEditScreen />);
-      expect(getByText('New Project')).toBeTruthy();
-    });
-
-    it('shows empty inputs when creating new project', () => {
-      mockRouteParams = {};
-      mockGetProject.mockReturnValue(null as any);
-      const { queryByDisplayValue } = render(<ProjectEditScreen />);
-      expect(queryByDisplayValue('Test Project')).toBeNull();
-      expect(queryByDisplayValue('Test desc')).toBeNull();
-      expect(queryByDisplayValue('Be helpful')).toBeNull();
-    });
-  });
-
-  // ============================================================================
-  // Form Editing
-  // ============================================================================
-  describe('form editing', () => {
-    it('updates name field on text change', () => {
-      const { getByDisplayValue } = render(<ProjectEditScreen />);
-      const nameInput = getByDisplayValue('Test Project');
-      fireEvent.changeText(nameInput, 'Updated Name');
-      expect(getByDisplayValue('Updated Name')).toBeTruthy();
-    });
-
-    it('updates description field on text change', () => {
-      const { getByDisplayValue } = render(<ProjectEditScreen />);
-      const descInput = getByDisplayValue('Test desc');
-      fireEvent.changeText(descInput, 'Updated Description');
-      expect(getByDisplayValue('Updated Description')).toBeTruthy();
-    });
-
-    it('updates system prompt field on text change', () => {
-      const { getByDisplayValue } = render(<ProjectEditScreen />);
-      const promptInput = getByDisplayValue('Be helpful');
-      fireEvent.changeText(promptInput, 'New system prompt');
-      expect(getByDisplayValue('New system prompt')).toBeTruthy();
-    });
-  });
-
-  // ============================================================================
-  // Save Handler
-  // ============================================================================
-  describe('save handler', () => {
-    it('calls updateProject and goBack when saving existing project', () => {
-      const { getByText } = render(<ProjectEditScreen />);
-      fireEvent.press(getByText('Save'));
-      expect(mockUpdateProject).toHaveBeenCalledWith('proj1', {
-        name: 'Test Project',
-        description: 'Test desc',
-        systemPrompt: 'Be helpful',
-      });
-      expect(mockGoBack).toHaveBeenCalled();
-    });
-
-    it('calls createProject and goBack when saving new project', () => {
-      mockRouteParams = {};
-      mockGetProject.mockReturnValue(null as any);
-      const { getByText } = render(<ProjectEditScreen />);
-
-      // Fill in form fields since they start empty
-      const { TextInput } = require('react-native');
-      // We need to find the inputs by placeholder
-      // Use UNSAFE to find all TextInputs
-      const { UNSAFE_getAllByType } = render(<ProjectEditScreen />);
-      const textInputs = UNSAFE_getAllByType(TextInput);
-
-      fireEvent.changeText(textInputs[0], 'New Project Name');
-      fireEvent.changeText(textInputs[2], 'New system prompt');
-      fireEvent.press(getByText('Save'));
-
-      // The first render's save won't have been called on the second render
-      // Let's do a clean test
-    });
-
-    it('creates new project with filled form data', () => {
-      mockRouteParams = {};
-      mockGetProject.mockReturnValue(null as any);
-      const { TextInput } = require('react-native');
-      const { UNSAFE_getAllByType, getByText } = render(<ProjectEditScreen />);
-      const textInputs = UNSAFE_getAllByType(TextInput);
-
-      fireEvent.changeText(textInputs[0], 'My New Project');
-      fireEvent.changeText(textInputs[1], 'A description');
-      fireEvent.changeText(textInputs[2], 'You are helpful');
-
-      fireEvent.press(getByText('Save'));
-
-      expect(mockCreateProject).toHaveBeenCalledWith({
-        name: 'My New Project',
-        description: 'A description',
-        systemPrompt: 'You are helpful',
-      });
-      expect(mockGoBack).toHaveBeenCalled();
-    });
-
-    it('trims whitespace from form data when saving', () => {
-      const { getByDisplayValue, getByText } = render(<ProjectEditScreen />);
-
-      fireEvent.changeText(getByDisplayValue('Test Project'), '  Trimmed Name  ');
-      fireEvent.changeText(getByDisplayValue('Test desc'), '  Trimmed Desc  ');
-      fireEvent.changeText(getByDisplayValue('Be helpful'), '  Trimmed Prompt  ');
-
-      fireEvent.press(getByText('Save'));
-
-      expect(mockUpdateProject).toHaveBeenCalledWith('proj1', {
-        name: 'Trimmed Name',
-        description: 'Trimmed Desc',
-        systemPrompt: 'Trimmed Prompt',
-      });
-    });
-  });
-
-  // ============================================================================
-  // Validation
-  // ============================================================================
   describe('validation', () => {
-    it('shows alert when name is empty on save', () => {
-      const { getByDisplayValue, getByText } = render(<ProjectEditScreen />);
-      fireEvent.changeText(getByDisplayValue('Test Project'), '');
-      fireEvent.press(getByText('Save'));
+    it.each([
+      ['an empty name', { name: '', systemPrompt: 'Be helpful' }, 'Please enter a name for the project'],
+      ['a blank name', { name: '   ', systemPrompt: 'Be helpful' }, 'Please enter a name for the project'],
+      ['an empty system prompt', { name: 'Named', systemPrompt: '' }, 'Please enter a system prompt'],
+      ['a blank system prompt', { name: 'Named', systemPrompt: '   ' }, 'Please enter a system prompt'],
+      // The name is checked first.
+      ['neither', { name: '', systemPrompt: '' }, 'Please enter a name for the project'],
+    ])('refuses %s and stays in the editor', async (_case, fields, message) => {
+      const app = await mountProjectsApp();
+      const before = app.useProjectStore.getState().projects.length;
+      await openNew(app);
 
-      expect(mockShowAlert).toHaveBeenCalledWith(
-        'Error',
-        'Please enter a name for the project',
-      );
-      expect(mockUpdateProject).not.toHaveBeenCalled();
-      expect(mockGoBack).not.toHaveBeenCalled();
-    });
+      await app.fillAndSave(fields);
 
-    it('shows alert when name is only whitespace on save', () => {
-      const { getByDisplayValue, getByText } = render(<ProjectEditScreen />);
-      fireEvent.changeText(getByDisplayValue('Test Project'), '   ');
-      fireEvent.press(getByText('Save'));
-
-      expect(mockShowAlert).toHaveBeenCalledWith(
-        'Error',
-        'Please enter a name for the project',
-      );
-      expect(mockUpdateProject).not.toHaveBeenCalled();
-    });
-
-    it('shows alert when system prompt is empty on save', () => {
-      const { getByDisplayValue, getByText } = render(<ProjectEditScreen />);
-      fireEvent.changeText(getByDisplayValue('Be helpful'), '');
-      fireEvent.press(getByText('Save'));
-
-      expect(mockShowAlert).toHaveBeenCalledWith(
-        'Error',
-        'Please enter a system prompt',
-      );
-      expect(mockUpdateProject).not.toHaveBeenCalled();
-      expect(mockGoBack).not.toHaveBeenCalled();
-    });
-
-    it('shows alert when system prompt is only whitespace on save', () => {
-      const { getByDisplayValue, getByText } = render(<ProjectEditScreen />);
-      fireEvent.changeText(getByDisplayValue('Be helpful'), '   ');
-      fireEvent.press(getByText('Save'));
-
-      expect(mockShowAlert).toHaveBeenCalledWith(
-        'Error',
-        'Please enter a system prompt',
-      );
-    });
-
-    it('validates name before system prompt', () => {
-      const { getByDisplayValue, getByText } = render(<ProjectEditScreen />);
-      fireEvent.changeText(getByDisplayValue('Test Project'), '');
-      fireEvent.changeText(getByDisplayValue('Be helpful'), '');
-      fireEvent.press(getByText('Save'));
-
-      // Name validation error should show first
-      expect(mockShowAlert).toHaveBeenCalledWith(
-        'Error',
-        'Please enter a name for the project',
-      );
-      expect(mockShowAlert).toHaveBeenCalledTimes(1);
+      expect(app.view.getByText('Error')).toBeTruthy();
+      expect(app.view.getByText(message)).toBeTruthy();
+      expect(app.route()?.name).toBe('ProjectEdit');
+      expect(app.useProjectStore.getState().projects).toHaveLength(before);
     });
   });
 
-  // ============================================================================
-  // Cancel / Navigation
-  // ============================================================================
-  describe('navigation', () => {
-    it('calls goBack when Cancel is pressed', () => {
-      const { getByText } = render(<ProjectEditScreen />);
-      fireEvent.press(getByText('Cancel'));
-      expect(mockGoBack).toHaveBeenCalled();
+  describe('editing a project', () => {
+    it('opens under "Edit Project" with the project\'s fields filled in', async () => {
+      const app = await mountProjectsApp();
+      const id = await makeProject(app, { name: 'Test Project', description: 'Test desc', systemPrompt: 'Be helpful' });
+
+      app.open('ProjectEdit', { projectId: id });
+
+      await app.rtl.waitFor(() => expect(app.view.getByText('Edit Project')).toBeTruthy());
+      expect(app.view.getByDisplayValue('Test Project')).toBeTruthy();
+      expect(app.view.getByDisplayValue('Test desc')).toBeTruthy();
+      expect(app.view.getByDisplayValue('Be helpful')).toBeTruthy();
+    });
+
+    it('Save updates that project, trimmed, without making a new one', async () => {
+      const app = await mountProjectsApp();
+      const id = await makeProject(app, { name: 'Test Project', description: 'Test desc', systemPrompt: 'Be helpful' });
+      const count = app.useProjectStore.getState().projects.length;
+      app.open('ProjectEdit', { projectId: id });
+      await app.rtl.waitFor(() => expect(app.view.getByDisplayValue('Test Project')).toBeTruthy());
+
+      app.rtl.fireEvent.changeText(app.view.getByDisplayValue('Test Project'), '  Trimmed Name  ');
+      app.rtl.fireEvent.changeText(app.view.getByDisplayValue('Test desc'), '  Trimmed Desc  ');
+      app.rtl.fireEvent.changeText(app.view.getByDisplayValue('Be helpful'), '  Trimmed Prompt  ');
+      await app.rtl.act(async () => { app.rtl.fireEvent.press(app.view.getByTestId('project-edit-save')); });
+
+      await app.rtl.waitFor(() => expect(app.route()?.name).toBe('ProjectsTab'));
+      expect(app.view.getByText('Trimmed Name')).toBeTruthy();
+      expect(app.view.queryByText('Test Project')).toBeNull();
+      expect(app.useProjectStore.getState().projects).toHaveLength(count);
+      expect(app.useProjectStore.getState().getProject(id)).toEqual(
+        expect.objectContaining({ name: 'Trimmed Name', description: 'Trimmed Desc', systemPrompt: 'Trimmed Prompt' }),
+      );
     });
   });
 });
