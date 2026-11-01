@@ -93,7 +93,6 @@
   "__tests__/pro/ui/McpGuideScreen.test.tsx": 1,
   "__tests__/pro/ui/McpSettingsSection.test.tsx": 1,
   "__tests__/pro/ui/McpToolsScreen.test.tsx": 1,
-  "__tests__/rntl/components/AnimatedListItem.test.tsx": 2,
   "__tests__/rntl/components/ChatInput.test.tsx": 4,
   "__tests__/rntl/components/GenerationSettingsModal.test.tsx": 2,
   "__tests__/rntl/components/McpServersScreen.test.tsx": 6,
