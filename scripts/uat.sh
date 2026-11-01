@@ -206,7 +206,7 @@ COMMITS=$(git log ${RANGE:-HEAD~30..HEAD} --pretty=format:"%s (%h)" --no-merges 
 # Notes live OUTSIDE the repo so they never dirty the tree (a failed run must not block the
 # next). The Android changelog (written under fastlane/metadata by the beta lane) IS in-repo;
 # the trap below removes it on any exit so leftovers can't fail the clean-tree pre-check.
-NOTES_FILE="$(mktemp -t uat-notes).md"
+NOTES_FILE="$(mktemp "${TMPDIR:-/tmp}/uat-notes.XXXXXX").md"
 ANDROID_CHANGELOG="$ROOT_DIR/fastlane/metadata/android/en-US/changelogs/${BUILD_NUMBER}.txt"
 
 gen_notes_with_claude() {
