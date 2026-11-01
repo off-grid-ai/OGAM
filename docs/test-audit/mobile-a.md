@@ -66,6 +66,20 @@ navigation stub in `jest.setup.ts` goes last, once no test leans on it.
 | 2 | useFastestSettings | Model Settings opened on its own route |
 | 3 | 22 chat tests | the chat opens when the test opens it; relaunch opens the real app on the Chats tab |
 | 4 | 27 files | project, model, server and settings screens in a real stack; deleting a chat from every surface in the real app; the residency probe beside the app; Pro tools screens; the Voice row opens Models on the Voice tab |
+| 5 | ProDetailScreen, GalleryScreen, DownloadManagerScreen, 6 TTS files, companionTaskRouting, runtimeDeactivation, App.test | half A at zero; App.test was in testPathIgnorePatterns and now runs |
+
+## Status
+
+The mobile mock baseline is `{}`. The guard holds one named, reviewed exception (EXCEPTIONS in
+`__tests__/scripts/noMocksOfOurCode.test.ts`): the global `@react-navigation/native` stub in `jest.setup.ts`.
+It is a third-party navigation library stubbed for screen-render tests; flows that depend on navigation use
+the real-navigation harness.
+
+## After-release follow-ups
+
+1. **Remove the global navigation stub** in `jest.setup.ts` (about 197 render test files may rely on it).
+   Render each of those screens in a real navigator (`withNavigator` / `withNavigatorRoutes`), then delete
+   the stub and its guard exception.
 
 ## Findings
 
@@ -78,3 +92,11 @@ navigation stub in `jest.setup.ts` goes last, once no test leans on it.
   stub hid it because the tap was dropped. The test now checks the Auto state the send leaves.
 - **Possible flake to watch:** `stopDuringPromptEnhancement` once saw the stop button still shown right
   after the enhancement card cleared (1 run in 5, under 2 parallel workers). Not reproduced since.
+- **Fixed on -fixes, found by the real-code tests:**
+  - A model whose files the disk refused to remove was dropped from the list anyway, and came back on the
+    next launch. It now stays listed, and the Download Manager says "Couldn't remove the model files. Try
+    again." with Retry.
+  - Every speak turn passed residency's Load Anyway override, so the voice model skipped the memory budget.
+    A speak turn is now budgeted (TTS is a sidecar beside the text model); only Load Anyway sets it aside.
+  - Deleting the voice model during a voice switch left the previous voice's file on disk. Every voice's
+    files are removed now.
