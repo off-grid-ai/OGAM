@@ -3,18 +3,18 @@
  *
  * The email + calendar tools are pro-gated and implemented in the pro package
  * as a ToolExtension. These tests cover the tool definitions, enabled-state
- * filtering (read from the core enabledTools setting), and execution against a
- * mocked calendar native module and mailto link.
+ * filtering (read from the real app store's enabledTools setting), and execution against a
+ * faked calendar native module and the OS mailto link handler.
  */
 
 import { Linking } from 'react-native';
 import type { ToolCall } from '../../../../src/services/tools/types';
 import type { ToolExtension } from '../../../../src/services/tools/extensions';
 
-let mockEnabledTools: string[] = [];
-jest.mock('@offgrid/core/stores', () => ({
-  useAppStore: { getState: () => ({ settings: { enabledTools: mockEnabledTools } }) },
-}));
+import { useAppStore } from '../../../../src/stores/appStore';
+
+/** The person's tool switches, written through the app store's own settings action. */
+const enableTools = (enabledTools: string[]) => useAppStore.getState().updateSettings({ enabledTools });
 
 const mockSaveEvent = jest.fn();
 const mockRequestPermissions = jest.fn();
@@ -66,7 +66,7 @@ function call(name: string, args: Record<string, any> = {}): ToolCall {
 describeIfPro('EmailCalendarExtension', () => {
   beforeEach(() => {
     loadedProExtension?.setEntitlementActive(true);
-    mockEnabledTools = [];
+    enableTools([]);
     mockOpenURL.mockReset().mockResolvedValue(undefined as never);
     mockSaveEvent.mockReset().mockResolvedValue('evt-1');
     mockRequestPermissions.mockReset().mockResolvedValue('authorized');
@@ -90,7 +90,7 @@ describeIfPro('EmailCalendarExtension', () => {
     });
 
     it('exposes schemas only for the enabled subset', () => {
-      mockEnabledTools = ['send_email'];
+      enableTools(['send_email']);
       const schemas = EmailCalendarExtension.getOpenAISchemas!();
       expect(schemas.map((s: any) => s.function.name)).toEqual(['send_email']);
     });
@@ -101,14 +101,14 @@ describeIfPro('EmailCalendarExtension', () => {
     });
 
     it('hint lists only enabled tools', () => {
-      mockEnabledTools = ['create_calendar_event'];
+      enableTools(['create_calendar_event']);
       const hint = EmailCalendarExtension.getSystemPromptHint();
       expect(hint).toContain('create_calendar_event');
       expect(hint).not.toContain('send_email');
     });
 
     it('reports 0 from enabledToolCount to avoid double counting', () => {
-      mockEnabledTools = ['send_email', 'create_calendar_event'];
+      enableTools(['send_email', 'create_calendar_event']);
       expect(EmailCalendarExtension.enabledToolCount()).toBe(0);
     });
 

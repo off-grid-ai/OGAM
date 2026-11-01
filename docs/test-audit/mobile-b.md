@@ -36,7 +36,9 @@ Seeding uses the app's own write paths:
 
 ## Progress
 
-_Filled in per batch. The release 17 are complete._
+**Done: none of half B is left in `mockBaseline.json`.** All 126 files of half B and the 17 release
+files run our code for real, with fakes only at the device boundary. The guard passes, and so do
+`knip` and `tsc`.
 
 ### Release files (iOS lane audit list): 17 of 17
 
@@ -146,14 +148,33 @@ Each fix has a test at the device boundary that fails on the code before the fix
 - **`29b6c2f76` Vision repair works again.** A model loaded without its projector now really
   reloads with it.
 
+More bugs the converted tests found, each fixed with a test that fails before the fix:
+
+- **`1457ebd1b` A dictation went to the wrong chat.** If the person switched chats while
+  recording, the transcript was put into the new chat.
+- **`8456334f4` Generated images were not spoken in voice mode.** The image service reported done
+  before the result was in the chat, so turn speech found nothing to say.
+- **`28dae3467`, `63699b824` The Queued-cancel fix corrected twice.**
+  - First, deleting a running download also cancels its queued placeholder, and remembering that
+    cancel refused the replacement download.
+  - Then, a cancel kept in memory for a fixed time refused a re-download right after the cancel.
+  - Now only a start that `startModelDownload` announced, and that was cancelled before it reached
+    the queue, is refused.
+
 ## Open
 
-- **LockScreen (marked `it.failing`):** when the keychain can't be read, the right passphrase is
-  answered as wrong and counts as a failed attempt. Ali's call, because `authService.test`
-  (half A) asserts the current behaviour.
+- None. The LockScreen keychain lockout is fixed in `b7a95bd66`: a keychain that can't be read
+  now says "Couldn't check your passphrase" with Try again, and no attempt counts.
 
 ## After release
 
 - **The residency lock in `localProvider`:** `unloadModel` and `dispose` call
   `llmService.unloadModel` without the residency lock. Nothing in the app calls them today. Route
   them through the lock before anything does.
+
+## Not changed (observations)
+
+- **`detectServerType` misreads Ollama.** It reports a real Ollama server as `openai-compatible`
+  unless the server sends a `Server: ollama` header.
+- **A dead branch in `checkMmProjExists`.** Its `statFile` catch can never run, because `statFile`
+  never throws.

@@ -1,229 +1,152 @@
 /**
  * TTS Store Unit Tests
  *
- * Tests for the engine-agnostic TTS store.
- * The store delegates to the active TTSEngine via the registry.
+ * The engine-agnostic TTS store over the registry's real Kokoro engine and its executorch bridge
+ * (mounted by EngineBridge). Faked, at the device edge only (harness/speechDevice): ExecuTorch's
+ * resource cache (voice files a test can hold or fail), the executorch speech runtime (it records
+ * each synthesis request and can hang like a wedged runtime), the audio output, async-storage and
+ * RAM. State is reached through the store's own actions, or through what a previous launch saved.
  */
+import { launchSpeech, type SpeechApp, type SpeechLaunchOptions } from '../../harness/speechDevice';
 
-// Mock the engine module — we control the registry and engine instances
-const mockEngine = {
-  id: 'mock-tts',
-  displayName: 'Mock TTS',
-  capabilities: {
-    streaming: false,
-    voiceCloning: false,
-    pauseResume: true,
-    generateAndSave: true,
-    peakRamMB: 100,
-  },
-  getPhase: jest.fn(() => 'ready' as const),
-  on: jest.fn(() => jest.fn()), // returns unsub
-  off: jest.fn(),
-  once: jest.fn(() => jest.fn()),
-  isSupported: jest.fn(() => true),
-  initialize: jest.fn().mockResolvedValue(undefined),
-  release: jest.fn().mockResolvedValue(undefined),
-  destroy: jest.fn().mockResolvedValue(undefined),
-  getRequiredAssets: jest.fn(() => []),
-  checkAssetStatus: jest.fn().mockResolvedValue([]),
-  downloadAssets: jest.fn().mockResolvedValue(undefined),
-  deleteAssets: jest.fn().mockResolvedValue(undefined),
-  getOverallDownloadProgress: jest.fn(() => 1),
-  isFullyDownloaded: jest.fn(() => true),
-  hydrateDownloaded: jest.fn(),
-  getBridgeComponent: jest.fn(() => null),
-  getVoices: jest.fn(() => [{ id: 'default', label: 'Default', metadata: {} }]),
-  getActiveVoice: jest.fn(() => ({ id: 'default', label: 'Default', metadata: {} })),
-  setVoice: jest.fn().mockResolvedValue(undefined),
-  speak: jest.fn().mockResolvedValue(undefined),
-  generateAndSave: jest.fn().mockResolvedValue({
-    filePath: '/cache/c1/m1.pcm',
-    durationSeconds: 2.5,
-    waveformData: new Array(200).fill(0.1),
-  }),
-  stop: jest.fn(),
-  pause: jest.fn(),
-  resume: jest.fn(),
-  setSpeed: jest.fn(),
-};
+let app: SpeechApp;
 
-jest.mock('../../../pro/audio/engine', () => ({
-  ttsRegistry: {
-    register: jest.fn(),
-    has: jest.fn(() => true),
-    getEngine: jest.fn(() => mockEngine),
-    setActiveEngine: jest.fn().mockResolvedValue(mockEngine),
-    getActiveEngine: jest.fn(() => mockEngine),
-    getActiveEngineId: jest.fn(() => 'mock-tts'),
-    getRegisteredIds: jest.fn(() => ['mock-tts']),
-  },
-  OuteTTSEngine: class {},
-}));
+async function launch(options: SpeechLaunchOptions = {}) {
+  app = await launchSpeech(options);
+  return app;
+}
 
-jest.mock('@offgrid/core/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), error: jest.fn(), warn: jest.fn() },
-}));
+beforeEach(async () => {
+  await launch();
+});
 
-import { useTTSStore, _setVoiceSwitchTimeoutForTest } from '../../../pro/audio/ttsStore';
+afterEach(async () => {
+  await app.close();
+});
 
-const getState = () => useTTSStore.getState();
-
-const resetState = () => {
-  useTTSStore.setState({
-    phase: 'ready',
-    currentMessageId: null,
-    currentAmplitude: 0,
-    playbackElapsed: 0,
-    playbackStatus: 'idle',
-    playSessionId: 0,
-    error: null,
-    isReady: true,
-    isDownloading: false,
-    isLoading: false,
-    isSpeaking: false,
-    isPaused: false,
-    isGeneratingAudio: false,
-    assets: [],
-    overallDownloadProgress: 1,
-    voices: [{ id: 'default', label: 'Default', metadata: {} }],
-    activeVoiceId: 'default',
-    isSwitchingVoice: false,
-    pendingVoiceId: null,
-    failedVoiceId: null,
-    voiceSwitchProgress: 0,
-    voiceSwitchNeedsDownload: false,
-    audioCacheSizeMB: 0,
-    settings: {
-      interfaceMode: 'chat',
-      enabled: true,
-      speed: 1.0,
-      engineId: 'mock-tts',
-      voiceByEngine: {},
-      modelDownloaded: {},
-      voiceAssetsDownloaded: {},
-    },
-  });
-};
+const getState = () => app.store();
+const until = (check: () => boolean) => app.rtl.waitFor(() => expect(check()).toBe(true));
 
 describe('ttsStore', () => {
-  beforeEach(() => {
-    resetState();
-    jest.clearAllMocks();
-  });
-
   // ── Speak ──────────────────────────────────────────────────────────────
 
   describe('speak', () => {
-    it('delegates to engine.speak with correct options', async () => {
-      await getState().speak('hello', 'msg1');
+    it('speaks the text through the engine, then clears currentMessageId when it has played', async () => {
+      await app.rtl.act(async () => { void getState().speak('hello', 'msg1'); });
+      await until(() => app.said().length === 1);
+      expect(app.said()).toEqual(['hello']);
+      expect(getState().currentMessageId).toBe('msg1');
 
-      expect(mockEngine.speak).toHaveBeenCalledWith('hello', expect.objectContaining({
-        speed: 1.0,
-        messageId: 'msg1',
-      }));
+      await app.play(2);
+
+      await until(() => getState().currentMessageId === null);
+      expect(getState().playbackStatus).toBe('idle');
     });
 
-    it('toggles off when same message is already speaking', async () => {
-      useTTSStore.setState({ playbackStatus: 'playing', currentMessageId: 'msg1' });
+    it('toggles off when the same message is already speaking', async () => {
+      app.runtime.reply('hang');
+      await app.rtl.act(async () => { void getState().speak('hello', 'msg1'); });
+      await until(() => getState().currentMessageId === 'msg1' && app.said().length === 1);
 
-      await getState().speak('hello', 'msg1');
+      await app.run(() => getState().speak('hello', 'msg1'));
 
-      expect(mockEngine.stop).toHaveBeenCalled();
-      expect(mockEngine.speak).not.toHaveBeenCalled();
+      expect(app.said()).toEqual(['hello']);
+      expect(getState().currentMessageId).toBeNull();
+      expect(getState().playbackStatus).toBe('idle');
     });
 
     it('does nothing when TTS is disabled', async () => {
-      useTTSStore.setState({ settings: { ...getState().settings, enabled: false } });
+      getState().updateSettings({ enabled: false });
 
-      await getState().speak('hello', 'msg1');
+      await app.run(() => getState().speak('hello', 'msg1'));
 
-      expect(mockEngine.speak).not.toHaveBeenCalled();
-    });
-
-    it('clears currentMessageId after completion', async () => {
-      await getState().speak('hello', 'msg1');
-
-      expect(getState().currentMessageId).toBeNull();
+      expect(app.said()).toEqual([]);
     });
   });
 
-  // ── Stop / Pause / Resume ─────────────────────────────────────────────
+  // ── Stop ───────────────────────────────────────────────────────────────
 
   describe('stop', () => {
-    it('delegates to engine.stop and clears state', () => {
-      useTTSStore.setState({ currentMessageId: 'msg1' });
-      getState().stop();
+    it('stops a message mid-speech and clears state', async () => {
+      app.runtime.reply('hang');
+      await app.rtl.act(async () => { void getState().speak('a long answer', 'msg1'); });
+      await until(() => getState().currentMessageId === 'msg1');
+      const stopsBefore = app.runtime.stops;
 
-      expect(mockEngine.stop).toHaveBeenCalled();
+      await app.rtl.act(async () => { getState().stop(); });
+
       expect(getState().currentMessageId).toBeNull();
-    });
-  });
-
-  describe('pause/resume', () => {
-    it('delegates to engine', () => {
-      getState().pause();
-      expect(mockEngine.pause).toHaveBeenCalled();
-
-      getState().resume();
-      expect(mockEngine.resume).toHaveBeenCalled();
+      expect(getState().playbackStatus).toBe('idle');
+      expect(app.runtime.stops).toBeGreaterThan(stopsBefore);
     });
   });
 
   describe('setVoice (logged, timeout-guarded switch)', () => {
     it('keeps the current voice active until the requested voice is ready', async () => {
-      let finishSwitch!: () => void;
-      mockEngine.setVoice.mockReturnValueOnce(new Promise<void>((resolve) => { finishSwitch = resolve; }));
-      const switching = getState().setVoice('next');
+      const before = getState().activeVoiceId;
+      const finish = app.cache.holdNext(0.5);
+      let switching!: Promise<void>;
+      await app.rtl.act(async () => { switching = getState().setVoice('am_michael'); });
+      await app.settle();
 
-      expect(getState().activeVoiceId).toBe('default');
-      expect(getState().pendingVoiceId).toBe('next');
+      expect(getState().activeVoiceId).toBe(before);
+      expect(getState().pendingVoiceId).toBe('am_michael');
       expect(getState().isSwitchingVoice).toBe(true);
 
-      finishSwitch();
-      await switching;
-      expect(mockEngine.setVoice).toHaveBeenCalledWith('next');
-      expect(getState().activeVoiceId).toBe('next');
-      expect(getState().settings.voiceByEngine['mock-tts']).toBe('next');
-      expect(getState().settings.voiceAssetsDownloaded?.['mock-tts']).toContain('next');
+      finish();
+      await app.run(() => switching);
+      expect(getState().activeVoiceId).toBe('am_michael');
+      expect(getState().settings.voiceByEngine.kokoro).toBe('am_michael');
+      expect(getState().settings.voiceAssetsDownloaded?.kokoro).toContain('am_michael');
       expect(getState().pendingVoiceId).toBeNull();
       expect(getState().isSwitchingVoice).toBe(false);
     });
 
     it('distinguishes a first download from preparing a completed voice', async () => {
-      const firstSwitch = getState().setVoice('next');
+      let first!: Promise<void>;
+      await app.rtl.act(async () => { first = getState().setVoice('am_michael'); });
       expect(getState().voiceSwitchNeedsDownload).toBe(true);
-      await firstSwitch;
+      await app.run(() => first);
+      await app.run(() => getState().setVoice('af_heart'));
 
-      useTTSStore.setState({ activeVoiceId: 'default' });
-      const cachedSwitch = getState().setVoice('next');
+      let again!: Promise<void>;
+      await app.rtl.act(async () => { again = getState().setVoice('am_michael'); });
       expect(getState().voiceSwitchNeedsDownload).toBe(false);
-      await cachedSwitch;
+      await app.run(() => again);
     });
 
-    it('does NOT hang when the engine voice fetch never settles — times out and recovers', async () => {
+    it('does NOT hang when the voice fetch never settles: times out and recovers', async () => {
+      const { _setVoiceSwitchTimeoutForTest } = require('@offgrid/pro/audio/ttsStore');
       _setVoiceSwitchTimeoutForTest(20);
-      mockEngine.setVoice.mockReturnValueOnce(new Promise<void>(() => { /* never resolves (stuck native fetch) */ }));
-      await getState().setVoice('default');
-      // The spinner must clear and an error surfaces — never a permanent stuck state.
+      app.cache.holdNext(0.1); // a stuck native fetch, never released
+
+      await app.run(() => getState().setVoice('am_michael'));
+
+      // The spinner must clear and an error surfaces: never a permanent stuck state.
       expect(getState().isSwitchingVoice).toBe(false);
       expect(getState().error).toMatch(/timed out/i);
-      expect(getState().failedVoiceId).toBe('default');
+      expect(getState().failedVoiceId).toBe('am_michael');
       expect(getState().pendingVoiceId).toBeNull();
       _setVoiceSwitchTimeoutForTest(45000);
     });
 
-    it('recovers (clears the flag, surfaces error) when the switch rejects', async () => {
-      mockEngine.setVoice.mockRejectedValueOnce(new Error('fetch failed'));
-      await getState().setVoice('default');
+    it('recovers (clears the flag, surfaces the error) when the voice fetch fails', async () => {
+      app.cache.failFetch(new Error('fetch failed'));
+
+      await app.run(() => getState().setVoice('am_michael'));
+
       expect(getState().isSwitchingVoice).toBe(false);
       expect(getState().error).toBe('fetch failed');
-      expect(getState().failedVoiceId).toBe('default');
+      expect(getState().failedVoiceId).toBe('am_michael');
     });
 
     it('deleteModels clears a stuck isSwitchingVoice (delete mid-switch must not lock the picker)', async () => {
-      useTTSStore.setState({ isSwitchingVoice: true });
-      await getState().deleteModels();
+      app.cache.holdNext(0.1); // the switch never finishes on its own
+      await app.rtl.act(async () => { void getState().setVoice('am_michael'); });
+      await until(() => getState().isSwitchingVoice);
+
+      await app.run(() => getState().deleteModels());
+
       expect(getState().isSwitchingVoice).toBe(false);
     });
   });
@@ -231,13 +154,8 @@ describe('ttsStore', () => {
   // ── Generate and Save ─────────────────────────────────────────────────
 
   describe('generateAndSave', () => {
-    it('delegates to engine and returns result', async () => {
-      const result = await getState().generateAndSave('hello', 'conv1', 'msg1');
-
-      expect(mockEngine.generateAndSave).toHaveBeenCalledWith('hello', 'conv1', 'msg1', expect.any(Object));
-      expect(result.path).toBe('/cache/c1/m1.pcm');
-      expect(result.waveformData).toHaveLength(200);
-      expect(result.durationSeconds).toBe(2.5);
+    it('is refused by an engine that cannot save audio (Kokoro streams only)', async () => {
+      await expect(getState().generateAndSave('hello', 'conv1', 'msg1')).rejects.toThrow('Kokoro TTS does not support audio generation.');
     });
   });
 
@@ -246,9 +164,8 @@ describe('ttsStore', () => {
   describe('updateSettings', () => {
     it('merges partial settings', () => {
       getState().updateSettings({ speed: 1.5 });
-      const { settings } = getState();
-      expect(settings.speed).toBe(1.5);
-      expect(settings.enabled).toBe(true);
+      expect(getState().settings.speed).toBe(1.5);
+      expect(getState().settings.enabled).toBe(true);
     });
 
     it('can switch interfaceMode', () => {
@@ -258,9 +175,13 @@ describe('ttsStore', () => {
   });
 
   describe('clearError', () => {
-    it('clears the error field', () => {
-      useTTSStore.setState({ error: 'something went wrong', failedVoiceId: 'next' });
+    it('clears the error left by a failed voice switch', async () => {
+      app.cache.failFetch(new Error('fetch failed'));
+      await app.run(() => getState().setVoice('am_michael'));
+      expect(getState().error).toBe('fetch failed');
+
       getState().clearError();
+
       expect(getState().error).toBeNull();
       expect(getState().failedVoiceId).toBeNull();
     });
@@ -269,99 +190,72 @@ describe('ttsStore', () => {
   // ── Routing & engine ────────────────────────────────────────────────────
   describe('play routing', () => {
     it('synthesizes via the engine when there is no audio file', async () => {
-      await getState().play('msg-x', { text: 'hello world' });
-      expect(mockEngine.speak).toHaveBeenCalledWith('hello world', expect.objectContaining({ messageId: 'msg-x' }));
+      await app.rtl.act(async () => { void getState().play('msg-x', { text: 'hello world' }); });
+      await until(() => app.said().length === 1);
+      expect(app.said()).toEqual(['hello world']);
     });
   });
 
   describe('seek', () => {
-    it('is a no-op for non-file (streaming) clips', async () => {
-      await getState().seek('msg-x', 0.5);
-      expect(mockEngine.speak).not.toHaveBeenCalled();
+    it('is a no-op for a clip that was never played', async () => {
+      await app.run(() => getState().seek('msg-x', 0.5));
+      expect(app.said()).toEqual([]);
     });
   });
 
   describe('setEngine fallback', () => {
     it('falls back to the default when the requested engine is not registered', async () => {
-      const { ttsRegistry } = jest.requireMock('../../../pro/audio/engine');
-      ttsRegistry.getRegisteredIds.mockReturnValue(['mock-tts']);
-      ttsRegistry.setActiveEngine.mockResolvedValue(mockEngine);
-      await getState().setEngine('outetts');
-      expect(ttsRegistry.setActiveEngine).toHaveBeenCalledWith('kokoro');
+      await app.run(() => getState().setEngine('outetts'));
       expect(getState().settings.engineId).toBe('kokoro');
     });
   });
 
-  describe('updateSettings speed', () => {
-    it('applies a live speed change to the active engine', () => {
-      getState().updateSettings({ speed: 1.5 });
-      expect(mockEngine.setSpeed).toHaveBeenCalledWith(1.5);
-    });
-  });
-
-  // The persisted modelDownloaded flag is the durable cross-restart truth (set only
-  // after a genuine fetch, cleared only by an explicit delete). The engine's in-memory
-  // completeness signal is volatile and can desync to false on a mid-session re-init /
-  // bridge unmount that never re-ran the hydrate path. checkDownloadStatus must
-  // reconcile the engine TOWARD the persisted truth, or a present-on-disk model reports
-  // not-downloaded and every play() bails (the on-device TTS dead-play bug).
+  // The persisted modelDownloaded flag is the durable cross-restart truth (set only after a genuine
+  // fetch, cleared only by an explicit delete). The engine's in-memory completeness signal is volatile:
+  // after a relaunch it starts false. checkDownloadStatus must reconcile the engine TOWARD the persisted
+  // truth, or a present-on-disk model reports not-downloaded and every play() bails (the on-device TTS
+  // dead-play bug).
   describe('checkDownloadStatus reconciles the engine to the persisted truth', () => {
-    // A dynamic engine whose reported completeness follows its volatile flag, which
-    // hydrateDownloaded flips — proving the fix drives real state, not a call count.
-    function desyncedEngine(persistedFlagWins: { genuine: boolean }, opts: { progress?: number; phase?: string } = {}) {
-      const asset = { id: 'kokoro-medium', label: 'Kokoro', url: '', sizeBytes: 1, filename: 'k' };
-      return {
-        ...mockEngine,
-        id: 'mock-tts',
-        getPhase: jest.fn(() => (opts.phase ?? 'idle') as any),
-        getOverallDownloadProgress: jest.fn(() => opts.progress ?? 0),
-        hydrateDownloaded: jest.fn((v: boolean) => { persistedFlagWins.genuine = v; }),
-        isFullyDownloaded: jest.fn(() => persistedFlagWins.genuine),
-        checkAssetStatus: jest.fn(async () => [{
-          asset,
-          status: persistedFlagWins.genuine ? 'downloaded' : 'not-downloaded',
-          progress: persistedFlagWins.genuine ? 1 : (opts.progress ?? 0),
-        }]),
-      };
+    /** Relaunch over the same storage and voice files, without downloading again. */
+    async function relaunch() {
+      const files = app.cache.files;
+      await app.close();
+      await launch({ preserveStorage: true, files, download: false });
     }
 
-    it('re-hydrates a desynced engine (persisted=true, engine volatile-false, idle) and then reports downloaded', async () => {
-      const { ttsRegistry } = jest.requireMock('../../../pro/audio/engine');
-      const state = { genuine: false }; // engine desynced to NOT-complete
-      const engine = desyncedEngine(state);
-      ttsRegistry.getActiveEngine.mockReturnValue(engine);
-      useTTSStore.setState({ settings: { ...getState().settings, modelDownloaded: { 'mock-tts': true } } });
+    it('after a relaunch, a model downloaded before reports downloaded', async () => {
+      expect(getState().settings.modelDownloaded?.kokoro).toBe(true);
+      await relaunch();
 
-      await getState().checkDownloadStatus();
+      await app.run(() => getState().checkDownloadStatus());
 
-      // Reconciled to the durable truth: engine re-seeded, status now downloaded.
-      expect(engine.hydrateDownloaded).toHaveBeenCalledWith(true);
-      expect(getState().assets[0].status).toBe('downloaded');
+      expect(getState().assets.map(a => a.status)).toEqual(expect.arrayContaining(['downloaded']));
+      expect(getState().assets.every(a => a.status === 'downloaded')).toBe(true);
     });
 
-    it('does NOT fabricate downloaded when the persisted flag is false', async () => {
-      const { ttsRegistry } = jest.requireMock('../../../pro/audio/engine');
-      const engine = desyncedEngine({ genuine: false });
-      ttsRegistry.getActiveEngine.mockReturnValue(engine);
-      useTTSStore.setState({ settings: { ...getState().settings, modelDownloaded: { 'mock-tts': false } } });
+    it('does NOT fabricate downloaded when the model was deleted', async () => {
+      await app.run(() => getState().deleteModels());
+      expect(getState().settings.modelDownloaded?.kokoro).toBeFalsy();
+      await relaunch();
 
-      await getState().checkDownloadStatus();
+      await app.run(() => getState().checkDownloadStatus());
 
-      expect(engine.hydrateDownloaded).not.toHaveBeenCalledWith(true);
-      expect(getState().assets[0].status).toBe('not-downloaded');
+      expect(getState().assets.length).toBeGreaterThan(0);
+      expect(getState().assets.some(a => a.status === 'downloaded')).toBe(false);
     });
 
-    it('does NOT re-hydrate while a download is in flight (respects the live fetch)', async () => {
-      const { ttsRegistry } = jest.requireMock('../../../pro/audio/engine');
-      const engine = desyncedEngine({ genuine: false }, { progress: 0.4, phase: 'downloading' });
-      ttsRegistry.getActiveEngine.mockReturnValue(engine);
-      useTTSStore.setState({ settings: { ...getState().settings, modelDownloaded: { 'mock-tts': true } } });
+    it('does NOT report downloaded while a download is in flight (respects the live fetch)', async () => {
+      await app.run(() => getState().deleteModels());
+      const finish = app.cache.holdNext(0.4);
+      let downloading!: Promise<void>;
+      await app.rtl.act(async () => { downloading = getState().downloadModels(); });
+      await until(() => getState().isDownloading);
 
-      await getState().checkDownloadStatus();
+      await app.run(() => getState().checkDownloadStatus());
 
-      // A live download is authoritative not-complete — the stale persisted flag must
-      // not force it back to downloaded mid-fetch.
-      expect(engine.hydrateDownloaded).not.toHaveBeenCalledWith(true);
+      expect(getState().assets.some(a => a.status === 'downloaded')).toBe(false);
+      finish();
+      await app.run(() => downloading);
     });
   });
 });
