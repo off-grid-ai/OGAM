@@ -1,149 +1,154 @@
 /**
  * VoicePickerPopover tests
  *
- * The TTS voice selector popover shown from the audio-mode input row. Drives the
- * REAL useTTSStore (voices/activeVoiceId set via setState) and asserts what the
- * user sees (voice labels, personas, the active check + primary color) and what
- * pressing a row DOES (dispatches the real setVoice action -> activeVoiceId in the
- * store actually changes; a speaking voice is stopped first; onClose fires).
+ * The TTS voice selector popover shown from the audio-mode input row. It runs on the real TTS
+ * stack: the real useTTSStore, the real Kokoro engine from the real registry, and its real
+ * executorch bridge, mounted beside the popover as the app mounts it. Voices reach the store the
+ * way they do in the app, through setEngine('kokoro') and a model download.
  *
- * Mocks only genuine boundaries: the icon shim, theme, haptics, and the native
- * TTS engine registry (setVoice would otherwise hit native). The store under
- * assertion is NOT mocked.
+ * Faked: only the device edges. ExecuTorch's resource cache (installKokoroResourceBoundary) holds
+ * the files a voice needs; the executorch speech hook (jest.setup) reports the model ready; the
+ * haptic engine records what it was asked to play. The icon font renders its name.
+ *
+ * Asserted: what the user sees (voice labels, personas, which row is selected) and what pressing
+ * a row does (the store's active voice changes, the new voice's file reaches the device cache, a
+ * running playback is stopped first, the popover closes).
  */
 import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react-native';
-
-const mockColors = {
-  text: '#000000', textMuted: '#999999', primary: '#00FF00',
-  background: '#FFFFFF', surface: '#F5F5F5', border: '#E0E0E0',
-};
+import { render, fireEvent, act, waitFor } from '@testing-library/react-native';
+import HapticFeedback from 'react-native-haptic-feedback';
+import { useTextToSpeech } from 'react-native-executorch';
 
 jest.mock('react-native-vector-icons/Feather', () => {
   const { Text } = require('react-native');
   return ({ name, color }: any) => <Text testID={`feather-${name}`} style={{ color }}>{name}</Text>;
 });
 
-jest.mock('@offgrid/core/theme', () => ({
-  useTheme: () => ({ colors: mockColors }),
-}));
-
-jest.mock('@offgrid/core/utils/haptics', () => ({ triggerHaptic: jest.fn() }));
-
-// The active engine is a native boundary: setVoice() forwards to engine.setVoice.
-// Keep the stub dumb (resolve immediately) so the REAL store logic runs on top.
-const mockEngine = {
-  setVoice: jest.fn(() => Promise.resolve()),
-  // The stop() path (taken when playbackStatus !== 'idle') reads these off the
-  // active engine; keep them as dumb boundary stubs so the REAL store/playback
-  // logic runs on top and lands the store back in the 'idle' state we assert.
-  getPhase: jest.fn(() => 'idle'),
-  stop: jest.fn(),
-};
-jest.mock('../../../../pro/audio/engine', () => ({
-  ttsRegistry: { getActiveEngine: () => mockEngine },
-}));
-
 import { VoicePickerPopover } from '@offgrid/pro/audio/ui/VoicePickerPopover';
 import { useTTSStore } from '@offgrid/pro/audio/ttsStore';
-import { triggerHaptic } from '@offgrid/core/utils/haptics';
-import type { TTSVoice } from '@offgrid/pro/audio/engine/types';
+import { ttsRegistry, KOKORO_VOICES } from '@offgrid/pro/audio/engine';
+import { getTheme } from '@offgrid/core/theme';
+import { installKokoroResourceBoundary } from '../../../harness/kokoroResourceBoundary';
 
-const VOICES: TTSVoice[] = [
-  { id: 'af_heart', label: 'Heart', metadata: { persona: 'Warm narrator' } },
-  { id: 'am_puck', label: 'Puck', metadata: { persona: 'Playful' } },
-  { id: 'zh_1', label: 'Ling', metadata: {} },
-];
+const voice = (id: string) => KOKORO_VOICES.find(v => v.id === id)!;
+const HEART = voice('af_heart');
+const MICHAEL = voice('am_michael');
+const { colors } = getTheme('light');
 
 const baseProps = { visible: true, onClose: jest.fn(), anchorY: 0, anchorX: 0 };
 
-/** Snapshot of the store fields we mutate, so afterEach can restore them exactly. */
-const INITIAL = useTTSStore.getState();
+let cache: ReturnType<typeof installKokoroResourceBoundary>;
+const speechHook = useTextToSpeech as jest.Mock;
+const readySpeechHook = speechHook.getMockImplementation();
 
-afterEach(() => {
-  useTTSStore.setState({
-    voices: INITIAL.voices,
-    activeVoiceId: INITIAL.activeVoiceId,
-    isSpeaking: INITIAL.isSpeaking,
-    playbackStatus: INITIAL.playbackStatus,
+/** The Kokoro engine is chosen and its model downloaded, as the voice settings screen does it. */
+async function kokoroReady(): Promise<void> {
+  await act(async () => {
+    await useTTSStore.getState().setEngine('kokoro');
+    await useTTSStore.getState().downloadModels();
   });
-  jest.clearAllMocks();
+}
+
+/** The popover, with the active engine's executorch bridge mounted beside it as the app mounts it. */
+function renderPicker(props: Partial<typeof baseProps> = {}) {
+  const Bridge = ttsRegistry.getActiveEngine()?.getBridgeComponent() as React.FC | undefined;
+  return render(
+    <>
+      {Bridge ? <Bridge /> : null}
+      <VoicePickerPopover {...baseProps} {...props} />
+    </>,
+  );
+}
+
+beforeEach(() => {
+  cache = installKokoroResourceBoundary();
+  (HapticFeedback.trigger as jest.Mock).mockClear();
+});
+
+afterEach(async () => {
+  speechHook.mockImplementation(readySpeechHook);
+  await act(async () => {
+    useTTSStore.getState().stop();
+  });
 });
 
 describe('VoicePickerPopover', () => {
-  it('renders nothing when not visible', () => {
-    const { queryByText } = render(<VoicePickerPopover {...baseProps} visible={false} />);
-    expect(queryByText('Heart')).toBeNull();
+  it('renders an empty popover (no rows) before any engine has published voices', () => {
+    // First in the file: the store starts with no voices until setEngine runs.
+    const { queryAllByTestId } = render(<VoicePickerPopover {...baseProps} />);
+    expect(queryAllByTestId('feather-user')).toHaveLength(0);
   });
 
-  it('renders voices for the selected language and their persona', () => {
-    useTTSStore.setState({ voices: VOICES, activeVoiceId: 'af_heart' });
-    const { getByText } = render(<VoicePickerPopover {...baseProps} />);
-    expect(getByText('Heart')).toBeTruthy();
-    expect(getByText('Puck')).toBeTruthy();
-    expect(getByText('Warm narrator')).toBeTruthy();
-    expect(getByText('Playful')).toBeTruthy();
+  it('renders nothing when not visible', async () => {
+    await kokoroReady();
+    const { queryByText } = renderPicker({ visible: false });
+    expect(queryByText(HEART.label)).toBeNull();
   });
 
-  it('renders an empty popover (no rows) when the store has no voices', () => {
-    useTTSStore.setState({ voices: [], activeVoiceId: null });
-    const { queryByText } = render(<VoicePickerPopover {...baseProps} />);
-    expect(queryByText('Heart')).toBeNull();
+  it('renders the voices of the active voice language with their persona', async () => {
+    await kokoroReady();
+    const { getByText } = renderPicker();
+    expect(getByText(HEART.label)).toBeTruthy();
+    expect(getByText(HEART.persona)).toBeTruthy();
+    expect(getByText(MICHAEL.label)).toBeTruthy();
+    expect(getByText(MICHAEL.persona)).toBeTruthy();
   });
 
-  it('shows a check icon and primary-colored label only for the active voice', () => {
-    useTTSStore.setState({ voices: VOICES, activeVoiceId: 'am_puck' });
-    const { getByText, getAllByTestId, queryAllByTestId } = render(<VoicePickerPopover {...baseProps} />);
+  it('marks only the active voice selected, with a check and the primary colour', async () => {
+    await kokoroReady();
+    const { getByText, getAllByTestId, getByRole } = renderPicker();
 
+    expect(getByRole('button', { name: HEART.label }).props.accessibilityState).toEqual({ selected: true });
+    expect(getByRole('button', { name: MICHAEL.label }).props.accessibilityState).toEqual({ selected: false });
     // Exactly one check icon (the active row).
     expect(getAllByTestId('feather-check')).toHaveLength(1);
-
-    // Active label uses primary; an inactive one uses the plain text color.
-    expect(getByText('Puck').props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ color: mockColors.primary })]),
+    expect(getByText(HEART.label).props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ color: colors.primary })]),
     );
-    expect(getByText('Heart').props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ color: mockColors.text })]),
+    expect(getByText(MICHAEL.label).props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ color: colors.text })]),
     );
-
-    // One user icon per voice row.
-    expect(queryAllByTestId('feather-user')).toHaveLength(2);
   });
 
-  it('renders empty-string persona (no crash) when metadata has no persona', () => {
-    useTTSStore.setState({ voices: [VOICES[2]], activeVoiceId: 'zh_1' });
-    const { getByText } = render(<VoicePickerPopover {...baseProps} />);
-    expect(getByText('Ling')).toBeTruthy();
-  });
-
-  it('pressing a voice dispatches setVoice -> the real store activeVoiceId changes', async () => {
-    useTTSStore.setState({ voices: VOICES, activeVoiceId: 'af_heart', isSpeaking: false, playbackStatus: 'idle' });
+  it('pressing a voice switches the real store to it and fetches its voice file', async () => {
+    await kokoroReady();
     const onClose = jest.fn();
-    const { getByText } = render(<VoicePickerPopover {...baseProps} onClose={onClose} />);
+    const { getByRole } = renderPicker({ onClose });
 
     await act(async () => {
-      fireEvent.press(getByText('Puck'));
+      fireEvent.press(getByRole('button', { name: MICHAEL.label }));
     });
 
-    // Real store state changed (setVoice reflects activeVoiceId immediately).
-    expect(useTTSStore.getState().activeVoiceId).toBe('am_puck');
-    // The native engine was actually asked to switch.
-    expect(mockEngine.setVoice).toHaveBeenCalledWith('am_puck');
-    expect(triggerHaptic).toHaveBeenCalledWith('impactLight');
+    await waitFor(() => expect(useTTSStore.getState().activeVoiceId).toBe(MICHAEL.id));
+    expect([...cache.files].some(path => path.includes('am_michael'))).toBe(true);
+    expect(useTTSStore.getState().settings.voiceByEngine.kokoro).toBe(MICHAEL.id);
+    expect(HapticFeedback.trigger).toHaveBeenCalledWith('impactLight', expect.anything());
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('stops playback first when speaking, then switches voice', async () => {
-    // playbackStatus !== idle is what setVoice's stop() branch actually checks.
-    useTTSStore.setState({ voices: VOICES, activeVoiceId: 'af_heart', isSpeaking: true, playbackStatus: 'playing' });
-    const { getByText } = render(<VoicePickerPopover {...baseProps} />);
+    await kokoroReady();
+    // The executorch runtime accepts the text and keeps streaming: speech is in flight.
+    speechHook.mockImplementation(() => ({
+      isReady: true,
+      downloadProgress: 1,
+      error: null,
+      stream: () => new Promise<void>(() => {}),
+      streamStop: jest.fn(),
+    }));
+    const { getByRole } = renderPicker();
+    await waitFor(() => expect(ttsRegistry.getActiveEngine()?.getPhase()).toBe('ready'));
+    act(() => {
+      useTTSStore.getState().speak('Hello there, this is a long answer.', 'm1');
+    });
+    await waitFor(() => expect(useTTSStore.getState().playbackStatus).not.toBe('idle'));
 
     await act(async () => {
-      fireEvent.press(getByText('Puck'));
+      fireEvent.press(getByRole('button', { name: MICHAEL.label }));
     });
 
     // The switch still happens, and the store is no longer left in a playing state.
-    expect(useTTSStore.getState().activeVoiceId).toBe('am_puck');
+    await waitFor(() => expect(useTTSStore.getState().activeVoiceId).toBe(MICHAEL.id));
     expect(useTTSStore.getState().playbackStatus).toBe('idle');
   });
 });
