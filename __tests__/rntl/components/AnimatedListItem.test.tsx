@@ -6,32 +6,14 @@
  * - Press and long press handlers
  * - Disabled state
  * - Props forwarding
+ *
+ * The real AnimatedEntry and AnimatedPressable run underneath (react-native-reanimated and haptics
+ * are the device boundary, faked in jest.setup).
  */
 
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
-import { Text } from 'react-native';
-
-jest.mock('../../../src/components/AnimatedEntry', () => ({
-  AnimatedEntry: ({ children }: any) => children,
-}));
-
-jest.mock('../../../src/components/AnimatedPressable', () => ({
-  AnimatedPressable: ({ children, onPress, onLongPress, disabled, testID, style }: any) => {
-    const { TouchableOpacity } = require('react-native');
-    return (
-      <TouchableOpacity
-        onPress={onPress}
-        onLongPress={onLongPress}
-        disabled={disabled}
-        testID={testID}
-        style={style}
-      >
-        {children}
-      </TouchableOpacity>
-    );
-  },
-}));
+import { StyleSheet, Text } from 'react-native';
 
 import { AnimatedListItem } from '../../../src/components/AnimatedListItem';
 
@@ -65,15 +47,15 @@ describe('AnimatedListItem', () => {
     expect(onLongPress).toHaveBeenCalledTimes(1);
   });
 
-  it('forwards disabled prop', () => {
+  it('a disabled item ignores presses', () => {
     const onPress = jest.fn();
     const { getByTestId } = render(
       <AnimatedListItem index={0} onPress={onPress} disabled testID="disabled-item">
         <Text>Disabled</Text>
       </AnimatedListItem>
     );
-    // The disabled prop is forwarded to AnimatedPressable
-    expect(getByTestId('disabled-item')).toBeTruthy();
+    fireEvent.press(getByTestId('disabled-item'));
+    expect(onPress).not.toHaveBeenCalled();
   });
 
   it('passes testID to AnimatedPressable', () => {
@@ -92,8 +74,7 @@ describe('AnimatedListItem', () => {
         <Text>Styled</Text>
       </AnimatedListItem>
     );
-    const style = getByTestId('styled').props.style;
-    expect(style).toMatchObject(customStyle);
+    expect(StyleSheet.flatten(getByTestId('styled').props.style)).toMatchObject(customStyle);
   });
 
   it('renders without onPress or onLongPress', () => {

@@ -139,7 +139,6 @@
   "__tests__/unit/services/modelManager/scan.branches.test.ts": 4,
   "__tests__/unit/services/modelManager/scan.test.ts": 2,
   "__tests__/unit/services/parallelMmproj.test.ts": 3,
-  "__tests__/unit/services/providers/openAICompatibleProvider.test.ts": 2,
   "__tests__/unit/services/providers/registry.test.ts": 2,
   "__tests__/unit/services/startModelDownload.test.ts": 4,
   "__tests__/unit/services/sttDownloadProvider.test.ts": 3,
