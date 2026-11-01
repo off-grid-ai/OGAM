@@ -1,8 +1,9 @@
 /**
- * Extra coverage for McpToolExtension — drives the REAL extension against the REAL
- * mcpStore + remoteServerStore + schemaTrim + mcpService parse/prompt logic. The only
- * boundary stubbed is executeMcpTool (the network round-trip to a live MCP client),
- * which cannot run in jest because it needs a connected native transport.
+ * Extra coverage for McpToolExtension: drives the REAL extension against the REAL mcpStore,
+ * remoteServerStore, schemaTrim, mcpService (prompt, parser, McpClient execution) and the real
+ * companion task mesh over the real syncService. Only the network is faked: the MCP server
+ * answers over XMLHttpRequest (installMcpHttpFake), and sync's TCP socket and LAN discovery
+ * are the native sync boundaries.
  *
  * Every branch of the extension is exercised on both sides:
  *   - getOpenAISchemas: aggressive trim (on-device) vs pruneToolNoise (remote), missing
@@ -10,25 +11,9 @@
  *   - getSystemPromptHint: real prompt built from the stores; empty when no tools.
  *   - parseToolCalls / stripFromVisibleText: real tag parser, calls vs no-calls.
  *   - canHandle: owned vs unowned.
- *   - execute: success path + never-throw error path.
+ *   - execute: success path + never-throw error paths.
  *   - enabledToolCount: only counts enabled tools that resolve to a connected server.
  */
-
-// executeMcpTool is the sole boundary (needs a live native MCP client). Keep the rest
-// of mcpService REAL so getMcpToolsPrompt / parseMcpToolCallsFromText run for real.
-const mockExecuteMcpTool = jest.fn();
-const mockExecuteCompanionTask = jest.fn();
-jest.mock('@offgrid/pro/mcp/mcpService', () => {
-  const actual = jest.requireActual('@offgrid/pro/mcp/mcpService');
-  return {
-    __esModule: true,
-    ...actual,
-    executeMcpTool: (...args: unknown[]) => mockExecuteMcpTool(...args),
-  };
-});
-jest.mock('@offgrid/pro/mcp/companionTaskMesh', () => ({
-  executeCompanionTask: (input: unknown) => mockExecuteCompanionTask(input),
-}));
 
 jest.mock('react-native-tcp-socket', () => {
   const {
@@ -50,6 +35,8 @@ import { useRemoteServerStore } from '@offgrid/core/stores';
 import { SMALL_MODEL_TOOL_BUDGET } from '@offgrid/pro/mcp/schemaTrim';
 import type { McpTool } from '@offgrid/pro/mcp/types';
 import { useSyncStore } from '@offgrid/pro/sync/syncStore';
+import { connectServer, disconnectServer } from '@offgrid/pro/mcp/mcpService';
+import { installMcpHttpFake, type McpHttpFake } from '../../harness/mcpHttpFake';
 
 // A compact tool (under the small-model budget) — passes through trimming untouched.
 const compactTool: McpTool = {
@@ -109,7 +96,6 @@ function resetStores() {
 }
 
 beforeEach(() => {
-  jest.clearAllMocks();
   resetStores();
 });
 
@@ -270,23 +256,30 @@ describe('canHandle', () => {
 });
 
 describe('execute', () => {
-  // The user's server lists notion_search and it is switched on there (discovery turns it on).
-  const turnOnNotionSearch = () => useMcpStore.getState().setServerTools('notion', [compactTool]);
+  const NOTION_URL = 'https://notion.example.test/mcp';
+  let mcp: McpHttpFake;
+
+  // The user's Notion server is added and connected: it lists notion_search, and discovery turns it on.
+  beforeEach(async () => {
+    mcp = installMcpHttpFake({ [NOTION_URL]: { label: 'Notion', tools: [compactTool] } });
+    useMcpStore.getState().addServer({ id: 'notion', name: 'Notion', url: NOTION_URL });
+    await connectServer('notion');
+  });
+
+  afterEach(() => {
+    disconnectServer('notion');
+    useMcpStore.getState().removeServer('notion');
+    mcp.restore();
+  });
 
   it('refuses a tool the user has switched off, without reaching any server', async () => {
-    turnOnNotionSearch();
     useMcpStore.getState().toggleTool('notion_search', 'notion');
     const r = await McpToolExtension.execute({ id: 'c0', name: 'notion_search', arguments: {} });
     expect(r.error).toBe('The tool "notion_search" is turned off.');
-    expect(mockExecuteMcpTool).not.toHaveBeenCalled();
+    expect(mcp.calls).toEqual([]);
   });
 
   it('returns content + toolCallId on success and never sets error', async () => {
-    turnOnNotionSearch();
-    mockExecuteMcpTool.mockResolvedValue({
-      content: 'the result',
-      durationMs: 42,
-    });
     const r = await McpToolExtension.execute({
       id: 'c1',
       name: 'notion_search',
@@ -295,123 +288,54 @@ describe('execute', () => {
     expect(r).toMatchObject({
       toolCallId: 'c1',
       name: 'notion_search',
-      content: 'the result',
-      durationMs: 42,
+      content: 'Notion ran notion_search',
     });
+    expect(typeof r.durationMs).toBe('number');
     expect(r.error).toBeUndefined();
-    expect(mockExecuteMcpTool).toHaveBeenCalledWith('notion_search', {
-      query: 'x',
-    });
+    // The call reached the user's server, once.
+    expect(mcp.calls).toEqual([{ url: NOTION_URL, tool: 'notion_search' }]);
   });
 
-  it('passes the originating chat and device with a companion action', async () => {
-    useMcpStore.setState({
-      servers: [
-        {
-          id: 'desktop-tools',
-          name: 'Office Mac',
-          url: 'http://office-mac/mcp',
-          grantedByDeviceId: 'desktop-1',
-        },
-        {
-          id: 'studio-tools',
-          name: 'Studio Mac',
-          url: 'http://studio-mac/mcp',
-          grantedByDeviceId: 'desktop-2',
-        },
-      ],
-      connectionStates: {
-        'desktop-tools': 'connected',
-        'studio-tools': 'connected',
-      },
-      serverTools: {
-        'desktop-tools': [
-          {
-            name: 'web_use',
-            description: 'Run a web task',
-            inputSchema: { type: 'object' },
-          },
-        ],
-        'studio-tools': [
-          {
-            name: 'web_use',
-            description: 'Run a web task',
-            inputSchema: { type: 'object' },
-          },
-        ],
-      },
-      enabledTools: ['web_use'],
-      toolOwners: { web_use: 'desktop-tools' },
+  it('routes a companion action to the Desktop task mesh, never to an MCP server', async () => {
+    useMcpStore.getState().addServer({
+      id: 'studio-tools',
+      name: 'Studio Mac',
+      url: 'http://studio-mac/mcp',
+      grantedByDeviceId: 'desktop-2',
     });
-    useSyncStore.setState({
-      thisDevice: {
-        id: 'phone-1',
-        name: 'Ali phone',
-        platform: 'ios',
-        version: '1',
-        host: '',
-        port: 0,
+    useMcpStore.getState().setConnectionState('studio-tools', 'connected');
+    useMcpStore.getState().setServerTools('studio-tools', [
+      { name: 'web_use', description: 'Run a web task', inputSchema: { type: 'object' } },
+    ]);
+    useMcpStore.getState().setServerToolsEnabled('studio-tools', ['web_use'], true);
+    useSyncStore.getState().setThisDevice({
+      id: 'phone-1', name: 'Ali phone', platform: 'ios', version: '1', host: '', port: 0,
+    });
+    useSyncStore.getState().setKnownDevices([
+      {
+        id: 'desktop-2', name: 'Studio Alias', platform: 'macos', version: '1',
+        host: 'studio-mac', port: 1, status: 'connected', pairedAt: 1, lastSeenAt: 1,
       },
-      knownDevices: [
-        {
-          id: 'desktop-1',
-          name: 'Office Mac',
-          platform: 'macos',
-          version: '1',
-          host: 'office-mac',
-          port: 1,
-          status: 'connected',
-          pairedAt: 1,
-          lastSeenAt: 1,
-        },
-        {
-          id: 'desktop-2',
-          name: 'Studio Alias',
-          platform: 'macos',
-          version: '1',
-          host: 'studio-mac',
-          port: 1,
-          status: 'connected',
-          pairedAt: 1,
-          lastSeenAt: 1,
-        },
-      ],
-      connectedDeviceIds: ['desktop-1', 'desktop-2'],
-    });
-    mockExecuteCompanionTask.mockResolvedValue({
-      content: 'started',
-      durationMs: 9,
-    });
+    ]);
+    useSyncStore.getState().setConnectedDeviceIds(['desktop-2']);
 
-    await McpToolExtension.execute({
+    const r = await McpToolExtension.execute({
       id: 'task-1',
       name: 'web_use',
-      arguments: {
-        task: 'Find a flight',
-        execution_device: 'studio alias',
-      },
+      arguments: { task: 'Find a flight', execution_device: 'studio alias' },
       context: { conversationId: 'chat-mobile-1' },
     });
 
-    expect(mockExecuteCompanionTask).toHaveBeenCalledWith({
-      deviceId: 'desktop-2',
-      name: 'web_use',
-      args: { task: 'Find a flight', execution_device: 'studio alias' },
-      origin: {
-          conversationId: 'chat-mobile-1',
-          launchId: expect.any(String),
-          deviceId: 'phone-1',
-          deviceName: 'Ali phone',
-          executionDeviceId: 'desktop-2',
-      },
-    });
+    // The phone has no live sync session with that Desktop, so the real mesh reports it as not
+    // connected. The action went to the task mesh, not over HTTP to the granted MCP URL.
+    expect(r.error).toContain('not connected');
+    expect(mcp.calls).toEqual([]);
+    useMcpStore.getState().removeServer('studio-tools');
+    useSyncStore.getState().reset();
   });
 
-  it('returns a typed error result (does NOT throw) when the call rejects with an Error', async () => {
-    turnOnNotionSearch();
-    mockExecuteMcpTool.mockRejectedValue(
-      new Error('Server "notion" is not connected'),
-    );
+  it('returns a typed error result (does NOT throw) when the server is not connected', async () => {
+    disconnectServer('notion');
     const r = await McpToolExtension.execute({
       id: 'c2',
       name: 'notion_search',
@@ -423,16 +347,16 @@ describe('execute', () => {
     expect(typeof r.durationMs).toBe('number');
   });
 
-  it('uses the fallback message when the rejection is not an Error instance', async () => {
-    turnOnNotionSearch();
-    mockExecuteMcpTool.mockRejectedValue('boom-string');
+  it('returns a typed error result (does NOT throw) when the server stops answering', async () => {
+    mcp.setDown(NOTION_URL, true);
     const r = await McpToolExtension.execute({
       id: 'c3',
       name: 'notion_search',
       arguments: {},
     });
-    expect(r.error).toBe('MCP tool execution failed');
+    expect(r.toolCallId).toBe('c3');
     expect(r.content).toBe('');
+    expect(r.error).toBeTruthy();
   });
 });
 

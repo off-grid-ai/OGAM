@@ -12,7 +12,7 @@
 
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
-import { inStack } from '../../harness/realNavigation';
+import { withNavigatorRoutes } from '../../harness/realNavigation';
 import type { McpTool } from '@offgrid/pro/mcp/types';
 
 jest.mock('react-native-vector-icons/Feather', () => {
@@ -22,7 +22,7 @@ jest.mock('react-native-vector-icons/Feather', () => {
 
 
 let routeParams: { serverId: string } = { serverId: 'srv-1' };
-// Real navigation: the screen is the top of a real stack (harness/realNavigation inStack).
+// Real navigation: the screen is the top of a real stack (harness/realNavigation withNavigatorRoutes).
 jest.unmock('@react-navigation/native');
 
 type ScreenModule = typeof import('@offgrid/pro/ui/McpToolsScreen');
@@ -89,25 +89,25 @@ const seed = (opts: {
       servers: [{ id: 'srv-1', name: 'Notion', url: 'https://x/mcp' }],
       serverTools: { 'srv-1': [tool('find')] },
     });
-    render(inStack(<McpToolsScreen />, { params: routeParams }));
+    render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     expect(require('@testing-library/react-native').screen.getByText('Notion')).toBeTruthy();
     fireEvent.press(require('@testing-library/react-native').screen.getByText('arrow-left'));
-    expect(require('@testing-library/react-native').screen.getByTestId('previous-screen')).toBeTruthy();
+    expect(require('@testing-library/react-native').screen.getByTestId('route-Previous')).toBeTruthy();
   });
 
   it('falls back to "Tools" when the server is not found', () => {
     seed({ serverId: 'missing', servers: [], serverTools: {} });
-    const { getByText } = render(inStack(<McpToolsScreen />, { params: routeParams }));
+    const { getByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     expect(getByText('Tools')).toBeTruthy();
   });
 
   it('says a missing server was removed and offers Go back', () => {
     seed({ serverId: 'srv-1', serverTools: {} });
-    const { getByText, getByTestId } = render(inStack(<McpToolsScreen />, { params: routeParams }));
+    const { getByText, getByTestId } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     expect(getByText('This server was removed.')).toBeTruthy();
     expect(getByText('0 TOOLS AVAILABLE')).toBeTruthy();
     fireEvent.press(getByTestId('mcp-tools-go-back'));
-    expect(getByTestId('previous-screen')).toBeTruthy();
+    expect(getByTestId('route-Previous')).toBeTruthy();
   });
 
   it('a paired device route that is not connected asks to keep the device online, not to connect', () => {
@@ -115,7 +115,7 @@ const seed = (opts: {
       serverId: 'mesh-task-mac-1',
       servers: [{ id: 'mesh-task-mac-1', name: 'My Mac', url: 'sync://mac-1' }],
     });
-    const { getByText, queryByTestId, getByTestId } = render(inStack(<McpToolsScreen />, { params: routeParams }));
+    const { getByText, queryByTestId, getByTestId } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     expect(getByText('My Mac is not reachable. Keep the paired device online, then come back.')).toBeTruthy();
     expect(queryByTestId('mcp-tools-connect')).toBeNull();
     expect(getByTestId('mcp-tools-go-back')).toBeTruthy();
@@ -126,7 +126,7 @@ const seed = (opts: {
       serverId: 'srv-1',
       serverTools: { 'srv-1': [tool('lookup', 'find things'), tool('create', 'make things')] },
     });
-    const { getByText, getAllByText } = render(inStack(<McpToolsScreen />, { params: routeParams }));
+    const { getByText, getAllByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     expect(getByText('2 TOOLS AVAILABLE')).toBeTruthy();
     expect(getByText('lookup')).toBeTruthy();
     expect(getByText('create')).toBeTruthy();
@@ -140,7 +140,7 @@ const seed = (opts: {
       serverTools: { 'srv-1': [tool('lookup'), tool('create')] },
       enabledTools: ['lookup'],
     });
-    const { UNSAFE_getAllByType } = render(inStack(<McpToolsScreen />, { params: routeParams }));
+    const { UNSAFE_getAllByType } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     const { Switch } = require('react-native');
     const switches = UNSAFE_getAllByType(Switch);
     expect(switches[0].props.value).toBe(true);   // lookup enabled
@@ -162,7 +162,7 @@ const seed = (opts: {
     });
     useMcpStore.getState().setServerTools('mesh-task-mac-1', [tool('web_use'), tool('computer_use')]);
 
-    const { UNSAFE_getAllByType } = render(inStack(<McpToolsScreen />, { params: routeParams }));
+    const { UNSAFE_getAllByType } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     const { Switch } = require('react-native');
     const switches = UNSAFE_getAllByType(Switch);
     expect(switches.map(item => item.props.value)).toEqual([false, false]);
@@ -179,7 +179,7 @@ const seed = (opts: {
     });
     useMcpStore.getState().setServerTools('desktop-mcp', [tool('search'), tool('edit')]);
 
-    const { UNSAFE_getAllByType } = render(inStack(<McpToolsScreen />, { params: routeParams }));
+    const { UNSAFE_getAllByType } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     const { Switch } = require('react-native');
     const switches = UNSAFE_getAllByType(Switch);
     expect(switches.map(item => item.props.value)).toEqual([false, false]);
@@ -195,11 +195,11 @@ const seed = (opts: {
       serverTools: { 'srv-1': [tool('a'), tool('b')] },
       enabledTools: ['a'],
     });
-    const { getByText, rerender } = render(inStack(<McpToolsScreen />, { params: routeParams }));
+    const { getByText, rerender } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     fireEvent.press(getByText('Enable All'));
     expect(useMcpStore.getState().enabledTools.sort()).toEqual(['a', 'b']);
 
-    rerender(inStack(<McpToolsScreen />, { params: routeParams }));
+    rerender(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     // All enabled -> the Enable All button is disabled.
     const enableAll = getByText('Enable All');
     // Walk up to the pressable ancestor to read `disabled`.
@@ -212,7 +212,7 @@ const seed = (opts: {
       serverTools: { 'srv-1': [tool('a'), tool('b')] },
       enabledTools: ['a', 'b', 'other-server-tool'],
     });
-    const { getByText } = render(inStack(<McpToolsScreen />, { params: routeParams }));
+    const { getByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     fireEvent.press(getByText('Disable All'));
     // Foreign tool survives; this server's tools are removed.
     expect(useMcpStore.getState().enabledTools).toEqual(['other-server-tool']);
@@ -224,7 +224,7 @@ const seed = (opts: {
       serverTools: { 'srv-1': [tool('a')] },
       enabledTools: [],
     });
-    const { getByText } = render(inStack(<McpToolsScreen />, { params: routeParams }));
+    const { getByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     const disableAll = getByText('Disable All');
     expect(disableAll.parent?.parent?.props.accessibilityState?.disabled).toBe(true);
   });
@@ -234,7 +234,7 @@ const seed = (opts: {
       serverId: 'srv-1',
       serverTools: { 'srv-1': [tool('lookup', 'find'), tool('create', 'make')] },
     });
-    const { getByPlaceholderText, getByText, queryByText } = render(inStack(<McpToolsScreen />, { params: routeParams }));
+    const { getByPlaceholderText, getByText, queryByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     const input = getByPlaceholderText('Filter tools by name...');
     fireEvent.changeText(input, 'look');
     expect(getByText('lookup')).toBeTruthy();
@@ -250,7 +250,7 @@ const seed = (opts: {
       serverId: 'srv-1',
       serverTools: { 'srv-1': [tool('lookup', 'find things'), tool('create', 'make things')] },
     });
-    const { getByPlaceholderText, getByText, queryByText } = render(inStack(<McpToolsScreen />, { params: routeParams }));
+    const { getByPlaceholderText, getByText, queryByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     const input = getByPlaceholderText('Filter tools by name...');
 
     // Matches by description.
@@ -267,14 +267,14 @@ const seed = (opts: {
     // Exercises the `properties ?? {}` fallback in estimateToolTokens.
     const noProps: McpTool = { name: 'bare', description: 'x', inputSchema: { type: 'object' } };
     seed({ serverId: 'srv-1', serverTools: { 'srv-1': [noProps] } });
-    const { getByText } = render(inStack(<McpToolsScreen />, { params: routeParams }));
+    const { getByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     // description len 1 -> descTokens 1, propCount 0 -> round((1+0+15)/5)*5 = 15 tks.
     expect(getByText('~15 tks')).toBeTruthy();
   });
 
   it('does not render the clear (x) button while the query is empty', () => {
     seed({ serverId: 'srv-1', serverTools: { 'srv-1': [tool('lookup')] } });
-    const { queryByText } = render(inStack(<McpToolsScreen />, { params: routeParams }));
+    const { queryByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     expect(queryByText('x')).toBeNull();
   });
 });

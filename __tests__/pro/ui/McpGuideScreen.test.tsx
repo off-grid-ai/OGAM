@@ -16,7 +16,7 @@
 
 import React from 'react';
 import { render, fireEvent, screen } from '@testing-library/react-native';
-import { inStack } from '../../harness/realNavigation';
+import { withNavigatorRoutes } from '../../harness/realNavigation';
 
 jest.mock('react-native-vector-icons/Feather', () => {
   const { Text } = require('react-native');
@@ -32,7 +32,7 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
-// Real navigation: the screen is the top of a real stack (harness/realNavigation inStack).
+// Real navigation: the screen is the top of a real stack (harness/realNavigation withNavigatorRoutes).
 jest.unmock('@react-navigation/native');
 
 type ScreenModule = typeof import('@offgrid/pro/ui/McpGuideScreen');
@@ -58,7 +58,7 @@ describeIfPro('McpGuideScreen', () => {
   });
 
   it('renders the header title and every section heading', () => {
-    render(inStack(<McpGuideScreen />));
+    render(withNavigatorRoutes(<McpGuideScreen />, { openedFrom: 'Previous' }));
     expect(screen.getByText('MCP Setup Guide')).toBeTruthy();
     expect(screen.getByText('What MCP enables')).toBeTruthy();
     expect(screen.getByText('Local models: what to expect')).toBeTruthy();
@@ -68,7 +68,7 @@ describeIfPro('McpGuideScreen', () => {
   });
 
   it('renders the recommended-model copy in each card', () => {
-    render(inStack(<McpGuideScreen />));
+    render(withNavigatorRoutes(<McpGuideScreen />, { openedFrom: 'Previous' }));
     expect(
       screen.getByText('Gemma 3 2B or 4B with thinking enabled - keep enabled tools under 5'),
     ).toBeTruthy();
@@ -80,13 +80,13 @@ describeIfPro('McpGuideScreen', () => {
   });
 
   it('renders the card header icons (alert-triangle for local, wifi for remote)', () => {
-    render(inStack(<McpGuideScreen />));
+    render(withNavigatorRoutes(<McpGuideScreen />, { openedFrom: 'Previous' }));
     expect(screen.getByText('alert-triangle')).toBeTruthy();
     expect(screen.getByText('wifi')).toBeTruthy();
   });
 
   it('renders both branches of the checklist ternary: 3 done (check-circle) and 1 not-done (circle)', () => {
-    render(inStack(<McpGuideScreen />));
+    render(withNavigatorRoutes(<McpGuideScreen />, { openedFrom: 'Previous' }));
     // CHECKLIST_ITEMS: 3 done → check-circle, 1 not done → circle.
     expect(screen.getAllByText('check-circle')).toHaveLength(3);
     expect(screen.getAllByText('circle')).toHaveLength(1);
@@ -98,21 +98,21 @@ describeIfPro('McpGuideScreen', () => {
   });
 
   it('renders the back arrow and goes back to the previous screen when the back control is pressed', () => {
-    render(inStack(<McpGuideScreen />));
+    render(withNavigatorRoutes(<McpGuideScreen />, { openedFrom: 'Previous' }));
     const backIcon = screen.getByText('arrow-left');
-    expect(screen.queryByTestId('previous-screen')).toBeNull();
+    expect(screen.queryByTestId('route-Previous')).toBeNull();
     fireEvent.press(backIcon);
-    expect(screen.getByTestId('previous-screen')).toBeTruthy();
+    expect(screen.getByTestId('route-Previous')).toBeTruthy();
   });
 
   it('resolves colors via the REAL useTheme for both light and dark theme modes', () => {
     useAppStore.setState({ themeMode: 'light' });
-    const light = render(inStack(<McpGuideScreen />));
+    const light = render(withNavigatorRoutes(<McpGuideScreen />, { openedFrom: 'Previous' }));
     expect(light.getByText('MCP Setup Guide')).toBeTruthy();
     light.unmount();
 
     useAppStore.setState({ themeMode: 'dark' });
-    render(inStack(<McpGuideScreen />));
+    render(withNavigatorRoutes(<McpGuideScreen />, { openedFrom: 'Previous' }));
     // Same content renders regardless of resolved palette — proves the real
     // useTheme branch runs without throwing for either mode.
     expect(screen.getByText('MCP Setup Guide')).toBeTruthy();

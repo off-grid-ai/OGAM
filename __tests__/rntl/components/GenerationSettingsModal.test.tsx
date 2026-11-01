@@ -20,34 +20,15 @@ import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import { GenerationSettingsModal } from '../../../src/components/GenerationSettingsModal';
 
-// Mock AppSheet
+import { useAppStore } from '../../../src/stores/appStore';
+import { createDownloadedModel, createONNXImageModel } from '../../utils/factories';
+import { requireRTL } from '../../harness/nativeBoundary';
+import { launchGeneration } from '../../harness/generationDevice';
 
-// Mock action fns defined outside factory for access in tests
-const mockUpdateSettings = jest.fn();
-const mockResetSettings = jest.fn();
-
-let mockStoreValues: any = {};
-
-jest.mock('../../../src/stores', () => ({
-  useAppStore: jest.fn((sel?: any) => typeof sel === 'function' ? sel(mockStoreValues) : mockStoreValues),
-  useRemoteServerStore: jest.requireActual('../../../src/stores/remoteServerStore').useRemoteServerStore,
-  selectIsLiteRT: (state: any) =>
-    state.downloadedModels?.find((m: any) => m.id === state.activeModelId)?.engine === 'litert',
-}));
-
-jest.mock('../../../src/services', () => ({
-  llmService: {
-    getPerformanceStats: jest.fn(() => ({
-      lastTokensPerSecond: 0,
-      lastTokenCount: 0,
-      lastGenerationTime: 0,
-    })),
-  },
-  hardwareService: {
-    formatModelSize: jest.fn(() => '4.0 GB'),
-    getTotalMemoryGB: jest.fn().mockReturnValue(8),
-  },
-}));
+// The real app store, the real llmService and hardwareService run under the modal: settings reach the
+// store through its own actions (updateSettings, setDownloadedModels, ...), and every press is asserted
+// on the store state it leaves behind. The slider is a native view, rendered as a View carrying its props.
+const settingsNow = () => useAppStore.getState().settings;
 
 jest.mock('@react-native-community/slider', () => {
   const { View } = require('react-native');
@@ -91,16 +72,12 @@ const defaultProps = {
 describe('GenerationSettingsModal', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockStoreValues = {
-      settings: { ...defaultSettings },
-      updateSettings: mockUpdateSettings,
-      resetSettings: mockResetSettings,
-      downloadedModels: [],
-      downloadedImageModels: [],
-      activeImageModelId: null,
-      downloadedVideoModels: [],
-      activeVideoModelId: null,
-    };
+    const app = useAppStore.getState();
+    app.resetSettings();
+    app.updateSettings({ ...defaultSettings } as any);
+    app.setDownloadedModels([]);
+    app.setDownloadedImageModels([]);
+    app.setModelMaxContext(null);
   });
 
   it('returns null when not visible', () => {
@@ -151,30 +128,9 @@ describe('GenerationSettingsModal', () => {
     expect(queryByText(/Gallery/)).toBeNull();
   });
 
-  it('shows performance stats when lastTokensPerSecond > 0', () => {
-    const { llmService } = require('../../../src/services');
-    const statsData = {
-      lastTokensPerSecond: 12.5,
-      lastTokenCount: 150,
-      lastGenerationTime: 3.2,
-    };
-    (llmService.getPerformanceStats as jest.Mock).mockReturnValue(statsData);
-
-    const { getByText } = render(
-      <GenerationSettingsModal {...defaultProps} />,
-    );
-
-    expect(getByText('Last Generation:')).toBeTruthy();
-    expect(getByText('12.5 tok/s')).toBeTruthy();
-    expect(getByText('150 tokens')).toBeTruthy();
-    expect(getByText('3.2s')).toBeTruthy();
-
-    // Restore default mock
-    (llmService.getPerformanceStats as jest.Mock).mockReturnValue({
-      lastTokensPerSecond: 0,
-      lastTokenCount: 0,
-      lastGenerationTime: 0,
-    });
+  it('shows no performance stats before anything was generated', () => {
+    const { queryByText } = render(<GenerationSettingsModal {...defaultProps} />);
+    expect(queryByText('Last Generation:')).toBeNull();
   });
 
   it('opens image settings section when tapping "IMAGE GENERATION"', () => {
@@ -204,7 +160,7 @@ describe('GenerationSettingsModal', () => {
   });
 
   it('lets context reach the model 262K limit and caps max tokens at the context', () => {
-    mockStoreValues.modelMaxContext = 262144;
+    useAppStore.getState().setModelMaxContext(262144);
     const { getByText, getByTestId } = render(
       <GenerationSettingsModal {...defaultProps} />,
     );
@@ -214,7 +170,7 @@ describe('GenerationSettingsModal', () => {
     // Output cannot exceed the context that has to hold it, so this surface stops the max-tokens
     // slider at the chosen context while context itself may reach the model's trained ceiling.
     expect(getByTestId('setting-maxTokens-slider').props.maximumValue).toBe(
-      mockStoreValues.settings.contextLength,
+      settingsNow().contextLength,
     );
     expect(getByTestId('setting-contextLength-slider').props.maximumValue).toBe(262144);
   });
@@ -238,9 +194,15 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
+    // The app's defaults, then a setting moved away from them.
+    useAppStore.getState().resetSettings();
+    const defaults = { ...settingsNow() };
+    useAppStore.getState().updateSettings({ temperature: 1.6 });
+
     fireEvent.press(getByText('Reset to Defaults'));
 
-    expect(mockResetSettings).toHaveBeenCalledTimes(1);
+    // The shared reset action put every setting back to the app's defaults.
+    expect(settingsNow()).toEqual(defaults);
   });
 
   it('keeps transcription model selection out of chat settings', () => {
@@ -265,17 +227,16 @@ describe('GenerationSettingsModal', () => {
 
     // Press Manual button
     fireEvent.press(getByText('Manual'));
-    expect(mockUpdateSettings).toHaveBeenCalledWith({
+    expect(settingsNow()).toEqual(expect.objectContaining({
       imageGenerationMode: 'manual',
-    });
+    }));
 
-    mockUpdateSettings.mockClear();
 
     // Press Auto button
     fireEvent.press(getByText('Auto'));
-    expect(mockUpdateSettings).toHaveBeenCalledWith({
+    expect(settingsNow()).toEqual(expect.objectContaining({
       imageGenerationMode: 'auto',
-    });
+    }));
   });
 
   it('calls onClose then onDeleteConversation when Delete is pressed', () => {
@@ -341,13 +302,13 @@ describe('GenerationSettingsModal', () => {
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
     fireEvent.press(getByText('LLM'));
 
-    expect(mockUpdateSettings).toHaveBeenCalledWith({
+    expect(settingsNow()).toEqual(expect.objectContaining({
       autoDetectMethod: 'llm',
-    });
+    }));
   });
 
   it('calls updateSettings when auto-detect method is changed to Pattern', () => {
-    mockStoreValues.settings = { ...defaultSettings, autoDetectMethod: 'llm' };
+    useAppStore.getState().updateSettings({ ...defaultSettings, autoDetectMethod: 'llm' } as any);
 
     const { getByText, getByTestId } = render(
       <GenerationSettingsModal {...defaultProps} />,
@@ -357,13 +318,13 @@ describe('GenerationSettingsModal', () => {
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
     fireEvent.press(getByText('Pattern'));
 
-    expect(mockUpdateSettings).toHaveBeenCalledWith({
+    expect(settingsNow()).toEqual(expect.objectContaining({
       autoDetectMethod: 'pattern',
-    });
+    }));
   });
 
   it('hides detection method when image gen mode is manual', () => {
-    mockStoreValues.settings = { ...defaultSettings, imageGenerationMode: 'manual' };
+    useAppStore.getState().updateSettings({ ...defaultSettings, imageGenerationMode: 'manual' } as any);
 
     const { getByText, queryByText } = render(
       <GenerationSettingsModal {...defaultProps} />,
@@ -378,7 +339,7 @@ describe('GenerationSettingsModal', () => {
   // NEW TESTS: Classifier model picker (visible when LLM mode)
   // ============================================================================
   it('shows classifier model picker when auto + llm mode', () => {
-    mockStoreValues.settings = { ...defaultSettings, autoDetectMethod: 'llm' };
+    useAppStore.getState().updateSettings({ ...defaultSettings, autoDetectMethod: 'llm' } as any);
 
     const { getByText, getByTestId } = render(
       <GenerationSettingsModal {...defaultProps} />,
@@ -402,7 +363,7 @@ describe('GenerationSettingsModal', () => {
   });
 
   it('shows classifier tip text when LLM mode is active', () => {
-    mockStoreValues.settings = { ...defaultSettings, autoDetectMethod: 'llm' };
+    useAppStore.getState().updateSettings({ ...defaultSettings, autoDetectMethod: 'llm' } as any);
 
     const { getByText, getByTestId } = render(
       <GenerationSettingsModal {...defaultProps} />,
@@ -415,10 +376,10 @@ describe('GenerationSettingsModal', () => {
   });
 
   it('opens classifier model picker and shows downloaded models', () => {
-    mockStoreValues.settings = { ...defaultSettings, autoDetectMethod: 'llm' };
-    mockStoreValues.downloadedModels = [
-      { id: 'smol-model', name: 'SmolLM', fileSize: 500000000, quantization: 'Q4_K_M' },
-    ];
+    useAppStore.getState().updateSettings({ ...defaultSettings, autoDetectMethod: 'llm' } as any);
+    useAppStore.getState().setDownloadedModels([
+      createDownloadedModel({ id: 'smol-model', name: 'SmolLM', fileSize: 500000000, quantization: 'Q4_K_M' }),
+    ]);
 
     const { getByText, getByTestId, getAllByText } = render(
       <GenerationSettingsModal {...defaultProps} />,
@@ -435,10 +396,10 @@ describe('GenerationSettingsModal', () => {
   });
 
   it('selects classifier model from picker', () => {
-    mockStoreValues.settings = { ...defaultSettings, autoDetectMethod: 'llm' };
-    mockStoreValues.downloadedModels = [
-      { id: 'smol-model', name: 'SmolLM', fileSize: 500000000, quantization: 'Q4_K_M' },
-    ];
+    useAppStore.getState().updateSettings({ ...defaultSettings, autoDetectMethod: 'llm' } as any);
+    useAppStore.getState().setDownloadedModels([
+      createDownloadedModel({ id: 'smol-model', name: 'SmolLM', fileSize: 500000000, quantization: 'Q4_K_M' }),
+    ]);
 
     const { getByText, getByTestId } = render(
       <GenerationSettingsModal {...defaultProps} />,
@@ -449,11 +410,11 @@ describe('GenerationSettingsModal', () => {
     fireEvent.press(getByText('Classifier Model'));
     fireEvent.press(getByText('SmolLM'));
 
-    expect(mockUpdateSettings).toHaveBeenCalledWith({ classifierModelId: 'smol-model' });
+    expect(settingsNow()).toEqual(expect.objectContaining({ classifierModelId: 'smol-model' }));
   });
 
   it('selects "Use current model" in classifier picker', () => {
-    mockStoreValues.settings = { ...defaultSettings, autoDetectMethod: 'llm', classifierModelId: 'some-model' };
+    useAppStore.getState().updateSettings({ ...defaultSettings, autoDetectMethod: 'llm', classifierModelId: 'some-model' } as any);
 
     const { getByText, getByTestId, getAllByText } = render(
       <GenerationSettingsModal {...defaultProps} />,
@@ -467,13 +428,13 @@ describe('GenerationSettingsModal', () => {
     // Press the one inside the picker list
     fireEvent.press(useCurrentButtons[useCurrentButtons.length - 1]);
 
-    expect(mockUpdateSettings).toHaveBeenCalledWith({ classifierModelId: null });
+    expect(settingsNow()).toEqual(expect.objectContaining({ classifierModelId: null }));
   });
 
   it('keeps image model selection out of chat settings', () => {
-    mockStoreValues.downloadedImageModels = [
-      { id: 'img1', name: 'SD Model', style: 'creative' },
-    ];
+    useAppStore.getState().setDownloadedImageModels([
+      createONNXImageModel({ id: 'img1', name: 'SD Model', style: 'creative' } as any),
+    ]);
     const { getByText, queryByText } = render(
       <GenerationSettingsModal {...defaultProps} />,
     );
@@ -499,7 +460,7 @@ describe('GenerationSettingsModal', () => {
 
   it('calls updateSettings to enable enhance image prompts', () => {
     // Enhancement needs a text model available, else the toggle is disabled.
-    mockStoreValues.downloadedModels = [{ id: 'text-1' } as any];
+    useAppStore.getState().setDownloadedModels([createDownloadedModel({ id: 'text-1' })]);
     const { getByText, getByTestId, getAllByText } = render(
       <GenerationSettingsModal {...defaultProps} />,
     );
@@ -512,7 +473,7 @@ describe('GenerationSettingsModal', () => {
     // The last "On" button in the image section is for enhance prompts
     fireEvent.press(onButtons[onButtons.length - 1]);
 
-    expect(mockUpdateSettings).toHaveBeenCalledWith({ enhanceImagePrompts: true });
+    expect(settingsNow()).toEqual(expect.objectContaining({ enhanceImagePrompts: true }));
   });
 
   // ============================================================================
@@ -587,7 +548,7 @@ describe('GenerationSettingsModal', () => {
     // The last "On" is for show generation details
     fireEvent.press(onButtons[onButtons.length - 1]);
 
-    expect(mockUpdateSettings).toHaveBeenCalledWith({ showGenerationDetails: true });
+    expect(settingsNow()).toEqual(expect.objectContaining({ showGenerationDetails: true }));
   });
 
   // ============================================================================
@@ -755,7 +716,7 @@ describe('GenerationSettingsModal', () => {
     // First slider in image section is imageSteps
     if (sliders.length > 0 && sliders[0].props.onSlidingComplete) {
       sliders[0].props.onSlidingComplete(30);
-      expect(mockUpdateSettings).toHaveBeenCalledWith({ imageSteps: 30 });
+      expect(settingsNow()).toEqual(expect.objectContaining({ imageSteps: 30 }));
     }
   });
 
@@ -782,8 +743,9 @@ describe('GenerationSettingsModal', () => {
 
     const sliders = queryAllByTestId('slider');
     if (sliders.length > 0 && sliders[0].props.onValueChange) {
+      const before = { ...settingsNow() };
       sliders[0].props.onValueChange(0.5);
-      expect(mockUpdateSettings).toHaveBeenCalled();
+      expect(settingsNow()).not.toEqual(before);
     }
   });
 
@@ -806,7 +768,7 @@ describe('GenerationSettingsModal', () => {
     });
 
     it('calls updateSettings with flashAttn: false when Off is pressed', () => {
-      mockStoreValues.settings = { ...defaultSettings, flashAttn: true };
+      useAppStore.getState().updateSettings({ ...defaultSettings, flashAttn: true } as any);
 
       const { getByText, getByTestId } = render(
         <GenerationSettingsModal {...defaultProps} />,
@@ -814,17 +776,14 @@ describe('GenerationSettingsModal', () => {
 
       fireEvent.press(getByText('TEXT GENERATION'));
       fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-      mockUpdateSettings.mockClear();
 
       fireEvent.press(getByTestId('flash-attn-off-button'));
 
-      expect(mockUpdateSettings).toHaveBeenCalledWith(
-        expect.objectContaining({ flashAttn: false })
-      );
+      expect(settingsNow()).toEqual(expect.objectContaining({ flashAttn: false }));
     });
 
     it('calls updateSettings with flashAttn: true when On is pressed', () => {
-      mockStoreValues.settings = { ...defaultSettings, flashAttn: false };
+      useAppStore.getState().updateSettings({ ...defaultSettings, flashAttn: false } as any);
 
       const { getByText, getByTestId } = render(
         <GenerationSettingsModal {...defaultProps} />,
@@ -832,27 +791,23 @@ describe('GenerationSettingsModal', () => {
 
       fireEvent.press(getByText('TEXT GENERATION'));
       fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-      mockUpdateSettings.mockClear();
 
       fireEvent.press(getByTestId('flash-attn-on-button'));
 
-      expect(mockUpdateSettings).toHaveBeenCalledWith(
-        expect.objectContaining({ flashAttn: true })
-      );
+      expect(settingsNow()).toEqual(expect.objectContaining({ flashAttn: true }));
     });
 
     it('defaults flash attention On when flashAttn setting is undefined (iOS → platform default true)', () => {
       // flashAttn: undefined → falls back to Platform.OS !== 'android' = true on iOS
-      mockStoreValues.settings = { ...defaultSettings, flashAttn: undefined as any };
+      useAppStore.getState().updateSettings({ ...defaultSettings, flashAttn: undefined as any } as any);
 
       const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
       fireEvent.press(getByText('TEXT GENERATION'));
       fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-      mockUpdateSettings.mockClear();
 
       // The Off button should be pressable (flash attn is currently ON via fallback)
       fireEvent.press(getByTestId('flash-attn-off-button'));
-      expect(mockUpdateSettings).toHaveBeenCalledWith(expect.objectContaining({ flashAttn: false }));
+      expect(settingsNow()).toEqual(expect.objectContaining({ flashAttn: false }));
     });
 
     // Android-specific tests: mock Platform.OS before each, restore after
@@ -870,7 +825,7 @@ describe('GenerationSettingsModal', () => {
       });
 
       it('renders GPU layers slider with gpuLayersEffective when backend is OpenCL', () => {
-        mockStoreValues.settings = { ...defaultSettings, inferenceBackend: 'opencl' as const, gpuLayers: 8, flashAttn: false };
+        useAppStore.getState().updateSettings({ ...defaultSettings, inferenceBackend: 'opencl' as const, gpuLayers: 8, flashAttn: false } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
         fireEvent.press(getByText('GENERAL'));
         expect(getByTestId('gpu-layers-stepper-value').props.children).toBe('8');
@@ -878,7 +833,7 @@ describe('GenerationSettingsModal', () => {
 
       it('shows GPU layers at full value when flash attention is On (no clamping)', () => {
         // Flash attention no longer caps GPU layers — gpuLayersMax is always 99
-        mockStoreValues.settings = { ...defaultSettings, inferenceBackend: 'opencl' as const, gpuLayers: 8, flashAttn: true };
+        useAppStore.getState().updateSettings({ ...defaultSettings, inferenceBackend: 'opencl' as const, gpuLayers: 8, flashAttn: true } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
         fireEvent.press(getByText('GENERAL'));
         // gpuLayersEffective = Math.min(8, 99) = 8
@@ -886,12 +841,12 @@ describe('GenerationSettingsModal', () => {
       });
 
       it('uses default gpuLayers value of 1 when gpuLayers is undefined (covers ?? fallback)', () => {
-        mockStoreValues.settings = {
+        useAppStore.getState().updateSettings({
           ...defaultSettings,
           inferenceBackend: 'opencl' as const,
           gpuLayers: undefined as any,
           flashAttn: false,
-        };
+        } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
         fireEvent.press(getByText('GENERAL'));
         // gpuLayersEffective = Math.min(undefined ?? 1, 99) = 1
@@ -899,81 +854,69 @@ describe('GenerationSettingsModal', () => {
       });
 
       it('does not clamp gpuLayers when turning flash attn On with undefined layers', () => {
-        mockStoreValues.settings = { ...defaultSettings, flashAttn: false, gpuLayers: undefined as any };
+        useAppStore.getState().updateSettings({ ...defaultSettings, flashAttn: false, gpuLayers: undefined as any } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
         fireEvent.press(getByText('TEXT GENERATION'));
         fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-        mockUpdateSettings.mockClear();
+          const gpuLayersBefore = settingsNow().gpuLayers;
         fireEvent.press(getByTestId('flash-attn-on-button'));
-        expect(mockUpdateSettings).toHaveBeenCalledWith(
-          expect.objectContaining({ flashAttn: true })
-        );
-        expect(mockUpdateSettings).not.toHaveBeenCalledWith(
-          expect.objectContaining({ gpuLayers: expect.any(Number) })
-        );
+        expect(settingsNow()).toEqual(expect.objectContaining({ flashAttn: true }));
+        // Turning flash attention on left the GPU layers as they were.
+        expect(settingsNow().gpuLayers).toBe(gpuLayersBefore);
       });
 
       it('does not clamp gpuLayers when turning flash attn On with layers > 1', () => {
-        mockStoreValues.settings = { ...defaultSettings, flashAttn: false, gpuLayers: 8 };
+        useAppStore.getState().updateSettings({ ...defaultSettings, flashAttn: false, gpuLayers: 8 } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
         fireEvent.press(getByText('TEXT GENERATION'));
         fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-        mockUpdateSettings.mockClear();
+          const gpuLayersBefore = settingsNow().gpuLayers;
         fireEvent.press(getByTestId('flash-attn-on-button'));
-        expect(mockUpdateSettings).toHaveBeenCalledWith(
-          expect.objectContaining({ flashAttn: true })
-        );
-        expect(mockUpdateSettings).not.toHaveBeenCalledWith(
-          expect.objectContaining({ gpuLayers: expect.any(Number) })
-        );
+        expect(settingsNow()).toEqual(expect.objectContaining({ flashAttn: true }));
+        // Turning flash attention on left the GPU layers as they were.
+        expect(settingsNow().gpuLayers).toBe(gpuLayersBefore);
       });
 
       it('does not clamp gpuLayers when turning flash attn On with layers = 1', () => {
-        mockStoreValues.settings = { ...defaultSettings, flashAttn: false, gpuLayers: 1 };
+        useAppStore.getState().updateSettings({ ...defaultSettings, flashAttn: false, gpuLayers: 1 } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
         fireEvent.press(getByText('TEXT GENERATION'));
         fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-        mockUpdateSettings.mockClear();
+          const gpuLayersBefore = settingsNow().gpuLayers;
         fireEvent.press(getByTestId('flash-attn-on-button'));
-        expect(mockUpdateSettings).toHaveBeenCalledWith(
-          expect.objectContaining({ flashAttn: true })
-        );
-        expect(mockUpdateSettings).not.toHaveBeenCalledWith(
-          expect.objectContaining({ gpuLayers: expect.any(Number) })
-        );
+        expect(settingsNow()).toEqual(expect.objectContaining({ flashAttn: true }));
+        // Turning flash attention on left the GPU layers as they were.
+        expect(settingsNow().gpuLayers).toBe(gpuLayersBefore);
       });
 
       it('calls updateSettings with inferenceBackend: cpu when CPU button pressed', () => {
-        mockStoreValues.settings = { ...defaultSettings, inferenceBackend: 'opencl' as const };
+        useAppStore.getState().updateSettings({ ...defaultSettings, inferenceBackend: 'opencl' as const } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
         fireEvent.press(getByText('GENERAL'));
-        mockUpdateSettings.mockClear();
-
+  
         fireEvent.press(getByTestId('backend-cpu-button'));
 
-        expect(mockUpdateSettings).toHaveBeenCalledWith({ inferenceBackend: 'cpu' });
+        expect(settingsNow()).toEqual(expect.objectContaining({ inferenceBackend: 'cpu' }));
       });
 
       it('calls updateSettings with inferenceBackend: opencl when OpenCL button pressed on Android', () => {
-        mockStoreValues.settings = { ...defaultSettings, inferenceBackend: 'cpu' as const };
+        useAppStore.getState().updateSettings({ ...defaultSettings, inferenceBackend: 'cpu' as const } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
         fireEvent.press(getByText('GENERAL'));
-        mockUpdateSettings.mockClear();
-
+  
         fireEvent.press(getByTestId('backend-opencl-button'));
 
-        expect(mockUpdateSettings).toHaveBeenCalledWith({ inferenceBackend: 'opencl' });
+        expect(settingsNow()).toEqual(expect.objectContaining({ inferenceBackend: 'opencl' }));
       });
 
       it('calls updateSettings with gpuLayers value from GPU layers slider', () => {
-        mockStoreValues.settings = { ...defaultSettings, inferenceBackend: 'opencl' as const, gpuLayers: 6, flashAttn: false };
+        useAppStore.getState().updateSettings({ ...defaultSettings, inferenceBackend: 'opencl' as const, gpuLayers: 6, flashAttn: false } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
         fireEvent.press(getByText('GENERAL'));
-        mockUpdateSettings.mockClear();
-
+  
         fireEvent(getByTestId('gpu-layers-stepper-slider'), 'slidingComplete', 7);
 
-        expect(mockUpdateSettings).toHaveBeenCalledWith({ gpuLayers: 7 });
+        expect(settingsNow()).toEqual(expect.objectContaining({ gpuLayers: 7 }));
       });
     });
   });
@@ -986,33 +929,50 @@ describe('GenerationSettingsModal', () => {
     // "Off" button in the Performance section. Start with flash attn OFF so the
     // only "Off" button that matches { showGenerationDetails: false } is the one
     // we want, avoiding ambiguity.
-    mockStoreValues.settings = {
+    useAppStore.getState().updateSettings({
       ...defaultSettings,
       showGenerationDetails: true,
       flashAttn: true, // flash attn already on → its Off button calls updateSettings({flashAttn:false})
-    };
+    } as any);
 
     const { getByText, getAllByText } = render(
       <GenerationSettingsModal {...defaultProps} />,
     );
 
     fireEvent.press(getByText('GENERAL'));
-    mockUpdateSettings.mockClear();
 
     // Find and press the Off button that sets showGenerationDetails
     const offButtons = getAllByText('Off');
     for (const btn of offButtons) {
       fireEvent.press(btn);
-      if (
-        mockUpdateSettings.mock.calls.some(
-          (args: any[]) => 'showGenerationDetails' in args[0],
-        )
-      ) {
-        break;
-      }
-      mockUpdateSettings.mockClear();
+      if (!settingsNow().showGenerationDetails) break;
     }
 
-    expect(mockUpdateSettings).toHaveBeenCalledWith({ showGenerationDetails: false });
+    expect(settingsNow()).toEqual(expect.objectContaining({ showGenerationDetails: false }));
+  });
+});
+
+describe('GenerationSettingsModal performance stats', () => {
+  it('shows the last generation stats after the model answers', async () => {
+    // A phone with a loaded model answers once; the real llmService records the run's stats.
+    const device = await launchGeneration();
+    device.boundary.llama!.scriptCompletion({ text: 'One two three four five.' });
+    // The clock moves on while the answer streams, as it does on a phone.
+    let now = 1_000_000;
+    const clock = jest.spyOn(Date, 'now').mockImplementation(() => (now += 40));
+    await device.generationService.generateResponse(device.conversationId, device.ask('Count to five'));
+    clock.mockRestore();
+    const stats = device.llmService.getPerformanceStats();
+    expect(stats.lastTokensPerSecond).toBeGreaterThan(0);
+    expect(stats.lastTokenCount).toBeGreaterThan(0);
+
+    const FreshReact = require('react');
+    const rtl = requireRTL();
+    const { GenerationSettingsModal: Modal } = require('../../../src/components/GenerationSettingsModal');
+    const { getByText } = rtl.render(FreshReact.createElement(Modal, defaultProps));
+
+    expect(getByText('Last Generation:')).toBeTruthy();
+    expect(getByText(`${stats.lastTokenCount} tokens`)).toBeTruthy();
+    expect(getByText(/tok\/s$/)).toBeTruthy();
   });
 });

@@ -599,7 +599,10 @@ describe('Pro mobile model transfer journey', () => {
       port: 51000,
       capabilities: { modelTransfer: true },
     };
-    const reads = jest.spyOn(modelManager, 'getDownloadedModels');
+    // The downloaded-model list lives on the device's storage; count the sheet's reads of it there.
+    const storageRead = AsyncStorage.getItem as jest.Mock;
+    const modelListReads = () =>
+      storageRead.mock.calls.filter(([key]) => key === '@local_llm/downloaded_models').length;
 
     ui = render(
       <NavigationContainer>
@@ -609,7 +612,8 @@ describe('Pro mobile model transfer journey', () => {
     await waitFor(() =>
       expect(ui!.queryByTestId('model-transfer-loading')).toBeNull(),
     );
-    const readsAfterLoad = reads.mock.calls.length;
+    const readsAfterLoad = modelListReads();
+    expect(readsAfterLoad).toBeGreaterThan(0);
 
     ui.rerender(
       <NavigationContainer>
@@ -618,7 +622,6 @@ describe('Pro mobile model transfer journey', () => {
     );
 
     expect(ui.queryByTestId('model-transfer-loading')).toBeNull();
-    expect(reads).toHaveBeenCalledTimes(readsAfterLoad);
-    reads.mockRestore();
+    expect(modelListReads()).toBe(readsAfterLoad);
   });
 });

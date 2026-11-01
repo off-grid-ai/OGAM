@@ -52,7 +52,7 @@ app's own `NavigationContainer` and `AppNavigator` in one root View, as App.tsx 
 - `relaunchApp()` mounts the relaunched app on the Chats tab; tapping a row opens that chat.
 
 A screen rendered on its own uses `harness/realNavigation`: `withNavigator(element, params)` puts it in a
-real stack, and `inStack` / `withNavigatorRoutes` add the screen it was opened from and the routes it can
+real stack, and `withNavigatorRoutes` adds the screen it was opened from and the routes it can
 go to, so a test reads where Back or a press really led instead of spying on `navigate` / `goBack`.
 
 The test file calls `jest.unmock('@react-navigation/native')` and declares no navigation mock. The global
