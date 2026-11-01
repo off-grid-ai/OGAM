@@ -54,6 +54,8 @@ class BackgroundDownloadService {
   /** "Queued" rows cancelled before their start reached startDownload, by key and time. That start is
    *  refused when it arrives, so a cancel always wins. Kept briefly, so a later re-download still starts. */
   private cancelledBeforeStart = new Map<string, number>();
+  /** The model key of each counted download holding a slot (reservation token or real id). */
+  private keyBySlot = new Map<string, string>();
   /** Monotonic counter for unique in-flight reservation tokens. */
   private startSeq = 0;
   /** Set once cleanup() runs, so a beginDownload() still awaiting the native start can't
@@ -130,16 +132,20 @@ class BackgroundDownloadService {
     // over-admit past the cap.
     const token = `reserve:${++this.startSeq}`;
     this.activeIds.add(token);
+    this.keyBySlot.set(token, this.keyFor(params));
     try {
       const info = await this.startNativeDownload(params);
+      this.keyBySlot.delete(token);
       // Swap the reservation for the real download id (still one slot). If cleanup() ran
       // while we awaited the native start, don't re-add — the release listeners are gone,
       // so this id could never be freed and would leak a slot for the service's life.
       this.activeIds.delete(token);
       if (this.shutDown) { DownloadManagerModule.cancelDownload(info.downloadId).catch(() => {}); return { ...info, status: 'failed' }; }
       this.activeIds.add(info.downloadId);
+      this.keyBySlot.set(info.downloadId, this.keyFor(params));
       return info;
     } catch (e) {
+      this.keyBySlot.delete(token);
       this.activeIds.delete(token); // free the reservation, let the queue try the next
       this.pump();
       throw e;
@@ -194,6 +200,7 @@ class BackgroundDownloadService {
 
   /** Free a slot when a download reaches a terminal state, and admit queued starts. */
   private release(downloadId: string): void {
+    this.keyBySlot.delete(downloadId);
     if (this.activeIds.delete(downloadId)) {
       this.pump();
     }
@@ -301,7 +308,9 @@ class BackgroundDownloadService {
     const idx = this.startQueue.findIndex((q) => q.key === key);
     if (idx === -1) {
       // The start may not have reached the queue yet (it checks the disk first): remember the cancel.
-      this.cancelledBeforeStart.set(key, Date.now());
+      // Not when that model's download has already started: the cancel was for a queued start only,
+      // and remembering it would refuse a later download of the same model.
+      if (![...this.keyBySlot.values()].includes(key)) this.cancelledBeforeStart.set(key, Date.now());
       return false;
     }
     const [removed] = this.startQueue.splice(idx, 1);
