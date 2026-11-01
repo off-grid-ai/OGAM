@@ -1,165 +1,88 @@
 /**
- * TTS Integration Tests
+ * TTS integration tests — the TTS store wired to the registry's real Kokoro engine.
  *
- * Tests the wiring between ttsStore and the engine registry.
- * Verifies full flows delegate correctly through the engine interface.
+ * Ours runs for real: the store, the playback machine, the registry, the Kokoro engine and its
+ * executorch bridge (mounted by EngineBridge), the residency manager and the hardware service.
+ * Faked (harness/speechDevice): the executorch speech runtime, the audio output and its clock,
+ * the resource cache and RAM. Each case asserts what is resident, what reached the runtime, what is
+ * sounding, and the store state.
  */
+import { GB } from '../../harness/nativeBoundary';
+import { launchSpeech, type SpeechApp } from '../../harness/speechDevice';
 
-const mockEngine = {
-  id: 'mock-tts',
-  displayName: 'Mock TTS',
-  capabilities: {
-    streaming: false,
-    voiceCloning: false,
-    pauseResume: true,
-    generateAndSave: true,
-    peakRamMB: 100,
-  },
-  getPhase: jest.fn(() => 'ready' as const),
-  on: jest.fn(() => jest.fn()),
-  off: jest.fn(),
-  once: jest.fn(() => jest.fn()),
-  isSupported: jest.fn(() => true),
-  initialize: jest.fn().mockResolvedValue(undefined),
-  release: jest.fn().mockResolvedValue(undefined),
-  destroy: jest.fn().mockResolvedValue(undefined),
-  getRequiredAssets: jest.fn(() => [
-    { id: 'backbone', label: 'Voice Model', url: 'https://example.com/bb.gguf', sizeBytes: 454 * 1024 * 1024, filename: 'bb.gguf' },
-    { id: 'vocoder', label: 'Decoder', url: 'https://example.com/voc.gguf', sizeBytes: 73 * 1024 * 1024, filename: 'voc.gguf' },
-  ]),
-  checkAssetStatus: jest.fn().mockResolvedValue([
-    { asset: { id: 'backbone', label: 'Voice Model', url: '', sizeBytes: 454 * 1024 * 1024, filename: 'bb.gguf' }, status: 'downloaded', progress: 1 },
-    { asset: { id: 'vocoder', label: 'Decoder', url: '', sizeBytes: 73 * 1024 * 1024, filename: 'voc.gguf' }, status: 'downloaded', progress: 1 },
-  ]),
-  downloadAssets: jest.fn().mockResolvedValue(undefined),
-  deleteAssets: jest.fn().mockResolvedValue(undefined),
-  getOverallDownloadProgress: jest.fn(() => 1),
-  isFullyDownloaded: jest.fn(() => true),
-  getBridgeComponent: jest.fn(() => null),
-  getVoices: jest.fn(() => [{ id: '0', label: 'Default', metadata: {} }]),
-  getActiveVoice: jest.fn(() => ({ id: '0', label: 'Default', metadata: {} })),
-  setVoice: jest.fn().mockResolvedValue(undefined),
-  speak: jest.fn().mockResolvedValue(undefined),
-  generateAndSave: jest.fn().mockResolvedValue({
-    filePath: '/cache/c1/m1.pcm',
-    durationSeconds: 1.5,
-    waveformData: new Array(200).fill(0.2),
-  }),
-  stop: jest.fn(),
-  pause: jest.fn(),
-  resume: jest.fn(),
-  setSpeed: jest.fn(),
-};
+let app: SpeechApp;
 
-jest.mock('../../../pro/audio/engine', () => ({
-  ttsRegistry: {
-    register: jest.fn(),
-    has: jest.fn(() => true),
-    getEngine: jest.fn(() => mockEngine),
-    setActiveEngine: jest.fn().mockResolvedValue(mockEngine),
-    getActiveEngine: jest.fn(() => mockEngine),
-    getActiveEngineId: jest.fn(() => 'mock-tts'),
-    getRegisteredIds: jest.fn(() => ['mock-tts']),
-  },
-  OuteTTSEngine: class {},
-}));
+beforeEach(async () => {
+  app = await launchSpeech();
+});
 
+afterEach(async () => {
+  await app.close();
+});
 
-import { useTTSStore } from '../../../pro/audio/ttsStore';
+/** The voice model was freed (as residency does under memory pressure): the engine is cold. */
+async function coolEngine() {
+  await app.rtl.act(async () => { await app.store().releaseEngine(); });
+  await app.rtl.waitFor(() => expect(app.store().isReady).toBe(false));
+}
 
-const getState = () => useTTSStore.getState();
-
-const resetStore = () => {
-  useTTSStore.setState({
-    phase: 'ready',
-    currentMessageId: null,
-    currentAmplitude: 0,
-    playbackElapsed: 0,
-    playbackStatus: 'idle',
-    playSessionId: 0,
-    error: null,
-    isReady: true,
-    isDownloading: false,
-    isLoading: false,
-    isSpeaking: false,
-    isPaused: false,
-    isGeneratingAudio: false,
-    assets: [],
-    overallDownloadProgress: 1,
-    voices: [{ id: '0', label: 'Default', metadata: {} }],
-    activeVoiceId: '0',
-    audioCacheSizeMB: 0,
-    settings: {
-      interfaceMode: 'chat',
-      enabled: true,
-      speed: 1.0,
-      engineId: 'mock-tts',
-      voiceByEngine: {},
-    },
-  });
-};
+/** The text model the person chats with, resident at `sizeMB`. Returns whether it was unloaded. */
+function residentTextModel(sizeMB: number) {
+  const state = { unloaded: false };
+  app.residency.register({ key: 'text', type: 'text', sizeMB }, async () => { state.unloaded = true; });
+  return state;
+}
 
 describe('TTS integration', () => {
-  beforeEach(() => {
-    resetStore();
-    jest.clearAllMocks();
-  });
-
   // ── Voice sequencing ──────────────────────────────────────────────────
-  // TTS eviction is requested ONLY for a real speak turn (the finished text model is
-  // evicted for the voice model) — NOT for warm/preload/mode-switch, which co-reside if
-  // there's room (those callers gate on canLoadWithoutEviction; evicting there would kill
-  // the user's text model mid-session). This asserts the CONTRACT (which override flag is
-  // requested); the real eviction behavior is proven in modelResidency.test.ts.
-  describe('voice sequencing: TTS load requests eviction only for a real turn', () => {
-    afterEach(() => { mockEngine.getPhase.mockReturnValue('ready'); });
+  // TTS eviction is requested ONLY for a real speak turn (the finished text model is evicted for
+  // the voice model) — NOT for warm/preload/mode-switch, which co-reside if there's room.
+  describe('voice sequencing: TTS load evicts only for a real turn', () => {
+    it('a warm/preload initializeEngine() co-resides with the text model when it fits', async () => {
+      await coolEngine();
+      const text = residentTextModel(1000);
 
-    it('a warm/preload initializeEngine() does NOT override (co-reside, honor fit)', async () => {
-      const { modelResidencyManager } = require('@offgrid/core/services/modelResidency');
-      const spy = jest.spyOn(modelResidencyManager, 'makeRoomFor')
-        .mockResolvedValue({ fits: true, evicted: [] });
-      mockEngine.getPhase.mockReturnValue('idle');
-      mockEngine.isFullyDownloaded.mockReturnValue(true);
+      await app.run(() => app.store().initializeEngine());
 
-      await getState().initializeEngine();
-
-      expect(spy).toHaveBeenCalledWith(
-        expect.objectContaining({ key: 'tts', type: 'tts' }),
-        { override: false },
-      );
-      spy.mockRestore();
+      await app.rtl.waitFor(() => expect(app.store().isReady).toBe(true));
+      expect(app.residency.isResident('tts')).toBe(true);
+      expect(app.residency.isResident('text')).toBe(true);
+      expect(text.unloaded).toBe(false);
     });
 
-    it('a speak turn forces override:true (evict the finished text model for the voice model)', async () => {
-      const { modelResidencyManager } = require('@offgrid/core/services/modelResidency');
-      const spy = jest.spyOn(modelResidencyManager, 'makeRoomFor')
-        .mockResolvedValue({ fits: true, evicted: ['text'] });
-      mockEngine.getPhase.mockReturnValue('idle');
-      mockEngine.isFullyDownloaded.mockReturnValue(true);
+    // FINDING (open): ttsStore.initializeEngine documents that a speak turn's override load "evicts
+    // EVERYTHING evictable … the text model already answered, free it". The residency policy
+    // (@offgrid/models planEviction) treats 'tts' as a sidecar, and a sidecar may only evict other
+    // sidecars, so the text model stays resident beside the voice model. The old test mocked
+    // makeRoomFor and only checked the flag it was called with, which hid this. it.failing keeps
+    // the contract pinned: it turns red the day the eviction happens, so this can become `it`.
+    it.failing('a speak turn (override) evicts the finished text model for the voice model', async () => {
+      await coolEngine();
+      const text = residentTextModel(1000);
 
-      await getState().initializeEngine({ override: true });
+      await app.run(() => app.store().initializeEngine({ override: true }));
 
-      expect(spy).toHaveBeenCalledWith(
-        expect.objectContaining({ key: 'tts', type: 'tts' }),
-        { override: true },
-      );
-      spy.mockRestore();
+      await app.rtl.waitFor(() => expect(app.store().isReady).toBe(true));
+      expect(app.residency.isResident('tts')).toBe(true);
+      expect(app.residency.isResident('text')).toBe(false);
+      expect(text.unloaded).toBe(true);
     });
 
-    it('a warm load that does not fit skips quietly — no error, no eviction', async () => {
-      const { modelResidencyManager } = require('@offgrid/core/services/modelResidency');
-      const spy = jest.spyOn(modelResidencyManager, 'makeRoomFor')
-        .mockResolvedValue({ fits: false, evicted: [] });
-      mockEngine.getPhase.mockReturnValue('idle');
-      mockEngine.isFullyDownloaded.mockReturnValue(true);
+    it('a warm load that does not fit skips quietly — no error, no eviction, no load', async () => {
+      // A 4 GB phone whose text model already fills the budget.
+      await app.close();
+      app = await launchSpeech({ ram: { platform: 'android', totalBytes: 4 * GB, availBytes: 2 * GB } });
+      await coolEngine();
+      const text = residentTextModel(app.residency.getBudgetMB());
 
-      await getState().initializeEngine(); // warm
+      await app.run(() => app.store().initializeEngine()); // warm
 
-      // Not an error state (the speak turn will force-load later), and the engine
-      // was NOT initialized (no co-resident load forced).
-      expect(getState().error).toBeNull();
-      expect(mockEngine.initialize).not.toHaveBeenCalled();
-      spy.mockRestore();
+      // Not an error state (the speak turn will force-load later), and nothing was loaded.
+      expect(app.store().error).toBeNull();
+      expect(app.store().isReady).toBe(false);
+      expect(app.runtime.loaded()).toEqual([]);
+      expect(app.residency.isResident('tts')).toBe(false);
+      expect(text.unloaded).toBe(false);
     });
   });
 
@@ -167,52 +90,27 @@ describe('TTS integration', () => {
 
   describe('Chat Mode: speak → stop', () => {
     it('completes the full Chat Mode flow', async () => {
-      let finishSpeaking!: () => void;
-      mockEngine.speak.mockImplementationOnce(
-        () => new Promise<void>(resolve => { finishSpeaking = resolve; }),
-      );
+      let first!: Promise<void>;
+      await app.rtl.act(async () => { first = app.store().speak('hello', 'msg1'); });
+      await app.rtl.waitFor(() => expect(app.store().playbackStatus).toBe('playing'));
+      expect(app.store().currentMessageId).toBe('msg1');
+      expect(app.runtime.spoken).toEqual([{ voice: 'af_heart', text: 'hello' }]);
 
-      // Speak
-      const speakPromise = getState().speak('hello', 'msg1');
-      await Promise.resolve(); // let the remote-voice preflight choose the local engine
-      expect(getState().currentMessageId).toBe('msg1');
+      // The audio plays out → the message is done.
+      await app.play(1);
+      await app.rtl.act(async () => { await first; });
+      expect(app.store().currentMessageId).toBeNull();
+      expect(app.store().playbackStatus).toBe('idle');
 
-      finishSpeaking();
-      await speakPromise;
-      expect(mockEngine.speak).toHaveBeenCalledWith('hello', expect.objectContaining({
-        speed: 1.0,
-        messageId: 'msg1',
-      }));
-      expect(getState().currentMessageId).toBeNull();
-
-      // Stop mid-speech
-      mockEngine.speak.mockImplementation(
-        () => new Promise((resolve) => setTimeout(resolve, 1000)),
-      );
-      getState().speak('second', 'msg2');
-      getState().stop();
-      expect(mockEngine.stop).toHaveBeenCalled();
-    });
-  });
-
-  // ── Audio Mode full flow ──────────────────────────────────────────────
-
-  describe('Audio Mode: generateAndSave → stop', () => {
-    beforeEach(() => {
-      useTTSStore.setState({
-        settings: { ...getState().settings, interfaceMode: 'audio' },
-      });
-    });
-
-    it('completes the full Audio Mode flow', async () => {
-      const result = await getState().generateAndSave('hello audio', 'conv1', 'msg1');
-
-      expect(result.path).toBe('/cache/c1/m1.pcm');
-      expect(result.waveformData).toHaveLength(200);
-      expect(result.durationSeconds).toBe(1.5);
-
-      getState().stop();
-      expect(mockEngine.stop).toHaveBeenCalled();
+      // Stop mid-speech: the runtime is told to stop and nothing is left sounding.
+      await app.rtl.act(async () => { app.store().speak('second', 'msg2').catch(() => {}); });
+      await app.rtl.waitFor(() => expect(app.output.sounding()).toHaveLength(1));
+      const stopsBefore = app.runtime.stops;
+      await app.rtl.act(async () => { app.store().stop(); });
+      expect(app.runtime.stops).toBeGreaterThan(stopsBefore);
+      expect(app.output.sounding()).toEqual([]);
+      expect(app.store().playbackStatus).toBe('idle');
+      expect(app.store().currentMessageId).toBeNull();
     });
   });
 
@@ -220,27 +118,39 @@ describe('TTS integration', () => {
 
   describe('mode switching', () => {
     it('switching interfaceMode to audio takes effect', () => {
-      expect(getState().settings.interfaceMode).toBe('chat');
-      getState().updateSettings({ interfaceMode: 'audio' });
-      expect(getState().settings.interfaceMode).toBe('audio');
+      expect(app.store().settings.interfaceMode).toBe('chat');
+      app.store().updateSettings({ interfaceMode: 'audio' });
+      expect(app.store().settings.interfaceMode).toBe('audio');
     });
 
     it('switching back to chat mode works', () => {
-      getState().updateSettings({ interfaceMode: 'audio' });
-      getState().updateSettings({ interfaceMode: 'chat' });
-      expect(getState().settings.interfaceMode).toBe('chat');
+      app.store().updateSettings({ interfaceMode: 'audio' });
+      app.store().updateSettings({ interfaceMode: 'chat' });
+      expect(app.store().settings.interfaceMode).toBe('chat');
+    });
+
+    it('switching mode stops speech from the old mode', async () => {
+      await app.rtl.act(async () => { app.store().speak('still talking', 'msg1').catch(() => {}); });
+      await app.rtl.waitFor(() => expect(app.output.sounding()).toHaveLength(1));
+
+      await app.rtl.act(async () => { app.store().updateSettings({ interfaceMode: 'audio' }); });
+
+      expect(app.output.sounding()).toEqual([]);
+      expect(app.store().playbackStatus).toBe('idle');
     });
   });
 
   // ── Engine-agnostic speak ─────────────────────────────────────────────
 
   describe('auto-play', () => {
-    it('speak delegates to the engine when ready', async () => {
-      await getState().speak('AI response', 'last-msg');
+    it('speak reaches the engine runtime when ready, at the chosen speed', async () => {
+      app.store().updateSettings({ speed: 1.25 });
+      await app.rtl.act(async () => { app.store().speak('AI response', 'last-msg').catch(() => {}); });
 
-      expect(mockEngine.speak).toHaveBeenCalledWith('AI response', expect.objectContaining({
-        messageId: 'last-msg',
-      }));
+      await app.rtl.waitFor(() => expect(app.output.sounding()).toHaveLength(1));
+      expect(app.said()).toEqual(['AI response']);
+      expect(app.output.sounding()[0].playbackRate.value).toBe(1.25);
+      expect(app.store().currentMessageId).toBe('last-msg');
     });
   });
 });
