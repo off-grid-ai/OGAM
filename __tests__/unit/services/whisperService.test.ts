@@ -10,7 +10,6 @@ import { Platform, PermissionsAndroid } from 'react-native';
 import RNFS from 'react-native-fs';
 import { whisperService } from '../../../src/services/whisperService';
 import { audioSessionManager } from '../../../src/services/audioSessionManager';
-import { audioRecorderService } from '../../../src/services/audioRecorderService';
 import { AudioManager } from 'react-native-audio-api';
 
 // The realtime permission path drives audioSessionManager, which calls these.
@@ -18,6 +17,10 @@ const mockSetAudioSessionOptions =
   AudioManager.setAudioSessionOptions as jest.Mock;
 const mockSetAudioSessionActivity =
   AudioManager.setAudioSessionActivity as jest.Mock;
+
+// The real audioRecorderService records through react-native-audio-api's AudioRecorder (faked in
+// jest.setup), which writes the take to this file.
+const RECORDED_FILE = '/mock/audio/input.wav';
 
 // Downloads (the native downloader, the download store and its rows) are covered on the phone's fakes in
 // transcriptionDownloads.test.ts.
@@ -678,11 +681,6 @@ describe('WhisperService', () => {
       mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
       await whisperService.loadModel('/path/model.bin');
       Object.defineProperty(Platform, 'OS', { get: () => 'ios' });
-      jest.spyOn(audioRecorderService, 'startRecording').mockResolvedValue();
-      jest.spyOn(audioRecorderService, 'stopRecording').mockResolvedValue({
-        path: '/recorded-hindi.wav',
-        durationSeconds: 1,
-      });
 
       const resultCb = jest.fn();
       await whisperService.startRealtimeTranscription(resultCb, {
@@ -692,7 +690,7 @@ describe('WhisperService', () => {
       await (whisperService as any).transcriptionFullyStopped;
 
       expect(mockContext.transcribe).toHaveBeenCalledWith(
-        '/recorded-hindi.wav',
+        RECORDED_FILE,
         expect.objectContaining({
           language: 'hi',
           translate: false,
@@ -779,11 +777,6 @@ describe('WhisperService', () => {
       await whisperService.loadModel('/path/model.bin');
       Object.defineProperty(Platform, 'OS', { get: () => 'android' });
       jest.spyOn(PermissionsAndroid, 'request').mockResolvedValue(PermissionsAndroid.RESULTS.GRANTED);
-      jest.spyOn(audioRecorderService, 'startRecording').mockResolvedValue();
-      jest.spyOn(audioRecorderService, 'stopRecording').mockResolvedValue({
-        path: '/recorded.wav',
-        durationSeconds: 1,
-      });
 
       const firstResult = jest.fn();
       await whisperService.startRealtimeTranscription(firstResult);

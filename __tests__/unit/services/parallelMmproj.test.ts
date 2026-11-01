@@ -1,376 +1,227 @@
 /**
- * Parallel mmproj Download Tests
+ * Parallel mmproj download tests.
  *
- * Tests for downloading mmproj (vision projection) files in parallel with the
- * main GGUF model, instead of sequentially blocking before the main download.
+ * A vision model downloads its projector (mmproj) beside the main GGUF instead of one after the
+ * other. Covered: parallel start, combined progress, finalize only when both files are in, error
+ * handling, downloads that ended while the app was closed, and restore after a relaunch.
  *
- * Covers: parallel start, combined progress, dual completion gating,
- * error handling, cancellation, sync after app kill, and restore.
+ * Fakes: the native background downloader (NativeModules.DownloadManagerModule), the disk
+ * (react-native-fs in memory) and async-storage, from harness/modelManagerDevice. The download
+ * functions, backgroundDownloadService, the Hugging Face URL builder and the download store run for
+ * real. A transfer finishes only when the fake native downloader says so; the app's own finalize
+ * moves the file into the models folder.
  */
-
-import RNFS from 'react-native-fs';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NativeModules } from 'react-native';
-import {
-  performBackgroundDownload,
-  watchBackgroundDownload,
-  syncCompletedBackgroundDownloads,
-  mmProjLocalName,
-} from '../../../src/services/modelManager/download';
+import { installModelManagerDevice, type ModelManagerDevice } from '../../harness/modelManagerDevice';
+import { mmProjLocalName } from '../../../src/services/modelManager/download';
 import { mmProjBelongsToModel, pickMmProjForDownload } from '../../../src/services/mmproj';
-import { restoreInProgressDownloads } from '../../../src/services/modelManager/restore';
-import { backgroundDownloadService } from '../../../src/services/backgroundDownloadService';
-import { BackgroundDownloadContext } from '../../../src/services/modelManager/types';
-import { useDownloadStore } from '../../../src/stores/downloadStore';
 import { createModelFile, createModelFileWithMmProj } from '../../utils/factories';
+import type { DownloadedModel, ModelFile, PersistedDownloadInfo } from '../../../src/types';
+import type { BackgroundDownloadContext } from '../../../src/services/modelManager/types';
 
-const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
-const mockedAsyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage>;
+type DownloadModule = typeof import('../../../src/services/modelManager/download');
+type RestoreModule = typeof import('../../../src/services/modelManager/restore');
+type DownloadStoreModule = typeof import('../../../src/stores/downloadStore');
 
-jest.mock('../../../src/services/huggingface', () => ({
-  huggingFaceService: {
-    getDownloadUrl: jest.fn((modelId: string, fileName: string) =>
-      `https://huggingface.co/${modelId}/resolve/main/${fileName}`
-    ),
-  },
-}));
+const MMPROJ_URL = 'https://huggingface.co/test/model/resolve/main/mmproj.gguf';
 
-jest.mock('../../../src/services/backgroundDownloadService', () => ({
-  backgroundDownloadService: {
-    isAvailable: jest.fn(() => true),
-    startDownload: jest.fn(),
-    cancelDownload: jest.fn(() => Promise.resolve()),
-    purgeNativeRecord: jest.fn(() => Promise.resolve()),
-    adoptActive: jest.fn(),
-    getActiveDownloads: jest.fn(() => Promise.resolve([])),
-    moveCompletedDownload: jest.fn(),
-    startProgressPolling: jest.fn(),
-    stopProgressPolling: jest.fn(),
-    onProgress: jest.fn(() => jest.fn()),
-    onComplete: jest.fn(() => jest.fn()),
-    onError: jest.fn(() => jest.fn()),
-    excludeFromBackup: jest.fn(() => Promise.resolve(true)),
-  },
-}));
-
-const mockService = backgroundDownloadService as jest.Mocked<typeof backgroundDownloadService>;
-
-const MODELS_DIR = '/mock/documents/models';
-
-// Helper: create a vision file with specific sizes
-function visionFile(mainSize = 4_000_000_000, mmProjSize = 500_000_000) {
+function visionFile(mainSize = 4_000_000_000, mmProjSize = 500_000_000): ModelFile {
   return createModelFileWithMmProj({
     name: 'vision.gguf',
     size: mainSize,
     quantization: 'Q4_K_M',
     mmProjName: 'mmproj.gguf',
     mmProjSize,
-    mmProjDownloadUrl: 'https://huggingface.co/test/model/resolve/main/mmproj.gguf',
+    mmProjDownloadUrl: MMPROJ_URL,
   });
-}
-
-// Helper: stub startDownload to return download IDs BY ROLE, not call order. The
-// sidecar (fileName contains 'mmproj') always gets ids[1]; the main file gets ids[0].
-// Keeping the id tied to the role — not the start sequence — makes these tests agnostic
-// to whether the main or the sidecar is started first (the sidecar-first ordering that
-// closes the finalize-hang window must not require rewriting every assertion).
-function stubStartDownload(ids: string[]) {
-  let idx = 0;
-  mockService.startDownload.mockImplementation(async (params: any) => {
-    const isMmProj = /mmproj/i.test(params.fileName ?? '');
-    const downloadId = ids.length > 1
-      ? (isMmProj ? ids[1] : ids[0])
-      : (ids[idx++] ?? ids[ids.length - 1]);
-    return {
-      downloadId,
-      fileName: params.fileName,
-      modelId: params.modelId,
-      status: 'pending',
-      bytesDownloaded: 0,
-      totalBytes: params.totalBytes || 0,
-      startedAt: Date.now(),
-    };
-  });
-}
-
-// Helper: capture onComplete callbacks keyed by downloadId
-function captureCompleteCallbacks(): Record<string, (event: any) => Promise<void>> {
-  const cbs: Record<string, any> = {};
-  mockService.onComplete.mockImplementation((id: string, cb: any) => {
-    cbs[id] = cb;
-    return jest.fn();
-  });
-  return cbs;
-}
-
-// Helper: capture onError callbacks keyed by downloadId
-function captureErrorCallbacks(): Record<string, (event: any) => void> {
-  const cbs: Record<string, any> = {};
-  mockService.onError.mockImplementation((id: string, cb: any) => {
-    cbs[id] = cb;
-    return jest.fn();
-  });
-  return cbs;
-}
-
-// Helper: capture onProgress callbacks keyed by downloadId
-function captureProgressCallbacks(): Record<string, (event: any) => void> {
-  const cbs: Record<string, any> = {};
-  mockService.onProgress.mockImplementation((id: string, cb: any) => {
-    cbs[id] = cb;
-    return jest.fn();
-  });
-  return cbs;
 }
 
 describe('Parallel mmproj download', () => {
+  let device: ModelManagerDevice;
+  let dl: DownloadModule;
+  let restore: RestoreModule;
+  let store: DownloadStoreModule['useDownloadStore'];
   let bgContext: Map<string, BackgroundDownloadContext>;
-  let metadataCallback: jest.Mock;
+  let metadata: Array<[string, unknown]>;
 
-  beforeEach(() => {
-    jest.clearAllMocks();
+  const modelsDir = () => device.modelsDir;
+  const metadataCallback = (id: string | number, info: unknown) => { metadata.push([String(id), info]); };
+
+  beforeEach(async () => {
+    device = await installModelManagerDevice();
+    dl = require('../../../src/services/modelManager/download');
+    restore = require('../../../src/services/modelManager/restore');
+    store = (require('../../../src/stores/downloadStore') as DownloadStoreModule).useDownloadStore;
     bgContext = new Map();
-    metadataCallback = jest.fn();
-
-    mockedRNFS.exists.mockResolvedValue(false);
-    mockedAsyncStorage.getItem.mockResolvedValue('[]');
-    mockedAsyncStorage.setItem.mockResolvedValue(undefined as any);
+    metadata = [];
   });
+
+  /** Start a download the way modelManager does; returns the main and sidecar native ids. */
+  async function start(file: ModelFile = visionFile(), onProgress?: (p: { bytesDownloaded: number; totalBytes: number; progress: number }) => void) {
+    const info = await dl.performBackgroundDownload({
+      modelId: 'test/model',
+      file,
+      modelsDir: modelsDir(),
+      backgroundDownloadContext: bgContext,
+      backgroundDownloadMetadataCallback: metadataCallback,
+      onProgress,
+    });
+    const sidecarId = device.nativeRows().find(row => /mmproj/.test(row.fileName ?? ''))?.downloadId;
+    return { info, mainId: info.downloadId, sidecarId };
+  }
+
+  /** Attach the finalize watcher; what it delivers lands in done/errors. */
+  function watch(downloadId: string) {
+    const done: DownloadedModel[] = [];
+    const errors: Error[] = [];
+    dl.watchBackgroundDownload({
+      downloadId,
+      modelsDir: modelsDir(),
+      backgroundDownloadContext: bgContext,
+      backgroundDownloadMetadataCallback: metadataCallback,
+      onComplete: model => done.push(model),
+      onError: error => errors.push(error),
+    });
+    return { done, errors };
+  }
+
+  /** The native downloader reports the transfer finished, but no file waits in its temp folder. */
+  async function announceCompleteWithoutFile(downloadId: string) {
+    const download = device.boundary.download!;
+    const row = device.nativeRows().find(r => r.downloadId === downloadId)!;
+    download.seedActive({ ...row, status: 'completed' });
+    download.events.emit('DownloadComplete', {
+      downloadId, fileName: row.fileName, modelId: row.modelId, status: 'completed',
+      bytesDownloaded: row.totalBytes, totalBytes: row.totalBytes,
+    });
+    await device.settle();
+  }
+
+  const onDisk = (name: string) => device.fs.exists(`${modelsDir()}/${name}`);
 
   // ========================================================================
   // performBackgroundDownload — parallel start
   // ========================================================================
 
   describe('performBackgroundDownload', () => {
-    it('starts both main and mmproj downloads in parallel', async () => {
-      stubStartDownload(['42', '43']);
+    it('starts the projector first, then the main, both from their own URLs', async () => {
+      // Regression: the main used to be started first, then this function blocked awaiting the
+      // sidecar's queued start; during that wait the main could complete with no listener yet
+      // (lost event, finalize hang at 100%). Sidecar-first means nothing long is awaited after the
+      // main starts.
+      const { mainId, sidecarId } = await start();
 
-      const info = await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
-
-      expect(info.downloadId).toBe('42');
-      expect(mockService.startDownload).toHaveBeenCalledTimes(2);
-      expect(mockService.startDownload).toHaveBeenCalledWith(
-        expect.objectContaining({ fileName: 'vision.gguf' }),
-      );
-      expect(mockService.startDownload).toHaveBeenCalledWith(
-        expect.objectContaining({ fileName: 'vision-mmproj.gguf' }),
-      );
+      const rows = device.nativeRows() as Array<{ fileName?: string; url?: string; status?: string }>;
+      expect(rows.map(row => [row.fileName, row.url, row.status])).toEqual([
+        ['vision-mmproj.gguf', MMPROJ_URL, 'running'],
+        ['vision.gguf', visionFile().downloadUrl, 'running'],
+      ]);
+      expect(mainId).toBe(device.nativeRows()[1].downloadId);
+      expect(sidecarId).toBe(device.nativeRows()[0].downloadId);
     });
 
-    it('starts the mmproj sidecar BEFORE the main (so the main is last-started → watcher attaches before it can complete)', async () => {
-      // Regression: the main used to be started first, then this function blocked
-      // awaiting the sidecar's queued start; during that wait the main could complete
-      // with no listener yet (lost event → finalize hang at 100%). Sidecar-first means
-      // nothing long is awaited after the main starts.
-      stubStartDownload(['42', '43']);
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
-      const order = mockService.startDownload.mock.calls.map((c: any[]) => c[0].fileName);
-      expect(order).toEqual(['vision-mmproj.gguf', 'vision.gguf']);
-    });
+    it('hands the projector id and name to the metadata callback with the main id', async () => {
+      const { mainId, sidecarId } = await start();
 
-    it('persists mmProjDownloadId in metadata callback', async () => {
-      stubStartDownload(['42', '43']);
-
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
-
-      expect(metadataCallback).toHaveBeenCalledWith('42', expect.objectContaining({
-        mmProjDownloadId: '43',
+      expect(metadata).toEqual([[mainId, expect.objectContaining({
+        mmProjDownloadId: sidecarId,
         mmProjFileName: 'vision-mmproj.gguf',
-      }));
+      })]]);
     });
 
     it('persists metadataJson (with mmProjDownloadUrl) on the store entry so a same-session iOS retry can re-fetch the vision projector', async () => {
-      // The BUG: the store row carried mmProjFileName/Size but NOT metadataJson, so
-      // metadataJson (which holds mmProjDownloadUrl) only appeared after a hydrate from
-      // native — i.e. after an app restart. On a same-session retry, iOS's
-      // restartIosTextDownload found meta=null and re-issued ONLY the main GGUF, silently
-      // dropping the vision projector. The sidecar URL must be on the row the moment the
-      // download is added, exactly as it is handed to the native service.
-      useDownloadStore.setState({ downloads: {}, downloadIdIndex: {} } as any);
-      stubStartDownload(['42', '43']);
+      // The BUG: the store row carried mmProjFileName/Size but NOT metadataJson, so metadataJson
+      // (which holds mmProjDownloadUrl) only appeared after a hydrate from native, i.e. after an app
+      // restart. On a same-session retry, iOS's restartIosTextDownload found meta=null and re-issued
+      // ONLY the main GGUF, silently dropping the vision projector.
+      expect(store.getState().downloads['test/model/vision.gguf']).toBeUndefined();
+      const { sidecarId } = await start();
 
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
-
-      const entry = useDownloadStore.getState().downloads['test/model/vision.gguf'];
-      expect(entry).toBeDefined();
+      const entry = store.getState().downloads['test/model/vision.gguf'];
       expect(entry.mmProjFileName).toBe('vision-mmproj.gguf');
-      expect(entry.metadataJson).toBeDefined();
-      const meta = JSON.parse(entry.metadataJson as string);
-      expect(meta.mmProjDownloadUrl).toBe('https://huggingface.co/test/model/resolve/main/mmproj.gguf');
+      expect(entry.mmProjDownloadId).toBe(sidecarId);
+      expect(JSON.parse(entry.metadataJson as string).mmProjDownloadUrl).toBe(MMPROJ_URL);
     });
 
-    it('sets mmProjCompleted=false and mainCompleted=false in context', async () => {
-      stubStartDownload(['42', '43']);
+    it('waits for both files before it registers the model', async () => {
+      const { mainId, sidecarId } = await start();
+      const { done } = watch(mainId);
 
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      await device.finishDownload(mainId, 4_000_000_000);
+      expect(done).toEqual([]);
+      expect(await device.readRegistry()).toEqual([]);
 
-      const ctx = bgContext.get('42') as any;
-      expect(ctx.mmProjCompleted).toBe(false);
-      expect(ctx.mainCompleted).toBe(false);
-      expect(ctx.mmProjDownloadId).toBe('43');
+      await device.finishDownload(sidecarId!, 500_000_000);
+      expect(done).toEqual([expect.objectContaining({ isVisionModel: true, mmProjPath: `${modelsDir()}/vision-mmproj.gguf` })]);
     });
 
-    it('skips mmproj download when mmproj already exists', async () => {
-      stubStartDownload(['42']);
-      mockedRNFS.exists
-        .mockResolvedValueOnce(false) // main doesn't exist
-        .mockResolvedValueOnce(true); // mmproj exists
-      mockedRNFS.stat.mockResolvedValue({ size: 500_000_000 } as any);
+    it('skips the projector when a complete one is already on disk, and finishes on the main alone', async () => {
+      device.fs.seedFile(`${modelsDir()}/vision-mmproj.gguf`, 500_000_000);
 
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      const { mainId, sidecarId } = await start();
+      expect(sidecarId).toBeUndefined();
+      expect(device.nativeRows().map(row => row.fileName)).toEqual(['vision.gguf']);
 
-      // Only main download started
-      expect(mockService.startDownload).toHaveBeenCalledTimes(1);
-      const ctx = bgContext.get('42') as any;
-      expect(ctx.mmProjCompleted).toBe(true);
+      const { done } = watch(mainId);
+      await device.finishDownload(mainId, 4_000_000_000);
+
+      expect(done).toEqual([expect.objectContaining({ isVisionModel: true, mmProjPath: `${modelsDir()}/vision-mmproj.gguf` })]);
     });
 
-    it('only starts main download for non-vision models', async () => {
-      stubStartDownload(['42']);
-      const file = createModelFile({ name: 'model.gguf', size: 4_000_000_000 });
+    it('starts only the main for a model with no projector, and finishes it alone', async () => {
+      const { mainId, sidecarId } = await start(createModelFile({ name: 'model.gguf', size: 4_000_000_000 }));
 
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file,
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
-
-      expect(mockService.startDownload).toHaveBeenCalledTimes(1);
-      const ctx = bgContext.get('42') as any;
-      expect(ctx.mmProjCompleted).toBe(true);
-      expect(ctx.mmProjDownloadId).toBeUndefined();
+      expect(sidecarId).toBeUndefined();
+      expect(device.nativeRows().map(row => row.fileName)).toEqual(['model.gguf']);
+      const { done } = watch(mainId);
+      await device.finishDownload(mainId, 4_000_000_000);
+      expect(done).toEqual([expect.objectContaining({ id: 'test/model/model.gguf' })]);
     });
 
-    it('returns immediately when both files already exist', async () => {
-      mockedRNFS.exists.mockResolvedValue(true);
-      mockedRNFS.stat.mockResolvedValue({ size: 500_000_000 } as any);
-      mockedAsyncStorage.getItem.mockResolvedValue('[]');
+    it('returns at once, with nothing started, when both files are already on disk', async () => {
+      device.fs.seedFile(`${modelsDir()}/vision.gguf`, 4_000_000_000);
+      device.fs.seedFile(`${modelsDir()}/vision-mmproj.gguf`, 500_000_000);
 
-      const info = await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      const { info } = await start();
 
       expect(info.downloadId).toBe('already-downloaded:test/model/vision.gguf');
       expect(info.status).toBe('completed');
-      expect(mockService.startDownload).not.toHaveBeenCalled();
+      expect(device.nativeRows()).toEqual([]);
     });
 
-    it('re-downloads mmproj when an existing sidecar is only partially written', async () => {
-      stubStartDownload(['42', '43']);
-      mockedRNFS.exists
-        .mockResolvedValueOnce(false)
-        .mockResolvedValueOnce(true);
-      mockedRNFS.stat.mockResolvedValue({ size: '123' } as any);
-      mockedRNFS.unlink.mockResolvedValue(undefined as any);
+    it('re-downloads a projector that is only partly written, and removes the partial file', async () => {
+      device.fs.seedFile(`${modelsDir()}/vision-mmproj.gguf`, 123);
+      expect(await onDisk('vision-mmproj.gguf')).toBe(true);
 
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(4_000_000_000, 500_000_000),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      await start();
 
-      expect(mockedRNFS.unlink).toHaveBeenCalledWith(`${MODELS_DIR}/vision-mmproj.gguf`);
-      expect(mockService.startDownload).toHaveBeenCalledTimes(2);
+      expect(await onDisk('vision-mmproj.gguf')).toBe(false);
+      expect(device.nativeRows().map(row => row.fileName)).toEqual(['vision-mmproj.gguf', 'vision.gguf']);
     });
 
-    it('re-downloads mmproj when stat fails for an existing sidecar', async () => {
-      stubStartDownload(['42', '43']);
-      mockedRNFS.exists
-        .mockResolvedValueOnce(false)
-        .mockResolvedValueOnce(true);
-      mockedRNFS.stat.mockRejectedValue(new Error('stat failed'));
-      mockedRNFS.unlink.mockResolvedValue(undefined as any);
+    it('re-downloads a projector whose size the disk cannot read', async () => {
+      device.fs.seedFile(`${modelsDir()}/vision-mmproj.gguf`, 500_000_000);
+      device.fs.module.readDir.mockRejectedValueOnce(new Error('readDir failed'));
 
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(4_000_000_000, 500_000_000),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      await start();
 
-      expect(mockedRNFS.unlink).toHaveBeenCalledWith(`${MODELS_DIR}/vision-mmproj.gguf`);
-      expect(mockService.startDownload).toHaveBeenCalledTimes(2);
+      expect(await onDisk('vision-mmproj.gguf')).toBe(false);
+      expect(device.nativeRows().map(row => row.fileName)).toEqual(['vision-mmproj.gguf', 'vision.gguf']);
     });
 
-    it('reuses an existing failed entry by cancelling old downloads and retrying the store entry', async () => {
-      stubStartDownload(['42', '43']);
-      const retryEntry = jest.fn();
-      const add = jest.fn();
-      const setMmProjDownloadId = jest.fn();
-      const getStateSpy = jest.spyOn(useDownloadStore, 'getState').mockReturnValue({
-        downloads: {
-          'test/model/vision.gguf': {
-            downloadId: 'old-main',
-            mmProjDownloadId: 'old-mmproj',
-          },
-        },
-        retryEntry,
-        add,
-        setMmProjDownloadId,
-      } as any);
+    it('a second start of the same model cancels the old transfers and points the store row at the new ones', async () => {
+      const first = await start();
+      expect(store.getState().downloads['test/model/vision.gguf'].downloadId).toBe(first.mainId);
 
-      try {
-        await performBackgroundDownload({
-          modelId: 'test/model',
-          file: visionFile(),
-          modelsDir: MODELS_DIR,
-          backgroundDownloadContext: bgContext,
-          backgroundDownloadMetadataCallback: metadataCallback,
-        });
+      const second = await start();
 
-        expect(mockService.cancelDownload).toHaveBeenCalledWith('old-main');
-        expect(mockService.cancelDownload).toHaveBeenCalledWith('old-mmproj');
-        expect(retryEntry).toHaveBeenCalledWith('test/model/vision.gguf', '42');
-        expect(add).not.toHaveBeenCalled();
-        expect(setMmProjDownloadId).toHaveBeenCalledWith('test/model/vision.gguf', '43');
-      } finally {
-        getStateSpy.mockRestore();
-      }
+      const ids = device.nativeRows().map(row => row.downloadId);
+      expect(ids).not.toContain(first.mainId);
+      expect(ids).not.toContain(first.sidecarId);
+      expect(ids.sort()).toEqual([second.mainId, second.sidecarId].sort());
+      const entry = store.getState().downloads['test/model/vision.gguf'];
+      expect(entry.downloadId).toBe(second.mainId);
+      expect(entry.mmProjDownloadId).toBe(second.sidecarId);
+      expect(Object.keys(store.getState().downloads)).toEqual(['test/model/vision.gguf']);
     });
   });
 
@@ -380,111 +231,48 @@ describe('Parallel mmproj download', () => {
 
   describe('combined progress', () => {
     it('reports combined progress from both downloads', async () => {
-      const progressCbs = captureProgressCallbacks();
-      stubStartDownload(['42', '43']);
-      const onProgress = jest.fn();
+      const progress: Array<{ bytesDownloaded: number; totalBytes: number; progress: number }> = [];
+      const { mainId, sidecarId } = await start(visionFile(4_000_000_000, 1_000_000_000), p => progress.push(p));
 
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(4_000_000_000, 1_000_000_000), // 4GB main + 1GB mmproj
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onProgress,
-      });
+      await device.reportProgress(mainId, 2_000_000_000, 4_000_000_000);
+      expect(progress.at(-1)).toEqual(expect.objectContaining({ bytesDownloaded: 2_000_000_000, totalBytes: 5_000_000_000 }));
 
-      // Simulate main progress: 2GB downloaded
-      progressCbs['42']?.({ downloadId: '42', bytesDownloaded: 2_000_000_000, totalBytes: 4_000_000_000, status: 'running', fileName: 'vision.gguf', modelId: 'test/model' });
-      expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({
-        bytesDownloaded: 2_000_000_000, // main only so far
-        totalBytes: 5_000_000_000, // combined
-      }));
-
-      // Simulate mmproj progress: 500MB downloaded
-      progressCbs['43']?.({ downloadId: '43', bytesDownloaded: 500_000_000, totalBytes: 1_000_000_000, status: 'running', fileName: 'mmproj.gguf', modelId: 'test/model' });
-      expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({
-        bytesDownloaded: 2_500_000_000, // 2GB main + 500MB mmproj
+      await device.reportProgress(sidecarId!, 500_000_000, 1_000_000_000);
+      expect(progress.at(-1)).toEqual(expect.objectContaining({
+        bytesDownloaded: 2_500_000_000,
         totalBytes: 5_000_000_000,
-        progress: expect.closeTo(0.5, 5),
+        progress: 0.5,
       }));
     });
 
-    it('includes pre-existing mmproj size in progress when mmproj already downloaded', async () => {
-      const progressCbs = captureProgressCallbacks();
-      stubStartDownload(['42']);
-      mockedRNFS.exists
-        .mockResolvedValueOnce(false) // main
-        .mockResolvedValueOnce(true); // mmproj exists
-      mockedRNFS.stat.mockResolvedValue({ size: 1_000_000_000 } as any);
-      const onProgress = jest.fn();
+    it('counts a projector already on disk as downloaded', async () => {
+      device.fs.seedFile(`${modelsDir()}/vision-mmproj.gguf`, 1_000_000_000);
+      const progress: Array<{ bytesDownloaded: number; totalBytes: number }> = [];
+      const { mainId } = await start(visionFile(4_000_000_000, 1_000_000_000), p => progress.push(p));
 
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(4_000_000_000, 1_000_000_000),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onProgress,
-      });
+      await device.reportProgress(mainId, 2_000_000_000, 4_000_000_000);
 
-      // Main progress: 2GB
-      progressCbs['42']?.({ downloadId: '42', bytesDownloaded: 2_000_000_000, totalBytes: 4_000_000_000, status: 'running', fileName: 'vision.gguf', modelId: 'test/model' });
-      expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({
-        bytesDownloaded: 3_000_000_000, // 2GB main + 1GB existing mmproj
-        totalBytes: 5_000_000_000,
-      }));
+      expect(progress.at(-1)).toEqual(expect.objectContaining({ bytesDownloaded: 3_000_000_000, totalBytes: 5_000_000_000 }));
     });
 
-    it('updates the native combined-progress notification when supported', async () => {
-      const progressCbs = captureProgressCallbacks();
-      stubStartDownload(['42', '43']);
-      NativeModules.DownloadManagerModule = {
-        updateCombinedProgress: jest.fn(),
-      };
+    it('updates the native combined-progress notification when the platform has one', async () => {
+      const notification: unknown[][] = [];
+      device.boundary.download!.module.updateCombinedProgress = jest.fn((...args: unknown[]) => { notification.push(args); });
+      const { mainId } = await start(visionFile(4_000_000_000, 1_000_000_000), () => {});
 
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(4_000_000_000, 1_000_000_000),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onProgress: jest.fn(),
-      });
+      await device.reportProgress(mainId, 1_000_000_000, 4_000_000_000);
 
-      progressCbs['42']?.({ downloadId: '42', bytesDownloaded: 1_000_000_000, totalBytes: 4_000_000_000, status: 'running', fileName: 'vision.gguf', modelId: 'test/model' });
-
-      expect(NativeModules.DownloadManagerModule.updateCombinedProgress).toHaveBeenCalledWith(
-        'test/model',
-        'vision.gguf',
-        'mmproj.gguf',
-        1_000_000_000,
-        4_000_000_000,
-        0,
-        1_000_000_000,
-      );
+      expect(notification).toEqual([['test/model', 'vision.gguf', 'mmproj.gguf', 1_000_000_000, 4_000_000_000, 0, 1_000_000_000]]);
     });
 
-    it('swallows native combined-progress update failures', async () => {
-      const progressCbs = captureProgressCallbacks();
-      stubStartDownload(['42', '43']);
-      NativeModules.DownloadManagerModule = {
-        updateCombinedProgress: jest.fn(() => {
-          throw new Error('native failure');
-        }),
-      };
+    it('still reports progress in the app when the native notification update throws', async () => {
+      device.boundary.download!.module.updateCombinedProgress = jest.fn(() => { throw new Error('native failure'); });
+      const progress: Array<{ bytesDownloaded: number }> = [];
+      const { mainId } = await start(visionFile(4_000_000_000, 1_000_000_000), p => progress.push(p));
 
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(4_000_000_000, 1_000_000_000),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onProgress: jest.fn(),
-      });
+      await device.reportProgress(mainId, 1_000_000_000, 4_000_000_000);
 
-      expect(() => {
-        progressCbs['42']?.({ downloadId: '42', bytesDownloaded: 1_000_000_000, totalBytes: 4_000_000_000, status: 'running', fileName: 'vision.gguf', modelId: 'test/model' });
-      }).not.toThrow();
+      expect(progress).toEqual([expect.objectContaining({ bytesDownloaded: 1_000_000_000 })]);
     });
   });
 
@@ -493,253 +281,96 @@ describe('Parallel mmproj download', () => {
   // ========================================================================
 
   describe('watchBackgroundDownload — completion gating', () => {
-    async function setupVisionDownload() {
-      stubStartDownload(['42', '43']);
-      const completeCbs = captureCompleteCallbacks();
+    it('does not finish until both downloads finish (projector first), then moves both files in', async () => {
+      const { mainId, sidecarId } = await start();
+      const { done } = watch(mainId);
 
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      await device.finishDownload(sidecarId!, 500_000_000);
+      expect(done).toEqual([]);
+      expect(await onDisk('vision-mmproj.gguf')).toBe(true);
+      expect(await onDisk('vision.gguf')).toBe(false);
 
-      return completeCbs;
-    }
-
-    it('does not fire onComplete until both downloads finish (mmproj first)', async () => {
-      const completeCbs = await setupVisionDownload();
-      const onComplete = jest.fn();
-
-      mockService.moveCompletedDownload.mockResolvedValue('/models/vision.gguf');
-      mockedRNFS.exists.mockResolvedValue(true);
-
-      watchBackgroundDownload({
-        downloadId: '42',
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onComplete,
-      });
-
-      // mmproj completes first
-      await completeCbs['43']?.({ downloadId: '43', fileName: 'mmproj.gguf' });
-      expect(onComplete).not.toHaveBeenCalled();
-
-      // main completes
-      await completeCbs['42']?.({ downloadId: '42', fileName: 'vision.gguf' });
-      expect(onComplete).toHaveBeenCalledTimes(1);
+      await device.finishDownload(mainId, 4_000_000_000);
+      expect(done).toHaveLength(1);
+      expect(await onDisk('vision.gguf')).toBe(true);
     });
 
-    it('does not fire onComplete until both downloads finish (main first)', async () => {
-      const completeCbs = await setupVisionDownload();
-      const onComplete = jest.fn();
+    it('does not finish until both downloads finish (main first)', async () => {
+      const { mainId, sidecarId } = await start();
+      const { done } = watch(mainId);
 
-      mockService.moveCompletedDownload.mockResolvedValue('/models/vision.gguf');
-      mockedRNFS.exists.mockResolvedValue(true);
+      await device.finishDownload(mainId, 4_000_000_000);
+      expect(done).toEqual([]);
 
-      watchBackgroundDownload({
-        downloadId: '42',
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onComplete,
-      });
-
-      // main completes first
-      await completeCbs['42']?.({ downloadId: '42', fileName: 'vision.gguf' });
-      expect(onComplete).not.toHaveBeenCalled();
-
-      // mmproj completes
-      await completeCbs['43']?.({ downloadId: '43', fileName: 'mmproj.gguf' });
-      expect(onComplete).toHaveBeenCalledTimes(1);
-    });
-
-    it('fires onComplete immediately for non-vision model (no mmproj)', async () => {
-      stubStartDownload(['42']);
-      const completeCbs = captureCompleteCallbacks();
-      const file = createModelFile({ name: 'model.gguf', size: 4_000_000_000 });
-
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file,
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
-
-      const onComplete = jest.fn();
-      mockService.moveCompletedDownload.mockResolvedValue('/models/model.gguf');
-      mockedRNFS.exists.mockResolvedValue(true);
-
-      watchBackgroundDownload({
-        downloadId: '42',
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onComplete,
-      });
-
-      await completeCbs['42']?.({ downloadId: '42', fileName: 'model.gguf' });
-      expect(onComplete).toHaveBeenCalledTimes(1);
+      await device.finishDownload(sidecarId!, 500_000_000);
+      expect(done).toHaveLength(1);
     });
 
     it('finalizes idempotently when the native move rejects but the file is already on disk (no re-finalize loop)', async () => {
-      // Device case: a record reports completed across relaunch but its localUri was
-      // cleared (moved in a prior session), so moveCompletedDownload rejects NOT_COMPLETED.
-      // The file is already at localPath — finalize from it, and purge the stale native
-      // record so restore can't re-adopt + re-fail it every foreground.
-      stubStartDownload(['42']);
-      const completeCbs = captureCompleteCallbacks();
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: createModelFile({ name: 'model.gguf', size: 4_000_000_000 }),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      // Device case: a record reports completed across relaunch but its localUri was cleared (moved
+      // in a prior session), so moveCompletedDownload rejects NOT_COMPLETED. The file is already at
+      // localPath: finalize from it, and purge the stale native record so restore can't re-adopt and
+      // re-fail it every foreground.
+      const { mainId } = await start(createModelFile({ name: 'model.gguf', size: 4_000_000_000 }));
+      const { done, errors } = watch(mainId);
+      device.fs.seedFile(`${modelsDir()}/model.gguf`, 4_000_000_000);
 
-      const onComplete = jest.fn();
-      const onError = jest.fn();
-      mockService.moveCompletedDownload.mockRejectedValue(new Error('Download 42 not completed yet'));
-      mockedRNFS.exists.mockResolvedValue(true); // the final file IS on disk
-      mockService.purgeNativeRecord.mockResolvedValue(undefined);
+      await announceCompleteWithoutFile(mainId);
 
-      watchBackgroundDownload({
-        downloadId: '42',
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onComplete,
-        onError,
-      });
-
-      await completeCbs['42']?.({ downloadId: '42', fileName: 'model.gguf' });
-      await new Promise(resolve => setImmediate(resolve));
-
-      expect(onComplete).toHaveBeenCalledTimes(1); // finalized from disk, not an error
-      expect(onError).not.toHaveBeenCalled();
-      // Purged via the listener-free path (NOT the finalize-path cancelDownload, which
-      // would synthesize a spurious DownloadError and flash the just-finalized model as
-      // failed — see F2). cancelDownload may still be called by the re-adopt path above.
-      expect(mockService.purgeNativeRecord).toHaveBeenCalledWith('42');
+      expect(errors).toEqual([]);
+      expect(done).toEqual([expect.objectContaining({ id: 'test/model/model.gguf' })]);
+      expect(device.nativeRows()).toEqual([]);
     });
 
     it('fails (not loops) when the native move rejects AND the file is genuinely absent', async () => {
-      stubStartDownload(['42']);
-      const completeCbs = captureCompleteCallbacks();
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: createModelFile({ name: 'model.gguf', size: 4_000_000_000 }),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      const { mainId } = await start(createModelFile({ name: 'model.gguf', size: 4_000_000_000 }));
+      const { done, errors } = watch(mainId);
 
-      const onComplete = jest.fn();
-      const onError = jest.fn();
-      mockService.moveCompletedDownload.mockRejectedValue(new Error('Download 42 not completed yet'));
-      mockedRNFS.exists.mockResolvedValue(false); // file NOT on disk → genuine failure
+      await announceCompleteWithoutFile(mainId);
 
-      watchBackgroundDownload({
-        downloadId: '42',
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onComplete,
-        onError,
-      });
-
-      await completeCbs['42']?.({ downloadId: '42', fileName: 'model.gguf' });
-      await new Promise(resolve => setImmediate(resolve));
-
-      expect(onComplete).not.toHaveBeenCalled();
-      expect(onError).toHaveBeenCalled();
+      expect(done).toEqual([]);
+      expect(errors.map(e => e.message)).toEqual([`Download ${mainId} not completed yet`]);
+      expect(await device.readRegistry()).toEqual([]);
     });
 
-    it('moves mmproj file on mmproj completion', async () => {
-      const completeCbs = await setupVisionDownload();
+    it('hands the metadata slot back when both complete', async () => {
+      const { mainId, sidecarId } = await start();
+      watch(mainId);
+      expect(metadata.at(-1)?.[1]).not.toBeNull();
 
-      mockService.moveCompletedDownload.mockResolvedValue('/models/vision.gguf');
-      mockedRNFS.exists.mockResolvedValue(true);
+      await device.finishDownload(sidecarId!, 500_000_000);
+      await device.finishDownload(mainId, 4_000_000_000);
 
-      watchBackgroundDownload({
-        downloadId: '42',
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
-
-      await completeCbs['43']?.({ downloadId: '43', fileName: 'mmproj.gguf' });
-
-      expect(mockService.moveCompletedDownload).toHaveBeenCalledWith(
-        '43', `${MODELS_DIR}/vision-mmproj.gguf`,
-      );
+      expect(metadata.at(-1)).toEqual([mainId, null]);
     });
 
-    it('clears metadata callback when both complete', async () => {
-      const completeCbs = await setupVisionDownload();
-      mockService.moveCompletedDownload.mockResolvedValue('/models/vision.gguf');
-      mockedRNFS.exists.mockResolvedValue(true);
+    it('a duplicate main completion event registers the model once', async () => {
+      const { mainId, sidecarId } = await start();
+      const { done, errors } = watch(mainId);
+      await device.finishDownload(mainId, 4_000_000_000);
 
-      watchBackgroundDownload({
-        downloadId: '42',
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      // The OS repeats the completion before the projector finishes.
+      device.boundary.download!.events.emit('DownloadComplete', { downloadId: mainId, fileName: 'vision.gguf', modelId: 'test/model', status: 'completed' });
+      await device.settle();
+      await device.finishDownload(sidecarId!, 500_000_000);
 
-      metadataCallback.mockClear();
-      await completeCbs['43']?.({ downloadId: '43' });
-      await completeCbs['42']?.({ downloadId: '42' });
-
-      expect(metadataCallback).toHaveBeenCalledWith('42', null);
+      expect(done).toHaveLength(1);
+      expect(errors).toEqual([]);
+      expect(await device.readRegistry()).toHaveLength(1);
     });
 
-    it('ignores duplicate main completion events after the first one', async () => {
-      const completeCbs = await setupVisionDownload();
-      mockedRNFS.exists.mockResolvedValue(true);
-      mockService.moveCompletedDownload.mockResolvedValue('/models/vision.gguf');
+    it('drops vision when the projector move fails and its file is missing', async () => {
+      const { mainId, sidecarId } = await start();
+      const { done } = watch(mainId);
 
-      watchBackgroundDownload({
-        downloadId: '42',
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onComplete: jest.fn(),
-      });
+      await announceCompleteWithoutFile(sidecarId!);
+      await device.finishDownload(mainId, 4_000_000_000);
 
-      await completeCbs['42']?.({ downloadId: '42', fileName: 'vision.gguf' });
-      await completeCbs['42']?.({ downloadId: '42', fileName: 'vision.gguf' });
-
-      expect(mockService.moveCompletedDownload).not.toHaveBeenCalledWith('42', `${MODELS_DIR}/vision.gguf`);
-    });
-
-    it('drops vision when mmproj move fails and the target file is missing', async () => {
-      const completeCbs = await setupVisionDownload();
-      mockedRNFS.exists.mockResolvedValue(false);
-      mockService.moveCompletedDownload
-        .mockRejectedValueOnce(new Error('move failed'))
-        .mockResolvedValueOnce('/models/vision.gguf');
-      const onComplete = jest.fn();
-
-      watchBackgroundDownload({
-        downloadId: '42',
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onComplete,
-      });
-
-      await completeCbs['43']?.({ downloadId: '43', fileName: 'mmproj.gguf' });
-      await completeCbs['42']?.({ downloadId: '42', fileName: 'vision.gguf' });
-
-      expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({
+      expect(done).toEqual([expect.objectContaining({
         mmProjPath: undefined,
         mmProjFileName: 'mmproj.gguf',
         isVisionModel: false,
-      }));
+      })]);
     });
   });
 
@@ -748,182 +379,76 @@ describe('Parallel mmproj download', () => {
   // ========================================================================
 
   describe('watchBackgroundDownload — error handling', () => {
-    it('cancels mmproj when main download fails', async () => {
-      stubStartDownload(['42', '43']);
-      const errorCbs = captureErrorCallbacks();
-      captureCompleteCallbacks();
+    it('a failed main reports its reason and leaves the projector transfer running', async () => {
+      // The sidecar is NOT cancelled: a cancelled native worker refuses retryDownload, which used to
+      // deadlock the retried main (see handleError in download.ts).
+      const { mainId, sidecarId } = await start();
+      const { errors } = watch(mainId);
 
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      await device.failDownload(mainId, 'Network error');
 
-      const onError = jest.fn();
-      watchBackgroundDownload({
-        downloadId: '42',
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onError,
-      });
-
-      errorCbs['42']?.({ downloadId: '42', fileName: 'vision.gguf', modelId: 'test/model', status: 'failed', reason: 'Network error' });
-
-      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'Network error' }));
-      expect(mockService.cancelDownload).toHaveBeenCalledWith('43');
+      expect(errors.map(e => e.message)).toEqual(['Network error']);
+      expect(device.nativeRows().find(row => row.downloadId === sidecarId)?.status).toBe('running');
     });
 
-    it('preserves retry context and resets main finalization flags when main download fails', async () => {
-      stubStartDownload(['42', '43']);
-      const errorCbs = captureErrorCallbacks();
+    it('after a failed main, a retried main that finishes still finalizes with vision', async () => {
+      const { mainId, sidecarId } = await start();
+      watch(mainId);
+      await device.failDownload(mainId, 'Network error');
 
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      // The person retries: the native worker restarts the same id and the watcher re-attaches.
+      device.boundary.download!.seedActive({ ...device.nativeRows().find(r => r.downloadId === mainId)!, status: 'running' });
+      const { done, errors } = watch(mainId);
+      await device.finishDownload(sidecarId!, 500_000_000);
+      await device.finishDownload(mainId, 4_000_000_000);
 
-      const ctx = bgContext.get('42') as any;
-      ctx.mainCompleted = true;
-      ctx.mainCompleteHandled = true;
-      ctx.isFinalizing = true;
-
-      watchBackgroundDownload({
-        downloadId: '42',
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onError: jest.fn(),
-      });
-
-      errorCbs['42']?.({ downloadId: '42', fileName: 'vision.gguf', modelId: 'test/model', status: 'failed', reason: 'Network error' });
-
-      expect(bgContext.get('42')).toBe(ctx);
-      expect(ctx.mainCompleted).toBe(false);
-      expect(ctx.mainCompleteHandled).toBe(false);
-      expect(ctx.isFinalizing).toBe(false);
-      expect(ctx.mmProjDownloadId).toBe('43');
+      expect(errors).toEqual([]);
+      expect(done).toEqual([expect.objectContaining({ isVisionModel: true })]);
     });
 
-    it('continues as text-only when mmproj download fails', async () => {
-      stubStartDownload(['42', '43']);
-      const errorCbs = captureErrorCallbacks();
-      captureCompleteCallbacks();
+    it('continues as text-only when the projector download fails', async () => {
+      const { mainId, sidecarId } = await start();
+      const { done, errors } = watch(mainId);
 
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      await device.failDownload(sidecarId!, 'Storage full');
+      expect(errors).toEqual([]);
+      expect(store.getState().downloads['test/model/vision.gguf'].mmProjStatus).toBe('failed');
 
-      const onError = jest.fn();
-      watchBackgroundDownload({
-        downloadId: '42',
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onError,
-      });
-
-      errorCbs['43']?.({ downloadId: '43', fileName: 'mmproj.gguf', modelId: 'test/model', status: 'failed', reason: 'Storage full' });
-
-      expect(onError).not.toHaveBeenCalled();
-      const ctx = bgContext.get('42') as any;
-      expect(ctx.mmProjCompleted).toBe(true);
-      expect(ctx.mmProjLocalPath).toBeNull();
+      await device.finishDownload(mainId, 4_000_000_000);
+      expect(done).toEqual([expect.objectContaining({ isVisionModel: false, mmProjPath: undefined })]);
     });
   });
 
   describe('watchBackgroundDownload — already-downloaded recovery', () => {
-    it('persists already-downloaded models before firing onComplete', async () => {
-      mockedRNFS.exists.mockResolvedValue(true);
-      mockedRNFS.stat.mockResolvedValue({ size: 4_500_000_000, isFile: () => true } as any);
-
-      const info = await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
-      const onComplete = jest.fn();
-
-      watchBackgroundDownload({
-        downloadId: info.downloadId,
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onComplete,
-      });
-
-      await new Promise(resolve => setImmediate(resolve));
-
-      expect(mockedAsyncStorage.setItem).toHaveBeenCalledWith(
-        '@local_llm/downloaded_models',
-        expect.stringContaining('"id":"test/model/vision.gguf"'),
-      );
-      expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({
-        id: 'test/model/vision.gguf',
-        filePath: `${MODELS_DIR}/vision.gguf`,
-        mmProjPath: `${MODELS_DIR}/vision-mmproj.gguf`,
-      }));
-      expect(bgContext.has(info.downloadId)).toBe(false);
+    beforeEach(() => {
+      device.fs.seedFile(`${modelsDir()}/vision.gguf`, 4_000_000_000);
+      device.fs.seedFile(`${modelsDir()}/vision-mmproj.gguf`, 500_000_000);
     });
 
-    it('still fires onComplete when persistence fails for already-downloaded models', async () => {
-      mockedRNFS.exists.mockResolvedValue(true);
-      mockedRNFS.stat.mockResolvedValue({ size: 4_500_000_000, isFile: () => true } as any);
-      mockedAsyncStorage.setItem.mockRejectedValueOnce(new Error('storage write failed'));
+    it('persists already-downloaded models before reporting them done', async () => {
+      const { info } = await start();
+      const { done } = watch(info.downloadId);
+      await device.settle();
 
-      const info = await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
-      const onComplete = jest.fn();
-
-      watchBackgroundDownload({
-        downloadId: info.downloadId,
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onComplete,
-      });
-
-      await new Promise(resolve => setImmediate(resolve));
-
-      expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({
+      expect(await device.readRegistry()).toEqual([expect.objectContaining({ id: 'test/model/vision.gguf' })]);
+      expect(done).toEqual([expect.objectContaining({
         id: 'test/model/vision.gguf',
-      }));
-      expect(bgContext.has(info.downloadId)).toBe(false);
+        filePath: `${modelsDir()}/vision.gguf`,
+        mmProjPath: `${modelsDir()}/vision-mmproj.gguf`,
+      })]);
+      // A second watcher finds nothing left to deliver.
+      expect(watch(info.downloadId).done).toEqual([]);
     });
 
-    it('surfaces an already-downloaded context error via onError', () => {
-      const onError = jest.fn();
-      bgContext.set('already-downloaded:test/model/vision.gguf', {
-        model: null,
-        error: new Error('persist failed'),
-      } as any);
+    it('still reports the model done when the storage write fails', async () => {
+      const storage = require('@react-native-async-storage/async-storage');
+      storage.setItem.mockImplementationOnce(async () => { throw new Error('storage write failed'); });
+      const { info } = await start();
 
-      watchBackgroundDownload({
-        downloadId: 'already-downloaded:test/model/vision.gguf',
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onError,
-      });
+      const { done } = watch(info.downloadId);
+      await device.settle();
 
-      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'persist failed' }));
-      expect(bgContext.has('already-downloaded:test/model/vision.gguf')).toBe(false);
+      expect(done).toEqual([expect.objectContaining({ id: 'test/model/vision.gguf' })]);
     });
   });
 
@@ -932,90 +457,59 @@ describe('Parallel mmproj download', () => {
   // ========================================================================
 
   describe('syncCompletedBackgroundDownloads', () => {
-    it('syncs completed model with mmproj download', async () => {
-      mockService.getActiveDownloads.mockResolvedValue([
-        { downloadId: '42', status: 'completed', fileName: 'vision.gguf', modelId: 'test/model', bytesDownloaded: 4_000_000_000, totalBytes: 4_000_000_000, startedAt: 0 } as any,
-        { downloadId: '43', status: 'completed', fileName: 'mmproj.gguf', modelId: 'test/model', bytesDownloaded: 500_000_000, totalBytes: 500_000_000, startedAt: 0 } as any,
-      ]);
-      mockService.moveCompletedDownload.mockResolvedValue(`${MODELS_DIR}/vision.gguf`);
-      mockedRNFS.exists.mockResolvedValue(true);
-
-      const clearCb = jest.fn();
-      const models = await syncCompletedBackgroundDownloads({
-        persistedDownloads: {
-          '42': {
-            modelId: 'test/model',
-            fileName: 'vision.gguf',
-            quantization: 'Q4_K_M',
-            author: 'test',
-            totalBytes: 4_500_000_000,
-            mmProjFileName: 'vision-mmproj.gguf',
-            mmProjLocalPath: `${MODELS_DIR}/vision-mmproj.gguf`,
-            mmProjDownloadId: '43',
-          },
-        },
-        modelsDir: MODELS_DIR,
-        clearDownloadCallback: clearCb,
-      });
-
-      expect(models.length).toBe(1);
-      // Should move both files
-      expect(mockService.moveCompletedDownload).toHaveBeenCalledWith('42', `${MODELS_DIR}/vision.gguf`);
-      expect(mockService.moveCompletedDownload).toHaveBeenCalledWith('43', `${MODELS_DIR}/vision-mmproj.gguf`);
-      expect(clearCb).toHaveBeenCalledWith('42');
+    const persisted = (extra: Partial<PersistedDownloadInfo> = {}): Record<string, PersistedDownloadInfo> => ({
+      main: {
+        modelId: 'test/model', fileName: 'vision.gguf', quantization: 'Q4_K_M', author: 'test',
+        totalBytes: 4_500_000_000, mmProjDownloadId: 'side', ...extra,
+      },
     });
 
-    it('skips sync when mmproj download is still running', async () => {
-      mockService.getActiveDownloads.mockResolvedValue([
-        { downloadId: '42', status: 'completed', fileName: 'vision.gguf', modelId: 'test/model', bytesDownloaded: 4_000_000_000, totalBytes: 4_000_000_000, startedAt: 0 } as any,
-        { downloadId: '43', status: 'running', fileName: 'mmproj.gguf', modelId: 'test/model', bytesDownloaded: 200_000_000, totalBytes: 500_000_000, startedAt: 0 } as any,
-      ]);
+    it('moves a model and its projector that both finished while the app was closed', async () => {
+      device.seedFinishedNativeRow({ downloadId: 'main', fileName: 'vision.gguf', modelId: 'test/model', sizeBytes: 4_000_000_000 });
+      device.seedFinishedNativeRow({ downloadId: 'side', fileName: 'mmproj.gguf', modelId: 'test/model', sizeBytes: 500_000_000 });
+      const cleared: string[] = [];
 
-      const clearCb = jest.fn();
-      const models = await syncCompletedBackgroundDownloads({
-        persistedDownloads: {
-          '42': {
-            modelId: 'test/model',
-            fileName: 'vision.gguf',
-            quantization: 'Q4_K_M',
-            author: 'test',
-            totalBytes: 4_500_000_000,
-            mmProjDownloadId: '43',
-          },
-        },
-        modelsDir: MODELS_DIR,
-        clearDownloadCallback: clearCb,
+      const models = await dl.syncCompletedBackgroundDownloads({
+        persistedDownloads: persisted({
+          mmProjFileName: 'vision-mmproj.gguf',
+          mmProjLocalPath: `${modelsDir()}/vision-mmproj.gguf`,
+        }),
+        modelsDir: modelsDir(),
+        clearDownloadCallback: id => cleared.push(id),
       });
 
-      // Should skip — mmproj still running
-      expect(models.length).toBe(0);
-      expect(clearCb).not.toHaveBeenCalled();
+      expect(await onDisk('vision.gguf')).toBe(true);
+      expect(await onDisk('vision-mmproj.gguf')).toBe(true);
+      expect(models).toEqual([expect.objectContaining({ id: 'test/model/vision.gguf', mmProjPath: `${modelsDir()}/vision-mmproj.gguf` })]);
+      expect(cleared).toEqual(['main']);
     });
 
-    it('cancels mmproj when main download failed', async () => {
-      mockService.getActiveDownloads.mockResolvedValue([
-        { downloadId: '42', status: 'failed', fileName: 'vision.gguf', modelId: 'test/model', bytesDownloaded: 0, totalBytes: 4_000_000_000, startedAt: 0 } as any,
-        { downloadId: '43', status: 'running', fileName: 'mmproj.gguf', modelId: 'test/model', bytesDownloaded: 200_000_000, totalBytes: 500_000_000, startedAt: 0 } as any,
-      ]);
+    it('waits while the projector is still running', async () => {
+      device.seedFinishedNativeRow({ downloadId: 'main', fileName: 'vision.gguf', modelId: 'test/model', sizeBytes: 4_000_000_000 });
+      device.boundary.download!.seedActive({ downloadId: 'side', fileName: 'mmproj.gguf', modelId: 'test/model', status: 'running', bytesDownloaded: 200_000_000, totalBytes: 500_000_000 });
+      const cleared: string[] = [];
 
-      const clearCb = jest.fn();
-      await syncCompletedBackgroundDownloads({
-        persistedDownloads: {
-          '42': {
-            modelId: 'test/model',
-            fileName: 'vision.gguf',
-            quantization: 'Q4_K_M',
-            author: 'test',
-            totalBytes: 4_500_000_000,
-            mmProjDownloadId: '43',
-          },
-        },
-        modelsDir: MODELS_DIR,
-        clearDownloadCallback: clearCb,
+      const models = await dl.syncCompletedBackgroundDownloads({
+        persistedDownloads: persisted(), modelsDir: modelsDir(), clearDownloadCallback: id => cleared.push(id),
       });
 
-      expect(mockService.cancelDownload).toHaveBeenCalledWith('43');
-      expect(clearCb).toHaveBeenCalledWith('42');
+      expect(models).toEqual([]);
+      expect(cleared).toEqual([]);
+      expect(await onDisk('vision.gguf')).toBe(false);
+    });
+
+    it('cancels the projector when the main failed while the app was closed', async () => {
+      device.seedFinishedNativeRow({ downloadId: 'main', fileName: 'vision.gguf', modelId: 'test/model', sizeBytes: 4_000_000_000, status: 'failed' });
+      device.boundary.download!.seedActive({ downloadId: 'side', fileName: 'mmproj.gguf', modelId: 'test/model', status: 'running', totalBytes: 500_000_000 });
+      const cleared: string[] = [];
+
+      await dl.syncCompletedBackgroundDownloads({
+        persistedDownloads: persisted(), modelsDir: modelsDir(), clearDownloadCallback: id => cleared.push(id),
+      });
+      await device.settle();
+
+      expect(device.nativeRows().map(row => row.downloadId)).toEqual(['main']);
+      expect(cleared).toEqual(['main']);
     });
   });
 
@@ -1024,228 +518,128 @@ describe('Parallel mmproj download', () => {
   // ========================================================================
 
   describe('restoreInProgressDownloads — mmproj recovery', () => {
-    it('restores both main and mmproj progress listeners', async () => {
-      mockService.getActiveDownloads.mockResolvedValue([
-        { downloadId: '42', status: 'running', fileName: 'vision.gguf', modelId: 'test/model', bytesDownloaded: 1_000_000_000, totalBytes: 4_000_000_000, combinedTotalBytes: 4_500_000_000, quantization: 'Q4_K_M', mmProjDownloadId: '43', startedAt: 0 } as any,
-        { downloadId: '43', status: 'running', fileName: 'mmproj.gguf', modelId: 'test/model', bytesDownloaded: 100_000_000, totalBytes: 500_000_000, startedAt: 0 } as any,
-      ]);
+    /** The native rows a relaunch finds: the main (linked to its projector) and the projector. */
+    function seedRelaunchRows(main: { bytes: number }, side: { status: string; bytes: number }) {
+      const download = device.boundary.download!;
+      download.seedActive({
+        downloadId: 'main', status: 'running', fileName: 'vision.gguf', modelId: 'test/model',
+        bytesDownloaded: main.bytes, totalBytes: 4_000_000_000, combinedTotalBytes: 4_500_000_000,
+        quantization: 'Q4_K_M', mmProjDownloadId: 'side',
+      });
+      if (side.status === 'completed') {
+        device.seedFinishedNativeRow({ downloadId: 'side', fileName: 'vision-mmproj.gguf', modelId: 'test/model', sizeBytes: 500_000_000 });
+      } else {
+        download.seedActive({
+          downloadId: 'side', status: side.status, fileName: 'vision-mmproj.gguf', modelId: 'test/model',
+          bytesDownloaded: side.bytes, totalBytes: 500_000_000,
+        });
+      }
+    }
 
-      await restoreInProgressDownloads({
-        modelsDir: MODELS_DIR,
+    async function restoreNow() {
+      const progress: Array<{ bytesDownloaded: number; totalBytes: number }> = [];
+      const restored = await restore.restoreInProgressDownloads({
+        modelsDir: modelsDir(),
         backgroundDownloadContext: bgContext,
         backgroundDownloadMetadataCallback: metadataCallback,
+        onProgress: p => progress.push(p),
       });
+      return { restored, progress };
+    }
 
-      expect(bgContext.size).toBe(1);
-      const ctx = bgContext.get('42') as any;
-      expect(ctx.mmProjDownloadId).toBe('43');
-      expect(ctx.mmProjCompleted).toBe(false);
-      expect(ctx.mainCompleted).toBe(false);
-      // Progress listeners for both
-      expect(mockService.onProgress).toHaveBeenCalledWith('42', expect.any(Function));
-      expect(mockService.onProgress).toHaveBeenCalledWith('43', expect.any(Function));
+    it('restores the main once (not the projector) and follows progress from both', async () => {
+      seedRelaunchRows({ bytes: 1_000_000_000 }, { status: 'running', bytes: 100_000_000 });
+
+      const { restored, progress } = await restoreNow();
+
+      expect(restored).toEqual(['main']);
+      expect(progress.at(-1)).toEqual(expect.objectContaining({ bytesDownloaded: 1_100_000_000, totalBytes: 4_500_000_000 }));
+      await device.reportProgress('main', 2_000_000_000, 4_000_000_000);
+      expect(progress.at(-1)).toEqual(expect.objectContaining({ bytesDownloaded: 2_100_000_000 }));
+      await device.reportProgress('side', 500_000_000, 500_000_000);
+      expect(progress.at(-1)).toEqual(expect.objectContaining({ bytesDownloaded: 2_500_000_000 }));
     });
 
-    it('handles mmproj completed while app was dead', async () => {
-      mockService.getActiveDownloads.mockResolvedValue([
-        { downloadId: '42', status: 'running', fileName: 'vision.gguf', modelId: 'test/model', bytesDownloaded: 2_000_000_000, totalBytes: 4_000_000_000, combinedTotalBytes: 4_500_000_000, quantization: 'Q4_K_M', mmProjDownloadId: '43', startedAt: 0 } as any,
-        { downloadId: '43', status: 'completed', fileName: 'mmproj.gguf', modelId: 'test/model', bytesDownloaded: 500_000_000, totalBytes: 500_000_000, startedAt: 0 } as any,
-      ]);
-      mockedRNFS.exists.mockResolvedValue(true);
+    it('a projector already in the models folder counts as done: the main alone finishes the model with vision', async () => {
+      seedRelaunchRows({ bytes: 2_000_000_000 }, { status: 'completed', bytes: 500_000_000 });
+      device.fs.seedFile(`${modelsDir()}/vision-mmproj.gguf`, 500_000_000);
 
-      await restoreInProgressDownloads({
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      const { progress } = await restoreNow();
+      expect(progress.at(-1)).toEqual(expect.objectContaining({ bytesDownloaded: 2_500_000_000 }));
 
-      const ctx = bgContext.get('42') as any;
-      expect(ctx.mmProjCompleted).toBe(true);
-      // File already on disk — move is deferred to watchBackgroundDownload, not called here
-      expect(mockService.moveCompletedDownload).not.toHaveBeenCalled();
-      // Should NOT register mmproj progress listener (already complete)
-      expect(mockService.onProgress).not.toHaveBeenCalledWith('43', expect.any(Function));
+      const { done } = watch('main');
+      await device.settle();
+      expect(done).toEqual([]);
+      await device.finishDownload('main', 4_000_000_000);
+
+      expect(done).toEqual([expect.objectContaining({ isVisionModel: true, mmProjPath: `${modelsDir()}/vision-mmproj.gguf` })]);
     });
 
-    it('marks mmproj as completed when it failed while app was dead', async () => {
-      mockService.getActiveDownloads.mockResolvedValue([
-        { downloadId: '42', status: 'running', fileName: 'vision.gguf', modelId: 'test/model', bytesDownloaded: 2_000_000_000, totalBytes: 4_000_000_000, combinedTotalBytes: 4_500_000_000, quantization: 'Q4_K_M', mmProjDownloadId: '43', startedAt: 0 } as any,
-        { downloadId: '43', status: 'failed', fileName: 'mmproj.gguf', modelId: 'test/model', bytesDownloaded: 0, totalBytes: 500_000_000, startedAt: 0 } as any,
-      ]);
+    it('a projector that failed while the app was closed does not hold the model back', async () => {
+      seedRelaunchRows({ bytes: 2_000_000_000 }, { status: 'failed', bytes: 0 });
 
-      await restoreInProgressDownloads({
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      await restoreNow();
+      const { done } = watch('main');
+      await device.finishDownload('main', 4_000_000_000);
 
-      const ctx = bgContext.get('42') as any;
-      // mmproj failed but treated as done (vision just won't work)
-      expect(ctx.mmProjCompleted).toBe(true);
+      expect(done).toEqual([expect.objectContaining({ id: 'test/model/vision.gguf' })]);
     });
 
-    it('defers mmproj move to watchBackgroundDownload when file not yet on disk', async () => {
-      mockService.getActiveDownloads.mockResolvedValue([
-        { downloadId: '42', status: 'running', fileName: 'vision.gguf', modelId: 'test/model', bytesDownloaded: 0, totalBytes: 4_000_000_000, combinedTotalBytes: 4_500_000_000, quantization: 'Q4_K_M', mmProjDownloadId: '43', startedAt: 0 } as any,
-        { downloadId: '43', status: 'completed', fileName: 'mmproj.gguf', modelId: 'test/model', bytesDownloaded: 500_000_000, totalBytes: 500_000_000, startedAt: 0 } as any,
-      ]);
-      // File not yet on disk — watchBackgroundDownload must do the move
-      mockedRNFS.exists.mockResolvedValue(false);
+    it('a projector that finished while closed but is not moved yet is moved by the watcher, not by restore', async () => {
+      seedRelaunchRows({ bytes: 0 }, { status: 'completed', bytes: 500_000_000 });
 
-      await restoreInProgressDownloads({
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      await restoreNow();
+      expect(await onDisk('vision-mmproj.gguf')).toBe(false);
 
-      const ctx = bgContext.get('42') as any;
-      // mmProjCompleted=false so watchBackgroundDownload registers the onComplete listener
-      expect(ctx.mmProjCompleted).toBe(false);
-      expect(mockService.moveCompletedDownload).not.toHaveBeenCalled();
-      // Progress listener NOT registered (mmproj is already at completed status, no bytes left)
-      // but onComplete listener WILL be registered by watchBackgroundDownload
-    });
+      const { done } = watch('main');
+      await device.settle();
+      expect(await onDisk('vision-mmproj.gguf')).toBe(true);
+      await device.finishDownload('main', 4_000_000_000);
 
-    it('does not create duplicate context for mmproj download ID', async () => {
-      mockService.getActiveDownloads.mockResolvedValue([
-        { downloadId: '42', status: 'running', fileName: 'vision.gguf', modelId: 'test/model', bytesDownloaded: 0, totalBytes: 4_000_000_000, combinedTotalBytes: 4_500_000_000, quantization: 'Q4_K_M', mmProjDownloadId: '43', startedAt: 0 } as any,
-        { downloadId: '43', status: 'running', fileName: 'mmproj.gguf', modelId: 'test/model', bytesDownloaded: 0, totalBytes: 500_000_000, startedAt: 0 } as any,
-      ]);
-
-      await restoreInProgressDownloads({
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
-
-      // Only the main download ID should be in the context, not the mmproj
-      expect(bgContext.size).toBe(1);
-      expect(bgContext.has('42')).toBe(true);
-      expect(bgContext.has('43')).toBe(false);
+      expect(done).toEqual([expect.objectContaining({ isVisionModel: true, mmProjPath: `${modelsDir()}/vision-mmproj.gguf` })]);
     });
   });
 
   describe('watchBackgroundDownload — catch-up paths', () => {
-    it('finalizes after mmproj was already completed before listener registration', async () => {
-      stubStartDownload(['42', '43']);
-      const completeCbs = captureCompleteCallbacks();
-      mockService.getActiveDownloads.mockResolvedValue([
-        { downloadId: '43', status: 'completed' } as any,
-      ]);
-      mockService.moveCompletedDownload
-        .mockResolvedValueOnce(`${MODELS_DIR}/vision-mmproj.gguf`)
-        .mockResolvedValueOnce(`${MODELS_DIR}/vision.gguf`);
-      mockedRNFS.exists
-        .mockResolvedValueOnce(false)
-        .mockResolvedValueOnce(false)
-        .mockResolvedValue(true);
-      const onComplete = jest.fn();
+    it('finalizes with vision when the projector finished before the watcher attached', async () => {
+      const { mainId, sidecarId } = await start();
+      // The sidecar's one DownloadComplete fires before anyone listens.
+      const download = device.boundary.download!;
+      const row = device.nativeRows().find(r => r.downloadId === sidecarId)!;
+      device.seedFinishedNativeRow({ downloadId: sidecarId!, fileName: row.fileName!, modelId: 'test/model', sizeBytes: 500_000_000 });
+      expect(download.active().find(r => r.downloadId === sidecarId)?.status).toBe('completed');
 
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      const { done } = watch(mainId);
+      await device.settle();
+      await device.finishDownload(mainId, 4_000_000_000);
 
-      watchBackgroundDownload({
-        downloadId: '42',
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onComplete,
-      });
-
-      await new Promise(resolve => setImmediate(resolve));
-      await completeCbs['42']?.({ downloadId: '42', fileName: 'vision.gguf' });
-      await new Promise(resolve => setImmediate(resolve));
-
-      expect(mockService.moveCompletedDownload).toHaveBeenCalledWith('43', `${MODELS_DIR}/vision-mmproj.gguf`);
-      expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({
-        mmProjPath: `${MODELS_DIR}/vision-mmproj.gguf`,
-        isVisionModel: true,
-      }));
+      expect(done).toEqual([expect.objectContaining({ mmProjPath: `${modelsDir()}/vision-mmproj.gguf`, isVisionModel: true })]);
     });
 
-    it('continues without vision when catch-up mmproj move fails and target is missing', async () => {
-      stubStartDownload(['42', '43']);
-      const completeCbs = captureCompleteCallbacks();
-      mockService.getActiveDownloads.mockResolvedValue([
-        { downloadId: '43', status: 'completed' } as any,
-      ]);
-      mockService.moveCompletedDownload
-        .mockRejectedValueOnce(new Error('catch-up move failed'))
-        .mockResolvedValueOnce(`${MODELS_DIR}/vision.gguf`);
-      mockedRNFS.exists.mockResolvedValue(false);
-      const onComplete = jest.fn();
+    it('continues without vision when the projector reported done before the watcher but its file is gone', async () => {
+      const { mainId, sidecarId } = await start();
+      const download = device.boundary.download!;
+      download.seedActive({ ...device.nativeRows().find(r => r.downloadId === sidecarId)!, status: 'completed' });
 
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: visionFile(),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      const { done } = watch(mainId);
+      await device.settle();
+      await device.finishDownload(mainId, 4_000_000_000);
 
-      watchBackgroundDownload({
-        downloadId: '42',
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onComplete,
-      });
-
-      await new Promise(resolve => setImmediate(resolve));
-      await completeCbs['42']?.({ downloadId: '42', fileName: 'vision.gguf' });
-      await new Promise(resolve => setImmediate(resolve));
-
-      expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({
-        mmProjPath: undefined,
-        mmProjFileName: 'mmproj.gguf',
-      }));
+      expect(done).toEqual([expect.objectContaining({ mmProjPath: undefined, mmProjFileName: 'mmproj.gguf' })]);
     });
 
     it('finalizes a non-vision main that completed before listener registration (main catch-up, no live event)', async () => {
-      // Under the 3-concurrent cap, the main GGUF can finish in native before
-      // watchBackgroundDownload subscribes (listener setup delayed behind an
-      // awaited-queued start). The DownloadComplete event fires once with no
-      // subscriber and is lost. The reconcile must query native and drive
-      // handleMainComplete itself — WITHOUT any manually-fired complete event.
-      stubStartDownload(['42']);
-      captureCompleteCallbacks();
-      const onComplete = jest.fn();
+      // Under the 3-concurrent cap, the main GGUF can finish in native before watchBackgroundDownload
+      // subscribes. The DownloadComplete event fires once with no subscriber and is lost. The
+      // reconcile must query native and finalize itself, with no live complete event.
+      const { mainId } = await start(createModelFile({ name: 'model.gguf', size: 4_000_000_000 }));
+      device.seedFinishedNativeRow({ downloadId: mainId, fileName: 'model.gguf', modelId: 'test/model', sizeBytes: 4_000_000_000 });
 
-      // exists=false during the start so it actually queues a download (ctx under '42'),
-      // not the already-on-disk path.
-      await performBackgroundDownload({
-        modelId: 'test/model',
-        file: createModelFile({ name: 'model.gguf', size: 4_000_000_000 }),
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-      });
+      const { done } = watch(mainId);
+      await device.settle();
 
-      // Native already reports the main as completed before we subscribe.
-      mockService.getActiveDownloads.mockResolvedValue([
-        { downloadId: '42', status: 'completed' } as any,
-      ]);
-      mockService.moveCompletedDownload.mockResolvedValue(`${MODELS_DIR}/model.gguf`);
-      mockedRNFS.exists.mockResolvedValue(true);
-
-      watchBackgroundDownload({
-        downloadId: '42',
-        modelsDir: MODELS_DIR,
-        backgroundDownloadContext: bgContext,
-        backgroundDownloadMetadataCallback: metadataCallback,
-        onComplete,
-      });
-
-      // No completeCbs['42'] call — the reconcile alone must finalize.
-      // The reconcile is fire-and-forget; drain the microtask/macrotask chain.
-      for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve));
-
-      expect(onComplete).toHaveBeenCalledTimes(1);
+      expect(done).toEqual([expect.objectContaining({ id: 'test/model/model.gguf' })]);
+      expect(await onDisk('model.gguf')).toBe(true);
     });
   });
 });

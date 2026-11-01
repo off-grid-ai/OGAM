@@ -1,39 +1,23 @@
 /**
  * Unit tests for importHelpers.ts
  *
- * Tests pure helpers (isMmProj, classifyGgufPair, getErrorMessage) directly,
- * and importGgufFiles via mocked dependencies.
+ * Tests pure helpers (isMmProj, classifyGgufPair, getErrorMessage) directly, and importGgufFiles
+ * on the real modelManager import over harness/modelManagerDevice: the picked files sit on the
+ * in-memory disk, the import copies them into the models folder and writes the registry. The OS
+ * dialog (Alert.alert) is the other device piece: the test answers it.
  */
 
-// ── Mocks (hoisted before imports) ─────────────────────────────────────────
-
-const mockImportLocalModel = jest.fn();
-jest.mock('../../../../src/services', () => ({
-  modelManager: {
-    importLocalModel: (...args: any[]) => mockImportLocalModel(...args),
-    getImageModelsDirectory: jest.fn(() => '/models'),
-  },
-}));
-
-jest.mock('../../../../src/components/CustomAlert', () => ({
-  showAlert: jest.fn(),
-  initialAlertState: { visible: false },
-}));
-
-// ── Imports ─────────────────────────────────────────────────────────────────
-
-import { Alert } from 'react-native';
+import { installModelManagerDevice, type ModelManagerDevice } from '../../../harness/modelManagerDevice';
 import {
   isMmProj,
   classifyGgufPair,
   getErrorMessage,
-  importGgufFiles,
   GgufFileRef,
 } from '../../../../src/screens/ModelsScreen/importHelpers';
-import { showAlert } from '../../../../src/components/CustomAlert';
+import type { AlertState } from '../../../../src/components/CustomAlert';
+import type { DownloadedModel } from '../../../../src/types';
 
-const mockShowAlert = showAlert as jest.Mock;
-const mockAlertAlert = jest.spyOn(Alert, 'alert') as jest.Mock;
+type ImportHelpers = typeof import('../../../../src/screens/ModelsScreen/importHelpers');
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -123,136 +107,105 @@ describe('getErrorMessage', () => {
 // ── importGgufFiles ─────────────────────────────────────────────────────────
 
 describe('importGgufFiles', () => {
-  const mockSetAlertState = jest.fn();
-  const mockSetImportProgress = jest.fn();
-  const mockAddDownloadedModel = jest.fn();
+  let device: ModelManagerDevice;
+  let importGgufFiles: ImportHelpers['importGgufFiles'];
+  let alerts: AlertState[];
+  let progress: Array<{ fraction: number; fileName: string }>;
+  let added: DownloadedModel[];
+  let dialogs: Array<{ title: string; message: string }>;
+  let answer: string;
 
-  const deps = {
-    setAlertState: mockSetAlertState,
-    setImportProgress: mockSetImportProgress,
-    addDownloadedModel: mockAddDownloadedModel,
+  const deps = () => ({
+    setAlertState: (next: AlertState | ((prev: AlertState) => AlertState)) => {
+      alerts.push(typeof next === 'function' ? next(alerts.at(-1)!) : next);
+    },
+    setImportProgress: (p: { fraction: number; fileName: string } | null) => { if (p) progress.push(p); },
+    addDownloadedModel: (model: DownloadedModel) => { added.push(model); },
+  });
+
+  /** A file the document picker hands back: it sits on the phone's disk. */
+  const picked = (name: string, size: number) => {
+    device.fs.seedFile(`/picked/${name}`, size);
+    return { uri: `file:///picked/${name}`, name, size };
   };
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockShowAlert.mockReturnValue({ visible: true });
+  beforeEach(async () => {
+    device = await installModelManagerDevice();
+    ({ importGgufFiles } = require('../../../../src/screens/ModelsScreen/importHelpers') as ImportHelpers);
+    alerts = [];
+    progress = [];
+    added = [];
+    dialogs = [];
+    answer = 'Import';
+    // The OS dialog: record it and tap the button the test chose.
+    require('react-native').Alert.alert = (title: string, message: string, buttons?: Array<{ text: string; onPress?: () => void }>) => {
+      dialogs.push({ title, message });
+      buttons?.find(b => b.text === answer)?.onPress?.();
+    };
   });
 
-  // ── single GGUF ────────────────────────────────────────────────────────
+  const inModels = (name: string) => device.fs.exists(`${device.modelsDir}/${name}`);
 
-  it('single GGUF: calls importLocalModel with correct opts and shows success', async () => {
-    const fakeModel = { id: 'm1', name: 'MyModel' };
-    mockImportLocalModel.mockResolvedValueOnce(fakeModel);
+  it('single GGUF: copies it into the models folder, registers it, reports progress and says it worked', async () => {
+    const file = picked('my-model-Q4_K_M.gguf', 4000);
 
-    await importGgufFiles(
-      [{ uri: 'file://my-model.gguf', name: 'my-model.gguf', size: 4000 }],
-      deps,
-    );
+    await importGgufFiles([file], deps());
 
-    expect(mockImportLocalModel).toHaveBeenCalledWith(expect.objectContaining({
-      sourceUri: 'file://my-model.gguf',
-      fileName: 'my-model.gguf',
-      sourceSize: 4000,
-      onProgress: expect.any(Function),
-    }));
-    expect(mockAddDownloadedModel).toHaveBeenCalledWith(fakeModel);
-    expect(mockSetAlertState).toHaveBeenCalledWith(expect.objectContaining({ visible: true }));
-    expect(mockShowAlert).toHaveBeenCalledWith('Success', 'MyModel imported successfully!');
+    expect(await inModels('my-model-Q4_K_M.gguf')).toBe(true);
+    expect(added).toEqual([expect.objectContaining({ fileName: 'my-model-Q4_K_M.gguf', fileSize: 4000 })]);
+    expect(await device.readRegistry()).toEqual([expect.objectContaining({ fileName: 'my-model-Q4_K_M.gguf' })]);
+    expect(progress.at(-1)).toEqual(expect.objectContaining({ fraction: 1, fileName: 'my-model-Q4_K_M.gguf' }));
+    expect(alerts).toEqual([expect.objectContaining({ visible: true, title: 'Success', message: `${added[0].name} imported successfully!` })]);
+    expect(dialogs).toEqual([]);
   });
 
-  it('single GGUF: null name falls back to "unknown"', async () => {
-    mockImportLocalModel.mockResolvedValueOnce({ id: 'x', name: 'X' });
-    await importGgufFiles([{ uri: 'file://x.gguf', name: null, size: 0 }], deps);
-    expect(mockImportLocalModel).toHaveBeenCalledWith(expect.objectContaining({ fileName: 'unknown' }));
+  it('single file with no name is refused as not a model, and nothing is copied', async () => {
+    device.fs.seedFile('/picked/x', 10);
+
+    await expect(importGgufFiles([{ uri: 'file:///picked/x', name: null, size: 0 }], deps()))
+      .rejects.toThrow('Only .gguf and .litertlm files can be imported');
+    expect(await inModels('unknown')).toBe(false);
+    expect(added).toEqual([]);
   });
 
-  // ── two GGUFs — user confirms ──────────────────────────────────────────
+  it('two GGUFs: asks first, and on Import brings in the model with its projector linked', async () => {
+    const main = picked('llava-7b-Q4_K_M.gguf', 4200);
+    const mmproj = picked('llava-mmproj-f16.gguf', 300);
 
-  it('two GGUFs: shows confirmation dialog and on confirm imports with mmproj args', async () => {
-    const fakeModel = { id: 'm2', name: 'VisionModel' };
-    mockImportLocalModel.mockResolvedValueOnce(fakeModel);
+    await importGgufFiles([main, mmproj], deps());
 
-    // Simulate user tapping "Import" in the native Alert dialog
-    mockAlertAlert.mockImplementationOnce((_title: string, _msg: string, buttons: any[]) => {
-      buttons?.find((b: any) => b.text === 'Import')?.onPress?.();
-    });
-
-    const file1 = { uri: 'file://llava-7b-Q4.gguf', name: 'llava-7b-Q4.gguf', size: 4200 };
-    const file2 = { uri: 'file://llava-mmproj-f16.gguf', name: 'llava-mmproj-f16.gguf', size: 300 };
-
-    await importGgufFiles([file1, file2], deps);
-
-    // Confirmation dialog shown via Alert.alert
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'Import Vision Model?',
-      expect.stringContaining('llava-7b-Q4.gguf'),
-      expect.any(Array),
-      expect.any(Object),
-    );
-
-    // importLocalModel called with mmproj fields
-    expect(mockImportLocalModel).toHaveBeenCalledWith(expect.objectContaining({
-      sourceUri: file1.uri,
-      fileName: file1.name,
-      sourceSize: file1.size,
-      onProgress: expect.any(Function),
-      mmProjSourceUri: file2.uri,
-      mmProjFileName: file2.name,
-      mmProjSourceSize: file2.size,
-    }));
-
-    expect(mockAddDownloadedModel).toHaveBeenCalledWith(fakeModel);
-    expect(mockShowAlert).toHaveBeenCalledWith('Success', 'VisionModel imported with vision projector!');
+    expect(dialogs).toEqual([expect.objectContaining({
+      title: 'Import Vision Model?',
+      message: expect.stringContaining('Main model:  llava-7b-Q4_K_M.gguf\nProjector:    llava-mmproj-f16.gguf'),
+    })]);
+    expect(await inModels('llava-7b-Q4_K_M.gguf')).toBe(true);
+    expect(await inModels('llava-mmproj-f16.gguf')).toBe(true);
+    expect(added).toEqual([expect.objectContaining({
+      fileName: 'llava-7b-Q4_K_M.gguf', isVisionModel: true, mmProjPath: `${device.modelsDir}/llava-mmproj-f16.gguf`,
+    })]);
+    expect(alerts.at(-1)).toEqual(expect.objectContaining({ title: 'Success', message: `${added[0].name} imported with vision projector!` }));
   });
 
-  it('two GGUFs: classifies correctly — mmproj name in file1 position swaps to projector', async () => {
-    mockImportLocalModel.mockResolvedValueOnce({ id: 'v', name: 'VisionModel' });
+  it('two GGUFs: a projector picked first is still used as the projector', async () => {
+    const mmproj = picked('mmproj-f16.gguf', 200);
+    const main = picked('model-Q4_K_M.gguf', 4000);
 
-    // file1 has mmproj in name → should become the projector, file2 is main
-    const mmproj = { uri: 'file://mmproj-f16.gguf', name: 'mmproj-f16.gguf', size: 200 };
-    const main = { uri: 'file://model-Q4.gguf', name: 'model-Q4.gguf', size: 4000 };
+    await importGgufFiles([mmproj, main], deps());
 
-    mockAlertAlert.mockImplementationOnce((_: string, __: string, buttons: any[]) => {
-      buttons?.find((b: any) => b.text === 'Import')?.onPress?.();
-    });
-
-    await importGgufFiles([mmproj, main], deps);
-
-    expect(mockImportLocalModel).toHaveBeenCalledWith(expect.objectContaining({
-      sourceUri: main.uri,         // main model is file2
-      mmProjSourceUri: mmproj.uri, // projector is file1
-    }));
+    expect(added).toEqual([expect.objectContaining({ fileName: 'model-Q4_K_M.gguf', mmProjPath: `${device.modelsDir}/mmproj-f16.gguf` })]);
   });
 
-  // ── two GGUFs — user cancels ───────────────────────────────────────────
+  it('two GGUFs: on Cancel nothing is copied or registered', async () => {
+    answer = 'Cancel';
+    const main = picked('llava-7b-Q4_K_M.gguf', 4200);
+    const mmproj = picked('llava-mmproj-f16.gguf', 300);
 
-  it('two GGUFs: on cancel, does NOT call importLocalModel', async () => {
-    mockAlertAlert.mockImplementationOnce((_title: string, _msg: string, buttons: any[]) => {
-      buttons?.find((b: any) => b.text === 'Cancel')?.onPress?.();
-    });
+    await importGgufFiles([main, mmproj], deps());
 
-    const file1 = { uri: 'file://llava-7b-Q4.gguf', name: 'llava-7b-Q4.gguf', size: 4200 };
-    const file2 = { uri: 'file://llava-mmproj-f16.gguf', name: 'llava-mmproj-f16.gguf', size: 300 };
-
-    await importGgufFiles([file1, file2], deps);
-
-    expect(mockImportLocalModel).not.toHaveBeenCalled();
-    expect(mockAddDownloadedModel).not.toHaveBeenCalled();
-  });
-
-  // ── onProgress wiring ──────────────────────────────────────────────────
-
-  it('single GGUF: onProgress callback forwards progress to setImportProgress', async () => {
-    mockImportLocalModel.mockImplementationOnce(async ({ onProgress }: any) => {
-      onProgress({ fraction: 0.5, fileName: 'my-model.gguf' });
-      return { id: 'x', name: 'X' };
-    });
-
-    await importGgufFiles(
-      [{ uri: 'file://my-model.gguf', name: 'my-model.gguf', size: 100 }],
-      deps,
-    );
-
-    expect(mockSetImportProgress).toHaveBeenCalledWith({ fraction: 0.5, fileName: 'my-model.gguf' });
+    expect(dialogs).toHaveLength(1);
+    expect(await inModels('llava-7b-Q4_K_M.gguf')).toBe(false);
+    expect(added).toEqual([]);
+    expect(await device.readRegistry()).toEqual([]);
+    expect(alerts).toEqual([]);
   });
 });

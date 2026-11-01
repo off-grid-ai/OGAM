@@ -10,16 +10,28 @@
  * - duplicateProject
  */
 
-const mockDeleteProjectDocuments = jest.fn<Promise<void>, [string]>(() => Promise.resolve());
-jest.mock('../../../src/services/rag', () => ({
-  knowledgeBase: { deleteProjectDocuments: (id: string) => mockDeleteProjectDocuments(id) },
-}));
+import { installNativeBoundary } from '../../harness/nativeBoundary';
+import { installDocumentEngine, type DocumentEngineBoundary, type DocumentEngineOptions } from '../../harness/documentEngine';
 
-import { useProjectStore } from '../../../src/stores/projectStore';
+type ProjectStoreModule = typeof import('../../../src/stores/projectStore');
+type RagModule = typeof import('../../../src/services/rag');
+
+// The store and the project knowledge base run for real, over the document engine's device boundary
+// (in-memory disk, a real in-memory SQLite for rag.db, the embedding model's native call).
+let useProjectStore: ProjectStoreModule['useProjectStore'];
+let knowledgeBase: RagModule['knowledgeBase'];
+let engine: DocumentEngineBoundary;
+
+function launch(options: DocumentEngineOptions = {}) {
+  const boundary = installNativeBoundary({ fs: true });
+  engine = installDocumentEngine(boundary.fs!, options);
+  ({ useProjectStore } = require('../../../src/stores/projectStore') as ProjectStoreModule);
+  ({ knowledgeBase } = require('../../../src/services/rag') as RagModule);
+}
 
 describe('projectStore', () => {
   beforeEach(() => {
-    mockDeleteProjectDocuments.mockReset().mockResolvedValue(undefined);
+    launch();
     // Reset to default projects
     useProjectStore.setState({
       projects: [
@@ -481,22 +493,31 @@ describe('projectStore', () => {
   // RAG cleanup on delete
   // ============================================================================
   describe('RAG cleanup on deleteProject', () => {
-    it('calls knowledgeBase.deleteProjectDocuments when deleting a project', async () => {
-      const { deleteProject } = useProjectStore.getState();
-      await deleteProject('default-assistant');
-      expect(mockDeleteProjectDocuments).toHaveBeenCalledWith(
-        'default-assistant',
-      );
+    it('deleting a project removes its knowledge-base documents', async () => {
+      const project = useProjectStore.getState().createProject({ name: 'Research', description: '', systemPrompt: '' });
+      engine.seedText('/docs/notes.txt', 'Field notes from the survey.');
+      await knowledgeBase.addFile({ projectId: project.id, filePath: '/docs/notes.txt', fileName: 'notes.txt', fileSize: 28 });
+      await engine.indexed(await engine.documentIdOf('/docs/notes.txt'));
+      expect((await knowledgeBase.getDocumentsByProject(project.id)).map(d => d.name)).toEqual(['notes.txt']);
+
+      const outcome = await useProjectStore.getState().deleteProject(project.id);
+
+      expect(outcome).toEqual({ ok: true });
+      expect(await knowledgeBase.getDocumentsByProject(project.id)).toEqual([]);
+      expect(useProjectStore.getState().getProject(project.id)).toBeUndefined();
     });
 
-    it('preserves the project and returns a refusal if RAG cleanup fails', async () => {
-      mockDeleteProjectDocuments.mockRejectedValueOnce(new Error('DB error'));
-      const { deleteProject } = useProjectStore.getState();
-      const beforeCount = useProjectStore.getState().projects.length;
-      const outcome = await deleteProject('default-assistant');
-      const afterCount = useProjectStore.getState().projects.length;
-      expect(outcome).toEqual({ ok: false, reason: 'DB error' });
-      expect(afterCount).toBe(beforeCount);
+    it('preserves the project and returns a refusal if the knowledge base cannot be opened', async () => {
+      // The phone cannot open rag.db (its folder is gone), so the documents cannot be cleaned up.
+      launch({ sqlite: { persistAt: '/no/such/folder' } });
+      await useProjectStore.persist.rehydrate();
+      const before = useProjectStore.getState().projects.map(p => p.id);
+      expect(before).toContain('default-assistant');
+
+      const outcome = await useProjectStore.getState().deleteProject('default-assistant');
+
+      expect(outcome).toEqual({ ok: false, reason: expect.stringMatching(/unable to open database/i) });
+      expect(useProjectStore.getState().projects.map(p => p.id)).toEqual(before);
     });
   });
 });
