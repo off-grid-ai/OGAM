@@ -18,10 +18,6 @@ import {
 import { Platform } from 'react-native';
 import { INFERENCE_BACKENDS } from '../../../src/types';
 
-jest.mock('../../../src/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
 const GB = BYTES_PER_GB;
 
@@ -410,10 +406,15 @@ describe('describeGpuFallback — the silent GPU→CPU downgrade verdict (device
   });
 });
 
+// The real logger writes to the console: read what it wrote there.
 describe('logContextMetadata', () => {
-  const logger = require('../../../src/utils/logger').default;
+  const logger = { log: jest.fn(), warn: jest.fn() };
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    logger.log = jest.spyOn(console, 'log').mockImplementation(() => undefined) as jest.Mock;
+    logger.warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined) as jest.Mock;
+  });
+  afterEach(() => jest.restoreAllMocks());
 
   it('logs nothing when context has no metadata', () => {
     const ctx = {} as any;
@@ -520,7 +521,8 @@ describe('initContextWithFallback — HTP device stripping and timeout', () => {
   it('logs backend=HTP when devices contains HTP0', async () => {
     const mockCtx = { gpu: true, release: jest.fn() };
     mockedInitLlama.mockResolvedValueOnce(mockCtx as any);
-    const logger = require('../../../src/utils/logger').default;
+    // The real logger writes to the console: read what it wrote there.
+    const logger = { log: jest.spyOn(console, 'log').mockImplementation(() => undefined) };
 
     await initContextWithFallback(baseParams, 2048, 99);
 

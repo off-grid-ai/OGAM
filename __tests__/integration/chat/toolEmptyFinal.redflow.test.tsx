@@ -12,16 +12,12 @@
 import { within } from '@testing-library/react-native';
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('Q5 (behavioral) — successful tool + empty final turn', () => {
   it('keeps raw tool output inside Work done instead of using it as the answer', async () => {
-    const h = await setupChatScreen({ engine: 'litert' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
     h.enableToolViaUI('calculator'); // real Tools-screen toggle
     h.render();
 
@@ -42,7 +38,7 @@ describe('Q5 (behavioral) — successful tool + empty final turn', () => {
   });
 
   it('control: when the model DOES answer after the tool, the user sees the answer (no "(No response)")', async () => {
-    const h = await setupChatScreen({ engine: 'litert' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
     h.enableToolViaUI('calculator');
     h.render();
 

@@ -15,26 +15,6 @@ import { ImageFilterBar } from '../../../src/screens/ModelsScreen/ImageFilterBar
 import { BACKEND_OPTIONS, SD_VERSION_OPTIONS, STYLE_OPTIONS } from '../../../src/screens/ModelsScreen/constants';
 
 // Mock useThemedStyles
-jest.mock('../../../src/theme', () => ({
-  useThemedStyles: jest.fn((createStyles) => {
-    const mockColors = {
-      background: '#fff',
-      surface: '#f5f5f5',
-      text: '#000',
-      textSecondary: '#666',
-      textMuted: '#999',
-      border: '#ddd',
-      primary: '#007AFF',
-      card: '#fff',
-    };
-    const mockShadows = {
-      small: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2 },
-      medium: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 },
-      large: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
-    };
-    return createStyles(mockColors, mockShadows);
-  }),
-}));
 
 // Default props
 const defaultProps = {

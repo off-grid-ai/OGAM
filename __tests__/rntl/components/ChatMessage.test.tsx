@@ -27,10 +27,6 @@ import {
 // as the tests will still work with the deprecated API.
 
 // Mock the stripControlTokens utility
-jest.mock('../../../src/utils/messageContent', () => ({
-  ...jest.requireActual('../../../src/utils/messageContent'),
-  stripControlTokens: (content: string) => content,
-}));
 
 describe('ChatMessage', () => {
   const _defaultProps = {

@@ -12,16 +12,13 @@ import {
   installLanProbe,
   type LanProbeHandle,
 } from '../../harness/lanProbe';
+import { withNavigator } from '../../harness/realNavigation';
 
 const mockRoute: { params?: { serverId?: string } } = {};
 const mockGoBack = jest.fn();
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: jest.fn(), goBack: mockGoBack }),
-  useRoute: () => mockRoute,
-  useIsFocused: () => true,
-  useFocusEffect: () => {},
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 const MAC = '192.168.1.30:7878';
 
@@ -43,7 +40,7 @@ describe('full-screen remote server editor', () => {
   afterEach(() => lan.uninstall());
 
   it('rejects an invalid address before it creates a server', async () => {
-    const ui = render(<RemoteServerEditorScreen />);
+    const ui = render(withNavigator(<RemoteServerEditorScreen />));
     fireEvent.changeText(ui.getByTestId('server-name'), 'Study Mac');
     fireEvent.changeText(ui.getByTestId('server-endpoint'), 'not-a-url');
     fireEvent.press(ui.getByTestId('test-connection'));
@@ -55,7 +52,7 @@ describe('full-screen remote server editor', () => {
   });
 
   it('states when media leaves the phone and when it stays on the local network', async () => {
-    const ui = render(<RemoteServerEditorScreen />);
+    const ui = render(withNavigator(<RemoteServerEditorScreen />));
     const address = ui.getByTestId('server-endpoint');
 
     fireEvent.changeText(address, `http://${MAC}`);
@@ -77,7 +74,7 @@ describe('full-screen remote server editor', () => {
   });
 
   it('saves media model IDs and shows the named server in the list', async () => {
-    const editor = render(<RemoteServerEditorScreen />);
+    const editor = render(withNavigator(<RemoteServerEditorScreen />));
     fireEvent.changeText(editor.getByTestId('server-name'), 'Study Mac');
     fireEvent.changeText(
       editor.getByTestId('server-endpoint'),
@@ -113,7 +110,7 @@ describe('full-screen remote server editor', () => {
     );
 
     editor.unmount();
-    const list = render(<RemoteServersScreen />);
+    const list = render(withNavigator(<RemoteServersScreen />));
     await waitFor(() => expect(list.getByText('Study Mac')).toBeTruthy());
   });
 
@@ -151,7 +148,7 @@ describe('full-screen remote server editor', () => {
         },
       },
     });
-    const editor = render(<RemoteServerEditorScreen />);
+    const editor = render(withNavigator(<RemoteServerEditorScreen />));
     fireEvent.changeText(editor.getByTestId('server-name'), 'Studio Mac');
     fireEvent.changeText(
       editor.getByTestId('server-endpoint'),

@@ -237,7 +237,7 @@ export type TurnKind = 'text' | 'image' | 'video';
 /** Did this assistant reply produce an image? An image turn's final assistant message carries an
  *  image attachment (imageGenerationService), so that message IS the owning record of the turn's
  *  modality. Read it instead of re-deriving from the prompt + current settings. */
-export function messageHasImageOutput(
+function messageHasImageOutput(
   message: Message | undefined | null,
 ): boolean {
   return !!message?.attachments?.some(a => a.type === 'image');
@@ -282,7 +282,7 @@ export function recordedTurnKind(
  *  passes the turn's recorded kind and it wins verbatim (deterministic, no classify); a NEW turn has
  *  none, so the route rule (force / manual / classifier) decides. Adding a modality (stt/tts) extends
  *  this one function, not each call site (OCP). */
-export async function resolveTurnKind(
+async function resolveTurnKind(
   deps: Parameters<typeof shouldRouteToImageGenerationFn>[0],
   input: {
     text: string;
@@ -304,7 +304,7 @@ export async function resolveTurnKind(
     : 'text';
 }
 
-export async function shouldRouteToImageGenerationFn(
+async function shouldRouteToImageGenerationFn(
   deps: Pick<
     GenerationDeps,
     | 'isGeneratingImage'

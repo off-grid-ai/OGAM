@@ -5,19 +5,7 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 
-jest.mock('../../../src/components/AppSheet', () => {
-  const { View } = require('react-native');
-  return { AppSheet: ({ visible, children }: any) => (visible ? <View>{children}</View> : null) };
-});
 
-jest.mock('../../../src/components/AnimatedPressable', () => {
-  const { TouchableOpacity } = require('react-native');
-  return {
-    AnimatedPressable: ({ children, onPress, testID, disabled }: any) => (
-      <TouchableOpacity testID={testID} onPress={onPress} disabled={disabled}>{children}</TouchableOpacity>
-    ),
-  };
-});
 
 import { ModelsManagerSheet } from '../../../src/components/models/ModelsManagerSheet';
 

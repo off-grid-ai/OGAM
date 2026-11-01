@@ -16,36 +16,27 @@
  * REAL native download layer received a fresh start (the status leaves 'failed'; a new native row exists).
  *
  * Integration boundary: fakes ONLY at the device boundary — the native DownloadManagerModule + fs + RAM
- * (installNativeBoundary), and the HuggingFace NETWORK transport (searchModels/getModelFiles). Everything
- * we own runs REAL: ModelsScreen, TextModelsTab, ModelCard, useTextModels, modelDownloadService,
+ * (installNativeBoundary), and the Hugging Face API at the network edge (hfModelApiServer). Everything
+ * we own runs REAL: huggingFaceService, ModelsScreen, TextModelsTab, ModelCard, useTextModels, modelDownloadService,
  * textProvider, modelManager, backgroundDownloadService, the download store. Platform pinned to iOS.
  */
 import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
+import { serveHfModelApi } from '../../harness/hfModelApiServer';
 
 const MODEL_ID = 'meta/llama-lost';
 const FILE_NAME = 'llama-q4.gguf';
 const MODEL_KEY = `${MODEL_ID}/${FILE_NAME}`;
+/** The name the search shows for the repo: its id without the author. */
+const MODEL_NAME = 'llama-lost';
 
 describe('iOS text retry re-issues a rehydrated failed download that lost its downloadId (red-flow)', () => {
   it('tapping Retry on a lost-downloadId failed card re-issues a fresh download (not a silent no-op)', async () => {
     // Device boundary: an iOS phone with plenty of RAM (12GB) so the file is compatible/offered.
     const boundary = installNativeBoundary({ download: true, fs: true, ram: { platform: 'ios', totalBytes: 12 * GB, availBytes: 8 * GB } });
 
-    // HuggingFace NETWORK transport is outside our system — fake it. getDownloadUrl is a PURE string
-    // builder (the retry re-issue path calls it), so implement it faithfully so a real URL is built.
-    const file = { name: FILE_NAME, size: 3 * GB, quantization: 'Q4_K_M', downloadUrl: `https://huggingface.co/${MODEL_ID}/resolve/main/${FILE_NAME}` };
-    const modelInfo = { id: MODEL_ID, name: 'Llama Lost', author: 'meta', description: 'test', downloads: 100, likes: 1, tags: [], lastModified: '', files: [file] };
-    jest.doMock('../../../src/services/huggingface', () => ({
-      huggingFaceService: {
-        searchModels: jest.fn(async () => [modelInfo]),
-        getModelFiles: jest.fn(async () => [file]),
-        getModelDetails: jest.fn(async () => modelInfo),
-        getDownloadUrl: (modelId: string, fileName: string, revision = 'main') =>
-          `https://huggingface.co/${modelId}/resolve/${revision}/${fileName}`,
-        formatModelSize: jest.fn(() => '3.0 GB'),
-        formatFileSize: jest.fn((b: number) => `${(b / GB).toFixed(1)} GB`),
-      },
-    }));
+    // The Hugging Face API is the network: it serves the repo and its one file with its size. The real
+    // huggingFaceService turns its answers into the search result, the detail and the file card.
+    serveHfModelApi({ repos: { [MODEL_ID]: [{ path: FILE_NAME, size: 3 * GB }] } });
 
      
     const React = require('react');
@@ -92,8 +83,8 @@ describe('iOS text retry re-issues a rehydrated failed download that lost its do
       fireEvent(getByTestId('search-input'), 'submitEditing');
       await new Promise((r) => setTimeout(r, 600)); // let the debounced + submitted search resolve
     });
-    await waitFor(() => expect(getByText('Llama Lost')).toBeTruthy(), { timeout: 6000 });
-    await act(async () => { fireEvent.press(getByText('Llama Lost')); });
+    await waitFor(() => expect(getByText(MODEL_NAME)).toBeTruthy(), { timeout: 6000 });
+    await act(async () => { fireEvent.press(getByText(MODEL_NAME)); });
     await waitFor(() => expect(getByTestId('model-detail-screen')).toBeTruthy(), { timeout: 4000 });
 
     // The failed file card must expose a Retry control (a failed rehydrated entry the user must recover).

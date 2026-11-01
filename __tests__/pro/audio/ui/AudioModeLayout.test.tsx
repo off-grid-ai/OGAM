@@ -26,9 +26,6 @@ jest.mock('react-native-vector-icons/Feather', () => {
   return (props: { name: string }) => RC.createElement(Text, { testID: `feather-${props.name}` }, props.name);
 });
 
-// Haptics is a genuine native boundary — stub it so presses don't call into the device.
-jest.mock('@offgrid/core/utils/haptics', () => ({ triggerHaptic: jest.fn() }));
-
 import { AudioModeLayout } from '@offgrid/pro/audio/ui/AudioModeLayout';
 import { useTTSStore } from '@offgrid/pro/audio/ttsStore';
 import { hideAlert } from '@offgrid/core/components/CustomAlert';
@@ -205,22 +202,22 @@ describe('AudioModeLayout — press handlers respect the real state (assert the 
     expect(onStop).toHaveBeenCalledTimes(1);
   });
 
-  it('pressing TTS stop while PLAYING fires the real store stop', () => {
+  it('pressing TTS stop while PLAYING runs the real store stop: playback ends and the mic returns', () => {
     useTTSStore.setState({ playbackStatus: 'playing' } as any);
-    // stop() is a thin native boundary (stopPlayback) — spy to assert the guard let it through.
-    const stopSpy = jest.spyOn(useTTSStore.getState(), 'stop').mockImplementation(() => {});
-    const { getByTestId } = renderLayout({ isGenerating: false });
+    const { getByTestId, queryByTestId } = renderLayout({ isGenerating: false });
     fireEvent.press(getByTestId('tts-stop-button'));
-    expect(stopSpy).toHaveBeenCalledTimes(1);
+    expect(useTTSStore.getState().playbackStatus).toBe('idle');
+    expect(queryByTestId('tts-stop-button')).toBeNull();
+    expect(queryByTestId('feather-mic')).toBeTruthy();
   });
 
   it('the disabled TTS stop button does not fire stop while PREPARING', () => {
     // While preparing the control renders disabled; a UI press must never reach stop.
     useTTSStore.setState({ playbackStatus: 'preparing' } as any);
-    const stopSpy = jest.spyOn(useTTSStore.getState(), 'stop').mockImplementation(() => {});
     const { getByTestId } = renderLayout({ isGenerating: false });
     fireEvent.press(getByTestId('tts-stop-button'));
-    expect(stopSpy).not.toHaveBeenCalled();
+    // Playback was not stopped: the store is still preparing.
+    expect(useTTSStore.getState().playbackStatus).toBe('preparing');
   });
 
   it('handleStopTts internally guards against a preparing status even if invoked', () => {
@@ -229,12 +226,12 @@ describe('AudioModeLayout — press handlers respect the real state (assert the 
     // Render with the button ENABLED (playing) so we hold a live onPress handler, then flip
     // the store to 'preparing' so the handler reads that status when invoked.
     useTTSStore.setState({ playbackStatus: 'playing' } as any);
-    const stopSpy = jest.spyOn(useTTSStore.getState(), 'stop').mockImplementation(() => {});
     const { UNSAFE_getByProps } = renderLayout({ isGenerating: false });
     const btn = UNSAFE_getByProps({ testID: 'tts-stop-button' });
     useTTSStore.setState({ playbackStatus: 'preparing' } as any);
     btn.props.onPress();
-    expect(stopSpy).not.toHaveBeenCalled();
+    // The handler short-circuited: the store is still preparing, not stopped to idle.
+    expect(useTTSStore.getState().playbackStatus).toBe('preparing');
   });
 });
 

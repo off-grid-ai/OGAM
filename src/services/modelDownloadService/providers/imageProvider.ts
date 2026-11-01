@@ -15,6 +15,7 @@
  * resumable: zip on Android only; multi-file (synthetic `image-multi:` id, no native
  * row) is never resumable → reconcile strands stranded in-flight as retriable error.
  */
+import RNFS from 'react-native-fs';
 import { Platform } from 'react-native';
 import { modelManager } from '../../modelManager';
 import { activeModelService } from '../../activeModelService';
@@ -161,8 +162,14 @@ export const imageProvider: DownloadProvider = {
     }
     await activeModelService.unloadImageModel()
       .catch(err => logger.log(`[DL-SM] image:${modelId} remove: unload failed err=${msg(err)}`));
-    await modelManager.deleteImageModel(modelId)
-      .catch(err => logger.log(`[DL-SM] image:${modelId} remove: delete failed err=${msg(err)}`));
+    // The files leave first. If the disk refuses, the model stays the person's (still listed, still on
+    // disk) and the caller hears it, so the screen can say so and offer a retry.
+    try {
+      await modelManager.deleteImageModel(modelId);
+    } catch (err) {
+      logger.log(`[DL-SM] image:${modelId} remove: delete failed err=${msg(err)}`);
+      if (await RNFS.exists(`${modelManager.getImageModelsDirectory()}/${modelId}`)) throw err;
+    }
     useAppStore.getState().removeDownloadedImageModel(modelId);
   },
 

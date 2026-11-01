@@ -18,12 +18,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 type Harness = Awaited<ReturnType<typeof setupChatScreen>>;
 
@@ -39,7 +35,7 @@ function pressByWalkingUp(node: unknown): void {
 }
 
 async function npuPhone(): Promise<Harness> {
-  return setupChatScreen({
+  return setupChatScreen({ navigation: 'real',
     engine: 'llama',
     platform: 'android',
     deferInitialLoad: true,

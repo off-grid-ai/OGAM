@@ -68,6 +68,8 @@ export const SecuritySettingsScreen: React.FC = () => {
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
         >
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>

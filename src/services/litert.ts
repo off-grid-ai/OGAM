@@ -59,6 +59,11 @@ interface LiteRTGenerationCallbacks {
 }
 
 class LiteRTService {
+  /** Ends the turn in flight when the person stops it: a Stop clears the native event listeners, so
+   *  neither litert_complete nor litert_error reaches that turn's callbacks any more. Every sendMessage
+   *  therefore ends with exactly one onComplete or onError, a Stop included (as llama.rn resolves a
+   *  stopped completion), and a caller awaiting the turn is never left waiting. */
+  private endStoppedTurn: (() => void) | null = null;
   private loaded = false;
   /** The file the engine holds, so "is this model ready" means this model, not any LiteRT model. */
   private loadedModelPath: string | null = null;
@@ -319,6 +324,7 @@ class LiteRTService {
 
     // Register event listeners for this generation
     this.clearSubscriptions();
+    this.endStoppedTurn = () => callbacks.onComplete(this.currentContent, this.currentReasoning);
     this.subscriptions = [
       this.emitter!.addListener(EVENT_TOKEN, (token: string) => {
         firstTokenTime ??= Date.now();
@@ -491,7 +497,9 @@ class LiteRTService {
   async stopGeneration(): Promise<void> {
     if (!this.isAvailable()) return;
     logger.log(TAG, 'stopGeneration');
+    const endTurn = this.endStoppedTurn;
     this.clearSubscriptions();
+    endTurn?.(); // the stopped turn ends with what streamed
     // Don't null activeConversationId — the native conversation is still loaded and
     // its KV cache still reflects cumulativeTokens. Clearing the id would force the
     // next prepareConversation to classify the same conversation as "new", falling
@@ -583,6 +591,7 @@ class LiteRTService {
   private clearSubscriptions(): void {
     this.subscriptions.forEach(s => s.remove());
     this.subscriptions = [];
+    this.endStoppedTurn = null;
   }
 }
 

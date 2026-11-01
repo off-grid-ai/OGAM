@@ -26,14 +26,6 @@ jest.mock('react-native-vector-icons/Feather', () => {
   return ({ name, ...props }: any) => <Text {...props}>{name}</Text>;
 });
 
-jest.mock('../../../src/theme', () => {
-  const colors = {
-    text: '#000', textMuted: '#999', textSecondary: '#666', textDisabled: '#bbb',
-    primary: '#1DB954', background: '#FFF', surface: '#F5F5F5', surfaceLight: '#EEE',
-    border: '#E0E0E0', overlay: 'rgba(0,0,0,0.4)', error: '#FF3B30',
-  };
-  return { useTheme: () => ({ colors, shadows: { small: {} } }) };
-});
 
 type ModalModule = typeof import('../../../pro/ui/McpServerModal');
 type StoreModule = typeof import('../../../pro/mcp/mcpStore');

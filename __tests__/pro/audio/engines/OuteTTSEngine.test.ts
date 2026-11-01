@@ -107,14 +107,6 @@ jest.mock('react-native-fs', () => {
   return { __esModule: true, default: boundary.module, ...boundary.module };
 });
 
-// ── Background download boundary ────────────────────────────────────────────
-const mockBgAvailable = { value: false };
-jest.mock('@offgrid/core/services/backgroundDownloadService', () => ({
-  backgroundDownloadService: {
-    isAvailable: () => mockBgAvailable.value,
-    downloadFileTo: jest.fn(() => ({ promise: Promise.resolve() })),
-  },
-}));
 
 import { OuteTTSEngine } from '@offgrid/pro/audio/engine/tts/engines/outetts/OuteTTSEngine';
 import {
@@ -145,7 +137,6 @@ beforeEach(() => {
   mockRuntime.pcm = new Array(48).fill(0).map((_, i) => Math.sin(i)) as number[];
   mockRuntime.vocoderEnabled = true;
   mockRuntime.completionArgs = undefined;
-  mockBgAvailable.value = false;
   mockAudioApi.closed = 0;
   mockAudioApi.lastSpeed = undefined;
   mockAudioApi.startThrows = false;

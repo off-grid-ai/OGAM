@@ -8,17 +8,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: () => {},
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('happy — edit a message via the real action menu (heavy entry point)', () => {
   // The action menu opens TWO ways — long-press the bubble AND the 3-dots '•••' button. Both are real
@@ -26,7 +17,7 @@ describe('happy — edit a message via the real action menu (heavy entry point)'
   it.each(['longpress', 'dots'] as const)(
     '%s → Edit → change text → SAVE & RESEND re-runs generation',
     async via => {
-      const h = await setupChatScreen({ engine: 'litert' });
+      const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
       h.render();
 
       await h.send('what is the capital of span', {

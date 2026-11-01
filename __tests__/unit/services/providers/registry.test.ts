@@ -1,20 +1,14 @@
 /**
- * ProviderRegistry Unit Tests
+ * ProviderRegistry — which provider answers a chat (the local model or a server's).
+ *
+ * Real: the registry, the local provider it starts with, the logger. The server providers registered here
+ * are plain records: the registry only stores and hands them back, it never calls them.
  */
-
-jest.mock('../../../../src/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
-jest.mock('../../../../src/services/providers/localProvider', () => ({
-  localProvider: { id: 'local', type: 'local', generate: jest.fn(), isModelLoaded: jest.fn() },
-}));
-
 import { providerRegistry, getProviderForServer } from '../../../../src/services/providers/registry';
+import { localProvider } from '../../../../src/services/providers/localProvider';
 
 function makeProvider(id: string) {
-  return { id, type: 'remote' as any, generate: jest.fn(), isModelLoaded: jest.fn() };
+  return { id, type: 'remote' as any };
 }
 
 describe('ProviderRegistry', () => {
@@ -78,7 +72,6 @@ describe('ProviderRegistry', () => {
     });
 
     it('falls back to localProvider when active provider is not found', () => {
-      const { localProvider } = require('../../../../src/services/providers/localProvider');
       // Force an inconsistent state: activeProviderId points to a missing provider
       (providerRegistry as any).activeProviderId = 'missing-provider';
       const active = providerRegistry.getActiveProvider();
@@ -150,7 +143,6 @@ describe('getProviderForServer', () => {
   });
 
   it('returns localProvider when serverId is null', () => {
-    const { localProvider } = require('../../../../src/services/providers/localProvider');
     expect(getProviderForServer(null)).toBe(localProvider);
   });
 
@@ -161,7 +153,6 @@ describe('getProviderForServer', () => {
   });
 
   it('falls back to localProvider when server has no registered provider', () => {
-    const { localProvider } = require('../../../../src/services/providers/localProvider');
     expect(getProviderForServer('nonexistent-server')).toBe(localProvider);
   });
 });

@@ -2,107 +2,120 @@
  * ChatInputModeToggle tests
  *
  * The pro-only Text/Voice interface control is one direct icon toggle:
- *  - when the voice model is NOT downloaded → routes to the Models Voice tab
- *  - when downloaded → flips interfaceMode inline (chat→audio)
+ *  - when the voice model is NOT downloaded → prompts, then routes to the Models Voice tab
+ *  - when downloaded (or a remote voice model is active) → flips interfaceMode inline (chat→audio)
  *  - when the control is disabled → does nothing
+ *
+ * The real toggle runs on a real stack navigator with the real TTS and remote-server stores and the
+ * real haptics helper (the haptic engine is faked in jest.setup). State is written through the
+ * stores' own actions. Each test reads the mode the person ends in and the screen they are on.
  */
+jest.unmock('@react-navigation/native');
+
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
-
-const mockNavigate = jest.fn();
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
-}));
-
-jest.mock('@offgrid/core/utils/haptics', () => ({
-  triggerHaptic: jest.fn(),
-}));
-
-const mockActiveRemoteVoiceServer = jest.fn(() => null);
-jest.mock('@offgrid/core/services/remoteVoicePlayback', () => ({
-  activeRemoteVoiceServer: () => mockActiveRemoteVoiceServer(),
-}));
-
+import { Platform, Text } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ChatInputModeToggle } from '../../../pro/audio/ui/ChatInputModeToggle';
 import { useTTSStore } from '../../../pro/audio/ttsStore';
+import { useRemoteServerStore } from '../../../src/stores/remoteServerStore';
 
-// isReady drives the `downloaded` gate (modelDownloaded ?? isReady) the component uses.
-const setDownloaded = (
-  downloaded: boolean,
-  mode: 'chat' | 'audio' = 'chat',
-) => {
-  useTTSStore.setState(s => ({
-    isReady: downloaded,
-    settings: { ...s.settings, interfaceMode: mode },
-  }));
-};
+const Stack = createNativeStackNavigator();
+const MainStub = () => <Text>Main screen</Text>;
+
+function mount(props: React.ComponentProps<typeof ChatInputModeToggle> = {}) {
+  const ref = createNavigationContainerRef<Record<string, object | undefined>>();
+  const Chat = () => <ChatInputModeToggle {...props} />;
+  const view = render(
+    <NavigationContainer ref={ref}>
+      <Stack.Navigator>
+        <Stack.Screen name="Chat" component={Chat} />
+        <Stack.Screen name="Main" component={MainStub} />
+      </Stack.Navigator>
+    </NavigationContainer>,
+  );
+  return { view, route: () => ref.getCurrentRoute() };
+}
+
+/** Whether this phone has the voice model, and which mode the chat is in. */
+function voiceModel(downloaded: boolean, mode: 'chat' | 'audio' = 'chat') {
+  const { settings, updateSettings } = useTTSStore.getState();
+  updateSettings({ modelDownloaded: { [settings.engineId]: downloaded }, interfaceMode: mode });
+}
+
+const mode = () => useTTSStore.getState().settings.interfaceMode;
 
 describe('ChatInputModeToggle', () => {
+  const realOS = Platform.OS;
+
   beforeEach(() => {
-    mockNavigate.mockClear();
-    mockActiveRemoteVoiceServer.mockReturnValue(null);
-    setDownloaded(false, 'chat');
+    useTTSStore.setState({ isReady: false });
+    voiceModel(false, 'chat');
+    const remote = useRemoteServerStore.getState();
+    remote.setActiveRemoteMediaServerId('voice', null);
+    for (const server of [...remote.servers]) remote.removeServer(server.id);
   });
 
-  it('prompts to download and routes to the Models Voice tab when no voice model', () => {
-    // Force Android: the alert shows inline. On iOS the component defers it to
-    // the dropdown's onDismiss (to avoid presenting two modals at once), which
-    // jest's Modal can't fire — that sequencing is an on-device concern.
-    const { Platform } = require('react-native');
-    const prevOS = Platform.OS;
-    Platform.OS = 'android';
-    try {
-      setDownloaded(false);
-      const { getByTestId, getByText } = render(<ChatInputModeToggle />);
+  afterEach(() => {
+    Object.defineProperty(Platform, 'OS', { value: realOS, configurable: true });
+  });
 
-      fireEvent.press(getByTestId('chat-mode-toggle'));
+  it('with no voice model, prompts instead of switching, and "Get voice model" opens the Models Voice tab', async () => {
+    // Android: the prompt shows inline. On iOS it waits for the dropdown's onDismiss (one modal at
+    // a time), which jest's Modal cannot fire; that sequencing is checked on the device.
+    Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
+    const { view, route } = mount();
 
-      // No silent switch — a prompt appears and the mode stays on chat.
-      expect(mockNavigate).not.toHaveBeenCalled();
-      expect(useTTSStore.getState().settings.interfaceMode).toBe('chat');
+    fireEvent.press(view.getByTestId('chat-mode-toggle'));
 
-      // Tapping "Get voice model" routes to the nested Models Voice tab.
-      fireEvent.press(getByText('Get voice model'));
-      expect(mockNavigate).toHaveBeenCalledWith('Main', {
-        screen: 'ModelsTab',
-        params: { initialTab: 'voice' },
+    expect(view.getByText('Get voice model')).toBeTruthy();
+    expect(route()?.name).toBe('Chat');
+    expect(mode()).toBe('chat');
+
+    fireEvent.press(view.getByText('Get voice model'));
+
+    await waitFor(() => expect(route()?.name).toBe('Main'));
+    expect(route()?.params).toEqual({ screen: 'ModelsTab', params: { initialTab: 'voice' } });
+    expect(mode()).toBe('chat');
+  });
+
+  it('with the voice model downloaded, switches to voice in place', () => {
+    voiceModel(true, 'chat');
+    const { view, route } = mount();
+
+    fireEvent.press(view.getByTestId('chat-mode-toggle'));
+
+    expect(mode()).toBe('audio');
+    expect(route()?.name).toBe('Chat');
+  });
+
+  it('with a remote voice model active, switches to voice in place', () => {
+    act(() => {
+      const remote = useRemoteServerStore.getState();
+      const id = remote.addServer({
+        name: 'Desktop',
+        endpoint: 'http://192.168.1.10:7878',
+        providerType: 'openai-compatible',
+        mediaModels: { voice: 'kokoro' },
       });
-      expect(useTTSStore.getState().settings.interfaceMode).toBe('chat');
-    } finally {
-      Platform.OS = prevOS;
-    }
-  });
-
-  it('flips interfaceMode to audio inline when the model is downloaded', () => {
-    setDownloaded(true, 'chat');
-    const { getByTestId } = render(<ChatInputModeToggle />);
-
-    fireEvent.press(getByTestId('chat-mode-toggle'));
-
-    expect(mockNavigate).not.toHaveBeenCalled();
-    expect(useTTSStore.getState().settings.interfaceMode).toBe('audio');
-  });
-
-  it('flips to audio when a remote voice model is active', () => {
-    mockActiveRemoteVoiceServer.mockReturnValue({
-      id: 'desktop',
-      mediaModels: { voice: 'kokoro' },
+      remote.setActiveRemoteMediaServerId('voice', id);
     });
-    setDownloaded(false, 'chat');
-    const { getByTestId } = render(<ChatInputModeToggle />);
+    const { view, route } = mount();
 
-    fireEvent.press(getByTestId('chat-mode-toggle'));
+    fireEvent.press(view.getByTestId('chat-mode-toggle'));
 
-    expect(mockNavigate).not.toHaveBeenCalled();
-    expect(useTTSStore.getState().settings.interfaceMode).toBe('audio');
+    expect(mode()).toBe('audio');
+    expect(route()?.name).toBe('Chat');
   });
 
-  it('does not change mode when disabled', () => {
-    setDownloaded(true, 'chat');
-    const { getByTestId } = render(<ChatInputModeToggle disabled />);
+  it('does nothing while disabled', () => {
+    voiceModel(true, 'chat');
+    const { view } = mount({ disabled: true });
 
-    fireEvent.press(getByTestId('chat-mode-toggle'));
+    fireEvent.press(view.getByTestId('chat-mode-toggle'));
 
-    expect(useTTSStore.getState().settings.interfaceMode).toBe('chat');
+    expect(mode()).toBe('chat');
+    expect(view.queryByText('Get voice model')).toBeNull();
   });
 });

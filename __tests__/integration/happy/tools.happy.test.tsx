@@ -8,12 +8,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('happy — a tool runs and its result renders (heavy entry point)', () => {
   it('web search shows intentionally escaped entity text literally', async () => {
@@ -30,7 +26,7 @@ describe('happy — a tool runs and its result renders (heavy entry point)', () 
     }) as Response;
 
     try {
-      const h = await setupChatScreen({ engine: 'litert' });
+      const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
       h.enableToolViaUI('web_search');
       h.render();
 
@@ -106,7 +102,7 @@ describe('happy — a tool runs and its result renders (heavy entry point)', () 
     };
 
     try {
-      const h = await setupChatScreen({ engine: 'litert' });
+      const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
       registerToolExtension(collidingSearchExtension);
       h.enableToolViaUI('web_search');
       h.render();
@@ -133,7 +129,7 @@ describe('happy — a tool runs and its result renders (heavy entry point)', () 
   });
 
   it('calculator: tool call executes and the answer renders', async () => {
-    const h = await setupChatScreen({ engine: 'litert' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
     // Arrive-via-UI: enable the calculator on the real Tools screen (flip its switch), then chat.
     h.enableToolViaUI('calculator');
     h.render();
@@ -149,7 +145,7 @@ describe('happy — a tool runs and its result renders (heavy entry point)', () 
   });
 
   it('MCP: a registered MCP tool executes and its result reaches the answer', async () => {
-    const h = await setupChatScreen({ engine: 'litert' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
      
     const { registerToolExtension, _clearExtensionsForTesting } = require('../../../src/services/tools/extensions');
      
@@ -174,7 +170,7 @@ describe('happy — a tool runs and its result renders (heavy entry point)', () 
   });
 
   it('T044: two parallel calculator calls render two tool-result bubbles, both correct', async () => {
-    const h = await setupChatScreen({ engine: 'litert' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
     h.enableToolViaUI('calculator');
     h.render();
     // The model emits TWO calculator tool calls in one turn (parallel, index 0+1); the real tool loop runs
@@ -194,7 +190,7 @@ describe('happy — a tool runs and its result renders (heavy entry point)', () 
   });
 
   it('places time below the answer, then tools, and opens generation details on tap', async () => {
-    const h = await setupChatScreen({ engine: 'litert' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
     h.enableToolViaUI('calculator');
     h.enableGenerationDetailsViaUI();
     h.render();

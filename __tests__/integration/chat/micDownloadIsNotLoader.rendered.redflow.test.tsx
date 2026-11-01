@@ -21,11 +21,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 /** The catalogue size whisperService seeds for base.en (142 MB — the value the download alert shows). */
 const BASE_EN_TOTAL_BYTES = 142 * 1024 * 1024;
@@ -41,7 +38,7 @@ const progressEvent = (downloadId: string, fraction: number) => ({
 
 describe('mic during a background STT download — a download affordance, never a loader (IMG_0143)', () => {
   it('keeps chat usable and shows download progress on the mic — NOT the busy spinner', async () => {
-    const h = await setupChatScreen({ engine: 'llama', whisper: true, download: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', whisper: true, download: true });
     h.render();
     const { ActivityIndicator } = require('react-native');
 
@@ -87,7 +84,7 @@ describe('mic during a background STT download — a download affordance, never 
   }, 30000);
 
   it('falsifier: a genuine tap-triggered whisper load DOES show the voice-loading spinner', async () => {
-    const h = await setupChatScreen({ engine: 'llama', whisper: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', whisper: true });
     await h.setupWhisperModel('tiny.en'); // downloaded + selected + resident, via the real select gesture
     h.render();
     const { useWhisperStore } = require('../../../src/stores/whisperStore');

@@ -186,6 +186,9 @@ export interface AppState extends ProAccessSlice {
    *  activeModelId). Not persisted (a relaunch has nothing loaded). */
   loadedTextModelId: string | null;
   setLoadedTextModelId: (modelId: string | null) => void;
+  /** The image model in memory now, the same projection as loadedTextModelId. Not persisted. */
+  loadedImageModelId: string | null;
+  setLoadedImageModelId: (modelId: string | null) => void;
   /** The active text model was EVICTED to free RAM (e.g. an image/TTS load in voice mode)
    *  while still selected. Drives the chat "tap to continue" reload affordance so a big
    *  model that got unloaded can be brought back on demand. Set by the service, cleared
@@ -392,6 +395,8 @@ export const useAppStore = create<AppState>()(
       setActiveModelId: modelId => set({ activeModelId: modelId }),
       loadedTextModelId: null,
       setLoadedTextModelId: modelId => set({ loadedTextModelId: modelId }),
+      loadedImageModelId: null,
+      setLoadedImageModelId: modelId => set({ loadedImageModelId: modelId }),
       textModelEvicted: false,
       setTextModelEvicted: evicted => set({ textModelEvicted: evicted }),
       lastTextModelId: null,

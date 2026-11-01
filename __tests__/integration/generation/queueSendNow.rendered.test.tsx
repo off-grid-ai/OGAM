@@ -9,12 +9,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 type Harness = Awaited<ReturnType<typeof setupChatScreen>>;
 
@@ -45,7 +41,7 @@ async function type(h: Harness, text: string) {
 
 describe('queue and send now while a reply runs', () => {
   it('long-press on send stops the reply and sends the message at once; the queued one goes after it', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     h.render();
     await startHeldReply(h);
 
@@ -74,7 +70,7 @@ describe('queue and send now while a reply runs', () => {
   });
 
   it('send now on a queued row sends that message on its own, then the rest', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     h.render();
     await startHeldReply(h);
 
@@ -104,7 +100,7 @@ describe('queue and send now while a reply runs', () => {
   });
 
   it('Stop holds the queue until the user sends it', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     h.render();
     await startHeldReply(h);
 
@@ -128,7 +124,7 @@ describe('queue and send now while a reply runs', () => {
   });
 
   it('a removed message is never sent; the rest still go when the reply ends', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     h.render();
     await startHeldReply(h);
 

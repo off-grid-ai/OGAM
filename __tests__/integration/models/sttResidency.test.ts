@@ -5,105 +5,93 @@
  * pipeline held the Whisper STT model AND the text model in RAM at the same
  * time, OOM-ing the app and forcing the user to resend.
  *
- * Why the old suite missed it: `whisperStore.test.ts` mocks the residency
- * manager's `makeRoomFor` to ALWAYS return `{ fits: true }` and only asserts
+ * Why the old suite missed it: `whisperStore.test.ts` mocked the residency
+ * manager's `makeRoomFor` to ALWAYS return `{ fits: true }` and only asserted
  * that `makeRoomFor`/`loadModel` were *called*. That is a false green — it
  * passes whether or not the store RESPECTS the verdict, and the bug was
  * precisely that the store ignored `fits` and loaded anyway.
  *
- * This test instead drives the REAL modelResidencyManager (only the native
- * whisperService.loadModel/unloadModel and the hardware memory probe are
- * mocked at the boundary) and asserts the OUTCOME a user cares about: how many
- * models are resident. Deleting the `if (!fits) return` guard in the store
- * fails these tests.
+ * This test drives the REAL whisperStore, whisperService, activeModelService, llmService and
+ * modelResidencyManager. Only the phone is faked: whisper.rn and llama.rn (the native engines), the
+ * disk and the RAM sensor (installNativeBoundary). It asserts the OUTCOME a user cares about: how many
+ * models are resident, and whether the native whisper model was ever opened. Deleting the
+ * `if (!fits) return` guard in the store fails these tests.
  */
+import { installNativeBoundary, GB, MB, type NativeBoundary } from '../../harness/nativeBoundary';
+import { createDownloadedModel } from '../../utils/factories';
 
-import { modelResidencyManager } from '../../../src/services/modelResidency';
-import { hardwareService } from '../../../src/services/hardware';
+const WHISPER = 'base';
+/** The text model that was force-loaded ("Load Anyway") on the device: bigger than the budget alone. */
+const TEXT_MODEL_BYTES = 8537 * MB;
 
-// Native boundary: the whisper native model. A dumb stub that just flips a flag
-// so the REAL residency bookkeeping and the REAL store logic run on top of it.
-let mockWhisperNativeLoaded = false;
-let mockWhisperModelPath: string | null = null;
-jest.mock('../../../src/services/whisperService', () => ({
-  whisperService: {
-    getModelPath: (id: string) => `/models/ggml-${id}.bin`,
-    getLoadedModelPath: () => mockWhisperModelPath,
-    loadModel: jest.fn(async (path: string) => {
-      mockWhisperNativeLoaded = true;
-      mockWhisperModelPath = path;
-    }),
-    unloadModel: jest.fn(async () => {
-      mockWhisperNativeLoaded = false;
-      mockWhisperModelPath = null;
-    }),
-    isModelLoaded: () => mockWhisperNativeLoaded,
-    isModelDownloaded: jest.fn(async () => true),
-    deleteModel: jest.fn(async () => {}),
-    downloadModel: jest.fn(async () => '/models/x'),
-  },
-  WHISPER_MODELS: [{ id: 'base', size: 142 }],
-}));
+let boundary: NativeBoundary;
+let residency: any;
+let activeModelService: any;
+let useWhisperStore: any;
 
-jest.mock('../../../src/services/hardware');
-const mockHardware = hardwareService as jest.Mocked<typeof hardwareService>;
+/** How many times the native whisper model was opened. */
+const whisperOpens = (): number => boundary.whisper!.module.initWhisper.mock.calls.length;
 
-import { useWhisperStore } from '../../../src/stores/whisperStore';
-import { whisperService } from '../../../src/services/whisperService';
+beforeEach(async () => {
+  // Device under test: the 12GB Android phone that OOM'd.
+  boundary = installNativeBoundary({
+    llama: true, whisper: true, fs: true,
+    ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 4.5 * GB },
+  });
+  const { hardwareService } = require('../../../src/services/hardware');
+  const { useAppStore } = require('../../../src/stores');
+  const { whisperService } = require('../../../src/services/whisperService');
+  ({ modelResidencyManager: residency } = require('../../../src/services/modelResidency'));
+  ({ activeModelService } = require('../../../src/services/activeModelService'));
+  ({ useWhisperStore } = require('../../../src/stores/whisperStore'));
+  await hardwareService.refreshMemoryInfo();
 
-const mockWhisper = whisperService as jest.Mocked<typeof whisperService>;
+  // Pin the budget the device had (11297MB usable → ~7908MB on Android) so the invariant is
+  // deterministic. The text model (8537MB) alone exceeds it — it was force-loaded via override — so a
+  // 142MB whisper sidecar CANNOT co-reside without evicting it, and residency won't evict a generation
+  // model for a sidecar. That is the exact device state.
+  residency.setLoadPolicy('balanced');
+  residency.setBudgetOverrideMB(7908);
 
-/** A resident generation (text) model, as activeModelService would register it. */
-const registerTextModel = (sizeMB: number) => {
-  modelResidencyManager.register(
-    { key: 'text', type: 'text', sizeMB },
-    async () => { /* text unload */ },
-  );
-};
+  // A downloaded text model, as a finished download leaves it: its file on disk and its record added.
+  const filePath = `${boundary.fs!.DocumentDirectoryPath}/models/big.gguf`;
+  boundary.fs!.seedFile(filePath, 500 * MB);
+  useAppStore.getState().addDownloadedModel(createDownloadedModel({
+    id: 'big', name: 'Big Model', engine: 'llama', filePath, fileName: 'big.gguf', fileSize: TEXT_MODEL_BYTES,
+  }));
+  activeModelService.selectTextModel('big');
+
+  // The whisper model file is on disk.
+  boundary.fs!.seedFile(whisperService.getModelPath(WHISPER), 142 * MB);
+});
+
+/** The person loads the big text model with "Load Anyway". */
+const loadTextAnyway = () => activeModelService.loadTextModel('big', undefined, { override: true });
 
 describe('STT residency — single-model invariant', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockWhisperNativeLoaded = false;
-    mockWhisperModelPath = null;
-    modelResidencyManager._reset();
-    useWhisperStore.setState({ downloadedModelId: 'base', isModelLoaded: false, isModelLoading: false, error: null });
-
-    // Device under test: the 12GB phone that OOM'd (11297MB usable → ~7908MB model
-    // budget on Android). Pin the budget directly so the invariant is deterministic
-    // and platform-independent (the test-env Platform.OS would otherwise pick the
-    // iOS fraction and give a roomier budget than the Android device had). The text
-    // model (8537MB) alone exceeds this budget — it was force-loaded via override —
-    // so a 142MB whisper sidecar CANNOT co-reside without evicting it, and residency
-    // won't evict a generation model for a sidecar. That is the exact device state.
-    mockHardware.getTotalMemoryGB.mockReturnValue(11.03);
-    mockHardware.getAvailableMemoryGB.mockReturnValue(4.5);
-    mockHardware.refreshMemoryInfo.mockResolvedValue({} as any);
-    modelResidencyManager.setLoadPolicy('balanced');
-    modelResidencyManager.setBudgetOverrideMB(7908);
-  });
-
   it('loads whisper when nothing else is resident', async () => {
-    await useWhisperStore.getState().loadModel();
+    await useWhisperStore.getState().selectModel(WHISPER);
 
-    expect(mockWhisper.loadModel).toHaveBeenCalledTimes(1);
-    expect(modelResidencyManager.isResident('whisper')).toBe(true);
+    expect(whisperOpens()).toBe(1);
+    expect(residency.isResident('whisper')).toBe(true);
     expect(useWhisperStore.getState().isModelLoaded).toBe(true);
   });
 
   it('does NOT load whisper alongside a heavier resident text model (the OOM regression)', async () => {
-    // The text model is resident (like right after a voice "Load Anyway"). Residency
-    // will NOT evict an 8.5GB generation model to make room for a 142MB sidecar, so
-    // makeRoomFor returns fits=false. The store must honor that and stay out.
-    registerTextModel(8537);
+    // The text model is resident (like right after a voice "Load Anyway"). Residency will NOT evict an
+    // 8.5GB generation model to make room for a 142MB sidecar, so makeRoomFor returns fits=false. The
+    // store must honor that and stay out.
+    await loadTextAnyway();
+    expect(residency.isResident('text')).toBe(true);
 
+    await useWhisperStore.getState().selectModel(WHISPER);
     await useWhisperStore.getState().loadModel();
 
     // The invariant: exactly ONE model resident — the text model, not both.
-    expect(mockWhisper.loadModel).not.toHaveBeenCalled();
-    expect(modelResidencyManager.isResident('whisper')).toBe(false);
-    expect(modelResidencyManager.isResident('text')).toBe(true);
-    expect(modelResidencyManager.getResidents()).toHaveLength(1);
+    expect(whisperOpens()).toBe(0);
+    expect(residency.isResident('whisper')).toBe(false);
+    expect(residency.isResident('text')).toBe(true);
+    expect(residency.getResidents()).toHaveLength(1);
     // Not an error — STT just loads on the next record when there's room.
     expect(useWhisperStore.getState().isModelLoaded).toBe(false);
     expect(useWhisperStore.getState().error).toBeNull();
@@ -111,41 +99,36 @@ describe('STT residency — single-model invariant', () => {
 
   it('a text load evicts a resident whisper, and whisper does not fight its way back', async () => {
     // 1. Whisper resident (user recorded a voice note).
-    await useWhisperStore.getState().loadModel();
-    expect(modelResidencyManager.isResident('whisper')).toBe(true);
+    await useWhisperStore.getState().selectModel(WHISPER);
+    expect(residency.isResident('whisper')).toBe(true);
 
-    // 2. A big text model needs to load. activeModelService asks residency to make
-    //    room with override (Load Anyway) — this evicts whisper.
-    const { evicted } = await modelResidencyManager.makeRoomFor(
-      { key: 'text', type: 'text', modelId: 'gemma-e4b', sizeMB: 8537 },
-      { override: true },
-    );
-    registerTextModel(8537); // text now actually resident
-    expect(evicted).toContain('whisper');
-    expect(modelResidencyManager.isResident('whisper')).toBe(false);
+    // 2. The big text model loads with override (Load Anyway) — this evicts whisper.
+    await loadTextAnyway();
+    expect(residency.isResident('text')).toBe(true);
+    expect(residency.isResident('whisper')).toBe(false);
     // whisper's unload ran → store flag cleared (the eviction path).
-    expect(mockWhisper.unloadModel).toHaveBeenCalled();
+    expect(useWhisperStore.getState().isModelLoaded).toBe(false);
 
-    // 3. The reactive auto-load effect (or any retry) tries to bring whisper back
-    //    while the text model owns memory. It must NOT succeed — otherwise we're
-    //    back to whisper+text co-resident.
+    // 3. The reactive auto-load effect (or any retry) tries to bring whisper back while the text model
+    //    owns memory. It must NOT succeed — otherwise we're back to whisper+text co-resident.
     await useWhisperStore.getState().loadModel();
 
-    expect(modelResidencyManager.isResident('whisper')).toBe(false);
-    expect(modelResidencyManager.isResident('text')).toBe(true);
-    expect(modelResidencyManager.getResidents()).toHaveLength(1);
+    expect(whisperOpens()).toBe(1);
+    expect(residency.isResident('whisper')).toBe(false);
+    expect(residency.isResident('text')).toBe(true);
+    expect(residency.getResidents()).toHaveLength(1);
   });
 
   it('after the text model unloads, whisper can load again', async () => {
-    registerTextModel(8537);
-    await useWhisperStore.getState().loadModel();
-    expect(modelResidencyManager.isResident('whisper')).toBe(false);
+    await loadTextAnyway();
+    await useWhisperStore.getState().selectModel(WHISPER);
+    expect(residency.isResident('whisper')).toBe(false);
 
-    // Text model goes away (turn finished / model switched).
-    modelResidencyManager.release('text');
+    // Text model goes away (the person ejects it).
+    await activeModelService.unloadTextModel();
 
     await useWhisperStore.getState().loadModel();
-    expect(modelResidencyManager.isResident('whisper')).toBe(true);
+    expect(residency.isResident('whisper')).toBe(true);
     expect(useWhisperStore.getState().isModelLoaded).toBe(true);
   });
 });

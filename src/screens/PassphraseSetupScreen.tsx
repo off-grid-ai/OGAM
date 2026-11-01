@@ -15,7 +15,7 @@ import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { authService } from '../services/authService';
+import { authService, PassphraseCheckUnavailable } from '../services/authService';
 import { useAuthStore } from '../stores/authStore';
 import logger from '../utils/logger';
 
@@ -91,7 +91,7 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
       onComplete();
     } catch (err) {
       logger.warn('[PassphraseSetup] Operation failed:', err);
-      setAlertState(showAlert('Error', 'An error occurred. Please try again.'));
+      setAlertState(showAlert('Error', err instanceof PassphraseCheckUnavailable ? err.message : 'An error occurred. Please try again.'));
     } finally {
       setIsSubmitting(false);
     }

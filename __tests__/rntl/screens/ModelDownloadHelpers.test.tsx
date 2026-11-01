@@ -1,76 +1,23 @@
 /**
- * ModelDownloadHelpers Tests
+ * Advanced Setup's network pieces and its file picker.
  *
- * Tests for helper components and functions used by the model download screen:
- * - NetworkSection component (scanning, server list, empty state, actions)
- * - ServerCard component (server info, connection state)
- * - fetchModelFiles utility (quant filtering, error handling)
+ * NetworkSection and ServerCard render for real with the real theme, Card and Touchable. What their
+ * buttons DO (scan, add a server, connect) is driven end to end on the real screen in
+ * ModelDownloadScreen.test.tsx; here each state the section and card can be in is checked as the
+ * person sees it.
+ *
+ * fetchModelFiles runs the real huggingFaceService against Hugging Face's API faked at fetch
+ * (hfModelApiServer), on an iPhone (nativeBoundary), where a curated download takes Q4_K_M only.
  */
-
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
+import { useTheme } from '../../../src/theme';
+import { NetworkSection, ServerCard } from '../../../src/screens/ModelDownloadHelpers';
+import type { RemoteServer } from '../../../src/types';
+import { installNativeBoundary, GB } from '../../harness/nativeBoundary';
+import { serveHfModelApi, type HfModelApiServer } from '../../harness/hfModelApiServer';
 
-jest.mock('../../../src/components', () => ({
-  Card: ({ children, style, onPress, testID }: any) => {
-    const { View, TouchableOpacity } = require('react-native');
-    const Container = onPress ? TouchableOpacity : View;
-    return <Container style={style} onPress={onPress} testID={testID}>{children}</Container>;
-  },
-}));
-
-// Hugging Face is the remote boundary. ModelDownloadHelpers now reaches it through
-// modelCatalogFiles, so both import paths must resolve to the same controlled adapter.
-jest.mock('../../../src/services/huggingface', () => ({
-  huggingFaceService: { getModelFiles: jest.fn() },
-}));
-
-jest.mock('../../../src/services', () =>
-  jest.requireMock('../../../src/services/huggingface'),
-);
-
-jest.mock('../../../src/utils/logger', () => ({
-  __esModule: true,
-  default: { error: jest.fn(), info: jest.fn(), warn: jest.fn() },
-}));
-
-jest.mock('../../../src/theme', () => ({
-  useTheme: () => ({ colors: mockColors }),
-  useThemedStyles: (fn: any) => fn(mockColors, {}),
-}));
-
-jest.mock('../../../src/constants', () => ({
-  // fetchModelFiles reads the backend from the app store, which needs the real APP_CONFIG.
-  ...jest.requireActual('../../../src/constants'),
-  TYPOGRAPHY: {
-    h2: { fontSize: 20, fontWeight: '600' },
-    meta: { fontSize: 12 },
-    bodySmall: { fontSize: 14 },
-  },
-  SPACING: { sm: 4, md: 8, lg: 12, xl: 16 },
-  FONTS: { mono: 'SpaceMono' },
-}));
-
-const mockColors = {
-  primary: '#007AFF',
-  text: '#000',
-  textSecondary: '#666',
-  textMuted: '#999',
-  background: '#FFF',
-  surface: '#F5F5F5',
-  border: '#DDD',
-  warning: '#FF9500',
-  success: '#525252',
-};
-
-import { RemoteServer } from '../../../src/types';
-import { huggingFaceService } from '../../../src/services';
-import {
-  NetworkSection,
-  ServerCard,
-  fetchModelFiles,
-} from '../../../src/screens/ModelDownloadHelpers';
-
-const mockServer: RemoteServer = {
+const OLLAMA: RemoteServer = {
   id: 'server-1',
   name: 'Ollama (192.168.1.10)',
   endpoint: 'http://192.168.1.10:11434',
@@ -78,7 +25,7 @@ const mockServer: RemoteServer = {
   createdAt: '2024-01-01',
 };
 
-const mockLMStudioServer: RemoteServer = {
+const LM_STUDIO: RemoteServer = {
   id: 'server-2',
   name: 'LM Studio (192.168.1.20)',
   endpoint: 'http://192.168.1.20:1234',
@@ -86,296 +33,170 @@ const mockLMStudioServer: RemoteServer = {
   createdAt: '2024-01-01',
 };
 
-const defaultNetworkProps = {
-  servers: [] as RemoteServer[],
-  discoveredModels: {},
-  connectingServerId: null,
-  connectedServerId: null,
-  isCheckingNetwork: false,
-  isScanning: false,
-  onConnectServer: jest.fn(),
-  onScanNetwork: jest.fn(),
-  onAddManually: jest.fn(),
-  colors: mockColors as any,
-};
+const noop = () => {};
 
-// ---------------------------------------------------------------------------
-// NetworkSection
-// ---------------------------------------------------------------------------
+type SectionProps = Omit<React.ComponentProps<typeof NetworkSection>, 'colors'>;
+type CardProps = Omit<React.ComponentProps<typeof ServerCard>, 'colors'>;
+
+/** The section in the app's theme, as Advanced Setup renders it. */
+function Section(props: Partial<SectionProps>) {
+  const { colors } = useTheme();
+  return (
+    <NetworkSection
+      servers={[]}
+      discoveredModels={{}}
+      connectingServerId={null}
+      connectedServerId={null}
+      isCheckingNetwork={false}
+      isScanning={false}
+      onConnectServer={noop}
+      onScanNetwork={noop}
+      onAddManually={noop}
+      {...props}
+      colors={colors}
+    />
+  );
+}
+
+function Server(props: Partial<CardProps>) {
+  const { colors } = useTheme();
+  return (
+    <ServerCard
+      server={OLLAMA}
+      modelCount={3}
+      isConnecting={false}
+      isConnected={false}
+      onConnect={noop}
+      {...props}
+      colors={colors}
+    />
+  );
+}
 
 describe('NetworkSection', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
+  it('with nothing found, says so and offers Off Grid AI Desktop, Scan Network and Add Server', () => {
+    const view = render(<Section />);
+
+    expect(view.getByText('Network Models')).toBeTruthy();
+    expect(view.getByText('No Off Grid AI Desktop, Ollama, or LM Studio server found. Scan again or add one.')).toBeTruthy();
+    expect(view.getByTestId('onboarding-get-desktop')).toBeTruthy();
+    expect(view.getByText('Scan Network')).toBeTruthy();
+    expect(view.getByText('Add Server')).toBeTruthy();
+    expect(view.queryByText('Scanning your network...')).toBeNull();
   });
 
-  it('renders "Network Models" title', () => {
-    const { getByText } = render(<NetworkSection {...defaultNetworkProps} />);
-    expect(getByText('Network Models')).toBeTruthy();
+  it('while the first check runs with no servers, shows it is scanning and holds the Scan button', () => {
+    const view = render(<Section isCheckingNetwork />);
+
+    expect(view.getByText('Scanning your network...')).toBeTruthy();
+    expect(view.queryByText('Scan Network')).toBeNull();
+    expect(view.getByText('Add Server')).toBeTruthy();
   });
 
-  it('shows scanning spinner when isCheckingNetwork=true and no servers', () => {
-    const { getByText } = render(
-      <NetworkSection {...defaultNetworkProps} isCheckingNetwork={true} />,
-    );
-    expect(getByText('Scanning your network...')).toBeTruthy();
+  it('lists each server found, and a recheck does not hide them behind the scanning line', () => {
+    const view = render(<Section isCheckingNetwork servers={[OLLAMA, LM_STUDIO]} />);
+
+    expect(view.getByTestId('discovered-server-server-1')).toBeTruthy();
+    expect(view.getByTestId('discovered-server-server-2')).toBeTruthy();
+    expect(view.queryByText('Scanning your network...')).toBeNull();
+    expect(view.queryByText('Scan Network')).toBeNull();
   });
 
-  it('does NOT show scanning spinner when servers exist even if isCheckingNetwork=true', () => {
-    const { queryByText } = render(
-      <NetworkSection
-        {...defaultNetworkProps}
-        isCheckingNetwork={true}
-        servers={[mockServer]}
-      />,
-    );
-    expect(queryByText('Scanning your network...')).toBeNull();
+  it('while a scan runs, the Scan button shows it is busy', () => {
+    const view = render(<Section isScanning />);
+
+    expect(view.queryByText('Scan Network')).toBeNull();
+    expect(view.getByText('Add Server')).toBeTruthy();
   });
 
-  it('shows server cards when servers provided', () => {
-    const { getByTestId } = render(
-      <NetworkSection
-        {...defaultNetworkProps}
-        servers={[mockServer, mockLMStudioServer]}
-      />,
-    );
-    expect(getByTestId('discovered-server-server-1')).toBeTruthy();
-    expect(getByTestId('discovered-server-server-2')).toBeTruthy();
-  });
+  it('marks the connected server, and only that one', () => {
+    const view = render(<Section servers={[OLLAMA, LM_STUDIO]} connectedServerId="server-2" />);
 
-  it('shows empty text when no servers and not checking', () => {
-    const { getByText } = render(<NetworkSection {...defaultNetworkProps} />);
-    expect(
-      getByText('No Off Grid AI Desktop, Ollama, or LM Studio server found. Scan again or add one.'),
-    ).toBeTruthy();
-  });
-
-  it('always shows "Scan Network" and "Add Server" buttons', () => {
-    const { getByText } = render(<NetworkSection {...defaultNetworkProps} />);
-    expect(getByText('Scan Network')).toBeTruthy();
-    expect(getByText('Add Server')).toBeTruthy();
-  });
-
-  it('"Scan Network" button is disabled when isScanning', () => {
-    const onScan = jest.fn();
-    const { queryByText } = render(
-      <NetworkSection
-        {...defaultNetworkProps}
-        isScanning={true}
-        onScanNetwork={onScan}
-      />,
-    );
-    // When busy, the button shows a spinner instead of text
-    expect(queryByText('Scan Network')).toBeNull();
-  });
-
-  it('"Scan Network" button is disabled when isCheckingNetwork', () => {
-    const onScan = jest.fn();
-    const { queryByText } = render(
-      <NetworkSection
-        {...defaultNetworkProps}
-        isCheckingNetwork={true}
-        servers={[mockServer]}
-        onScanNetwork={onScan}
-      />,
-    );
-    // When busy, the button shows a spinner instead of text
-    expect(queryByText('Scan Network')).toBeNull();
-  });
-
-  it('calls onScanNetwork when "Scan Network" pressed', () => {
-    const onScan = jest.fn();
-    const { getByText } = render(
-      <NetworkSection {...defaultNetworkProps} onScanNetwork={onScan} />,
-    );
-    fireEvent.press(getByText('Scan Network'));
-    expect(onScan).toHaveBeenCalledTimes(1);
-  });
-
-  it('calls onAddManually when "Add Server" pressed', () => {
-    const onAdd = jest.fn();
-    const { getByText } = render(
-      <NetworkSection {...defaultNetworkProps} onAddManually={onAdd} />,
-    );
-    fireEvent.press(getByText('Add Server'));
-    expect(onAdd).toHaveBeenCalledTimes(1);
-  });
-
-  it('calls onConnectServer with correct server when server card pressed', () => {
-    const onConnect = jest.fn();
-    const { getByTestId } = render(
-      <NetworkSection
-        {...defaultNetworkProps}
-        servers={[mockServer]}
-        onConnectServer={onConnect}
-      />,
-    );
-    fireEvent.press(getByTestId('discovered-server-server-1-connect'));
-    expect(onConnect).toHaveBeenCalledWith(mockServer);
+    expect(view.getByTestId('discovered-server-server-2-connected')).toBeTruthy();
+    expect(view.getByTestId('discovered-server-server-1-connect')).toBeTruthy();
+    expect(view.queryByTestId('discovered-server-server-1-connected')).toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// ServerCard
-// ---------------------------------------------------------------------------
 
 describe('ServerCard', () => {
-  const defaultCardProps = {
-    server: mockServer,
-    modelCount: 3,
-    isConnecting: false,
-    isConnected: false,
-    onConnect: jest.fn(),
-    colors: mockColors as any,
-  };
+  it('names the server and its kind by port: Ollama on 11434, LM Studio on 1234', () => {
+    const ollama = render(<Server />);
+    expect(ollama.getByText('Ollama (192.168.1.10)')).toBeTruthy();
+    expect(ollama.getByText('Ollama · 3 models')).toBeTruthy();
+    ollama.unmount();
 
-  beforeEach(() => {
-    jest.clearAllMocks();
+    const studio = render(<Server server={LM_STUDIO} />);
+    expect(studio.getByText('LM Studio · 3 models')).toBeTruthy();
   });
 
-  it('renders server name', () => {
-    const { getByText } = render(<ServerCard {...defaultCardProps} />);
-    expect(getByText('Ollama (192.168.1.10)')).toBeTruthy();
+  it.each([
+    [3, 'Ollama · 3 models'],
+    [1, 'Ollama · 1 model'],
+    [0, 'Ollama · Tap to connect'],
+  ])('with %i models, reads "%s"', (modelCount, meta) => {
+    const view = render(<Server modelCount={modelCount} />);
+    expect(view.getByText(meta)).toBeTruthy();
   });
 
-  it('shows "Ollama" for port 11434 endpoints', () => {
-    const { getAllByText } = render(<ServerCard {...defaultCardProps} />);
-    // The server type "Ollama" appears in the meta line (e.g., "Ollama · 3 models")
-    expect(getAllByText(/Ollama/).length).toBeGreaterThanOrEqual(1);
-    expect(getAllByText(/Ollama · 3 models/).length).toBe(1);
-  });
+  it('shows Connect until it connects, a spinner while connecting, then Connected', () => {
+    const idle = render(<Server />);
+    expect(idle.getByText('Connect')).toBeTruthy();
+    expect(idle.queryByText('Connected')).toBeNull();
+    idle.unmount();
 
-  it('shows "LM Studio" for non-11434 endpoints', () => {
-    const { getAllByText } = render(
-      <ServerCard {...defaultCardProps} server={mockLMStudioServer} />,
-    );
-    expect(getAllByText(/LM Studio/).length).toBeGreaterThanOrEqual(1);
-    expect(getAllByText(/LM Studio · 3 models/).length).toBe(1);
-  });
+    const connecting = render(<Server isConnecting />);
+    expect(connecting.queryByText('Connect')).toBeNull();
+    expect(connecting.queryByText('Connected')).toBeNull();
+    connecting.unmount();
 
-  it('shows model count text', () => {
-    const { getByText } = render(<ServerCard {...defaultCardProps} modelCount={3} />);
-    expect(getByText(/3 models/)).toBeTruthy();
-  });
-
-  it('shows singular "model" for count 1', () => {
-    const { getByText } = render(<ServerCard {...defaultCardProps} modelCount={1} />);
-    expect(getByText(/1 model(?!s)/)).toBeTruthy();
-  });
-
-  it('shows "Tap to connect" when modelCount is 0', () => {
-    const { getByText } = render(<ServerCard {...defaultCardProps} modelCount={0} />);
-    expect(getByText(/Tap to connect/)).toBeTruthy();
-  });
-
-  it('shows spinner when isConnecting', () => {
-    const { queryByText } = render(
-      <ServerCard {...defaultCardProps} isConnecting={true} />,
-    );
-    // Connect button text should not be present when spinner is shown
-    expect(queryByText('Connect')).toBeNull();
-  });
-
-  it('shows Connect button when not connecting', () => {
-    const { getByText } = render(<ServerCard {...defaultCardProps} />);
-    expect(getByText('Connect')).toBeTruthy();
-  });
-
-  it('calls onConnect when pressed', () => {
-    const onConnect = jest.fn();
-    const { getByText } = render(
-      <ServerCard {...defaultCardProps} onConnect={onConnect} />,
-    );
-    fireEvent.press(getByText('Connect'));
-    expect(onConnect).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows "Connected" badge when isConnected', () => {
-    const { getByTestId, getByText, queryByTestId } = render(
-      <ServerCard {...defaultCardProps} isConnected={true} />,
-    );
-    expect(getByTestId('discovered-server-server-1-connected')).toBeTruthy();
-    expect(getByText('Connected')).toBeTruthy();
-    expect(queryByTestId('discovered-server-server-1-connect')).toBeNull();
-  });
-
-  it('shows Connect button when not connected', () => {
-    const { getByTestId, queryByTestId } = render(
-      <ServerCard {...defaultCardProps} isConnected={false} />,
-    );
-    expect(getByTestId('discovered-server-server-1-connect')).toBeTruthy();
-    expect(queryByTestId('discovered-server-server-1-connected')).toBeNull();
+    const connected = render(<Server isConnected />);
+    expect(connected.getByTestId('discovered-server-server-1-connected')).toBeTruthy();
+    expect(connected.getByText('Connected')).toBeTruthy();
+    expect(connected.queryByTestId('discovered-server-server-1-connect')).toBeNull();
   });
 });
 
-// ---------------------------------------------------------------------------
-// fetchModelFiles
-// ---------------------------------------------------------------------------
-
 describe('fetchModelFiles', () => {
-  const mockGetModelFiles = huggingFaceService.getModelFiles as jest.Mock;
+  let hf: HfModelApiServer;
+  const realFetch = globalThis.fetch;
 
-  beforeEach(() => {
-    jest.clearAllMocks();
+  afterEach(() => {
+    hf?.restore();
+    globalThis.fetch = realFetch;
   });
 
-  it('returns the Q4_K_M file when available', async () => {
-    const q4kmFile = {
-      name: 'model-Q4_K_M.gguf',
-      size: 4000000000,
-      quantization: 'Q4_K_M',
-      downloadUrl: 'https://example.com/model-Q4_K_M.gguf',
-    };
-    const otherFile = {
-      name: 'model-Q8_0.gguf',
-      size: 8000000000,
-      quantization: 'Q8_0',
-      downloadUrl: 'https://example.com/model-Q8_0.gguf',
-    };
-    mockGetModelFiles.mockResolvedValueOnce([otherFile, q4kmFile]);
+  /** An iPhone whose Hugging Face serves `test/model` with these files. */
+  function phoneWith(files: string[] | null) {
+    installNativeBoundary({ ram: { platform: 'ios', totalBytes: 8 * GB, availBytes: 4 * GB } });
+    hf = serveHfModelApi(
+      files === null ? { status: 500 } : { repos: { 'test/model': files.map((path, i) => ({ path, size: (i + 3) * GB })) } },
+    );
+    const { fetchModelFiles } = require('../../../src/screens/ModelDownloadHelpers');
+    return fetchModelFiles as typeof import('../../../src/screens/ModelDownloadHelpers').fetchModelFiles;
+  }
+
+  it('picks the Q4_K_M file, wherever it is listed', async () => {
+    const fetchModelFiles = phoneWith(['model-Q4_K_S.gguf', 'model-Q8_0.gguf', 'model-Q4_K_M.gguf']);
 
     const result = await fetchModelFiles([{ id: 'test/model' }]);
-    expect(result['test/model']).toEqual([q4kmFile]);
+
+    expect(result['test/model']).toHaveLength(1);
+    expect(result['test/model'][0]).toEqual(expect.objectContaining({ name: 'model-Q4_K_M.gguf', quantization: 'Q4_K_M', size: 5 * GB }));
   });
 
-  it('picks Q4_K_M even when listed after other variants', async () => {
-    const q4ksFile = { name: 'model-Q4_K_S.gguf', size: 3800000000, quantization: 'Q4_K_S', downloadUrl: 'https://example.com/q4ks' };
-    const q4kmFile = { name: 'model-Q4_K_M.gguf', size: 4200000000, quantization: 'Q4_K_M', downloadUrl: 'https://example.com/q4km' };
-    const q8File = { name: 'model-Q8_0.gguf', size: 8000000000, quantization: 'Q8_0', downloadUrl: 'https://example.com/q8' };
-    mockGetModelFiles.mockResolvedValueOnce([q4ksFile, q4kmFile, q8File]);
+  it('leaves the model out when there is no Q4_K_M; Q4_K_S and Q4_0 do not count', async () => {
+    const fetchModelFiles = phoneWith(['model-Q4_K_S.gguf', 'model-Q4_0.gguf', 'model-Q8_0.gguf', 'model-Q6_K.gguf']);
 
     const result = await fetchModelFiles([{ id: 'test/model' }]);
-    expect(result['test/model']).toEqual([q4kmFile]);
-  });
 
-  it('does not treat Q4_K_S or Q4_0 as Q4_K_M — model excluded', async () => {
-    const files = [
-      { name: 'model-Q4_K_S.gguf', size: 3800000000, quantization: 'Q4_K_S', downloadUrl: 'https://example.com/q4ks' },
-      { name: 'model-Q4_0.gguf', size: 3500000000, quantization: 'Q4_0', downloadUrl: 'https://example.com/q40' },
-      { name: 'model-Q8_0.gguf', size: 8000000000, quantization: 'Q8_0', downloadUrl: 'https://example.com/q8' },
-    ];
-    mockGetModelFiles.mockResolvedValueOnce(files);
-
-    const result = await fetchModelFiles([{ id: 'test/model' }]);
-    // No Q4_K_M → model excluded from results
     expect(result['test/model']).toBeUndefined();
   });
 
-  it('excludes model from results when no Q4_K_M present', async () => {
-    const files = [
-      { name: 'model-Q8_0.gguf', size: 8e9, quantization: 'Q8_0', downloadUrl: 'https://example.com/1' },
-      { name: 'model-Q5_1.gguf', size: 5e9, quantization: 'Q5_1', downloadUrl: 'https://example.com/2' },
-      { name: 'model-Q6_K.gguf', size: 6e9, quantization: 'Q6_K', downloadUrl: 'https://example.com/3' },
-    ];
-    mockGetModelFiles.mockResolvedValueOnce(files);
+  it('leaves the model out when Hugging Face does not answer', async () => {
+    const fetchModelFiles = phoneWith(null);
 
     const result = await fetchModelFiles([{ id: 'test/model' }]);
-    expect(result['test/model']).toBeUndefined();
-  });
 
-  it('handles fetch errors gracefully', async () => {
-    mockGetModelFiles.mockRejectedValueOnce(new Error('Network error'));
-
-    const result = await fetchModelFiles([{ id: 'test/model' }]);
-    expect(result['test/model']).toBeUndefined();
+    expect(result).toEqual({});
   });
 });

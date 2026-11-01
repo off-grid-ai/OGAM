@@ -1,34 +1,19 @@
 /**
- * Intent Classifier Unit Tests
+ * Intent Classifier
  *
- * Comprehensive tests for the pattern-based intent classification system.
- * Tests cover all regex patterns for both image and text intents,
- * plus edge cases, caching, and LLM fallback.
+ * The pattern-based intent classification (image vs text, every regex family, edge cases, the cache), the
+ * tool-need classifier, and the model fallback for messages no pattern decides.
+ *
+ * The pattern tests are pure. The model fallback runs on a faked phone (harness/generationDevice): the
+ * classifier, llmService and activeModelService (loads through the residency lock) are real, and llama.rn
+ * answers the classification prompt.
  */
-
 import { intentClassifier, classifyToolsNeeded } from '../../../src/services/intentClassifier';
-import { llmService } from '../../../src/services/llm';
-import { activeModelService } from '../../../src/services/activeModelService';
-
-// Mock dependencies
-jest.mock('../../../src/services/llm');
-jest.mock('../../../src/services/activeModelService');
-
-const mockLlmService = llmService as jest.Mocked<typeof llmService>;
-const mockActiveModelService = activeModelService as jest.Mocked<typeof activeModelService>;
+import { launchGeneration, type GenerationDevice } from '../../harness/generationDevice';
 
 describe('IntentClassifier', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
     intentClassifier.clearCache();
-
-    // Default mock implementations
-    mockLlmService.isModelLoaded.mockReturnValue(false);
-    mockLlmService.getLoadedModelPath.mockReturnValue(null);
-    mockActiveModelService.getActiveModels.mockReturnValue({
-      text: { model: null, isLoaded: false, isLoading: false },
-      image: { model: null, isLoaded: false, isLoading: false },
-    });
   });
 
   // ============================================================================
@@ -909,78 +894,89 @@ describe('IntentClassifier', () => {
   });
 
   // ============================================================================
-  // LLM FALLBACK
+  // THE MODEL FALLBACK (a faked phone: llama.rn answers the classification prompt)
   // ============================================================================
-  describe('LLM Fallback', () => {
-    test('should not call LLM when useLLM is false', async () => {
-      await intentClassifier.classifyIntent('ambiguous message', { useLLM: false });
+  describe('Model fallback', () => {
+    let d: GenerationDevice;
+    let classifier: typeof intentClassifier;
 
-      expect(mockLlmService.generateResponse).not.toHaveBeenCalled();
-    });
+    async function phone(opts: Parameters<typeof launchGeneration>[0] = {}) {
+      const mod = require('@react-native-async-storage/async-storage');
+      await (mod.default ?? mod).clear();
+      d = await launchGeneration(opts);
+      classifier = require('../../../src/services/intentClassifier').intentClassifier;
+    }
+    const completions = () => d.boundary.llama!.calls.completion.length;
+    const uncertain = 'something uncertain without clear patterns';
 
-    test('should return text default when pattern is uncertain and LLM disabled', async () => {
-      const result = await intentClassifier.classifyIntent('random words here', { useLLM: false });
+    test('does not ask the model when the model fallback is off', async () => {
+      await phone();
+
+      const result = await classifier.classifyIntent('ambiguous message', { useLLM: false });
+
       expect(result).toBe('text');
+      expect(completions()).toBe(0);
     });
 
-    test('should throw when LLM enabled but no model loaded', async () => {
-      mockLlmService.isModelLoaded.mockReturnValue(false);
+    test('answers text when no model is loaded', async () => {
+      await phone({ load: false });
 
-      // Uncertain message would try LLM
-      const result = await intentClassifier.classifyIntent('something ambiguous', { useLLM: true });
-
-      // Should default to text when LLM fails
-      expect(result).toBe('text');
+      expect(await classifier.classifyIntent('something ambiguous', { useLLM: true })).toBe('text');
+      expect(completions()).toBe(0);
     });
 
-    test('should use LLM classification when pattern is uncertain and LLM enabled', async () => {
-      mockLlmService.isModelLoaded.mockReturnValue(true);
-      mockLlmService.generateResponse.mockImplementation(
-        async (_messages, { onStream, onComplete } = {}) => {
-          onStream?.({ content: 'YES' });
-          onComplete?.({ content: 'YES', reasoningContent: '' });
-          return 'YES';
-        }
-      );
+    test('answers image when the model says YES', async () => {
+      await phone();
+      d.boundary.llama!.scriptCompletion({ text: 'YES' });
 
-      const result = await intentClassifier.classifyIntent(
-        'something uncertain without clear patterns',
-        { useLLM: true }
-      );
+      expect(await classifier.classifyIntent(uncertain, { useLLM: true })).toBe('image');
+      expect(completions()).toBe(1);
+    });
+
+    test('answers text when the model says NO', async () => {
+      await phone();
+      d.boundary.llama!.scriptCompletion({ text: 'NO' });
+
+      expect(await classifier.classifyIntent(uncertain, { useLLM: true })).toBe('text');
+    });
+
+    test('answers text when the model fails', async () => {
+      await phone();
+      d.boundary.llama!.scriptCompletion({ throwMessage: 'Failed to evaluate chunks' });
+
+      expect(await classifier.classifyIntent('something uncertain', { useLLM: true })).toBe('text');
+    });
+
+    test('loads the classifier model to ask it, then loads the chat model back', async () => {
+      await phone({ extraModels: [{ id: 'classifier-model', name: 'Classifier' }] });
+      d.boundary.llama!.scriptCompletion({ text: 'YES' });
+      const classifierModel = d.useAppStore.getState().downloadedModels.find((m: any) => m.id === 'classifier-model');
+      const chatPath = d.llmService.getLoadedModelPath();
+      const statuses: string[] = [];
+
+      const result = await classifier.classifyIntent(uncertain, {
+        useLLM: true, classifierModel, onStatusChange: (s: string) => statuses.push(s),
+      });
 
       expect(result).toBe('image');
-      expect(mockLlmService.generateResponse).toHaveBeenCalled();
+      const opened = d.boundary.llama!.calls.initLlama.filter(p => !p.embedding).map(p => p.model);
+      expect(opened).toEqual([chatPath, classifierModel.filePath, chatPath]);
+      expect(d.llmService.getLoadedModelPath()).toBe(chatPath); // the chat model is back
+      expect(d.activeModelService.getLoadedModelIds().textModelId).toBe('m');
+      expect(statuses).toEqual(expect.arrayContaining([
+        expect.stringContaining('Loading'), 'Analyzing request...', 'Restoring text model...',
+      ]));
     });
 
-    test('should return text when LLM responds NO', async () => {
-      mockLlmService.isModelLoaded.mockReturnValue(true);
-      mockLlmService.generateResponse.mockImplementation(
-        async (_messages, { onStream, onComplete } = {}) => {
-          onStream?.({ content: 'NO' });
-          onComplete?.({ content: 'NO', reasoningContent: '' });
-          return 'NO';
-        }
-      );
+    test('asks the loaded model without a swap when it is the classifier model', async () => {
+      await phone();
+      d.boundary.llama!.scriptCompletion({ text: 'NO' });
+      const classifierModel = d.useAppStore.getState().downloadedModels.find((m: any) => m.id === 'm');
 
-      const result = await intentClassifier.classifyIntent(
-        'something uncertain without clear patterns',
-        { useLLM: true }
-      );
+      const result = await classifier.classifyIntent(uncertain, { useLLM: true, classifierModel });
 
       expect(result).toBe('text');
-    });
-
-    test('should handle LLM errors gracefully', async () => {
-      mockLlmService.isModelLoaded.mockReturnValue(true);
-      mockLlmService.generateResponse.mockRejectedValue(new Error('LLM error'));
-
-      const result = await intentClassifier.classifyIntent(
-        'something uncertain',
-        { useLLM: true }
-      );
-
-      // Should fall back to text on error
-      expect(result).toBe('text');
+      expect(d.boundary.llama!.calls.initLlama.filter(p => !p.embedding)).toHaveLength(1);
     });
   });
 
@@ -997,94 +993,6 @@ describe('IntentClassifier', () => {
       // After 105 entries, eviction should have run, cache should still work
       const result = await intentClassifier.classifyIntent('draw a new test image please', { useLLM: false });
       expect(result).toBe('image');
-    });
-  });
-
-  // ============================================================================
-  // LLM CLASSIFICATION WITH MODEL SWAP
-  // ============================================================================
-  describe('LLM Classification with Model Swap', () => {
-    test('should swap to classifier model when provided and different from current', async () => {
-      const classifierModel = {
-        id: 'classifier-model',
-        name: 'Classifier',
-        author: 'test',
-        filePath: '/path/to/classifier.gguf',
-        fileName: 'classifier.gguf',
-        fileSize: 1000,
-        quantization: 'Q4',
-        downloadedAt: new Date().toISOString(),
-        engine: 'llama' as const,
-      };
-
-      mockLlmService.getLoadedModelPath.mockReturnValue('/path/to/different.gguf');
-      mockLlmService.isModelLoaded.mockReturnValue(true);
-      mockLlmService.generateResponse.mockImplementation(
-        async (_messages, { onStream } = {}) => {
-          onStream?.({ content: 'YES' });
-          return 'YES';
-        }
-      );
-      mockActiveModelService.getActiveModels.mockReturnValue({
-        text: { model: { id: 'original-model' } as any, isLoaded: true, isLoading: false },
-        image: { model: null, isLoaded: false, isLoading: false },
-      });
-      mockActiveModelService.loadTextModel.mockResolvedValue(undefined);
-
-      const onStatusChange = jest.fn();
-
-      const result = await intentClassifier.classifyIntent(
-        'something uncertain without clear patterns',
-        {
-          useLLM: true,
-          classifierModel,
-          onStatusChange,
-        }
-      );
-
-      expect(result).toBe('image');
-      // Should have loaded the classifier model
-      expect(mockActiveModelService.loadTextModel).toHaveBeenCalledWith('classifier-model');
-      // Should always restore the original model after classifying
-      expect(mockActiveModelService.loadTextModel).toHaveBeenCalledWith('original-model');
-      expect(onStatusChange).toHaveBeenCalledWith(expect.stringContaining('Loading'));
-      expect(onStatusChange).toHaveBeenCalledWith('Analyzing request...');
-      expect(onStatusChange).toHaveBeenCalledWith('Restoring text model...');
-    });
-
-    test('should not swap model when classifier model path matches current', async () => {
-      const classifierModel = {
-        id: 'classifier-model',
-        name: 'Classifier',
-        author: 'test',
-        filePath: '/path/to/same.gguf',
-        fileName: 'same.gguf',
-        fileSize: 1000,
-        quantization: 'Q4',
-        downloadedAt: new Date().toISOString(),
-        engine: 'llama' as const,
-      };
-
-      mockLlmService.getLoadedModelPath.mockReturnValue('/path/to/same.gguf');
-      mockLlmService.isModelLoaded.mockReturnValue(true);
-      mockLlmService.generateResponse.mockImplementation(
-        async (_messages, { onStream } = {}) => {
-          onStream?.({ content: 'NO' });
-          return 'NO';
-        }
-      );
-
-      const result = await intentClassifier.classifyIntent(
-        'something uncertain without clear patterns',
-        {
-          useLLM: true,
-          classifierModel,
-        }
-      );
-
-      expect(result).toBe('text');
-      // Should NOT have swapped models
-      expect(mockActiveModelService.loadTextModel).not.toHaveBeenCalled();
     });
   });
 

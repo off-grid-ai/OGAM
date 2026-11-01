@@ -9,66 +9,16 @@
  * `makeImageModelKey(id)` — the card fell back to the plain download arrow even though
  * the Download Manager (which reads the queue directly) correctly listed it as queued.
  *
- * This integration test drives the REAL `proceedWithDownload` against the REAL
- * `useDownloadStore` with a native start that stays pending (== queued at the cap), then
- * renders the REAL `ImageModelCardItem` and asserts it reads the entry, keyed off the
- * SAME `makeImageModelKey(id)` the download writes. Mocking only the native boundary and
- * the id-mismatch is exactly what the bug was, so a hand-made store entry under the
- * card's assumed key would fake-green — we key the assertion off the real write path.
+ * This integration test fills the REAL backgroundDownloadService's three download slots with
+ * real text downloads, so the image download genuinely waits in its queue, then drives the REAL
+ * `proceedWithDownload` against the REAL `useDownloadStore`, modelManager and hardwareService,
+ * and renders the REAL `ImageModelCardItem`. Only the phone is faked (installNativeBoundary: the
+ * native background downloader, the disk, RAM). The assertion is keyed off the real write path.
  *
  * Fails-before (no early store row → card shows the download button, no Queued label);
  * passes-after (early queued row → card shows the Queued label, no download button).
  */
-import React from 'react';
-import { render } from '@testing-library/react-native';
-
-// --- Native boundary + file-system boundary mocks only ---------------------------------
-jest.mock('react-native-fs', () => ({
-  // The model dir does NOT exist yet, so proceedWithDownload takes the download branch
-  // (not the "already on disk" register branch).
-  exists: jest.fn(() => Promise.resolve(false)),
-  mkdir: jest.fn(() => Promise.resolve()),
-  unlink: jest.fn(() => Promise.resolve()),
-  writeFile: jest.fn(() => Promise.resolve()),
-  stat: jest.fn(() => Promise.resolve({ size: 500000 })),
-}));
-
-jest.mock('react-native-zip-archive', () => ({
-  unzip: jest.fn(() => Promise.resolve('/unzipped')),
-}));
-
-jest.mock('../../../src/components/CustomAlert', () => ({
-  showAlert: jest.fn((title: string, message: string, buttons?: any) => ({ visible: true, title, message, buttons })),
-  hideAlert: jest.fn(() => ({ visible: false })),
-}));
-
-// A never-resolving native start === a download sitting in the queue waiting for a slot.
-// The store row must appear BEFORE this promise settles, which is the whole fix.
-const mockStartDownload = jest.fn((_params: any) => new Promise<any>(() => {}));
-const mockOnComplete = jest.fn((_id: string, _cb: any) => jest.fn());
-const mockOnError = jest.fn((_id: string, _cb: any) => jest.fn());
-
-jest.mock('../../../src/services', () => ({
-  modelManager: {
-    getImageModelsDirectory: () => '/mock/image-models',
-    addDownloadedImageModel: jest.fn(() => Promise.resolve()),
-  },
-  hardwareService: { getSoCInfo: jest.fn(() => Promise.resolve({ hasNPU: true })) },
-  backgroundDownloadService: {
-    startDownload: (params: any) => mockStartDownload(params),
-    onComplete: (id: string, cb: any) => mockOnComplete(id, cb),
-    onError: (id: string, cb: any) => mockOnError(id, cb),
-    startProgressPolling: jest.fn(),
-    cancelDownload: jest.fn(() => Promise.resolve()),
-  },
-}));
-
-// REAL store, REAL key helper, REAL card, REAL download action.
-import { useDownloadStore, isActiveStatus, isQueuedStatus } from '../../../src/stores/downloadStore';
-import { makeImageModelKey } from '../../../src/utils/modelKey';
-import { proceedWithDownload } from '../../../src/services/imageDownloadActions';
-import { ImageModelCardItem } from '../../../src/screens/ModelsScreen/ImageModelsTab';
-import { makeImageDownloadDeps } from '../../utils/factories';
+import { installNativeBoundary, requireRTL, type NativeBoundary } from '../../harness/nativeBoundary';
 
 const MODEL_ID = 'stabilityai/sd-turbo-onnx';
 
@@ -91,46 +41,67 @@ const hfModel: any = {
   backend: 'mnn',
 };
 
-const renderCard = () =>
-  render(
-    <ImageModelCardItem
-      model={hfModel}
-      index={0}
-      imageRec={null}
-      isRecommendedModel={() => false}
-      handleDownloadImageModel={jest.fn()}
-      handleCancelImageDownload={jest.fn()}
-    />,
-  );
+let boundary: NativeBoundary;
+const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve)); };
+
+/** Three text downloads already hold every download slot; then the person taps download on the image model. */
+async function queueImageDownloadBehindFullSlots(): Promise<void> {
+  boundary = installNativeBoundary({ download: true, fs: true });
+  const { startModelDownload } = require('../../../src/services/startModelDownload');
+  for (const name of ['a', 'b', 'c']) {
+    startModelDownload(`org/${name}`, {
+      name: `${name}.gguf`, size: 1000, quantization: 'Q4_K_M',
+      downloadUrl: `https://huggingface.co/org/${name}/resolve/main/${name}.gguf`,
+    }).catch(() => {});
+  }
+  await settle();
+  expect(boundary.download!.active()).toHaveLength(3);
+
+  const { proceedWithDownload } = require('../../../src/services/imageDownloadActions');
+  const { useAppStore } = require('../../../src/stores');
+  const appState = useAppStore.getState();
+  proceedWithDownload(descriptor, {
+    addDownloadedImageModel: appState.addDownloadedImageModel,
+    activeImageModelId: appState.activeImageModelId,
+    setActiveImageModelId: appState.setActiveImageModelId,
+    setAlertState: () => {},
+    triedImageGen: false,
+  }).catch(() => {});
+  await settle();
+}
 
 describe('BUG #33 — image card reflects queued download (real store + real card)', () => {
-  beforeEach(() => {
-    // Reset the real store between tests.
-    useDownloadStore.setState({ downloads: {}, downloadIdIndex: {}, repairingVisionIds: {} });
-    jest.clearAllMocks();
-  });
+  it('publishes a queued store row under makeImageModelKey while the download waits for a slot', async () => {
+    await queueImageDownloadBehindFullSlots();
+    const { useDownloadStore, isActiveStatus, isQueuedStatus } = require('../../../src/stores/downloadStore');
+    const { makeImageModelKey } = require('../../../src/utils/modelKey');
 
-  it('publishes a queued store row under makeImageModelKey BEFORE the native start resolves', async () => {
-    // Kick off the (queued) download. Do NOT await — startDownload never resolves.
-    proceedWithDownload(descriptor, makeImageDownloadDeps());
-    // Let the synchronous store publish + the microtask up to the awaited startDownload run.
-    await Promise.resolve();
-    await Promise.resolve();
-
+    // The native start has not happened: the image download is waiting in the queue.
+    expect(boundary.download!.active().some(row => row.modelId?.includes('sd-turbo'))).toBe(false);
     const entry = useDownloadStore.getState().downloads[makeImageModelKey(MODEL_ID)];
     // This is the exact key mismatch the bug was about: the row MUST exist under the
     // card's key while still queued.
     expect(entry).toBeDefined();
-    expect(isActiveStatus(entry!.status)).toBe(true);
-    expect(isQueuedStatus(entry!.status)).toBe(true);
+    expect(isActiveStatus(entry.status)).toBe(true);
+    expect(isQueuedStatus(entry.status)).toBe(true);
   });
 
   it('renders the card as Queued (not the download button) while queued', async () => {
-    proceedWithDownload(descriptor, makeImageDownloadDeps());
-    await Promise.resolve();
-    await Promise.resolve();
+    await queueImageDownloadBehindFullSlots();
+    const React = require('react');
+    const { render } = requireRTL();
+    const { ImageModelCardItem } = require('../../../src/screens/ModelsScreen/ImageModelsTab');
 
-    const { queryByLabelText, queryByTestId } = renderCard();
+    const { queryByLabelText, queryByTestId } = render(
+      React.createElement(ImageModelCardItem, {
+        model: hfModel,
+        index: 0,
+        imageRec: null,
+        isRecommendedModel: () => false,
+        handleDownloadImageModel: () => {},
+        handleCancelImageDownload: () => {},
+      }),
+    );
     // isQueued path renders an Icon with accessibilityLabel="Queued".
     expect(queryByLabelText('Queued')).not.toBeNull();
     // And the plain download affordance must NOT be offered.

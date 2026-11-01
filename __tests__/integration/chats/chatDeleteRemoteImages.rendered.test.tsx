@@ -9,17 +9,10 @@ import {
   installNativeBoundary,
   requireRTL,
 } from '../../harness/nativeBoundary';
+import { withNavigator } from '../../harness/realNavigation';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: () => {},
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 describe('Deleting a chat with generated images', () => {
   it('removes its remote JPEG and WebP files and keeps another chat’s image', async () => {
@@ -78,7 +71,7 @@ describe('Deleting a chat with generated images', () => {
     const logoJpeg = saveImage('img-logo-1', 'jpg', 'chat-logo');
 
     const { ChatsListScreen } = require('../../../src/screens/ChatsListScreen');
-    const chats = rtl.render(React.createElement(ChatsListScreen));
+    const chats = rtl.render(withNavigator(React.createElement(ChatsListScreen)));
 
     rtl.fireEvent.press(chats.getByLabelText('Select chats'));
     rtl.fireEvent.press(chats.getByText('Trip photos'));

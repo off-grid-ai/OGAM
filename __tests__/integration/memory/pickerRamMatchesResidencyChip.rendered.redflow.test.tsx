@@ -18,12 +18,10 @@
  */
 import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
 import { createDownloadedModel } from '../../utils/factories';
+import { withNavigator } from '../../harness/realNavigation';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => ({ params: {} }),
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 /** Invoke the onPress bound at/above a testID host (AnimatedPressable's onPress lives on the composite). */
 function pressByWalkingUp(node: unknown): void {
@@ -92,11 +90,11 @@ describe('RAM display agreement — picker label matches the residency chip for 
     useAppStore.setState({ checklistDismissed: true });
 
     const nav = { navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} };
-    const view = rtl.render(React.createElement(
+    const view = rtl.render(withNavigator(React.createElement(
       React.Fragment, null,
       React.createElement(ResidentsProbe, {}),
       React.createElement(HomeScreen, { navigation: nav }),
-    ));
+    )));
     await rtl.waitFor(() => { expect(useAppStore.getState().downloadedModels.length).toBeGreaterThan(0); }, { timeout: 10000 });
 
     // GESTURE: select the text model the way a user does — open the picker, tap the row.
@@ -107,7 +105,7 @@ describe('RAM display agreement — picker label matches the residency chip for 
 
     // GESTURE: switch the inference backend to GPU (OpenCL) via the REAL BackendSelector control — the same
     // store action the settings screen dispatches — BEFORE the load, so the resident registers at 2.2×.
-    const settings = rtl.render(React.createElement(BackendSelector, {}));
+    const settings = rtl.render(withNavigator(React.createElement(BackendSelector, {})));
     rtl.fireEvent.press(await rtl.waitFor(() => settings.getByTestId('backend-opencl-button')));
     await rtl.waitFor(() => { expect(useAppStore.getState().settings.inferenceBackend).toBe('opencl'); });
     settings.unmount();
@@ -122,10 +120,10 @@ describe('RAM display agreement — picker label matches the residency chip for 
     const chipGb = ramGb(await rtl.waitFor(() => view.getByTestId('models-row-text-ram'), { timeout: 10000 }));
 
     // The Select-Model picker "Currently Loaded" RAM label — mounted with the real loaded path.
-    const picker = rtl.render(React.createElement(ModelSelectorModal, {
+    const picker = rtl.render(withNavigator(React.createElement(ModelSelectorModal, {
       visible: true, onClose: () => {}, onSelectModel: () => {}, onUnloadModel: () => {}, isLoading: false,
       currentModelPath: llmService.getLoadedModelPath(),
-    }));
+    })));
     const pickerGb = ramGb(await rtl.waitFor(() => picker.getByTestId('currently-loaded-model-ram'), { timeout: 10000 }));
 
     // Same model, same backend → the two surfaces must show the SAME RAM figure.

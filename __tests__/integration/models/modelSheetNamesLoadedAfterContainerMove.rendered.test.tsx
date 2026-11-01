@@ -12,12 +12,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 /** Where the record was saved, before iOS moved the app's folder. */
 const OLD_CONTAINER_PATH =
@@ -25,7 +21,7 @@ const OLD_CONTAINER_PATH =
 
 describe('model sheet after iOS moves the app folder', () => {
   it('names the loaded model under Currently Loaded, not "Unknown"', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       platform: 'ios',
       deferInitialLoad: true,

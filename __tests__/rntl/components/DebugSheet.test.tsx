@@ -17,18 +17,6 @@ import { DebugSheet } from '../../../src/components/DebugSheet';
 import { DebugInfo, Project, Conversation } from '../../../src/types';
 
 // Mock AppSheet to render children directly
-jest.mock('../../../src/components/AppSheet', () => ({
-  AppSheet: ({ visible, children, title }: any) => {
-    if (!visible) return null;
-    const { View, Text } = require('react-native');
-    return (
-      <View testID="app-sheet">
-        <Text>{title}</Text>
-        {children}
-      </View>
-    );
-  },
-}));
 
 const createDebugInfo = (overrides: Partial<DebugInfo> = {}): DebugInfo => ({
   estimatedTokens: 150,

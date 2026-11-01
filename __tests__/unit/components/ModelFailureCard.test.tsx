@@ -7,14 +7,6 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 
-jest.mock('../../../src/components/AnimatedPressable', () => {
-  const { TouchableOpacity } = require('react-native');
-  return {
-    AnimatedPressable: ({ children, onPress, testID }: any) => (
-      <TouchableOpacity testID={testID} onPress={onPress}>{children}</TouchableOpacity>
-    ),
-  };
-});
 
 import { ModelFailureCard } from '../../../src/components/ModelFailureCard';
 import { useModelFailureStore, type ModelFailure } from '../../../src/stores/modelFailureStore';

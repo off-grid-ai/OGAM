@@ -2,192 +2,155 @@
  * useVoiceDownloadItems tests
  *
  * Surfaces voice (TTS) + transcription (STT/Whisper) models in the Download Manager.
- * TTS state now comes from the SAME ModelDownloadService projection the Voice panel
- * reads (ttsProvider) — not a parallel `downloads.listVoiceModels` hook — so the two
- * surfaces can't disagree (the "Kokoro shows downloaded while still downloading" bug).
- * Delete still routes through the pro delete hook.
+ * TTS state comes from the SAME ModelDownloadService projection the Voice panel reads (Pro's
+ * ttsProvider), not a parallel `downloads.listVoiceModels` hook, so the two surfaces can't disagree
+ * (the "Kokoro shows downloaded while still downloading" bug). Delete routes through the Pro delete
+ * hook.
+ *
+ * Only the device is faked: the in-memory disk (a Whisper model is a file in the whisper folder),
+ * async-storage, and ExecuTorch's resource fetcher for Kokoro (harness/kokoroResourceBoundary). The
+ * hook, whisperService, the whisper store, ModelDownloadService, Pro (activated through the real
+ * license path in harness/proHarness), its TTS store and download provider run for real.
  */
-import { renderHook, waitFor, act } from '@testing-library/react-native';
-import type { ModelDownload } from '../../../../src/services/modelDownloadService/types';
+import { installModelManagerDevice, type ModelManagerDevice } from '../../../harness/modelManagerDevice';
+import { requireRTL } from '../../../harness/nativeBoundary';
+import type { DownloadItem } from '../../../../src/screens/DownloadManagerScreen/items';
+import type { VoiceDownloadItems } from '../../../../src/screens/DownloadManagerScreen/useVoiceDownloadItems';
 
-const mockListDownloadedModels = jest.fn((..._a: any[]) => Promise.resolve([] as any[]));
-const mockDeleteModel = jest.fn((..._a: any[]) => Promise.resolve());
-const mockUnloadModel = jest.fn(async (..._a: any[]) => {});
-// The hook reads whisperService.listDownloadedModels from the barrel, but the STT delete routes
-// through the REAL whisperStore, which reads the CONCRETE services/whisperService. Mock BOTH paths,
-// wired to the SAME mock closures, so the delete assertion sees the call regardless of which import
-// reaches it. NB: each factory INLINES the object with lazy-arrow methods that read the mock-prefixed
-// closures only when CALLED — an eager object/const captured in the factory is undefined at hoist
-// time (ES imports run the factory before the const initializes).
-jest.mock('../../../../src/services', () => ({
-  whisperService: {
-    listDownloadedModels: (...a: any[]) => mockListDownloadedModels(...a),
-    deleteModel: (...a: any[]) => mockDeleteModel(...a),
-    isModelLoaded: () => false,
-    unloadModel: (...a: any[]) => mockUnloadModel(...a),
-    getModelPath: (id: string) => `/models/ggml-${id}.bin`,
-    isModelDownloaded: () => Promise.resolve(true),
-  },
-}));
-jest.mock('../../../../src/services/whisperService', () => ({
-  whisperService: {
-    listDownloadedModels: (...a: any[]) => mockListDownloadedModels(...a),
-    deleteModel: (...a: any[]) => mockDeleteModel(...a),
-    isModelLoaded: () => false,
-    unloadModel: (...a: any[]) => mockUnloadModel(...a),
-    getModelPath: (id: string) => `/models/ggml-${id}.bin`,
-    isModelDownloaded: () => Promise.resolve(true),
-  },
-  WHISPER_MODELS: [],
-}));
+const WHISPER_FILE = '/docs/whisper-models/ggml-base.en.bin';
 
-let mockServiceList: ModelDownload[] = [];
-jest.mock('../../../../src/services/modelDownloadService', () => ({
-  modelDownloadService: {
-    list: jest.fn(async () => mockServiceList),
-    subscribe: jest.fn(() => () => {}),
-  },
-}));
+let device: ModelManagerDevice;
+let rtl: ReturnType<typeof requireRTL>;
+let result: { current: VoiceDownloadItems };
+let unmount: () => void;
+let alertsClosed: number;
 
-const mockCallHook = jest.fn();
-jest.mock('../../../../src/bootstrap/hookRegistry', () => ({
-  callHook: (...a: any[]) => mockCallHook(...a),
-  HOOKS: { downloadsListVoiceModels: 'downloads.listVoiceModels', downloadsDeleteVoiceModel: 'downloads.deleteVoiceModel' },
-}));
+const tts = () => require('../../../../pro/audio/ttsStore').useTTSStore;
+const cache = () => require('../../../harness/kokoroResourceBoundary').currentKokoroResourceBoundary();
 
-import { useVoiceDownloadItems } from '../../../../src/screens/DownloadManagerScreen/useVoiceDownloadItems';
-
-const CAPS = { cancel: false, retry: false, remove: true, resumable: true, determinateProgress: false };
-const ttsEntry = (over: Partial<ModelDownload> = {}): ModelDownload => ({
-  id: 'tts:kokoro', modelType: 'tts', name: 'Kokoro TTS', sizeBytes: 82_000_000,
-  bytesDownloaded: 82_000_000, progress: 1, status: 'completed', capabilities: CAPS, ...over,
+beforeEach(async () => {
+  device = await installModelManagerDevice({ platform: 'android' });
+  require('../../../harness/kokoroResourceBoundary').installKokoroResourceBoundary();
+  await require('../../../harness/proHarness').installPro();
+  rtl = requireRTL();
+  require('../../../../src/services/modelDownloadService/registerProviders').registerCoreDownloadProviders();
+  device.fs.seedFile(WHISPER_FILE, 142_000_000);
+  alertsClosed = 0;
 });
 
+afterEach(() => unmount?.());
+
+async function mount() {
+  const { useVoiceDownloadItems } = require('../../../../src/screens/DownloadManagerScreen/useVoiceDownloadItems');
+  const view = rtl.renderHook(() => useVoiceDownloadItems(() => { alertsClosed += 1; }));
+  result = view.result;
+  unmount = view.unmount;
+  await rtl.act(async () => { await device.settle(); });
+}
+
+async function waitUntil(check: () => boolean) {
+  await rtl.waitFor(() => expect(check()).toBe(true));
+}
+
+const item = (modelType: 'stt' | 'tts'): DownloadItem | undefined =>
+  result.current.voiceItems.find(i => i.modelType === modelType);
+
+/** Kokoro downloaded through the TTS store, the way the Voice panel's Download button does it. */
+async function downloadKokoro() {
+  cache().seedVoice();
+  await rtl.act(async () => { await tts().getState().downloadModels(); });
+}
+
 describe('useVoiceDownloadItems', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockListDownloadedModels.mockResolvedValue([
-      { modelId: 'base.en', fileName: 'ggml-base.en.bin', sizeBytes: 142_000_000, filePath: '/x/ggml-base.en.bin' },
-    ]);
-    mockServiceList = [ttsEntry()];
-    mockCallHook.mockResolvedValue(undefined);
-  });
-
   it('lists transcription (stt) and voice (tts) downloaded models', async () => {
-    const { result } = renderHook(() => useVoiceDownloadItems(jest.fn()));
+    await downloadKokoro();
+    await mount();
 
-    await waitFor(() => expect(result.current.voiceItems).toHaveLength(2));
-
-    const stt = result.current.voiceItems.find(i => i.modelType === 'stt');
-    const tts = result.current.voiceItems.find(i => i.modelType === 'tts');
-    expect(stt?.fileName).toBe('ggml-base.en.bin');
-    expect(stt?.modelId).toBe('base.en');
-    expect(tts?.modelId).toBe('kokoro');
-    expect(tts?.fileName).toBe('Kokoro TTS');
+    await waitUntil(() => result.current.voiceItems.length === 2);
+    expect(item('stt')).toEqual(expect.objectContaining({
+      type: 'completed', fileName: 'ggml-base.en.bin', modelId: 'base.en', filePath: WHISPER_FILE,
+    }));
+    expect(item('tts')).toEqual(expect.objectContaining({ type: 'completed', modelId: 'kokoro', fileName: 'Kokoro TTS' }));
   });
 
-  it('shows an in-progress voice download as an ACTIVE item (service says downloading)', async () => {
-    mockServiceList = [ttsEntry({ status: 'downloading', progress: 0.5, bytesDownloaded: 40_000_000 })];
-    const { result } = renderHook(() => useVoiceDownloadItems(jest.fn()));
-    await waitFor(() => expect(result.current.voiceItems.some(i => i.modelType === 'tts')).toBe(true));
+  it('shows an in-progress voice download as an ACTIVE item, never as completed, then as completed when it finishes', async () => {
+    // Regression (the sync bug): the Download Manager showed Kokoro under "Downloaded Models" while
+    // the Voice panel showed it downloading. With one source, a downloading engine can only ever
+    // produce an ACTIVE item here.
+    await mount();
+    const finish = cache().holdNext(0.3);
+    let done!: Promise<void>;
+    await rtl.act(async () => { done = tts().getState().downloadModels(); await device.settle(); });
 
-    const tts = result.current.voiceItems.find(i => i.modelType === 'tts')!;
-    expect(tts.type).toBe('active');
-    expect(tts.status).toBe('downloading');
-    expect(tts.progress).toBe(0.5);
-    expect(tts.bytesDownloaded).toBe(40_000_000);
-  });
-
-  it('regression: a downloading TTS model is NEVER rendered as completed (the sync bug)', async () => {
-    // The Download Manager showed Kokoro under "Downloaded Models" while the Voice
-    // panel showed it at 0%. With one source, a service status of 'downloading' can
-    // only ever produce an ACTIVE item here.
-    mockServiceList = [ttsEntry({ status: 'downloading', progress: 0, bytesDownloaded: 0 })];
-    const { result } = renderHook(() => useVoiceDownloadItems(jest.fn()));
-    await waitFor(() => expect(result.current.voiceItems.some(i => i.modelType === 'tts')).toBe(true));
-
-    const tts = result.current.voiceItems.find(i => i.modelType === 'tts')!;
-    expect(tts.type).toBe('active');
+    await waitUntil(() => item('tts')?.status === 'downloading');
+    expect(item('tts')?.type).toBe('active');
     expect(result.current.voiceItems.some(i => i.modelType === 'tts' && i.type === 'completed')).toBe(false);
+
+    finish();
+    await rtl.act(async () => { await done; });
+    await waitUntil(() => item('tts')?.type === 'completed');
+    expect(item('tts')?.status).toBe('completed');
   });
 
-  it('shows a finished voice download as a COMPLETED item', async () => {
-    mockServiceList = [ttsEntry({ status: 'completed', progress: 1 })];
-    const { result } = renderHook(() => useVoiceDownloadItems(jest.fn()));
-    await waitFor(() => expect(result.current.voiceItems.some(i => i.modelType === 'tts')).toBe(true));
+  it('surfaces a FAILED voice download as a retryable failed item with the engine message', async () => {
+    // Regression: a failed Kokoro download used to be dropped entirely (nothing shown, no way to
+    // retry). It must render as a failed ACTIVE item so the Download Manager shows Retry.
+    await mount();
+    cache().failFetch(new Error('Download interrupted'));
+    await rtl.act(async () => { await tts().getState().downloadModels().catch(() => {}); await device.settle(); });
 
-    const tts = result.current.voiceItems.find(i => i.modelType === 'tts')!;
-    expect(tts.type).toBe('completed');
-    expect(tts.status).toBe('completed');
-  });
-
-  it('surfaces a FAILED voice download as a retryable failed item', async () => {
-    // Regression: a failed Kokoro download used to be dropped entirely (nothing
-    // shown, no way to retry). A service status of 'error' must render as a
-    // failed ACTIVE item with a retryable reason code so the Download Manager
-    // shows the Retry button.
-    mockServiceList = [ttsEntry({
-      status: 'error', progress: 0.3, bytesDownloaded: 24_000_000,
-      error: 'Download interrupted or missing resource',
-    })];
-    const { result } = renderHook(() => useVoiceDownloadItems(jest.fn()));
-    await waitFor(() => expect(result.current.voiceItems.some(i => i.modelType === 'tts')).toBe(true));
-
-    const tts = result.current.voiceItems.find(i => i.modelType === 'tts')!;
-    expect(tts.type).toBe('active');
-    expect(tts.status).toBe('failed');
-    // Engine message present → prefer it verbatim; leave reasonCode undefined so
-    // the label helper shows the engine text, not a canned code message. Retry
-    // still renders because isRetryable(undefined) === true.
-    expect(tts.reason).toBe('Download interrupted or missing resource');
-    expect(tts.reasonCode).toBeUndefined();
+    await waitUntil(() => item('tts')?.status === 'failed');
+    const failed = item('tts')!;
+    expect(failed.type).toBe('active');
+    // Engine message present: shown verbatim, so no canned reason code. Retry still renders because
+    // isRetryable(undefined) === true.
+    expect(failed.reason).toBe('Download interrupted');
+    expect(failed.reasonCode).toBeUndefined();
   });
 
   it('falls back to the retryable code when the engine gives no failure message', async () => {
-    mockServiceList = [ttsEntry({ status: 'error', progress: 0, bytesDownloaded: 0 })];
-    const { result } = renderHook(() => useVoiceDownloadItems(jest.fn()));
-    await waitFor(() => expect(result.current.voiceItems.some(i => i.modelType === 'tts')).toBe(true));
+    await mount();
+    cache().failFetch(new Error(''));
+    await rtl.act(async () => { await tts().getState().downloadModels().catch(() => {}); await device.settle(); });
 
-    const tts = result.current.voiceItems.find(i => i.modelType === 'tts')!;
-    expect(tts.status).toBe('failed');
-    expect(tts.reasonCode).toBe('download_interrupted');
+    await waitUntil(() => item('tts')?.status === 'failed');
+    expect(item('tts')?.reasonCode).toBe('download_interrupted');
   });
 
-  it('omits voice models when the service reports no tts entries', async () => {
-    mockServiceList = [];
-    const { result } = renderHook(() => useVoiceDownloadItems(jest.fn()));
+  it('omits voice models when no voice model was downloaded', async () => {
+    await mount();
 
-    await waitFor(() => expect(result.current.voiceItems).toHaveLength(1));
-    expect(result.current.voiceItems[0].modelType).toBe('stt');
+    await waitUntil(() => result.current.voiceItems.length === 1);
+    expect(item('stt')?.modelId).toBe('base.en');
+    expect(item('tts')).toBeUndefined();
   });
 
   it('builds a delete alert that removes a transcription model on confirm', async () => {
-    const onClose = jest.fn();
-    const { result } = renderHook(() => useVoiceDownloadItems(onClose));
-    await waitFor(() => expect(result.current.voiceItems).toHaveLength(2));
+    await mount();
+    await waitUntil(() => !!item('stt'));
 
-    const sttItem = result.current.voiceItems.find(i => i.modelType === 'stt')!;
-    const alert = result.current.buildDeleteAlert(sttItem);
-    expect(alert.title).toContain('Transcription');
+    const alert = result.current.buildDeleteAlert(item('stt')!);
+    expect(alert.title).toBe('Delete Transcription Model');
 
-    const confirm = alert.buttons?.find(b => b.text === 'Delete');
-    await act(async () => { confirm?.onPress?.(); });
+    await rtl.act(async () => { alert.buttons?.find(b => b.text === 'Delete')?.onPress?.(); await device.settle(); });
 
-    expect(onClose).toHaveBeenCalled();
-    await waitFor(() => expect(mockDeleteModel).toHaveBeenCalledWith('base.en'));
+    expect(alertsClosed).toBe(1);
+    await waitUntil(() => !item('stt'));
+    expect(await device.fs.exists(WHISPER_FILE)).toBe(false);
   });
 
-  it('builds a delete alert that calls the pro delete hook for voice models', async () => {
-    const { result } = renderHook(() => useVoiceDownloadItems(jest.fn()));
-    await waitFor(() => expect(result.current.voiceItems).toHaveLength(2));
+  it('builds a delete alert that deletes a voice model through Pro', async () => {
+    await downloadKokoro();
+    await mount();
+    await waitUntil(() => item('tts')?.type === 'completed');
+    expect(cache().files.size).toBeGreaterThan(0);
 
-    const ttsItem = result.current.voiceItems.find(i => i.modelType === 'tts')!;
-    const alert = result.current.buildDeleteAlert(ttsItem);
-    expect(alert.title).toContain('Voice');
+    const alert = result.current.buildDeleteAlert(item('tts')!);
+    expect(alert.title).toBe('Delete Voice Model');
 
-    const confirm = alert.buttons?.find(b => b.text === 'Delete');
-    await act(async () => { confirm?.onPress?.(); });
+    await rtl.act(async () => { alert.buttons?.find(b => b.text === 'Delete')?.onPress?.(); await device.settle(); });
 
-    await waitFor(() => expect(mockCallHook).toHaveBeenCalledWith('downloads.deleteVoiceModel', 'kokoro'));
+    await waitUntil(() => cache().files.size === 0);
+    await waitUntil(() => item('tts')?.type !== 'completed');
   });
 });

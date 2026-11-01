@@ -8,6 +8,9 @@
  *
  * Lives in the private pro/ submodule, loaded via a computed path so the suite skips
  * in open-core CI where pro/ is absent.
+ *
+ * The real sheet (AppSheet), theme and scanner screen run; only the camera (react-native-vision-camera)
+ * is faked, so a test can hand the scanner a decoded QR frame.
  */
 
 import React from 'react';
@@ -16,26 +19,6 @@ import { render, fireEvent, act } from '@testing-library/react-native';
 jest.mock('react-native-vector-icons/Feather', () => {
   const { Text } = require('react-native');
   return ({ name, ...props }: any) => <Text {...props}>{name}</Text>;
-});
-
-// The sheet is a modal wrapper; render its children inline (respecting `visible`, as
-// the real one does) so the test can drive the content and observe it hiding while
-// the scanner is open.
-jest.mock('@offgrid/core/components/AppSheet', () => ({
-  AppSheet: ({ visible, children }: { visible: boolean; children: React.ReactNode }) =>
-    visible ? children : null,
-}));
-
-jest.mock('../../../src/theme', () => {
-  const colors = {
-    text: '#000', textMuted: '#999', primary: '#1DB954', error: '#F00',
-    background: '#FFF', surface: '#F5F5F5', border: '#E0E0E0',
-  };
-  const shadows = { small: {}, medium: {}, large: {} };
-  return {
-    useTheme: () => ({ colors, shadows, isDark: false }),
-    useThemedStyles: (fn: any) => fn(colors, shadows),
-  };
 });
 
 // vision-camera is globally stubbed in jest.setup; capture the scan config here so

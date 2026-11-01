@@ -14,31 +14,16 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { GB } from '../../harness/nativeBoundary';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: () => {},
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 type Harness = Awaited<ReturnType<typeof setupChatScreen>>;
 
-/** Mount the real ChatScreen with the residency probe beside it. */
+/** Open the real chat with the residency probe mounted beside the app. */
 function renderWithProbe(h: Harness) {
   const { ResidentsProbe } = require('../../harness/ResidentsProbe');
-  h.view = h.rtl.render(
-    h.React.createElement(
-      h.React.Fragment,
-      null,
-      h.screenTree(),
-      h.React.createElement(ResidentsProbe, {}),
-    ),
-  );
+  h.mountBeside(h.React.createElement(ResidentsProbe, {}));
+  h.render();
 }
 
 const residents = (h: Harness): string =>
@@ -60,7 +45,7 @@ jest.setTimeout(60_000);
 
 describe('model residency on the shared policy', () => {
   it('loads the text model on the first message, not when it is picked', async () => {
-    const h = await setupChatScreen({ engine: 'llama', deferInitialLoad: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', deferInitialLoad: true });
     renderWithProbe(h);
 
     // Picked, but nothing is in memory yet.
@@ -71,7 +56,7 @@ describe('model residency on the shared policy', () => {
   });
 
   it('keeps the text and image models loaded side by side when the phone has the memory', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       deferInitialLoad: true,
       ram: { platform: 'ios', totalBytes: 16 * GB, availBytes: 12 * GB },
@@ -89,7 +74,7 @@ describe('model residency on the shared policy', () => {
   });
 
   it('unloads the text model for an image that does not fit beside it, then swaps back on the next message', async () => {
-    const h = await setupChatScreen({
+    const h = await setupChatScreen({ navigation: 'real',
       engine: 'llama',
       deferInitialLoad: true,
       ram: { platform: 'ios', totalBytes: 8 * GB, availBytes: 3 * GB },

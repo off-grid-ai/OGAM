@@ -20,11 +20,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 function pressByWalkingUp(node: unknown): Promise<void> {
   type N = { props?: Record<string, unknown>; parent?: N | null } | null;
@@ -57,7 +54,7 @@ async function reloadOnOpenCL(h: Awaited<ReturnType<typeof setupChatScreen>>) {
 
 describe('GPU fallback notice — a GPU-selected load that lands on CPU is visibly reported (device 18:57)', () => {
   it('shows a CPU-fallback notice in the conversation when the GPU init fails (details OFF)', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.render();
 
     // A live conversation exists (the user was chatting when they changed the backend, as on device).
@@ -76,7 +73,7 @@ describe('GPU fallback notice — a GPU-selected load that lands on CPU is visib
   }, 30000);
 
   it('falsify: a healthy GPU reload shows NO fallback notice', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.render();
 
     await h.send('hello', { text: 'Hi there.' });

@@ -68,6 +68,85 @@ export function installRemoteStream(sseBody: string | string[]): { release: () =
   };
 }
 
+/** One request the fake server received: where it went and the JSON body the app sent. */
+export interface RecordedRemoteRequest {
+  method: string;
+  url: string;
+  body: Record<string, unknown> | null;
+}
+
+/**
+ * A remote server that answers every request with `sseBody` (streamed as installRemoteStream does) and
+ * records what each request carried, so a test asserts what actually went on the wire.
+ */
+export function recordRemoteStream(sseBody: string): { requests: RecordedRemoteRequest[] } {
+  const requests: RecordedRemoteRequest[] = [];
+  class RecordingXHR {
+    responseText = '';
+    readyState = 0;
+    status = 0;
+    onprogress: null | (() => void) = null;
+    onreadystatechange: null | (() => void) = null;
+    onerror: null | (() => void) = null;
+    ontimeout: null | (() => void) = null;
+    private method = 'GET';
+    private url = '';
+    open(method: string, url: string): void { this.method = method; this.url = url; this.readyState = 1; }
+    setRequestHeader(): void { /* headers irrelevant to the fake */ }
+    abort(): void { /* no-op */ }
+    send(body?: string): void {
+      let parsed: Record<string, unknown> | null = null;
+      try { parsed = body ? JSON.parse(body) : null; } catch { parsed = null; }
+      requests.push({ method: this.method, url: this.url, body: parsed });
+      const chunks = sseBody.match(/[^\n]*\n/g) ?? [sseBody];
+      let i = 0;
+      const pump = (): void => {
+        if (i < chunks.length) {
+          this.responseText += chunks[i++];
+          this.onprogress?.();
+          setTimeout(pump, 0);
+        } else {
+          this.readyState = 4;
+          this.status = 200;
+          this.onreadystatechange?.();
+        }
+      };
+      setTimeout(pump, 0);
+    }
+  }
+  (global as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = RecordingXHR;
+  return { requests };
+}
+
+/**
+ * The remote server answers every request with an HTTP error (the network boundary): `status` and the
+ * `body` the server sends, as a real failing server does. The real HTTP client turns it into the error the
+ * app shows.
+ */
+export function installRemoteFailure(status: number, body: string): void {
+  class FailingXHR {
+    responseText = '';
+    readyState = 0;
+    status = 0;
+    onprogress: null | (() => void) = null;
+    onreadystatechange: null | (() => void) = null;
+    onerror: null | (() => void) = null;
+    ontimeout: null | (() => void) = null;
+    open(): void { this.readyState = 1; }
+    setRequestHeader(): void { /* headers irrelevant to the fake */ }
+    abort(): void { /* no-op */ }
+    send(): void {
+      setTimeout(() => {
+        this.status = status;
+        this.responseText = body;
+        this.readyState = 4;
+        this.onreadystatechange?.();
+      }, 0);
+    }
+  }
+  (global as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FailingXHR;
+}
+
 /** Make a remote OpenAI-compatible model the ACTIVE model — the real connect flow's end state (server
  *  added, its models discovered, the provider registered + made active). Discovery/connection is the
  *  network boundary; we pre-place its result, then mount + gesture as the user. `caps` mirrors what a

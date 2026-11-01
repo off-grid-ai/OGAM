@@ -11,19 +11,15 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 type Harness = Awaited<ReturnType<typeof setupChatScreen>>;
 
 /** Turn prompt enhancement ON by tapping the real toggle on the real image settings section. */
 async function enableEnhanceViaUI(h: Harness) {
   const { ImageGenerationSection } = require('../../../src/components/GenerationSettingsModal/ImageGenerationSection');
-  const s = h.rtl.render(h.React.createElement(ImageGenerationSection, {}));
+  const s = h.renderAside(h.React.createElement(ImageGenerationSection, {}));
   h.rtl.fireEvent.press(s.getByTestId('modal-image-advanced-toggle'));
   h.rtl.fireEvent.press(await h.rtl.waitFor(() => s.getByTestId('image-enhance-on')));
   s.unmount();
@@ -31,7 +27,7 @@ async function enableEnhanceViaUI(h: Harness) {
 
 describe('pressing Stop while an image prompt is being enhanced', () => {
   it('stops the enhancement, draws no image and leaves the chat ready for the next message', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     h.render();
     await h.placeImageModel({ backend: 'coreml' });
     await h.cycleImageMode(); // auto -> ON (force)
@@ -68,9 +64,9 @@ describe('pressing Stop while an image prompt is being enhanced', () => {
     const fs = h.boundary.fs!;
     expect(fs.listFiles(`${fs.DocumentDirectoryPath}/generated_images`)).toHaveLength(0);
 
-    // A following ordinary message works: image mode off, ask a question, the reply renders.
-    await h.cycleImageMode(); // ON -> OFF
-    await h.rtl.waitFor(() => { expect(view.queryByTestId('image-mode-force-badge')).toBeNull(); });
+    // A following ordinary message works: ask a question, the reply renders.
+    // The send already put image mode back to Auto (the composer resets Force after every send).
+    expect(view.queryByTestId('image-mode-force-badge')).toBeNull();
     expect(view.queryByText(/The capital of France is Paris\./)).toBeNull();
     await h.send('what is the capital of France', { text: 'The capital of France is Paris.' });
     await h.rtl.waitFor(() => { expect(view.queryByText(/The capital of France is Paris\./)).not.toBeNull(); });

@@ -27,9 +27,6 @@ import { getDisplayMessages } from '../../../../src/screens/ChatScreen/types';
 import type { Message } from '@offgrid/core/types';
 
 // The file player decodes real audio off a native module — a genuine boundary.
-jest.mock('@offgrid/pro/audio/audioFilePlayer', () => ({
-  decodeFileWaveform: jest.fn(async () => [] as number[]),
-}));
 
 const baseProps: Omit<MessageAudioModeProps, 'msg'> = {
   isStreamingThis: true,

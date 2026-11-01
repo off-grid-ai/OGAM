@@ -12,10 +12,15 @@ export type ModelNotReadyReason =
   | 'not-downloaded' // the selected model is not on disk
   | 'insufficient-memory' // could not fit the model in the residency budget
   | 'load-in-progress' // a load is already running; do not start a second
+  | 'unloadable-file' // the file is damaged or of a kind the engine cannot read
   | 'load-threw'; // the native load attempt failed
 
 /** Map a thrown load error to a typed reason (the one place this heuristic lives). */
 export function reasonFromLoadError(err: unknown): ModelNotReadyReason {
+  // The engine says what failed when it knows (llmHelpers' loadFailure); trust that over the wording.
+  const typed = (err as { loadFailure?: string } | null)?.loadFailure;
+  if (typed === 'out-of-memory') return 'insufficient-memory';
+  if (typed === 'unloadable-file') return 'unloadable-file';
   const msg = err instanceof Error ? err.message : String(err);
   if (/not found|no such file|missing|does not exist/i.test(msg)) return 'not-downloaded';
   // "Insufficient credits" from a remote server is not memory: only memory or RAM words count.
@@ -48,6 +53,13 @@ export function modelNotReadyAlert(
       return {
         title: 'Still loading',
         message: 'The model is still loading. Give it a moment, then try again.',
+      };
+    case 'unloadable-file':
+      return {
+        title: "This model file can't be loaded",
+        message:
+          "This model file can't be loaded (damaged or unsupported). " +
+          'Delete it on the Models screen and download it again, or choose another model.',
       };
     case 'load-threw':
     default:

@@ -22,9 +22,6 @@ import { useTTSStore } from '@offgrid/pro/audio/ttsStore';
 import { prepareMessageForSpeech } from '@offgrid/core/utils/messageContent';
 
 // The file player decodes real audio off a native module — the one genuine IO boundary. Stub the decode.
-jest.mock('@offgrid/pro/audio/audioFilePlayer', () => ({
-  decodeFileWaveform: jest.fn(async () => [] as number[]),
-}));
 
 const initialTTSState = useTTSStore.getState();
 afterEach(() => {

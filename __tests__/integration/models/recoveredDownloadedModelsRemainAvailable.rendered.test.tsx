@@ -9,18 +9,10 @@ import {
   requireRTL,
 } from '../../harness/nativeBoundary';
 import { createDownloadedModel } from '../../utils/factories';
+import { withNavigator } from '../../harness/realNavigation';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: () => {},
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => ({ params: {} }),
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 describe('recovered downloaded models', () => {
   it('keeps a complete recovered model available and hides a partial file', async () => {
@@ -67,21 +59,20 @@ describe('recovered downloaded models', () => {
       ]),
     );
 
-    const models = rtl.render(React.createElement(ModelsScreen));
+    const models = rtl.render(withNavigator(React.createElement(ModelsScreen)));
     await rtl.waitFor(() =>
       expect(models.getByTestId('models-list')).not.toBeNull(),
     );
     models.unmount();
 
-    const picker = rtl.render(
+    const picker = rtl.render(withNavigator(
       React.createElement(ModelSelectorModal, {
         visible: true,
         onClose: () => {},
         onSelectModel: () => {},
         onUnloadModel: () => {},
         isLoading: false,
-      }),
-    );
+      })));
 
     await rtl.waitFor(() => {
       expect(

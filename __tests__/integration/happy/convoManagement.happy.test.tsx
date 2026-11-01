@@ -9,16 +9,12 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('happy — delete a conversation via the real swipe gesture', () => {
   it('a sent chat is swipe-deleted from Recent and disappears', async () => {
-    const h = await setupChatScreen({ engine: 'litert' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
     h.render();
     // Create a real conversation by sending a message.
     await h.send('trip planning ideas', { content: 'Here are some ideas.' });
@@ -29,7 +25,7 @@ describe('happy — delete a conversation via the real swipe gesture', () => {
     const React = require('react');
     const { HomeScreen } = require('../../../src/screens/HomeScreen');
      
-    const home = h.rtl.render(React.createElement(HomeScreen, { navigation: { navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} } }));
+    const home = h.rtl.render(h.inNavigator(React.createElement(HomeScreen, { navigation: { navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} } })));
     await h.rtl.waitFor(() => { expect(home.queryByText('trip planning ideas')).not.toBeNull(); });
 
     // Swipe-delete gesture: tap the swipe-revealed delete button, then confirm in the alert.

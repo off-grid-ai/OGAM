@@ -1,93 +1,115 @@
 /**
- * STT download provider — wraps the existing whisper + downloadStore bridge under
- * the uniform DownloadProvider contract. Verifies list merges in-flight + completed,
- * retry/cancel/remove delegate to the working service calls, and reconcile strands
- * an interrupted (non-resumable) download as a retriable error.
+ * sttProvider — the transcription models' side of the Download Manager: what it lists, and its cancel, retry,
+ * remove and relaunch reconcile.
+ *
+ * The phone is the boundary: the native background downloader (its rows; it can refuse a start), the disk
+ * and storage (harness/modelManagerDevice). The provider, the transcription downloads and the download store
+ * run for real, and a download starts the way the app starts one.
  */
-jest.mock('../../../src/services/whisperService', () => ({
-  whisperService: {
-    listDownloadedModels: jest.fn(async () => []),
-    downloadModel: jest.fn(async () => '/path'),
-    deleteModel: jest.fn(async () => {}),
-  },
-}));
-jest.mock('../../../src/services/backgroundDownloadService', () => ({
-  backgroundDownloadService: { cancelDownload: jest.fn(async () => {}) },
-}));
-jest.mock('../../../src/utils/logger', () => ({ __esModule: true, default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
+import { installModelManagerDevice, type ModelManagerDevice } from '../../harness/modelManagerDevice';
+import { requireRTL } from '../../harness/nativeBoundary';
 
-import { sttProvider } from '../../../src/services/modelDownloadService/providers/sttProvider';
-import { useDownloadStore } from '../../../src/stores/downloadStore';
-import { whisperService } from '../../../src/services/whisperService';
-import { backgroundDownloadService } from '../../../src/services/backgroundDownloadService';
+const SIZE = 142 * 1024 * 1024;
+let device: ModelManagerDevice;
+let sttProvider: typeof import('../../../src/services/modelDownloadService/providers/sttProvider')['sttProvider'];
+let whisperService: typeof import('../../../src/services/whisperService')['whisperService'];
+let store: () => ReturnType<typeof import('../../../src/stores/downloadStore')['useDownloadStore']['getState']>;
 
-const mockWhisper = whisperService as unknown as { listDownloadedModels: jest.Mock; downloadModel: jest.Mock; deleteModel: jest.Mock };
-const mockBg = backgroundDownloadService as unknown as { cancelDownload: jest.Mock };
-
-const entry = (over: any = {}) => ({
-  modelKey: 'whisper-base.en/ggml-base.en.bin', downloadId: 'dl-1', modelId: 'whisper-base.en',
-  fileName: 'ggml-base.en.bin', quantization: '', modelType: 'stt', status: 'running',
-  bytesDownloaded: 50, totalBytes: 100, combinedTotalBytes: 100, progress: 0.5, createdAt: 1, ...over,
+beforeEach(async () => {
+  device = await installModelManagerDevice();
+  ({ sttProvider } = require('../../../src/services/modelDownloadService/providers/sttProvider'));
+  ({ whisperService } = require('../../../src/services/whisperService'));
+  const { useDownloadStore } = require('../../../src/stores/downloadStore');
+  store = () => useDownloadStore.getState();
 });
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  useDownloadStore.setState({ downloads: {}, downloadIdIndex: {} } as any);
-  useDownloadStore.getState().add(entry());
-});
+const KEY = 'whisper-base.en/ggml-base.en.bin';
+const transfers = () => device.nativeRows().filter(r => r.modelId === 'whisper-base.en');
+
+/** Base (English) is downloading; returns the download's outcome (wrapped, so awaiting this does not wait for it). */
+async function downloadingBase() {
+  const done = whisperService.downloadModel('base.en').then(() => null, (e: Error) => e);
+  await device.settle();
+  return { done };
+}
 
 describe('sttProvider', () => {
-  it('lists an in-flight download mapped to the uniform shape (downloading)', async () => {
-    const list = await sttProvider.list();
-    const d = list.find(x => x.id === 'stt:base.en');
-    expect(d?.status).toBe('downloading');
-    expect(d?.modelType).toBe('stt');
+  it('lists an in-flight download mapped to the uniform shape', async () => {
+    // The app root carries the native downloader's progress into the store.
+    const { useDownloadListeners } = require('../../../src/hooks/useDownloads');
+    requireRTL().renderHook(() => useDownloadListeners());
+    const { done } = await downloadingBase();
+    await device.reportProgress(transfers()[0].downloadId, SIZE / 2, SIZE);
+    const d = (await sttProvider.list()).find(x => x.id === 'stt:base.en');
+    expect(d).toEqual(expect.objectContaining({ status: 'downloading', modelType: 'stt' }));
     expect(d?.capabilities.resumable).toBe(false);
-    expect(d?.progress).toBe(0.5);
+    expect(d?.progress).toBeCloseTo(0.5);
+    void done;
   });
 
-  it('lists completed disk models, skipping ones already in-flight', async () => {
-    mockWhisper.listDownloadedModels.mockResolvedValue([
-      { modelId: 'base.en', fileName: 'ggml-base.en.bin', sizeBytes: 100, filePath: '/p' }, // dup of in-flight
-      { modelId: 'small', fileName: 'ggml-small.bin', sizeBytes: 400, filePath: '/p2' },
-    ]);
+  it('lists completed disk models, skipping ones already in flight', async () => {
+    const { done } = await downloadingBase();
+    // Small is on the phone from earlier; Base's file is the one being written.
+    device.fs.seedFile(whisperService.getModelPath('small'), 466 * 1024 * 1024);
     const list = await sttProvider.list();
-    expect(list.filter(d => d.id === 'stt:base.en')).toHaveLength(1); // not duplicated
-    const done = list.find(d => d.id === 'stt:small');
-    expect(done?.status).toBe('completed');
+    expect(list.filter(d => d.id === 'stt:base.en')).toHaveLength(1);
+    expect(list.find(d => d.id === 'stt:small')?.status).toBe('completed');
+    void done;
   });
 
-  it('cancel cancels the native task and clears the store row', async () => {
+  it('cancel stops the native transfer and clears the row', async () => {
+    const { done } = await downloadingBase();
     await sttProvider.cancel('stt:base.en');
-    expect(mockBg.cancelDownload).toHaveBeenCalledWith('dl-1');
-    expect(useDownloadStore.getState().downloads['whisper-base.en/ggml-base.en.bin']).toBeUndefined();
+    expect(transfers()).toEqual([]);
+    expect(store().downloads[KEY]).toBeUndefined();
+    void done;
   });
 
-  it('retry clears the dead row then re-downloads via whisperService', async () => {
+  it('retry stops the dead transfer and downloads again', async () => {
+    const { done: first } = await downloadingBase();
+    await device.failDownload(transfers()[0].downloadId, 'connection reset');
+    await first;
+    expect(store().downloads[KEY].status).toBe('failed');
+
     await sttProvider.retry('stt:base.en');
-    expect(mockBg.cancelDownload).toHaveBeenCalledWith('dl-1');
-    expect(mockWhisper.downloadModel).toHaveBeenCalledWith('base.en');
+    await device.settle();
+    // One fresh transfer runs; the failed row is replaced by the live download.
+    const [again] = transfers();
+    expect(transfers()).toHaveLength(1);
+    expect(again).toEqual(expect.objectContaining({ status: 'running', bytesDownloaded: 0 }));
+    expect(store().downloads[KEY].status).not.toBe('failed');
+    await device.finishDownload(again.downloadId, SIZE);
+    await device.settle();
+    expect(await whisperService.isModelDownloaded('base.en')).toBe(true);
   });
 
-  it('retry restores a failed row if the re-download fails before re-registering (no vanished model)', async () => {
-    mockWhisper.downloadModel.mockRejectedValueOnce(new Error('network down'));
+  it('retry restores a failed row if the re-download fails before it registers (no vanished model)', async () => {
+    const { done: first } = await downloadingBase();
+    await device.failDownload(transfers()[0].downloadId, 'connection reset');
+    await first;
+    // The phone refuses to start the next transfer.
+    device.boundary.download!.module.startDownload.mockRejectedValueOnce(new Error('network down'));
+
     await sttProvider.retry('stt:base.en');
-    // A moment for the fire-and-forget re-download rejection to settle.
-    await new Promise(r => setImmediate(r));
-    const restored = useDownloadStore.getState().downloads['whisper-base.en/ggml-base.en.bin'];
-    expect(restored).toBeDefined();
-    expect(restored.status).toBe('failed');
-    expect(restored.errorMessage).toBe('network down');
+    await device.settle();
+    const restored = store().downloads[KEY];
+    expect(restored).toEqual(expect.objectContaining({ status: 'failed', errorMessage: expect.stringContaining('network down') }));
   });
 
   it('remove deletes the model from disk', async () => {
+    device.fs.seedFile(whisperService.getModelPath('base.en'), SIZE);
     await sttProvider.remove('stt:base.en');
-    expect(mockWhisper.deleteModel).toHaveBeenCalledWith('base.en');
+    expect(await device.fs.exists(whisperService.getModelPath('base.en'))).toBe(false);
   });
 
   it('reconcile strands an interrupted in-flight download as failed (not resumable)', async () => {
+    // After a relaunch, the row the last run left behind is in the store, but its foreground transfer died.
+    store().add({
+      modelKey: KEY as never, downloadId: 'dl-old', modelId: 'whisper-base.en', fileName: 'ggml-base.en.bin',
+      quantization: '', modelType: 'stt' as never, status: 'running' as never, bytesDownloaded: 50,
+      totalBytes: 100, combinedTotalBytes: 100, progress: 0.5, createdAt: 1,
+    });
     await sttProvider.reconcile!();
-    const e = useDownloadStore.getState().downloads['whisper-base.en/ggml-base.en.bin'];
-    expect(e.status).toBe('failed');
+    expect(store().downloads[KEY].status).toBe('failed');
   });
 });

@@ -48,6 +48,9 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
 
   const [imageRec, setImageRec] = useState<ImageModelRecommendation | null>(null);
   const [userChangedBackendFilter, setUserChangedBackendFilter] = useState(false);
+  // The recommendation arrives after mount; it reads the person's latest choice, not the mount-time one.
+  const userChangedBackendFilterRef = useRef(false);
+  useEffect(() => { userChangedBackendFilterRef.current = userChangedBackendFilter; }, [userChangedBackendFilter]);
   const [showRecommendedOnly, setShowRecommendedOnly] = useState(true);
   const [showRecHint, setShowRecHint] = useState(true);
 
@@ -158,7 +161,7 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
     hardwareService.getImageModelRecommendation().then(rec => {
       if (cancelled) return;
       setImageRec(rec);
-      if (!userChangedBackendFilter && Platform.OS !== 'ios') {
+      if (!userChangedBackendFilterRef.current && Platform.OS !== 'ios') {
         let filter: 'qnn' | 'mnn' | 'all';
         if (rec.recommendedBackend === 'qnn') filter = 'qnn';
         else if (rec.recommendedBackend === 'mnn') filter = 'mnn';
@@ -167,10 +170,7 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
       }
     });
     return () => { cancelled = true; };
-
-    // Intentionally mount-only: fetches hardware recommendation once.
-    // userChangedBackendFilter is read inside but should not re-trigger this fetch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Mount-only: fetches the hardware recommendation once; the person's filter choice is read from the ref.
   }, []);
 
   const clearImageFilters = useCallback(() => {

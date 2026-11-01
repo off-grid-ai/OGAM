@@ -20,12 +20,8 @@
 import { setupChatScreen, type ChatHarnessOptions } from '../../harness/chatHarness';
 import { MB } from '../../harness/nativeBoundary';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 jest.mock('@react-native-community/slider', () => ({
   __esModule: true,
@@ -52,7 +48,7 @@ function pressByWalkingUp(node: unknown): void {
 }
 
 function setup(extra: Partial<ChatHarnessOptions>) {
-  return setupChatScreen({ engine: 'llama', deferInitialLoad: true, modelFileSizeBytes: 500 * MB, ...extra });
+  return setupChatScreen({ navigation: 'real', engine: 'llama', deferInitialLoad: true, modelFileSizeBytes: 500 * MB, ...extra });
 }
 
 /** The chat's settings sheet, Advanced expanded. */

@@ -2,10 +2,6 @@ import { getQnnWarningMessage, showQnnWarningAlert } from '../../../../src/servi
 import { ImageModelDescriptor } from '../../../../src/screens/ModelsScreen/types';
 import { makeImageDownloadDeps } from '../../../utils/factories';
 
-jest.mock('../../../../src/components/CustomAlert', () => ({
-  showAlert: jest.fn((_title: string, _msg: string, buttons: any[]) => ({ visible: true, title: _title, buttons })),
-  hideAlert: jest.fn(() => ({ visible: false })),
-}));
 
 function makeModel(overrides: Partial<ImageModelDescriptor> = {}): ImageModelDescriptor {
   return {

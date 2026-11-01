@@ -371,7 +371,7 @@ export async function downloadHuggingFaceModel(
 }
 
 /** CoreML multi-file download (one file per blob in coremlFiles). */
-export async function downloadCoreMLMultiFile(
+async function downloadCoreMLMultiFile(
   modelInfo: ImageModelDescriptor,
   deps: ImageDownloadDeps,
 ): Promise<void> {

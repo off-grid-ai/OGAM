@@ -9,24 +9,15 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { installRemoteStream } from '../../harness/remoteHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: () => {},
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('happy — resend/regenerate (heavy entry point)', () => {
   // Retry is reached through the action menu, which opens BOTH via long-press AND the 3-dots '•••' button.
   it.each(['longpress', 'dots'] as const)(
     'llama.cpp: Retry (menu via %s) produces a fresh answer',
     async via => {
-      const h = await setupChatScreen({ engine: 'llama' });
+      const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
       h.render();
       await h.send('tell me a fact', { text: 'Honey never spoils.' });
       await h.rtl.waitFor(() => {
@@ -45,7 +36,7 @@ describe('happy — resend/regenerate (heavy entry point)', () => {
   it.each(['longpress', 'dots'] as const)(
     'LiteRT: Retry (menu via %s) produces a fresh answer',
     async via => {
-      const h = await setupChatScreen({ engine: 'litert' });
+      const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
       h.render();
       await h.send('tell me a fact', { content: 'Honey never spoils.' });
       await h.rtl.waitFor(() => {
@@ -62,7 +53,7 @@ describe('happy — resend/regenerate (heavy entry point)', () => {
   );
 
   it('uses a newly selected remote model when resending an older message', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     h.render();
     await h.send('tell me a fact', { text: 'Local answer.' });
     await h.rtl.waitFor(() => {

@@ -23,12 +23,8 @@ jest.mock('react-native-vector-icons/Feather', () => {
   return ({ name }: { name: string }) => <Text>{name}</Text>;
 });
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => ({ params: {} }),
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 jest.mock('react-native-tcp-socket', () => {
   const { createNativeTcpBoundary } = require('../../utils/nativeSyncBoundaries');
@@ -41,6 +37,7 @@ jest.mock('react-native-zeroconf', () => {
 });
 
 import { proIsPresent, requirePro } from '../helpers/requirePro';
+import { withNavigator } from '../../harness/realNavigation';
 
 const describePro = proIsPresent() ? describe : describe.skip;
 
@@ -81,7 +78,7 @@ describePro('the notifications screen filter', () => {
     };
     await act(async () => fileCompletionNotificationService.record(completion));
     const id = syncFileCompletionNotificationId(completion);
-    const ui = render(<SyncNotificationsScreen />);
+    const ui = render(withNavigator(<SyncNotificationsScreen />));
     const dismiss = ui.getByTestId(`sync-file-notification-dismiss-${id}`);
 
     fireEvent.press(dismiss);
@@ -96,7 +93,7 @@ describePro('the notifications screen filter', () => {
   });
 
   it('offers every filter, with All chosen to begin with', () => {
-    const ui = render(<SyncNotificationsScreen />);
+    const ui = render(withNavigator(<SyncNotificationsScreen />));
     fireEvent.press(ui.getByTestId('sync-notifications-filter'));
 
     // All four are reachable. A filter that is not rendered is a section the user can never isolate.
@@ -108,14 +105,14 @@ describePro('the notifications screen filter', () => {
   });
 
   it('says nothing is waiting for approval, rather than showing a blank area', () => {
-    const ui = render(<SyncNotificationsScreen />);
+    const ui = render(withNavigator(<SyncNotificationsScreen />));
 
     // The answer to the question the user asked by opening this screen. Blank space reads as a failed load.
     expect(ui.queryByText('No files are waiting for approval.')).not.toBeNull();
   });
 
   it('keeps the approvals answer visible when the user narrows to Approvals', () => {
-    const ui = render(<SyncNotificationsScreen />);
+    const ui = render(withNavigator(<SyncNotificationsScreen />));
 
     chooseFilter(ui, 'approvals');
 
@@ -124,7 +121,7 @@ describePro('the notifications screen filter', () => {
   });
 
   it('drops the approvals section entirely when the user narrows to Transfers', () => {
-    const ui = render(<SyncNotificationsScreen />);
+    const ui = render(withNavigator(<SyncNotificationsScreen />));
 
     chooseFilter(ui, 'transfers');
 
@@ -133,7 +130,7 @@ describePro('the notifications screen filter', () => {
   });
 
   it('drops the approvals section when the user narrows to Recent', () => {
-    const ui = render(<SyncNotificationsScreen />);
+    const ui = render(withNavigator(<SyncNotificationsScreen />));
 
     chooseFilter(ui, 'recent');
 
@@ -141,7 +138,7 @@ describePro('the notifications screen filter', () => {
   });
 
   it('comes back to everything when the user chooses All again', () => {
-    const ui = render(<SyncNotificationsScreen />);
+    const ui = render(withNavigator(<SyncNotificationsScreen />));
 
     chooseFilter(ui, 'transfers');
     expect(ui.queryByText('No files are waiting for approval.')).toBeNull();
@@ -152,7 +149,7 @@ describePro('the notifications screen filter', () => {
   });
 
   it('offers a way to reach the screens the notifications came from', () => {
-    const ui = render(<SyncNotificationsScreen />);
+    const ui = render(withNavigator(<SyncNotificationsScreen />));
 
     // A notification about a file is only useful if the user can get to the file. At least one destination has
     // to be offered, or this screen is a dead end.

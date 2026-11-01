@@ -2,10 +2,6 @@
  * Unit tests for remoteModelCapabilities.ts
  */
 
-jest.mock('../../../src/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
 import {
   fetchRemoteModelInfo,
@@ -277,8 +273,8 @@ describe('fetchLlamaCppProps', () => {
   });
 
   it('logs a warning (not silent) when /props is unavailable', async () => {
-    const logger = require('../../../src/utils/logger').default;
-    logger.warn.mockClear();
+    // The real logger writes to the console: read what it wrote there.
+    const logger = { warn: jest.spyOn(console, 'warn').mockImplementation(() => undefined) };
     mockFetchError(new Error('DNS failure'));
     const info = await fetchLlamaCppProps('http://192.168.1.58:7878');
     expect(info).toBeNull();

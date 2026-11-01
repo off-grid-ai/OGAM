@@ -2,6 +2,9 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { installRemoteModel, installRemoteStream } from '../../harness/remoteHarness';
 
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
+
 const SLOW_REPLY =
   'data: {"choices":[{"delta":{"content":"Still working"}}]}\n\n' +
   '__PAUSE__\n' +
@@ -11,7 +14,7 @@ const SLOW_REPLY =
 
 describe('slow remote reply in the chat UI', () => {
   it('stays in progress until the remote model completes', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     await installRemoteModel();
     const upstream = installRemoteStream(SLOW_REPLY);
     h.render();
@@ -32,7 +35,7 @@ describe('slow remote reply in the chat UI', () => {
   });
 
   it('keeps a draft and the Projects screen usable while a reply streams', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     await installRemoteModel();
     const upstream = installRemoteStream(SLOW_REPLY);
     h.render();
@@ -47,13 +50,13 @@ describe('slow remote reply in the chat UI', () => {
 
     const { ProjectEditScreen } = require('../../../src/screens/ProjectEditScreen');
     const { ProjectsScreen } = require('../../../src/screens/ProjectsScreen');
-    const editor = h.rtl.render(h.React.createElement(ProjectEditScreen));
+    const editor = h.renderAside(h.React.createElement(ProjectEditScreen));
     h.rtl.fireEvent.changeText(editor.getByTestId('project-edit-name'), 'Research');
     h.rtl.fireEvent.changeText(editor.getByTestId('project-edit-system-prompt'), 'Help with research.');
     h.rtl.fireEvent.press(editor.getByTestId('project-edit-save'));
     editor.unmount();
 
-    const projects = h.rtl.render(h.React.createElement(ProjectsScreen));
+    const projects = h.renderAside(h.React.createElement(ProjectsScreen));
     expect(projects.getByText('Research')).toBeTruthy();
     expect(h.view!.getByText(/Still working/)).toBeTruthy();
 
@@ -66,7 +69,7 @@ describe('slow remote reply in the chat UI', () => {
   });
 
   it('saves an edited message and shows the new reply', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.render();
     await h.send('First question', { text: 'First answer' });
     await h.rtl.waitFor(() => expect(h.view!.getByText('First answer')).toBeTruthy());

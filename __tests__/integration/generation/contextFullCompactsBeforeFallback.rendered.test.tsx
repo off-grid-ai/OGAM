@@ -1,14 +1,11 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 describe('context full in a tool-enabled chat', () => {
   it('retries after compaction on the selected model without a model-change notice', async () => {
-    const h = await setupChatScreen({ engine: 'llama', backupModel: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', backupModel: true });
     h.enableToolViaUI('calculator');
     h.enableGenerationDetailsViaUI();
     h.render();
@@ -34,7 +31,7 @@ describe('context full in a tool-enabled chat', () => {
   });
 
   it('keeps reasoning already shown when a full context starts a retry', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     h.render();
     h.rtl.fireEvent.press(h.view!.getByTestId('quick-settings-button'));
     h.rtl.fireEvent.press(h.view!.getByTestId('quick-thinking-toggle'));
@@ -53,7 +50,7 @@ describe('context full in a tool-enabled chat', () => {
   });
 
   it('shows a context limit after the retry also fills, and ends the busy state', async () => {
-    const h = await setupChatScreen({ engine: 'llama', backupModel: true });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', backupModel: true });
     h.enableToolViaUI('calculator');
     h.render();
     h.boundary.llama!.scriptCompletions([

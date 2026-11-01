@@ -18,17 +18,14 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const PARTIAL = 'The capital of France is Paris and it';
 
 describe('Stop mid-generation keeps the shown partial (never discards output) â€” device 2026-07-14', () => {
   it('pressing STOP while a partial is streaming persists it â€” the message does not disappear', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.render();
     const { rtl } = h;
     const view = h.view!;
@@ -53,7 +50,7 @@ describe('Stop mid-generation keeps the shown partial (never discards output) â€
   });
 
   it('keeps earlier reasoning and tool results when a later tool-loop segment is stopped', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.enableToolViaUI('calculator');
     h.render();
     h.rtl.fireEvent.press(
@@ -117,7 +114,7 @@ describe('Stop mid-generation keeps the shown partial (never discards output) â€
   });
 
   it('keeps the work accordion when Stop lands before the next segment emits text', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.enableToolViaUI('calculator');
     h.render();
     h.boundary.llama!.scriptCompletions([

@@ -1,29 +1,19 @@
 /**
- * Unit tests for liteRTCompaction.ts
- * Covers summarizeSession and runCompaction branches.
+ * liteRTCompaction — summarizing a LiteRT session and rebuilding it smaller when it fills.
+ *
+ * summarizeSession and runCompaction take the engine's send / summarize / reset as arguments (the LiteRT
+ * service passes its own); the tests pass plain functions that answer as the engine does. Everything else
+ * is real: the compacting state the chat shows (contextCompactionService), the logger, the stores.
  */
-
-jest.mock('../../../src/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
-jest.mock('../../../src/services/contextCompaction', () => ({
-  contextCompactionService: {
-    signalCompacting: jest.fn(),
-  },
-}));
-
-jest.mock('../../../src/stores/debugLogsStore', () => ({
-  useDebugLogsStore: {
-    getState: jest.fn(() => ({ addLog: jest.fn() })),
-  },
-}));
-
 import { summarizeSession, runCompaction } from '../../../src/services/liteRTCompaction';
 import { contextCompactionService } from '../../../src/services/contextCompaction';
 
-const mockedSignal = contextCompactionService.signalCompacting as jest.Mock;
+/** Record the compacting state the chat screen sees. */
+function watchCompacting() {
+  const states: boolean[] = [];
+  const unsubscribe = contextCompactionService.subscribeCompacting((v: boolean) => states.push(v));
+  return { states, unsubscribe };
+}
 
 // ---------------------------------------------------------------------------
 // summarizeSession
@@ -114,10 +104,11 @@ describe('runCompaction', () => {
     resetFn: jest.fn(() => Promise.resolve()),
   };
 
-  it('calls signalCompacting(true) then signalCompacting(false)', async () => {
+  it('shows the compacting state while it runs, then clears it', async () => {
+    const watch = watchCompacting();
     await runCompaction({ ...baseParams, history: [] });
-    expect(mockedSignal).toHaveBeenNthCalledWith(1, true);
-    expect(mockedSignal).toHaveBeenNthCalledWith(2, false);
+    watch.unsubscribe();
+    expect(watch.states.slice(-2)).toEqual([true, false]);
   });
 
   it('uses summary in compacted history when activeConversationId matches', async () => {
@@ -174,10 +165,13 @@ describe('runCompaction', () => {
     expect(compactedHistory[0].content).not.toContain('Context from earlier');
   });
 
-  it('calls signalCompacting(false) even when resetFn throws', async () => {
+  it('clears the compacting state even when the reset fails', async () => {
+    const watch = watchCompacting();
     const resetFn = jest.fn(() => Promise.reject(new Error('reset failed')));
     await expect(runCompaction({ ...baseParams, history: [], resetFn })).rejects.toThrow('reset failed');
-    expect(mockedSignal).toHaveBeenLastCalledWith(false);
+    watch.unsubscribe();
+    expect(watch.states).toContain(true);
+    expect(watch.states.at(-1)).toBe(false);
   });
 
   it('slices history to stay within recent budget', async () => {

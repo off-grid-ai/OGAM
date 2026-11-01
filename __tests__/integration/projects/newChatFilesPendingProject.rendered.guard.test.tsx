@@ -10,14 +10,11 @@
 import { installNativeBoundary, GB } from '../../harness/nativeBoundary';
 import { makeGenDeps } from '../../harness/genDeps';
 import { createProject } from '../../utils/factories';
+import { withNavigator } from '../../harness/realNavigation';
 
 let mockRouteProjectId = 'proj-1';
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn(), setOptions: jest.fn(), addListener: jest.fn(() => jest.fn()) }),
-  useRoute: () => ({ params: { projectId: mockRouteProjectId } }),
-  useFocusEffect: jest.fn(),
-  useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 describe('Q10 (rendered) — new chat files a pending project', () => {
   it('lists the new conversation under the pending project after first send', async () => {
@@ -42,13 +39,13 @@ describe('Q10 (rendered) — new chat files a pending project', () => {
     const { deps } = makeGenDeps({ activeConversationId: null, pendingProjectId: 'proj-1' });
 
     // Precondition: the project has no chats yet (empty state renders).
-    const before = render(React.createElement(ProjectChatsScreen, {}));
+    const before = render(withNavigator(React.createElement(ProjectChatsScreen, {}), { projectId: mockRouteProjectId }));
     expect(before.getByText('No chats yet')).toBeTruthy();
     before.unmount();
 
     await handleSendFn(deps, { text: 'hello there', startGeneration: async () => {}, setDebugInfo: () => {} });
 
-    const view = render(React.createElement(ProjectChatsScreen, {}));
+    const view = render(withNavigator(React.createElement(ProjectChatsScreen, {}), { projectId: mockRouteProjectId }));
     // The freshly-sent chat is filed under the project and shows in its list (titled from the first message).
     expect(view.queryByText('No chats yet')).toBeNull();
     expect(view.getByText('hello there')).toBeTruthy();

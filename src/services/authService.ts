@@ -43,22 +43,22 @@ class AuthService {
     }
   }
 
+  /**
+   * Whether the passphrase is right. Throws PassphraseCheckUnavailable when the keychain cannot be read:
+   * that is not a wrong passphrase, so it must not count toward a lockout.
+   */
   async verifyPassphrase(passphrase: string): Promise<boolean> {
+    let credentials: Awaited<ReturnType<typeof Keychain.getGenericPassword>>;
     try {
-      const credentials = await Keychain.getGenericPassword({
-        service: SERVICE_NAME,
-      });
-
-      if (!credentials) {
-        return false;
-      }
-
-      const inputHash = this.hashPassphrase(passphrase);
-      return inputHash === credentials.password;
+      credentials = await Keychain.getGenericPassword({ service: SERVICE_NAME });
     } catch (error) {
       logger.error('Failed to verify passphrase:', error);
+      throw new PassphraseCheckUnavailable();
+    }
+    if (!credentials) {
       return false;
     }
+    return this.hashPassphrase(passphrase) === credentials.password;
   }
 
   async hasPassphrase(): Promise<boolean> {
@@ -95,3 +95,11 @@ class AuthService {
 }
 
 export const authService = new AuthService();
+
+/** The keychain could not be read, so the passphrase could not be checked (not a wrong passphrase). */
+export class PassphraseCheckUnavailable extends Error {
+  constructor() {
+    super("Couldn't check your passphrase. Try again.");
+    this.name = 'PassphraseCheckUnavailable';
+  }
+}

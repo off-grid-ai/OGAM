@@ -1174,17 +1174,22 @@ describe('HardwareService', () => {
     const origOS = Platform.OS;
     afterEach(() => { Object.defineProperty(Platform, 'OS', { value: origOS, configurable: true }); });
 
-    it('reports NPU + GPU from the SoC and OpenCL probes on Android', async () => {
+    afterEach(() => { delete NativeModules.LocalDreamModule; });
+
+    it('reports NPU + GPU on a Snapdragon with a Hexagon NPU and an Adreno GPU', async () => {
       Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
-      jest.spyOn(hardwareService, 'getSoCInfo').mockResolvedValue({ vendor: 'qualcomm', hasNPU: true } as any);
-      jest.spyOn(hardwareService, 'getOpenCLCapability').mockResolvedValue({ supported: true });
+      (hardwareService as any).cachedOpenCLCapability = null;
+      mockedDeviceInfo.getHardware.mockResolvedValue('qcom');
+      mockedDeviceInfo.getModel.mockReturnValue('Galaxy S23');
+      NativeModules.LocalDreamModule = { getSoCModel: jest.fn().mockResolvedValue('SM8550') };
       expect(await hardwareService.getAccelerationCapability()).toEqual({ hasNpu: true, hasGpu: true });
     });
 
-    it('has no acceleration on a device with neither', async () => {
+    it('has no acceleration on a Mali phone with no NPU', async () => {
       Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
-      jest.spyOn(hardwareService, 'getSoCInfo').mockResolvedValue({ vendor: 'other', hasNPU: false } as any);
-      jest.spyOn(hardwareService, 'getOpenCLCapability').mockResolvedValue({ supported: false, reason: 'no_compatible_gpu' });
+      (hardwareService as any).cachedOpenCLCapability = null;
+      mockedDeviceInfo.getHardware.mockResolvedValue('mt6989');
+      mockedDeviceInfo.getModel.mockReturnValue('Redmi Note');
       expect(await hardwareService.getAccelerationCapability()).toEqual({ hasNpu: false, hasGpu: false });
     });
 

@@ -1,10 +1,6 @@
 import { initLlama } from 'llama.rn';
 import RNFS from 'react-native-fs';
 
-jest.mock('../../../../src/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), error: jest.fn(), warn: jest.fn() },
-}));
 
 const mockInitLlama = initLlama as jest.MockedFunction<typeof initLlama>;
 const mockExists = RNFS.exists as jest.MockedFunction<typeof RNFS.exists>;

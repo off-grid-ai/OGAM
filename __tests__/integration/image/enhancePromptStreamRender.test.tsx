@@ -24,12 +24,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 /** The device's shape: the model reasons first, then writes the prompt in markdown. */
 const PAUSE = 'PAUSE_MID_STREAM';
@@ -50,7 +46,7 @@ async function enableEnhanceViaUI(h: Awaited<ReturnType<typeof setupChatScreen>>
 
 describe('the Enhanced prompt card renders as a card from the first token', () => {
   it('shows the labelled markdown card mid-stream, never the raw <think>/__LABEL: wrapper', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     h.render();
     await h.placeImageModel({ backend: 'coreml' });
     await h.cycleImageMode(); // auto -> ON(force); also activates the downloaded image model

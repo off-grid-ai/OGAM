@@ -8,13 +8,10 @@
  * resource fetcher (jest.setup).
  */
 import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
+import { withNavigator } from '../../harness/realNavigation';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => ({ params: {} }),
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
+jest.unmock('@react-navigation/native');
 
 describe('voice model card RAM fact', () => {
   it('shows the Kokoro card on the Voice tab without an "At least 0GB RAM" fact', async () => {
@@ -25,7 +22,7 @@ describe('voice model card RAM fact', () => {
     await installPro();
     const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
 
-    const view = rtl.render(React.createElement(ModelsScreen, {}));
+    const view = rtl.render(withNavigator(React.createElement(ModelsScreen, {})));
 
     // Before: the Models screen opens on Text, so no voice model card is on screen yet.
     await rtl.waitFor(() => expect(view.getByTestId('voice-models-tab')).toBeTruthy());

@@ -34,6 +34,12 @@ export const routeHolder: { params: Record<string, unknown> } = { params: {} };
 
 export interface ChatHarnessOptions {
   engine: 'llama' | 'litert';
+  /**
+   * 'real': the screens mount inside the app's own NavigationContainer and AppNavigator, so routes,
+   * focus and navigate are the real ones. The test file calls `jest.unmock('@react-navigation/native')`
+   * and declares no navigation mock; Home, the model picker and Chat are reached as a person reaches them.
+   */
+  navigation?: 'real';
   /** 'ios' surfaces the Metal accelerator path for llama; default 'android'. */
   platform?: 'ios' | 'android';
   ram?: RamProfile;
@@ -111,18 +117,6 @@ export function renderedThread(view: { queryAllByTestId: (id: RegExp) => unknown
 export const CHAT_STORE_KEY = 'local-llm-chat-storage';
 
 /**
- * Where the screen asked to go. A test's navigation mock forwards `navigate` here
- * (`navigate: (...a) => require('<harness>/chatHarness').recordNavigation(...a)`), so a tap on a chat
- * row can be followed to the chat it opens.
- */
-export const navHolder: { last: { screen: string; params?: Record<string, unknown> } | null } = {
-  last: null,
-};
-export function recordNavigation(screen: string, params?: Record<string, unknown>) {
-  navHolder.last = { screen, params };
-}
-
-/**
  * BOUNDARY: the next read of `key` from AsyncStorage fails, once, as an unreadable store does on device;
  * every other read, and every later read of `key`, goes to the stored data. Patches the AsyncStorage
  * module of the CURRENT module graph, so call it after a module reset and before the stores are required.
@@ -184,30 +178,28 @@ export async function relaunchApp(relaunch: { failFirstReadOf?: string } = {}) {
   if (readFailure) await readFailure.failed;
   else await rtl.waitFor(() => expect(useChatStore.persist.hasHydrated()).toBe(true));
   await rtl.act(() => new Promise(resolve => setTimeout(resolve, 0)));
+  // The relaunched app itself is mounted with real navigation: the list and the chat are its routes.
+  const nav = require('@react-navigation/native');
+  const navRef = nav.createNavigationContainerRef();
+  const { useAppStore } = require('../../src/stores');
+  await rtl.waitFor(() => expect(useAppStore.persist.hasHydrated()).toBe(true));
   return {
     React,
     rtl,
-    /** Mount the real chat list (the Chats tab). */
+    /** Mount the relaunched app on the Chats tab. */
     renderChatList() {
-      const { ChatsListScreen } = require('../../src/screens/ChatsListScreen');
-      return rtl.render(React.createElement(ChatsListScreen));
+      const { AppNavigator } = require('../../src/navigation');
+      const app = rtl.render(
+        React.createElement(nav.NavigationContainer, { ref: navRef }, React.createElement(AppNavigator)),
+      );
+      rtl.act(() => navRef.navigate('Main', { screen: 'ChatsTab' }));
+      return app;
     },
-    /**
-     * Tap a chat's row on the mounted chat list and open the chat it navigates to: the real ChatScreen
-     * with the route params the row handed to navigation.
-     */
+    /** Tap a chat's row on the mounted chat list; the app opens that chat. Returns the app's view. */
     async openChatFromList(list: ReturnType<typeof rtl.render>, title: string) {
-      require('./chatHarness').navHolder.last = null;
       rtl.fireEvent.press(list.getByText(title));
-      const target = require('./chatHarness').navHolder.last as {
-        screen: string;
-        params?: Record<string, unknown>;
-      } | null;
-      expect(target?.screen).toBe('Chat');
-      list.unmount();
-      require('./chatHarness').routeHolder.params = target!.params ?? {};
-      const { ChatScreen } = require('../../src/screens/ChatScreen');
-      return rtl.render(React.createElement(ChatScreen, {}));
+      await rtl.waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('Chat'));
+      return list;
     },
   };
 }
@@ -326,18 +318,84 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     await installPro();
   }
 
+  // Real navigation: the app opens where a returning person's app opens, on Home. Onboarding was finished
+  // on an earlier launch (the store action Onboarding calls), and the downloaded model is known the way
+  // Home learns it (modelManager), so AppNavigator's first route is Main, as on device.
+  const realNav = opts.navigation === 'real';
+  const nav = realNav ? require('@react-navigation/native') : undefined;
+  const navRef = nav?.createNavigationContainerRef();
+  const appShell = (beside: React.ReactElement | null = null): React.ReactElement => {
+    const { AppNavigator } = require('../../src/navigation');
+    const { getSlot, SLOTS } = require('../../src/bootstrap/slotRegistry');
+    const AppRoot = opts.pro ? getSlot(SLOTS.appRoot) : undefined;
+    // One host root, as App.tsx has: RNTL queries from the first host root, so an element mounted beside
+    // the app (mountBeside) is only found inside it.
+    const { View } = require('react-native');
+    return React.createElement(
+      View,
+      { style: { flex: 1 } },
+      AppRoot ? React.createElement(AppRoot, {}) : null,
+      React.createElement(nav.NavigationContainer, { ref: navRef }, React.createElement(AppNavigator)),
+      beside,
+    );
+  };
+  /**
+   * Real navigation: a screen or section rendered on its own (the tools list, a settings section) sits as
+   * the one screen of a real React Navigation stack, so its useNavigation / useFocusEffect are the
+   * library's own, not a stub. Without real navigation it renders as before.
+   */
+  const inNavigator = (element: React.ReactElement): React.ReactElement => {
+    if (!realNav) return element;
+    const { createNativeStackNavigator } = require('@react-navigation/native-stack');
+    const Stack = createNativeStackNavigator();
+    return React.createElement(
+      nav.NavigationContainer,
+      null,
+      React.createElement(
+        Stack.Navigator,
+        { screenOptions: { headerShown: false } },
+        React.createElement(Stack.Screen, { name: 'Host' }, () => element),
+      ),
+    );
+  };
+  /**
+   * Real navigation: RNTL fires events only into its current screen, the last render. A section rendered
+   * in its own root (renderAside) takes that over, so when it is unmounted the app shell is the screen again;
+   * otherwise every later tap on the app would be dropped without a word.
+   */
+  let shell: ReturnType<typeof rtl.render> | undefined;
+  const backToShell = () => {
+    if (shell) require('@testing-library/react-native/build/screen').setRenderResult(shell);
+  };
+  const renderAside = (element: React.ReactElement) => {
+    const aside = rtl.render(inNavigator(element));
+    const unmount = aside.unmount;
+    aside.unmount = () => {
+      unmount();
+      backToShell();
+    };
+    return aside;
+  };
+  if (realNav) {
+    const { modelManager } = require('../../src/services');
+    useAppStore.getState().setDownloadedModels(await modelManager.getDownloadedModels());
+    useAppStore.getState().setOnboardingComplete(true);
+  }
+
   // GESTURE: mount the real Home screen — its REAL hydration loads the record — then open the picker and TAP
   // the model row. The real handleSelectTextModel sets it active (no setState activeModelId shortcut).
-  const home = rtl.render(
-    React.createElement(HomeScreen, {
-      navigation: {
-        navigate: () => {},
-        goBack: () => {},
-        setOptions: () => {},
-        addListener: () => () => {},
-      },
-    }),
-  );
+  const home = realNav
+    ? (shell = rtl.render(appShell()))
+    : rtl.render(
+        React.createElement(HomeScreen, {
+          navigation: {
+            navigate: () => {},
+            goBack: () => {},
+            setOptions: () => {},
+            addListener: () => () => {},
+          },
+        }),
+      );
   await rtl.waitFor(
     () => {
       expect(useAppStore.getState().downloadedModels.length).toBeGreaterThan(0);
@@ -367,10 +425,13 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
 
   // GESTURE: with the model now selected, tap "New Chat" on Home — the real way a user starts a chat. A new
   // chat has NO conversation yet; it is created on the first message (real app behavior). No createConversation.
-  rtl.fireEvent.press(
-    await rtl.waitFor(() => home.getByTestId('new-chat-button')),
-  );
-  home.unmount();
+  // Real navigation keeps the app mounted and waits on Home: render() taps New Chat, so the chat screen
+  // mounts when the test opens it, after the test has set up the device (a denied mic, a seeded chat).
+  const newChatButton = await rtl.waitFor(() => home.getByTestId('new-chat-button'));
+  if (!realNav) {
+    rtl.fireEvent.press(newChatButton);
+    home.unmount();
+  }
 
   // Load via the REAL load path (the app loads lazily on the first send; we trigger the same path so the
   // readiness gate passes deterministically). This is the real native-faked load, not a state shortcut.
@@ -414,7 +475,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       const { ToolsScreen } = require('../../src/screens/ToolsScreen');
       const { Switch } = require('react-native');
 
-      const tools = rtl.render(React.createElement(ToolsScreen, {}));
+      const tools = renderAside(React.createElement(ToolsScreen, {}));
       const row = tools.getByTestId(`tool-picker-row-${toolId}`);
       // The RN Switch toggles via onValueChange (not press) — locate it in the row and flip it.
       rtl.fireEvent(
@@ -433,7 +494,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       const {
         TextGenerationSection,
       } = require('../../src/components/GenerationSettingsModal/TextGenerationSection');
-      const s = rtl.render(React.createElement(TextGenerationSection, {}));
+      const s = renderAside(React.createElement(TextGenerationSection, {}));
       if (!s.queryByTestId(`setting-${key}-value-button`)) {
         rtl.fireEvent.press(s.getByTestId('modal-text-advanced-toggle'));
       }
@@ -583,7 +644,9 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
         parent?: PressNode | null;
       };
       await rtl.act(async () => {
-        const xIcons = this.view!.root.findAll(
+        // Inside the chat screen only: the whole app (real navigation) has other "x" icons.
+        const chat = this.view!.queryAllByTestId('chat-screen')[0] ?? this.view!.root;
+        const xIcons = chat.findAll(
           (n: PressNode) =>
             n.type === 'Icon' && (n.props as { name?: string })?.name === 'x',
         );
@@ -686,9 +749,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       const {
         ShowGenerationDetailsToggle,
       } = require('../../src/components/settings/textGenAdvancedSections');
-      const s = rtl.render(
-        React.createElement(ShowGenerationDetailsToggle, {}),
-      );
+      const s = renderAside(React.createElement(ShowGenerationDetailsToggle, {}));
       rtl.fireEvent.press(s.getByTestId('show-gen-details-on-button'));
       s.unmount();
     },
@@ -710,7 +771,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
         75 * 1024 * 1024,
       );
       await useWhisperStore.getState().refreshPresentModels(); // real disk scan → present
-      const t = rtl.render(React.createElement(TranscriptionModelsTab, {}));
+      const t = renderAside(React.createElement(TranscriptionModelsTab, {}));
       await rtl.waitFor(
         () => {
           expect(useWhisperStore.getState().presentModelIds).toContain(modelId);
@@ -897,9 +958,63 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
 
     /** Mount the real ChatScreen (plus the real app.root slot when pro is active, so the TTS EngineBridge
      *  mounts and the voice engine can load over the executorch fake — the same slot App.tsx renders). */
+    /** Wrap an element rendered on its own so it has real navigation (see inNavigator above). */
+    inNavigator,
+    /** Render a section on its own, with real navigation; unmounting it makes the app the screen again. */
+    renderAside,
+
     render() {
+      if (realNav) {
+        // The app is already mounted on Chat (New Chat opened it); a chat chosen by the test opens there.
+        backToShell();
+        this.view = home;
+        const params = require('./chatHarness').routeHolder.params;
+        if (Object.keys(params).length) rtl.act(() => navRef.navigate('Chat', params));
+        else if (navRef.getCurrentRoute()?.name !== 'Chat') rtl.fireEvent.press(home.getByTestId('new-chat-button'));
+        return this.view;
+      }
       this.view = rtl.render(this.screenTree());
       return this.view;
+    },
+
+    /**
+     * Real navigation only: go to one of the app's routes (ModelSettings, StorageSettings, ...) in the
+     * mounted app, as a tap that navigates there does, and return the app's view.
+     */
+    async openScreen(name: string, params?: Record<string, unknown>) {
+      if (!realNav) throw new Error("openScreen needs setupChatScreen({ navigation: 'real' })");
+      await rtl.act(async () => navRef.navigate(name, params));
+      await rtl.waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe(name));
+      this.view = home;
+      return home;
+    },
+
+    /**
+     * Real navigation only: mount an element beside the app, as one more child of the app's root (a probe
+     * that reads the stores). The app stays mounted where it is.
+     */
+    mountBeside(element: React.ReactElement) {
+      if (!realNav) throw new Error("mountBeside needs setupChatScreen({ navigation: 'real' })");
+      shell!.rerender(appShell(element));
+    },
+
+    /** Real navigation only: open one of Home's tabs (ChatsTab, ProjectsTab, ...), as tapping it does. */
+    async openTab(tab: string) {
+      if (!realNav) throw new Error("openTab needs setupChatScreen({ navigation: 'real' })");
+      await rtl.act(async () => navRef.navigate('Main', { screen: tab }));
+      await rtl.waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe(tab));
+      this.view = home;
+      return home;
+    },
+
+    /** Real navigation only: open the Chats tab in the mounted app; returns the app's view. */
+    openChatList() {
+      return this.openTab('ChatsTab');
+    },
+
+    /** Real navigation only: the route the app is on (the leaf route, inside Home's tabs). */
+    currentRoute(): string | undefined {
+      return navRef?.getCurrentRoute()?.name;
     },
 
     /** The mounted tree: ChatScreen, plus the app.root slot when pro is active. Fresh elements each call. */
@@ -923,6 +1038,14 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
      * still in flight in the composer (a transcription, a send) stays alive across the switch.
      */
     async openConversation(conversationId?: string) {
+      if (realNav) {
+        // The native stack keeps the Chat screen and hands it the new params.
+        await rtl.act(async () => navRef.navigate('Chat', conversationId ? { conversationId } : {}));
+        await rtl.waitFor(() => {
+          expect(useChatStore.getState().activeConversationId).toBe(conversationId ?? null);
+        });
+        return;
+      }
       // The screen reads the route through the module registry the harness reset into, which holds its
       // own copy of this module; set the params there.
       require('./chatHarness').routeHolder.params = conversationId ? { conversationId } : {};
@@ -939,6 +1062,17 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
      * New Chat button opens a fresh chat screen with no conversation (created on the first send).
      */
     async newChatViaHome() {
+      if (realNav) {
+        // Back to Home with the chat's own Back button, then Home's real New Chat button.
+        rtl.fireEvent.press(home.getByLabelText('Back'));
+        await rtl.waitFor(() => expect(navRef.getCurrentRoute()?.name).toBe('HomeTab'));
+        rtl.fireEvent.press(await rtl.waitFor(() => home.getByTestId('new-chat-button')));
+        await rtl.waitFor(() => {
+          expect(navRef.getCurrentRoute()?.name).toBe('Chat');
+          expect(useChatStore.getState().activeConversationId).toBeNull();
+        });
+        return;
+      }
       this.view?.unmount();
       const homeView = rtl.render(
         React.createElement(HomeScreen, {

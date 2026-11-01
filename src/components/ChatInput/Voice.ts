@@ -445,10 +445,12 @@ export function useVoiceInput({ conversationId, interfaceMode, onTranscript, onA
 
 
 
+  // Switching chats discards a finished whisper result from the old chat. The recording keeps its
+  // chat: forgetting it here made a stop that ran after the switch treat the turn as unowned and
+  // deliver the old chat's transcript into the new one. The stop and finalResult paths release it.
   useEffect(() => {
     if (recordingConversationIdRef.current && recordingConversationIdRef.current !== conversationId) {
       clearResult();
-      recordingConversationIdRef.current = null;
     }
   }, [conversationId, clearResult]);
 

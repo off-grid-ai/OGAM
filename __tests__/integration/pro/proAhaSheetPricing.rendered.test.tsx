@@ -13,12 +13,8 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 const OFFER_HEADLINE = 'It already knows what you did today.';
 // The chat offer appears a moment after the reply finishes; give it more than that moment.
@@ -27,7 +23,7 @@ const STALE_PRICE_COPY = [/\$49/, /\$69/, /\/yr/i, /year/i];
 
 describe('Pro offer in chat states the current price (rendered)', () => {
   it('after the 10th reply the offer shows $119 once for life or $7.99 a month, and no old or yearly price', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     const view = h.render();
 
     for (let turn = 1; turn <= 9; turn += 1) {

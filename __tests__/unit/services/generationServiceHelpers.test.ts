@@ -1,528 +1,267 @@
 /**
- * Unit tests for generationServiceHelpers.ts
- * Focuses on vision guard and buildGenerationMetaImpl LiteRT branches.
+ * generationServiceHelpers — the speed details a reply is stored with (per engine), getting ready for a
+ * reply, and the reply itself, all driven through generationService.generateResponse on a faked device.
+ *
+ *  - The speed details: a server on the LAN, llama, LiteRT with and without the native benchmark, on the
+ *    GPU / NPU / CPU.
+ *  - Getting ready: a second send while a reply runs, no model loaded, the native conversation reset failing.
+ *  - The reply: LiteRT and llama answers stored; a voice note always goes to LiteRT as its transcript.
+ *
+ * Real: generationService and its helpers, llmService, liteRTService, activeModelService (loads through the
+ * residency lock), the providers and stream parser, the stores. Faked (device / network,
+ * harness/generationDevice): llama.rn, the LiteRT native module and its events, the filesystem, RAM, and
+ * the LAN server at its XMLHttpRequest.
  */
+import {
+  launchGeneration,
+  connectServer,
+  type GenerationDevice,
+  type ServerHandle,
+} from '../../harness/generationDevice';
 
-import { buildGenerationMetaImpl, prepareGenerationImpl, generateResponseImpl } from '../../../src/services/generationServiceHelpers';
+const tick = (ms = 0) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
-jest.mock('../../../src/services/llm', () => ({
-  llmService: {
-    isModelLoaded: jest.fn(() => false),
-    isCurrentlyGenerating: jest.fn(() => false),
-    generateResponse: jest.fn(),
-    prepareConversationBoundary: jest.fn(() => Promise.resolve()),
-    getGpuInfo: jest.fn(() => ({ gpu: false, gpuBackend: 'CPU', gpuLayers: 0 })),
-    getPerformanceStats: jest.fn(() => ({
-      lastTokensPerSecond: 10,
-      lastDecodeTokensPerSecond: 12,
-      lastTimeToFirstToken: 0.4,
-      lastGenerationTime: 2,
-      lastTokenCount: 40,
-    })),
-  },
-}));
-
-jest.mock('../../../src/services/litert', () => ({
-  liteRTService: {
-    isModelLoaded: jest.fn(() => false),
-    getActiveBackend: jest.fn(() => 'cpu'),
-    prepareConversation: jest.fn(() => Promise.resolve()),
-    sendMessage: jest.fn(() => Promise.resolve()),
-    getLastBenchmarkStats: jest.fn().mockReturnValue(undefined),
-  },
-}));
-
-jest.mock('../../../src/stores', () => ({
-  useAppStore: {
-    getState: jest.fn(),
-  },
-  useChatStore: {
-    getState: jest.fn(() => ({
-      startStreaming: jest.fn(),
-      clearStreamingMessage: jest.fn(),
-      appendToStreamingMessage: jest.fn(),
-      finalizeStreamingMessage: jest.fn(),
-    })),
-  },
-  useRemoteServerStore: {
-    getState: jest.fn(() => ({
-      getActiveServer: jest.fn(() => null),
-      activeServerId: null,
-      updateServerHealth: jest.fn(),
-    })),
-  },
-}));
-
-jest.mock('../../../src/stores/debugLogsStore', () => ({
-  useDebugLogsStore: {
-    getState: jest.fn(() => ({ addLog: jest.fn() })),
-  },
-}));
-
-jest.mock('../../../src/services/generationToolLoop', () => ({
-  runToolLoop: jest.fn(() => Promise.resolve()),
-  buildLiteRTHistory: jest.fn(() => []),
-}));
-
-jest.mock('../../../src/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), error: jest.fn(), warn: jest.fn() },
-}));
-
-import { useAppStore, useChatStore } from '../../../src/stores';
-import { liteRTService } from '../../../src/services/litert';
-
-const mockedGetState = useAppStore.getState as jest.Mock;
-const mockedLiteRT = liteRTService as jest.Mocked<typeof liteRTService>;
-
-function makeLiteRTAppState(overrides: any = {}) {
-  return {
-    downloadedModels: [{ id: 'litert-1', name: 'LiteRT Model', engine: 'litert', ...overrides.modelProps }],
-    activeModelId: 'litert-1',
-    downloadedImageModels: [],
-    activeImageModelId: null,
-    settings: { temperature: 0.7, topP: 0.9, cacheType: 'ram', maxTokens: 512, thinkingEnabled: false },
-    ...overrides.storeProps,
-  };
+async function until(check: () => boolean, what: string, timeoutMs = 3000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    await tick(5);
+  }
 }
 
-describe('buildGenerationMetaImpl — remote provider path', () => {
-  beforeEach(() => jest.clearAllMocks());
+let d: GenerationDevice;
+let server: ServerHandle | null = null;
 
-  it('returns remote meta with estimated token count', () => {
-    const { useRemoteServerStore } = require('../../../src/stores');
-    useRemoteServerStore.getState.mockReturnValue({
-      getActiveServer: () => ({ name: 'My Server' }),
-      activeServerId: 'srv-1',
-      updateServerHealth: jest.fn(),
-    });
+beforeEach(async () => {
+  const mod = require('@react-native-async-storage/async-storage');
+  await (mod.default ?? mod).clear(); // each test is a fresh install
+});
 
-    const svc = {
-      isUsingRemoteProvider: () => true,
-      state: { streamingContent: 'hello world test', startTime: Date.now() - 2000 },
-      totalReasoningLength: 8,
-      remoteTimeToFirstToken: 0.3,
-    };
+afterEach(() => {
+  server?.restore();
+  server = null;
+});
 
-    const meta = buildGenerationMetaImpl(svc);
-    expect(meta.gpuBackend).toBe('Remote');
-    expect(meta.modelName).toBe('My Server');
-    expect(meta.gpu).toBe(false);
-    expect(meta.tokenCount).toBeGreaterThan(0);
-    expect(meta.timeToFirstToken).toBe(0.3);
-  });
+const nativeSends = (dev: GenerationDevice) =>
+  dev.boundary.litert.calls.sendMessage.length +
+  dev.boundary.litert.calls.sendMessageWithImages.length +
+  dev.boundary.litert.calls.sendMessageWithMedia.length;
 
-  it('uses fallback name when no active server', () => {
-    const { useRemoteServerStore } = require('../../../src/stores');
-    useRemoteServerStore.getState.mockReturnValue({
-      getActiveServer: () => null,
-      activeServerId: null,
-      updateServerHealth: jest.fn(),
-    });
+/** A LiteRT phone whose native engine loaded the model on `backend`. */
+async function liteRTOn(backend: 'gpu' | 'npu' | 'cpu', model: Record<string, unknown> = {}) {
+  const dev = await launchGeneration({ engine: 'litert', load: false });
+  const m = dev.useAppStore.getState().downloadedModels[0];
+  dev.useAppStore.getState().setDownloadedModels([{ ...m, ...model }]);
+  dev.useAppStore.getState().updateSettings({ liteRTBackend: backend });
+  dev.boundary.litert.module.loadModel.mockResolvedValueOnce({ backend, maxNumTokens: 4096 });
+  await dev.activeModelService.loadTextModel('m');
+  return dev;
+}
 
-    const svc = {
-      isUsingRemoteProvider: () => true,
-      state: { streamingContent: 'tokens', startTime: null },
-      totalReasoningLength: 0,
-      remoteTimeToFirstToken: undefined,
-    };
+/** Answer one LiteRT turn token by token, ending with what native reports on litert_complete. */
+async function liteRTReply(dev: GenerationDevice, tokens: string[], complete: Record<string, unknown> = {}) {
+  dev.boundary.litert.scriptHang();
+  const before = nativeSends(dev);
+  const reply = dev.generationService.generateResponse(dev.conversationId, dev.ask('hi'));
+  await until(() => nativeSends(dev) === before + 1, 'the native send');
+  for (const t of tokens) {
+    dev.boundary.litertEvents.emit('litert_token', t);
+    await tick(15);
+  }
+  dev.boundary.litertEvents.emit('litert_complete', JSON.stringify(complete));
+  await reply;
+  return dev.answers().at(-1);
+}
 
-    const meta = buildGenerationMetaImpl(svc);
-    expect(meta.modelName).toBe('Remote Model');
-    expect(meta.tokensPerSecond).toBeUndefined();
+// ---------------------------------------------------------------------------
+// The speed details stored with a reply
+// ---------------------------------------------------------------------------
+describe('speed details — a server on the LAN', () => {
+  it('stores the server reply as remote, with an estimated token count and the time to the first token', async () => {
+    d = await launchGeneration({ localModel: false });
+    server = await connectServer(d);
+    server.reply({ content: ['hello ', 'world ', 'test'] });
+
+    await d.generationService.generateResponse(d.conversationId, d.ask('hi'));
+
+    const [answer] = d.answers();
+    expect(answer.content).toBe('hello world test');
+    expect(answer.generationMeta).toEqual(expect.objectContaining({ gpu: false, gpuBackend: 'Remote' }));
+    expect(answer.generationMeta.modelName).toEqual(expect.any(String));
+    expect(answer.generationMeta.modelName).not.toBe('');
+    expect(answer.generationMeta.tokenCount).toBe(Math.ceil('hello world test'.length / 4));
+    expect(answer.generationMeta.timeToFirstToken).toEqual(expect.any(Number));
   });
 });
 
-describe('buildGenerationMetaImpl — llama.cpp path', () => {
-  beforeEach(() => jest.clearAllMocks());
+describe('speed details — llama', () => {
+  it('stores what llama measured, the backend it ran on and the cache type', async () => {
+    d = await launchGeneration();
+    d.useAppStore.getState().updateSettings({ cacheType: 'q8_0' });
+    d.boundary.llama!.scriptCompletion({ text: 'Hi there.' });
 
-  it('returns llama.cpp perf stats when model engine is not litert', () => {
-    const { llmService } = require('../../../src/services/llm');
-    llmService.getGpuInfo.mockReturnValue({ gpu: true, gpuBackend: 'Metal', gpuLayers: 32 });
-    llmService.getPerformanceStats.mockReturnValue({
-      lastTokensPerSecond: 25,
-      lastDecodeTokensPerSecond: 28,
-      lastTimeToFirstToken: 0.6,
-      lastGenerationTime: 3,
-      lastTokenCount: 75,
-    });
+    await d.generationService.generateResponse(d.conversationId, d.ask('hi'));
 
-    mockedGetState.mockReturnValue({
-      downloadedModels: [{ id: 'llm-1', name: 'Llama-3', engine: 'ggml' }],
-      activeModelId: 'llm-1',
-      downloadedImageModels: [],
-      activeImageModelId: null,
-      settings: { cacheType: 'flash', temperature: 0.7, topP: 0.9, maxTokens: 512, thinkingEnabled: false },
-    });
-
-    const svc = {
-      isUsingRemoteProvider: () => false,
-      liteRTBenchmarkStats: null,
-      state: { streamingContent: '', startTime: Date.now() },
-    };
-
-    const meta = buildGenerationMetaImpl(svc);
-    expect(meta.gpu).toBe(true);
-    expect(meta.gpuBackend).toBe('Metal');
-    expect(meta.tokensPerSecond).toBe(25);
-    expect(meta.tokenCount).toBe(75);
-    expect(meta.cacheType).toBe('flash');
+    const [answer] = d.answers();
+    expect(answer.content).toBe('Hi there.');
+    const gpuInfo = d.llmService.getGpuInfo();
+    const perf = d.llmService.getPerformanceStats();
+    expect(answer.generationMeta).toEqual(expect.objectContaining({
+      modelName: 'Test Model',
+      gpu: gpuInfo.gpu,
+      gpuBackend: gpuInfo.gpuBackend,
+      tokenCount: perf.lastTokenCount,
+      tokensPerSecond: perf.lastTokensPerSecond,
+      cacheType: 'q8_0',
+    }));
+    expect(answer.generationMeta.tokenCount).toBeGreaterThan(0);
   });
 });
 
-describe('buildGenerationMetaImpl — LiteRT path', () => {
-  beforeEach(() => jest.clearAllMocks());
+describe('speed details — LiteRT', () => {
+  it('stores the prompt token count native reported and the speed timed on the stream, on the GPU', async () => {
+    d = await liteRTOn('gpu');
 
-  it('returns real benchmark stats when liteRTBenchmarkStats is set', () => {
-    mockedGetState.mockReturnValue(makeLiteRTAppState());
-    mockedLiteRT.getActiveBackend.mockReturnValue('gpu');
+    const answer = await liteRTReply(d, ['hello', ' world'], { prefillTokenCount: 128, decodeTokenCount: 2 });
 
-    const svc = {
-      isUsingRemoteProvider: () => false,
-      liteRTBenchmarkStats: {
-        decodeTokensPerSecond: 42,
-        ttft: 0.12,
-        prefillTokenCount: 128,
-      },
-      state: { streamingContent: 'hello world', startTime: Date.now() - 2000 },
-    };
-
-    const meta = buildGenerationMetaImpl(svc);
-
-    expect(meta.decodeTokensPerSecond).toBe(42);
-    expect(meta.timeToFirstToken).toBeCloseTo(0.12, 2);
-    expect(meta.tokenCount).toBe(128);
-    expect(meta.gpu).toBe(true);
-    expect(meta.gpuBackend).toBe('GPU');
+    expect(answer.content).toBe('hello world');
+    expect(answer.generationMeta).toEqual(expect.objectContaining({
+      modelName: 'Test Model',
+      gpu: true,
+      gpuBackend: 'GPU',
+      tokenCount: 128,
+    }));
+    // Timed from the send to the first token, and over the tokens that followed.
+    expect(answer.generationMeta.timeToFirstToken).toBeGreaterThan(0);
+    expect(answer.generationMeta.decodeTokensPerSecond).toBeGreaterThan(0);
   });
 
-  it('falls back to estimate when liteRTBenchmarkStats is null', () => {
-    mockedGetState.mockReturnValue(makeLiteRTAppState());
-    mockedLiteRT.getActiveBackend.mockReturnValue('cpu');
+  it('marks an NPU turn as accelerated', async () => {
+    d = await liteRTOn('npu');
 
-    const startTime = Date.now() - 4000;
-    const svc = {
-      isUsingRemoteProvider: () => false,
-      liteRTBenchmarkStats: null,
-      state: { streamingContent: 'abcd'.repeat(50), startTime },
-    };
+    const answer = await liteRTReply(d, ['ok'], { ttft: 0.2, decodeTokensPerSecond: 30, prefillTokenCount: 64 });
 
-    const meta = buildGenerationMetaImpl(svc);
-
-    expect(meta.tokenCount).toBe(Math.ceil(svc.state.streamingContent.length / 4));
-    expect(meta.tokensPerSecond).toBeGreaterThan(0);
-    expect(meta.gpu).toBe(false);
+    expect(answer.generationMeta).toEqual(expect.objectContaining({ gpu: true, gpuBackend: 'NPU' }));
   });
 
-  it('sets gpu=true when backend is npu', () => {
-    mockedGetState.mockReturnValue(makeLiteRTAppState());
-    mockedLiteRT.getActiveBackend.mockReturnValue('npu');
+  it('estimates the tokens and speed of a reply stopped before native reported anything, on the CPU', async () => {
+    d = await liteRTOn('cpu', { name: 'Gemma-3' });
+    const text = 'abcd'.repeat(10);
+    d.boundary.litert.scriptPartialThenHang(text);
+    const reply = d.generationService.generateResponse(d.conversationId, d.ask('hi'));
+    await until(() => d.useChatStore.getState().streamingMessage === text, 'the partial on screen');
+    await tick(20);
 
-    const svc = {
-      isUsingRemoteProvider: () => false,
-      liteRTBenchmarkStats: { decodeTokensPerSecond: 30, ttft: 0.2, prefillTokenCount: 64 },
-      state: { streamingContent: '', startTime: Date.now() },
-    };
+    await d.generationService.stopGeneration();
+    await reply;
 
-    const meta = buildGenerationMetaImpl(svc);
-    expect(meta.gpu).toBe(true);
-    expect(meta.gpuBackend).toBe('NPU');
-  });
-
-  it('returns model name from downloadedModels', () => {
-    mockedGetState.mockReturnValue(makeLiteRTAppState({ modelProps: { name: 'Gemma-3' } }));
-    mockedLiteRT.getActiveBackend.mockReturnValue('cpu');
-
-    const svc = {
-      isUsingRemoteProvider: () => false,
-      liteRTBenchmarkStats: { decodeTokensPerSecond: 20, ttft: 0.1, prefillTokenCount: 64 },
-      state: { streamingContent: '', startTime: Date.now() },
-    };
-
-    const meta = buildGenerationMetaImpl(svc);
-    expect(meta.modelName).toBe('Gemma-3');
-  });
-
-  it('returns undefined tokensPerSecond when startTime is null (fallback path)', () => {
-    mockedGetState.mockReturnValue(makeLiteRTAppState());
-    mockedLiteRT.getActiveBackend.mockReturnValue('cpu');
-
-    const svc = {
-      isUsingRemoteProvider: () => false,
-      liteRTBenchmarkStats: null,
-      state: { streamingContent: 'some text', startTime: null },
-    };
-
-    const meta = buildGenerationMetaImpl(svc);
-    expect(meta.tokensPerSecond).toBeUndefined();
+    const [answer] = d.answers();
+    expect(answer.content).toBe(text);
+    expect(answer.generationMeta).toEqual(expect.objectContaining({
+      modelName: 'Gemma-3',
+      gpu: false,
+      gpuBackend: 'CPU',
+      tokenCount: Math.ceil(text.length / 4),
+    }));
+    expect(answer.generationMeta.tokensPerSecond).toBeGreaterThan(0);
   });
 });
 
 // ---------------------------------------------------------------------------
-// prepareGenerationImpl
+// Getting ready for a reply
 // ---------------------------------------------------------------------------
+describe('getting ready for a reply', () => {
+  it('a second send while a reply runs sends nothing more to native', async () => {
+    d = await liteRTOn('cpu');
+    d.boundary.litert.scriptHang();
+    const first = d.generationService.generateResponse(d.conversationId, d.ask('one'));
+    await until(() => nativeSends(d) === 1, 'the first native send');
 
-function makeSvc(overrides: any = {}) {
-  const state = { isGenerating: false, startTime: Date.now(), streamingContent: '', ...overrides.state };
-  const svc = {
-    state,
-    generationAttempt: 0,
-    updateState: jest.fn((patch: any) => { Object.assign(state, patch); }),
-    pendingStop: null,
-    abortRequested: false,
-    resetState: jest.fn(),
-    tokenBuffer: '',
-    reasoningBuffer: '',
-    totalReasoningLength: 0,
-    remoteTimeToFirstToken: undefined,
-    isUsingRemoteProvider: () => false,
-    getCurrentProvider: () => null,
-  };
-  const { state: _s, ...rest } = overrides;
-  return { ...svc, ...rest };
-}
+    await d.generationService.generateResponse(d.conversationId, d.ask('two'));
 
-// Non-LiteRT store state — getActiveEngineService() returns llmService
-function makeLlmAppState() {
-  return {
-    downloadedModels: [{ id: 'llm-1', engine: 'ggml', name: 'Llama' }],
-    activeModelId: 'llm-1',
-    downloadedImageModels: [],
-    activeImageModelId: null,
-    settings: { temperature: 0.7, topP: 0.9, cacheType: 'q8_0', maxTokens: 512, thinkingEnabled: false, liteRTTemperature: 0.7, liteRTTopP: 0.9, liteRTMaxTokens: 512 },
-  };
-}
-
-describe('prepareGenerationImpl', () => {
-  it('returns false immediately when already generating', async () => {
-    const svc = makeSvc({ state: { isGenerating: true } });
-    const result = await prepareGenerationImpl(svc, 'conv-1');
-    expect(result).toBe(false);
+    expect(nativeSends(d)).toBe(1);
+    expect(d.generationService.getState().isGenerating).toBe(true);
+    d.boundary.litertEvents.emit('litert_complete', '{}');
+    await first;
   });
 
-  it('throws when LiteRT active but no model loaded', async () => {
-    // engine: 'litert' makes getActiveEngineService() return liteRTService → isLiteRTActive() = true
-    mockedGetState.mockReturnValue(makeLiteRTAppState());
-    mockedLiteRT.isModelLoaded.mockReturnValue(false);
+  it('refuses a LiteRT reply when the model is not loaded, and leaves nothing streaming', async () => {
+    d = await launchGeneration({ engine: 'litert', load: false });
+    const loads = d.boundary.litert.calls.loadModel.length;
+    d.boundary.litert.module.loadModel.mockRejectedValue(new Error('native load refused'));
 
-    const svc = makeSvc();
-    await expect(prepareGenerationImpl(svc, 'conv-1')).rejects.toThrow('No LiteRT model loaded');
-    expect(svc.resetState).toHaveBeenCalled();
+    await expect(d.generationService.generateResponse(d.conversationId, d.ask('hi'))).rejects.toThrow();
+
+    expect(d.boundary.litert.calls.loadModel.length).toBeGreaterThanOrEqual(loads);
+    expect(nativeSends(d)).toBe(0);
+    expect(d.generationService.getState().isGenerating).toBe(false);
+    expect(d.useChatStore.getState().streamingForConversationId).toBeNull();
   });
 
-  it('returns true when LiteRT active and model is loaded', async () => {
-    mockedGetState.mockReturnValue(makeLiteRTAppState());
-    mockedLiteRT.isModelLoaded.mockReturnValue(true);
+  it('refuses a llama reply when the model is not loaded, and leaves nothing streaming', async () => {
+    d = await launchGeneration({ load: false });
+    d.boundary.llama!.scriptInitFailure(true);
 
-    const svc = makeSvc();
-    const result = await prepareGenerationImpl(svc, 'conv-1');
-    expect(result).toBe(true);
+    await expect(d.generationService.generateResponse(d.conversationId, d.ask('hi'))).rejects.toThrow();
+
+    expect(d.boundary.llama!.calls.completion).toHaveLength(0);
+    expect(d.generationService.getState().isGenerating).toBe(false);
+    expect(d.useChatStore.getState().streamingForConversationId).toBeNull();
   });
 
-  it('throws when llama.cpp not loaded', async () => {
-    const { llmService: llm } = require('../../../src/services/llm');
-    llm.isModelLoaded.mockReturnValue(false);
-    mockedGetState.mockReturnValue(makeLlmAppState());
+  it('clears the reply state when the native conversation reset fails', async () => {
+    d = await launchGeneration();
+    d.nativeContext()!.clearCache.mockRejectedValueOnce(new Error('Conversation preparation failed'));
 
-    const svc = makeSvc();
-    await expect(prepareGenerationImpl(svc, 'conv-1')).rejects.toThrow('No model loaded');
-  });
+    await expect(d.generationService.generateResponse(d.conversationId, d.ask('hi')))
+      .rejects.toThrow('Conversation preparation failed');
 
-  it('clears generation state when conversation preparation rejects', async () => {
-    const { llmService: llm } = require('../../../src/services/llm');
-    const clearStreamingMessage = jest.fn();
-    llm.isModelLoaded.mockReturnValue(true);
-    llm.prepareConversationBoundary.mockRejectedValueOnce(
-      new Error('Conversation preparation failed'),
-    );
-    mockedGetState.mockReturnValue(makeLlmAppState());
-    (useChatStore.getState as jest.Mock).mockReturnValue({
-      startStreaming: jest.fn(),
-      clearStreamingMessage,
-    });
-    const svc = makeSvc();
-    svc.resetState.mockImplementation(() => {
-      svc.state.isGenerating = false;
-    });
-
-    await expect(prepareGenerationImpl(svc, 'conv-1')).rejects.toThrow(
-      'Conversation preparation failed',
-    );
-    expect(svc.state.isGenerating).toBe(false);
-    expect(clearStreamingMessage).toHaveBeenCalledTimes(1);
-  });
-
-});
-
-// ---------------------------------------------------------------------------
-// generateResponseImpl — LiteRT branch
-// ---------------------------------------------------------------------------
-
-function makeLiteRTState() {
-  return {
-    ...makeLiteRTAppState(),
-    settings: { liteRTTemperature: 0.7, liteRTTopP: 0.9, liteRTMaxTokens: 512, cacheType: 'q8_0', temperature: 0.7, maxTokens: 512, thinkingEnabled: false, topP: 0.9 },
-  };
-}
-
-function makeServiceSvc() {
-  return {
-    ...makeSvc(),
-    flushTimer: null,
-    liteRTBenchmarkStats: null,
-    forceFlushTokens: jest.fn(),
-    flushTokenBuffer: jest.fn(),
-    checkSharePrompt: jest.fn(),
-    isUsingRemoteProvider: () => false,
-    getCurrentProvider: () => null,
-  };
-}
-
-const makeLiteRTSvc = makeServiceSvc;
-const makeLlmSvc = makeServiceSvc;
-
-describe('generateResponseImpl — LiteRT path', () => {
-  beforeEach(() => {
-    mockedLiteRT.isModelLoaded.mockReturnValue(true);
-    mockedGetState.mockReturnValue(makeLiteRTState());
-  });
-
-  it('enters LiteRT path and calls prepareConversation', async () => {
-    const finalize = jest.fn();
-    (useChatStore.getState as jest.Mock).mockReturnValue({
-      startStreaming: jest.fn(), clearStreamingMessage: jest.fn(),
-      appendToStreamingMessage: jest.fn(), finalizeStreamingMessage: finalize,
-    });
-    mockedLiteRT.sendMessage.mockImplementation((_text: any, callbacks: any) => {
-      callbacks.onComplete('', '', null);
-      return Promise.resolve();
-    });
-
-    await generateResponseImpl(makeLiteRTSvc(), {
-      conversationId: 'conv-1',
-      messages: [{ id: '1', timestamp: 0, role: 'system' as const, content: 'sys' }, { id: '2', timestamp: 1, role: 'user' as const, content: 'Hello' }],
-    });
-    expect(mockedLiteRT.prepareConversation).toHaveBeenCalled();
-    expect(finalize).toHaveBeenCalled();
-  });
-
-  it('exits early when no user message in history', async () => {
-    const clear = jest.fn();
-    (useChatStore.getState as jest.Mock).mockReturnValue({
-      startStreaming: jest.fn(), clearStreamingMessage: clear,
-      appendToStreamingMessage: jest.fn(), finalizeStreamingMessage: jest.fn(),
-    });
-
-    await generateResponseImpl(makeLiteRTSvc(), {
-      conversationId: 'conv-1',
-      messages: [{ id: '1', timestamp: 0, role: 'system' as const, content: 'sys' }],
-    });
-    expect(mockedLiteRT.sendMessage).not.toHaveBeenCalled();
-    expect(clear).toHaveBeenCalled();
-  });
-
-  // (Removed: the mockist "clears streaming message on onError" tests asserted the SUPERSEDED
-  // clear-on-error behavior. The session's rule is never-discard-shown-output on error — the partial
-  // is flushed + finalized (keepShownPartialOnError). New behavior is covered by the rendered
-  // integration test errorKeepsPartial.rendered.redflow.test.tsx.)
-
-  // PRODUCT RULE (modelMedia single source): a voice note is transcript-only — its audio is NEVER
-  // model input, on ANY engine. These two tests replace the old ones that asserted the removed
-  // behavior (route audio to an audio-capable litert model / hard-reject a non-audio one). The
-  // audio-capability flag is retained as latent data but no path sends audio today.
-  it('NEVER sends a voice note as audio to LiteRT — transcript-only, even for an audio-capable model', async () => {
-    mockedGetState.mockReturnValue({
-      ...makeLiteRTState(),
-      downloadedModels: [{ id: 'litert-1', name: 'Gemma 4 E2B', engine: 'litert', liteRTAudio: true }],
-      activeModelId: 'litert-1',
-    });
-    (useChatStore.getState as jest.Mock).mockReturnValue({
-      startStreaming: jest.fn(), clearStreamingMessage: jest.fn(),
-      appendToStreamingMessage: jest.fn(), finalizeStreamingMessage: jest.fn(),
-    });
-    mockedLiteRT.sendMessage.mockImplementation((_t: any, callbacks: any) => {
-      callbacks.onComplete('', '', null);
-      return Promise.resolve();
-    });
-
-    await generateResponseImpl(makeLiteRTSvc(), {
-      conversationId: 'conv-1',
-      messages: [{
-        id: '1', timestamp: 0, role: 'user' as const, content: 'the transcript',
-        attachments: [{ id: 'a', type: 'audio' as const, uri: 'file:///clip.wav' }],
-      }],
-    });
-
-    // Transcript reaches the model; audioUris is empty despite the model being audio-capable.
-    expect(mockedLiteRT.sendMessage).toHaveBeenCalledWith('the transcript', expect.any(Object), { imageUris: [], audioUris: [] });
-  });
-
-  it('does NOT reject a voice note on a non-audio LiteRT model — it uses the transcript (B5/B9 parity)', async () => {
-    mockedGetState.mockReturnValue({
-      ...makeLiteRTState(),
-      downloadedModels: [{ id: 'litert-1', name: 'Gemma vision-only', engine: 'litert', liteRTAudio: false }],
-      activeModelId: 'litert-1',
-    });
-    const clear = jest.fn();
-    (useChatStore.getState as jest.Mock).mockReturnValue({
-      startStreaming: jest.fn(), clearStreamingMessage: clear,
-      appendToStreamingMessage: jest.fn(), finalizeStreamingMessage: jest.fn(),
-    });
-    mockedLiteRT.sendMessage.mockImplementation((_t: any, callbacks: any) => {
-      callbacks.onComplete('', '', null);
-      return Promise.resolve();
-    });
-
-    // Must NOT throw "does not support audio" — the voice note is transcript-only.
-    await generateResponseImpl(makeLiteRTSvc(), {
-      conversationId: 'conv-1',
-      messages: [{
-        id: '1', timestamp: 0, role: 'user' as const, content: 'the transcript',
-        attachments: [{ id: 'a', type: 'audio' as const, uri: 'file:///clip.wav' }],
-      }],
-    });
-
-    expect(clear).not.toHaveBeenCalled();
-    expect(mockedLiteRT.sendMessage).toHaveBeenCalledWith('the transcript', expect.any(Object), { imageUris: [], audioUris: [] });
+    expect(d.boundary.llama!.calls.completion).toHaveLength(0);
+    expect(d.generationService.getState().isGenerating).toBe(false);
+    expect(d.useChatStore.getState().streamingForConversationId).toBeNull();
+    expect(d.useChatStore.getState().streamingMessage).toBe('');
   });
 });
 
 // ---------------------------------------------------------------------------
-// generateResponseImpl — llama.cpp path (isLiteRTActive = false)
+// The reply
 // ---------------------------------------------------------------------------
+describe('the reply', () => {
+  const voiceNote = [{ id: 'a', type: 'audio' as const, uri: 'file:///clip.wav' }];
 
-describe('generateResponseImpl — llama.cpp path', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockedGetState.mockReturnValue(makeLlmAppState());
+  // PRODUCT RULE (modelMedia single source): a voice note is transcript-only; its audio is NEVER model
+  // input, on any engine, even for a model that takes audio.
+  it('sends a voice note to an audio-capable LiteRT model as its transcript, never as audio', async () => {
+    d = await liteRTOn('cpu', { liteRTAudio: true });
+    d.boundary.litert.scriptTurn({ content: 'Heard you.' });
+
+    await d.generationService.generateResponse(d.conversationId, d.ask('the transcript', voiceNote));
+
+    expect(d.boundary.litert.calls.sendMessage.map(args => args[0])).toEqual(['the transcript']);
+    expect(d.boundary.litert.calls.sendMessageWithMedia).toHaveLength(0);
+    expect(d.answers().map((m: any) => m.content)).toEqual(['Heard you.']);
   });
 
-  it('calls finalizeStreamingMessage on successful completion', async () => {
-    const { llmService: llm } = require('../../../src/services/llm');
-    llm.isModelLoaded.mockReturnValue(true);
-    llm.isCurrentlyGenerating.mockReturnValue(false);
+  it('does not refuse a voice note on a LiteRT model without audio: it sends the transcript (B5/B9)', async () => {
+    d = await liteRTOn('cpu', { liteRTAudio: false });
+    d.boundary.litert.scriptTurn({ content: 'Got it.' });
 
-    const finalize = jest.fn();
-    (useChatStore.getState as jest.Mock).mockReturnValue({
-      startStreaming: jest.fn(),
-      clearStreamingMessage: jest.fn(),
-      appendToStreamingMessage: jest.fn(),
-      finalizeStreamingMessage: finalize,
-    });
+    await d.generationService.generateResponse(d.conversationId, d.ask('the transcript', voiceNote));
 
-    llm.generateResponse.mockImplementation((_msgs: any, { onStream: onChunk, onComplete }: any = {}) => {
-      onChunk({ content: 'hello', reasoningContent: undefined });
-      onChunk({ content: undefined, reasoningContent: 'thinking' });
-      onComplete();
-      return Promise.resolve();
-    });
-
-    await generateResponseImpl(makeLlmSvc(), {
-      conversationId: 'conv-1',
-      messages: [{ id: '1', timestamp: 0, role: 'user' as const, content: 'hi' }],
-    });
-
-    expect(finalize).toHaveBeenCalled();
+    expect(d.boundary.litert.calls.sendMessage.map(args => args[0])).toEqual(['the transcript']);
+    expect(d.answers().map((m: any) => m.content)).toEqual(['Got it.']);
   });
 
+  it('stores a llama answer with the reasoning the model streamed beside it', async () => {
+    d = await launchGeneration();
+    d.useAppStore.getState().updateSettings({ thinkingEnabled: true });
+    d.boundary.llama!.scriptCompletion({ text: 'hello', reasoning: 'thinking' });
+
+    await d.generationService.generateResponse(d.conversationId, d.ask('hi'));
+
+    const [answer] = d.answers();
+    expect(answer.content).toBe('hello');
+    expect(answer.reasoningContent).toBe('thinking');
+    expect(d.useChatStore.getState().streamingForConversationId).toBeNull();
+  });
 });

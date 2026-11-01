@@ -1,9 +1,6 @@
 jest.mock('react-native-device-info', () =>
   require('../../helpers/mockNetworkDeps').deviceInfoMock,
 );
-jest.mock('../../../src/utils/logger', () =>
-  require('../../helpers/mockNetworkDeps').loggerMock,
-);
 
 import { getIpAddress } from 'react-native-device-info';
 import {

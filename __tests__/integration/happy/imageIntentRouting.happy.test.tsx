@@ -9,12 +9,8 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 import { createONNXImageModel } from '../../utils/factories';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 // The image model is DOWNLOADED (boundary) + ACTIVE. Activating it in AUTO mode (without changing the image
 // mode) is a user's image-picker selection — that picker is behind the Home model-manager modal, which is
@@ -29,7 +25,7 @@ async function withImageModel(h: Awaited<ReturnType<typeof setupChatScreen>>) {
 
 describe('happy — prompt routing picks the right model (heavy entry point)', () => {
   it('a "draw ..." prompt routes to the image model (image generated)', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' });
     await withImageModel(h);
     h.render();
 
@@ -40,7 +36,7 @@ describe('happy — prompt routing picks the right model (heavy entry point)', (
   });
 
   it('a prompt-style description ("a red fox in fresh snow at dawn, photo") routes to the image model, not a text answer', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' });
     await withImageModel(h);
     h.render();
 
@@ -51,7 +47,7 @@ describe('happy — prompt routing picks the right model (heavy entry point)', (
   });
 
   it('control: a normal prompt routes to the text model (no image generated)', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'ios' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' });
     await withImageModel(h);
     h.render();
 
