@@ -327,9 +327,16 @@ export interface PodcastOptions {
    * one part per real story). Skips planning, and keeps parts short when a source is thin so
    * the model does not fill gaps with invented detail.
    */
-  outline?: { topic: string; sources: Source[] }[];
+  outline?: { topic: string; sources: Source[]; always?: boolean }[];
   /** Outline mode: script lines to aim for per item, to reach the chosen length. */
   linesPerItem?: number;
+  /**
+   * Outline mode: spoken words the episode should reach. Items are written in order until the script really has that many
+   * words (the last one written gets the goodbye), so a long outline is cut short and a thin one is not padded. Items left
+   * over are simply not used; `onItemsUsed` says how many were.
+   */
+  targetWords?: number;
+  onItemsUsed?: (count: number) => void;
   /** Outline mode: a rule every part must follow (e.g. topics never to bring up). */
   rules?: string;
   /** Outline mode: who speaks in each part (e.g. the anchor and that topic's expert). */
@@ -444,34 +451,48 @@ export const outlineLines = (sources: Source[]) =>
   Math.max(3, Math.min(8, Math.round(sources.reduce((n, x) => n + x.text.length, 0) / 180)));
 
 async function writeOutlinedEpisode(
-  outline: { topic: string; sources: Source[] }[], opts: PodcastOptions,
+  outline: { topic: string; sources: Source[]; always?: boolean }[], opts: PodcastOptions,
   cfg: { cast: string; fmt: string; style: string; hosts: number }, onStep: (m: string) => void,
 ): Promise<StudyResult> {
   const title = opts.title || opts.prompt || 'Episode';
   const lines: PodcastLine[] = [];
   const all: Source[] = [];
+  const wordCount = () => lines.reduce((n, l) => n + l.text.split(/\s+/).filter(Boolean).length, 0);
+  let used = 0;
+  let finished = false;
   for (let i = 0; i < outline.length; i++) {
     if (opts.shouldStop?.() && lines.length >= 4) break;
+    // Once the length is reached only the items marked `always` (a fun fact) are still written.
+    if (finished && !outline[i].always) continue;
     onStep(`Writing part ${i + 1} of ${outline.length}: ${outline[i].topic.slice(0, 60)}...`);
     const part = outline[i];
     part.sources.forEach((x) => all.push(x));
-    const where = outline.length === 1 ? 'This is the WHOLE episode: welcome listeners, cover it, then say goodbye.'
-      : i === 0 ? 'This is the START: A welcomes listeners and names the episode, then covers this item.'
-        : i === outline.length - 1 ? 'This is the LAST item: cover it, then a one-line wrap-up and goodbye.'
-          : 'Move on to this item with a short natural transition.';
-    const recap = lines.slice(-3).map((l) => `${l.host}: ${l.text}`).join('\n');
     // Never more lines than the source can fill (no padding), but as many as the chosen length needs.
     const n = opts.linesPerItem ? Math.min(opts.linesPerItem, Math.max(4, Math.round(part.sources.reduce((k, x) => k + x.text.length, 0) / 80))) : outlineLines(part.sources);
+    // With a word target, this is the last item once it should bring the script to the target (or when none are left).
+    const reaches = !!opts.targetWords && wordCount() + n * 18 >= opts.targetWords;
+    const alwaysAfter = outline.slice(i + 1).some((o) => o.always);
+    const last = i === outline.length - 1 || ((reaches || finished) && !alwaysAfter);
+    const where = last && i === 0 ? 'This is the WHOLE episode: welcome listeners, cover it, then say goodbye.'
+      : i === 0 ? 'This is the START: A welcomes listeners and names the episode, then covers this item.'
+        : last ? 'This is the LAST item: cover it, then a one-line wrap-up and goodbye.'
+          : 'Move on to this item with a short natural transition.';
+    const recap = lines.slice(-3).map((l) => `${l.host}: ${l.text}`).join('\n');
+    const covered = outline.slice(0, i).map((o) => `- ${o.topic.slice(0, 90)}`).join('\n');
     // With a length to reach, ask for about n lines (the hosts may explain why the story
     // matters, from the source); otherwise at most n.
     const howMany = opts.linesPerItem ? `Write about ${n} lines (no fewer than ${Math.max(3, n - 2)}), each 1-2 sentences` : `Write at most ${n} lines (each 1-2 sentences)`;
     const cast = opts.castFor?.(i) ?? cfg.cast;
     const t = await ask(
       'You write natural spoken scripts from sources. Say ONLY what the sources say: never add names, numbers, dates, places or quotes that are not in them. If the source gives few details, the hosts may say why it matters, using only what the source says. Never mention source numbers.',
-      `SOURCES:\n${sourceBlock(part.sources)}\n\nEpisode: "${title}". Style: ${cfg.style}. Cast: ${cast}.\nThis item: ${part.topic}\n${where}\n${recap ? `Last lines so far:\n${recap}\n` : ''}${opts.rules ? `${opts.rules}\n` : ''}${howMany}, exactly in this format:\n${cfg.fmt}`,
+      `SOURCES:\n${sourceBlock(part.sources)}\n\nEpisode: "${title}". Style: ${cfg.style}. Cast: ${cast}.\nThis item: ${part.topic}\n${where}\n${recap ? `Last lines so far:\n${recap}\n` : ''}${covered ? `Already covered (do not repeat or retell these):\n${covered}\n` : ''}${opts.rules ? `${opts.rules}\n` : ''}${howMany}, exactly in this format:\n${cfg.fmt}`,
     );
     lines.push(...parseLines(t, cfg.hosts).slice(0, n + 2));
+    if (!part.always) used++;
+    if (reaches) finished = true;
+    if (last) break;
   }
+  opts.onItemsUsed?.(used);
   if (lines.length < 2) throw new Error('The model did not write the script in the expected format. Try again or use a bigger model.');
   return { kind: 'podcast', createdAt: Date.now(), topic: opts.prompt, title, sources: all.slice(0, 60), podcast: lines, hosts: cfg.hosts };
 }

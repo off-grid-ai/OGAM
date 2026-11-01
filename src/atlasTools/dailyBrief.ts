@@ -7,8 +7,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Source, StudyResult, useStudyStore, writeEpisode } from '../study/engine';
-import { WORDS_PER_MINUTE, avoided, cleanHeadlines, feedsFor, isPromotional, linesPerStory, onTopic, pickStories, similarity, splitOutlet, spokenMinutes, storyBudget, storyWords, type Headline } from './newsSources';
+import { Source, StudyResult, askModel, useStudyStore, writeEpisode } from '../study/engine';
+import { WORDS_PER_MINUTE, avoided, cleanHeadlines, feedsFor, isPromotional, linesPerStory, onTopic, parseScreenReply, pickStories, screenPrompt, similarity, splitOutlet, spokenMinutes, storyBudget, type Headline } from './newsSources';
 
 export const BRIEF_PROJECT = 'daily-brief';
 
@@ -143,7 +143,7 @@ async function libraryFacts(topic: string, startN: number): Promise<Source[]> {
   } catch { return []; }
 }
 
-type OutlineItem = { topic: string; sources: Source[] };
+type OutlineItem = { topic: string; sources: Source[]; always?: boolean };
 
 function storyHeader(h: Headline): string {
   const when = h.date ? new Date(h.date).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
@@ -168,13 +168,31 @@ async function libraryItems(interests: string[], withNews: boolean, firstN: numb
     const facts = await libraryFacts(topic, n);
     if (!facts.length) continue;
     n += facts.length;
-    out.push({ topic: withNews ? `A fun fact about ${topic} from the offline library` : `From the offline library: ${topic}`, sources: facts });
+    out.push({ topic: withNews ? `A fun fact about ${topic} from the offline library` : `From the offline library: ${topic}`, sources: facts, always: true });
     if (withNews) break;
   }
   return out;
 }
 
 type Picked = { interest: number; headline: Headline };
+
+/**
+ * Word lists miss stories ("Chiefs beat Bills" never says sports), so the AI on the phone also reads the headlines and names
+ * the ones about a topic the listener wants left out. Returns the positions to drop; if the AI cannot be asked, the word
+ * lists alone have to do.
+ */
+export async function aiScreen(titles: string[], avoid: string[]): Promise<Set<number>> {
+  if (!avoid.length || !titles.length) return new Set();
+  const drop = new Set<number>();
+  try {
+    for (let from = 0; from < titles.length; from += 25) {
+      const batch = titles.slice(from, from + 25);
+      const { system, user } = screenPrompt(batch, avoid);
+      parseScreenReply(await askModel(system, user), batch.length).forEach((i) => drop.add(from + i));
+    }
+  } catch { /* the word lists already ran */ }
+  return drop;
+}
 
 /**
  * Real headlines for each interest (top-story sections for broad ones), no ads, press
@@ -194,27 +212,48 @@ async function gatherStories(o: { interests: string[]; minutes: number; deep: bo
     perInterest.push(hs);
     hs.forEach((h) => seen.push(h.title));
   }
+  if (avoid.length) {
+    onStep('Checking the headlines against your topics to avoid...');
+    const flat = perInterest.flatMap((list, interest) => list.map((h) => ({ interest, h })));
+    const dropped = await aiScreen(flat.map(({ h }) => h.title), avoid);
+    const gone = new Set([...dropped].map((i) => flat[i].h));
+    perInterest.forEach((list, k) => { perInterest[k] = list.filter((h) => !gone.has(h)); });
+  }
   const outline: OutlineItem[] = [];
   const stories: Picked[] = [];
-  let words = 0;
+  // A few more than the length needs are read, so the script can keep going until it really reaches the length.
+  const want = Math.min(24, budget + 4);
   for (const pick of pickStories(perInterest, Math.min(30, budget * 2))) {
-    if (stories.length >= budget && words >= minutes * WORDS_PER_MINUTE) break;
+    if (stories.length >= want) break;
+    // The same event under another outlet's wording is one card, not two.
+    if (stories.some((x) => similarity(x.headline.title, pick.headline.title) >= 0.5 || (!!x.headline.url && x.headline.url === pick.headline.url))) continue;
     onStep(`Reading story ${stories.length + 1}: ${pick.headline.title.slice(0, 50)}...`);
     const item = await storyItem({ h: pick.headline, interest: interests[pick.interest], deep, n: outline.length + 1 });
     outline.push(item);
     stories.push(pick);
-    words += storyWords(item.sources.reduce((n, x) => n + x.text.length, 0), 12);
   }
   return { outline, stories };
 }
 
+function offGridNow(): boolean { try { return require('./offGrid').offGridOn(); } catch { return false; } }
+
+/** The interests to cover: those that are not themselves something to avoid (by word lists, then by asking the AI). */
+async function wantedInterests(all: string[], avoid: string[]): Promise<string[]> {
+  const byWords = all.filter((i) => !avoided({ title: i, desc: '' }, avoid));
+  const byAi = avoid.length && !offGridNow() ? await aiScreen(byWords, avoid) : new Set<number>();
+  const wanted = byWords.filter((_, k) => !byAi.has(k));
+  return wanted.length ? wanted : ['world news'];
+}
+
+const NO_WELCOME = 'Do not say "welcome to the daily briefing" or name the show. Open with one short greeting and today\'s date, then go straight into the first story, and move between stories with a few words.';
+/** Rules every part of the briefing must follow. */
+const briefingRules = (avoid: string[], gotNews: boolean): string | undefined =>
+  [avoid.length ? `Never bring up: ${avoid.join(', ')}.` : '', gotNews ? NO_WELCOME : ''].filter(Boolean).join(' ') || undefined;
+
 /** Builds today's briefing from real, current stories and saves it. */
 export async function makeBriefing(onStep: (m: string) => void, voicesAvailable: number): Promise<StudyResult> {
   const p = useBriefPrefs.getState();
-  const avoidList = p.avoid ?? [];
-  // An interest that is itself something to avoid is left out.
-  const wanted = p.interests.filter((i) => !avoided({ title: i, desc: '' }, avoidList));
-  const interests = wanted.length ? wanted : ['world news'];
+  const interests = await wantedInterests(p.interests, p.avoid ?? []);
   let offline = false;
   try { offline = require('./offGrid').offGridOn(); } catch { /* ignore */ }
 
@@ -235,9 +274,9 @@ export async function makeBriefing(onStep: (m: string) => void, voicesAvailable:
   }
 
   const date = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-  const noWelcome = 'Do not say "welcome to the daily briefing" or name the show. Open with one short greeting and today\'s date, then go straight into the first story, and move between stories with a few words.';
-  const rules = [avoid.length ? `Never bring up: ${avoid.join(', ')}.` : '', gotNews ? noWelcome : ''].filter(Boolean).join(' ') || undefined;
+  const rules = briefingRules(avoid, gotNews);
   const withExperts = p.experts && gotNews && voicesAvailable >= 2;
+  let usedStories = stories.length;
   const r = await writeEpisode([], {
     title: `${gotNews ? 'Daily briefing' : 'Offline edition'} - ${date}`,
     prompt: gotNews
@@ -252,10 +291,12 @@ export async function makeBriefing(onStep: (m: string) => void, voicesAvailable:
     funFacts: false,
     outline,
     // Enough lines per story that the stories add up to the length the user picked.
-    linesPerItem: linesPerStory(p.minutes, Math.max(1, outline.length)),
+    linesPerItem: linesPerStory(p.minutes, storyBudget(p.minutes, p.deep)),
+    targetWords: p.minutes * WORDS_PER_MINUTE,
+    onItemsUsed: (count) => { usedStories = count; },
   }, onStep);
   r.minutes = Math.max(1, Math.round(spokenMinutes((r.podcast ?? []).map((l) => l.text))));
-  r.headlines = stories.map(({ interest, headline: h }, i) => ({
+  r.headlines = stories.slice(0, usedStories).map(({ interest, headline: h }, i) => ({
     title: h.title, source: h.source, date: h.date, interest: interests[interest], url: outline[i]?.sources[0]?.url || h.url,
   }));
   useStudyStore.getState().add(BRIEF_PROJECT, r);

@@ -144,3 +144,19 @@ describe('avoiding sports', () => {
     expect(avoided(h('Scientists find water on Mars'), ['sports'])).toBe(false);
   });
 });
+
+describe('AI screening of headlines', () => {
+  it('reads the numbers the AI names, ignoring anything else', () => {
+    const { parseScreenReply } = require('../../../src/atlasTools/newsSources');
+    expect([...parseScreenReply('1, 3 and 9', 4)]).toEqual([0, 2]);
+    expect([...parseScreenReply('NONE', 4)]).toEqual([]);
+    expect([...parseScreenReply('Headlines 2 (a game recap), 0, 7', 5)]).toEqual([1]);
+  });
+  it('asks about the topics to avoid and lists every headline by number', () => {
+    const { screenPrompt } = require('../../../src/atlasTools/newsSources');
+    const { user } = screenPrompt(['Bears win', 'Mars water found'], ['sports']);
+    expect(user).toContain('sports');
+    expect(user).toContain('1. Bears win');
+    expect(user).toContain('2. Mars water found');
+  });
+});

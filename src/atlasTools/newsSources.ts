@@ -201,3 +201,22 @@ export function pickStories(perInterest: Headline[][], budget: number): { intere
   }
   return picked;
 }
+
+/** The question put to the AI: which of these numbered headlines are about a topic the listener wants left out. */
+export function screenPrompt(headlines: string[], avoid: string[]): { system: string; user: string } {
+  return {
+    system: 'You screen news headlines for a listener. Answer only with numbers.',
+    user: `The listener does NOT want any story about: ${avoid.join(', ')}.\nBe strict. A story counts if it is about the topic in any way, even when the word is never used (for sports: any team, player, coach, game, score, league, transfer or season; for politics: any politician, party, election or government fight).\n\nHeadlines:\n${headlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}\n\nReply with the numbers of the headlines to LEFT OUT, separated by commas, or NONE.`,
+  };
+}
+
+/** The zero-based positions the AI said to leave out (ignores anything that is not a valid number). */
+export function parseScreenReply(reply: string, count: number): Set<number> {
+  const out = new Set<number>();
+  if (/^\s*none\b/i.test(reply)) return out;
+  for (const m of reply.matchAll(/\d+/g)) {
+    const n = Number(m[0]);
+    if (n >= 1 && n <= count) out.add(n - 1);
+  }
+  return out;
+}
