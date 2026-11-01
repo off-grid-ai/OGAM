@@ -33,7 +33,11 @@ export interface ImproveNavigator {
 }
 
 const native: ScribeEntryNative | undefined = NativeModules.ScribeEntryModule;
-const IMPROVE_URL = 'offgrid://improve';
+/**
+ * The Share extension opens `<this app's bundle id>://improve`, so with several builds installed
+ * (dev, release) it opens the one it belongs to. `offgrid://improve` still works.
+ */
+const IMPROVE_URL = /^[a-z][a-z0-9+.-]*:\/\/improve(?:[/?#]|$)/i;
 let current: string | null = null;
 let navigator: ImproveNavigator | null = null;
 
@@ -64,7 +68,7 @@ export async function finishImprove(text: string | null): Promise<void> {
   );
 }
 
-/** Watch for requests: on start, when Android offers one, and when iOS opens offgrid://improve. */
+/** Watch for requests: on start, when Android offers one, and when iOS opens its improve link. */
 export function startScribeEntry(appNavigator: ImproveNavigator): () => void {
   if (!native) return () => undefined;
   navigator = appNavigator;
@@ -76,7 +80,7 @@ export function startScribeEntry(appNavigator: ImproveNavigator): () => void {
       if (state === 'active') open();
     }),
     Linking.addEventListener('url', ({ url }) => {
-      if (url.startsWith(IMPROVE_URL)) open();
+      if (IMPROVE_URL.test(url)) open();
     }),
   ];
   if (Platform.OS === 'android') {

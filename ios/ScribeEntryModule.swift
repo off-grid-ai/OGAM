@@ -3,12 +3,15 @@ import UIKit
 
 /**
  * JS side of Share -> Improve. The ImproveShare extension puts the shared text on a named
- * pasteboard only this team's apps can read (no paste prompt, no App Group) and opens
- * offgrid://improve. The app takes it once; the pick is copied, so `finish` has nothing to return.
+ * pasteboard only this team's apps can read (no paste prompt, no App Group), named after this
+ * app's bundle id, and opens `<bundle id>://improve`. The app takes it once; the pick is copied,
+ * so `finish` has nothing to return.
  */
 @objc(ScribeEntryModule)
 final class ScribeEntryModule: NSObject {
-  static let pasteboardName = UIPasteboard.Name("ai.offgridmobile.scribe.improve")
+  static let pasteboardName = UIPasteboard.Name(
+    "\(Bundle.main.bundleIdentifier ?? "ai.offgridmobile").scribe.improve"
+  )
 
   @objc static func requiresMainQueueSetup() -> Bool { false }
 

@@ -3,11 +3,17 @@ import UniformTypeIdentifiers
 
 /**
  * Share -> Improve. Takes the shared text, puts it on a named pasteboard only Off Grid AI reads,
- * and opens the app on offgrid://improve. The model runs in the app: an extension's memory limit is
- * far below what a text model needs.
+ * and opens the app on `<its bundle id>://improve`. Both are named after the app this extension
+ * ships in, so with a dev and a release build installed the text reaches the build it was shared
+ * to. The model runs in the app: an extension's memory limit is far below what a text model needs.
  */
 final class ShareViewController: UIViewController {
-  private static let pasteboardName = UIPasteboard.Name("ai.offgridmobile.scribe.improve")
+  /** The containing app's bundle id: this extension's, without its own last component. */
+  private static let appBundleId: String = {
+    let own = Bundle.main.bundleIdentifier ?? "ai.offgridmobile.ImproveShare"
+    return own.components(separatedBy: ".").dropLast().joined(separator: ".")
+  }()
+  private static let pasteboardName = UIPasteboard.Name("\(appBundleId).scribe.improve")
 
   override func viewDidLoad() {
     super.viewDidLoad()
@@ -19,7 +25,7 @@ final class ShareViewController: UIViewController {
         return
       }
       UIPasteboard(name: Self.pasteboardName, create: true)?.string = text
-      self.openApp(URL(string: "offgrid://improve")!)
+      self.openApp(URL(string: "\(Self.appBundleId)://improve")!)
       self.extensionContext?.completeRequest(returningItems: nil)
     }
   }
