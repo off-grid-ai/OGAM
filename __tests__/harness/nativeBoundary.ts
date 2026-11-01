@@ -767,6 +767,8 @@ function makeLlamaFake(
   };
 
   const module: Record<string, jest.Mock> = {
+    // The native libraries load here on device; nothing to load in node.
+    installJsi: jest.fn(async () => {}),
     loadLlamaModelInfo: jest.fn(async () => modelInfo ?? {}),
     toggleNativeLog: jest.fn(async (enabled: boolean) => {
       nativeLogOn = enabled;
