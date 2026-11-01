@@ -1,6 +1,5 @@
 {
   "__tests__/App.test.tsx": 13,
-  "__tests__/integration/audio/streamingPlayback.test.ts": 2,
   "__tests__/integration/audio/streamingStateMachine.test.ts": 3,
   "__tests__/integration/pro/companionTaskRouting.integration.test.ts": 1,
   "__tests__/integration/stores/tts.test.ts": 4,
