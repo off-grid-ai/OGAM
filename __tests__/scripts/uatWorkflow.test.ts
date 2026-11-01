@@ -1,7 +1,7 @@
 /**
  * The parallel mobile nightly (.github/workflows/uat-dev.yml).
  *
- * SPEC: a plan job pins the version and the commit; Android and iOS build in parallel from that commit;
+ * SPEC: a plan job pins the version; every job builds the run's own commit (github.sha); Android and iOS build in parallel;
  * each upload starts only once every build that runs has succeeded; finalize (commit, tag, GitHub
  * prerelease) starts only once every upload has. The plan reads the private shared repository's
  * origin/main, so its shared checkout keeps credentials.
@@ -21,7 +21,7 @@ const workflow = parse(fs.readFileSync(path.join(__dirname, '../../.github/workf
 const jobs = workflow.jobs;
 const needs = (name: string) => ([] as string[]).concat(jobs[name].needs ?? []);
 const checkouts = (job: Job) => job.steps.filter(step => step.uses?.startsWith('actions/checkout@'));
-const PINNED = '${{ needs.plan.outputs.sha }}';
+const PINNED = '${{ github.sha }}';
 
 it('the plan keeps credentials on the shared checkout it fetches with uat.sh --plan', () => {
   const plan = jobs.plan;
@@ -31,7 +31,7 @@ it('the plan keeps credentials on the shared checkout it fetches with uat.sh --p
   expect(shared[0].with?.['persist-credentials']).not.toBe(false);
 });
 
-it('every build, upload and finalize job checks out the commit the plan pinned', () => {
+it('every build, upload and finalize job checks out the run\'s own commit, the one the plan read', () => {
   const later = Object.keys(jobs).filter(name => name !== 'plan');
   expect(later.sort()).toEqual(['build-android', 'build-ios', 'finalize', 'upload-android', 'upload-ios']);
   for (const name of later) {
@@ -53,4 +53,23 @@ it('Android and iOS build in parallel, uploads wait for both builds, finalize wa
   expect(needs('finalize')).toEqual(expect.arrayContaining(['upload-android', 'upload-ios']));
   expect(jobs.finalize.if).toContain("!contains(needs.*.result, 'failure')");
   expect(jobs.finalize.steps.some(step => step.run?.includes('scripts/uat.sh --finalize'))).toBe(true);
+});
+
+it('each build saves node_modules before it builds, so native build output never enters the cache', () => {
+  for (const name of ['build-android', 'build-ios']) {
+    const steps = jobs[name].steps;
+    const save = steps.findIndex(step => step.uses?.startsWith('actions/cache/save@'));
+    const build = steps.findIndex(step => step.run?.includes('scripts/uat.sh --build-only'));
+    expect(save).toBeGreaterThan(-1);
+    expect(save).toBeLessThan(build);
+  }
+});
+
+it('the build caches are pinned by full commit SHA', () => {
+  const caching = Object.values(jobs)
+    .flatMap(job => job.steps)
+    .map(step => step.uses)
+    .filter((uses): uses is string => /^(actions\/cache|hendrikmuhs\/ccache-action|gradle\/actions)/.test(uses ?? ''));
+  expect(caching.length).toBeGreaterThan(0);
+  for (const uses of caching) expect(uses).toMatch(/@[0-9a-f]{40}$/);
 });
