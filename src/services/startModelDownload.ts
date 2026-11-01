@@ -116,6 +116,8 @@ export async function startModelDownload(
   // queued (letting the same model enqueue twice). The store is the single source of
   // truth all screens read; download.ts reconciles this placeholder id to the real
   // native downloadId via retryEntry once the start begins.
+  // A Cancel of that row before the start reaches the download queue must still win.
+  backgroundDownloadService.expectStart(modelKey);
   useDownloadStore.getState().add({
     modelKey,
     downloadId: queuedPlaceholderId(modelKey),
