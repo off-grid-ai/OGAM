@@ -23,9 +23,11 @@ import { runningLlamaBuild, setLoadedPackBuild } from './running';
  *     its test is dropped by the native store after two launches.
  */
 
-const MANIFEST_URL = 'https://mobile-runtime.getoffgridai.co/android/manifest.json';
-/** The ed25519 key off-grid-ai/llama.rn signs manifest.json with (raw 32 bytes, base64). */
-const PUBLIC_KEY = 'c4nGAstb9RSHmeFnP8n+4kEoR85a2V01N34jQKzl/iQ=';
+/** Where the signed manifest lives, and the ed25519 key the fork signs it with (raw 32 bytes, base64). */
+export const ENGINE_PACK_SOURCE = {
+  manifestUrl: 'https://mobile-runtime.getoffgridai.co/android/manifest.json',
+  publicKey: 'c4nGAstb9RSHmeFnP8n+4kEoR85a2V01N34jQKzl/iQ=',
+};
 const CHECK_EVERY_MS = 24 * 60 * 60 * 1000;
 const LAST_CHECK_KEY = '@enginePacks/lastCheck';
 const TEST_PROMPT = 'The capital of France is';
@@ -173,7 +175,7 @@ export interface ManifestSource {
  * whatever fails here, the engine that loaded keeps running.
  */
 export async function startEnginePacks(
-  { now = Date.now(), source = { manifestUrl: MANIFEST_URL, publicKey: PUBLIC_KEY } }: { now?: number; source?: ManifestSource } = {},
+  { now = Date.now(), source = ENGINE_PACK_SOURCE }: { now?: number; source?: ManifestSource } = {},
 ): Promise<void> {
   const engine = native();
   if (!engine) return;
