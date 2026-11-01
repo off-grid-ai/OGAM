@@ -427,6 +427,13 @@ The **Build Atlas voices** workflow ran successfully on 2026-10-19, so `kitten-n
 - **Appearance**: "Surprise me" picks a random background and accent; "Reset the look" returns to the default (keeps your chat layout).
 - Not verified on a device.
 
+## 8n. Briefing: avoid topics, length, repeats (0.0.118)
+
+- **Topics to avoid are checked by the AI**: after the word lists, the AI on the phone reads the candidate headlines (and your interests) and names the ones about a topic you avoid, even when no sports word appears. If it cannot be asked, the word lists still run.
+- **Length is reached for real**: stories are written one by one until the script truly has the chosen number of spoken words; the last story written gets the goodbye, extra stories read in advance are left out, and the fun fact (if on) is still included. Before, the length was only estimated from the amount of source text.
+- **No repeated cards**: two headlines about the same event (different outlets, different wording) or with the same link count as one, and each part is told which stories are already covered.
+- Not verified on a device.
+
 ## Build evidence and checks
 
 - New **Android unit tests** workflow runs the Kotlin/JVM tests (`:app:testDebugUnitTest`) on every push that
