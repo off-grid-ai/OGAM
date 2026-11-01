@@ -79,7 +79,9 @@ jobs:
           # stable-diffusion.cpp is read from GitHub's API; the token lifts the anonymous rate limit.
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          node scripts/update-engines.js --pods --summary "$RUNNER_TEMP/engines.md" | tee "$RUNNER_TEMP/engines.json"
+          # No pipe: a failed npm or pod install fails this step, before any PR is opened.
+          node scripts/update-engines.js --pods --summary "$RUNNER_TEMP/engines.md" > "$RUNNER_TEMP/engines.json"
+          cat "$RUNNER_TEMP/engines.json"
           git status --porcelain -- package.json package-lock.json ios/Podfile.lock android/app/build.gradle scripts/video/revision > "$RUNNER_TEMP/changed.txt"
           if [ -s "$RUNNER_TEMP/changed.txt" ]; then echo "changed=true" >> "$GITHUB_OUTPUT"; else echo "changed=false" >> "$GITHUB_OUTPUT"; fi
 

@@ -121,6 +121,8 @@ async function main() {
     }
   }
 
+  // npm and CocoaPods log to stderr here: stdout carries only the one JSON line the workflow reads.
+  const logToStderr = ['ignore', 2, 2];
   const bumps = results.filter(r => r.status === 'bump');
   if (!CHECK && bumps.length > 0) {
     for (const r of bumps) {
@@ -131,11 +133,11 @@ async function main() {
     }
     fs.writeFileSync(pkgFile, `${JSON.stringify(pkg, null, 2)}\n`);
     if (bumps.some(r => engines.ENGINES.find(e => e.id === r.id).source === 'npm')) {
-      execFileSync('npm', ['install', '--no-audit', '--no-fund'], { cwd: ROOT, stdio: 'inherit' });
+      execFileSync('npm', ['install', '--no-audit', '--no-fund'], { cwd: ROOT, stdio: logToStderr });
       if (PODS) {
         execFileSync('pod', ['install'], {
           cwd: path.join(ROOT, 'ios'),
-          stdio: 'inherit',
+          stdio: logToStderr,
           env: { ...process.env, LANG: 'en_US.UTF-8' },
         });
       }
