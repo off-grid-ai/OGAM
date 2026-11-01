@@ -411,12 +411,6 @@ describe('Pro mobile state sync journey', () => {
     fireEvent.press(ui.getByTestId('sync-open-sharing'));
     expect(ui.getByTestId('sync-sending-accordion')).toBeTruthy();
     expect(ui.getByTestId('sync-clipboard-toggle')).toBeTruthy();
-    // Writing (Scribe's learned words and style guides) is on by default, and its switch turns it off and on.
-    expect(ui.getByTestId('sync-writing-toggle').props.value).toBe(true);
-    fireEvent(ui.getByTestId('sync-writing-toggle'), 'valueChange', false);
-    await waitFor(() => expect(ui!.getByTestId('sync-writing-toggle').props.value).toBe(false));
-    fireEvent(ui.getByTestId('sync-writing-toggle'), 'valueChange', true);
-    await waitFor(() => expect(ui!.getByTestId('sync-writing-toggle').props.value).toBe(true));
     fireEvent.press(ui.getByTestId('ambient-open-settings'));
     fireEvent(
       ui.getByTestId('ambient-model-settings-toggle'),
@@ -424,6 +418,12 @@ describe('Pro mobile state sync journey', () => {
       true,
     );
     fireEvent.press(ui.getByTestId('app-sheet-close'));
+    // Writing (Scribe's learned words and style guides) is on by default, and its switch turns it off and on.
+    expect(ui.getByTestId('sync-writing-toggle').props.value).toBe(true);
+    fireEvent(ui.getByTestId('sync-writing-toggle'), 'valueChange', false);
+    await waitFor(() => expect(ui!.getByTestId('sync-writing-toggle').props.value).toBe(false));
+    fireEvent(ui.getByTestId('sync-writing-toggle'), 'valueChange', true);
+    await waitFor(() => expect(ui!.getByTestId('sync-writing-toggle').props.value).toBe(true));
 
     fireEvent.press(ui.getByLabelText('Back'));
     fireEvent.press(ui.getByLabelText('Back'));
