@@ -1,209 +1,211 @@
 /**
  * TranscriptionModelsTab tests
  *
- * The Models > Transcription Models tab (speech-to-text / Whisper). Now supports
- * MULTIPLE downloaded models (presentModelIds) with one active (downloadedModelId).
- * Verifies:
- *  - the built-in ggml catalogue renders as ModelCards + the privacy banner
- *  - tapping a not-present model downloads it via the whisper store
- *  - every on-disk (present) model shows as downloaded, not just the active one
- *  - tapping a present-but-inactive model SELECTS it (selectModel), no re-download
- *  - per-model delete calls deleteModelById
+ * The Models > Speech tab (speech-to-text / Whisper). It supports MULTIPLE downloaded models (every
+ * model file on disk) with one active. Verifies:
+ *  - the built-in catalogue renders as model cards + the privacy banner, with this phone's picks
+ *  - tapping a model that is not on the phone downloads it on the native downloader
+ *  - every on-disk model shows as downloaded, not just the active one
+ *  - tapping an on-disk but inactive model makes it the active one, with no new download
+ *  - per-model delete removes that model's file
+ *  - a download the native downloader failed is offered again; a running one is not
+ *  - a queued download reads as queued, not as 0%
+ *  - the tab re-reads the disk when it regains focus
+ *
+ * Real TranscriptionModelsTab, ModelCard, picks rule, whisper store, background download service and
+ * stores, on a real navigation stack, with the app root's real download listeners (useDownloadListeners)
+ * so native progress reaches the cards as in the app. Fakes only at the device boundary: the RAM sensor
+ * (a 12 GB Android phone), the native download module, the file system and the network (fetch).
  */
-import React from 'react';
-import { render, fireEvent, act, within } from '@testing-library/react-native';
+jest.unmock('@react-navigation/native');
 
-jest.mock('../../../src/services', () => ({
-  WHISPER_MODELS: [
-    { id: 'tiny.en', name: 'Tiny', size: 75, lang: 'en', url: 'https://x/ggml-tiny.en.bin', description: 'Fastest, English only' },
-    { id: 'small', name: 'Small', size: 466, lang: 'multi', url: 'https://x/ggml-small.bin', description: 'High accuracy, 99 languages' },
-  ],
-}));
+import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
 
-const mockWhisperActions = {
-  downloadModel: jest.fn(async () => {}),
-  selectModel: jest.fn(async () => {}),
-  deleteModel: jest.fn(),
-  deleteModelById: jest.fn(async () => {}),
-  refreshPresentModels: jest.fn(async () => {}),
-  clearError: jest.fn(),
-};
-let mockWhisperState: any;
-jest.mock('../../../src/stores', () => ({
-  useWhisperStore: () => mockWhisperState,
-  // The tab re-works its "For this phone" picks when the device RAM reading lands.
-  useAppStore: (selector: (s: any) => unknown) => selector({ deviceInfo: null }),
-}));
+const DIR = '/docs/whisper-models';
 
-jest.mock('../../../src/components', () => {
-  const { Text, TouchableOpacity } = require('react-native');
-  return {
-    ModelCard: ({ model, isDownloaded, isActive, isDownloading, isQueued, downloadBytes, onPress, onDownload, onDelete, testID }: any) => (
-      <TouchableOpacity testID={testID} onPress={onPress} disabled={!onPress}>
-        <Text testID={`${testID}-name`}>{model.name}</Text>
-        {isDownloaded && <Text testID={`${testID}-downloaded`}>downloaded</Text>}
-        {isActive && <Text testID={`${testID}-active`}>active</Text>}
-        {isDownloading && <Text testID={`${testID}-downloading`}>downloading</Text>}
-        {isQueued && <Text testID={`${testID}-queued`}>queued</Text>}
-        {downloadBytes && <Text testID={`${testID}-bytes`}>{`${downloadBytes.downloaded}/${downloadBytes.total}`}</Text>}
-        {onDownload && <TouchableOpacity testID={`${testID}-download`} onPress={onDownload}><Text>Download</Text></TouchableOpacity>}
-        {onDelete && <TouchableOpacity testID={`${testID}-delete`} onPress={onDelete}><Text>Delete</Text></TouchableOpacity>}
-      </TouchableOpacity>
+type Rtl = ReturnType<typeof requireRTL>;
+
+async function mount(opts: { onDisk?: string[] } = {}) {
+  const boundary = installNativeBoundary({
+    download: true,
+    fs: true,
+    ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB },
+  });
+  // No remote catalog and no Hugging Face answers: the bundled speech catalog is what the phone shows.
+  globalThis.fetch = (async () => new Response('[]', { status: 200 })) as typeof fetch;
+  const AsyncStorage =
+    require('@react-native-async-storage/async-storage').default ??
+    require('@react-native-async-storage/async-storage');
+  await AsyncStorage.clear();
+  for (const id of opts.onDisk ?? []) boundary.fs!.seedFile(`${DIR}/ggml-${id}.bin`, 200 * 1024 * 1024);
+  const { hardwareService } = require('../../../src/services/hardware');
+  await hardwareService.getDeviceInfo();
+
+  const React = require('react');
+  const rtl: Rtl = requireRTL();
+  const nav = require('@react-navigation/native');
+  const { createNativeStackNavigator } = require('@react-navigation/native-stack');
+  const { Text } = require('react-native');
+  const { TranscriptionModelsTab } = require('../../../src/screens/ModelsScreen/TranscriptionModelsTab');
+  const { useDownloadListeners } = require('../../../src/hooks/useDownloads');
+  const { useDownloadStore } = require('../../../src/stores/downloadStore');
+  const { useWhisperStore } = require('../../../src/stores/whisperStore');
+  const AppRoot = ({ children }: { children: unknown }) => {
+    useDownloadListeners();
+    return children;
+  };
+  const Stack = createNativeStackNavigator();
+  const ref = nav.createNavigationContainerRef();
+  const Other = () => React.createElement(Text, null, 'Download manager');
+  const view = rtl.render(
+    React.createElement(
+      AppRoot,
+      null,
+      React.createElement(
+        nav.NavigationContainer,
+        { ref },
+        React.createElement(
+          Stack.Navigator,
+          null,
+          React.createElement(Stack.Screen, { name: 'Speech', component: TranscriptionModelsTab }),
+          React.createElement(Stack.Screen, { name: 'DownloadManager', component: Other }),
+        ),
+      ),
     ),
-  };
-});
+  );
+  await rtl.waitFor(() => expect(view.getByTestId('speech-picks')).toBeTruthy());
+  return { boundary, rtl, view, ref, useDownloadStore, useWhisperStore };
+}
 
-const mockShowAlert = jest.fn((title: string, message: string, buttons: any[]) => ({
-  visible: true, title, message, buttons,
-}));
-jest.mock('../../../src/components/CustomAlert', () => {
-  const { View } = require('react-native');
-  return {
-    CustomAlert: () => <View testID="custom-alert" />,
-    showAlert: (...a: any[]) => mockShowAlert(...(a as [string, string, any[]])),
-    hideAlert: () => ({ visible: false }),
-    initialAlertState: { visible: false },
-  };
-});
-
-import { useFocusEffect } from '@react-navigation/native';
-import { TranscriptionModelsTab } from '../../../src/screens/ModelsScreen/TranscriptionModelsTab';
-// Real download store (NOT mocked) — the tab derives in-flight STT state from it.
-import { useDownloadStore } from '../../../src/stores/downloadStore';
-
-const seedSttDownload = (modelId: string, status: string, progress = 0) => {
-  useDownloadStore.setState({
-    downloads: {
-      [modelId]: {
-        modelKey: modelId, downloadId: `dl-${modelId}`, modelId: `whisper-${modelId}`,
-        fileName: `ggml-${modelId}.bin`, quantization: '', modelType: 'stt',
-        status, bytesDownloaded: 0, totalBytes: 100, combinedTotalBytes: 100,
-        progress, createdAt: 0,
-      } as any,
-    },
+const settle = async (rtl: Rtl) => {
+  await rtl.act(async () => {
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise(resolve => setTimeout(resolve, 0));
   });
 };
 
 describe('TranscriptionModelsTab', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    useDownloadStore.setState({ downloads: {} });
-    mockWhisperState = {
-      downloadedModelId: null,
-      presentModelIds: [],
-      downloadProgressById: {},
-      error: null,
-      ...mockWhisperActions,
-    };
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
   });
 
-  it('renders the built-in whisper catalogue and privacy banner', () => {
-    const { getByTestId, getByText, queryByTestId } = render(<TranscriptionModelsTab />);
-    expect(getByTestId('transcription-model-card-0-name')).toHaveTextContent('Tiny');
-    // The one multilingual model is this phone's pick: it shows once, in the picks row, and the
-    // list leaves it out.
-    expect(within(getByTestId('pick-best')).getByText('Small')).toBeTruthy();
-    expect(queryByTestId('transcription-model-card-1')).toBeNull();
-    expect(getByText(/audio is never sent anywhere/)).toBeTruthy();
+  it('shows the speech catalogue, this phone\'s picks and the privacy banner', async () => {
+    const { rtl, view } = await mount();
+
+    expect(rtl.within(view.getByTestId('transcription-model-card-0')).getByText('Tiny')).toBeTruthy();
+    expect(rtl.within(view.getByTestId('pick-fast')).getByText('Tiny')).toBeTruthy();
+    expect(rtl.within(view.getByTestId('pick-balanced')).getByText('Small')).toBeTruthy();
+    expect(rtl.within(view.getByTestId('pick-best')).getByText('Large v3')).toBeTruthy();
+    // A pick shows once, in the picks row; the list leaves that model out.
+    expect(view.queryByTestId('transcription-model-card-6')).toBeNull();
+    expect(view.getByText(/audio is never sent anywhere/)).toBeTruthy();
   });
 
-  it('downloads a not-present model when its card is tapped', () => {
-    const { getByTestId } = render(<TranscriptionModelsTab />);
-    fireEvent.press(getByTestId('transcription-model-card-0'));
-    expect(mockWhisperActions.downloadModel).toHaveBeenCalledWith('tiny.en');
-    expect(mockWhisperActions.selectModel).not.toHaveBeenCalled();
+  it('tapping a model that is not on the phone downloads it, and the card shows the transfer', async () => {
+    const { boundary, rtl, view } = await mount();
+    expect(boundary.download!.active()).toHaveLength(0);
+
+    rtl.fireEvent.press(view.getByTestId('transcription-model-card-0'));
+
+    await rtl.waitFor(() => expect(boundary.download!.active().map(row => row.fileName)).toEqual(['ggml-tiny.en.bin']));
+    await rtl.waitFor(() => expect(view.queryByTestId('transcription-model-card-0-download')).toBeNull());
+    expect(view.getByTestId('transcription-model-card-0-cancel')).toBeTruthy();
   });
 
-  it('marks every on-disk model as downloaded, and the active one as active', () => {
-    // Both models present on disk; only `small` is the active/selected one.
-    mockWhisperState.presentModelIds = ['tiny.en', 'small'];
-    mockWhisperState.downloadedModelId = 'small';
-    const { getByTestId, queryByTestId } = render(<TranscriptionModelsTab />);
-    // Both show as downloaded...
-    expect(getByTestId('transcription-model-card-0-downloaded')).toBeTruthy();
-    // (`small` is this phone's pick, so it shows in the picks row: on disk + active = "In use".)
-    expect(queryByTestId('pick-best-download')).toBeNull();
-    // ...but only `small` is active.
-    expect(queryByTestId('transcription-model-card-0-active')).toBeNull();
-    expect(getByTestId('pick-best-active')).toBeTruthy();
+  it('marks every model on disk as downloaded; using one makes it the active pick without a download', async () => {
+    const { boundary, rtl, view } = await mount({ onDisk: ['tiny.en', 'small'] });
+
+    await rtl.waitFor(() => expect(view.getByTestId('transcription-model-card-0-delete')).toBeTruthy());
+    expect(view.queryByTestId('transcription-model-card-0-download')).toBeNull();
+    expect(view.queryByTestId('pick-balanced-download')).toBeNull();
+    expect(view.getByTestId('pick-balanced-select')).toBeTruthy();
+
+    rtl.fireEvent.press(view.getByTestId('pick-balanced-select'));
+
+    await rtl.waitFor(() => expect(view.getByTestId('pick-balanced-active')).toBeTruthy());
+    expect(view.queryByTestId('pick-balanced-select')).toBeNull();
+    expect(boundary.download!.active()).toHaveLength(0);
   });
 
-  it('selects a present-but-inactive model without re-downloading', () => {
-    // `tiny.en` is on disk but `small` is the active one.
-    mockWhisperState.presentModelIds = ['tiny.en', 'small'];
-    mockWhisperState.downloadedModelId = 'small';
-    const { getByTestId } = render(<TranscriptionModelsTab />);
-    fireEvent.press(getByTestId('transcription-model-card-0'));
-    expect(mockWhisperActions.selectModel).toHaveBeenCalledWith('tiny.en');
-    expect(mockWhisperActions.downloadModel).not.toHaveBeenCalled();
+  it('tapping an on-disk but inactive card makes it the active model, with no download', async () => {
+    const { boundary, rtl, view, useWhisperStore } = await mount({ onDisk: ['tiny.en', 'small'] });
+    await rtl.waitFor(() => expect(view.getByTestId('pick-balanced-select')).toBeTruthy());
+    rtl.fireEvent.press(view.getByTestId('pick-balanced-select'));
+    await rtl.waitFor(() => expect(view.getByTestId('pick-balanced-active')).toBeTruthy());
+
+    rtl.fireEvent.press(view.getByTestId('transcription-model-card-0'));
+
+    await rtl.waitFor(() => expect(view.getByTestId('pick-balanced-select')).toBeTruthy());
+    expect(useWhisperStore.getState().downloadedModelId).toBe('tiny.en');
+    expect(boundary.download!.active()).toHaveLength(0);
   });
 
-  it('offers no download or select for the already-active model', () => {
-    mockWhisperState.presentModelIds = ['small'];
-    mockWhisperState.downloadedModelId = 'small';
-    const { getByTestId, queryByTestId } = render(<TranscriptionModelsTab />);
-    // The active pick offers no action: no download, no select.
-    expect(getByTestId('pick-best-active')).toBeTruthy();
-    expect(queryByTestId('pick-best-download')).toBeNull();
-    expect(queryByTestId('pick-best-select')).toBeNull();
-    expect(mockWhisperActions.selectModel).not.toHaveBeenCalled();
-    expect(mockWhisperActions.downloadModel).not.toHaveBeenCalled();
+  it('the active model offers no download and no Use', async () => {
+    const { rtl, view } = await mount({ onDisk: ['small'] });
+    await rtl.waitFor(() => expect(view.getByTestId('pick-balanced-select')).toBeTruthy());
+
+    rtl.fireEvent.press(view.getByTestId('pick-balanced-select'));
+
+    await rtl.waitFor(() => expect(view.getByTestId('pick-balanced-active')).toBeTruthy());
+    expect(view.queryByTestId('pick-balanced-download')).toBeNull();
+    expect(view.queryByTestId('pick-balanced-select')).toBeNull();
   });
 
-  it('deletes a specific present model via per-model delete', () => {
-    mockWhisperState.presentModelIds = ['tiny.en'];
-    const { getByTestId } = render(<TranscriptionModelsTab />);
-    // Per-model delete is only offered for present models.
-    fireEvent.press(getByTestId('transcription-model-card-0-delete'));
-    // Delete is confirmed via CustomAlert; press the destructive button.
-    const remove = (mockShowAlert.mock.results.at(-1)?.value.buttons ?? []).find(
-      (b: any) => b.style === 'destructive',
-    );
-    act(() => remove.onPress());
-    expect(mockWhisperActions.deleteModelById).toHaveBeenCalledWith('tiny.en');
+  it('per-model delete asks first, then removes that model\'s file', async () => {
+    const { boundary, rtl, view } = await mount({ onDisk: ['tiny.en'] });
+    await rtl.waitFor(() => expect(view.getByTestId('transcription-model-card-0-delete')).toBeTruthy());
+
+    rtl.fireEvent.press(view.getByTestId('transcription-model-card-0-delete'));
+    expect(view.getByText('Remove Transcription Model')).toBeTruthy();
+    await rtl.act(async () => { rtl.fireEvent.press(view.getByText('Remove')); });
+
+    await rtl.waitFor(() => expect(view.getByTestId('transcription-model-card-0-download')).toBeTruthy());
+    expect(await boundary.fs!.module.exists(`${DIR}/ggml-tiny.en.bin`)).toBe(false);
   });
 
-  it('shows a model as downloadable (not stuck downloading) when its STT download FAILED in the download store', () => {
-    // The bug: the Download Manager marked the STT download failed, but this tab kept
-    // showing progress. Deriving from the canonical store, a failed entry is not active.
-    seedSttDownload('tiny.en', 'failed', 0.4);
-    const { getByTestId } = render(<TranscriptionModelsTab />);
-    // Not stuck "downloading" → the download affordance is offered again.
-    fireEvent.press(getByTestId('transcription-model-card-0-download'));
-    expect(mockWhisperActions.downloadModel).toHaveBeenCalledWith('tiny.en');
+  it('a download the native downloader failed is offered again, not stuck downloading', async () => {
+    const { boundary, rtl, view } = await mount();
+    rtl.fireEvent.press(view.getByTestId('transcription-model-card-0'));
+    await rtl.waitFor(() => expect(boundary.download!.active()).toHaveLength(1));
+    await rtl.waitFor(() => expect(view.queryByTestId('transcription-model-card-0-download')).toBeNull());
+    const row = boundary.download!.active()[0];
+
+    await rtl.act(async () => {
+      boundary.download!.events.emit('DownloadError', { downloadId: row.downloadId, status: 'failed', reason: 'Network lost' });
+    });
+    await settle(rtl);
+
+    await rtl.waitFor(() => expect(view.getByTestId('transcription-model-card-0-download')).toBeTruthy());
   });
 
-  it('treats an active STT download-store entry as downloading (no re-download affordance)', () => {
-    seedSttDownload('tiny.en', 'running', 0.6);
-    const { queryByTestId } = render(<TranscriptionModelsTab />);
-    // Downloading → no download button and the card is not tappable to re-download.
-    expect(queryByTestId('transcription-model-card-0-download')).toBeNull();
+  it('a queued download reads as queued, not as 0%', async () => {
+    const { rtl, view, useDownloadStore } = await mount();
+
+    // The background download service registers a download waiting for a slot.
+    rtl.act(() => {
+      useDownloadStore.getState().add({
+        modelKey: 'whisper-tiny.en', downloadId: 'dl-whisper-tiny.en', modelId: 'whisper-tiny.en',
+        fileName: 'ggml-tiny.en.bin', quantization: '', modelType: 'stt', status: 'pending',
+        bytesDownloaded: 0, totalBytes: 75 * 1024 * 1024, combinedTotalBytes: 75 * 1024 * 1024, progress: 0, createdAt: 0,
+      });
+    });
+
+    await rtl.waitFor(() => expect(rtl.within(view.getByTestId('transcription-model-card-0')).getByText(/Queued/)).toBeTruthy());
+    expect(rtl.within(view.getByTestId('transcription-model-card-0')).queryByText('0%')).toBeNull();
+    expect(view.queryByTestId('transcription-model-card-0-download')).toBeNull();
   });
 
-  it('shows a QUEUED (pending) STT download as Queued, not as a 0% download', () => {
-    // The bug: a pending STT entry rendered "0%" instead of "Queued".
-    seedSttDownload('tiny.en', 'pending', 0);
-    const { getByTestId, queryByTestId } = render(<TranscriptionModelsTab />);
-    expect(getByTestId('transcription-model-card-0-queued')).toBeTruthy();
-    expect(queryByTestId('transcription-model-card-0-downloading')).toBeNull();
-    // Bytes are still surfaced ("0 B / size") so it matches the Text/Image cards.
-    expect(getByTestId('transcription-model-card-0-bytes')).toHaveTextContent(/^0\/\d+$/);
-  });
+  it('re-reads the disk when the tab regains focus', async () => {
+    const { boundary, rtl, view, ref } = await mount();
+    expect(view.getByTestId('transcription-model-card-0-download')).toBeTruthy();
 
-  // NOTE: the whisper-store FALLBACK cases moved to a real rendered test
-  // (__tests__/integration/models/whisperPickerCanonicalDownloadProgress.rendered.test.tsx). They
-  // used to seed the MOCKED store (mockWhisperState.downloadProgressById) and assert, but the
-  // derivation now lives in the useSttDownloadState owner which reads the REAL stores — a mock of
-  // our own store proves nothing there, so they're deleted rather than repaired (test doctrine).
+    rtl.act(() => { ref.navigate('DownloadManager'); });
+    // Meanwhile the model lands on disk (downloaded from the Download Manager).
+    boundary.fs!.seedFile(`${DIR}/ggml-tiny.en.bin`, 75 * 1024 * 1024);
+    rtl.act(() => { ref.goBack(); });
 
-  it('re-derives present models from disk when the screen regains focus', () => {
-    // Disk is the source of truth: returning from the Download Manager (where a
-    // model may have been downloaded or deleted) must re-probe, not show stale state.
-    let focusCb: (() => void) | undefined;
-    (useFocusEffect as jest.Mock).mockImplementation((cb: () => void) => { focusCb = cb; });
-    render(<TranscriptionModelsTab />);
-    mockWhisperActions.refreshPresentModels.mockClear(); // drop the mount-effect call
-    act(() => { focusCb?.(); });
-    expect(mockWhisperActions.refreshPresentModels).toHaveBeenCalledTimes(1);
+    await rtl.waitFor(() => expect(view.getByTestId('transcription-model-card-0-delete')).toBeTruthy());
+    expect(view.queryByTestId('transcription-model-card-0-download')).toBeNull();
   });
 });
