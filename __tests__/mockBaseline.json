@@ -15,8 +15,6 @@
   "__tests__/integration/chat/toolEmbeddingStaleDim.redflow.test.ts": 2,
   "__tests__/integration/chats/chatDeleteImageFailure.rendered.test.tsx": 1,
   "__tests__/integration/chats/chatScreenDeleteImageFailure.rendered.test.tsx": 1,
-  "__tests__/integration/chats/deleteChatDuringImageGeneration.rendered.test.tsx": 1,
-  "__tests__/integration/chats/deleteChatDuringPromptEnhancement.rendered.test.tsx": 1,
   "__tests__/integration/downloads/textRetryReissuesOnIosLostDownloadId.rendered.redflow.test.tsx": 1,
   "__tests__/integration/generation/engineParityRedflow.test.ts": 2,
   "__tests__/integration/generation/queuedSendFeedback.test.ts": 5,
