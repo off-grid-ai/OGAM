@@ -30,18 +30,8 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('../../harness/heldStorageRead').heldAsyncStorageModule(),
 );
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: (screen: string, params?: Record<string, unknown>) =>
-      require('../../harness/chatHarness').recordNavigation(screen, params),
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 type View = { queryAllByTestId: (id: RegExp) => unknown[] };
 const expectThread = (view: View, ...lines: string[]) =>
@@ -54,7 +44,7 @@ describe('happy — chat history survives a slow read at launch', () => {
 
   it('saved chats appear once the pending read lands, open with their turns, and are still listed after the next relaunch', async () => {
     // --- Launch 1: two chats ---
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     h.render();
     await h.send('first chat', { text: 'Answer one.' });
     await h.rtl.waitFor(() => expect(h.view!.queryByText(/Answer one\./)).not.toBeNull());
@@ -65,7 +55,7 @@ describe('happy — chat history survives a slow read at launch', () => {
     // --- Launch 2: the chat store's read is slow; the app boots and the user opens a new chat meanwhile ---
     await closeApp();
     holdNextReadOf(CHAT_STORE_KEY);
-    const slow = await setupChatScreen({ engine: 'llama', relaunched: true });
+    const slow = await setupChatScreen({ navigation: 'real', engine: 'llama', relaunched: true });
     slow.render();
     expect(heldReadCount()).toBe(1);
     // Before: the user is on the new chat they opened from Home.
@@ -74,7 +64,7 @@ describe('happy — chat history survives a slow read at launch', () => {
     const React = require('react');
     const { ChatsListScreen } = require('../../../src/screens/ChatsListScreen');
     // Before: the read has not landed, so the saved chats are not listed yet.
-    let list = slow.rtl.render(React.createElement(ChatsListScreen));
+    let list = slow.renderAside(React.createElement(ChatsListScreen));
     expect(list.queryByText('first chat')).toBeNull();
     expect(list.queryByText('second chat')).toBeNull();
     list.unmount();
@@ -84,7 +74,7 @@ describe('happy — chat history survives a slow read at launch', () => {
       releaseHeldRead();
       await slow.settle(50);
     });
-    list = slow.rtl.render(React.createElement(ChatsListScreen));
+    list = slow.renderAside(React.createElement(ChatsListScreen));
     await slow.rtl.waitFor(() => expect(list.getByText('first chat')).toBeTruthy());
     expect(list.getByText('second chat')).toBeTruthy();
     list.unmount();

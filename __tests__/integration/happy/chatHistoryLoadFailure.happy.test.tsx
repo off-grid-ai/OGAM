@@ -15,18 +15,8 @@ import {
   setupChatScreen,
 } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: (screen: string, params?: Record<string, unknown>) =>
-      require('../../harness/chatHarness').recordNavigation(screen, params),
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 type View = { queryAllByTestId: (id: RegExp) => unknown[] };
 const expectThread = (view: View, ...lines: string[]) =>
@@ -37,7 +27,7 @@ const expectThread = (view: View, ...lines: string[]) =>
 describe('happy — chat history is kept when a load fails', () => {
   it('a launch whose chat-store read fails keeps the saved chats: a chat made then is added, and a healthy relaunch lists all three', async () => {
     // --- Launch 1: two chats ---
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     h.render();
     await h.send('first chat', { text: 'Answer one.' });
     await h.rtl.waitFor(() => expect(h.view!.queryByText(/Answer one\./)).not.toBeNull());
@@ -47,7 +37,7 @@ describe('happy — chat history is kept when a load fails', () => {
 
     // --- Launch 2: the first read of the chat store fails; the user starts a new chat and sends ---
     await closeApp();
-    const failed = await setupChatScreen({ engine: 'llama', relaunched: true, failFirstReadOf: CHAT_STORE_KEY });
+    const failed = await setupChatScreen({ navigation: 'real', engine: 'llama', relaunched: true, failFirstReadOf: CHAT_STORE_KEY });
     failed.render();
     await failed.send('third chat', { text: 'Answer three.' });
     await failed.rtl.waitFor(() => expect(failed.view!.queryByText(/Answer three\./)).not.toBeNull());

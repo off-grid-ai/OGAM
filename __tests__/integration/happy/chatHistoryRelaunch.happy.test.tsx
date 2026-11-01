@@ -13,18 +13,8 @@ import {
   setupChatScreen,
 } from '../../harness/chatHarness';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: (screen: string, params?: Record<string, unknown>) =>
-      require('../../harness/chatHarness').recordNavigation(screen, params),
-    goBack: () => {},
-    setOptions: () => {},
-    addListener: () => () => {},
-  }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {},
-  useIsFocused: () => true,
-}));
+// Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
+jest.unmock('@react-navigation/native');
 
 type View = { queryAllByTestId: (id: RegExp) => unknown[] };
 const expectThread = (view: View, ...lines: string[]) =>
@@ -35,7 +25,7 @@ const expectThread = (view: View, ...lines: string[]) =>
 describe('happy — chat history survives a relaunch', () => {
   it('a chat with two answer versions reopens at 2/2 and Previous still works; a plain chat reopens in order with no switcher', async () => {
     // --- Launch 1: one chat with a resent answer, one plain chat ---
-    const h = await setupChatScreen({ engine: 'llama' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     h.render();
     const v = () => h.view!;
     await h.send('tell me a fact', { text: 'Honey never spoils.' });
