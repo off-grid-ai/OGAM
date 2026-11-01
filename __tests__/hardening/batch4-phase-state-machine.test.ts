@@ -9,79 +9,58 @@
  *
  * The existing integration suite asserts the DERIVED `isGenerating` boolean but
  * never the authoritative `phase` field itself — the single source of truth the
- * UI projects. This suite drives the REAL `imageGenerationService` (deleting it
- * would fail these tests) and asserts the ORDERED `phase` transitions directly.
- * Only genuine boundaries are mocked: the native ONNX generator, the model
- * loaders, and the LLM used for enhancement.
+ * UI projects. This suite drives the REAL `imageGenerationService`, localDreamGenerator,
+ * activeModelService and llmService (prompt enhancement) and asserts the ORDERED `phase`
+ * transitions directly. Only the phone is faked (generationDevice: the image-generation native
+ * module and its progress events, llama.rn, the disk, RAM).
  */
-import { useAppStore } from '../../src/stores/appStore';
-import {
-  imageGenerationService,
-  isInFlight,
-  type ImageGenPhase,
-} from '../../src/services/imageGenerationService';
-import { localDreamGeneratorService } from '../../src/services/localDreamGenerator';
-import { activeModelService } from '../../src/services/activeModelService';
-import { llmService } from '../../src/services/llm';
-import { resetStores, flushPromises } from '../utils/testHelpers';
-import { createONNXImageModel } from '../utils/factories';
+import { launchGeneration, type GenerationDevice } from '../harness/generationDevice';
+import { SD_MNN_PACKAGE_FILES } from '../harness/imageModelPackage';
+import type { ImageGenPhase } from '../../src/services/imageGenerationService';
 
-jest.mock('../../src/services/localDreamGenerator');
-jest.mock('../../src/services/activeModelService');
-jest.mock('../../src/services/llm');
+let device: GenerationDevice;
+let imageGenerationService: any;
+let isInFlight: (phase: ImageGenPhase) => boolean;
 
-const mockDream = localDreamGeneratorService as jest.Mocked<typeof localDreamGeneratorService>;
-const mockActive = activeModelService as jest.Mocked<typeof activeModelService>;
-const mockLlm = llmService as jest.Mocked<typeof llmService>;
+const appState = () => device.useAppStore.getState();
+const diffusion = () => device.boundary.diffusion;
+/** The native image engine reports a step of the running generation. */
+const nativeProgress = (step: number, totalSteps = 8) =>
+  device.boundary.litertEvents.emit('LocalDreamProgress', { step, totalSteps, progress: step / totalSteps });
+const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve)); };
 
 /** Record every distinct phase the service passes through, in order. */
 function trackPhases(): { phases: ImageGenPhase[]; stop: () => void } {
   const phases: ImageGenPhase[] = [];
-  const unsub = imageGenerationService.subscribe((s) => {
+  const unsub = imageGenerationService.subscribe((s: { phase: ImageGenPhase }) => {
     if (phases[phases.length - 1] !== s.phase) phases.push(s.phase);
   });
   return { phases, stop: unsub };
 }
 
-const setupModel = () => {
-  const model = createONNXImageModel({ id: 'img-1', modelPath: '/mock/img-model' });
-  useAppStore.setState({
-    downloadedImageModels: [model],
-    activeImageModelId: 'img-1',
-    generatedImages: [],
-    warmedImageModels: ['img-1'], // pre-warmed so the ~120s notice path is out of scope here
-    settings: { imageSteps: 8, imageGuidanceScale: 2, imageWidth: 256, imageHeight: 256, imageThreads: 4 } as any,
-  });
-  mockDream.getLoadedModelPath.mockResolvedValue(model.modelPath);
-  return model;
-};
-
-const OK_RESULT = {
-  id: 'r1', prompt: 'p', imagePath: '/mock/out.png', width: 256, height: 256,
-  steps: 8, seed: 1, modelId: 'img-1', createdAt: new Date().toISOString(),
-};
+/** A downloaded, already-warmed image model, selected for image generation. */
+async function setupModel(enhanceImagePrompts = false): Promise<void> {
+  const { modelManager } = require('../../src/services/modelManager');
+  const modelPath = `${modelManager.getImageModelsDirectory()}/img-1`;
+  for (const name of SD_MNN_PACKAGE_FILES) device.boundary.fs!.seedFile(`${modelPath}/${name}`, 1024 * 1024);
+  const model = { id: 'img-1', name: 'Image One', description: '', size: 500 * 1024 * 1024, modelPath, backend: 'mnn' };
+  await modelManager.addDownloadedImageModel(model);
+  appState().addDownloadedImageModel(model);
+  appState().setActiveImageModelId('img-1');
+  appState().markImageModelWarmed('img-1'); // pre-warmed so the ~120s notice path is out of scope here
+  appState().updateSettings({
+    imageSteps: 8, imageGuidanceScale: 2, imageWidth: 256, imageHeight: 256, imageThreads: 4, enhanceImagePrompts,
+  } as never);
+}
 
 beforeEach(async () => {
-  resetStores();
-  jest.clearAllMocks();
-  mockDream.isModelLoaded.mockResolvedValue(true);
-  mockDream.getLoadedModelPath.mockResolvedValue('/mock/img-model');
-  mockDream.getLoadedThreads.mockReturnValue(4);
-  mockDream.isAvailable.mockReturnValue(true);
-  mockDream.generateImage.mockResolvedValue(OK_RESULT as any);
-  mockDream.cancelGeneration.mockResolvedValue(true);
-  mockActive.loadImageModel.mockResolvedValue();
-  mockActive.loadTextModel.mockResolvedValue();
-  mockLlm.isModelLoaded.mockReturnValue(false);
-  mockLlm.isCurrentlyGenerating.mockReturnValue(false);
-  mockLlm.stopGeneration.mockResolvedValue();
-  await imageGenerationService.cancelGeneration().catch(() => {});
+  device = await launchGeneration({ engine: 'llama' });
+  ({ imageGenerationService, isInFlight } = require('../../src/services/imageGenerationService'));
 });
 
 describe('image-gen phase state machine — ordered transitions (cases 17, 18, 26)', () => {
   it('enhancement OFF: idle → loading → generating → done, never enters enhancing (case 26)', async () => {
-    setupModel();
-    useAppStore.setState({ settings: { ...useAppStore.getState().settings, enhanceImagePrompts: false } as any });
+    await setupModel(false);
 
     const { phases, stop } = trackPhases();
     await imageGenerationService.generateImage({ prompt: 'a red apple' });
@@ -99,19 +78,9 @@ describe('image-gen phase state machine — ordered transitions (cases 17, 18, 2
   });
 
   it('enhancement ON: passes through enhancing BEFORE loading/generating (cases 17, 18)', async () => {
-    setupModel();
-    useAppStore.setState({
-      activeModelId: 'text-1',
-      settings: { ...useAppStore.getState().settings, enhanceImagePrompts: true } as any,
-    });
-    // WHICH text model to enhance with is asked of activeModelService, which is the one owner of that
-    // question so image generation cannot pick a different model than chat does. This suite mocks that
-    // service, so setting activeModelId in the store is no longer enough on its own - the mock has to
-    // answer, or the service finds no text model and skips enhancement entirely.
-    mockActive.selectedTextModelId.mockReturnValue('text-1');
-    // Text model loads on demand then reports loaded.
-    mockLlm.isModelLoaded.mockReturnValueOnce(false).mockReturnValue(true);
-    mockLlm.generateResponse.mockResolvedValue('an enhanced red apple, studio lighting');
+    await setupModel(true);
+    // The selected text model rewrites the prompt.
+    device.boundary.llama!.scriptCompletion({ text: 'an enhanced red apple, studio lighting' });
 
     const { phases, stop } = trackPhases();
     await imageGenerationService.generateImage({ prompt: 'a red apple' });
@@ -122,20 +91,24 @@ describe('image-gen phase state machine — ordered transitions (cases 17, 18, 2
     // enhancing must come strictly before generating (the status transition case 18).
     expect(phases.indexOf('enhancing')).toBeLessThan(phases.indexOf('generating'));
     expect(phases[phases.length - 1]).toBe('done');
+    // The engine drew the enhanced prompt.
+    expect(diffusion().calls.generateImage[0].prompt).toContain('an enhanced red apple');
   });
 
   it('the generating status advances the step counter toward totalSteps (case 19)', async () => {
-    setupModel();
-    useAppStore.setState({ settings: { ...useAppStore.getState().settings, enhanceImagePrompts: false } as any });
-    mockDream.generateImage.mockImplementation(async (_p, onProgress) => {
-      onProgress?.({ step: 1, totalSteps: 8, progress: 0.125 } as any);
-      onProgress?.({ step: 3, totalSteps: 8, progress: 0.375 } as any);
-      return OK_RESULT as any;
-    });
+    await setupModel(false);
+    diffusion().holdNextGeneration();
 
     const steps: number[] = [];
-    const unsub = imageGenerationService.subscribe((s) => { if (s.progress) steps.push(s.progress.step); });
-    await imageGenerationService.generateImage({ prompt: 'apple' });
+    const unsub = imageGenerationService.subscribe((s: { progress: { step: number } | null }) => {
+      if (s.progress) steps.push(s.progress.step);
+    });
+    const run = imageGenerationService.generateImage({ prompt: 'apple' });
+    while (!diffusion().generationHeld()) await settle();
+    nativeProgress(1);
+    nativeProgress(3);
+    diffusion().releaseGeneration();
+    await run;
     unsub();
 
     expect(Math.max(...steps)).toBeGreaterThanOrEqual(3);
@@ -147,47 +120,38 @@ describe('image-gen phase state machine — ordered transitions (cases 17, 18, 2
 
 describe('illegal transition guard — a 2nd in-flight request is ignored (case 22)', () => {
   it('does not start a second generation and leaves the first phase/progress untouched', async () => {
-    setupModel();
-    useAppStore.setState({ settings: { ...useAppStore.getState().settings, enhanceImagePrompts: false } as any });
-
-    let resolveFirst!: (v: any) => void;
-    let calls = 0;
-    mockDream.generateImage.mockImplementation(async (_p, onProgress) => {
-      calls++;
-      onProgress?.({ step: 2, totalSteps: 8, progress: 0.25 } as any);
-      return new Promise((r) => { resolveFirst = r; });
-    });
+    await setupModel(false);
+    diffusion().holdNextGeneration();
 
     const gen1 = imageGenerationService.generateImage({ prompt: 'first' });
-    await flushPromises();
+    while (!diffusion().generationHeld()) await settle();
+    nativeProgress(2);
+    await settle();
 
     const phaseDuring = imageGenerationService.getState().phase;
     const progressDuring = imageGenerationService.getState().progress;
     expect(isInFlight(phaseDuring)).toBe(true);
 
-    // Second request while in-flight → returns null, native generator not called again.
+    // Second request while in-flight → returns null, the native engine is not asked again.
     const gen2 = await imageGenerationService.generateImage({ prompt: 'second' });
     expect(gen2).toBeNull();
-    expect(calls).toBe(1);
+    expect(diffusion().calls.generateImage).toHaveLength(1);
     // First generation's phase and progress are unchanged (no reset to step 0).
     expect(imageGenerationService.getState().phase).toBe(phaseDuring);
     expect(imageGenerationService.getState().progress).toEqual(progressDuring);
 
-    resolveFirst(OK_RESULT);
+    diffusion().releaseGeneration();
     await gen1;
   });
 });
 
 describe('cancel mid-flight resets the machine to idle (case 20)', () => {
   it('transitions an in-flight generation back to idle and clears progress/prompt', async () => {
-    setupModel();
-    useAppStore.setState({ settings: { ...useAppStore.getState().settings, enhanceImagePrompts: false } as any });
+    await setupModel(false);
+    diffusion().holdNextGeneration();
 
-    let _resolve!: (v: any) => void;
-    mockDream.generateImage.mockImplementation(async () => new Promise((r) => { _resolve = r; }));
-
-    imageGenerationService.generateImage({ prompt: 'cancel me' });
-    await flushPromises();
+    const run = imageGenerationService.generateImage({ prompt: 'cancel me' });
+    while (!diffusion().generationHeld()) await settle();
     expect(isInFlight(imageGenerationService.getState().phase)).toBe(true);
 
     await imageGenerationService.cancelGeneration();
@@ -197,17 +161,15 @@ describe('cancel mid-flight resets the machine to idle (case 20)', () => {
     expect(isInFlight(s.phase)).toBe(false);
     expect(s.progress).toBeNull();
     expect(s.prompt).toBeNull();
-    expect(mockDream.cancelGeneration).toHaveBeenCalled();
+    // The native engine was told to stop.
+    expect(diffusion().cancelCount()).toBe(1);
+    await run;
   });
 });
 
 describe('no-model / load-failure surface an error phase, never a silent hang (cases 30, 38)', () => {
   it('no active image model → error phase with a clear message, generateImage returns null', async () => {
-    useAppStore.setState({
-      downloadedImageModels: [],
-      activeImageModelId: null,
-      settings: { imageSteps: 8, imageGuidanceScale: 2 } as any,
-    });
+    appState().updateSettings({ imageSteps: 8, imageGuidanceScale: 2 } as never);
 
     const result = await imageGenerationService.generateImage({ prompt: 'no model' });
 
@@ -219,9 +181,9 @@ describe('no-model / load-failure surface an error phase, never a silent hang (c
   });
 
   it('image model load failure → error phase, not stuck in loading (case 38)', async () => {
-    setupModel();
-    mockDream.isModelLoaded.mockResolvedValue(false); // force a load attempt
-    mockActive.loadImageModel.mockRejectedValue(new Error('weights corrupted'));
+    await setupModel(false);
+    // The native engine cannot open the weights.
+    diffusion().module.loadModel.mockRejectedValueOnce(new Error('weights corrupted'));
 
     const result = await imageGenerationService.generateImage({ prompt: 'broken model' });
 
