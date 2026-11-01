@@ -296,6 +296,17 @@ export function useDownloadManager(): UseDownloadManagerResult {
     );
   };
 
+  /** The model's files could not be removed: it is still on the phone and still listed. Say so, and offer
+   *  the same removal again. */
+  const showRemoveFailed = (retry: () => void) => {
+    setAlertState(
+      showAlert('Model not removed', "Couldn't remove the model files. Try again.", [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Retry', onPress: retry },
+      ]),
+    );
+  };
+
   const executeDeleteModel = async (model: DownloadedModel) => {
     setAlertState(hideAlert());
     try {
@@ -304,7 +315,7 @@ export function useDownloadManager(): UseDownloadManagerResult {
       await modelDownloadService.remove(uniformDownloadId('text', model.id));
     } catch (error) {
       logger.error('[DownloadManager] Failed to delete model:', error);
-      setAlertState(showAlert('Error', 'Failed to delete model'));
+      showRemoveFailed(() => executeDeleteModel(model));
     }
   };
 
@@ -316,7 +327,7 @@ export function useDownloadManager(): UseDownloadManagerResult {
       await modelDownloadService.remove(uniformDownloadId('image', model.id));
     } catch (error) {
       logger.error('[DownloadManager] Failed to delete image model:', error);
-      setAlertState(showAlert('Error', 'Failed to delete image model'));
+      showRemoveFailed(() => executeDeleteImageModel(model));
     }
   };
 

@@ -334,10 +334,18 @@ describe('DownloadManagerScreen', () => {
     await m.view.findByText('Delete Model');
     await confirm(m, 'Delete');
 
-    expect(await m.view.findByText('Failed to delete model')).toBeTruthy();
+    expect(await m.view.findByText("Couldn't remove the model files. Try again.")).toBeTruthy();
     expect(m.view.getByText('model.gguf')).toBeTruthy();
     expect(m.useAppStore.getState().downloadedModels).toHaveLength(1);
     expect(await m.boundary.fs!.exists(path)).toBe(true);
+
+    // Retry: the disk lets go this time, and the model is gone, from the screen and from the disk.
+    await confirm(m, 'Retry');
+    await m.rtl.waitFor(() => expect(m.view.getByText('No models downloaded yet')).toBeTruthy());
+    expect(await m.boundary.fs!.exists(path)).toBe(false);
+    // What the next launch reads: the saved list and a scan of the models folder.
+    const { textModels } = await m.modelManager.refreshModelLists();
+    expect(textModels).toEqual([]);
   });
 
   it('confirming delete of an image model removes it from the screen, the store, the registry and the disk', async () => {
@@ -355,11 +363,7 @@ describe('DownloadManagerScreen', () => {
     expect(await m.boundary.fs!.exists(dir)).toBe(false);
   });
 
-  // BUG (finding): imageProvider.remove swallows a failed deleteImageModel and drops the model from the
-  // store anyway, so the folder stays on disk, the person is told nothing ("Failed to delete image model"
-  // is unreachable), and the next launch's scan adopts the folder again. The text provider keeps the row
-  // when the disk refuses (textProvider.remove). Remove `.failing` when imageProvider does the same.
-  it.failing('when the disk refuses an image model delete, says so and keeps the model', async () => {
+  it('when the disk refuses an image model delete, says so, keeps the model, and Retry removes it', async () => {
     let dir = '';
     const m = await openManager(async ctx => {
       ({ dir } = await placeImageModel(ctx, { id: 'img-1', name: 'SD Model', bytes: 2048 }));
@@ -369,10 +373,19 @@ describe('DownloadManagerScreen', () => {
     await m.view.findByText('Delete Image Model');
     await confirm(m, 'Delete');
 
-    expect(await m.view.findByText('Failed to delete image model')).toBeTruthy();
+    expect(await m.view.findByText("Couldn't remove the model files. Try again.")).toBeTruthy();
     expect(m.view.getByText('SD Model')).toBeTruthy();
     expect(m.useAppStore.getState().downloadedImageModels).toHaveLength(1);
     expect(await m.boundary.fs!.exists(dir)).toBe(true);
+
+    // Retry: the disk lets go this time, and the model is gone, from the screen and from the disk.
+    await confirm(m, 'Retry');
+    await m.rtl.waitFor(() => expect(m.view.getByText('No models downloaded yet')).toBeTruthy());
+    expect(m.useAppStore.getState().downloadedImageModels).toEqual([]);
+    expect(await m.boundary.fs!.exists(dir)).toBe(false);
+    // What the next launch reads: the saved list and a scan of the image models folder.
+    const { imageModels } = await m.modelManager.refreshModelLists();
+    expect(imageModels).toEqual([]);
   });
 
   it('confirming remove on an active download cancels it on the native downloader', async () => {
