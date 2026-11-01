@@ -135,6 +135,8 @@ export const GalleryScreen: React.FC = () => {
             <TouchableOpacity
               style={styles.closeButton}
               onPress={toggleSelectMode}
+              accessibilityRole="button"
+              accessibilityLabel="Exit selection"
             >
               <Icon name="x" size={24} color={colors.text} />
             </TouchableOpacity>
@@ -240,6 +242,8 @@ export const GalleryScreen: React.FC = () => {
             <TouchableOpacity
               style={styles.genCancelButton}
               onPress={handleCancelGeneration}
+              accessibilityRole="button"
+              accessibilityLabel="Stop image generation"
             >
               <Icon name="x" size={16} color={colors.error} />
             </TouchableOpacity>

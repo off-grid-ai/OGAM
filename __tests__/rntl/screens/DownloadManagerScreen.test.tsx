@@ -1,1020 +1,466 @@
 /**
  * DownloadManagerScreen Tests
  *
- * Tests for the download manager screen including:
- * - Title display
- * - Empty state when no downloads
- * - Completed model rendering with details
- * - Active download rendering with progress
- * - Delete model confirmation flow (including onPress callbacks)
- * - Cancel active download flow (including onPress callbacks)
- * - Storage total display
- * - Image model rendering
- * - Background download service subscriptions
- * - Refresh flow
- * - Background download items rendering
- * - Alert onClose
-*/
+ * The real Download Manager over the real app and download stores, the real download service and its
+ * providers, the real modelManager and backgroundDownloadService, inside a real React Navigation stack
+ * opened from Settings.
+ *
+ * Faked: only the device boundary (harness/nativeBoundary): the native background downloader
+ * (DownloadManagerModule), react-native-fs over an in-memory disk, the clock and RAM.
+ *
+ * State enters the way the app writes it:
+ * - a downloaded model is a file on disk the app registered (buildDownloadedModel + persistDownloadedModel,
+ *   the finalize path), then read back by modelManager and published to the store;
+ * - an image model is a folder on disk registered through modelManager.addDownloadedImageModel;
+ * - a download in flight is a row on the native downloader, read into the store by hydrateDownloadStore
+ *   (the launch path); a queued one is a start the service holds behind its three-at-a-time cap.
+ *
+ * Tests assert what the person sees, the stores, the disk and what reached the native downloader.
+ */
+import type { DownloadRow, NativeBoundary } from '../../harness/nativeBoundary';
+import { GB, installNativeBoundary, requireRTL } from '../../harness/nativeBoundary';
+import { withNavigatorRoutes } from '../../harness/realNavigation';
 
-import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react-native';
+jest.unmock('@react-navigation/native');
 
-// Navigation is globally mocked in jest.setup.ts
+const KB = 1024;
+const MB = 1024 * 1024;
 
-const mockNavigate = jest.fn();
-jest.mock('@react-navigation/native', () => {
-  const actual = jest.requireActual('@react-navigation/native');
-  return {
-    ...actual,
-    useNavigation: () => ({
-      navigate: mockNavigate,
-      goBack: jest.fn(),
-      setOptions: jest.fn(),
-      addListener: jest.fn(() => jest.fn()),
-    }),
-    useRoute: () => ({ params: {} }),
-  };
-});
+interface Ctx {
+  boundary: NativeBoundary;
+  useAppStore: any;
+  useDownloadStore: any;
+  modelManager: any;
+  backgroundDownloadService: any;
+}
 
-const mockUseAppStore = jest.fn();
+interface Manager extends Ctx {
+  rtl: ReturnType<typeof requireRTL>;
+  view: ReturnType<ReturnType<typeof requireRTL>['render']>;
+}
 
-jest.mock('../../../src/stores', () => {
-  const store = (...args: any[]) => mockUseAppStore(...args);
-  store.getState = () => mockUseAppStore();
-  // useVoiceDownloadItems subscribes to presentModelIds and routes STT deletes
-  // through deleteModelById, so the Download Manager screen needs this store too.
-  // presentModelIds MUST be a stable reference (like the real zustand store) —
-  // a fresh array per call would change the effect dep every render and loop.
-  const whisperPresentModelIds: string[] = [];
-  const whisperState = {
-    presentModelIds: whisperPresentModelIds,
-    deleteModelById: jest.fn(() => Promise.resolve()),
-  };
-  const whisperStore = (selector?: any) => (selector ? selector(whisperState) : whisperState);
-  whisperStore.getState = () => whisperState;
-  return { useAppStore: store, useWhisperStore: whisperStore };
-});
-
-let mockDownloadStoreDownloads: Record<string, any> = {};
-const mockSetStatus = jest.fn();
-const mockSetRepairingVision = jest.fn();
-const mockRetryDownload = jest.fn(() => Promise.resolve());
-const mockStartProgressPolling = jest.fn();
-const mockResetMmProjForRetry = jest.fn();
-const mockWatchDownload = jest.fn();
-const mockRemoveDownloadEntry = jest.fn((modelKey: string) => { delete mockDownloadStoreDownloads[modelKey]; });
-
-jest.mock('../../../src/stores/downloadStore', () => {
-  const store = (selector?: any) => {
-    const state = {
-      downloads: mockDownloadStoreDownloads,
-      remove: mockRemoveDownloadEntry,
-      repairingVisionIds: {} as Record<string, true>,
-      setRepairingVision: mockSetRepairingVision,
-    };
-    return typeof selector === 'function' ? selector(state) : state;
-  };
-  store.getState = () => ({
-    downloads: mockDownloadStoreDownloads,
-    downloadIdIndex: Object.values(mockDownloadStoreDownloads).reduce((acc: Record<string, string>, entry: any) => {
-      if (entry?.downloadId && entry?.modelKey) acc[entry.downloadId] = entry.modelKey;
-      return acc;
-    }, {}),
-    remove: mockRemoveDownloadEntry,
-    setStatus: mockSetStatus,
+/** A text model the app downloaded: its file in the models folder, registered and published. */
+async function placeTextModel(
+  ctx: Ctx,
+  opts: { repo?: string; fileName: string; quantization?: string; bytes: number },
+): Promise<{ id: string; path: string }> {
+  const { buildDownloadedModel, persistDownloadedModel } = require('../../../src/services/modelManager/storage');
+  const modelsDir = ctx.modelManager.getModelsDirectory();
+  const path = `${modelsDir}/${opts.fileName}`;
+  ctx.boundary.fs!.seedFile(path, opts.bytes);
+  const model = await buildDownloadedModel({
+    modelId: opts.repo ?? 'author/model',
+    file: { name: opts.fileName, size: opts.bytes, quantization: opts.quantization ?? 'Q4_K_M', downloadUrl: '' },
+    resolvedLocalPath: path,
   });
-  // Only the store hook is mocked; the pure status classifiers (isActiveStatus /
-  // isQueuedStatus / isDownloadingStatus) come from the REAL module so the test
-  // exercises the same classification the screen ships with — never a stubbed copy
-  // that could drift (that drift is exactly what let the queued/active bugs hide).
-  const actual = jest.requireActual('../../../src/stores/downloadStore');
-  return {
-    ...actual,
-    useDownloadStore: store,
-    STUCK_THRESHOLD_MS: 30000,
+  await persistDownloadedModel(model, modelsDir);
+  ctx.useAppStore.getState().setDownloadedModels(await ctx.modelManager.getDownloadedModels());
+  return { id: model.id, path };
+}
+
+/** An image model the app downloaded: its folder in the image-models folder, registered and published. */
+async function placeImageModel(
+  ctx: Ctx,
+  opts: { id: string; name: string; bytes: number },
+): Promise<{ dir: string }> {
+  const dir = `${ctx.modelManager.getImageModelsDirectory()}/${opts.id}`;
+  ctx.boundary.fs!.seedFile(`${dir}/unet.mnn`, opts.bytes);
+  const model = {
+    id: opts.id,
+    name: opts.name,
+    description: 'Image model',
+    modelPath: dir,
+    downloadedAt: '2026-01-15T00:00:00.000Z',
+    size: opts.bytes,
+    style: 'creative',
+    backend: 'mnn',
   };
-});
+  await ctx.modelManager.addDownloadedImageModel(model);
+  ctx.useAppStore.getState().addDownloadedImageModel(model);
+  return { dir };
+}
 
-jest.mock('../../../src/services', () => ({
-  modelManager: {
-    getDownloadedModels: jest.fn(() => Promise.resolve([])),
-    linkOrphanMmProj: jest.fn().mockResolvedValue(undefined),
-    getDownloadedImageModels: jest.fn(() => Promise.resolve([])),
-    getActiveBackgroundDownloads: jest.fn(() => Promise.resolve([])),
-    startBackgroundDownloadPolling: jest.fn(),
-    stopBackgroundDownloadPolling: jest.fn(),
-    cancelBackgroundDownload: jest.fn(() => Promise.resolve()),
-    deleteModel: jest.fn(() => Promise.resolve()),
-    deleteImageModel: jest.fn(() => Promise.resolve()),
-    resetMmProjForRetry: jest.fn(),
-    watchDownload: jest.fn(),
-  },
-  backgroundDownloadService: {
-    isAvailable: jest.fn(() => false),
-    onAnyProgress: jest.fn(() => jest.fn()),
-    onAnyComplete: jest.fn(() => jest.fn()),
-    onAnyError: jest.fn(() => jest.fn()),
-    moveCompletedDownload: jest.fn(() => Promise.resolve()),
-    cancelDownload: jest.fn(() => Promise.resolve()),
-    retryDownload: jest.fn(() => Promise.resolve()),
-    startProgressPolling: jest.fn(),
-    getQueuedItems: jest.fn(() => []),
-  },
-  activeModelService: {
-    // The model-selection seam, from the one place it is defined.
-    ...require('../../utils/activeModelServiceStub').activeModelSelectionStub(),
-    unloadTextModel: jest.fn(),
-    unloadImageModel: jest.fn(() => Promise.resolve()),
-  },
-  hardwareService: {
-    getModelTotalSize: jest.fn((model: any) => model?.fileSize || 0),
-  },
-}));
+/** Downloads on the native downloader, read into the store the way the app reads them at launch. */
+async function nativeDownloads(ctx: Ctx, rows: DownloadRow[]) {
+  for (const row of rows) ctx.boundary.download!.seedActive({ createdAt: Date.now(), ...row });
+  const { hydrateDownloadStore } = require('../../../src/services/downloadHydration');
+  await hydrateDownloadStore();
+}
 
-// Get references to the mocked services after jest.mock is applied
-const { modelManager: mockModelManager, backgroundDownloadService: mockBackgroundDownloadService, hardwareService: mockHardwareService } = jest.requireMock('../../../src/services');
+/** The phone, what it holds (`before`), and the Download Manager opened from Settings. */
+async function openManager(before?: (ctx: Ctx) => Promise<void>): Promise<Manager> {
+  const boundary = installNativeBoundary({
+    download: true,
+    fs: true,
+    ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB },
+  });
+  const AsyncStorage = require('@react-native-async-storage/async-storage');
+  await AsyncStorage.clear();
+  const React = require('react');
+  const rtl = requireRTL();
+  const { registerCoreDownloadProviders } = require('../../../src/services/modelDownloadService/registerProviders');
+  registerCoreDownloadProviders();
+  const { useAppStore } = require('../../../src/stores');
+  const { useDownloadStore } = require('../../../src/stores/downloadStore');
+  const { modelManager, backgroundDownloadService } = require('../../../src/services');
+  const ctx: Ctx = { boundary, useAppStore, useDownloadStore, modelManager, backgroundDownloadService };
+  await before?.(ctx);
+  const { DownloadManagerScreen } = require('../../../src/screens/DownloadManagerScreen');
+  const view = rtl.render(
+    withNavigatorRoutes(React.createElement(DownloadManagerScreen), { openedFrom: 'Settings' }),
+  );
+  await view.findByTestId('downloaded-models-screen');
+  return { ...ctx, rtl, view };
+}
 
-// The Download Manager is a thin View: it dispatches cancel/retry/remove INTENTS to
-// ModelDownloadService (the single owner) and never performs the mechanism itself.
-// So these tests assert the View routes the correct uniform id; the actual
-// cancel/delete/retry mechanism is covered by the per-provider unit tests
-// (textDownloadProvider/imageDownloadProvider/sttProvider). This is also why the old
-// assertions against modelManager.deleteModel etc. were stale — that work moved into
-// the providers behind the service.
-const mockServiceRemove = jest.fn(async (..._a: any[]) => {});
-const mockServiceCancel = jest.fn(async (..._a: any[]) => {});
-const mockServiceRetry = jest.fn(async (..._a: any[]) => {});
-jest.mock('../../../src/services/modelDownloadService', () => ({
-  modelDownloadService: {
-    remove: (...a: any[]) => mockServiceRemove(...a),
-    cancel: (...a: any[]) => mockServiceCancel(...a),
-    retry: (...a: any[]) => mockServiceRetry(...a),
-    // useVoiceDownloadItems reads TTS state from here (single source w/ the Voice panel).
-    list: jest.fn(async () => []),
-    subscribe: jest.fn(() => () => {}),
-  },
-}));
+/** Confirm the open alert with the button of this label. */
+async function confirm(m: Manager, label: string) {
+  await m.rtl.act(async () => {
+    m.rtl.fireEvent.press(m.view.getByLabelText(label));
+  });
+}
 
-jest.mock('../../../src/components', () => ({
-  Card: ({ children, style }: any) => {
-    const { View } = require('react-native');
-    return <View style={style}>{children}</View>;
-  },
-}));
-
-const mockShowAlert = jest.fn((_t: string, _m: string, _b?: any) => ({
-  visible: true,
-  title: _t,
-  message: _m,
-  buttons: _b || [],
-}));
-
-const mockHideAlert = jest.fn(() => ({ visible: false, title: '', message: '', buttons: [] }));
-
-jest.mock('../../../src/components/CustomAlert', () => ({
-  CustomAlert: ({ visible, title, message, buttons, onClose }: any) => {
-    if (!visible) return null;
-    const { View, Text, TouchableOpacity: TO } = require('react-native');
-    return (
-      <View testID="custom-alert">
-        <Text testID="alert-title">{title}</Text>
-        <Text testID="alert-message">{message}</Text>
-        {buttons && buttons.map((btn: any, i: number) => (
-          <TO key={i} testID={`alert-button-${btn.text}`} onPress={btn.onPress}>
-            <Text>{btn.text}</Text>
-          </TO>
-        ))}
-        <TO testID="alert-close" onPress={onClose}>
-          <Text>CloseAlert</Text>
-        </TO>
-      </View>
-    );
-  },
-  showAlert: (...args: any[]) => (mockShowAlert as any)(...args),
-  hideAlert: (...args: any[]) => (mockHideAlert as any)(...args),
-  initialAlertState: { visible: false, title: '', message: '', buttons: [] },
-}));
-
-jest.mock('../../../src/components/AnimatedEntry', () => ({
-  AnimatedEntry: ({ children }: any) => children,
-}));
-
-jest.mock('../../../src/components/AnimatedListItem', () => ({
-  AnimatedListItem: ({ children, onPress, style }: any) => {
-    const { TouchableOpacity: TO } = require('react-native');
-    return (
-      <TO style={style} onPress={onPress}>
-        {children}
-      </TO>
-    );
-  },
-}));
-
-import { DownloadManagerScreen } from '../../../src/screens/DownloadManagerScreen';
-
-// Standard model fixture used across many tests
-const standardModel = {
-  id: 'model-1',
-  name: 'Model',
-  author: 'author',
-  fileName: 'model.gguf',
-  filePath: '/path',
-  fileSize: 1024,
+const runningText = (overrides: Partial<DownloadRow> = {}): DownloadRow => ({
+  downloadId: 'dl-1',
+  modelKey: 'author/model-id/model-file.gguf',
+  modelId: 'author/model-id',
+  fileName: 'model-file.gguf',
   quantization: 'Q4_K_M',
-  downloadedAt: '2026-01-15T00:00:00.000Z',
-};
-
-// Default store state
-const mockStoreState = (state: any) => {
-  mockUseAppStore.mockImplementation((selector?: any) => {
-    if (typeof selector === 'function') return selector(state);
-    return selector ? selector(state) : state;
-  });
-  return state;
-};
-
-const createDefaultState = (overrides: any = {}) => ({
-  downloadedModels: [],
-  setDownloadedModels: jest.fn(),
-  removeDownloadedModel: jest.fn(),
-  downloadedImageModels: [],
-  setDownloadedImageModels: jest.fn(),
-  removeDownloadedImageModel: jest.fn(),
-  downloadedVideoModels: [],
-  removeDownloadedVideoModel: jest.fn(),
-  themeMode: 'system',
+  modelType: 'text',
+  status: 'running',
+  bytesDownloaded: 1024,
+  totalBytes: 4096,
+  combinedTotalBytes: 4096,
   ...overrides,
 });
 
-// Helper: set up store with a single standard model and mock hardware service
-const setupSingleModelState = (extras: any = {}, modelSize = 1024) => {
-  const state = createDefaultState({
-    downloadedModels: [{ ...standardModel, ...extras.modelOverrides }],
-    ...extras,
-  });
-  delete state.modelOverrides;
-  mockStoreState(state);
-  mockHardwareService.getModelTotalSize.mockReturnValue(modelSize);
-  return state;
-};
-
 describe('DownloadManagerScreen', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    jest.useFakeTimers();
-    mockDownloadStoreDownloads = {};
-    mockSetStatus.mockReset();
-    mockSetRepairingVision.mockReset();
-    mockRetryDownload.mockReset();
-    mockRetryDownload.mockResolvedValue(undefined);
-    mockStartProgressPolling.mockReset();
-    mockResetMmProjForRetry.mockReset();
-    mockWatchDownload.mockReset();
-    mockRemoveDownloadEntry.mockClear();
-    mockServiceRemove.mockReset(); mockServiceRemove.mockResolvedValue(undefined);
-    mockServiceCancel.mockReset(); mockServiceCancel.mockResolvedValue(undefined);
-    mockServiceRetry.mockReset(); mockServiceRetry.mockResolvedValue(undefined);
-
-    // Restore mock implementations cleared by clearAllMocks
-    mockBackgroundDownloadService.isAvailable.mockReturnValue(false);
-    mockBackgroundDownloadService.onAnyProgress.mockReturnValue(jest.fn());
-    mockBackgroundDownloadService.onAnyComplete.mockReturnValue(jest.fn());
-    mockBackgroundDownloadService.onAnyError.mockReturnValue(jest.fn());
-    mockBackgroundDownloadService.retryDownload.mockImplementation(mockRetryDownload);
-    mockBackgroundDownloadService.startProgressPolling.mockImplementation(mockStartProgressPolling);
-    mockModelManager.getDownloadedModels.mockResolvedValue([]);
-    mockModelManager.getDownloadedImageModels.mockResolvedValue([]);
-    mockModelManager.cancelBackgroundDownload.mockResolvedValue(undefined);
-    mockModelManager.deleteModel.mockResolvedValue(undefined);
-    mockModelManager.deleteImageModel.mockResolvedValue(undefined);
-    mockModelManager.resetMmProjForRetry.mockImplementation(mockResetMmProjForRetry);
-    mockModelManager.watchDownload.mockImplementation(mockWatchDownload);
-    mockHardwareService.getModelTotalSize.mockImplementation((model: any) => model.fileSize || 0);
-
-    const defaultState = createDefaultState();
-    mockStoreState(defaultState);
+  it('renders screen title', async () => {
+    const { view } = await openManager();
+    expect(view.getByText('Download Manager')).toBeTruthy();
   });
 
-  afterEach(() => {
-    jest.useRealTimers();
-  });
-
-  it('renders screen title', () => {
-    const { getByText } = render(<DownloadManagerScreen />);
-    expect(getByText('Download Manager')).toBeTruthy();
-  });
-
-  it('shows empty state when no downloads', () => {
-    const { getByText, queryByText } = render(<DownloadManagerScreen />);
+  it('shows empty state when no downloads', async () => {
+    const { view } = await openManager();
     // Active Downloads section is hidden when there are no active items
-    expect(queryByText('Active Downloads')).toBeNull();
-    expect(getByText('No models downloaded yet')).toBeTruthy();
+    expect(view.queryByText('Active Downloads')).toBeNull();
+    expect(view.getByText('No models downloaded yet')).toBeTruthy();
   });
 
-  it('keeps failed downloads visible with their reason', () => {
-    mockDownloadStoreDownloads = {
-      'test/model/model.gguf': {
-        modelKey: 'test/model/model.gguf',
-        downloadId: 'dl-42',
-        modelId: 'test/model',
-        fileName: 'model.gguf',
-        quantization: 'Q4_K_M',
-        modelType: 'text',
-        status: 'failed',
-        bytesDownloaded: 1024,
-        totalBytes: 4096,
-        combinedTotalBytes: 4096,
-        progress: 0.25,
-        errorMessage: 'http_416',
-        createdAt: Date.now(),
-        lastProgressAt: Date.now(),
-      },
-    };
-
-    const { getByText, queryByText } = render(<DownloadManagerScreen />);
-
-    expect(getByText('model.gguf')).toBeTruthy();
-    expect(getByText('The server could not resume this download. Please retry it.')).toBeTruthy();
-    expect(queryByText('No active downloads')).toBeNull();
+  it('Back returns to the screen it was opened from', async () => {
+    const { view, rtl } = await openManager();
+    rtl.fireEvent.press(view.getByTestId('back-button'));
+    expect(await view.findByTestId('route-Settings')).toBeTruthy();
   });
 
-  it('surfaces a queued (capped) download with the clock icon (icon-only, no "Queued" word)', () => {
-    mockBackgroundDownloadService.getQueuedItems.mockReturnValueOnce([
-      { modelKey: 'q/waiting.gguf', modelId: 'q/waiting', fileName: 'waiting.gguf', modelType: 'text', totalBytes: 5000 },
-    ]);
-    const { getByText, queryByText, getByLabelText } = render(<DownloadManagerScreen />);
-    expect(getByText('waiting.gguf')).toBeTruthy();
+  it('keeps failed downloads visible with their reason', async () => {
+    const { view } = await openManager(ctx =>
+      nativeDownloads(ctx, [runningText({
+        downloadId: 'dl-42', modelKey: 'test/model/model.gguf', modelId: 'test/model', fileName: 'model.gguf',
+        status: 'failed', reason: 'http_416',
+      })]),
+    );
+    expect(view.getByText('model.gguf')).toBeTruthy();
+    expect(view.getByText('The server could not resume this download. Please retry it.')).toBeTruthy();
+    expect(view.queryByText('No active downloads')).toBeNull();
+  });
+
+  it('surfaces a start held behind the three-download cap as queued (clock icon, no "Queued" word)', async () => {
+    const { view, boundary } = await openManager(async ctx => {
+      const start = (name: string) =>
+        ctx.backgroundDownloadService.startDownload({
+          url: `https://huggingface.co/q/resolve/main/${name}`, fileName: name, modelId: 'q/m',
+          modelKey: `q/m/${name}`, modelType: 'text', totalBytes: 5000,
+        });
+      for (const name of ['one.gguf', 'two.gguf', 'three.gguf']) await start(name);
+      start('waiting.gguf').catch(() => {}); // resolves only when a slot frees
+    });
+    expect(boundary.download!.active().map(r => r.fileName)).toEqual(['one.gguf', 'two.gguf', 'three.gguf']);
+    expect(view.getByText('waiting.gguf')).toBeTruthy();
     // The word "Queued" was dropped in favor of the clock icon (a11y label "Queued").
-    expect(queryByText('Queued')).toBeNull();
-    expect(getByLabelText('Queued')).toBeTruthy();
+    expect(view.queryByText('Queued')).toBeNull();
+    expect(view.getByLabelText('Queued')).toBeTruthy();
   });
 
-  it('shows section headers for active and completed', () => {
-    const { getByText, queryByText } = render(<DownloadManagerScreen />);
-    // Active Downloads section is hidden when empty
-    expect(queryByText('Active Downloads')).toBeNull();
-    // Downloaded Models section is always shown
-    expect(getByText('Downloaded Models')).toBeTruthy();
+  it('shows section headers for active and completed', async () => {
+    const { view } = await openManager();
+    expect(view.queryByText('Active Downloads')).toBeNull();
+    expect(view.getByText('Downloaded Models')).toBeTruthy();
   });
 
-  it('shows empty subtext when no models downloaded', () => {
-    const { getByText } = render(<DownloadManagerScreen />);
-    expect(getByText('No models downloaded yet')).toBeTruthy();
-  });
-
-  it('renders completed text model with details', () => {
-    const state = createDefaultState({
-      downloadedModels: [
-        {
-          id: 'model-1',
-          name: 'Test Model',
-          author: 'test-author',
-          fileName: 'test-model-q4.gguf',
-          filePath: '/path/to/model',
-          fileSize: 4 * 1024 * 1024 * 1024,
-          quantization: 'Q4_K_M',
-          downloadedAt: '2026-01-15T00:00:00.000Z',
-        },
-      ],
+  it('renders completed text model with details', async () => {
+    const { view } = await openManager(async ctx => {
+      await placeTextModel(ctx, { repo: 'test-author/test-model', fileName: 'test-model-q4.gguf', bytes: 4 * GB });
     });
-    mockStoreState(state);
-    mockHardwareService.getModelTotalSize.mockReturnValue(4 * 1024 * 1024 * 1024);
-
-    const { getByText, queryByText } = render(<DownloadManagerScreen />);
-    expect(getByText('test-model-q4.gguf')).toBeTruthy();
+    expect(view.getByText('test-model-q4.gguf')).toBeTruthy();
     // Cards say only what helps a choice: size and quant, no publisher name, no type label.
-    expect(getByText('4.00 GB · Q4_K_M')).toBeTruthy();
-    expect(queryByText('test-author')).toBeNull();
-    expect(queryByText(/· Text/)).toBeNull();
-    expect(queryByText('No models downloaded yet')).toBeNull();
+    expect(view.getByText('4.00 GB · Q4_K_M')).toBeTruthy();
+    expect(view.queryByText('test-author')).toBeNull();
+    expect(view.queryByText(/· Text/)).toBeNull();
+    expect(view.queryByText('No models downloaded yet')).toBeNull();
   });
 
-  it('renders completed image model', () => {
-    const state = createDefaultState({
-      downloadedImageModels: [
-        {
-          id: 'img-model-1',
-          name: 'SD Turbo',
-          description: 'Image model',
-          modelPath: '/path/to/img',
-          downloadedAt: '2026-01-15T00:00:00.000Z',
-          size: 2 * 1024 * 1024 * 1024,
-          style: 'creative',
-          backend: 'mnn',
-        },
-      ],
+  it('renders completed image model', async () => {
+    const { view } = await openManager(async ctx => {
+      await placeImageModel(ctx, { id: 'img-model-1', name: 'SD Turbo', bytes: 2 * GB });
     });
-    mockStoreState(state);
-
-    const { getByText, queryByText } = render(<DownloadManagerScreen />);
-    expect(getByText('SD Turbo')).toBeTruthy();
-    expect(getByText('2.00 GB')).toBeTruthy();
+    expect(view.getByText('SD Turbo')).toBeTruthy();
+    expect(view.getByText('2.00 GB')).toBeTruthy();
     // No type label repeated on every card.
-    expect(queryByText('Image Generation')).toBeNull();
+    expect(view.queryByText('Image Generation')).toBeNull();
   });
 
-  it('renders active download with progress info', () => {
-    mockDownloadStoreDownloads = {
-      'author/model-id/model-file.gguf': {
-        modelKey: 'author/model-id/model-file.gguf',
-        downloadId: 'dl-1',
-        modelId: 'author/model-id',
-        fileName: 'model-file.gguf',
-        quantization: 'Q4_K_M',
-        modelType: 'text',
-        status: 'running',
-        bytesDownloaded: 2 * 1024 * 1024 * 1024,
-        totalBytes: 4 * 1024 * 1024 * 1024,
-        combinedTotalBytes: 4 * 1024 * 1024 * 1024,
-        progress: 0.5,
-        createdAt: Date.now(),
-        lastProgressAt: Date.now(),
-      },
-    };
-
-    const { getByText, queryByText } = render(<DownloadManagerScreen />);
-    expect(getByText('model-file.gguf')).toBeTruthy();
-    expect(queryByText('No active downloads')).toBeNull();
-  });
-
-  it('shows storage total when models exist', () => {
-    setupSingleModelState({ modelOverrides: { fileSize: 1024 * 1024 * 1024 } }, 1024 * 1024 * 1024);
-
-    const { getByText } = render(<DownloadManagerScreen />);
-    expect(getByText(/Total storage used/)).toBeTruthy();
-  });
-
-  it('shows count badge for completed section', () => {
-    setupSingleModelState();
-
-    const { getByText, queryByText } = render(<DownloadManagerScreen />);
-    // Active section is hidden when empty (no "0" badge)
-    // Completed section shows count of 1
-    expect(queryByText('0')).toBeNull();
-    expect(getByText('1')).toBeTruthy();
-  });
-
-  it('pressing delete button on completed model shows confirmation alert', () => {
-    const removeDownloadedModel = jest.fn();
-    setupSingleModelState({ removeDownloadedModel });
-
-    const { getAllByTestId } = render(<DownloadManagerScreen />);
-    const deleteButtons = getAllByTestId('delete-model-button');
-    fireEvent.press(deleteButtons[0]);
-
-    expect(mockShowAlert).toHaveBeenCalledWith(
-      'Delete Model',
-      expect.stringContaining('model.gguf'),
-      expect.any(Array),
+  it('renders active download with progress info', async () => {
+    const { view } = await openManager(ctx =>
+      nativeDownloads(ctx, [runningText({ bytesDownloaded: 2 * GB, totalBytes: 4 * GB, combinedTotalBytes: 4 * GB })]),
     );
+    expect(view.getByText('model-file.gguf')).toBeTruthy();
+    expect(view.getByText('Active Downloads')).toBeTruthy();
+    expect(view.getByText('50%')).toBeTruthy();
   });
 
-  it('pressing cancel on active download shows confirmation alert', () => {
-    mockDownloadStoreDownloads = {
-      'author/model-id/model-file.gguf': {
-        modelKey: 'author/model-id/model-file.gguf',
-        downloadId: 'dl-2',
-        modelId: 'author/model-id',
-        fileName: 'model-file.gguf',
-        quantization: 'Q4_K_M',
-        modelType: 'text',
-        status: 'running',
-        bytesDownloaded: 1024,
-        totalBytes: 4096,
-        combinedTotalBytes: 4096,
-        progress: 0.3,
-        createdAt: Date.now(),
-        lastProgressAt: Date.now(),
-      },
-    };
+  it('shows storage total when models exist', async () => {
+    const { view } = await openManager(async ctx => {
+      await placeTextModel(ctx, { fileName: 'model.gguf', bytes: GB });
+    });
+    expect(view.getByText('Total storage used: 1.0 GB')).toBeTruthy();
+  });
 
-    const { getAllByTestId } = render(<DownloadManagerScreen />);
-    fireEvent.press(getAllByTestId('remove-download-button')[0]);
+  it('shows count badge for completed section', async () => {
+    const { view } = await openManager(async ctx => {
+      await placeTextModel(ctx, { fileName: 'model.gguf', bytes: KB });
+    });
+    // Active section is hidden when empty (no "0" badge); completed shows 1.
+    expect(view.queryByText('0')).toBeNull();
+    expect(view.getByText('1')).toBeTruthy();
+  });
 
-    expect(mockShowAlert).toHaveBeenCalledWith(
-      'Remove Download',
-      expect.any(String),
-      expect.any(Array),
+  it('pressing delete on a downloaded model asks first and deletes nothing yet', async () => {
+    let path = '';
+    const m = await openManager(async ctx => {
+      ({ path } = await placeTextModel(ctx, { fileName: 'model.gguf', bytes: KB }));
+    });
+    m.rtl.fireEvent.press(m.view.getByTestId('delete-model-button'));
+
+    expect(await m.view.findByText('Delete Model')).toBeTruthy();
+    expect(m.view.getByText(/"model\.gguf"/)).toBeTruthy();
+    expect(await m.boundary.fs!.exists(path)).toBe(true);
+    expect(m.useAppStore.getState().downloadedModels).toHaveLength(1);
+  });
+
+  it('pressing remove on an active download asks first and leaves it running', async () => {
+    const m = await openManager(ctx => nativeDownloads(ctx, [runningText({ downloadId: 'dl-2' })]));
+    m.rtl.fireEvent.press(m.view.getByTestId('remove-download-button'));
+
+    expect(await m.view.findByText('Remove Download')).toBeTruthy();
+    expect(m.boundary.download!.active().map(r => r.downloadId)).toEqual(['dl-2']);
+  });
+
+  it('renders multiple completed models', async () => {
+    const { view } = await openManager(async ctx => {
+      await placeTextModel(ctx, { repo: 'author-a/a', fileName: 'model-a.gguf', bytes: KB });
+      await placeTextModel(ctx, { repo: 'author-b/b', fileName: 'model-b.gguf', quantization: 'Q8_0', bytes: 2 * KB });
+    });
+    expect(view.getByText('model-a.gguf')).toBeTruthy();
+    expect(view.getByText('model-b.gguf')).toBeTruthy();
+    expect(view.getByText('2')).toBeTruthy();
+  });
+
+  it('shows downloading status text for active downloads', async () => {
+    const { view } = await openManager(ctx =>
+      nativeDownloads(ctx, [runningText({ fileName: 'active-model.gguf', bytesDownloaded: 256, totalBytes: 1024, combinedTotalBytes: 1024 })]),
     );
+    expect(view.getByText('256 B / 1 KB · Rate unavailable')).toBeTruthy();
+    expect(view.getByText('25%')).toBeTruthy();
   });
 
-  it('renders multiple completed models', () => {
-    const state = createDefaultState({
-      downloadedModels: [
-        {
-          id: 'model-1',
-          name: 'Model A',
-          author: 'author-a',
-          fileName: 'model-a.gguf',
-          filePath: '/path/a',
-          fileSize: 1024,
-          quantization: 'Q4_K_M',
-          downloadedAt: '2026-01-15T00:00:00.000Z',
-        },
-        {
-          id: 'model-2',
-          name: 'Model B',
-          author: 'author-b',
-          fileName: 'model-b.gguf',
-          filePath: '/path/b',
-          fileSize: 2048,
-          quantization: 'Q8_0',
-          downloadedAt: '2026-01-16T00:00:00.000Z',
-        },
-      ],
-    });
-    mockStoreState(state);
-    mockHardwareService.getModelTotalSize.mockReturnValue(1024);
-
-    const { getByText } = render(<DownloadManagerScreen />);
-    expect(getByText('model-a.gguf')).toBeTruthy();
-    expect(getByText('model-b.gguf')).toBeTruthy();
-    expect(getByText('2')).toBeTruthy();
-  });
-
-  it('shows downloading status text for active downloads', () => {
-    mockDownloadStoreDownloads = {
-      'author/model-id/active-model.gguf': {
-        modelKey: 'author/model-id/active-model.gguf',
-        downloadId: 'dl-3',
-        modelId: 'author/model-id',
-        fileName: 'active-model.gguf',
-        quantization: 'Q4_K_M',
-        modelType: 'text',
-        status: 'running',
-        bytesDownloaded: 256,
-        totalBytes: 1024,
-        combinedTotalBytes: 1024,
-        progress: 0.25,
-        createdAt: Date.now(),
-        lastProgressAt: Date.now(),
-      },
-    };
-
-    const { getByText } = render(<DownloadManagerScreen />);
-    expect(getByText('256 B / 1 KB · Rate unavailable')).toBeTruthy();
-    expect(getByText('25%')).toBeTruthy();
-  });
-
-  it('shows the measured rate for an active download', () => {
-    mockDownloadStoreDownloads = {
-      'author/model-id/active-model.gguf': {
-        modelKey: 'author/model-id/active-model.gguf',
-        downloadId: 'dl-rate',
-        modelId: 'author/model-id',
-        fileName: 'active-model.gguf',
-        quantization: 'Q4_K_M',
-        modelType: 'text',
-        status: 'running',
-        bytesDownloaded: 512 * 1024,
-        totalBytes: 1024 * 1024,
-        combinedTotalBytes: 1024 * 1024,
-        bytesPerSecond: 128 * 1024,
-        progress: 0.5,
-        createdAt: Date.now(),
-        lastProgressAt: Date.now(),
-      },
-    };
-
-    const { getByText } = render(<DownloadManagerScreen />);
-    expect(getByText('512 KB / 1 MB · 128.0 KB/s')).toBeTruthy();
-    expect(getByText('50%')).toBeTruthy();
-  });
-
-  it('does not show storage section when no completed models', () => {
-    const { queryByText } = render(<DownloadManagerScreen />);
-    expect(queryByText(/Total storage used/)).toBeNull();
-  });
-
-  it('delete image model shows correct alert', () => {
-    const state = createDefaultState({
-      downloadedImageModels: [
-        {
-          id: 'img-1',
-          name: 'SD Model',
-          description: 'Test',
-          modelPath: '/path',
-          downloadedAt: '2026-01-15T00:00:00.000Z',
-          size: 2048,
-          style: 'creative',
-          backend: 'mnn',
-        },
-      ],
-    });
-    mockStoreState(state);
-
-    const { getAllByTestId } = render(<DownloadManagerScreen />);
-    const deleteButtons = getAllByTestId('delete-model-button');
-    fireEvent.press(deleteButtons[0]);
-
-    expect(mockShowAlert).toHaveBeenCalledWith(
-      'Delete Image Model',
-      expect.stringContaining('SD Model'),
-      expect.any(Array),
+  it('shows the measured rate for an active download', async () => {
+    const m = await openManager(ctx =>
+      nativeDownloads(ctx, [runningText({
+        downloadId: 'dl-rate', fileName: 'active-model.gguf',
+        bytesDownloaded: 384 * KB, totalBytes: MB, combinedTotalBytes: MB,
+      })]),
     );
+    // Two progress reports one second apart on the clock: 128 KB arrived in that second.
+    const clock = jest.spyOn(Date, 'now');
+    try {
+      clock.mockReturnValue(1_000_000);
+      await m.rtl.act(async () => { m.useDownloadStore.getState().updateProgress('dl-rate', 384 * KB, MB); });
+      clock.mockReturnValue(1_001_000);
+      await m.rtl.act(async () => { m.useDownloadStore.getState().updateProgress('dl-rate', 512 * KB, MB); });
+    } finally {
+      clock.mockRestore();
+    }
+    expect(m.view.getByText('512 KB / 1 MB · 128.0 KB/s')).toBeTruthy();
+    expect(m.view.getByText('50%')).toBeTruthy();
   });
 
-  // ===== COVERAGE TESTS =====
-
-  it('confirming delete model dispatches remove to the service with the canonical text id', async () => {
-    setupSingleModelState();
-
-    const { getAllByTestId, getByTestId } = render(<DownloadManagerScreen />);
-
-    // Press delete to show alert
-    const deleteButtons = getAllByTestId('delete-model-button');
-    fireEvent.press(deleteButtons[0]);
-
-    // Now press the "Delete" button in the alert
-    await act(async () => {
-      const deleteConfirm = getByTestId('alert-button-Delete');
-      fireEvent.press(deleteConfirm);
-    });
-
-    // View dispatches the intent; the provider owns the deleteModel/unload mechanism.
-    expect(mockServiceRemove).toHaveBeenCalledWith('text:model-1');
+  it('does not show storage section when no completed models', async () => {
+    const { view } = await openManager();
+    expect(view.queryByText(/Total storage used/)).toBeNull();
   });
 
-  it('delete model error shows error alert', async () => {
-    setupSingleModelState();
-    mockServiceRemove.mockRejectedValueOnce(new Error('fail'));
-
-    const { getAllByTestId, getByTestId } = render(<DownloadManagerScreen />);
-
-    const deleteButtons = getAllByTestId('delete-model-button');
-    fireEvent.press(deleteButtons[0]);
-
-    await act(async () => {
-      fireEvent.press(getByTestId('alert-button-Delete'));
+  it('pressing delete on an image model asks first, naming it', async () => {
+    const m = await openManager(async ctx => {
+      await placeImageModel(ctx, { id: 'img-1', name: 'SD Model', bytes: 2048 });
     });
-
-    expect(mockShowAlert).toHaveBeenCalledWith('Error', 'Failed to delete model');
+    m.rtl.fireEvent.press(m.view.getByTestId('delete-model-button'));
+    expect(await m.view.findByText('Delete Image Model')).toBeTruthy();
+    expect(m.view.getByText(/"SD Model"/)).toBeTruthy();
   });
 
-  it('confirming delete image model calls deleteImageModel and removeDownloadedImageModel', async () => {
-    const removeDownloadedImageModel = jest.fn();
-    const state = createDefaultState({
-      downloadedImageModels: [
-        {
-          id: 'img-1',
-          name: 'SD Model',
-          description: 'Test',
-          modelPath: '/path',
-          downloadedAt: '2026-01-15T00:00:00.000Z',
-          size: 2048,
-          style: 'creative',
-          backend: 'mnn',
-        },
-      ],
-      removeDownloadedImageModel,
+  it('confirming delete removes the model from the screen, the store, the registry and the disk', async () => {
+    let path = '';
+    const m = await openManager(async ctx => {
+      ({ path } = await placeTextModel(ctx, { fileName: 'model.gguf', bytes: KB }));
     });
-    mockStoreState(state);
+    m.rtl.fireEvent.press(m.view.getByTestId('delete-model-button'));
+    await m.view.findByText('Delete Model');
+    await confirm(m, 'Delete');
 
-    const { getAllByTestId, getByTestId } = render(<DownloadManagerScreen />);
-
-    const deleteButtons = getAllByTestId('delete-model-button');
-    fireEvent.press(deleteButtons[0]);
-
-    await act(async () => {
-      fireEvent.press(getByTestId('alert-button-Delete'));
-    });
-
-    // View dispatches the intent; imageProvider.remove owns unload + deleteImageModel.
-    expect(mockServiceRemove).toHaveBeenCalledWith('image:img-1');
+    await m.rtl.waitFor(() => expect(m.view.getByText('No models downloaded yet')).toBeTruthy());
+    expect(m.useAppStore.getState().downloadedModels).toEqual([]);
+    expect(await m.modelManager.getDownloadedModels()).toEqual([]);
+    expect(await m.boundary.fs!.exists(path)).toBe(false);
   });
 
-  it('delete image model error shows error alert', async () => {
-    const state = createDefaultState({
-      downloadedImageModels: [
-        {
-          id: 'img-1',
-          name: 'SD Model',
-          description: 'Test',
-          modelPath: '/path',
-          downloadedAt: '2026-01-15T00:00:00.000Z',
-          size: 2048,
-          style: 'creative',
-          backend: 'mnn',
-        },
-      ],
+  it('when the disk refuses the delete, says so and keeps the model', async () => {
+    let path = '';
+    const m = await openManager(async ctx => {
+      ({ path } = await placeTextModel(ctx, { fileName: 'model.gguf', bytes: KB }));
     });
-    mockStoreState(state);
-    mockServiceRemove.mockRejectedValueOnce(new Error('fail'));
+    m.boundary.fs!.module.unlink.mockImplementationOnce(() => Promise.reject(new Error('EACCES')));
+    m.rtl.fireEvent.press(m.view.getByTestId('delete-model-button'));
+    await m.view.findByText('Delete Model');
+    await confirm(m, 'Delete');
 
-    const { getAllByTestId, getByTestId } = render(<DownloadManagerScreen />);
-
-    const deleteButtons = getAllByTestId('delete-model-button');
-    fireEvent.press(deleteButtons[0]);
-
-    await act(async () => {
-      fireEvent.press(getByTestId('alert-button-Delete'));
-    });
-
-    expect(mockShowAlert).toHaveBeenCalledWith('Error', 'Failed to delete image model');
+    expect(await m.view.findByText('Failed to delete model')).toBeTruthy();
+    expect(m.view.getByText('model.gguf')).toBeTruthy();
+    expect(m.useAppStore.getState().downloadedModels).toHaveLength(1);
+    expect(await m.boundary.fs!.exists(path)).toBe(true);
   });
 
-  it('confirming remove active download cancels the native download', async () => {
-    mockDownloadStoreDownloads = {
-      'author/model-id/model-file.gguf': {
-        modelKey: 'author/model-id/model-file.gguf',
-        downloadId: 'dl-remove-1',
-        modelId: 'author/model-id',
-        fileName: 'model-file.gguf',
-        quantization: 'Q4_K_M',
-        modelType: 'text',
-        status: 'running',
-        bytesDownloaded: 1024,
-        totalBytes: 4096,
-        combinedTotalBytes: 4096,
-        progress: 0.3,
-        createdAt: Date.now(),
-        lastProgressAt: Date.now(),
-      },
-    };
-
-    const { getAllByTestId, getByTestId } = render(<DownloadManagerScreen />);
-    fireEvent.press(getAllByTestId('remove-download-button')[0]);
-
-    await act(async () => {
-      fireEvent.press(getByTestId('alert-button-Yes'));
+  it('confirming delete of an image model removes it from the screen, the store, the registry and the disk', async () => {
+    let dir = '';
+    const m = await openManager(async ctx => {
+      ({ dir } = await placeImageModel(ctx, { id: 'img-1', name: 'SD Model', bytes: 2048 }));
     });
+    m.rtl.fireEvent.press(m.view.getByTestId('delete-model-button'));
+    await m.view.findByText('Delete Image Model');
+    await confirm(m, 'Delete');
 
-    // View dispatches cancel by the canonical id (text = the modelKey, matching the
-    // finished model's id); the provider performs the native cancel.
-    expect(mockServiceCancel).toHaveBeenCalledWith('text:author/model-id/model-file.gguf');
+    await m.rtl.waitFor(() => expect(m.view.getByText('No models downloaded yet')).toBeTruthy());
+    expect(m.useAppStore.getState().downloadedImageModels).toEqual([]);
+    expect(await m.modelManager.getDownloadedImageModels()).toEqual([]);
+    expect(await m.boundary.fs!.exists(dir)).toBe(false);
   });
 
-  it('confirming remove download for image model cancels it', async () => {
-    mockDownloadStoreDownloads = {
-      'image:sd-turbo': {
-        modelKey: 'image:sd-turbo',
-        downloadId: 'dl-img-1',
-        modelId: 'image:sd-turbo',
-        fileName: 'sd-turbo.zip',
-        quantization: '',
-        modelType: 'image',
-        status: 'running',
-        bytesDownloaded: 500,
-        totalBytes: 1000,
-        combinedTotalBytes: 1000,
-        progress: 0.5,
-        createdAt: Date.now(),
-        lastProgressAt: Date.now(),
-      },
-    };
-
-    const { getAllByTestId, getByTestId } = render(<DownloadManagerScreen />);
-    fireEvent.press(getAllByTestId('remove-download-button')[0]);
-
-    await act(async () => {
-      fireEvent.press(getByTestId('alert-button-Yes'));
+  // BUG (finding): imageProvider.remove swallows a failed deleteImageModel and drops the model from the
+  // store anyway, so the folder stays on disk, the person is told nothing ("Failed to delete image model"
+  // is unreachable), and the next launch's scan adopts the folder again. The text provider keeps the row
+  // when the disk refuses (textProvider.remove). Remove `.failing` when imageProvider does the same.
+  it.failing('when the disk refuses an image model delete, says so and keeps the model', async () => {
+    let dir = '';
+    const m = await openManager(async ctx => {
+      ({ dir } = await placeImageModel(ctx, { id: 'img-1', name: 'SD Model', bytes: 2048 }));
     });
+    m.boundary.fs!.module.unlink.mockImplementationOnce(() => Promise.reject(new Error('EACCES')));
+    m.rtl.fireEvent.press(m.view.getByTestId('delete-model-button'));
+    await m.view.findByText('Delete Image Model');
+    await confirm(m, 'Delete');
 
-    // image:sd-turbo store modelId → canonical image:sd-turbo (prefix-idempotent).
-    expect(mockServiceCancel).toHaveBeenCalledWith('image:sd-turbo');
+    expect(await m.view.findByText('Failed to delete image model')).toBeTruthy();
+    expect(m.view.getByText('SD Model')).toBeTruthy();
+    expect(m.useAppStore.getState().downloadedImageModels).toHaveLength(1);
+    expect(await m.boundary.fs!.exists(dir)).toBe(true);
   });
 
-  it('renders background download items from active downloads with metadata', () => {
-    mockDownloadStoreDownloads = {
-      'author/bg-model/bg-model.gguf': {
-        modelKey: 'author/bg-model/bg-model.gguf',
-        downloadId: 'dl-bg-101',
-        modelId: 'author/bg-model',
-        fileName: 'bg-model.gguf',
-        quantization: 'Q4_K_M',
-        modelType: 'text',
-        status: 'running',
-        bytesDownloaded: 500,
-        totalBytes: 2000,
-        combinedTotalBytes: 2000,
-        progress: 0.25,
-        createdAt: Date.now(),
-        lastProgressAt: Date.now(),
-      },
-    };
+  it('confirming remove on an active download cancels it on the native downloader', async () => {
+    const m = await openManager(ctx => nativeDownloads(ctx, [runningText({ downloadId: 'dl-remove-1' })]));
+    m.rtl.fireEvent.press(m.view.getByTestId('remove-download-button'));
+    await m.view.findByText('Remove Download');
+    await confirm(m, 'Yes');
 
-    const { getByText, queryByText } = render(<DownloadManagerScreen />);
-    expect(getByText('bg-model.gguf')).toBeTruthy();
-    expect(getByText(/Q4_K_M · Text/)).toBeTruthy();
+    await m.rtl.waitFor(() => expect(m.view.queryByText('model-file.gguf')).toBeNull());
+    expect(m.boundary.download!.active()).toEqual([]);
+    expect(m.useDownloadStore.getState().downloads).toEqual({});
+  });
+
+  it('confirming remove on an image download cancels it on the native downloader', async () => {
+    const m = await openManager(ctx =>
+      nativeDownloads(ctx, [{
+        downloadId: 'dl-img-1', modelKey: 'image:sd-turbo', modelId: 'image:sd-turbo', fileName: 'sd-turbo.zip',
+        modelType: 'image', status: 'running', bytesDownloaded: 500, totalBytes: 1000, combinedTotalBytes: 1000,
+      }]),
+    );
+    m.rtl.fireEvent.press(m.view.getByTestId('remove-download-button'));
+    await m.view.findByText('Remove Download');
+    await confirm(m, 'Yes');
+
+    await m.rtl.waitFor(() => expect(m.view.queryByText('sd-turbo.zip')).toBeNull());
+    expect(m.boundary.download!.active()).toEqual([]);
+    expect(m.useDownloadStore.getState().downloads).toEqual({});
+  });
+
+  it('renders an active download with its quantization and type, not its publisher', async () => {
+    const { view } = await openManager(ctx =>
+      nativeDownloads(ctx, [runningText({
+        downloadId: 'dl-bg-101', modelKey: 'author/bg-model/bg-model.gguf', modelId: 'author/bg-model',
+        fileName: 'bg-model.gguf', bytesDownloaded: 500, totalBytes: 2000, combinedTotalBytes: 2000,
+      })]),
+    );
+    expect(view.getByText('bg-model.gguf')).toBeTruthy();
+    expect(view.getByText(/Q4_K_M · Text/)).toBeTruthy();
     // The publisher name is not repeated on the card.
-    expect(queryByText('author')).toBeNull();
+    expect(view.queryByText('author')).toBeNull();
   });
 
-  it('renders active download entries from store', () => {
-    mockDownloadStoreDownloads = {
-      'valid/model/valid-file.gguf': {
-        modelKey: 'valid/model/valid-file.gguf',
-        downloadId: 'dl-valid',
-        modelId: 'valid/model',
-        fileName: 'valid-file.gguf',
-        quantization: 'Q4_K_M',
-        modelType: 'text',
-        status: 'running',
-        bytesDownloaded: 500,
-        totalBytes: 1000,
-        combinedTotalBytes: 1000,
-        progress: 0.5,
-        createdAt: Date.now(),
-        lastProgressAt: Date.now(),
-      },
-    };
+  it('cancelling the delete alert closes it and keeps the model', async () => {
+    let path = '';
+    const m = await openManager(async ctx => {
+      ({ path } = await placeTextModel(ctx, { fileName: 'model.gguf', bytes: KB }));
+    });
+    m.rtl.fireEvent.press(m.view.getByTestId('delete-model-button'));
+    await m.view.findByText('Delete Model');
+    await confirm(m, 'Cancel');
 
-    const { getByText } = render(<DownloadManagerScreen />);
-    expect(getByText('valid-file.gguf')).toBeTruthy();
+    await m.rtl.waitFor(() => expect(m.view.queryByText('Delete Model')).toBeNull());
+    expect(m.view.getByText('model.gguf')).toBeTruthy();
+    expect(m.useAppStore.getState().downloadedModels).toHaveLength(1);
+    expect(await m.boundary.fs!.exists(path)).toBe(true);
   });
 
-  it('alert onClose calls hideAlert', () => {
-    // Need to trigger an alert first
-    setupSingleModelState();
-
-    const { getAllByTestId, getByTestId } = render(<DownloadManagerScreen />);
-    const deleteButtons = getAllByTestId('delete-model-button');
-    fireEvent.press(deleteButtons[0]);
-
-    // Press the close button on the alert
-    fireEvent.press(getByTestId('alert-close'));
-    expect(mockHideAlert).toHaveBeenCalled();
-  });
-
-  it('pressing Cancel on delete model alert does nothing (cancel style)', () => {
-    setupSingleModelState();
-
-    const { getAllByTestId, getByTestId } = render(<DownloadManagerScreen />);
-    const deleteButtons = getAllByTestId('delete-model-button');
-    fireEvent.press(deleteButtons[0]);
-
-    // Cancel button should exist but not trigger delete
-    const cancelBtn = getByTestId('alert-button-Cancel');
-    expect(cancelBtn).toBeTruthy();
-  });
-
-  it('renders valid download entries and shows their file names', () => {
-    mockDownloadStoreDownloads = {
-      'valid/model/valid.gguf': {
-        modelKey: 'valid/model/valid.gguf',
-        downloadId: 'dl-202',
-        modelId: 'valid/model',
-        fileName: 'valid.gguf',
-        quantization: 'Q4_K_M',
-        modelType: 'text',
-        status: 'running',
-        bytesDownloaded: 300,
-        totalBytes: 1000,
-        combinedTotalBytes: 1000,
-        progress: 0.3,
-        createdAt: Date.now(),
-        lastProgressAt: Date.now(),
-      },
-    };
-
-    const result = render(<DownloadManagerScreen />);
-
-    expect(result.getByText('valid.gguf')).toBeTruthy();
-  });
-
-  it('dispatches retry to the service with the canonical id for a failed text download', async () => {
-    // The retry MECHANISM (Android setStatus/retryDownload/resetMmProjForRetry/reattach,
-    // iOS re-download) lives in textProvider.retry — covered by textDownloadProvider's
-    // unit tests. The View's only job is to route the intent with the right id.
-    mockDownloadStoreDownloads = {
-      'author/vision/vision.gguf': {
-        modelKey: 'author/vision/vision.gguf',
-        downloadId: 'dl-main',
-        modelId: 'author/vision',
-        fileName: 'vision.gguf',
-        quantization: 'Q4_K_M',
-        modelType: 'text',
-        status: 'failed',
-        errorCode: 'http_416',
-        errorMessage: 'retry me',
-        bytesDownloaded: 1024,
-        totalBytes: 4096,
-        combinedTotalBytes: 4608,
-        progress: 0.25,
-        createdAt: Date.now(),
-        lastProgressAt: Date.now(),
-        mmProjDownloadId: 'dl-mmproj',
-        mmProjStatus: 'failed',
-      },
-    };
-
-    const { getByTestId } = render(<DownloadManagerScreen />);
-
-    await act(async () => {
-      fireEvent.press(getByTestId('failed-retry-button'));
+  it('retrying a failed text download restarts it on the native downloader', async () => {
+    const m = await openManager(ctx =>
+      nativeDownloads(ctx, [runningText({
+        downloadId: 'dl-main', modelKey: 'author/vision/vision.gguf', modelId: 'author/vision', fileName: 'vision.gguf',
+        status: 'failed', reason: 'http_416',
+      })]),
+    );
+    await m.rtl.act(async () => {
+      m.rtl.fireEvent.press(m.view.getByTestId('failed-retry-button'));
     });
 
-    expect(mockServiceRetry).toHaveBeenCalledWith('text:author/vision/vision.gguf');
+    // Android resumes the same WorkManager job in place: the row is no longer failed.
+    await m.rtl.waitFor(() => expect(m.view.queryByTestId('failed-retry-button')).toBeNull());
+    expect(m.boundary.download!.module.retryDownload).toHaveBeenCalledWith('dl-main');
+    expect(m.useDownloadStore.getState().downloads['author/vision/vision.gguf'].status).not.toBe('failed');
   });
 
-  // ===== BRANCH COVERAGE TESTS =====
-
-  it('pressing delete on image model when model id does not match store does nothing (covers if(model) false branch at line 411)', () => {
-    // The completed item has modelId='img-1' but downloadedImageModels has modelId='img-2'
-    // So find(m => m.id === item.modelId) returns undefined → if(model) is false → no alert
-    // We simulate this by rendering with one image model, then having the store return
-    // a *different* image model so the find fails.
-    //
-    // Since getDownloadItems() uses downloadedImageModels directly, the only way for
-    // item.modelId to not exist in downloadedImageModels is a stale closure.
-    // We test the guard indirectly: render with matching model first (happy path covered),
-    // then verify that when downloadedImageModels is empty, there are no delete buttons to press.
-    const state = createDefaultState({
-      downloadedImageModels: [
-        {
-          id: 'img-1',
-          name: 'SD Model',
-          description: 'Test',
-          modelPath: '/path',
-          downloadedAt: '2026-01-15T00:00:00.000Z',
-          size: 2048,
-          style: 'creative',
-          backend: 'mnn',
-        },
-      ],
+  it('does not invent a file size when the completed model size is unknown', async () => {
+    const { view } = await openManager(async ctx => {
+      await placeTextModel(ctx, { fileName: 'zero-model.gguf', bytes: 0 });
     });
-    mockStoreState(state);
+    expect(view.getByText('zero-model.gguf')).toBeTruthy();
+    expect(view.queryByText(/0 B · Q4_K_M/)).toBeNull();
+  });
 
-    // Render with matching model — delete button exists
-    const { getAllByTestId } = render(<DownloadManagerScreen />);
-    const deleteButtons = getAllByTestId('delete-model-button');
-    expect(deleteButtons.length).toBeGreaterThan(0);
-
-    // Verify the happy path does call showAlert (model found)
-    fireEvent.press(deleteButtons[0]);
-    expect(mockShowAlert).toHaveBeenCalledWith('Delete Image Model', expect.any(String), expect.any(Array));
-
-    // Now render with no image models — no delete buttons rendered at all
-    const emptyState = createDefaultState({ downloadedImageModels: [] });
-    mockUseAppStore.mockImplementation((selector?: any) => {
-      return selector ? selector(emptyState) : emptyState;
+  it('a completed image model shows its size without a quantization badge', async () => {
+    const { view } = await openManager(async ctx => {
+      await placeImageModel(ctx, { id: 'img-no-quant', name: 'No Quant Image', bytes: 1024 });
     });
-    const { queryAllByTestId: queryAll2 } = render(<DownloadManagerScreen />);
-    expect(queryAll2('delete-model-button').length).toBe(0);
+    expect(view.getByText('No Quant Image')).toBeTruthy();
+    expect(view.getByText('1.00 KB')).toBeTruthy();
+    expect(view.queryByText('Unknown')).toBeNull();
   });
-
-  it('pressing delete on text model when model id does not match store does nothing (covers if(model) false branch at line 413-414)', () => {
-    // Similarly for text models: render with model present (confirming the guard works when model IS found),
-    // then verify no buttons exist when model is absent.
-    setupSingleModelState();
-
-    const { getAllByTestId } = render(<DownloadManagerScreen />);
-    const deleteButtons = getAllByTestId('delete-model-button');
-    expect(deleteButtons.length).toBe(1);
-
-    // Verify the happy path: delete button press triggers alert when model is found
-    fireEvent.press(deleteButtons[0]);
-    expect(mockShowAlert).toHaveBeenCalledWith('Delete Model', expect.any(String), expect.any(Array));
-
-    // Now render with no text models — no delete buttons rendered
-    const emptyState = createDefaultState({ downloadedModels: [] });
-    mockUseAppStore.mockImplementation((selector?: any) => {
-      return selector ? selector(emptyState) : emptyState;
-    });
-    const { queryAllByTestId } = render(<DownloadManagerScreen />);
-    expect(queryAllByTestId('delete-model-button').length).toBe(0);
-  });
-
-  it('does not invent a file size when the completed model size is unknown', () => {
-    setupSingleModelState({ modelOverrides: { id: 'model-zero', name: 'Zero Model', fileName: 'zero-model.gguf', fileSize: 0 } }, 0);
-
-    const { getByText, queryByText } = render(<DownloadManagerScreen />);
-    expect(getByText('zero-model.gguf')).toBeTruthy();
-    expect(queryByText(/0 B · Q4_K_M/)).toBeNull();
-  });
-
-  it('image model with quantization renders imageBadge and imageQuantText styles (covers lines 424-425)', () => {
-    // To hit the imageBadge branch on line 424, we need a completed image-type item
-    // with a non-empty quantization. Image models currently have quantization='' in getDownloadItems,
-    // but an active download with image: prefix could have one via extractQuantization.
-    // The imageBadge style at line 424 is: item.modelType === 'image' && styles.imageBadge
-    // which is part of the completed item renderer only when item.quantization is truthy.
-    // Since completed image model items always have quantization='', we need to verify
-    // the falsy quantization branch (quantization='') does NOT render the badge.
-    const state = createDefaultState({
-      downloadedImageModels: [
-        {
-          id: 'img-no-quant',
-          name: 'No Quant Image',
-          description: 'Test',
-          modelPath: '/path',
-          downloadedAt: '2026-01-15T00:00:00.000Z',
-          size: 1024,
-          style: 'creative',
-          backend: 'mnn',
-        },
-      ],
-    });
-    mockStoreState(state);
-
-    const { getByText, queryByText } = render(<DownloadManagerScreen />);
-    // Image model is shown
-    expect(getByText('No Quant Image')).toBeTruthy();
-    // Since quantization is empty string, the quantBadge is NOT rendered
-    // (the falsy branch of `item.quantization &&` at line 423)
-    // The size is shown without any quantization badge text
-    expect(queryByText('Unknown')).toBeNull();
-  });
-
-
 });
