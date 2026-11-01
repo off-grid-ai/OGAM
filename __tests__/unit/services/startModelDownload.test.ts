@@ -74,6 +74,26 @@ describe('startModelDownload', () => {
     expect(row()).toBeUndefined();
   });
 
+  it('a cancel on the Queued row wins even when it comes before the start reaches the queue', async () => {
+    for (const n of [1, 2, 3]) await startModelDownload(`other/m${n}`, createModelFile({ name: `m${n}.gguf`, size: SIZE }), {});
+    await device.settle();
+    const onError = jest.fn();
+    let settled = false;
+    const starting = startModelDownload(MODEL_ID, file(), { onError }).then(() => { settled = true; });
+    // The Cancel lands at once, while the start is still checking the disk.
+    await require('../../../src/services/backgroundDownloadService').backgroundDownloadService.cancelDownload(`queued:${KEY}`);
+    await device.settle();
+    // A slot frees later: the cancelled model still must not start.
+    await device.finishDownload(device.nativeRows()[0].downloadId, SIZE);
+    await device.settle();
+
+    expect(settled).toBe(true);
+    expect(onError).not.toHaveBeenCalled();
+    expect(row()).toBeUndefined();
+    expect(device.nativeRows().map(r => r.modelId)).not.toContain(MODEL_ID);
+    await starting;
+  });
+
   it('publishes a QUEUED (pending) store row up front, before the native start', async () => {
     const starting = startModelDownload(MODEL_ID, file(), {});
     // The row exists at once, so the Models/onboarding screens can show "Queued".

@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- cohesive download admission-control service: the concurrency cap, FIFO queue, slot accounting, native-bridge calls, and event fan-out are one tightly-coupled unit; splitting it would scatter the shared activeIds/startQueue state. */
+ 
 import { NativeModules, NativeEventEmitter, Platform, Alert } from 'react-native';
 import { BackgroundDownloadInfo, BackgroundDownloadStatus } from '../types';
 import logger from '../utils/logger';
@@ -24,6 +24,12 @@ const { DownloadManagerModule } = NativeModules;
  * cannot resume a storm.
  */
 const MAX_CONCURRENT_DOWNLOADS = 3;
+/** How long a cancel of a "Queued" row waits for a start that has not reached startDownload yet. */
+const EARLY_CANCEL_WINDOW_MS = 30_000;
+
+function cancelledError(): Error & { cancelled: boolean } {
+  return Object.assign(new Error('Download cancelled'), { cancelled: true });
+}
 
 interface QueuedStart {
   params: DownloadParams;
@@ -45,6 +51,9 @@ class BackgroundDownloadService {
   private activeIds = new Set<string>();
   /** Starts waiting for a free slot, in FIFO order. */
   private startQueue: QueuedStart[] = [];
+  /** "Queued" rows cancelled before their start reached startDownload, by key and time. That start is
+   *  refused when it arrives, so a cancel always wins. Kept briefly, so a later re-download still starts. */
+  private cancelledBeforeStart = new Map<string, number>();
   /** Monotonic counter for unique in-flight reservation tokens. */
   private startSeq = 0;
   /** Set once cleanup() runs, so a beginDownload() still awaiting the native start can't
@@ -75,6 +84,7 @@ class BackgroundDownloadService {
     if (params.isSidecar) {
       return this.beginDownload(params, false);
     }
+    if (this.takeEarlyCancel(this.keyFor(params))) throw cancelledError();
     // Under the cap → start immediately. At the cap → queue and resolve when a slot
     // frees. Callers `await` this and only then attach onComplete/onError to the
     // returned downloadId, so a queued start simply resolves later — listeners still
@@ -289,13 +299,23 @@ class BackgroundDownloadService {
    */
   cancelQueued(key: string): boolean {
     const idx = this.startQueue.findIndex((q) => q.key === key);
-    if (idx === -1) return false;
+    if (idx === -1) {
+      // The start may not have reached the queue yet (it checks the disk first): remember the cancel.
+      this.cancelledBeforeStart.set(key, Date.now());
+      return false;
+    }
     const [removed] = this.startQueue.splice(idx, 1);
     this.persistQueue(); // a cancelled queued start must not resurrect on relaunch
-    const error = new Error('Download cancelled') as Error & { cancelled?: boolean };
-    error.cancelled = true;
-    removed.reject(error);
+    removed.reject(cancelledError());
     return true;
+  }
+
+  /** Whether a start for `key` was cancelled moments before it arrived (and forget that cancel). */
+  private takeEarlyCancel(key: string): boolean {
+    const at = this.cancelledBeforeStart.get(key);
+    if (at === undefined) return false;
+    this.cancelledBeforeStart.delete(key);
+    return Date.now() - at < EARLY_CANCEL_WINDOW_MS;
   }
 
   async pauseDownload(downloadId: string): Promise<void> {
