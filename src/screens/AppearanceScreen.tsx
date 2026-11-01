@@ -35,6 +35,8 @@ function Chips<T extends string | boolean | undefined>({ options, value, onPick,
   );
 }
 
+const pick = <T,>(list: T[]): T => list[Math.floor(Math.random() * list.length)];
+
 export const AppearanceScreen: React.FC = () => {
   const navigation = useNavigation();
   const { colors, isDark } = useTheme();
@@ -114,6 +116,19 @@ export const AppearanceScreen: React.FC = () => {
           <Text style={[styles.previewTitle, { fontFamily: FONT_CHOICES.find(f => f.id === appearance.font)?.heading ?? 'serif' }]}>Preview</Text>
           <Text style={[styles.previewBody, { fontFamily: FONT_CHOICES.find(f => f.id === appearance.font)?.body ?? 'sans-serif' }]}>This is how chats and notes will look.</Text>
           <Text style={styles.previewMeta}>Font and size apply to every screen right away.</Text>
+        </View>
+
+        <View style={styles.chips}>
+          <TouchableOpacity testID="look-surprise" accessibilityRole="button" style={styles.chip}
+            onPress={() => setLook({ palette: pick(PALETTES).id, accent: pick(ACCENTS).id })}>
+            <Icon name="shuffle" size={14} color={colors.text} />
+            <Text style={styles.chipText}>Surprise me</Text>
+          </TouchableOpacity>
+          <TouchableOpacity testID="look-reset" accessibilityRole="button" style={styles.chip}
+            onPress={() => updateSettings({ appearance: { chatLayout: appearance.chatLayout } })}>
+            <Icon name="rotate-ccw" size={14} color={colors.text} />
+            <Text style={styles.chipText}>Reset the look</Text>
+          </TouchableOpacity>
         </View>
 
         <NavBarSettings />

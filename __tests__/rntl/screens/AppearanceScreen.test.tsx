@@ -28,6 +28,18 @@ describe('AppearanceScreen', () => {
     expect(after).toBe('#1D4ED8');
   });
 
+  it('"Surprise me" picks a new look and "Reset the look" brings the default back', () => {
+    const view = render(<AppearanceScreen />);
+    fireEvent.press(view.getByTestId('accent-blue'));
+    fireEvent.press(view.getByTestId('look-surprise'));
+    const { appearance } = useAppStore.getState().settings;
+    expect(appearance?.palette).toBeTruthy();
+    expect(appearance?.accent).toBeTruthy();
+    fireEvent.press(view.getByTestId('look-reset'));
+    expect(useAppStore.getState().settings.appearance?.accent).toBeUndefined();
+    expect(useAppStore.getState().settings.appearance?.palette).toBeUndefined();
+  });
+
   it('puts the chosen AI style into the system prompt', () => {
     const view = render(<AppearanceScreen />);
     fireEvent.press(view.getByText('Brief'));
