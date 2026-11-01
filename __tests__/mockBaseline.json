@@ -96,7 +96,6 @@
   "__tests__/rntl/screens/ProDetailScreen.test.tsx": 1,
   "__tests__/rntl/screens/ProjectEditScreen.test.tsx": 6,
   "__tests__/rntl/screens/ProjectsScreen.test.tsx": 5,
-  "__tests__/rntl/screens/StorageSettingsScreen.test.tsx": 9,
   "__tests__/unit/audio/streamingSpeech.test.ts": 3,
   "__tests__/unit/audio/ttsDownloadProvider.test.ts": 2,
   "__tests__/unit/audio/ttsEngineSubscription.test.ts": 2,
