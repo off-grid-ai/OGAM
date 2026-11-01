@@ -1,236 +1,179 @@
 /**
- * App startup tests
+ * App startup, on the real App.
+ *
+ * The whole app mounts over the native boundary (installNativeBoundary): the native downloader, the disk,
+ * the device's IP address and AppState are the device; a saved remote server answers at the HTTP edge.
+ * Everything between them is the app's own startup: download recovery, remote provider initialization and
+ * the network reconnect watcher.
  */
+import { installNativeBoundary, requireRTL } from './harness/nativeBoundary';
 
-import React from 'react';
-import ReactTestRenderer from 'react-test-renderer';
+jest.mock('react-native-bootsplash', () => ({ hide: jest.fn(async () => {}) }), { virtual: true });
 
-const appState = {
-  setDeviceInfo: jest.fn(),
-  setModelRecommendation: jest.fn(),
-  setDownloadedModels: jest.fn(),
-  setDownloadedImageModels: jest.fn(),
-  clearImageModelDownloading: jest.fn(),
-  setBackgroundDownload: jest.fn(),
-  addDownloadedModel: jest.fn(),
-  setDownloadProgress: jest.fn(),
-  activeBackgroundDownloads: {
-    42: {
-      modelId: 'test/model',
-      fileName: 'model.gguf',
-      quantization: 'Q4_K_M',
-      author: 'test',
-      totalBytes: 1000,
+const SERVER = 'http://192.168.1.50:1234';
+
+/**
+ * The saved server, answering at the HTTP edge. Requests are counted; while `hold` is on, every
+ * request waits until release(), the way a slow server keeps the app's first connection open.
+ */
+function installServer() {
+  const requests: string[] = [];
+  let held: Array<() => void> = [];
+  let holding = true;
+  const realFetch = global.fetch;
+  global.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (!url.startsWith(SERVER)) return realFetch(input);
+    requests.push(url);
+    if (holding) await new Promise<void>(resolve => held.push(resolve));
+    return new Response(JSON.stringify({ data: [{ id: 'remote-model' }] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }) as typeof fetch;
+  return {
+    requests,
+    release() {
+      holding = false;
+      held.forEach(resolve => resolve());
+      held = [];
     },
-  },
-};
+    restore() {
+      global.fetch = realFetch;
+    },
+  };
+}
 
-const authState = {
-  isEnabled: false,
-  isLocked: false,
-  setLocked: jest.fn(),
-  setLastBackgroundTime: jest.fn(),
-};
+/** The phone's IP address, as react-native-device-info reads it. */
+function setPhoneIp(ip: string) {
+  require('react-native-device-info').getIpAddress = jest.fn(async () => ip);
+}
 
-const mockUseAppStore = Object.assign(
-  (selector?: (state: typeof appState) => unknown) => (selector ? selector(appState) : appState),
-  {
-    getState: () => appState,
-    persist: { hasHydrated: () => true, rehydrate: jest.fn() },
-  },
-);
+/** Wait out the reconnect watcher's settle delay (2.5 s), as a real network handoff does. */
+const settle = (rtl: ReturnType<typeof requireRTL>) =>
+  rtl.act(() => new Promise(resolve => setTimeout(resolve, 2_800)));
 
-const mockUseAuthStore = Object.assign(
-  (selector?: (state: typeof authState) => unknown) => (selector ? selector(authState) : authState),
-  {
-    getState: () => authState,
-  },
-);
-
-const mockUseRemoteServerStore = Object.assign(
-  () => ({}),
-  {
-    persist: { hasHydrated: () => true, rehydrate: jest.fn() },
-  },
-);
-
-const mockModelManager = {
-  initialize: jest.fn(() => Promise.resolve()),
-  cleanupMMProjEntries: jest.fn(() => Promise.resolve()),
-  setBackgroundDownloadMetadataCallback: jest.fn(),
-  syncBackgroundDownloads: jest.fn(() => Promise.resolve([])),
-  syncCompletedImageDownloads: jest.fn(() => Promise.resolve([])),
-  reconcileFinishedImageDownloads: jest.fn(() => Promise.resolve([])),
-  // Current API: no args, returns the ids of downloads that were still in flight
-  // when the app was killed. App then watches each to completion.
-  restoreInProgressDownloads: jest.fn(() => Promise.resolve(['restored-1'])),
-  startBackgroundDownloadPolling: jest.fn(),
-  getDownloadedModels: jest.fn(() => Promise.resolve([])),
-  refreshModelLists: jest.fn(() => Promise.resolve({ textModels: [], imageModels: [] })),
-  watchDownload: jest.fn(),
-};
-const mockInitializeProviders = jest.fn(() => Promise.resolve());
-const mockStartNetworkReconnectWatcher = jest.fn();
-
-jest.mock('../src/navigation', () => ({
-  AppNavigator: () => null,
-}));
-
-jest.mock('../src/screens', () => ({
-  LockScreen: () => null,
-}));
-
-
-jest.mock('../src/hooks/useAppState', () => ({
-  useAppState: jest.fn(),
-}));
-
-
-const mockUseWhisperStore = Object.assign(
-  () => ({}),
-  { getState: () => ({ refreshPresentModels: jest.fn() }) },
-);
-
-jest.mock('../src/stores', () => ({
-  useAppStore: mockUseAppStore,
-  useAuthStore: mockUseAuthStore,
-  useRemoteServerStore: mockUseRemoteServerStore,
-  useWhisperStore: mockUseWhisperStore,
-}));
-
-// Startup side-effect modules — mocked so initializeApp proceeds deterministically
-// to the download-restore step instead of blocking on real SQLite / keychain I/O.
-jest.mock('../src/services/downloadHydration', () => ({
-  hydrateDownloadStore: jest.fn(() => Promise.resolve()),
-}));
-jest.mock('../src/services/modelDownloadService/registerProviders', () => ({
-  registerCoreDownloadProviders: jest.fn(),
-}));
-jest.mock('../src/services/proLicenseService', () => ({
-  checkProStatus: jest.fn(() => Promise.resolve(false)),
-}));
-jest.mock('../src/bootstrap/loadProFeatures', () => ({
-  loadProFeatures: jest.fn(() => Promise.resolve()),
-}));
-jest.mock('../src/hooks/useDownloads', () => ({
-  useDownloadListeners: jest.fn(),
-}));
-jest.mock('../src/services/loadPolicySync', () => ({
-  startLoadPolicySync: jest.fn(() => jest.fn()),
-}));
-jest.mock('../src/services/networkReconnect', () => ({
-  startNetworkReconnectWatcher: mockStartNetworkReconnectWatcher,
-  stopNetworkReconnectWatcher: jest.fn(),
-}));
-jest.mock('../src/utils/debugLogFile', () => ({
-  initDebugLogFile: jest.fn(),
-  appendDebugLine: jest.fn(),
-  stopDebugLogFile: jest.fn(),
-}));
-
-jest.mock('../src/services', () => ({
-  hardwareService: {
-    getDeviceInfo: jest.fn(() => Promise.resolve({ totalMemory: 8 * 1024 * 1024 * 1024 })),
-    getModelRecommendation: jest.fn(() => ({ recommendedQuantization: 'Q4_K_M' })),
-  },
-  modelManager: mockModelManager,
-  authService: {
-    hasPassphrase: jest.fn(() => Promise.resolve(false)),
-  },
-  knowledgeBase: {
-    ensureReady: jest.fn(() => Promise.resolve()),
-  },
-  remoteServerManager: {
-    initializeProviders: mockInitializeProviders,
-  },
-}));
-
-// NOTE: App is required INSIDE the test, not imported at top level. The jest.mock
-// factories above are hoisted above the `const mock*` definitions; a top-level
-// `import App` is hoisted too and would run those factories BEFORE the consts
-// initialize, so every mocked hook (useAppStore, modelManager, …) captured
-// `undefined` → "useAppStore is not a function" during render. Requiring App from
-// inside the test defers the factories until the consts exist.
+async function saveServer() {
+  const AsyncStorage = require('@react-native-async-storage/async-storage');
+  await AsyncStorage.clear();
+  const { useRemoteServerStore } = require('../src/stores');
+  const serverId = useRemoteServerStore.getState().addServer({
+    name: 'Office Mac',
+    endpoint: SERVER,
+    providerType: 'openai-compatible',
+  });
+  useRemoteServerStore.getState().setActiveServerId(serverId);
+}
 
 describe('App', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockInitializeProviders.mockResolvedValue(undefined);
-  });
+  jest.setTimeout(30_000);
 
-  it('restores in-flight downloads at startup and watches each to completion', async () => {
-    const App = require('../App').default;
-    let renderer: ReactTestRenderer.ReactTestRenderer;
-    await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<App />);
-      // Flush the async startup chain (hydrate → reattach → restore → watch).
-      for (let i = 0; i < 20; i++) await Promise.resolve();
+  it('restores a download that was in flight when the app closed and finishes it after launch', async () => {
+    const boundary = installNativeBoundary({ download: true, fs: true });
+    const AsyncStorage = require('@react-native-async-storage/async-storage');
+    await AsyncStorage.clear();
+    // The native downloader kept the transfer through the app's restart.
+    boundary.download!.seedActive({
+      downloadId: 'restored-1',
+      modelId: 'test/model',
+      fileName: 'model.gguf',
+      modelType: 'text',
+      quantization: 'Q4_K_M',
+      status: 'running',
+      bytesDownloaded: 500,
+      totalBytes: 1000,
     });
+    const React = require('react');
+    const rtl = requireRTL();
+    const { useAppStore } = require('../src/stores');
+    const App = require('../App').default;
+    const view = rtl.render(React.createElement(App));
 
-    // Current startup restore: called with no args (the persisted map + progress
-    // callback API was removed when download recovery moved to the downloadStore).
-    expect(mockModelManager.restoreInProgressDownloads).toHaveBeenCalled();
-    // Each restored id is re-attached via watchDownload so it finishes in the
-    // background, and polling is resumed.
-    expect(mockModelManager.startBackgroundDownloadPolling).toHaveBeenCalled();
-    expect(mockModelManager.watchDownload).toHaveBeenCalledWith(
-      'restored-1',
-      expect.any(Function),
-      expect.any(Function),
+    // Startup re-attaches the transfer.
+    await rtl.waitFor(() => expect(boundary.download!.events.listenerCount('DownloadComplete')).toBeGreaterThan(0));
+    expect(useAppStore.getState().downloadedModels).toHaveLength(0);
+
+    // The native side finishes: the file is on disk, and the model is the person's to use.
+    const target = `${boundary.fs!.DocumentDirectoryPath}/models/model.gguf`;
+    await rtl.act(async () => {
+      boundary.fs!.seedFile(target, 1000);
+      boundary.download!.events.emit('DownloadComplete', {
+        downloadId: 'restored-1',
+        fileName: 'model.gguf',
+        modelId: 'test/model',
+        bytesDownloaded: 1000,
+        totalBytes: 1000,
+        status: 'completed',
+        localUri: `file://${target}`,
+      });
+    });
+    await rtl.waitFor(() =>
+      expect(useAppStore.getState().downloadedModels.map((m: { fileName: string }) => m.fileName)).toContain('model.gguf'),
     );
-    await ReactTestRenderer.act(async () => {
-      renderer!.unmount();
-    });
+    view.unmount();
   });
 
-  it('starts reconnect recovery only after remote provider initialization settles', async () => {
-    let finishInitialization: (() => void) | undefined;
-    mockInitializeProviders.mockImplementationOnce(() => new Promise<void>((resolve) => {
-      finishInitialization = resolve;
-    }));
+  it('starts reconnect recovery only after the saved server connection settles', async () => {
+    const boundary = installNativeBoundary({ fs: true });
+    const server = installServer();
+    try {
+      setPhoneIp('192.168.1.10');
+      await saveServer();
+      const React = require('react');
+      const rtl = requireRTL();
+      const App = require('../App').default;
+      const view = rtl.render(React.createElement(App));
 
-    const App = require('../App').default;
-    let renderer: ReactTestRenderer.ReactTestRenderer;
-    await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<App />);
-      for (let i = 0; i < 20; i++) await Promise.resolve();
-    });
+      // The app's first connection to the saved server is still open.
+      await rtl.waitFor(() => expect(server.requests.length).toBeGreaterThan(0));
+      const duringInit = server.requests.length;
 
-    expect(mockInitializeProviders).toHaveBeenCalledTimes(1);
-    expect(mockStartNetworkReconnectWatcher).not.toHaveBeenCalled();
+      // The phone changes network meanwhile: no recovery runs on top of the connection in progress.
+      setPhoneIp('192.168.1.20');
+      await rtl.act(async () => boundary.emitAppStateChange('background'));
+      await rtl.act(async () => boundary.emitAppStateChange('active'));
+      await settle(rtl);
+      expect(server.requests).toHaveLength(duringInit);
 
-    await ReactTestRenderer.act(async () => {
-      finishInitialization?.();
-      await Promise.resolve();
-    });
-
-    expect(mockStartNetworkReconnectWatcher).toHaveBeenCalledTimes(1);
-    await ReactTestRenderer.act(async () => {
-      renderer!.unmount();
-    });
+      // The connection settles. From then on, a network change reconnects to the server.
+      await rtl.act(async () => server.release());
+      await rtl.act(() => new Promise(resolve => setTimeout(resolve, 50)));
+      const afterInit = server.requests.length;
+      setPhoneIp('192.168.1.30');
+      await rtl.act(async () => boundary.emitAppStateChange('background'));
+      await rtl.act(async () => boundary.emitAppStateChange('active'));
+      await settle(rtl);
+      expect(server.requests.length).toBeGreaterThan(afterInit);
+      view.unmount();
+    } finally {
+      server.restore();
+    }
   });
 
-  it('does not start reconnect recovery when provider initialization settles after unmount', async () => {
-    let finishInitialization: (() => void) | undefined;
-    mockInitializeProviders.mockImplementationOnce(() => new Promise<void>((resolve) => {
-      finishInitialization = resolve;
-    }));
+  it('does not start reconnect recovery when the connection settles after the app is gone', async () => {
+    const boundary = installNativeBoundary({ fs: true });
+    const server = installServer();
+    try {
+      setPhoneIp('192.168.1.10');
+      await saveServer();
+      const React = require('react');
+      const rtl = requireRTL();
+      const App = require('../App').default;
+      const view = rtl.render(React.createElement(App));
+      await rtl.waitFor(() => expect(server.requests.length).toBeGreaterThan(0));
 
-    const App = require('../App').default;
-    let renderer: ReactTestRenderer.ReactTestRenderer;
-    await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<App />);
-      for (let i = 0; i < 20; i++) await Promise.resolve();
-    });
+      view.unmount();
+      await rtl.act(async () => server.release());
+      await rtl.act(() => new Promise(resolve => setTimeout(resolve, 50)));
+      const afterRelease = server.requests.length;
 
-    await ReactTestRenderer.act(async () => {
-      renderer!.unmount();
-    });
-    await ReactTestRenderer.act(async () => {
-      finishInitialization?.();
-      await Promise.resolve();
-    });
-
-    expect(mockStartNetworkReconnectWatcher).not.toHaveBeenCalled();
+      setPhoneIp('192.168.1.20');
+      await rtl.act(async () => boundary.emitAppStateChange('background'));
+      await rtl.act(async () => boundary.emitAppStateChange('active'));
+      await settle(rtl);
+      expect(server.requests).toHaveLength(afterRelease);
+    } finally {
+      server.restore();
+    }
   });
 });
