@@ -95,7 +95,6 @@
   "__tests__/pro/ui/McpToolsScreen.test.tsx": 1,
   "__tests__/rntl/components/ChatInput.test.tsx": 4,
   "__tests__/rntl/components/GenerationSettingsModal.test.tsx": 2,
-  "__tests__/rntl/components/McpServersScreen.test.tsx": 6,
   "__tests__/rntl/components/VoiceModelsPanel.test.tsx": 4,
   "__tests__/rntl/screens/DownloadManagerScreen.test.tsx": 9,
   "__tests__/rntl/screens/GalleryScreen.test.tsx": 8,
