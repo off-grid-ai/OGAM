@@ -46,13 +46,13 @@ describe('pinnedVersion and specFor', () => {
     ['0.13.0-rc.7', '0.13.0-rc.7'],
     ['^0.7.4', '0.7.4'],
     ['~1.2.3', '1.2.3'],
-    ['npm:@offgrid/llama.rn@0.14.0', '0.14.0'],
-    ['npm:@offgrid/llama.rn@^0.14.0-rc.1', '0.14.0-rc.1'],
+    ['npm:@ogai/llama.rn@0.14.0', '0.14.0'],
+    ['npm:@ogai/llama.rn@^0.14.0-rc.1', '0.14.0-rc.1'],
   ])('%p pins %p', (spec, version) => {
     expect(pinnedVersion(spec)).toBe(version);
   });
 
-  it.each(['*', 'file:../shared/packages/models', '>=1.0.0', 'npm:@offgrid/llama.rn@latest', '', undefined])('%p pins no version', spec => {
+  it.each(['*', 'file:../shared/packages/models', '>=1.0.0', 'npm:@ogai/llama.rn@latest', '', undefined])('%p pins no version', spec => {
     expect(pinnedVersion(spec)).toBeNull();
   });
 
@@ -65,14 +65,14 @@ describe('pinnedVersion and specFor', () => {
   });
 
   it('keeps an npm alias, so the app still imports llama.rn', () => {
-    expect(specFor('npm:@offgrid/llama.rn@0.14.0', '0.15.0')).toBe('npm:@offgrid/llama.rn@0.15.0');
-    expect(specFor('npm:@offgrid/llama.rn@^0.14.0', '0.15.0')).toBe('npm:@offgrid/llama.rn@^0.15.0');
+    expect(specFor('npm:@ogai/llama.rn@0.14.0', '0.15.0')).toBe('npm:@ogai/llama.rn@0.15.0');
+    expect(specFor('npm:@ogai/llama.rn@^0.14.0', '0.15.0')).toBe('npm:@ogai/llama.rn@^0.15.0');
   });
 
   it('checks the package the app installs: upstream llama.rn today, the fork once aliased', () => {
     const llama = ENGINES.find(e => e.id === 'llama.rn');
     expect(npmPackage('0.13.0-rc.9', llama!.pkg!)).toBe('llama.rn');
-    expect(npmPackage('npm:@offgrid/llama.rn@0.14.0', llama!.pkg!)).toBe('@offgrid/llama.rn');
+    expect(npmPackage('npm:@ogai/llama.rn@0.14.0', llama!.pkg!)).toBe('@ogai/llama.rn');
     expect(npmPackage('npm:llama.rn@0.14.0', 'x')).toBe('llama.rn');
   });
 });

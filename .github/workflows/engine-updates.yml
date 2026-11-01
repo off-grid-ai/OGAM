@@ -1,6 +1,6 @@
 name: Engine updates
 
-# Every day, moves the app's native engines (@offgrid/llama.rn, whisper.rn, ExecuTorch, LiteRT-LM,
+# Every day, moves the app's native engines (@ogai/llama.rn, whisper.rn, ExecuTorch, LiteRT-LM,
 # stable-diffusion.cpp; see scripts/lib/engines.js) to their newest upstream releases and opens one
 # PR for CI to test. iOS cannot load downloaded native code (App Store 2.5.2), so there a new engine
 # reaches people in the next nightly + TestFlight; Android also takes signed llama.cpp engine packs

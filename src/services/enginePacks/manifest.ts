@@ -11,7 +11,7 @@ import { decodeBase64, decodeUTF8 } from 'tweetnacl-util';
 
 /** One pack, as the app hands it to the native store (EnginePackStore). */
 export interface EnginePack {
-  /** The @offgrid/llama.rn version the pack was built from. */
+  /** The @ogai/llama.rn version the pack was built from. */
   engineVersion: string;
   /** llama.cpp build number inside the pack: what catalog `minLlamaBuild` compares. */
   llamaBuild: number;
@@ -27,7 +27,8 @@ export interface EnginePack {
   files: Record<string, string>;
 }
 
-const PACKAGE = '@offgrid/llama.rn';
+// The fork's npm name, and the name its first signed manifests carry.
+const PACKAGES = ['@ogai/llama.rn', '@offgrid/llama.rn'];
 const SHA256 = /^[a-f0-9]{64}$/;
 const VERSION = /^[A-Za-z0-9._-]+$/;
 const FILE = /^(?!\/)(?!.*\.\.)[A-Za-z0-9._/-]+$/;
@@ -85,7 +86,7 @@ function toPack(raw: RawPack | null, top: Omit<EnginePack, 'abi' | 'url' | 'sha2
 
 /**
  * The packs of a manifest whose signature verifies against `publicKeyBase64`. Throws when the
- * signature does not match or the manifest is not a schema 1 @offgrid/llama.rn manifest; drops any
+ * signature does not match or the manifest is not a schema 1 llama.rn fork manifest; drops any
  * pack that is malformed.
  */
 export function verifyManifest(body: string, signatureBase64: string, publicKeyBase64: string): EnginePack[] {
@@ -99,12 +100,12 @@ export function verifyManifest(body: string, signatureBase64: string, publicKeyB
   const m = JSON.parse(body) as RawManifest;
   const top =
     m.schema === 1 &&
-    m.package === PACKAGE &&
+    PACKAGES.includes(String(m.package)) &&
     typeof m.version === 'string' && VERSION.test(m.version) &&
     Number.isSafeInteger(m.llamaBuild) && (m.llamaBuild as number) > 0 &&
     typeof m.bridge === 'string' && typeof m.reactNative === 'string' &&
     Array.isArray(m.packs);
-  if (!top) throw new Error(`Engine pack manifest is not a schema 1 ${PACKAGE} manifest`);
+  if (!top) throw new Error('Engine pack manifest is not a schema 1 llama.rn fork manifest');
   const shared = {
     engineVersion: m.version as string,
     llamaBuild: m.llamaBuild as number,

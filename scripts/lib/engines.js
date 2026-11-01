@@ -14,7 +14,7 @@ const semver = require('semver');
 /** Every native engine in the app, and where its version is pinned. */
 const ENGINES = [
   // The app imports llama.cpp as `llama.rn`. Once package.json aliases it to our fork
-  // (`"llama.rn": "npm:@offgrid/llama.rn@…"`), the check follows the alias (npmPackage).
+  // (`"llama.rn": "npm:@ogai/llama.rn@…"`), the check follows the alias (npmPackage).
   { id: 'llama.rn', what: 'chat models (llama.cpp)', source: 'npm', pkg: 'llama.rn' },
   { id: 'whisper.rn', what: 'speech to text (whisper.cpp)', source: 'npm', pkg: 'whisper.rn' },
   {

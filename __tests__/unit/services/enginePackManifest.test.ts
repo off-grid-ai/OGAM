@@ -41,6 +41,11 @@ describe('verifyManifest', () => {
     expect(verifyManifest(body, sign(body), publicKey)).toEqual([expected]);
   });
 
+  it('takes the fork under its npm name too', () => {
+    const body = manifest([rawPack()], { package: '@ogai/llama.rn' });
+    expect(verifyManifest(body, sign(body), publicKey)).toEqual([expected]);
+  });
+
   it('refuses a manifest changed after signing', () => {
     const body = manifest([rawPack()]);
     expect(() => verifyManifest(body.replace('12032,', '99999,'), sign(body), publicKey)).toThrow('signature does not match');
@@ -67,7 +72,7 @@ describe('verifyManifest', () => {
     ['no pack list', { packs: {} }],
   ])('refuses a signed manifest with %s', (_label, over) => {
     const body = manifest([rawPack()], over);
-    expect(() => verifyManifest(body, sign(body), publicKey)).toThrow('not a schema 1 @offgrid/llama.rn manifest');
+    expect(() => verifyManifest(body, sign(body), publicKey)).toThrow('not a schema 1 llama.rn fork manifest');
   });
 
   it.each([
