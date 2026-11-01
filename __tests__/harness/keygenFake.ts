@@ -68,6 +68,8 @@ export interface KeygenFake {
   machines(key: string): readonly StoredMachine[];
   /** Take the network away, to exercise what the app does offline. */
   setOffline(offline: boolean): void;
+  /** Keygen refuses to remove installations (403), as it does for a machine it will not let go of. */
+  refuseDeactivation(refuse: boolean): void;
   /** Requests seen, for asserting that the app did not call out when it should not have. */
   readonly calls: readonly { method: string; path: string }[];
   reset(): void;
@@ -80,6 +82,7 @@ export function createKeygenFake(): KeygenFake {
   const machines = new Map<string, StoredMachine>();
   const calls: { method: string; path: string }[] = [];
   let offline = false;
+  let refuseDeactivation = false;
   let sequence = 0;
   const realFetch = globalThis.fetch;
 
@@ -255,6 +258,7 @@ export function createKeygenFake(): KeygenFake {
       if (!licence || !machine || machine.licenseId !== licence.id) {
         return json(404, { errors: [{ code: 'NOT_FOUND' }] });
       }
+      if (refuseDeactivation) return json(403, { errors: [{ code: 'FORBIDDEN' }] });
       machines.delete(machine.id);
       return new Response(null, { status: 204 });
     }
@@ -323,11 +327,15 @@ export function createKeygenFake(): KeygenFake {
     setOffline(next) {
       offline = next;
     },
+    refuseDeactivation(next) {
+      refuseDeactivation = next;
+    },
     reset() {
       licences.clear();
       machines.clear();
       calls.length = 0;
       offline = false;
+      refuseDeactivation = false;
       sequence = 0;
     },
     install() {
