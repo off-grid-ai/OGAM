@@ -434,6 +434,13 @@ The **Build Atlas voices** workflow ran successfully on 2026-10-19, so `kitten-n
 - **No repeated cards**: two headlines about the same event (different outlets, different wording) or with the same link count as one, and each part is told which stories are already covered.
 - Not verified on a device.
 
+## 8o. Force load everywhere (0.0.119)
+
+- The model picker (Home, Chats and the chat screen share it) has a **Force load: free memory first, skip the safeguards** switch. Switch it on and the next load unloads every other model and loads with the memory safeguards overridden, then the switch turns itself off.
+- Any load that fails now offers **Free memory and load** (memory refusals) or **Free memory and retry** (any other failure), not only "Load Anyway" for some memory cases.
+- The briefing, Learn and practice-call screens already had **Load the AI model now**.
+- Not verified on a device.
+
 ## Build evidence and checks
 
 - New **Android unit tests** workflow runs the Kotlin/JVM tests (`:app:testDebugUnitTest`) on every push that
