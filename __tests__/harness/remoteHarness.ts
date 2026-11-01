@@ -68,6 +68,35 @@ export function installRemoteStream(sseBody: string | string[]): { release: () =
   };
 }
 
+/**
+ * The remote server answers every request with an HTTP error (the network boundary): `status` and the
+ * `body` the server sends, as a real failing server does. The real HTTP client turns it into the error the
+ * app shows.
+ */
+export function installRemoteFailure(status: number, body: string): void {
+  class FailingXHR {
+    responseText = '';
+    readyState = 0;
+    status = 0;
+    onprogress: null | (() => void) = null;
+    onreadystatechange: null | (() => void) = null;
+    onerror: null | (() => void) = null;
+    ontimeout: null | (() => void) = null;
+    open(): void { this.readyState = 1; }
+    setRequestHeader(): void { /* headers irrelevant to the fake */ }
+    abort(): void { /* no-op */ }
+    send(): void {
+      setTimeout(() => {
+        this.status = status;
+        this.responseText = body;
+        this.readyState = 4;
+        this.onreadystatechange?.();
+      }, 0);
+    }
+  }
+  (global as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FailingXHR;
+}
+
 /** Make a remote OpenAI-compatible model the ACTIVE model — the real connect flow's end state (server
  *  added, its models discovered, the provider registered + made active). Discovery/connection is the
  *  network boundary; we pre-place its result, then mount + gesture as the user. `caps` mirrors what a
