@@ -104,7 +104,6 @@
   "__tests__/rntl/screens/DownloadManagerScreen.test.tsx": 9,
   "__tests__/rntl/screens/GalleryScreen.test.tsx": 8,
   "__tests__/rntl/screens/ModelDownloadHelpers.test.tsx": 6,
-  "__tests__/rntl/screens/NoModelScreen.test.tsx": 2,
   "__tests__/rntl/screens/ProDetailScreen.test.tsx": 1,
   "__tests__/rntl/screens/ProjectEditScreen.test.tsx": 6,
   "__tests__/rntl/screens/ProjectsScreen.test.tsx": 5,
