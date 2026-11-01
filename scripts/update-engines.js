@@ -40,13 +40,13 @@ function installedVersion(name, pkg) {
 }
 
 function npmEngine(engine, pkg) {
-  const spec = pkg.dependencies[engine.pkg];
+  const spec = pkg.dependencies[engine.dep ?? engine.pkg];
   const current = engines.pinnedVersion(spec);
   const latest = npmView(engine.pkg, ['dist-tags.latest']);
   const release = latest ? npmView(`${engine.pkg}@${latest}`, ['peerDependencies', 'peerDependenciesMeta']) : {};
   const peers = release?.peerDependencies ?? {};
   const installed = Object.fromEntries(Object.keys(peers).map(name => [name, installedVersion(name, pkg)]));
-  const patch = current ? path.join('patches', engines.patchFileName(engine.pkg, current)) : null;
+  const patch = current ? path.join('patches', engines.patchFileName(engine.dep ?? engine.pkg, current)) : null;
   const decision = engines.decide({
     current,
     latest,
@@ -92,7 +92,8 @@ function applyGithub(engine, to) {
 }
 
 function applyNpm(engine, to, pkg) {
-  pkg.dependencies[engine.pkg] = engines.specFor(pkg.dependencies[engine.pkg], to);
+  const dep = engine.dep ?? engine.pkg;
+  pkg.dependencies[dep] = engines.specFor(pkg.dependencies[dep], to);
   for (const companion of engine.with ?? []) {
     const latest = npmView(companion, ['dist-tags.latest']);
     if (latest && pkg.dependencies[companion]) {

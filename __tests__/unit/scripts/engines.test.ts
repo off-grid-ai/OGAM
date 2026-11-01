@@ -20,7 +20,7 @@ import {
 
 describe('the engines the app ships', () => {
   it('lists every native inference engine once', () => {
-    expect(ENGINES.map(e => e.id)).toEqual(['llama.rn', 'whisper.rn', 'react-native-executorch', 'litertlm-android', 'stable-diffusion.cpp']);
+    expect(ENGINES.map(e => e.id)).toEqual(['@offgrid/llama.rn', 'whisper.rn', 'react-native-executorch', 'litertlm-android', 'stable-diffusion.cpp']);
   });
 });
 
@@ -43,11 +43,13 @@ describe('pinnedVersion and specFor', () => {
     ['0.13.0-rc.7', '0.13.0-rc.7'],
     ['^0.7.4', '0.7.4'],
     ['~1.2.3', '1.2.3'],
+    ['npm:@offgrid/llama.rn@0.14.0', '0.14.0'],
+    ['npm:@offgrid/llama.rn@^0.14.0-rc.1', '0.14.0-rc.1'],
   ])('%p pins %p', (spec, version) => {
     expect(pinnedVersion(spec)).toBe(version);
   });
 
-  it.each(['*', 'file:../shared/packages/models', '>=1.0.0', '', undefined])('%p pins no version', spec => {
+  it.each(['*', 'file:../shared/packages/models', '>=1.0.0', 'npm:@offgrid/llama.rn@latest', '', undefined])('%p pins no version', spec => {
     expect(pinnedVersion(spec)).toBeNull();
   });
 
@@ -55,6 +57,16 @@ describe('pinnedVersion and specFor', () => {
     expect(specFor('^0.7.4', '0.8.0')).toBe('^0.8.0');
     expect(specFor('~0.7.4', '0.7.5')).toBe('~0.7.5');
     expect(specFor('0.13.0-rc.7', '0.13.0')).toBe('0.13.0');
+  });
+
+  it('keeps an npm alias, so the app still imports llama.rn', () => {
+    expect(specFor('npm:@offgrid/llama.rn@0.14.0', '0.15.0')).toBe('npm:@offgrid/llama.rn@0.15.0');
+    expect(specFor('npm:@offgrid/llama.rn@^0.14.0', '0.15.0')).toBe('npm:@offgrid/llama.rn@^0.15.0');
+  });
+
+  it('tracks the fork under the package.json key the app imports', () => {
+    const llama = ENGINES.find(e => e.id === '@offgrid/llama.rn');
+    expect(llama).toMatchObject({ pkg: '@offgrid/llama.rn', dep: 'llama.rn' });
   });
 });
 

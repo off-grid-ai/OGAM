@@ -6,6 +6,8 @@ export interface Engine {
   source: 'npm' | 'maven' | 'github';
   repo?: string;
   pkg?: string;
+  /** The package.json key when it differs from `pkg` (an npm alias). */
+  dep?: string;
   with?: string[];
   group?: string;
   artifact?: string;

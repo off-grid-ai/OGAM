@@ -4,15 +4,18 @@
 // scripts/uat.sh (a beta warns when a newer engine exists). Plain CommonJS so node runs it
 // directly; typed via engines.d.ts so the jest test and `tsc --noEmit` resolve it.
 //
-// A phone app cannot download new native code (App Store guideline 2.5.2, Google Play's policy on
-// executable code), so a new engine reaches people only in an app release. Keeping the pins at the
-// newest release is how every beta ships the newest engine.
+// iOS cannot load downloaded native code (App Store guideline 2.5.2), so there a new engine reaches
+// people only in an app release (nightly + TestFlight). Android also takes signed llama.cpp engine
+// packs over the air (src/services/enginePacks); the bundled engine is still its fallback. Keeping
+// the pins at the newest release is how every build ships the newest engine.
 
 const semver = require('semver');
 
 /** Every native engine in the app, and where its version is pinned. */
 const ENGINES = [
-  { id: 'llama.rn', what: 'chat models (llama.cpp)', source: 'npm', pkg: 'llama.rn' },
+  // Our fork, on llama.cpp's newest release. The app imports it as `llama.rn` through an npm alias
+  // (`"llama.rn": "npm:@offgrid/llama.rn@…"`), so `dep` names the package.json key.
+  { id: '@offgrid/llama.rn', what: 'chat models (llama.cpp)', source: 'npm', pkg: '@offgrid/llama.rn', dep: 'llama.rn' },
   { id: 'whisper.rn', what: 'speech to text (whisper.cpp)', source: 'npm', pkg: 'whisper.rn' },
   {
     id: 'react-native-executorch',
@@ -40,17 +43,25 @@ const ENGINES = [
 ];
 
 const PREFIX = /^([\^~]?)(.+)$/;
+const ALIAS = /^(npm:(?:@[^/@]+\/)?[^@]+@)(.*)$/;
 
-/** The version a dependency spec pins ("^0.7.4" → "0.7.4"), or null for a range or a path. */
+/** An npm alias spec split into its "npm:<name>@" head and its version spec. */
+function splitAlias(spec) {
+  const m = ALIAS.exec(String(spec || '').trim());
+  return m ? { head: m[1], version: m[2] } : { head: '', version: String(spec || '').trim() };
+}
+
+/** The version a dependency spec pins ("^0.7.4" or "npm:@x/y@0.7.4" → "0.7.4"), or null for a range or a path. */
 function pinnedVersion(spec) {
-  const m = PREFIX.exec(String(spec || '').trim());
+  const m = PREFIX.exec(splitAlias(spec).version);
   return m && semver.valid(m[2]) ? m[2] : null;
 }
 
-/** The spec for a new version, keeping the old spec's ^ or ~ (or exact pin). */
+/** The spec for a new version, keeping the old spec's alias and its ^ or ~ (or exact pin). */
 function specFor(oldSpec, version) {
-  const m = PREFIX.exec(String(oldSpec || '').trim());
-  return `${m ? m[1] : ''}${version}`;
+  const { head, version: old } = splitAlias(oldSpec);
+  const m = PREFIX.exec(old);
+  return `${head}${m ? m[1] : ''}${version}`;
 }
 
 /**
