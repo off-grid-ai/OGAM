@@ -84,7 +84,6 @@
   "__tests__/rntl/components/AnimatedListItem.test.tsx": 2,
   "__tests__/rntl/components/ChatInput.test.tsx": 4,
   "__tests__/rntl/components/ChatInputModeToggle.test.tsx": 3,
-  "__tests__/rntl/components/GenerationSettingsModal.test.tsx": 2,
   "__tests__/rntl/components/McpServersScreen.test.tsx": 6,
   "__tests__/rntl/components/pairingCodeSheet.test.tsx": 2,
   "__tests__/rntl/components/TranscriptionModelsTab.test.tsx": 4,
