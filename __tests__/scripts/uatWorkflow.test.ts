@@ -1,7 +1,7 @@
 /**
  * The parallel mobile nightly (.github/workflows/uat-dev.yml).
  *
- * SPEC: a plan job pins the version and the commit; Android and iOS build in parallel from that commit;
+ * SPEC: a plan job pins the version; every job builds the run's own commit (github.sha); Android and iOS build in parallel;
  * each upload starts only once every build that runs has succeeded; finalize (commit, tag, GitHub
  * prerelease) starts only once every upload has. The plan reads the private shared repository's
  * origin/main, so its shared checkout keeps credentials.
@@ -21,7 +21,7 @@ const workflow = parse(fs.readFileSync(path.join(__dirname, '../../.github/workf
 const jobs = workflow.jobs;
 const needs = (name: string) => ([] as string[]).concat(jobs[name].needs ?? []);
 const checkouts = (job: Job) => job.steps.filter(step => step.uses?.startsWith('actions/checkout@'));
-const PINNED = '${{ needs.plan.outputs.sha }}';
+const PINNED = '${{ github.sha }}';
 
 it('the plan keeps credentials on the shared checkout it fetches with uat.sh --plan', () => {
   const plan = jobs.plan;
@@ -31,7 +31,7 @@ it('the plan keeps credentials on the shared checkout it fetches with uat.sh --p
   expect(shared[0].with?.['persist-credentials']).not.toBe(false);
 });
 
-it('every build, upload and finalize job checks out the commit the plan pinned', () => {
+it('every build, upload and finalize job checks out the run\'s own commit, the one the plan read', () => {
   const later = Object.keys(jobs).filter(name => name !== 'plan');
   expect(later.sort()).toEqual(['build-android', 'build-ios', 'finalize', 'upload-android', 'upload-ios']);
   for (const name of later) {
