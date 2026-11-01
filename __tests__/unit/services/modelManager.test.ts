@@ -1217,16 +1217,27 @@ describe('ModelManager', () => {
       ).rejects.toThrow('Only .gguf and .litertlm files can be imported');
     });
 
-    it('rejects when destination already exists', async () => {
-      mockedRNFS.exists
-        .mockResolvedValueOnce(true)  // modelsDir
-        .mockResolvedValueOnce(true)  // imageModelsDir
-        .mockResolvedValue(true);     // destExists = true
+    it('says so when the model is already in the list', async () => {
+      mockedRNFS.exists.mockImplementation(() => Promise.resolve(true));
       mockedRNFS.stat.mockResolvedValue({ size: 1000, isFile: () => true } as any);
+      mockedAsyncStorage.getItem.mockResolvedValue(JSON.stringify([{ id: 'x', name: 'Existing', filePath: '/mock/documents/models/existing.gguf', fileName: 'existing.gguf', fileSize: 1000, engine: 'llama' }]));
+      try {
+        await expect(
+          modelManager.importLocalModel({ sourceUri: '/path/to/source.gguf', fileName: 'existing.gguf' })
+        ).rejects.toThrow('already in your models list');
+      } finally { mockedRNFS.exists.mockImplementation(() => Promise.resolve(false)); }
+    });
 
-      await expect(
-        modelManager.importLocalModel({ sourceUri: '/path/to/source.gguf', fileName: 'existing.gguf' })
-      ).rejects.toThrow('already exists');
+    it('adds a complete leftover file that is in the folder but not in the list, without copying it again', async () => {
+      mockedRNFS.exists.mockImplementation(() => Promise.resolve(true));
+      mockedRNFS.stat.mockResolvedValue({ size: 5000, isFile: () => true } as any);
+      (mockedRNFS as any).copyFile.mockClear();
+      mockedAsyncStorage.getItem.mockResolvedValue('[]');
+      try {
+        const result = await modelManager.importLocalModel({ sourceUri: '/path/to/source.gguf', fileName: 'Leftover-Q4_0.gguf', sourceSize: 5000 });
+        expect(result.id).toBe('local_import/Leftover-Q4_0.gguf');
+        expect((mockedRNFS as any).copyFile).not.toHaveBeenCalled();
+      } finally { mockedRNFS.exists.mockImplementation(() => Promise.resolve(false)); }
     });
 
     it('parses quantization from filename', async () => {
@@ -2141,7 +2152,7 @@ describe('ModelManager', () => {
         .mockResolvedValueOnce(true)
         .mockResolvedValueOnce(true);
 
-      const existing = [{ id: 'existing', filePath: '/mock/models/existing.gguf', name: 'Existing', author: 'test', fileName: 'existing.gguf', fileSize: 4000000000, quantization: 'Q4_K_M', downloadedAt: '' }];
+      const existing = [{ id: 'existing', filePath: '/models/existing.gguf', name: 'Existing', author: 'test', fileName: 'existing.gguf', fileSize: 4000000000, quantization: 'Q4_K_M', downloadedAt: '' }];
       mockedAsyncStorage.getItem.mockResolvedValue(JSON.stringify(existing));
 
       mockedRNFS.readDir.mockResolvedValue([

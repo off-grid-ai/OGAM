@@ -422,18 +422,29 @@ export async function importLocalModel(opts: ImportLocalModelOpts): Promise<Down
   const resolvedMmProjSource = mmProjSourceUri ? resolveUri(mmProjSourceUri) : undefined;
 
   const destPath = `${modelsDir}/${fileName}`;
-  const destExists = await RNFS.exists(destPath);
-  if (destExists) throw new Error(`A model file named "${fileName}" already exists`);
+  // A file with this name is already in the models folder. If the list has it, say so. If the list does not (an earlier
+  // import or removal left it behind), it is not a duplicate: a complete copy is added to the list as it is, a partial one
+  // is replaced. Before, this refused with "already exists" while the model was nowhere in the list to pick.
+  let alreadyCopied = false;
+  if (await RNFS.exists(destPath)) {
+    const known = (await loadDownloadedModels(modelsDir)).find((m) => m.filePath === destPath);
+    if (known) throw new Error(`"${fileName}" is already in your models list as "${known.name}"`);
+    const have = parseSizeInt((await RNFS.stat(destPath)).size);
+    if (sourceSize && have === sourceSize) alreadyCopied = true;
+    else await RNFS.unlink(destPath);
+  }
   if (mmProjFileName && await RNFS.exists(`${modelsDir}/${mmProjFileName}`)) {
     throw new Error(`A file named "${mmProjFileName}" already exists`);
   }
 
   // Copy main model: progress 0→0.5 when mmproj present, 0→1 otherwise
   const mainProgressScale = mmProjFileName ? 0.5 : 1;
-  await copyFileWithProgress(resolvedSource, destPath, {
-    knownTotalBytes: sourceSize ?? null,
-    onProgress: onProgress ? (fraction: number) => onProgress({ fraction: fraction * mainProgressScale, fileName }) : undefined,
-  });
+  if (!alreadyCopied) {
+    await copyFileWithProgress(resolvedSource, destPath, {
+      knownTotalBytes: sourceSize ?? null,
+      onProgress: onProgress ? (fraction: number) => onProgress({ fraction: fraction * mainProgressScale, fileName }) : undefined,
+    });
+  }
 
   const quantMatch = fileName.match(/[_-](Q\d+[_\w]*|f16|f32)/i);
   const quantization = quantMatch ? quantMatch[1].toUpperCase() : 'Unknown';
