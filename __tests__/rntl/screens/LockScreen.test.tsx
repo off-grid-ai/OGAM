@@ -162,21 +162,20 @@ describe('LockScreen', () => {
     expect(view.queryByPlaceholderText('Enter passphrase')).toBeNull();
   });
 
-  // FINDING: when the keychain cannot be read (a locked or damaged item), authService.verifyPassphrase
-  // swallows the error and answers "wrong passphrase". The person typing the RIGHT passphrase is told it
-  // is incorrect and charged an attempt; five of these lock them out. LockScreen already has the right
-  // branch ("Failed to verify passphrase", no attempt counted) but never reaches it. The fix is to let
-  // verifyPassphrase throw on a keychain failure; __tests__/unit/services/authService.test.ts pins the
-  // swallowing ("returns false when keychain retrieval fails"), and that file is outside this lane.
-  it.failing('says it could not check the passphrase when the keychain cannot be read, and counts no attempt', async () => {
+  it('says it could not check the passphrase when the keychain cannot be read, counts no attempt, and unlocks once it can', async () => {
     const view = render(<AppShell />);
     setKeychainUnreadable(true);
 
     await enter(view, PASSPHRASE);
 
-    await waitFor(() => expect(view.getByText('Failed to verify passphrase')).toBeTruthy());
+    // Not "Incorrect Passphrase": the passphrase was never checked, so no attempt is charged.
+    await waitFor(() => expect(view.getByText("Couldn't check your passphrase")).toBeTruthy());
     expect(view.queryByText('Incorrect Passphrase')).toBeNull();
-    fireEvent.press(view.getByText('OK'));
     expect(view.queryByText(/attempts? remaining/)).toBeNull();
+
+    // The keychain answers again: Try again checks the same passphrase and unlocks.
+    setKeychainUnreadable(false);
+    fireEvent.press(view.getByText('Try again'));
+    await waitFor(() => expect(view.queryByPlaceholderText('Enter passphrase')).toBeNull());
   });
 });
