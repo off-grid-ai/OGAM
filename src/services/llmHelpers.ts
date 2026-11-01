@@ -271,10 +271,31 @@ export async function initContextWithFallback(
       logger.error(`[LLM] Both init attempts failed for model: ${modelPath}`);
       logger.error(`[LLM] Error chain — GPU: "${gpuMsg}" | CPU: "${cpuMsg}"`);
       const nativeSuffix = nativeReason ? `\n\nllama.cpp: ${nativeReason}` : '';
-      throw new Error(`Failed to load model at selected context ${contextLength}. This may indicate insufficient memory, a corrupted model file, or an unsupported model format.\n\nGPU: ${gpuMsg} | CPU: ${cpuMsg}${nativeSuffix}`);
+      throw loadFailure(contextLength, `GPU: ${gpuMsg} | CPU: ${cpuMsg}${nativeSuffix}`);
     }
   }
 }
+/** What llama.cpp says when it could not get the memory it asked for. Any other refusal is the file. */
+const ALLOCATION_FAILURE = /failed to allocate|out of memory|\bOOM\b|cannot allocate|unable to allocate|alloc(ation)? fail/i;
+
+/**
+ * The error for a model neither GPU nor CPU could open, typed by its cause so the app does not guess from
+ * the wording: a real allocation failure is out of memory; anything else means the file is damaged or of a
+ * kind this engine cannot read.
+ */
+function loadFailure(contextLength: number, detail: string): Error & { loadFailure: 'out-of-memory' | 'unloadable-file' } {
+  // The first line tells the person the cause; the rest is the engine's detail, for the log and support.
+  const technical = `Failed to load model at selected context ${contextLength}.\n\n${detail}`;
+  if (ALLOCATION_FAILURE.test(detail)) {
+    return Object.assign(new Error(`Not enough memory to load this model.\n\n${technical}`), {
+      loadFailure: 'out-of-memory' as const,
+    });
+  }
+  return Object.assign(new Error(`This model file can't be loaded (damaged or unsupported).\n\n${technical}`), {
+    loadFailure: 'unloadable-file' as const,
+  });
+}
+
 export interface GpuInfo {
   gpuEnabled: boolean;
   gpuReason: string;

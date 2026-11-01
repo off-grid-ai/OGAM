@@ -246,7 +246,8 @@ class LLMService {
         this.context = null; this.currentModelPath = null; this.nativeConversationId = null; this.multimodalSupport = null;
         this.toolCallingSupported = false; this.thinkingSupported = false;
         Object.assign(this, { gpuEnabled: false, gpuReason: '', activeGpuLayers: 0, gpuDevices: [], requestedGpuLayers: 0, gpuAttemptFailed: false });
-        throw new Error(error?.message || 'Unknown error loading model');
+        // Keep the original error: it carries why the load failed (llmHelpers' loadFailure).
+        throw error instanceof Error ? error : new Error(error?.message || 'Unknown error loading model');
       }
     } finally {
       mutex.release();
