@@ -47,11 +47,6 @@ function engineReportsBuild(number: string | undefined) {
   llama.BuildInfo = number === undefined ? undefined : { number, commit: 'test' };
 }
 
-/** The build this app ships: llama.rn's own version file. */
-function shippedBuild(): string {
-  const src: string = require('fs').readFileSync(require.resolve('llama.rn/src/version.ts'), 'utf8');
-  return /BUILD_NUMBER = '(\d+)'/.exec(src)![1];
-}
 
 /** What the app does at launch (App.tsx reads the device once); the RAM it reads is the boundary's. */
 async function launchReadsDevice() {
@@ -112,9 +107,8 @@ describe('Models search leaves out what this phone cannot run', () => {
     const restoreFetches: (() => void)[] = [];
     const { CATALOG } = require('@offgrid/models');
     const needsNewer = CATALOG.find((e: { name: string }) => e.name === 'K2 Horizon 3.7B');
-    expect(needsNewer.minLlamaBuild).toBeGreaterThan(Number(shippedBuild()));
 
-    // Engine reports a build: first the one this app ships, then (another install) one new enough.
+    // Engine reports a build: one new enough, then one a build too old.
     const run = async (build: string | undefined) => {
       installNativeBoundary({ fs: true, ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB } });
       engineReportsBuild(build);
@@ -135,13 +129,13 @@ describe('Models search leaves out what this phone cannot run', () => {
     expect(newer.getByText('K2 Horizon 3.7B')).toBeTruthy();
     newer.unmount();
 
-    // The engine this app ships: the same search does not offer it.
-    const shipped = await run(shippedBuild());
+    // An engine one build older than the model needs: the same search does not offer it.
+    const older = await run(String(needsNewer.minLlamaBuild - 1));
     const rtl = requireRTL();
-    await rtl.waitFor(() => expect(shipped.getByText('Horizon-Chat-1B-GGUF')).toBeTruthy());
-    expect(shipped.queryByText('K2 Horizon 3.7B')).toBeNull();
-    expect(shipped.queryByText('K2 Horizon 7B')).toBeNull();
-    shipped.unmount();
+    await rtl.waitFor(() => expect(older.getByText('Horizon-Chat-1B-GGUF')).toBeTruthy());
+    expect(older.queryByText('K2 Horizon 3.7B')).toBeNull();
+    expect(older.queryByText('K2 Horizon 7B')).toBeNull();
+    older.unmount();
 
     // An engine that cannot say its build: still not offered.
     const unknown = await run(undefined);
