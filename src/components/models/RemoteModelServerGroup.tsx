@@ -14,6 +14,7 @@ interface RemoteModelRow {
   testID: string;
   model: CardModel;
   capabilities?: CardCapabilities;
+  facts?: string[];
   isCurrent: boolean;
   isLoading: boolean;
   onPress: () => void;
@@ -49,6 +50,7 @@ export const RemoteModelServerGroup: React.FC<Props> = ({ serverName, rows, disa
           model={row.model}
           sourceBadge="Remote"
           capabilities={row.capabilities}
+          facts={row.facts}
           // Selected only once the switch has landed; while it runs, the stop spinner says so.
           isActive={row.isCurrent}
           onPress={row.onPress}
