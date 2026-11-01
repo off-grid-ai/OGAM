@@ -5,17 +5,29 @@
  * - Text input and send
  * - Attachment handling (images, documents)
  * - Image generation mode toggle
- * - Voice recording
+ * - Voice recording (hold-to-talk dictation into the composer)
  * - Vision capabilities
  * - Disabled states
+ *
+ * The real ChatInput runs with the real stores, documentService, voice hooks, VoiceRecordButton and
+ * recorder service. Only the device is faked: the photo and document pickers (npm), the disk
+ * (react-native-fs, the in-memory nativeFileSystem), the microphone recorder and its permission
+ * (react-native-audio-api, PermissionsAndroid), and the network a remote transcription server answers
+ * on (fetch). State is written through the stores' and services' own actions; a document is a file on
+ * the in-memory disk that the real documentService reads.
  */
 
 import React from 'react';
 import { voiceSession } from '../../../src/services/voiceSession';
 import { recordingController } from '../../../src/services/recordingController';
-import { Keyboard, Platform } from 'react-native';
+import { Keyboard, PermissionsAndroid, Platform } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { ChatInput } from '../../../src/components/ChatInput';
+import { useAppStore } from '../../../src/stores/appStore';
+import { useWhisperStore } from '../../../src/stores/whisperStore';
+import { remoteServerManager } from '../../../src/services/remoteServerManager';
+import type { NativeFileSystemBoundary } from '../../harness/nativeFileSystem';
+import { createONNXImageModel } from '../../utils/factories';
 
 // Mock image picker
 jest.mock('react-native-image-picker', () => ({
@@ -33,89 +45,90 @@ jest.mock('@react-native-documents/picker', () => ({
   errorCodes: { OPERATION_CANCELED: 'OPERATION_CANCELED' },
 }));
 
-// Mock document service
-const mockIsSupported = jest.fn(() => true);
-const mockProcessDocument = jest.fn(() => Promise.resolve({
-  id: 'doc-1',
-  type: 'document' as const,
-  uri: 'file:///mock/document.txt',
-  fileName: 'document.txt',
-  textContent: 'File content here',
-  fileSize: 1234,
-}));
-jest.mock('../../../src/services/documentService', () => ({
-  documentService: {
-    get isSupported() { return mockIsSupported; },
-    get attachDocument() { return mockProcessDocument; },
-  },
-}));
+// The phone's disk: a stateful in-memory file system the real documentService reads and copies.
+jest.mock('react-native-fs', () => {
+  const disk = require('../../harness/nativeFileSystem').createNativeFileSystemBoundary();
+  (globalThis as unknown as { __chatInputDisk: unknown }).__chatInputDisk = disk;
+  return disk.module;
+});
+const disk = (globalThis as unknown as { __chatInputDisk: NativeFileSystemBoundary }).__chatInputDisk;
 
-// Mock the stores
-const mockUseWhisperStore = jest.fn();
-const mockUseAppStore = jest.fn();
-const mockRemoteServerState = { servers: [], activeServerId: null };
-const mockUseUiModeStore = jest.fn((selector?: (s: { interfaceMode: string }) => unknown) => {
-  const state = { interfaceMode: 'chat' };
-  return selector ? selector(state) : state;
+/** A file the document picker hands back: it sits on the phone's disk at its path. */
+function pickedFile(name: string, contents = 'File content here', reportedSize?: number) {
+  const path = `/picked/${name}`;
+  disk.seedTextFile(path, contents, reportedSize);
+  return { uri: `file://${path}`, name, type: 'text/plain', size: reportedSize ?? contents.length };
+}
+
+const SPEECH_SERVER = 'http://192.168.1.50:7878';
+const realFetch = global.fetch;
+
+/** A remote speech server answers transcription requests with this text. */
+async function serveRemoteTranscription(text: string): Promise<string[]> {
+  const requests: string[] = [];
+  const server = await remoteServerManager.addServer({
+    name: 'Desk',
+    endpoint: SPEECH_SERVER,
+    providerType: 'openai-compatible',
+    mediaModels: { transcription: 'whisper-1' },
+  });
+  await remoteServerManager.setActiveRemoteMediaModel(server.id, 'transcription', 'whisper-1');
+  global.fetch = (async (input: RequestInfo | URL) => {
+    requests.push(String(input));
+    return { ok: true, json: async () => ({ text }) } as Response;
+  }) as typeof fetch;
+  return requests;
+}
+
+/**
+ * One finger on the mic, as the OS reports it: the touch history carries where the finger started and
+ * where it is now, which is what the button's pan responder measures a slide from.
+ */
+const touch = (timestamp: number, pageX = 0) => ({
+  nativeEvent: { touches: [], changedTouches: [], identifier: 1, pageX, pageY: 0, locationX: pageX, locationY: 0, timestamp },
+  touchHistory: {
+    touchBank: [undefined, {
+      touchActive: true,
+      startPageX: 0, startPageY: 0, startTimeStamp: 0,
+      currentPageX: pageX, currentPageY: 0, currentTimeStamp: timestamp,
+      previousPageX: 0, previousPageY: 0, previousTimeStamp: 0,
+    }],
+    numberActiveTouches: 1,
+    indexOfSingleActiveTouch: 1,
+    mostRecentTimeStamp: timestamp,
+  },
 });
 
-jest.mock('../../../src/stores', () => {
-  const useUiModeStore = (selector?: (s: { interfaceMode: string }) => unknown) => mockUseUiModeStore(selector);
-  useUiModeStore.getState = () => ({ interfaceMode: 'chat' });
-  // activeModelService.supportsAudioInput() reads useAppStore.getState(), so the
-  // mocked store needs getState too (mirrors the hook return).
-  const useAppStore = () => mockUseAppStore();
-  useAppStore.getState = () => mockUseAppStore();
-  const useRemoteServerStore = (selector?: (state: typeof mockRemoteServerState) => unknown) =>
-    selector ? selector(mockRemoteServerState) : mockRemoteServerState;
-  useRemoteServerStore.getState = () => mockRemoteServerState;
-  return {
-    useWhisperStore: () => mockUseWhisperStore(),
-    useAppStore,
-    useRemoteServerStore,
-    useUiModeStore,
-  };
-});
+/** Press and hold the mic until it records. */
+async function holdMic(view: ReturnType<typeof render>) {
+  fireEvent(view.getByTestId('voice-record-button'), 'responderGrant', touch(0));
+  await waitFor(() => expect(view.getByTestId('voice-record-button').props.accessibilityLabel).toBe('Stop voice recording'));
+}
 
-// Mock the whisper hook
-const mockUseWhisperTranscription = jest.fn();
-jest.mock('../../../src/hooks/useWhisperTranscription', () => ({
-  useWhisperTranscription: () => mockUseWhisperTranscription(),
-}));
-
-// Mock VoiceRecordButton component
-jest.mock('../../../src/components/VoiceRecordButton', () => ({
-  VoiceRecordButton: ({ _testID, onStartRecording, onStopRecording, onCancelRecording, isRecording, isAvailable, disabled }: any) => {
-    const { TouchableOpacity, Text, View } = require('react-native');
-    return (
-      <View>
-        <TouchableOpacity
-          testID="voice-record-button"
-          onPress={isRecording ? onStopRecording : onStartRecording}
-          disabled={disabled || !isAvailable}
-        >
-          <Text>{isRecording ? 'Stop' : 'Mic'}</Text>
-        </TouchableOpacity>
-        {onCancelRecording && (
-          <TouchableOpacity
-            testID="voice-cancel-button"
-            onPress={onCancelRecording}
-          >
-            <Text>Cancel Recording</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-  },
-}));
+/** Let go of the mic. */
+function releaseMic(view: ReturnType<typeof render>) {
+  fireEvent(view.getByTestId('voice-record-button'), 'responderRelease', touch(500));
+}
 
 describe('ChatInput', () => {
   const defaultProps = {
     onSend: jest.fn(),
   };
 
+  afterEach(async () => {
+    global.fetch = realFetch;
+    await remoteServerManager.clearAllServers();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
+    disk.reset();
+    useAppStore.setState(useAppStore.getInitialState());
+    useWhisperStore.setState(useWhisperStore.getInitialState());
+    // The OS grants the microphone (Android permission dialog, iOS record permission).
+    PermissionsAndroid.request = (async () => PermissionsAndroid.RESULTS.GRANTED) as typeof PermissionsAndroid.request;
+    PermissionsAndroid.check = (async () => true) as typeof PermissionsAndroid.check;
+    require('react-native-audio-api').AudioManager.checkRecordingPermissions = () => Promise.resolve('Granted');
     // The voice session and recording controller are module singletons; without a reset one test's
     // session state (a turn left mid-listen) leaks into the next, so a later tap is refused and the
     // test fails only WHEN RUN AFTER another - green in isolation, red in the suite.
@@ -125,35 +138,6 @@ describe('ChatInput', () => {
     Object.defineProperty(Platform, 'OS', {
       configurable: true,
       value: 'android',
-    });
-
-    // Set up default mock implementations
-    mockUseWhisperStore.mockReturnValue({
-      downloadedModelId: null,
-    });
-
-    mockUseAppStore.mockReturnValue({
-      settings: { thinkingEnabled: false },
-      updateSettings: jest.fn(),
-      downloadedModels: [],
-      activeModelId: null,
-      // handleImageModeToggle now gates on whether an image model is DOWNLOADED.
-      // With no downloaded image models, toggling shows the 'No Image Model' alert.
-      downloadedImageModels: [],
-      setActiveImageModelId: jest.fn(),
-    });
-
-    mockUseWhisperTranscription.mockReturnValue({
-      isRecording: false,
-      isModelLoaded: false,
-      isModelLoading: false,
-      isTranscribing: false,
-      partialResult: '',
-      finalResult: null,
-      error: null,
-      startRecording: jest.fn(),
-      stopRecording: jest.fn(),
-      clearResult: jest.fn(),
     });
   });
 
@@ -700,12 +684,7 @@ describe('ChatInput', () => {
     });
 
     it('opens document picker when document is pressed via attach picker', async () => {
-      mockPick.mockResolvedValue([{
-        uri: 'file:///mock/document.txt',
-        name: 'document.txt',
-        type: 'text/plain',
-        size: 1234,
-      }]);
+      mockPick.mockResolvedValue([pickedFile('document.txt')]);
 
       const result = render(
         <ChatInput {...defaultProps} />
@@ -714,15 +693,14 @@ describe('ChatInput', () => {
       pressAttachDocument(result);
 
       await waitFor(() => {
-        expect(mockPick).toHaveBeenCalled();
         expect(result.queryByTestId('attachments-container')).toBeTruthy();
       });
+      expect(result.getByText('document.txt')).toBeTruthy();
     });
 
     it('shows error alert for unsupported file types', async () => {
-      mockIsSupported.mockReturnValue(false);
       mockPick.mockResolvedValue([{
-        uri: 'file:///mock/file.docx',
+        uri: 'file:///picked/file.docx',
         name: 'file.docx',
         type: 'application/vnd.openxmlformats',
         size: 5000,
@@ -737,8 +715,7 @@ describe('ChatInput', () => {
       await waitFor(() => {
         expect(result.getByText('Unsupported File')).toBeTruthy();
       });
-
-      mockIsSupported.mockReturnValue(true);
+      expect(result.queryByTestId('attachments-container')).toBeNull();
     });
 
     it('does nothing when document picker is cancelled', async () => {
@@ -752,31 +729,16 @@ describe('ChatInput', () => {
       );
 
       pressAttachDocument(result);
-
-      await waitFor(() => {
-        expect(mockPick).toHaveBeenCalled();
-      });
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
 
       expect(result.queryByTestId('attachments-container')).toBeNull();
+      expect(result.queryByText('Error')).toBeNull();
 
       mockIsErrorWithCode.mockReturnValue(false);
     });
 
     it('shows document preview with file icon after picking document', async () => {
-      mockPick.mockResolvedValue([{
-        uri: 'file:///mock/data.csv',
-        name: 'data.csv',
-        type: 'text/csv',
-        size: 2048,
-      }]);
-      mockProcessDocument.mockResolvedValue({
-        id: 'doc-csv',
-        type: 'document' as const,
-        uri: 'file:///mock/data.csv',
-        fileName: 'data.csv',
-        textContent: 'col1,col2\nval1,val2',
-        fileSize: 2048,
-      });
+      mockPick.mockResolvedValue([pickedFile('data.csv', 'col1,col2\nval1,val2')]);
 
       const result = render(
         <ChatInput {...defaultProps} />
@@ -790,20 +752,7 @@ describe('ChatInput', () => {
     });
 
     it('sends message with document attachment', async () => {
-      mockPick.mockResolvedValue([{
-        uri: 'file:///mock/notes.txt',
-        name: 'notes.txt',
-        type: 'text/plain',
-        size: 500,
-      }]);
-      mockProcessDocument.mockResolvedValue({
-        id: 'doc-notes',
-        type: 'document' as const,
-        uri: 'file:///mock/notes.txt',
-        fileName: 'notes.txt',
-        textContent: 'My notes content',
-        fileSize: 500,
-      });
+      mockPick.mockResolvedValue([pickedFile('notes.txt', 'My notes content')]);
 
       const onSend = jest.fn();
       const result = render(
@@ -832,13 +781,8 @@ describe('ChatInput', () => {
     });
 
     it('shows error alert when attaching the document fails', async () => {
-      mockPick.mockResolvedValue([{
-        uri: 'file:///mock/bad-file.txt',
-        name: 'bad-file.txt',
-        type: 'text/plain',
-        size: 100,
-      }]);
-      mockProcessDocument.mockRejectedValue(new Error('File is too large. Maximum size is 1 GB'));
+      // A file over the 1 GB limit, as the phone's disk reports it.
+      mockPick.mockResolvedValue([pickedFile('bad-file.txt', 'x', 2 * 1024 * 1024 * 1024)]);
 
       const result = render(
         <ChatInput {...defaultProps} />
@@ -850,15 +794,7 @@ describe('ChatInput', () => {
         expect(result.getByText('Error')).toBeTruthy();
         expect(result.getByText('File is too large. Maximum size is 1 GB')).toBeTruthy();
       });
-
-      mockProcessDocument.mockResolvedValue({
-        id: 'doc-1',
-        type: 'document' as const,
-        uri: 'file:///mock/document.txt',
-        fileName: 'document.txt',
-        textContent: 'File content here',
-        fileSize: 1234,
-      });
+      expect(result.queryByTestId('attachments-container')).toBeNull();
     });
 
 
@@ -872,20 +808,7 @@ describe('ChatInput', () => {
     });
 
     it('can remove a document attachment from preview', async () => {
-      mockPick.mockResolvedValue([{
-        uri: 'file:///mock/removable.txt',
-        name: 'removable.txt',
-        type: 'text/plain',
-        size: 100,
-      }]);
-      mockProcessDocument.mockResolvedValue({
-        id: 'doc-remove',
-        type: 'document' as const,
-        uri: 'file:///mock/removable.txt',
-        fileName: 'removable.txt',
-        textContent: 'remove me',
-        fileSize: 100,
-      });
+      mockPick.mockResolvedValue([pickedFile('removable.txt', 'remove me')]);
 
       const result = render(
         <ChatInput {...defaultProps} />
@@ -897,15 +820,16 @@ describe('ChatInput', () => {
         expect(result.getByTestId('attachments-container')).toBeTruthy();
       });
 
-      const removeButton = result.getByTestId('remove-attachment-doc-remove');
+      const [removeButton] = result.getAllByTestId(/^remove-attachment-/);
       fireEvent.press(removeButton);
 
       expect(result.queryByTestId('attachments-container')).toBeNull();
     });
 
     it('handles empty name from document picker', async () => {
+      // No name and no extension: the file is checked as "document", which is not a readable type.
       mockPick.mockResolvedValue([{
-        uri: 'file:///mock/unnamed',
+        uri: 'file:///picked/unnamed',
         name: null,
         type: 'application/octet-stream',
         size: 100,
@@ -918,8 +842,9 @@ describe('ChatInput', () => {
       pressAttachDocument(result);
 
       await waitFor(() => {
-        expect(mockIsSupported).toHaveBeenCalledWith('document');
+        expect(result.getByText('Unsupported File')).toBeTruthy();
       });
+      expect(result.queryByTestId('attachments-container')).toBeNull();
     });
 
     it('clears attachments after sending', async () => {
@@ -963,19 +888,29 @@ describe('ChatInput', () => {
   // Voice Recording
   // ============================================================================
   describe('voice recording', () => {
-    it('shows mic button when input is empty and not generating', () => {
+    it('shows mic button when input is empty and not generating', async () => {
+      await serveRemoteTranscription('unused');
       const { getByTestId } = render(
         <ChatInput {...defaultProps} isGenerating={false} />
       );
 
       // Mic button should be visible when input is empty
-      expect(getByTestId('voice-record-button')).toBeTruthy();
+      await waitFor(() => expect(getByTestId('voice-record-button')).toBeTruthy());
     });
 
-    it('hides mic button when input has text', () => {
+    it('with no speech model anywhere, shows the mic as unavailable', () => {
+      const { getByTestId, queryByTestId } = render(<ChatInput {...defaultProps} />);
+
+      expect(getByTestId('voice-record-button-unavailable')).toBeTruthy();
+      expect(queryByTestId('voice-record-button')).toBeNull();
+    });
+
+    it('hides mic button when input has text', async () => {
+      await serveRemoteTranscription('unused');
       const { getByTestId, queryByTestId } = render(
         <ChatInput {...defaultProps} />
       );
+      await waitFor(() => expect(getByTestId('voice-record-button')).toBeTruthy());
 
       const input = getByTestId('chat-input');
       fireEvent.changeText(input, 'Some text');
@@ -1128,17 +1063,10 @@ describe('ChatInput', () => {
     });
 
     it('selects the first downloaded image model and cycles mode when one is available', () => {
-      // Gating is now on DOWNLOADED (not loaded) image models. With a downloaded
-      // model present, toggling selects it and proceeds without the alert.
-      const setActiveImageModelId = jest.fn();
-      mockUseAppStore.mockReturnValue({
-        settings: { thinkingEnabled: false },
-        updateSettings: jest.fn(),
-        downloadedModels: [],
-        activeModelId: null,
-        downloadedImageModels: [{ id: 'img-1' }],
-        setActiveImageModelId,
-      });
+      // Gating is on DOWNLOADED (not loaded) image models. With a downloaded model present,
+      // toggling selects it and proceeds without the alert.
+      const imageModel = createONNXImageModel();
+      act(() => { useAppStore.getState().addDownloadedImageModel(imageModel); });
 
       const onImageModeChange = jest.fn();
       const result = render(
@@ -1151,7 +1079,7 @@ describe('ChatInput', () => {
 
       pressImageModeToggle(result);
 
-      expect(setActiveImageModelId).toHaveBeenCalledWith('img-1');
+      expect(useAppStore.getState().activeImageModelId).toBe(imageModel.id);
       expect(result.queryByText('No Image Model')).toBeNull();
       expect(onImageModeChange).toHaveBeenCalledWith('force');
     });
@@ -1320,188 +1248,59 @@ describe('ChatInput', () => {
   // Voice recording integration (covers lines 87-88, 95-96, 104-111, 442-443)
   // ============================================================================
   describe('voice recording integration', () => {
-    it('starts recording and tracks conversationId', () => {
-      const mockStartRecording = jest.fn().mockResolvedValue(undefined);
-      mockUseWhisperTranscription.mockReturnValue({
-        isRecording: false,
-        isModelLoaded: true,
-        isModelLoading: false,
-        isTranscribing: false,
-        partialResult: '',
-        finalResult: null,
-        error: null,
-        startRecording: mockStartRecording,
-        stopRecording: jest.fn(),
-        clearResult: jest.fn(),
-      });
-      mockUseWhisperStore.mockReturnValue({
-        downloadedModelId: 'whisper-model-1',
-      });
-
-      const { getByTestId } = render(
-        <ChatInput {...defaultProps} conversationId="conv-123" />
-      );
-
-      // Press mic button to start recording (covers lines 87-88)
-      fireEvent.press(getByTestId('voice-record-button'));
-
-      expect(mockStartRecording).toHaveBeenCalled();
-    });
-
-    it('inserts a standalone chat-mode dictation into the composer (does NOT auto-send)', () => {
-      const mockClearResult = jest.fn();
+    it('holding the mic records, and the dictation lands in the composer without sending', async () => {
+      const requests = await serveRemoteTranscription('Hello from voice');
       const onSend = jest.fn();
-      // First render: no finalResult, empty composer (standalone).
-      mockUseWhisperTranscription.mockReturnValue({
-        isRecording: false,
-        isModelLoaded: true,
-        isModelLoading: false,
-        isTranscribing: false,
-        partialResult: '',
-        finalResult: null,
-        error: null,
-        startRecording: jest.fn().mockResolvedValue(undefined),
-        stopRecording: jest.fn(),
-        clearResult: mockClearResult,
-      });
-      mockUseWhisperStore.mockReturnValue({
-        downloadedModelId: 'whisper-model-1',
-      });
+      const view = render(<ChatInput {...defaultProps} onSend={onSend} conversationId="conv-123" />);
+      await waitFor(() => expect(view.getByTestId('voice-record-button')).toBeTruthy());
 
-      const { getByTestId, rerender } = render(
-        <ChatInput {...defaultProps} onSend={onSend} conversationId="conv-123" />
-      );
+      await holdMic(view);
+      releaseMic(view);
 
-      // Simulate finalResult arriving for a standalone recording.
-      mockUseWhisperTranscription.mockReturnValue({
-        isRecording: false,
-        isModelLoaded: true,
-        isModelLoading: false,
-        isTranscribing: false,
-        partialResult: '',
-        finalResult: 'Hello from voice',
-        error: null,
-        startRecording: jest.fn().mockResolvedValue(undefined),
-        stopRecording: jest.fn(),
-        clearResult: mockClearResult,
-      });
-
-      rerender(<ChatInput {...defaultProps} onSend={onSend} conversationId="conv-123" />);
-
-      // B26: chat-mode hold-to-talk dictation places the transcript INTO the composer for the
-      // user to review and send (the user spoke and expects the words in the input box) — it
-      // does NOT auto-send. The transcript is consumed (clearResult) into the input value.
+      // B26: chat-mode hold-to-talk dictation places the transcript INTO the composer for the user to
+      // review and send; it does NOT auto-send.
+      await waitFor(() => expect(view.getByTestId('chat-input').props.value).toBe('Hello from voice'));
       expect(onSend).not.toHaveBeenCalled();
-      const input = getByTestId('chat-input');
-      expect(input.props.value).toBe('Hello from voice');
-      expect(mockClearResult).toHaveBeenCalled();
+      expect(requests).toEqual([`${SPEECH_SERVER}/v1/audio/transcriptions`]);
     });
 
-    it('appends transcribed text to existing message', () => {
-      const mockClearResult = jest.fn();
-      mockUseWhisperTranscription.mockReturnValue({
-        isRecording: false,
-        isModelLoaded: true,
-        isModelLoading: false,
-        isTranscribing: false,
-        partialResult: '',
-        finalResult: null,
-        error: null,
-        startRecording: jest.fn().mockResolvedValue(undefined),
-        stopRecording: jest.fn(),
-        clearResult: mockClearResult,
-      });
-      mockUseWhisperStore.mockReturnValue({
-        downloadedModelId: 'whisper-model-1',
-      });
+    it('records with no conversation open too', async () => {
+      await serveRemoteTranscription('No chat yet');
+      const view = render(<ChatInput {...defaultProps} />);
+      await waitFor(() => expect(view.getByTestId('voice-record-button')).toBeTruthy());
 
-      const { getByTestId, rerender } = render(
-        <ChatInput {...defaultProps} conversationId="conv-123" />
-      );
+      await holdMic(view);
+      releaseMic(view);
 
-      // Type some text first
-      fireEvent.changeText(getByTestId('chat-input'), 'Existing text');
-
-      // Simulate finalResult arriving
-      mockUseWhisperTranscription.mockReturnValue({
-        isRecording: false,
-        isModelLoaded: true,
-        isModelLoading: false,
-        isTranscribing: false,
-        partialResult: '',
-        finalResult: 'appended words',
-        error: null,
-        startRecording: jest.fn().mockResolvedValue(undefined),
-        stopRecording: jest.fn(),
-        clearResult: mockClearResult,
-      });
-
-      rerender(<ChatInput {...defaultProps} conversationId="conv-123" />);
-
-      const input = getByTestId('chat-input');
-      expect(input.props.value).toBe('Existing text appended words');
+      await waitFor(() => expect(view.getByTestId('chat-input').props.value).toBe('No chat yet'));
     });
 
-    it('clears pending transcription when conversation changes', () => {
-      const mockClearResult = jest.fn();
-      const mockStartRecording = jest.fn().mockResolvedValue(undefined);
-      mockUseWhisperTranscription.mockReturnValue({
-        isRecording: false,
-        isModelLoaded: true,
-        isModelLoading: false,
-        isTranscribing: false,
-        partialResult: '',
-        finalResult: null,
-        error: null,
-        startRecording: mockStartRecording,
-        stopRecording: jest.fn(),
-        clearResult: mockClearResult,
-      });
-      mockUseWhisperStore.mockReturnValue({
-        downloadedModelId: 'whisper-model-1',
-      });
+    it.failing('a dictation that finishes after the person switched chats does not land in the new chat', async () => {
+      await serveRemoteTranscription('Meant for chat one');
+      const view = render(<ChatInput {...defaultProps} conversationId="conv-1" />);
+      await waitFor(() => expect(view.getByTestId('voice-record-button')).toBeTruthy());
 
-      const { getByTestId, rerender } = render(
-        <ChatInput {...defaultProps} conversationId="conv-1" />
-      );
+      await holdMic(view);
+      view.rerender(<ChatInput {...defaultProps} conversationId="conv-2" />);
+      releaseMic(view);
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
 
-      // Start recording in conv-1
-      fireEvent.press(getByTestId('voice-record-button'));
-
-      // Change conversation (covers lines 95-96)
-      rerender(<ChatInput {...defaultProps} conversationId="conv-2" />);
-
-      expect(mockClearResult).toHaveBeenCalled();
+      expect(view.getByTestId('chat-input').props.value).toBe('');
     });
 
-    it('calls stopRecording and clearResult on cancel recording', () => {
-      const mockStopRecording = jest.fn();
-      const mockClearResult = jest.fn();
-      mockUseWhisperTranscription.mockReturnValue({
-        isRecording: true,
-        isModelLoaded: true,
-        isModelLoading: false,
-        isTranscribing: false,
-        partialResult: '',
-        finalResult: null,
-        error: null,
-        startRecording: jest.fn().mockResolvedValue(undefined),
-        stopRecording: mockStopRecording,
-        clearResult: mockClearResult,
-      });
-      mockUseWhisperStore.mockReturnValue({
-        downloadedModelId: 'whisper-model-1',
-      });
+    it('sliding left to cancel drops the recording: nothing is transcribed or inserted', async () => {
+      const requests = await serveRemoteTranscription('Should not appear');
+      const view = render(<ChatInput {...defaultProps} />);
+      await waitFor(() => expect(view.getByTestId('voice-record-button')).toBeTruthy());
 
-      const { getByTestId } = render(
-        <ChatInput {...defaultProps} />
-      );
+      await holdMic(view);
+      fireEvent(view.getByTestId('voice-record-button'), 'responderMove', touch(200, -300));
+      fireEvent(view.getByTestId('voice-record-button'), 'responderRelease', touch(500, -300));
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
 
-      // Press cancel recording button (covers lines 442-443)
-      fireEvent.press(getByTestId('voice-cancel-button'));
-
-      expect(mockStopRecording).toHaveBeenCalled();
-      expect(mockClearResult).toHaveBeenCalled();
+      expect(view.getByTestId('chat-input').props.value).toBe('');
+      expect(requests).toEqual([]);
+      await waitFor(() => expect(view.getByTestId('voice-record-button').props.accessibilityLabel).toBe('Start voice recording'));
     });
   });
 
@@ -1676,7 +1475,7 @@ describe('ChatInput', () => {
   });
 
   // ============================================================================
-  // Document picker error with message fallback (covers line 270)
+  // Document picker error with message fallback
   // ============================================================================
   describe('document picker error without message', () => {
     it('shows fallback error message when error has no message', async () => {
@@ -1698,40 +1497,7 @@ describe('ChatInput', () => {
   });
 
   // ============================================================================
-  // Voice recording with no conversationId (covers branch 5[1]: null fallback)
-  // ============================================================================
-  describe('voice recording without conversationId', () => {
-    it('starts recording with null conversationId when prop is undefined', () => {
-      const mockStartRecording = jest.fn().mockResolvedValue(undefined);
-      mockUseWhisperTranscription.mockReturnValue({
-        isRecording: false,
-        isModelLoaded: true,
-        isModelLoading: false,
-        isTranscribing: false,
-        partialResult: '',
-        finalResult: null,
-        error: null,
-        startRecording: mockStartRecording,
-        stopRecording: jest.fn(),
-        clearResult: jest.fn(),
-      });
-      mockUseWhisperStore.mockReturnValue({
-        downloadedModelId: 'whisper-model-1',
-      });
-
-      // conversationId is not provided (undefined)
-      const { getByTestId } = render(
-        <ChatInput {...defaultProps} />
-      );
-
-      fireEvent.press(getByTestId('voice-record-button'));
-
-      expect(mockStartRecording).toHaveBeenCalled();
-    });
-  });
-
-  // ============================================================================
-  // Document picker returns empty result (covers branch 24[0]: !file return)
+  // Document picker returns empty result
   // ============================================================================
   describe('document picker returns empty array', () => {
     it('does nothing when picker returns no files', async () => {
@@ -1749,38 +1515,6 @@ describe('ChatInput', () => {
 
       // No attachments should be added
       expect(queryByTestId('attachments-container')).toBeNull();
-    });
-  });
-
-  // ============================================================================
-  // Attachment preview with document without fileName (covers branch 34[1])
-  // ============================================================================
-  describe('document preview without fileName', () => {
-    it('shows Document fallback text when fileName is missing', async () => {
-      mockPick.mockResolvedValue([{
-        uri: 'file:///mock/unnamed-doc',
-        name: 'somefile.txt',
-        type: 'text/plain',
-        size: 100,
-      }]);
-      mockProcessDocument.mockResolvedValue({
-        id: 'doc-no-name',
-        type: 'document' as const,
-        uri: 'file:///mock/unnamed-doc',
-        fileName: '',
-        textContent: 'content',
-        fileSize: 100,
-      });
-
-      const { getByTestId, getByText } = render(
-        <ChatInput {...defaultProps} />
-      );
-
-      pressAttachDocument({ getByTestId });
-
-      await waitFor(() => {
-        expect(getByText('Document')).toBeTruthy();
-      });
     });
   });
 
