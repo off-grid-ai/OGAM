@@ -229,15 +229,21 @@ jobs:
 
       # Jest's transform cache (babel output per file, keyed by file content and config). The suite
       # transforms all of src/, pro/, shared and the React Native packages on every run otherwise.
-      - name: Cache Jest transforms
+      #
+      # The caches in this job restore and save in separate steps. actions/cache saves in its post
+      # step only when the whole job succeeds, and the gates here keep running after one fails, so a
+      # single red gate threw every cache away. Each save runs once the step that fills it has run.
+      - name: Restore Jest transforms
+        id: jest_cache
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/jest-cache
           key: jest-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'babel.config.js', 'jest.config.js') }}-${{ github.sha }}
           restore-keys: jest-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'babel.config.js', 'jest.config.js') }}-
 
       - name: Run Jest tests
+        id: jest
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         env:
           JEST_CACHE_DIR: ${{ runner.temp }}/jest-cache
@@ -257,6 +263,14 @@ jobs:
           # the runner's RAM and V8 collects before the box starts swapping.
           NODE_OPTIONS: --max-old-space-size=4096
         run: npx jest --coverage --forceExit --maxWorkers=1 --workerIdleMemoryLimit=1GB --cacheDirectory="$JEST_CACHE_DIR"
+
+      # Saved after a failing run too: the transforms are keyed by file content, not by the results.
+      - name: Save Jest transforms
+        if: ${{ !cancelled() && steps.jest.outcome != 'skipped' && steps.jest_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/jest-cache
+          key: ${{ steps.jest_cache.outputs.cache-primary-key }}
 
       - name: Install Android NDK
         # Configuring the native modules (op-sqlite etc.) needs the pinned NDK; the macOS
@@ -280,9 +294,10 @@ jobs:
 
       # ios/Pods, so pod install does not download every pod again (hermes-engine alone is large).
       # pod install still runs and reconciles the restored tree with Podfile.lock.
-      - name: Cache CocoaPods
+      - name: Restore CocoaPods
+        id: pods_cache
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ios/Pods
           key: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ios/Podfile', 'ios/Podfile.lock') }}
@@ -291,30 +306,46 @@ jobs:
       # The stable-diffusion.cpp xcframework that pod install builds (scripts/build-video-ios.sh).
       # It is built once per runtime revision; the script still checks its own build key and
       # rebuilds when it does not match.
-      - name: Cache the iOS video runtime
+      - name: Restore the iOS video runtime
+        id: video_cache
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: native/video/OffgridVideoRuntime.xcframework
           key: video-ios-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/video/**', 'scripts/build-video-ios.sh') }}
 
       - name: Install iOS dependencies
+        id: pods
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: bundle exec pod install --project-directory=ios
+
+      - name: Save CocoaPods
+        if: ${{ !cancelled() && steps.pods.outcome == 'success' && steps.pods_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ios/Pods
+          key: ${{ steps.pods_cache.outputs.cache-primary-key }}
+
+      - name: Save the iOS video runtime
+        if: ${{ !cancelled() && steps.pods.outcome == 'success' && steps.video_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: native/video/OffgridVideoRuntime.xcframework
+          key: ${{ steps.video_cache.outputs.cache-primary-key }}
 
       # Clang modules that Xcode builds for the SDK and the pods. A full DerivedData restore does not
       # make the build incremental (Xcode's file signatures include inodes, which a restore changes);
       # ccache below is what reuses compiled objects.
-      - name: Cache Xcode module cache
+      - name: Restore Xcode module cache
+        id: modules_cache
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Developer/Xcode/DerivedData/ModuleCache.noindex
           key: xcode-modules-debug-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ios/Podfile.lock') }}
           restore-keys: xcode-modules-debug-${{ runner.os }}-${{ runner.arch }}-
 
-      # ccache's default macOS directory: React Native's clang wrapper points ccache at its own
-      # config file, so the cache must be where ccache looks by default.
+      # Outside the checkout. scripts/xcode-ccache.sh writes this directory into its wrappers.
       - name: Locate the ccache directory
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: echo "CCACHE_DIR=$HOME/Library/Caches/ccache" >> "$GITHUB_ENV"
@@ -329,24 +360,26 @@ jobs:
           # Keep only what this build used, so the saved cache does not grow run after run.
           evict-old-files: job
 
-      # Route every C/C++/Objective-C compile through ccache with React Native's own wrapper.
-      # XCODE_XCCONFIG_FILE overrides the build settings of every target from the environment, so
-      # the tracked Xcode project stays as committed.
+      # Route every C/C++/Objective-C compile through ccache. XCODE_XCCONFIG_FILE overrides the
+      # build settings of every target from the environment, so the tracked Xcode project stays as
+      # committed.
       - name: Route clang through ccache
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: |
-          {
-            echo "CC = $GITHUB_WORKSPACE/node_modules/react-native/scripts/xcode/ccache-clang.sh"
-            echo "CXX = $GITHUB_WORKSPACE/node_modules/react-native/scripts/xcode/ccache-clang++.sh"
-            echo "CCACHE_BINARY = $(command -v ccache)"
-          } > "$RUNNER_TEMP/ccache.xcconfig"
-          cat "$RUNNER_TEMP/ccache.xcconfig"
+        run: bash scripts/xcode-ccache.sh "$RUNNER_TEMP/xcode-ccache"
 
       - name: Run iOS tests
+        id: ios_tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         env:
-          XCODE_XCCONFIG_FILE: ${{ runner.temp }}/ccache.xcconfig
+          XCODE_XCCONFIG_FILE: ${{ runner.temp }}/xcode-ccache/ccache.xcconfig
         run: npm run test:ios
+
+      - name: Save Xcode module cache
+        if: ${{ !cancelled() && steps.ios_tests.outcome != 'skipped' && steps.modules_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData/ModuleCache.noindex
+          key: ${{ steps.modules_cache.outputs.cache-primary-key }}
 
       - name: Upload coverage to Codecov
         if: always()
