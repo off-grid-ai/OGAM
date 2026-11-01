@@ -6,7 +6,8 @@
  *  - `react-native-audio-api` (native AudioContext / BufferSource) — a controllable
  *    fake whose `currentTime` we advance by hand and whose `onEnded` we fire when we
  *    choose, so the real position/session/state-machine logic runs against it.
- *  - `@offgrid/core/services/audioSessionManager` — the iOS audio-session native owner.
+ *  The real audioSessionManager runs on top of the fake AudioManager, which records the
+ *  iOS session category and activation it is given.
  *
  * `resolveDocumentPath` and `buildWaveformEnvelope` run FOR REAL (pure logic). We
  * assert observable state (getPosition/getDuration/isPlaying/isActive, decoded
@@ -75,6 +76,7 @@ const bag = (globalThis as unknown as { __audioBag: AudioTestBag }).__audioBag ?
           connect: jest.fn(),
           start: jest.fn(() => {
             if (bag.startShouldThrow) throw new Error('bad offset');
+            bag.sessionEvents.push('source.start');
             src.__started = true;
           }),
           stop: jest.fn(() => {
@@ -106,17 +108,16 @@ jest.mock('react-native-audio-api', () => ({
     (globalThis as unknown as { __audioBag: AudioTestBag }).__audioBag.makeCtx(),
   ),
   AudioManager: {
-    setAudioSessionOptions: jest.fn(),
-    setAudioSessionActivity: jest.fn().mockResolvedValue(true),
-  },
-}));
-
-// audioSessionManager: the iOS session native owner. Record ordering so we can
-// prove play() ensures the playback session BEFORE decoding/starting the source.
-jest.mock('@offgrid/core/services/audioSessionManager', () => ({
-  audioSessionManager: {
-    ensurePlayback: jest.fn(async () => {
-      (globalThis as unknown as { __audioBag: AudioTestBag }).__audioBag.sessionEvents.push('ensurePlayback');
+    setAudioSessionOptions: jest.fn((opts: { iosCategory: string }) => {
+      (globalThis as unknown as { __audioBag: AudioTestBag }).__audioBag.sessionEvents.push(
+        `category:${opts.iosCategory}`,
+      );
+    }),
+    setAudioSessionActivity: jest.fn(async (active: boolean) => {
+      (globalThis as unknown as { __audioBag: AudioTestBag }).__audioBag.sessionEvents.push(
+        `active:${active}`,
+      );
+      return true;
     }),
   },
 }));
@@ -124,7 +125,7 @@ jest.mock('@offgrid/core/services/audioSessionManager', () => ({
 const ctxHandles = bag.ctxHandles;
 const sessionEvents = bag.sessionEvents;
 
-import { audioSessionManager } from '@offgrid/core/services/audioSessionManager';
+import { Platform } from 'react-native';
 import { decodeFileWaveform, audioFilePlayer } from '@offgrid/pro/audio/audioFilePlayer';
 
 const flush = () => new Promise((r) => setImmediate(r));
@@ -139,7 +140,8 @@ beforeEach(() => {
   // Reset the singleton to a clean context between tests.
   audioFilePlayer.resetContext();
   ctxHandles.length = 0;
-  (audioSessionManager.ensurePlayback as jest.Mock).mockClear();
+  // The iOS session owner is the one that runs real session work; Android is a no-op.
+  Platform.OS = 'ios';
 });
 
 /** Start a play() but hold it at the source (don't fire onEnded); return the live source. */
@@ -183,8 +185,8 @@ describe('decodeFileWaveform', () => {
 describe('AudioFilePlayer play + lifecycle', () => {
   it('ensures the playback session BEFORE starting the source', async () => {
     const { p, source } = await startPlay();
-    // The source only starts after ensurePlayback resolved.
-    expect(sessionEvents).toEqual(['ensurePlayback']);
+    // The real session owner set the playback category and activated it before the source started.
+    expect(sessionEvents).toEqual(['category:playback', 'active:true', 'source.start']);
     expect(source.__started).toBe(true);
     source.__fireEnded();
     await p;
