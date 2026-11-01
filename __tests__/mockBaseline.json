@@ -48,8 +48,6 @@
   "__tests__/integration/happy/chatHydrationResumesAfterSlowRead.rendered.test.tsx": 1,
   "__tests__/integration/happy/gpuBackendMeta.rendered.happy.test.tsx": 1,
   "__tests__/integration/happy/plainChatThenRetryRelaunch.rendered.test.tsx": 1,
-  "__tests__/integration/happy/projectsAfterFailedLoad.happy.test.tsx": 1,
-  "__tests__/integration/happy/supportShareDismiss.happy.test.tsx": 1,
   "__tests__/integration/happy/tools.happy.test.tsx": 1,
   "__tests__/integration/image/stopDuringPromptEnhancement.rendered.test.tsx": 1,
   "__tests__/integration/licensing/keygenAutomaticReplacement.test.ts": 1,
