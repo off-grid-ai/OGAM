@@ -11,7 +11,6 @@
   "__tests__/rntl/screens/DownloadManagerScreen.test.tsx": 9,
   "__tests__/rntl/screens/GalleryScreen.test.tsx": 8,
   "__tests__/rntl/screens/ProDetailScreen.test.tsx": 1,
-  "__tests__/unit/services/tools/EmailCalendarExtension.test.ts": 1,
   "__tests__/unit/stores/ttsStore.test.ts": 2,
   "jest.setup.ts": 1
 }
