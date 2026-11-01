@@ -35,9 +35,9 @@ function residentTextModel(sizeMB: number) {
 
 describe('TTS integration', () => {
   // ── Voice sequencing ──────────────────────────────────────────────────
-  // TTS eviction is requested ONLY for a real speak turn (the finished text model is evicted for
-  // the voice model) — NOT for warm/preload/mode-switch, which co-reside if there's room.
-  describe('voice sequencing: TTS load evicts only for a real turn', () => {
+  // The voice model is a sidecar: it co-resides with the text model when the budget has room for both,
+  // on a warm load and on a speak turn alike; a speak turn without room is refused, a warm load skips.
+  describe('voice sequencing: the voice model rides beside the text model', () => {
     it('a warm/preload initializeEngine() co-resides with the text model when it fits', async () => {
       await coolEngine();
       const text = residentTextModel(1000);
@@ -50,22 +50,44 @@ describe('TTS integration', () => {
       expect(text.unloaded).toBe(false);
     });
 
-    // FINDING (open): ttsStore.initializeEngine documents that a speak turn's override load "evicts
-    // EVERYTHING evictable … the text model already answered, free it". The residency policy
-    // (@offgrid/models planEviction) treats 'tts' as a sidecar, and a sidecar may only evict other
-    // sidecars, so the text model stays resident beside the voice model. The old test mocked
-    // makeRoomFor and only checked the flag it was called with, which hid this. it.failing keeps
-    // the contract pinned: it turns red the day the eviction happens, so this can become `it`.
-    it.failing('a speak turn (override) evicts the finished text model for the voice model', async () => {
+    // TTS is a sidecar by design: a voice reply keeps the chat's text model loaded for the next turn,
+    // so even a speak turn rides beside it rather than evicting it.
+    it('a speak turn loads the voice model beside the resident text model', async () => {
       await coolEngine();
       const text = residentTextModel(1000);
 
-      await app.run(() => app.store().initializeEngine({ override: true }));
+      await app.run(() => app.store().initializeEngine({ speak: true }));
 
       await app.rtl.waitFor(() => expect(app.store().isReady).toBe(true));
       expect(app.residency.isResident('tts')).toBe(true);
-      expect(app.residency.isResident('text')).toBe(false);
-      expect(text.unloaded).toBe(true);
+      expect(app.residency.isResident('text')).toBe(true);
+      expect(text.unloaded).toBe(false);
+    });
+
+    // The budget counts the voice model's memory: when it does not fit beside the text model, the speak
+    // turn is refused with a memory error (the Load Anyway card), never squeezed in past the budget.
+    it('a speak turn that does not fit beside the text model is refused, and nothing is loaded or evicted', async () => {
+      await app.close();
+      app = await launchSpeech({ ram: { platform: 'android', totalBytes: 4 * GB, availBytes: 2 * GB } });
+      await coolEngine();
+      // Room is left, but less than the voice model's working set.
+      const text = residentTextModel(app.residency.getBudgetMB() - 100);
+
+      await expect(app.run(() => app.store().initializeEngine({ speak: true }))).rejects.toThrow(
+        'Not enough free memory to load the voice model',
+      );
+
+      expect(app.store().isReady).toBe(false);
+      expect(app.store().error).toBe('Not enough free memory to load the voice model');
+      expect(app.runtime.loaded()).toEqual([]);
+      expect(app.residency.isResident('tts')).toBe(false);
+      expect(app.residency.isResident('text')).toBe(true);
+      expect(text.unloaded).toBe(false);
+
+      // Load Anyway: the person sets the budget aside, and the voice model loads.
+      await app.run(() => app.store().initializeEngine({ override: true }));
+      await app.rtl.waitFor(() => expect(app.store().isReady).toBe(true));
+      expect(app.residency.isResident('tts')).toBe(true);
     });
 
     it('a warm load that does not fit skips quietly — no error, no eviction, no load', async () => {

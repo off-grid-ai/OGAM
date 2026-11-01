@@ -2,17 +2,16 @@
  * RED-FLOW (integration) — a TTS memory refusal on the SPEAK path must surface a dismissible failure
  * card with a "Load Anyway" affordance, never a silent dead-end.
  *
- * DEVICE: in voice/chat mode, tapping the speaker triggers speakMessage → initializeEngine({override:true}).
- * The override load evicts every evictable resident to free maximum RAM; if a native unload REJECTS, the
- * residency manager returns { fits: false } even under override. Pre-fix, ttsStore.initializeEngine threw a
+ * DEVICE: in voice/chat mode, tapping the speaker triggers speakMessage → initializeEngine({speak:true}), a
+ * load within the memory budget beside the chat's text model. When the voice model does not fit, the
+ * residency manager returns { fits: false }. Pre-fix, ttsStore.initializeEngine threw a
  * PLAIN Error there, caught it into `state.error` (static red text on the Settings panel only), and the
  * speak path then bailed silently (dispatchPlayback {t:'ended'}) — the speaker icon just stopped. No alert,
  * no card, no Load Anyway. This violates "any memory refusal on any model type offers Load Anyway".
  *
  * This drives the REAL store speak() → REAL ttsPlayback.speakMessage → REAL initializeEngine → REAL
  * modelResidencyManager over the device-memory harness. Fakes ONLY at the device boundary: a fake TTS
- * engine (idle + downloaded), and a resident text model whose native unload() REJECTS (the reason override
- * can't free room). Assert the USER-FACING outcome: a `tts` failure lands in the real failure store, marked
+ * engine (idle + downloaded), and a resident text model that leaves no room for it. Assert the USER-FACING outcome: a `tts` failure lands in the real failure store, marked
  * overridable with an onLoadAnyway (what the ModelFailureCard renders as "Load Anyway").
  *
  * RED on HEAD: the refusal throws a plain Error → isOverridableMemoryError === false → the failure store is
@@ -66,17 +65,15 @@ describe('TTS speak-path memory refusal is overridable (Load Anyway) — red-flo
   });
 
   it('surfaces a dismissible tts failure card with Load Anyway (not a silent bail)', async () => {
-    // 12GB device. The voice model is a sidecar; the evict-everything force (override → singleModel)
-    // evicts every evictable PEER sidecar to free maximum RAM before loading.
+    // 12GB device. The voice model is a sidecar: a speak turn loads it within the budget, beside the
+    // chat's text model, and never evicts that text model.
     await setDeviceMemory({ platform: 'ios', totalGB: 12, availGB: 0.2, policy: 'balanced' });
     useModelFailureStore.getState().clear();
 
-    // A resident peer sidecar (whisper) whose NATIVE unload REJECTS — the override force tries to evict it
-    // to free room, the native unload fails, so makeRoomFor returns { fits:false } even under override.
-    // This is the reachable device refusal on the evict-everything speak-turn force.
+    // The chat's text model leaves less room than the voice model's 400 MB working set.
     modelResidencyManager.register(
-      { key: 'whisper', type: 'whisper' as never, sizeMB: 1500, canEvict: () => true },
-      async () => { throw new Error('native unload rejected'); },
+      { key: 'text', type: 'text', sizeMB: modelResidencyManager.getBudgetMB() - 100 },
+      async () => {},
       1,
     );
 

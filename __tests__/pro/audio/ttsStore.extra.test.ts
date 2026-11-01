@@ -51,11 +51,11 @@ describe('initializeEngine', () => {
     expect(a.store().error).toBeNull();
   });
 
-  it('override load: fits → the voice model is loaded AND resident at its working-set size', async () => {
+  it('speak turn: fits → the voice model is loaded AND resident at its working-set size', async () => {
     const a = await launch();
     await coolEngine(a);
 
-    await a.run(() => a.store().initializeEngine({ override: true }));
+    await a.run(() => a.store().initializeEngine({ speak: true }));
 
     await a.rtl.waitFor(() => expect(a.store().isReady).toBe(true));
     expect(a.runtime.loaded()).toEqual(['af_heart']);
@@ -78,7 +78,7 @@ describe('initializeEngine', () => {
     expect(a.store().error).toBeNull();
   });
 
-  it('override load: loads even with ~500 MB free (Load Anyway always loads)', async () => {
+  it('Load Anyway (override): loads even with ~500 MB free (Load Anyway always loads)', async () => {
     const a = await launch();
     await coolEngine(a);
     a.boundary.setRam({ platform: 'android', totalBytes: 12 * GB, availBytes: 0.5 * GB });
@@ -94,7 +94,7 @@ describe('initializeEngine', () => {
   it('the TTS resident cannot be evicted while it plays, and can when idle', async () => {
     const a = await launch();
     await coolEngine(a);
-    await a.run(() => a.store().initializeEngine({ override: true }));
+    await a.run(() => a.store().initializeEngine({ speak: true }));
     await a.rtl.waitFor(() => expect(a.store().isReady).toBe(true));
 
     // Playing: a text load that needs the room cannot take it.
@@ -119,7 +119,7 @@ describe('initializeEngine', () => {
   it('eviction releases the engine: the runtime is unloaded and the engine reads cold', async () => {
     const a = await launch();
     await coolEngine(a);
-    await a.run(() => a.store().initializeEngine({ override: true }));
+    await a.run(() => a.store().initializeEngine({ speak: true }));
     await a.rtl.waitFor(() => expect(a.residency.isResident('tts')).toBe(true));
 
     await a.rtl.act(async () => {
@@ -256,6 +256,21 @@ describe('deleteModels', () => {
     expect(a.store().overallDownloadProgress).toBe(0);
     expect(a.store().isSwitchingVoice).toBe(false);
     expect([...a.cache.files].some(path => path.endsWith('synthesizer.pte'))).toBe(false);
+    // The voice the person used until the switch is gone too, not just the one being switched to.
+    expect([...a.cache.files].filter(path => path.endsWith('.bin'))).toEqual([]);
+  });
+
+  it('removes every voice the person downloaded, not just the active one', async () => {
+    const a = await launch();
+    await a.run(() => a.store().setVoice('am_michael'));
+    const voices = () => [...a.cache.files].filter(path => path.endsWith('.bin'));
+    expect(voices().some(path => path.endsWith('af_heart.bin'))).toBe(true);
+    expect(voices().some(path => path.endsWith('am_michael.bin'))).toBe(true);
+
+    await a.rtl.act(async () => { await a.store().deleteModels(); });
+
+    expect(voices()).toEqual([]);
+    expect(a.store().settings.modelDownloaded?.kokoro).toBe(false);
   });
 });
 
