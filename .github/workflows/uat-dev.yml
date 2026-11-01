@@ -149,9 +149,61 @@ jobs:
           npm --prefix ../shared/packages/ui run build
           # The build left ../shared's tree as checked out: uat.sh requires it clean.
           git -C ../shared status --porcelain
-      - run: npm ci
+      # node_modules is restored whole when package-lock.json and patches/ are unchanged, so `npm ci`
+      # runs only when they change. It is saved right after the install, before the native build
+      # writes into node_modules.
+      - name: Restore node_modules
+        id: node_modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node20-${{ hashFiles('package-lock.json', 'patches/**') }}
+      - name: Install dependencies
+        if: ${{ steps.node_modules.outputs.cache-hit != 'true' }}
+        run: npm ci
+      - name: Save node_modules
+        if: ${{ steps.node_modules.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: ${{ steps.node_modules.outputs.cache-primary-key }}
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
+      # Gradle wrapper, dependencies and the Gradle build cache. The open-source 'basic' provider:
+      # the default 'enhanced' one is a commercial service. Only main writes the cache.
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-provider: basic
+      - name: Turn on the Gradle build cache
+        # In the runner's Gradle home, not android/gradle.properties: local builds stay as they are.
+        run: echo "org.gradle.caching=true" >> ~/.gradle/gradle.properties
+      # The video runtime's prebuilt parts: the host shader compiler (shaderc) and the Hexagon DSP
+      # libraries built in Docker, plus the patched stable-diffusion.cpp source. Built once per
+      # revision of scripts/video; the scripts skip each part whose ready marker matches. The
+      # Hexagon SDK and the build trees are left out: they are only needed to build those parts.
+      - name: Cache the Android video runtime
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .video-build
+            !.video-build/hexagon-sdk
+            !.video-build/hexagon-sdk.tar.xz
+            !.video-build/hexagon-build
+            !.video-build/shaderc-source
+          key: video-android-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/video/**', 'scripts/prepare-video-runtime.sh') }}
+      # ccache for the NDK compiles (React Native's C++, stable-diffusion.cpp and ggml for each ABI).
+      # Outside the checkout: uat.sh refuses a dirty tree.
+      - name: Locate the ccache directory
+        run: echo "CCACHE_DIR=$HOME/.ccache" >> "$GITHUB_ENV"
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
+        with:
+          key: android-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'scripts/video/revision') }}
+          restore-keys: android-${{ runner.os }}-${{ runner.arch }}-
+          max-size: 3G
+          # Keep only what this build used, so the saved cache does not grow run after run.
+          evict-old-files: job
       - uses: ruby/setup-ruby@v1
         with: { ruby-version: '3.3', bundler-cache: true }
       - uses: actions/download-artifact@v4
@@ -172,6 +224,10 @@ jobs:
           ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          # CMake (3.17+) reads these as the default compiler launcher. Gradle passes its
+          # environment to the NDK's CMake, so every native compile goes through ccache.
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
         run: bash scripts/uat.sh --build-only --android
       - uses: actions/upload-artifact@v4
         with:
@@ -228,9 +284,42 @@ jobs:
           npm --prefix ../shared/packages/speech run build
           npm --prefix ../shared/packages/ui run build
           git -C ../shared status --porcelain
-      - run: npm ci
+      # node_modules is restored whole when package-lock.json and patches/ are unchanged, so `npm ci`
+      # runs only when they change. It is saved right after the install, before the native build
+      # writes into node_modules.
+      - name: Restore node_modules
+        id: node_modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node20-${{ hashFiles('package-lock.json', 'patches/**') }}
+      - name: Install dependencies
+        if: ${{ steps.node_modules.outputs.cache-hit != 'true' }}
+        run: npm ci
+      - name: Save node_modules
+        if: ${{ steps.node_modules.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: ${{ steps.node_modules.outputs.cache-primary-key }}
       - uses: ruby/setup-ruby@v1
         with: { ruby-version: '3.3', bundler-cache: true }
+      # ios/Pods, so pod install does not download every pod again (hermes-engine alone is large).
+      # pod install still runs and reconciles the restored tree with Podfile.lock.
+      - name: Cache CocoaPods
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ios/Pods
+          key: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ios/Podfile', 'ios/Podfile.lock') }}
+          restore-keys: pods-${{ runner.os }}-${{ runner.arch }}-
+      # The stable-diffusion.cpp xcframework that pod install builds (scripts/build-video-ios.sh).
+      # Built once per runtime revision; the script still checks its own build key and rebuilds
+      # when it does not match.
+      - name: Cache the iOS video runtime
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: native/video/OffgridVideoRuntime.xcframework
+          key: video-ios-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/video/**', 'scripts/build-video-ios.sh') }}
       - name: pod install
         # Use the CocoaPods pinned in Gemfile.lock, so Podfile.lock is reproduced as committed.
         # Restoring a lock rewritten by another CocoaPods left Pods/Manifest.lock out of step with
@@ -249,8 +338,41 @@ jobs:
         run: |
           git checkout -- .bundle/config Gemfile.lock 2>/dev/null || true
           git status --porcelain
+      # Clang modules that Xcode builds for the SDK and the pods. A full DerivedData restore does not
+      # make the archive incremental (Xcode's file signatures include inodes, which a restore
+      # changes); ccache below is what reuses compiled objects.
+      - name: Cache Xcode module cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData/ModuleCache.noindex
+          key: xcode-modules-release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: xcode-modules-release-${{ runner.os }}-${{ runner.arch }}-
+      # ccache's default macOS directory: React Native's clang wrapper points ccache at its own
+      # config file, so the cache must be where ccache looks by default.
+      - name: Locate the ccache directory
+        run: echo "CCACHE_DIR=$HOME/Library/Caches/ccache" >> "$GITHUB_ENV"
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
+        with:
+          key: ios-release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'scripts/video/revision') }}
+          restore-keys: ios-release-${{ runner.os }}-${{ runner.arch }}-
+          max-size: 2G
+          # Keep only what this build used, so the saved cache does not grow run after run.
+          evict-old-files: job
+      # Route every C/C++/Objective-C compile through ccache with React Native's own wrapper.
+      # XCODE_XCCONFIG_FILE overrides the build settings of every target from the environment, so
+      # the tracked Xcode project stays as committed (uat.sh refuses a dirty tree).
+      - name: Route clang through ccache
+        run: |
+          {
+            echo "CC = $GITHUB_WORKSPACE/node_modules/react-native/scripts/xcode/ccache-clang.sh"
+            echo "CXX = $GITHUB_WORKSPACE/node_modules/react-native/scripts/xcode/ccache-clang++.sh"
+            echo "CCACHE_BINARY = $(command -v ccache)"
+          } > "$RUNNER_TEMP/ccache.xcconfig"
+          cat "$RUNNER_TEMP/ccache.xcconfig"
       - name: Build iOS (scripts/uat.sh --build-only --ios)
         env:
+          XCODE_XCCONFIG_FILE: ${{ runner.temp }}/ccache.xcconfig
           # iOS signing (imported into a temp keychain by the Fastfile's setup_signing)
           ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}

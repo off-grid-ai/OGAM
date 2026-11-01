@@ -54,3 +54,22 @@ it('Android and iOS build in parallel, uploads wait for both builds, finalize wa
   expect(jobs.finalize.if).toContain("!contains(needs.*.result, 'failure')");
   expect(jobs.finalize.steps.some(step => step.run?.includes('scripts/uat.sh --finalize'))).toBe(true);
 });
+
+it('each build saves node_modules before it builds, so native build output never enters the cache', () => {
+  for (const name of ['build-android', 'build-ios']) {
+    const steps = jobs[name].steps;
+    const save = steps.findIndex(step => step.uses?.startsWith('actions/cache/save@'));
+    const build = steps.findIndex(step => step.run?.includes('scripts/uat.sh --build-only'));
+    expect(save).toBeGreaterThan(-1);
+    expect(save).toBeLessThan(build);
+  }
+});
+
+it('the build caches are pinned by full commit SHA', () => {
+  const caching = Object.values(jobs)
+    .flatMap(job => job.steps)
+    .map(step => step.uses)
+    .filter((uses): uses is string => /^(actions\/cache|hendrikmuhs\/ccache-action|gradle\/actions)/.test(uses ?? ''));
+  expect(caching.length).toBeGreaterThan(0);
+  for (const uses of caching) expect(uses).toMatch(/@[0-9a-f]{40}$/);
+});
