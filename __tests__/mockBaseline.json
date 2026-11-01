@@ -21,7 +21,6 @@
   "__tests__/unit/screens/DownloadManager/useVoiceDownloadItems.test.ts": 4,
   "__tests__/unit/screens/ModelsScreen/importHelpers.test.ts": 2,
   "__tests__/unit/screens/ModelsScreen/utils.test.ts": 1,
-  "__tests__/unit/services/hardware.test.ts": 4,
   "__tests__/unit/services/tools/EmailCalendarExtension.test.ts": 1,
   "__tests__/unit/services/whisperService.test.ts": 4,
   "__tests__/unit/stores/projectStore.test.ts": 1,
