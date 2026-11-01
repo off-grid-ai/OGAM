@@ -7,61 +7,32 @@
  * - End-to-end through the store's discoverModels action
  */
 
-// Mock logger before imports
-
-// Mock remoteServerManager to prevent initialization side effects
-jest.mock('../../../src/services/remoteServerManager', () => ({
-  remoteServerManager: {
-    initializeProviders: jest.fn(),
-    testConnection: jest.fn(),
-  },
-}));
-
-// Mock httpClient — not exercised in discovery but imported by the store
-jest.mock('../../../src/services/httpClient', () => ({
-  testEndpoint: jest.fn(),
-  detectServerType: jest.fn(),
-}));
-
+// Only the network is faked: each test answers fetch the way the server would. The real store,
+// remoteServerHelpers, httpClient (testEndpoint, detectServerType) and the discovery parsers run on top.
 import { useRemoteServerStore } from '../../../src/stores/remoteServerStore';
-import {
-  detectServerType,
-  testEndpoint,
-} from '../../../src/services/httpClient';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Add a server directly into the store and return its id. */
+/** Save a server through the store's own action, under a known id. */
 function addServer(opts: {
   id: string;
   endpoint: string;
   name?: string;
 }): void {
-  useRemoteServerStore.setState(state => ({
-    servers: [
-      ...state.servers,
-      {
-        id: opts.id,
-        name: opts.name ?? opts.id,
-        endpoint: opts.endpoint,
-        providerType: 'openai-compatible' as const,
-        apiKey: undefined,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-    ],
-  }));
+  useRemoteServerStore.getState().addServer(
+    { name: opts.name ?? opts.id, endpoint: opts.endpoint, providerType: 'openai-compatible' },
+    opts.id,
+  );
 }
 
-/** Resolve a fetch call with a JSON body and a given ok/status. */
+/** A server's JSON answer with a given status. */
 function jsonResponse(body: unknown, ok = true, status = 200): Response {
-  return {
-    ok,
-    status,
-    json: async () => body,
-  } as unknown as Response;
+  return new Response(JSON.stringify(body), {
+    status: ok ? status : status === 200 ? 404 : status,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 /** Reject a fetch call (simulates timeout / abort). */
@@ -80,8 +51,10 @@ describe('remoteServerDiscovery integration', () => {
     jest.clearAllMocks();
     mockFetch = jest.fn();
     (globalThis as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
-    // Reset servers and discovered models between tests
-    useRemoteServerStore.setState({ servers: [], discoveredModels: {} });
+    // Each test starts with no saved servers (removed through the store's own action).
+    for (const server of useRemoteServerStore.getState().servers) {
+      useRemoteServerStore.getState().removeServer(server.id);
+    }
   });
 
   // =========================================================================
@@ -585,13 +558,6 @@ describe('remoteServerDiscovery integration', () => {
         endpoint: 'http://192.168.1.44:7878',
         name: 'Studio Mac',
       }); // NOSONAR
-      (testEndpoint as jest.Mock).mockResolvedValue({
-        success: true,
-        latency: 8,
-      });
-      (detectServerType as jest.Mock).mockResolvedValue({
-        type: 'off-grid-desktop',
-      });
       mockFetch.mockImplementation((url: string) => {
         if (url.endsWith('/v1/models')) {
           return Promise.resolve(
