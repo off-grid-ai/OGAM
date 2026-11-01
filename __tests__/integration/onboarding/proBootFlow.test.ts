@@ -1,5 +1,15 @@
-import { useAppStore } from '../../../src/stores/appStore';
 import { createKeygenFake } from '../../harness/keygenFake';
+import { installNativeBoundary } from '../../harness/nativeBoundary';
+
+// The sync mesh's native transports, which a Pro launch brings up: the device boundary.
+jest.mock('react-native-tcp-socket', () => {
+  const { createNativeTcpBoundary } = require('../../utils/nativeSyncBoundaries');
+  return { __esModule: true, default: createNativeTcpBoundary() };
+});
+jest.mock('react-native-zeroconf', () => {
+  const { createNativeDiscoveryBoundary } = require('../../utils/nativeSyncBoundaries');
+  return { __esModule: true, default: createNativeDiscoveryBoundary() };
+});
 
 /**
  * Opening the app as a Pro user, and as a free one.
@@ -12,40 +22,30 @@ import { createKeygenFake } from '../../harness/keygenFake';
  * anything is drawn - so a stale cache is corrected without the user seeing a flash of the wrong screen,
  * and a provider that cannot be reached falls back to the cached answer rather than to nothing.
  *
- * This used to stand in for the app's own store and licence service with hand-written partial objects,
- * and both drifted behind the real modules - the store gained a setter, the service gained a function,
- * and the tests failed for reasons that had nothing to do with booting. Now the store, the licence
- * service, the cache and the registries are real; the keychain, the device fingerprint and Keygen's
- * HTTP endpoint stand in, because those three are the device and the network.
+ * This used to stand in for the app's own store, licence service and pro package with hand-written
+ * partial objects, and they drifted behind the real modules. Now the store, the licence service, the
+ * cache, the registries and the pro package itself are real; the keychain (which also holds this
+ * install's device fingerprint, saved by an earlier launch), the native modules, the sync transports
+ * and Keygen's HTTP endpoint stand in, because those are the device and the network. What the pro
+ * package switched on is read off the registries and stores it writes to.
  */
 
 const LICENCE_KEY = 'OFFGRID-TEST-LICENCE';
-const FINGERPRINT = 'fp-this-phone';
 
-// The pro package itself, which is what activation switches on. Its own contents are its own tests'
-// business; what matters here is that it is handed the registries, and that it is handed the function
-// that registers the entitlement provider - without which the app can never read a licence at all.
-jest.mock(
-  '@offgrid/pro',
-  () => {
-    const { proLicenseProvider } = require('../../../pro/licensing/proLicenseProvider');
-    return {
-      activate: jest.fn(),
-      activateSyncBootstrap: jest.fn(),
-      prepareLicenseActivation: jest.fn(() => Promise.resolve()),
-      configureProEntitlementProvider: (register: (provider: unknown) => void) => {
-        register(proLicenseProvider);
-      },
-    };
-  },
-  { virtual: true },
-);
+/** Wait for a condition the launch reaches in the background. */
+async function waitUntil(condition: () => boolean, timeoutMs = 4000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error('condition never became true');
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+}
+const FINGERPRINT = 'fp-this-phone';
 
 describe('opening the app as a Pro user, and as a free one', () => {
   const keygen = createKeygenFake();
   let vault: Map<string, string>;
   let licenceId = '';
-  let activate: jest.Mock;
   let originalDev: unknown;
 
   /** The app store the launch actually wrote to, which is the reloaded copy rather than this one. */
@@ -58,8 +58,19 @@ describe('opening the app as a Pro user, and as a free one', () => {
     return raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
   };
 
+  /** What the pro package switched on: the tools the chat can call and the screens in the nav. */
+  const proSurfaces = () => ({
+    tools: require('../../../src/services/tools/extensions').getToolExtensions().length,
+    screens: require('../../../src/navigation/screenRegistry').getRegisteredScreens()
+      .map((screen: { name: string }) => screen.name),
+  });
+
+  /** Whether licence activation was readied: the sync host published this phone's device. */
+  const activationReadied = (): boolean =>
+    require('../../../pro/sync/syncStore').useSyncStore.getState().thisDevice != null;
+
   /**
-   * Everything below the app: the keychain, the hardware id and Keygen's endpoint.
+   * Everything below the app: the native modules, the keychain and Keygen's endpoint.
    *
    * Bound from the CURRENT module graph, because each launch reloads it - the entitlement lifecycle
    * memoises its one launch-time revalidation, so a second launch in the same graph silently skips the
@@ -67,9 +78,9 @@ describe('opening the app as a Pro user, and as a free one', () => {
    * of the module, and it has to be re-wired to the same vault or every cached licence reads as absent.
    */
   function installBoundaries(): void {
-    const fingerprint = require('../../../pro/licensing/deviceFingerprint');
-    jest.spyOn(fingerprint, 'getDeviceFingerprintStrict').mockResolvedValue(FINGERPRINT);
-    jest.spyOn(fingerprint, 'getDeviceFingerprint').mockResolvedValue(FINGERPRINT);
+    installNativeBoundary();
+    // This install's fingerprint, saved in the keychain by an earlier launch.
+    vault.set('off-grid-device-fingerprint', FINGERPRINT);
 
     const secure = require('react-native-keychain');
     secure.getGenericPassword.mockImplementation(
@@ -99,13 +110,13 @@ describe('opening the app as a Pro user, and as a free one', () => {
     // tests are about the SHIPPED gating, so the flag is the one a release build has.
     originalDev = (global as { __DEV__?: unknown }).__DEV__;
     (global as { __DEV__?: unknown }).__DEV__ = false;
-    useAppStore.getState().setProActive(false);
-    useAppStore.getState().setHasRegisteredPro(false);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Close the launch: switch the pro package off and stop the sync runtime it started.
+    await require('../../../pro').deactivate().catch(() => undefined);
+    await require('../../../pro/sync/syncService').syncService.stop().catch(() => undefined);
     keygen.restore();
-    jest.restoreAllMocks();
     (global as { __DEV__?: unknown }).__DEV__ = originalDev;
   });
 
@@ -118,10 +129,7 @@ describe('opening the app as a Pro user, and as a free one', () => {
    * cached licence.
    */
   async function launch(): Promise<boolean> {
-    jest.resetModules();
     installBoundaries();
-    activate = require('@offgrid/pro').activate as jest.Mock;
-    activate.mockClear();
     const { loadProFeatures } = require('../../../src/bootstrap/loadProFeatures');
     return loadProFeatures();
   }
@@ -130,9 +138,13 @@ describe('opening the app as a Pro user, and as a free one', () => {
     const active = await launch();
 
     expect(active).toBe(false);
-    // Not merely hidden: the pro package is never activated, so its screens are not registered and its
-    // background work never starts on a device that is not entitled.
-    expect(activate).not.toHaveBeenCalled();
+    // Not merely hidden: the paid half of the pro package is never activated, so its tools and screens
+    // are not registered and its background work never starts on a device that is not entitled. Sync
+    // stays reachable on purpose (claiming a seat goes through the mesh), so only its screens are there.
+    const surfaces = proSurfaces();
+    expect(surfaces.tools).toBe(0);
+    expect(surfaces.screens).not.toContain('McpServers');
+    expect(surfaces.screens).toContain('Sync');
     expect(storeState().isProActive).toBe(false);
   });
 
@@ -151,7 +163,7 @@ describe('opening the app as a Pro user, and as a free one', () => {
     const active = await launch();
 
     expect(active).toBe(false);
-    expect(activate).not.toHaveBeenCalled();
+    expect(proSurfaces().tools).toBe(0);
     expect(storeState()).toMatchObject({
       isProActive: false,
       hasRegisteredPro: false,
@@ -174,15 +186,20 @@ describe('opening the app as a Pro user, and as a free one', () => {
 
     await launch();
 
-    const pro = require('@offgrid/pro');
-    expect(pro.activateSyncBootstrap).not.toHaveBeenCalled();
-    // Without this, Activate on the Pro screen waited 30 s and said activation was not ready.
-    expect(pro.prepareLicenseActivation).toHaveBeenCalledTimes(1);
+    // Sync's screens were never registered...
+    expect(proSurfaces().screens).not.toContain('Sync');
+    // ...but activation was readied. Without this, Activate on the Pro screen waited 30 s and said
+    // activation was not ready.
+    await waitUntil(activationReadied);
   });
 
-  it('readies no activation on a phone with no licence', async () => {
+  it('readies activation on a phone with no licence through the Sync bootstrap, not the expired-key path', async () => {
     await launch();
-    expect(require('@offgrid/pro').prepareLicenseActivation).not.toHaveBeenCalled();
+    // A phone with no licence (not an expired one) keeps Sync reachable: its bootstrap is what readies
+    // activation, so claiming a seat by key or from a paired device works without the expired-key path.
+    expect(proSurfaces().screens).toContain('Sync');
+    await waitUntil(activationReadied);
+    expect(storeState().hasExpiredProCredential).toBe(false);
   });
 
   it('switches the licensed half on for a phone that already holds one', async () => {
@@ -209,16 +226,11 @@ describe('opening the app as a Pro user, and as a free one', () => {
     const active = await launch();
 
     expect(active).toBe(true);
-    // The three ways the pro package reaches the user: a tool the chat can call, a screen in the nav,
-    // and a section in Settings. Activation hands it all three, so a missing one is a whole surface the
-    // user cannot reach with nothing failing anywhere.
-    expect(activate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        registerToolExtension: expect.any(Function),
-        registerScreen: expect.any(Function),
-        registerSettingsSection: expect.any(Function),
-      }),
-    );
+    // The ways the pro package reaches the user: tools the chat can call and screens in the nav. A
+    // missing one is a whole surface the user cannot reach with nothing failing anywhere.
+    const surfaces = proSurfaces();
+    expect(surfaces.tools).toBeGreaterThan(0);
+    expect(surfaces.screens).toEqual(expect.arrayContaining(['McpServers', 'Sync']));
   });
 
   it('answers from the keychain first, without waiting for the network', async () => {
@@ -239,7 +251,7 @@ describe('opening the app as a Pro user, and as a free one', () => {
     // A phone on a plane is still a phone the user paid for. Waiting on the provider would leave the
     // app deciding what to draw against a request that will time out.
     expect(active).toBe(true);
-    expect(activate).toHaveBeenCalled();
+    expect(proSurfaces().screens).toContain('McpServers');
     keygen.setOffline(false);
   });
 
