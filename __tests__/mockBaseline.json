@@ -117,7 +117,6 @@
   "__tests__/unit/screens/ModelsScreen/utils.test.ts": 1,
   "__tests__/unit/services/documentService.test.ts": 1,
   "__tests__/unit/services/hardware.test.ts": 4,
-  "__tests__/unit/services/imageDownloadProvider.test.ts": 4,
   "__tests__/unit/services/modelDownloadService.test.ts": 2,
   "__tests__/unit/services/modelManager/imageSync.test.ts": 2,
   "__tests__/unit/services/modelManager/reconcilePartialUnzipG7.test.ts": 2,
