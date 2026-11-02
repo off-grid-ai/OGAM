@@ -394,8 +394,10 @@ class WhisperService {
       logger.log('[WhisperService] Realtime transcriber started');
 
       this.stopFn = async () => {
-        await transcriber.stop();
-        await transcriber.release();
+        // A transcriber that fails to stop or release must not cost the person their words: the
+        // final transcript comes from the recording either way.
+        await transcriber.stop().catch(err => logger.error('[WhisperService] Realtime stop failed:', err));
+        await transcriber.release().catch(err => logger.error('[WhisperService] Realtime release failed:', err));
         logger.log('[WhisperService] Recording finished');
         // The final transcript outlives stop(): callers wait on transcriptionFullyStopped for it.
         // eslint-disable-next-line no-void
