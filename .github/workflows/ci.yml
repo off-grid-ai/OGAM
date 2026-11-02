@@ -95,7 +95,11 @@ jobs:
         with:
           path: ${{ runner.temp }}/jest-cache
           key: jest-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'babel.config.js', 'jest.config.js') }}-shard${{ matrix.shard }}-${{ github.sha }}
-          restore-keys: jest-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'babel.config.js', 'jest.config.js') }}-shard${{ matrix.shard }}-
+          # Any earlier cache last: transforms are keyed by file content and config, so a stale
+          # entry is never used, and a new lock file then retransforms only what changed.
+          restore-keys: |
+            jest-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'babel.config.js', 'jest.config.js') }}-shard${{ matrix.shard }}-
+            jest-${{ runner.os }}-${{ runner.arch }}-
 
       # A shard holds a quarter of the suites, so it cannot check coverageThreshold: the files the
       # other shards cover would look uncovered. It saves its raw coverage instead, and the coverage
