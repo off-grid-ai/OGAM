@@ -22,6 +22,10 @@ const jobs = workflow.jobs;
 const needs = (name: string) => ([] as string[]).concat(jobs[name].needs ?? []);
 const checkouts = (job: Job) => job.steps.filter(step => step.uses?.startsWith('actions/checkout@'));
 const PINNED = '${{ github.sha }}';
+const SETUP_MOBILE = './.github/actions/setup-mobile';
+const action = (name: string) =>
+  parse(fs.readFileSync(path.join(__dirname, `../../.github/actions/${name}/action.yml`), 'utf8')) as { runs: { steps: Step[] } };
+const setupMobile = action('setup-mobile').runs;
 
 it('the plan keeps credentials on the shared checkout it fetches with uat.sh --plan', () => {
   const plan = jobs.plan;
@@ -56,18 +60,23 @@ it('Android and iOS build in parallel, uploads wait for both builds, finalize wa
 });
 
 it('each build saves node_modules before it builds, so native build output never enters the cache', () => {
+  // The save lives in the shared setup (.github/actions/setup-mobile), right after the install.
+  const install = setupMobile.steps.findIndex(step => step.run === 'npm ci');
+  const save = setupMobile.steps.findIndex(step => step.uses?.startsWith('actions/cache/save@') && step.with?.path === 'node_modules');
+  expect(install).toBeGreaterThan(-1);
+  expect(save).toBe(install + 1);
   for (const name of ['build-android', 'build-ios']) {
     const steps = jobs[name].steps;
-    const save = steps.findIndex(step => step.uses?.startsWith('actions/cache/save@'));
+    const setup = steps.findIndex(step => step.uses === SETUP_MOBILE);
     const build = steps.findIndex(step => step.run?.includes('scripts/uat.sh --build-only'));
-    expect(save).toBeGreaterThan(-1);
-    expect(save).toBeLessThan(build);
+    expect(setup).toBeGreaterThan(-1);
+    expect(setup).toBeLessThan(build);
   }
 });
 
 it('the build caches are pinned by full commit SHA', () => {
-  const caching = Object.values(jobs)
-    .flatMap(job => job.steps)
+  // The builds' own steps and the shared setups they call.
+  const caching = [...Object.values(jobs).flatMap(job => job.steps), ...['setup-mobile', 'setup-ios', 'setup-android'].flatMap(name => action(name).runs.steps)]
     .map(step => step.uses)
     .filter((uses): uses is string => /^(actions\/cache|hendrikmuhs\/ccache-action|gradle\/actions)/.test(uses ?? ''));
   expect(caching.length).toBeGreaterThan(0);
