@@ -20,7 +20,7 @@ import { selectRelevantTools } from './litertToolSelector';
 import { isMcpEnabled } from './mcpContextBoost';
 import { selectToolsByEmbedding } from './toolEmbeddingRouter';
 import { providerRegistry } from './providers';
-import { getActiveEngineService, isRemoteTextModelActive } from './engines';
+import { activeLiteRTContextTokens, getActiveEngineService, isRemoteTextModelActive } from './engines';
 import type { GenerationOptions, CompletionResult } from './providers/types';
 import logger from '../utils/logger';
 import {
@@ -1467,6 +1467,7 @@ export async function runToolLoop(
               systemPrompt,
               allMessages: loopMessages,
               previousSummary: conversation?.compactionSummary,
+              contextLength: activeLiteRTContextTokens(),
             }).catch(() => undefined)
           : undefined;
         if (

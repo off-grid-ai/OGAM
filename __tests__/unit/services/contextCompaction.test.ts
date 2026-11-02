@@ -93,6 +93,36 @@ describe('isContextFullError', () => {
 });
 
 describe('compact', () => {
+  it('budgets for the context the engine holds, not the setting, when one is given', async () => {
+    mockTokenCounts(200);
+    (useChatStore.getState as jest.Mock).mockReturnValue({
+      updateCompactionState: mockedUpdateCompactionState,
+      addMessage: jest.fn(),
+    });
+    const messages = [
+      createMessage({ role: 'system', content: 'System' }),
+      createMessage({ role: 'user', content: 'Write a story about Paris' }),
+      createMessage({ role: 'assistant', content: 'A long story' }),
+      createMessage({ role: 'user', content: 'Now one about Lyon' }),
+    ];
+
+    // The 2048 setting holds all three turns, so nothing would be compacted.
+    const fromSetting = await compactWith(messages);
+    expect(fromSetting.filter(m => m.role !== 'system')).toHaveLength(3);
+    expect(mockedLlmService.generateWithMaxTokens).not.toHaveBeenCalled();
+
+    // A LiteRT engine clamped to 1024 cannot, so the oldest turn is summarized within its budget.
+    const fromEngine = await contextCompactionService.compact({
+      conversationId: 'conv-1',
+      systemPrompt: 'System',
+      allMessages: messages,
+      contextLength: 1024,
+    });
+    expect(fromEngine[fromEngine.length - 1].content).toBe('Now one about Lyon');
+    expect(fromEngine.some(m => m.content === 'Write a story about Paris')).toBe(false);
+    expect(mockedLlmService.generateWithMaxTokens).toHaveBeenCalledWith(expect.any(Array), Math.floor(1024 * 0.12));
+  });
+
   it('clears KV cache before compacting', async () => {
     const messages = [
       createMessage({ role: 'system', content: 'System' }),
