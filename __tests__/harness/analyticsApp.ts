@@ -82,7 +82,11 @@ export async function launchApp(options: {
   const rtl = requireRTL();
   const App = require('../../App').default;
   const view = rtl.render(React.createElement(App));
-  await rtl.waitFor(() => expect(view.queryByTestId('app-loading')).toBeNull(), { timeout: 10_000 });
+  // The app's first boot in a Jest worker requires most of src/ lazily, and on a cold transform
+  // cache (a fresh CI cache, a new lock file) Babel transforms all of it inside this wait: measured
+  // past 10 s on a Linux CI shard, where the next suite's warm boot took 5 s. The wait ends as soon
+  // as loading clears, so the longer bound costs a passing run nothing.
+  await rtl.waitFor(() => expect(view.queryByTestId('app-loading')).toBeNull(), { timeout: 30_000 });
   return { boundary, endpoint, rtl, view };
 }
 
