@@ -203,7 +203,8 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 safe.resolve(result)
             } catch (e: Exception) {
                 Log.e(TAG, "loadModel — all backends failed: ${e.message}", e)
-                safe.reject("LITERT_LOAD_ERROR", "Failed to load model: ${e.message}", e)
+                // The chat's alert already says "Failed to load model:"; repeating it here doubled it.
+                safe.reject("LITERT_LOAD_ERROR", e.message ?: "Unknown error", e)
             }
         }
     }
