@@ -256,6 +256,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <Icon name="chevron-right" size={16} color={colors.textMuted} />
           </AnimatedPressable>
 
+          {/* Learn any topic on a board the AI designs */}
+          <AnimatedPressable
+            style={styles.galleryCard}
+            onPress={() => navigation.navigate('Topics')}
+            hapticType="selection"
+            testID="home-topics"
+          >
+            <Icon name="compass" size={18} color={colors.primary} />
+            <View style={styles.galleryCardInfo}>
+              <Text style={styles.galleryCardTitle}>Learn a topic</Text>
+              <Text style={styles.galleryCardMeta}>Accounting, coding, history: a board designed for it</Text>
+            </View>
+            <Icon name="chevron-right" size={16} color={colors.textMuted} />
+          </AnimatedPressable>
+
           {/* Image Gallery */}
           <AnimatedPressable
             style={styles.galleryCard}

@@ -461,6 +461,12 @@ The **Build Atlas voices** workflow ran successfully on 2026-10-19, so `kitten-n
 - **When tasks run**: while Atlas is open (when it comes to the front, then once a minute). Atlas has no background alarm yet, so a task due while the phone was away runs once when you come back, not once per missed time.
 - Not verified on a device.
 
+## 8s. Notifications for scheduled tasks, and Learn a topic (0.0.123)
+
+- **Notifications from background alarms**: each switched-on scheduled task gets a notification at its time even when Atlas is closed (the next 10 runs of every task are set at once, so they keep coming for about two weeks; opening Atlas tops them up, and a reboot sets them again). Tap one and Atlas opens on Scheduled tasks, where the due task runs. Saving a task asks for the notification permission (Android 13 and up). Alarms are "allow while idle" ones: no special permission, but they can arrive a few minutes late while the phone dozes. The AI answer is still made when Atlas is open (tap the notification); it is not generated in the background.
+- **Learn a topic** (Home > Learn a topic): the language board for any subject. Name it, say what you want to be able to do, where you are now, how you like to learn and how long a sitting is. The AI designs the board: how many squares (12 to 30, in units), and for each square a format of its own choosing to suit the subject: **lesson** (sections, an example, key points), **quiz** (multiple choice with reasons), **flashcards**, **match**, **put in order**, **practice** (an open task you answer in words or code, which the AI marks and shows a good answer for). It also names the board journey and says how it will teach. Each square is written when you reach it and kept, so it works again offline. Stars, progress, and a final quiz that covers the course. Courses are in backups, not synced. Hold a course to delete it.
+- Not verified on a device.
+
 ## Build evidence and checks
 
 - New **Android unit tests** workflow runs the Kotlin/JVM tests (`:app:testDebugUnitTest`) on every push that

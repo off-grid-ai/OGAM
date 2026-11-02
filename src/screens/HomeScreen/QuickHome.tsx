@@ -15,6 +15,7 @@ const destinations: Destination[] = [
   { label: 'Daily briefing', hint: "Today's news, in your voice", icon: 'sun', screen: 'DailyBrief', tint: '#EDE5FF', tintDark: '#241A3D', color: ['#6D28D9', '#A78BFA'] },
   { label: 'Recorder', hint: 'Record a talk, get a transcript with speakers', icon: 'mic', screen: 'Recorder', tint: '#FDE7E2', tintDark: '#3A1A15', color: ['#B91C1C', '#F87171'] },
   { label: 'Learn', hint: 'Lessons, games and practice calls in a language', icon: 'book', screen: 'Language', tint: '#E4F2F0', tintDark: '#10302C', color: ['#0F766E', '#2DD4BF'] },
+  { label: 'Learn a topic', hint: 'Any subject, on a board the AI designs', icon: 'compass', screen: 'Topics', tint: '#E6EEFB', tintDark: '#14243D', color: ['#1D4ED8', '#60A5FA'] },
   { label: 'Settings', hint: 'Personalize Atlas', icon: 'settings', tab: 'SettingsTab', tint: '#FBE8F0', tintDark: '#381827', color: ['#BE185D', '#F472B6'] },
 ];
 const FOCUS = ['Chat', 'Learn', 'Daily briefing'];
