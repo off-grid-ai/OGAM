@@ -283,35 +283,12 @@ Message: "${message.slice(0, 200)}"
 
 Answer:`;
 
-    let originalModelId: string | null = null;
-    let needsModelSwap = false;
-
-    // Check if we need to swap models
-    if (opts.classifierModel && opts.classifierModel.id) {
-      const currentPath = llmService.getLoadedModelPath();
-      if (currentPath !== opts.classifierModel.filePath) {
-        needsModelSwap = true;
-        // Store original model ID from the store (not path)
-        const activeInfo = activeModelService.getActiveModels();
-        originalModelId = activeInfo.text.model?.id || null;
-
-        logger.log('[IntentClassifier] Swapping to classifier model:', opts.classifierModel.name);
-        opts.onStatusChange?.(`Loading ${opts.classifierModel.name}...`);
-        // Use activeModelService singleton to load - prevents duplicate loads
-        await activeModelService.loadTextModel(opts.classifierModel.id);
-      }
-    }
-
-    opts.onStatusChange?.('Analyzing request...');
-
-    // Ensure a model is loaded
-    if (!llmService.isModelLoaded()) {
-      throw new Error('No model loaded for classification');
-    }
-
     let response = '';
-
-    try {
+    const classify = async (): Promise<void> => {
+      opts.onStatusChange?.('Analyzing request...');
+      if (!llmService.isModelLoaded()) {
+        throw new Error('No model loaded for classification');
+      }
       // Use a minimal completion with low token limit for speed
       await llmService.generateResponse(
         [
@@ -328,14 +305,20 @@ Answer:`;
           },
         },
       );
-    } finally {
-      // Swap back to original model if we changed it
-      // Restore the original text model after classifying. The residency
-      // manager handles fitting it back into memory (evicting as needed).
-      if (needsModelSwap && originalModelId) {
+    };
+
+    const classifier = opts.classifierModel;
+    if (classifier?.id && llmService.getLoadedModelPath() !== classifier.filePath) {
+      logger.log('[IntentClassifier] Swapping to classifier model:', classifier.name);
+      opts.onStatusChange?.(`Loading ${classifier.name}...`);
+      // The service loads the classifier, then loads the chat model back and leaves the person's
+      // selection as it was: the classifier never becomes the chat model.
+      await activeModelService.withUtilityTextModel(classifier.id, async () => {
+        await classify();
         opts.onStatusChange?.('Restoring text model...');
-        await activeModelService.loadTextModel(originalModelId);
-      }
+      });
+    } else {
+      await classify();
     }
 
     // Parse response
