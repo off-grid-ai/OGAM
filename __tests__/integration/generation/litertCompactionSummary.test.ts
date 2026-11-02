@@ -3,6 +3,9 @@
  * from the recent turns; the turns it drops are summarized first, on an empty session, because replaying them
  * is what overflowed the context in the first place.
  *
+ * A service contract test, under litertCompactionSummary.rendered: the chat's own compaction runs first
+ * and keeps an ordinary chat below this threshold, so no chat gesture reaches this path on its own.
+ *
  * Real: liteRTService and liteRTCompaction, the stores. Faked (device, harness/generationDevice): the LiteRT
  * native module, the filesystem, RAM.
  */
