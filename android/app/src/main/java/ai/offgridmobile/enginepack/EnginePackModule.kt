@@ -19,12 +19,19 @@ class EnginePackModule(reactContext: ReactApplicationContext) : ReactContextBase
 
     override fun getName(): String = "EnginePack"
 
+    private companion object {
+        val launchCounted = java.util.concurrent.atomic.AtomicBoolean(false)
+    }
+
     private val store get() = EnginePackBoot.store(reactApplicationContext)
 
     @ReactMethod
     fun getStatus(promise: Promise) {
         try {
             val choice = EnginePackBoot.choice
+            // JS is running, so this launch will load and test the pack: count it, once per process.
+            val trialId = choice?.packId?.takeIf { choice.trial }
+            if (trialId != null && launchCounted.compareAndSet(false, true)) store.countTrialLaunch(trialId)
             val map = Arguments.createMap()
             map.putString("bootPackId", choice?.packId)
             map.putBoolean("trial", choice?.trial ?: false)

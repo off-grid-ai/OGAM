@@ -11,9 +11,11 @@ import java.security.MessageDigest
  * signature before it hands a pack here). This store is the only writer of that state: it runs
  * at boot, before React Native, to pick the pack, and behind EnginePackModule afterwards.
  *
- * A new pack starts on trial. Each launch that loads it counts; the app accepts it once a test
- * prompt passes. A pack that is still on trial after MAX_TRIAL_LAUNCHES launches crashed or hung
- * before its test, so it is rejected and the bundled engine loads instead.
+ * A new pack starts on trial. Each launch that runs the app's JS counts (countTrialLaunch); the
+ * app accepts it once a test prompt passes. A pack that is still on trial after MAX_TRIAL_LAUNCHES
+ * such launches crashed or hung before its test, so it is rejected and the bundled engine loads
+ * instead. Boot alone does not count: Android also starts the process in the background (download
+ * workers, receivers) with no JS, and those starts never reach the test prompt.
  *
  * Layout under `root`: state.json, and one folder per pack id holding its files.
  */
@@ -47,12 +49,21 @@ class EnginePackStore(private val root: File) {
                 continue
             }
             val onTrial = state.optJSONObject("trial")?.getString("id") == id
-            if (onTrial) state.getJSONObject("trial").put("launches", state.getJSONObject("trial").optInt("launches") + 1)
             writeState(state)
             return BootChoice(id, File(root, id), entry!!.optInt("llamaBuild").takeIf { it > 0 }, entry.optString("engineVersion").ifEmpty { null }, onTrial, dropped)
         }
         writeState(state)
         return BootChoice(null, null, null, null, false, dropped)
+    }
+
+    /** A launch that runs the app's JS reached the pack on trial: it counts toward the crash limit. */
+    @Synchronized
+    fun countTrialLaunch(id: String) {
+        val state = readState()
+        val trial = state.optJSONObject("trial") ?: return
+        if (trial.getString("id") != id) return
+        trial.put("launches", trial.optInt("launches") + 1)
+        writeState(state)
     }
 
     /**

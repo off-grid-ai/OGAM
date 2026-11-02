@@ -86,14 +86,28 @@ class EnginePackStoreTest {
     fun `a pack still on trial after two launches crashed before its test and is dropped`() {
         val (staging, entry) = stagedPack()
         val id = store.install(staging, entry, app)
-        store.chooseAtBoot(app)
-        store.chooseAtBoot(app)
+        repeat(2) {
+            store.chooseAtBoot(app)
+            store.countTrialLaunch(id)
+        }
 
         val third = store.chooseAtBoot(app)
         assertNull(third.dir)
         assertEquals(listOf(id), third.dropped)
         assertTrue(store.snapshot().getJSONObject("rejected").has(id))
         assertFalse(File(root, id).exists())
+    }
+
+    @Test
+    fun `background starts that run no JS never count toward the crash limit`() {
+        val (staging, entry) = stagedPack()
+        val id = store.install(staging, entry, app)
+        repeat(5) { assertEquals(id, store.chooseAtBoot(app).packId) }
+
+        val next = store.chooseAtBoot(app)
+        assertEquals(id, next.packId)
+        assertTrue(next.trial)
+        assertFalse(store.snapshot().has("rejected"))
     }
 
     @Test
