@@ -44,12 +44,13 @@ runs:
 
     # Configuring the native modules (op-sqlite etc.) needs the pinned NDK; the runner image doesn't
     # ship it, so the build failed at configure with "Failed to install ndk;...". Install the
-    # version android/build.gradle forces.
+    # version android/build.gradle forces. An action's bash runs with pipefail, and `yes` exits on
+    # the pipe sdkmanager closes, so only sdkmanager's own exit counts.
     - name: Install Android NDK
       shell: bash
       run: |
         SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-        yes | "$SDKMANAGER" "ndk;27.1.12297006" >/dev/null
+        (yes || true) | "$SDKMANAGER" "ndk;27.1.12297006" >/dev/null
 
     # The video runtime's prebuilt parts: the host shader compiler (shaderc) and the Hexagon DSP
     # libraries built in Docker, plus the patched stable-diffusion.cpp source. Built once per
