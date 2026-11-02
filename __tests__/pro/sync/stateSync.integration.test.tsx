@@ -47,6 +47,7 @@ import {
   stateSyncService,
 } from '../../../pro/sync/stateSyncService';
 import { useTaskRunStore } from '../../../pro/tasks/taskRunStore';
+import { writingEngine } from '../../../pro/scribe/writingEngine';
 import { useSyncStore } from '../../../pro/sync/syncStore';
 import { SyncScreen } from '../../../pro/ui/SyncScreen';
 import { SyncSharingSettingsScreen } from '../../../pro/ui/SyncScreen/SyncSharingSettingsScreen';
@@ -418,12 +419,34 @@ describe('Pro mobile state sync journey', () => {
       true,
     );
     fireEvent.press(ui.getByTestId('app-sheet-close'));
-    // Writing (Scribe's learned words and style guides) is on by default, and its switch turns it off and on.
+    // Writing (Scribe's learned words and style guides) is on by default. Off, a word I add to the
+    // dictionary stays on this phone; on again, it goes to the Desktop.
+    const learnedOnDesktop = (word: string) =>
+      [...remoteRecords.records].some(
+        ([key, fields]) =>
+          key.startsWith(`${CORE_SYNC_ENTITIES.writingLearned}:`) &&
+          JSON.stringify(fields).includes(word),
+      );
     expect(ui.getByTestId('sync-writing-toggle').props.value).toBe(true);
     fireEvent(ui.getByTestId('sync-writing-toggle'), 'valueChange', false);
     await waitFor(() => expect(ui!.getByTestId('sync-writing-toggle').props.value).toBe(false));
+    writingEngine.addWord('Offgridly');
+    // A project after it, which still syncs: once it is on the Desktop, the word would be too.
+    const afterWord = useProjectStore.getState().createProject({
+      name: 'Made while Writing is off',
+      description: '',
+      systemPrompt: '',
+      icon: '#4A90D9',
+    });
+    await waitFor(() =>
+      expect(
+        remoteRecords.records.get(`${CORE_SYNC_ENTITIES.project}:${afterWord.id}`),
+      ).toMatchObject({ name: 'Made while Writing is off' }),
+    );
+    expect(learnedOnDesktop('Offgridly')).toBe(false);
     fireEvent(ui.getByTestId('sync-writing-toggle'), 'valueChange', true);
     await waitFor(() => expect(ui!.getByTestId('sync-writing-toggle').props.value).toBe(true));
+    await waitFor(() => expect(learnedOnDesktop('Offgridly')).toBe(true));
 
     fireEvent.press(ui.getByLabelText('Back'));
     fireEvent.press(ui.getByLabelText('Back'));
