@@ -77,6 +77,7 @@ export const resetStores = (): void => {
       voiceSilenceAfterSpeechMs: 5_000,
       voiceSpeakerDrainMs: 2_000,
       enhanceImagePrompts: false,
+      engineUpdates: true,
       enabledTools: ['calculator', 'get_current_datetime'],
       thinkingEnabled: true,
       liteRTBackend: 'gpu' as const,

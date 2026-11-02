@@ -84,6 +84,8 @@ export type AppSettings = {
   imageHeight: number;
   imageUseOpenCL: boolean;
   enhanceImagePrompts: boolean;
+  /** Android: a newer llama.cpp engine downloads and installs without an app update (services/enginePacks). */
+  engineUpdates: boolean;
   enableGpu: boolean;
   gpuLayers: number;
   flashAttn: boolean;
@@ -303,6 +305,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   imageHeight: 512,
   imageUseOpenCL: true,
   enhanceImagePrompts: false,
+  engineUpdates: true,
   enableGpu: Platform.OS === 'ios',
   inferenceBackend:
     Platform.OS === 'ios' ? INFERENCE_BACKENDS.METAL : INFERENCE_BACKENDS.CPU,

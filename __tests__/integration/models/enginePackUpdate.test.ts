@@ -298,3 +298,119 @@ it('does nothing on iOS, which cannot load downloaded native code', async () => 
   expect(w.store.module.getStatus).not.toHaveBeenCalled();
   expect(w.fetched).toEqual([]);
 });
+
+// Settings → Engine updates. Off: nothing downloads or installs, an engine update already in use stays,
+// and a pack already on trial is still tested (it is in this process; a broken one must not stay).
+describe('Engine updates setting', () => {
+  // The app reads the setting only after the store has hydrated (App.tsx starts engine packs then).
+  const setEngineUpdates = async (on: boolean) => {
+    const { useAppStore } = require('../../../src/stores');
+    if (!useAppStore.persist.hasHydrated()) {
+      await new Promise<void>(resolve => { const stop = useAppStore.persist.onFinishHydration(() => { stop(); resolve(); }); });
+    }
+    useAppStore.getState().updateSettings({ engineUpdates: on });
+  };
+  const service = () => require('../../../src/services/enginePacks');
+  const now = (at: number) => ({ now: at, source: { manifestUrl: MANIFEST, publicKey: encodeBase64(keys.publicKey) } });
+
+  it('is on for a new install', async () => {
+    await world();
+    expect(require('../../../src/stores').useAppStore.getState().settings.engineUpdates).toBe(true);
+  });
+
+  it('off: no download starts, and the engine update already in use stays', async () => {
+    const w = await world();
+    w.store.state.packs['0.13.0-b12000-aaaaaaaaaaaa'] = { llamaBuild: 12000, engineVersion: '0.13.0-b12000' };
+    w.store.state.active = '0.13.0-b12000-aaaaaaaaaaaa';
+    await setEngineUpdates(false);
+    w.store.launch();
+    await w.start(10 * DAY);
+    expect(w.fetched).toEqual([]);
+    expect(w.store.installed).toEqual([]);
+    expect(w.store.state.active).toBe('0.13.0-b12000-aaaaaaaaaaaa');
+    expect(await service().getEngineUpdateInfo()).toMatchObject({ path: 'over-the-air', source: 'pack', version: '0.13.0-b12000' });
+  });
+
+  it('off: a pack already on trial is still tested and settled', async () => {
+    const w = await world();
+    w.store.launch();
+    await w.start(1 * DAY);
+    await setEngineUpdates(false);
+    w.boundary.llama!.scriptCompletion({ text: ' Paris.' });
+    w.store.launch();
+    await w.start(1 * DAY + 1000);
+    expect(w.store.state.active).toBe(`${VERSION}-${sha(ZIP).slice(0, 12)}`);
+    expect(w.fetched).toHaveLength(2); // only the first, opted-in check
+  });
+
+  it('turned back on, the next launch looks for a pack again', async () => {
+    const w = await world();
+    await setEngineUpdates(false);
+    w.store.launch();
+    await w.start(1 * DAY);
+    await setEngineUpdates(true);
+    await w.start(1 * DAY + 1000);
+    expect(w.store.installed).toHaveLength(1);
+  });
+
+  it('Check now stages a newer pack at once, and says one waits while it is on trial', async () => {
+    const w = await world({ model: false });
+    w.store.launch();
+    await w.start(1 * DAY);
+    expect(w.store.installed).toHaveLength(1);
+    expect(await service().checkEngineUpdatesNow(now(1 * DAY + 5))).toBe('staged');
+    expect(w.store.installed).toHaveLength(1); // nothing new while one waits
+    expect((await service().getEngineUpdateInfo()).lastCheck).toBe(1 * DAY + 5);
+  });
+
+  it('Check now ignores the once-a-day limit and finds a pack', async () => {
+    const w = await world();
+    w.store.launch();
+    expect(await service().checkEngineUpdatesNow(now(1 * DAY))).toBe('staged');
+    expect(w.store.installed).toHaveLength(1);
+  });
+
+  it.each([
+    ['nothing newer', { body: manifestBody({ version: BUNDLED_VERSION, llamaBuild: BUNDLED_BUILD }) }, 'current'],
+    ['the manifest host is down', { manifestStatus: 503 }, 'failed'],
+  ])('Check now with %s says so', async (_label, opts, outcome) => {
+    const w = await world(opts);
+    w.store.launch();
+    expect(await service().checkEngineUpdatesNow(now(1 * DAY))).toBe(outcome);
+    expect(w.store.installed).toEqual([]);
+  });
+
+  it('Check now with engine updates off downloads nothing', async () => {
+    const w = await world();
+    await setEngineUpdates(false);
+    w.store.launch();
+    expect(await service().checkEngineUpdatesNow(now(1 * DAY))).toBe('off');
+    expect(w.fetched).toEqual([]);
+  });
+
+  it('reports the bundled engine and when it last looked', async () => {
+    const w = await world();
+    w.store.launch();
+    expect(await service().getEngineUpdateInfo()).toEqual({
+      path: 'over-the-air', llamaBuild: BUNDLED_BUILD, version: BUNDLED_VERSION, source: 'bundled', lastCheck: null,
+    });
+    await w.start(3 * DAY);
+    expect((await service().getEngineUpdateInfo()).lastCheck).toBe(3 * DAY);
+  });
+
+  it('reads as the bundled engine when the native store cannot answer', async () => {
+    const w = await world();
+    w.store.module.getStatus.mockRejectedValueOnce(new Error('store unreadable'));
+    expect(await service().getEngineUpdateInfo()).toMatchObject({ path: 'over-the-air', source: 'bundled', version: null });
+  });
+
+  it('on iOS the engine updates with the app, and Check now has nothing to do', async () => {
+    await world();
+    const { Platform } = require('react-native');
+    Object.defineProperty(Platform, 'OS', { value: 'ios', configurable: true });
+    expect(await service().getEngineUpdateInfo()).toEqual({
+      path: 'with-app', llamaBuild: BUNDLED_BUILD, version: null, source: 'bundled', lastCheck: null,
+    });
+    expect(await service().checkEngineUpdatesNow()).toBe('unsupported');
+  });
+});

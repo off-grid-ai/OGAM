@@ -8,7 +8,7 @@ import { useAppStore } from '../../stores/appStore';
 import { isLiteRTModel } from '../../types';
 import { modelResidencyManager } from '../modelResidency';
 import { choosePack, packId, verifyManifest, type EnginePack } from './manifest';
-import { setLoadedPackBuild } from './running';
+import { runningLlamaBuild, setLoadedPackBuild } from './running';
 
 /**
  * Android engine packs: a newer llama.cpp reaches the phone without an app update. iOS cannot load
@@ -168,6 +168,64 @@ async function removeIfPresent(path: string): Promise<void> {
   if (await RNFS.exists(path)) await RNFS.unlink(path);
 }
 
+/**
+ * How this phone's engine gets newer. The gap is data, not a platform branch in the UI: Android takes
+ * signed packs over the air; iOS cannot load downloaded native code, so its engine updates with the app.
+ */
+export type EngineUpdatePath = 'over-the-air' | 'with-app';
+
+export interface EngineUpdateInfo {
+  path: EngineUpdatePath;
+  /** The llama.cpp build this process runs. */
+  llamaBuild: number | undefined;
+  /** The @ogai/llama.rn version running, where the platform reports it. */
+  version: string | null;
+  source: 'pack' | 'bundled';
+  /** When the app last looked for a newer pack (ms), or null if it never has. */
+  lastCheck: number | null;
+}
+
+/** What Settings → Engine updates shows. Never throws: an unreadable store reads as the bundled engine. */
+export async function getEngineUpdateInfo(): Promise<EngineUpdateInfo> {
+  const engine = native();
+  const llamaBuild = runningLlamaBuild();
+  if (!engine) return { path: 'with-app', llamaBuild, version: null, source: 'bundled', lastCheck: null };
+  const lastCheck = Number(await AsyncStorage.getItem(LAST_CHECK_KEY)) || null;
+  try {
+    const status = await engine.getStatus();
+    const pack = status.source === 'pack';
+    return {
+      path: 'over-the-air', llamaBuild, lastCheck,
+      version: pack && status.engineVersion ? status.engineVersion : status.bundledVersion,
+      source: pack ? 'pack' : 'bundled',
+    };
+  } catch (error) {
+    logger.warn('[EnginePack] status unavailable:', error);
+    return { path: 'over-the-air', llamaBuild, version: null, source: 'bundled', lastCheck };
+  }
+}
+
+/** What a check the person asked for found: a pack ready for the next launch, nothing newer, or a failure. */
+export type EngineCheckOutcome = 'staged' | 'current' | 'failed' | 'off' | 'unsupported';
+
+/** Settings → Engine updates → Check now: the daily check, at once. Never throws. */
+export async function checkEngineUpdatesNow(
+  { now = Date.now(), source = ENGINE_PACK_SOURCE }: { now?: number; source?: ManifestSource } = {},
+): Promise<EngineCheckOutcome> {
+  const engine = native();
+  if (!engine) return 'unsupported';
+  if (!useAppStore.getState().settings.engineUpdates) return 'off';
+  try {
+    await AsyncStorage.setItem(LAST_CHECK_KEY, String(now));
+    const status = await engine.getStatus();
+    if ((JSON.parse(status.state) as { trial?: unknown }).trial) return 'staged'; // one already waits for the next launch
+    return (await checkForUpdate(engine, status, source)) ? 'staged' : 'current';
+  } catch (error) {
+    logger.warn('[EnginePack] check failed:', error);
+    return 'failed';
+  }
+}
+
 /** Where the signed manifest lives and the key it must verify against. */
 export interface ManifestSource {
   manifestUrl: string;
@@ -187,7 +245,10 @@ export async function startEnginePacks(
     await installJsi(); // llama.rn loads its libraries here, so the status says which ones.
     const status = await engine.getStatus();
     setLoadedPackBuild(status.source === 'pack' ? status.llamaBuild : null);
+    // A pack already on trial is in this process: it is still tested, so a broken one never stays.
     await settleTrial(engine, status);
+    // Engine updates off (Settings → Engine updates): nothing downloads or installs; an accepted pack stays in use.
+    if (!useAppStore.getState().settings.engineUpdates) return;
     const last = Number(await AsyncStorage.getItem(LAST_CHECK_KEY)) || 0;
     if (now - last < CHECK_EVERY_MS) return;
     await AsyncStorage.setItem(LAST_CHECK_KEY, String(now));
