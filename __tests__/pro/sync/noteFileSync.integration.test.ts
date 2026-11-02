@@ -87,7 +87,7 @@ async function installPhone(): Promise<Phone> {
   const { launchLicensedApp, startPairedPeer } = require('../../harness/proHarness');
   app = await launchLicensedApp({ mesh, secrets: new Map() });
   const { view, rtl } = app!;
-  const fs = app!.boundary.fs!;
+  const fs: FsFake = app!.boundary.fs!;
   rtl.fireEvent.press(view.getByTestId('settings-tab'));
   rtl.fireEvent.press(await view.findByTestId('open-sync-settings'));
   desktop = (await startPairedPeer({ mesh, device: DESKTOP })) as PairedPeer;
