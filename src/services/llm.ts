@@ -168,7 +168,7 @@ class LLMService {
     useAppStore.getState().setModelMaxContext(getModelMaxContext(context));
     logger.log(`[LLM] Model loaded, vision: ${this.supportsVision()}, tools: ${this.toolCallingSupported}, thinking: ${this.thinkingSupported}`);
   }
-  async loadModel(modelPath: string, mmProjPath?: string, opts?: { override?: boolean; forceCpu?: boolean; draftPath?: string }): Promise<void> {
+  async loadModel(modelPath: string, mmProjPath?: string, opts?: { override?: boolean; forceCpu?: boolean; draftPath?: string; embeddedMtp?: boolean }): Promise<void> {
     const mutex = this.acquireContextMutex();
     try {
       await mutex.ready;
@@ -253,12 +253,13 @@ class LLMService {
             const requireAcceleration = Platform.OS === 'android' &&
               backend !== INFERENCE_BACKENDS.CPU;
             // An attached MTP file speeds replies up; if the engine cannot start with it, load without it.
-            const draftOn = !!opts?.draftPath && useAppStore.getState().settings.useMtp !== false
-              && await RNFS.exists(opts.draftPath);
+            const wantsMtp = useAppStore.getState().settings.useMtp !== false;
+            const draftFile = opts?.draftPath && wantsMtp && await RNFS.exists(opts.draftPath) ? opts.draftPath : undefined;
+            const draftOn = !!draftFile || (!!opts?.embeddedMtp && wantsMtp);
             let init;
             try {
               init = await this.initWithAutoContext(
-                { baseParams: { ...baseParams, ...mtpParams(opts?.draftPath, draftOn) }, ctxLen, nGpuLayers, fileSize },
+                { baseParams: { ...baseParams, ...mtpParams(draftFile, draftOn, !!opts?.embeddedMtp) }, ctxLen, nGpuLayers, fileSize },
                 backend, requireAcceleration,
               );
               this.mtpActive = draftOn;

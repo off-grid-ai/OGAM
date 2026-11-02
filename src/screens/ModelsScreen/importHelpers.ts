@@ -58,9 +58,27 @@ export async function importGgufFiles(
       return;
     }
 
+    // "MTP" in the name is either a complete model with MTP layers built in, or just the small MTP file for another model.
+    let embeddedMtp = false;
     if (!isLitert && isDraftFile(resolvedFileName)) {
-      setAlertState(showAlert('This is an MTP file', `"${resolvedFileName}" is an MTP (draft) file, not a model. Import the model first, then open My models and tap "Add MTP file" on it. Or pick both files together here.`));
-      return;
+      const answer = await new Promise<'model' | 'file' | 'cancel'>(resolve => {
+        Alert.alert(
+          'MTP in the file name',
+          `"${resolvedFileName}" has MTP in its name. Is it a complete model with MTP built in (usually over 1 GB), or only the small MTP file to attach to another model?`,
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve('cancel') },
+            { text: 'Only the MTP file', onPress: () => resolve('file') },
+            { text: 'Complete model', onPress: () => resolve('model') },
+          ],
+          { cancelable: false },
+        );
+      });
+      if (answer === 'cancel') return;
+      if (answer === 'file') {
+        setAlertState(showAlert('Add it to a model', `Import the model first, then open My models and tap "Add MTP file" on it. Or pick the model and "${resolvedFileName}" together here.`));
+        return;
+      }
+      embeddedMtp = true;
     }
 
     let liteRTVision = false;
@@ -89,6 +107,11 @@ export async function importGgufFiles(
       },
     });
     addDownloadedModel(model);
+    if (embeddedMtp) {
+      await modelManager.setEmbeddedMtp(model.id, true);
+      setAlertState(showAlert('Success', `${model.name} imported with MTP built in. It will draft tokens with it when it loads (Settings > Text generation > Use MTP files).`));
+      return;
+    }
     if (!isLitert && looksLikeVisionModel(resolvedFileName)) {
       const add = await new Promise<boolean>(resolve => {
         Alert.alert(

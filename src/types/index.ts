@@ -75,6 +75,8 @@ export interface LlamaDownloadedModel extends DownloadedModelBase {
   draftPath?: string;
   draftFileName?: string;
   draftFileSize?: number;
+  /** Atlas: the model file has MTP layers built in (a hybrid MTP GGUF), so no separate MTP file is needed. */
+  embeddedMtp?: boolean;
 }
 
 export interface LiteRTDownloadedModel extends DownloadedModelBase {

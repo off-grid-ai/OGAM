@@ -119,9 +119,10 @@ export function buildModelParams(
  * Extra context params that turn on MTP (multi-token prediction): the engine drafts a few tokens ahead with the attached MTP
  * file and the main model checks them. Empty when there is no file or the switch is off.
  */
-export function mtpParams(draftPath: string | undefined, enabled: boolean): Record<string, unknown> {
-  if (!draftPath || !enabled) return {};
-  return { model_draft: draftPath, speculative: { enabled: true, type: 'mtp', n_max: 3 } };
+export function mtpParams(draftPath: string | undefined, enabled: boolean, embedded = false): Record<string, unknown> {
+  if (!enabled || (!draftPath && !embedded)) return {};
+  // Embedded: the model's own MTP layers draft (no second file); otherwise the attached file does.
+  return { ...(draftPath ? { model_draft: draftPath } : {}), speculative: { enabled: true, type: 'mtp', n_max: 3 } };
 }
 
 export interface ContextInitResult {

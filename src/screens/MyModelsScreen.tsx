@@ -195,7 +195,7 @@ export const MyModelsScreen: React.FC = () => {
             <View key={m.id} style={card}>
               <Text style={{ color: colors.text, fontWeight: '600', fontSize: 15 }}>{nicknames[m.id] || m.name}</Text>
               <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
-                {m.fileName} · {fmtBytes(size)} · {onSd ? 'SD card' : 'phone'}{m.engine === 'litert' ? ' · LiteRT' : ''}{m.engine === 'llama' && m.draftPath ? ' · MTP' : ''}{vision ? ' · sees pictures' : ''}{m.id === activeId ? ' · in use' : ''}{speeds[m.id]?.decode ? ` · writes ~${Math.max(1, Math.round(speeds[m.id].decode * 0.75))} words/s` : ''}
+                {m.fileName} · {fmtBytes(size)} · {onSd ? 'SD card' : 'phone'}{m.engine === 'litert' ? ' · LiteRT' : ''}{m.engine === 'llama' && (m.draftPath || m.embeddedMtp) ? ' · MTP' : ''}{vision ? ' · sees pictures' : ''}{m.id === activeId ? ' · in use' : ''}{speeds[m.id]?.decode ? ` · writes ~${Math.max(1, Math.round(speeds[m.id].decode * 0.75))} words/s` : ''}
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                 <TouchableOpacity style={btn(colors.primary)} onPress={() => openNickname(m.id, m.name)}><Icon name="edit-2" size={14} color={colors.primary} /><Text style={{ color: colors.primary, marginLeft: 6 }}>Nickname</Text></TouchableOpacity>
@@ -205,6 +205,13 @@ export const MyModelsScreen: React.FC = () => {
                 ) : (
                   <TouchableOpacity style={btn(colors.primary)} onPress={() => addVision(m)}><Icon name="eye" size={14} color={colors.primary} /><Text style={{ color: colors.primary, marginLeft: 6 }}>Add vision file</Text></TouchableOpacity>
                 ))}
+                {m.engine === 'llama' && !m.draftPath && (
+                  <TouchableOpacity style={btn(m.embeddedMtp ? colors.primary : colors.border)} testID={`embedded-mtp-${m.id}`}
+                    onPress={() => { void modelManager.setEmbeddedMtp(m.id, !m.embeddedMtp); }}>
+                    <Icon name="zap" size={14} color={m.embeddedMtp ? colors.primary : colors.textSecondary} />
+                    <Text style={{ color: m.embeddedMtp ? colors.primary : colors.textSecondary, marginLeft: 6 }}>{m.embeddedMtp ? 'MTP built in: on' : 'MTP built in: off'}</Text>
+                  </TouchableOpacity>
+                )}
                 {m.engine === 'llama' && (m.draftPath ? (
                   <TouchableOpacity style={btn(colors.border)} testID={`remove-mtp-${m.id}`} onPress={() => removeDraft(m)}><Icon name="zap-off" size={14} color={colors.textSecondary} /><Text style={{ color: colors.textSecondary, marginLeft: 6 }}>Remove MTP file</Text></TouchableOpacity>
                 ) : (

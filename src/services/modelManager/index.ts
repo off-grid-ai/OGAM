@@ -413,6 +413,14 @@ class ModelManager {
     if (old && old !== dest) await RNFS.unlink(old).catch(() => {});
   }
 
+  /** Atlas: mark a model as having MTP layers built in (or not), so it drafts with them without a second file. */
+  async setEmbeddedMtp(modelId: string, on: boolean): Promise<void> {
+    const models = await this.getDownloadedModels();
+    const updated = models.map(m => (m.id === modelId && m.engine === 'llama' ? { ...m, embeddedMtp: on } : m));
+    await saveModelsList(updated);
+    useAppStore.getState().setDownloadedModels(updated);
+  }
+
   /** Atlas: detach (and delete) a model's MTP file. */
   async removeDraft(modelId: string): Promise<void> {
     const models = await this.getDownloadedModels();
