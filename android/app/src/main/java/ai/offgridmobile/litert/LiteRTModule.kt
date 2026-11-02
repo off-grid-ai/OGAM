@@ -93,6 +93,13 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
             return requested.coerceAtMost(maxOf(MIN_TOKEN_FLOOR, affordableTokens))
         }
 
+        /**
+         * Whether [clampMaxTokens] left too little context to load at all: below the floor it only goes
+         * when free RAM cannot hold the weights. A small budget the caller asked for is not this.
+         */
+        fun isUnusableContext(effective: Int, requested: Int): Boolean =
+            effective < MIN_TOKEN_FLOOR && effective < requested
+
         /** Sub-directory of the app cache where LiteRT-LM keeps its compiled programs. */
         const val ENGINE_CACHE_DIR_NAME = "litert-cache"
 
@@ -164,6 +171,17 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 if (engineCacheDir == null) Log.w(TAG, "loadModel — no writable engine cache dir, GPU programs will compile again")
                 // Unload any existing engine first
                 cleanupEngine()
+                // A Load Anyway reaches here past the memory gate. Every backend would fail on a context
+                // this small, after seconds of trying, and report nothing about memory.
+                if (isUnusableContext(configuredMaxTokens, maxNumTokens)) {
+                    Log.w(TAG, "loadModel — refused: free RAM leaves room for only $configuredMaxTokens tokens")
+                    safe.reject(
+                        "LITERT_LOW_MEMORY",
+                        "Not enough free memory to run this model right now. Close other apps or choose a smaller model.",
+                        null,
+                    )
+                    return@launch
+                }
 
                 val requestedBackend = parseBackend(backendStr)
                 Log.i(TAG, "loadModel — attempting backend chain from $backendStr")
