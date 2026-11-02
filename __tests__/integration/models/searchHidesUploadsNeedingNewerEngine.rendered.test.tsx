@@ -101,7 +101,8 @@ describe('Models search leaves out uploads of a model this engine cannot load', 
     expect(newer.queryByText('K2-Horizon-3.7B-GGUF')).toBeNull();
     newer.unmount();
 
-    // An engine one build older than the model needs: neither the catalog card nor any Hugging Face upload of the model.
+    // An engine one build older than the model needs: neither the catalog card nor any Hugging Face
+    // upload of the model.
     const older = await run(String(needsNewer.minLlamaBuild - 1));
     rtl = requireRTL();
     await rtl.waitFor(() => expect(older.getByText('Horizon-Chat-1B-GGUF')).toBeTruthy());
