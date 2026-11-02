@@ -5,7 +5,7 @@
  * matches our TypeScript expectations for speech transcription.
  */
 
-import { initWhisper, releaseAllWhisper, AudioSessionIos } from 'whisper.rn';
+import { initWhisper, releaseAllWhisper } from 'whisper.rn';
 
 // Define expected interfaces
 interface WhisperContextOptions {
@@ -19,24 +19,11 @@ interface TranscribeOptions {
   onProgress?: (progress: number) => void;
 }
 
-interface TranscribeRealtimeOptions {
-  language?: string;
-  maxLen?: number;
-  realtimeAudioSec?: number;
-  realtimeAudioSliceSec?: number;
-  audioSessionOnStartIos?: any;
-  audioSessionOnStopIos?: any;
-}
-
 interface TranscribeResult {
   result: string;
-}
-
-interface RealtimeTranscribeEvent {
-  isCapturing: boolean;
-  data?: { result: string };
-  processTime?: number;
-  recordingTime?: number;
+  language: string;
+  segments: Array<{ text: string; t0: number; t1: number }>;
+  isAborted: boolean;
 }
 
 interface WhisperContext {
@@ -45,12 +32,11 @@ interface WhisperContext {
     options?: TranscribeOptions
   ): { stop: () => void; promise: Promise<TranscribeResult> };
 
-  transcribeRealtime(
-    options?: TranscribeRealtimeOptions
-  ): Promise<{
-    stop: () => void;
-    subscribe: (callback: (event: RealtimeTranscribeEvent) => void) => void;
-  }>;
+  /** PCM audio (16 kHz mono int16): what whisper.rn's realtime transcriber decodes each slice with. */
+  transcribeData(
+    data: ArrayBuffer,
+    options?: TranscribeOptions
+  ): { stop: () => Promise<void>; promise: Promise<TranscribeResult> };
 
   release(): Promise<void>;
 }
@@ -59,24 +45,6 @@ interface WhisperContext {
 jest.mock('whisper.rn', () => ({
   initWhisper: jest.fn(),
   releaseAllWhisper: jest.fn(),
-  AudioSessionIos: {
-    Category: {
-      PlayAndRecord: 'AVAudioSessionCategoryPlayAndRecord',
-      Playback: 'AVAudioSessionCategoryPlayback',
-      Record: 'AVAudioSessionCategoryRecord',
-    },
-    CategoryOption: {
-      MixWithOthers: 'AVAudioSessionCategoryOptionMixWithOthers',
-      AllowBluetooth: 'AVAudioSessionCategoryOptionAllowBluetooth',
-    },
-    Mode: {
-      Default: 'AVAudioSessionModeDefault',
-      VoiceChat: 'AVAudioSessionModeVoiceChat',
-    },
-    setCategory: jest.fn(),
-    setMode: jest.fn(),
-    setActive: jest.fn(),
-  },
 }));
 
 const mockInitWhisper = initWhisper as jest.MockedFunction<typeof initWhisper>;
@@ -91,7 +59,7 @@ describe('whisper.rn Contract', () => {
     it('should accept valid initialization options', async () => {
       const mockContext: Partial<WhisperContext> = {
         transcribe: jest.fn(),
-        transcribeRealtime: jest.fn(),
+        transcribeData: jest.fn(),
         release: jest.fn(),
       };
       mockInitWhisper.mockResolvedValue(mockContext as WhisperContext);
@@ -112,7 +80,7 @@ describe('whisper.rn Contract', () => {
     it('should accept CoreML model asset option', async () => {
       const mockContext: Partial<WhisperContext> = {
         transcribe: jest.fn(),
-        transcribeRealtime: jest.fn(),
+        transcribeData: jest.fn(),
         release: jest.fn(),
       };
       mockInitWhisper.mockResolvedValue(mockContext as WhisperContext);
@@ -140,7 +108,7 @@ describe('whisper.rn Contract', () => {
     it('should return context with expected methods', async () => {
       const mockContext: Partial<WhisperContext> = {
         transcribe: jest.fn(),
-        transcribeRealtime: jest.fn(),
+        transcribeData: jest.fn(),
         release: jest.fn(),
       };
       mockInitWhisper.mockResolvedValue(mockContext as WhisperContext);
@@ -148,10 +116,10 @@ describe('whisper.rn Contract', () => {
       const context = await initWhisper({ filePath: '/path/to/model.bin' });
 
       expect(context).toHaveProperty('transcribe');
-      expect(context).toHaveProperty('transcribeRealtime');
+      expect(context).toHaveProperty('transcribeData');
       expect(context).toHaveProperty('release');
       expect(typeof context.transcribe).toBe('function');
-      expect(typeof context.transcribeRealtime).toBe('function');
+      expect(typeof context.transcribeData).toBe('function');
       expect(typeof context.release).toBe('function');
     });
   });
@@ -263,139 +231,12 @@ describe('whisper.rn Contract', () => {
     });
   });
 
-  describe('WhisperContext.transcribeRealtime', () => {
-    it('should return subscribable stream', async () => {
-      const mockStop = jest.fn();
-      const mockSubscribe = jest.fn();
-      const mockTranscribeRealtime = jest.fn().mockResolvedValue({
-        stop: mockStop,
-        subscribe: mockSubscribe,
-      });
-
-      const mockContext: Partial<WhisperContext> = {
-        transcribeRealtime: mockTranscribeRealtime,
-        release: jest.fn(),
-      };
-      mockInitWhisper.mockResolvedValue(mockContext as WhisperContext);
-
-      const context = await initWhisper({ filePath: '/path/to/model.bin' });
-      const stream = await context.transcribeRealtime();
-
-      expect(stream).toHaveProperty('stop');
-      expect(stream).toHaveProperty('subscribe');
-      expect(typeof stream.stop).toBe('function');
-      expect(typeof stream.subscribe).toBe('function');
-    });
-
-    it('should accept realtime options', async () => {
-      const mockTranscribeRealtime = jest.fn().mockResolvedValue({
-        stop: jest.fn(),
-        subscribe: jest.fn(),
-      });
-
-      const mockContext: Partial<WhisperContext> = {
-        transcribeRealtime: mockTranscribeRealtime,
-        release: jest.fn(),
-      };
-      mockInitWhisper.mockResolvedValue(mockContext as WhisperContext);
-
-      const context = await initWhisper({ filePath: '/path/to/model.bin' });
-
-      const options: TranscribeRealtimeOptions = {
-        language: 'en',
-        maxLen: 50,
-        realtimeAudioSec: 30,
-        realtimeAudioSliceSec: 3,
-      };
-
-      await context.transcribeRealtime(options);
-
-      expect(mockTranscribeRealtime).toHaveBeenCalledWith(
-        expect.objectContaining({
-          language: 'en',
-          realtimeAudioSec: 30,
-          realtimeAudioSliceSec: 3,
-        })
-      );
-    });
-
-    it('should emit events with expected shape', async () => {
-      const subscribeCallback = jest.fn();
-      const mockSubscribe = jest.fn().mockImplementation((callback) => {
-        // Simulate realtime events
-        callback({
-          isCapturing: true,
-          data: { result: 'Hello' },
-          processTime: 150,
-          recordingTime: 3000,
-        });
-        callback({
-          isCapturing: true,
-          data: { result: 'Hello world' },
-          processTime: 200,
-          recordingTime: 6000,
-        });
-        callback({
-          isCapturing: false,
-        });
-      });
-
-      const mockTranscribeRealtime = jest.fn().mockResolvedValue({
-        stop: jest.fn(),
-        subscribe: mockSubscribe,
-      });
-
-      const mockContext: Partial<WhisperContext> = {
-        transcribeRealtime: mockTranscribeRealtime,
-        release: jest.fn(),
-      };
-      mockInitWhisper.mockResolvedValue(mockContext as WhisperContext);
-
-      const context = await initWhisper({ filePath: '/path/to/model.bin' });
-      const stream = await context.transcribeRealtime();
-      stream.subscribe(subscribeCallback);
-
-      expect(subscribeCallback).toHaveBeenCalledWith(
-        expect.objectContaining({
-          isCapturing: true,
-          data: expect.objectContaining({ result: expect.any(String) }),
-        })
-      );
-
-      expect(subscribeCallback).toHaveBeenCalledWith(
-        expect.objectContaining({
-          isCapturing: false,
-        })
-      );
-    });
-
-    it('should be stoppable', async () => {
-      const mockStop = jest.fn();
-      const mockTranscribeRealtime = jest.fn().mockResolvedValue({
-        stop: mockStop,
-        subscribe: jest.fn(),
-      });
-
-      const mockContext: Partial<WhisperContext> = {
-        transcribeRealtime: mockTranscribeRealtime,
-        release: jest.fn(),
-      };
-      mockInitWhisper.mockResolvedValue(mockContext as WhisperContext);
-
-      const context = await initWhisper({ filePath: '/path/to/model.bin' });
-      const stream = await context.transcribeRealtime();
-      stream.stop();
-
-      expect(mockStop).toHaveBeenCalled();
-    });
-  });
-
   describe('WhisperContext.release', () => {
     it('should be callable for cleanup', async () => {
       const mockRelease = jest.fn().mockResolvedValue(undefined);
       const mockContext: Partial<WhisperContext> = {
         transcribe: jest.fn(),
-        transcribeRealtime: jest.fn(),
+        transcribeData: jest.fn(),
         release: mockRelease,
       };
       mockInitWhisper.mockResolvedValue(mockContext as WhisperContext);
@@ -414,51 +255,6 @@ describe('whisper.rn Contract', () => {
       await releaseAllWhisper();
 
       expect(mockReleaseAllWhisper).toHaveBeenCalled();
-    });
-  });
-
-  describe('AudioSessionIos', () => {
-    it('should have expected category constants', () => {
-      expect(AudioSessionIos.Category).toHaveProperty('PlayAndRecord');
-      expect(AudioSessionIos.Category).toHaveProperty('Playback');
-      expect(AudioSessionIos.Category).toHaveProperty('Record');
-    });
-
-    it('should have expected category option constants', () => {
-      expect(AudioSessionIos.CategoryOption).toHaveProperty('MixWithOthers');
-      expect(AudioSessionIos.CategoryOption).toHaveProperty('AllowBluetooth');
-    });
-
-    it('should have expected mode constants', () => {
-      expect(AudioSessionIos.Mode).toHaveProperty('Default');
-      expect(AudioSessionIos.Mode).toHaveProperty('VoiceChat');
-    });
-
-    it('should have setCategory method', async () => {
-      (AudioSessionIos.setCategory as jest.Mock).mockResolvedValue(undefined);
-
-      await AudioSessionIos.setCategory(
-        AudioSessionIos.Category.PlayAndRecord,
-        [AudioSessionIos.CategoryOption.MixWithOthers]
-      );
-
-      expect(AudioSessionIos.setCategory).toHaveBeenCalled();
-    });
-
-    it('should have setMode method', async () => {
-      (AudioSessionIos.setMode as jest.Mock).mockResolvedValue(undefined);
-
-      await AudioSessionIos.setMode(AudioSessionIos.Mode.VoiceChat);
-
-      expect(AudioSessionIos.setMode).toHaveBeenCalled();
-    });
-
-    it('should have setActive method', async () => {
-      (AudioSessionIos.setActive as jest.Mock).mockResolvedValue(undefined);
-
-      await AudioSessionIos.setActive(true);
-
-      expect(AudioSessionIos.setActive).toHaveBeenCalledWith(true);
     });
   });
 
@@ -486,15 +282,6 @@ describe('whisper.rn Contract', () => {
       const { promise } = context.transcribe('/path/to/audio.wav');
 
       await expect(promise).rejects.toThrow('Transcription failed');
-    });
-
-    it('should handle audio session errors', async () => {
-      (AudioSessionIos.setCategory as jest.Mock).mockRejectedValue(
-        new Error('Failed to set audio session category')
-      );
-
-      await expect(AudioSessionIos.setCategory('InvalidCategory'))
-        .rejects.toThrow('Failed to set audio session');
     });
   });
 });

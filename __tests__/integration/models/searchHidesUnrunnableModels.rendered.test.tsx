@@ -108,7 +108,7 @@ describe('Models search leaves out what this phone cannot run', () => {
     const { CATALOG } = require('@offgrid/models');
     const needsNewer = CATALOG.find((e: { name: string }) => e.name === 'K2 Horizon 3.7B');
 
-    // Engine reports a build: first the one this app ships, then (another install) one new enough.
+    // Engine reports a build: one new enough, then one a build too old.
     const run = async (build: string | undefined) => {
       installNativeBoundary({ fs: true, ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB } });
       engineReportsBuild(build);

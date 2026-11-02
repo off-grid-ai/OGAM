@@ -10,10 +10,14 @@ type AudioInputFormat = 'wav' | 'mp3';
 /** How loud the microphone is right now, 0 upwards. RMS of one buffer of PCM samples. */
 type AudioLevelListener = (rms: number) => void;
 
+/** The microphone's raw samples: one buffer of mono 16 kHz floats in -1..1. */
+type AudioSamplesListener = (samples: Float32Array) => void;
+
 class AudioRecorderService {
   private recorder: AudioRecorder | null = null;
   private isRecording = false;
   private readonly levelListeners = new Set<AudioLevelListener>();
+  private readonly sampleListeners = new Set<AudioSamplesListener>();
 
   /**
    * Listen to how loud the microphone is, while something is recording.
@@ -57,16 +61,35 @@ class AudioRecorderService {
 
   onAudioLevel(listener: AudioLevelListener): () => void {
     this.levelListeners.add(listener);
-    if (this.recorder && this.isRecording) this.attachLevelCallback(this.recorder);
+    if (this.recorder && this.isRecording) this.attachBufferCallback(this.recorder);
     return () => {
       this.levelListeners.delete(listener);
-      if (this.levelListeners.size === 0) {
-        (this.recorder as unknown as { clearOnAudioReady?: () => void })?.clearOnAudioReady?.();
-      }
+      this.clearBufferCallbackWhenUnused();
     };
   }
 
-  private attachLevelCallback(rec: AudioRecorder): void {
+  /**
+   * Listen to the microphone's samples while something is recording. whisper.rn's realtime
+   * transcriber reads the live preview from these, so the one capture that writes the recording
+   * file also feeds the preview. Returns an unsubscribe.
+   */
+  onAudioSamples(listener: AudioSamplesListener): () => void {
+    this.sampleListeners.add(listener);
+    if (this.recorder && this.isRecording) this.attachBufferCallback(this.recorder);
+    return () => {
+      this.sampleListeners.delete(listener);
+      this.clearBufferCallbackWhenUnused();
+    };
+  }
+
+  /** The recorder has one buffer callback, shared by levels and samples: clear it once neither listens. */
+  private clearBufferCallbackWhenUnused(): void {
+    if (this.levelListeners.size === 0 && this.sampleListeners.size === 0) {
+      (this.recorder as unknown as { clearOnAudioReady?: () => void })?.clearOnAudioReady?.();
+    }
+  }
+
+  private attachBufferCallback(rec: AudioRecorder): void {
     const withCallback = rec as unknown as {
       onAudioReady?: (
         options: { sampleRate: number; bufferLength: number; channelCount: number },
@@ -92,6 +115,18 @@ class AudioRecorderService {
           }
           seen += 1;
           if (!channel || frames <= 0) return;
+          if (this.sampleListeners.size > 0) {
+            // A copy: the native side may reuse its buffer once this callback returns.
+            const samples = channel.slice(0, frames);
+            for (const listener of this.sampleListeners) {
+              try {
+                listener(samples);
+              } catch {
+                // One bad listener must never take the recording down with it.
+              }
+            }
+          }
+          if (this.levelListeners.size === 0) return;
           let sum = 0;
           for (let i = 0; i < frames; i += 1) sum += channel[i] * channel[i];
           const rms = Math.sqrt(sum / frames);
@@ -172,7 +207,7 @@ class AudioRecorderService {
     this.recorder = rec;
     this.isRecording = true;
     // Before start, so the opening buffers are not missed.
-    if (this.levelListeners.size > 0) this.attachLevelCallback(rec);
+    if (this.levelListeners.size > 0 || this.sampleListeners.size > 0) this.attachBufferCallback(rec);
     const startResult: any = rec.start();
     if (startResult && startResult.status && startResult.status !== 'success') {
       this.isRecording = false;

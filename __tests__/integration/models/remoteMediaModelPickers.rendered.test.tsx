@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { RemoteModelOptionsSection } from '../../../src/components/models/RemoteModelOptionsSection';
 import { useRemoteServerStore } from '../../../src/stores/remoteServerStore';
 
@@ -48,6 +48,17 @@ describe('remote media model pickers', () => {
           ?.transcription,
       ).toBe('/models/whisper-large-v3.bin'),
     );
+    ui.unmount();
+  });
+
+  it('shows each remote voice model on a full card: what it does and the computer it runs on', () => {
+    const serverId = addGateway();
+    const ui = render(<RemoteModelOptionsSection category="voice" />);
+
+    const card = ui.getByTestId(`remote-voice-model-${serverId}:/models/orpheus.pte`);
+    expect(within(card).getByText('Orpheus')).toBeTruthy();
+    expect(within(card).getByText('Voice · Runs on Studio Mac')).toBeTruthy();
+    expect(within(card).queryByText('/models/orpheus.pte')).toBeNull();
     ui.unmount();
   });
 

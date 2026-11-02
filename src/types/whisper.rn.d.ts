@@ -17,38 +17,11 @@ declare module 'whisper.rn' {
     onProgress?: (progress: number) => void;
   }
 
-  export interface TranscribeRealtimeOptions {
-    language?: string;
-    maxLen?: number;
-    realtimeAudioSec?: number;
-    realtimeAudioSliceSec?: number;
-    /**
-     * Only transcribe slices that actually contain speech. The first check runs after 2s of
-     * recording. This gates WHAT is transcribed - it does not end the session; see
-     * AUTO_STOP_SILENCE_MS in whisperService for the endpointing that does.
-     */
-    useVad?: boolean;
-    /** Audio collected per VAD decision. Cannot be under 2000ms. (Default: 2000) */
-    vadMs?: number;
-    /** VAD threshold, 0-1. Higher needs louder speech. (Default: 0.6) */
-    vadThold?: number;
-    /** High-pass filter frequency applied before the VAD decision. (Default: 100.0) */
-    vadFreqThold?: number;
-    audioSessionOnStartIos?: any;
-    audioSessionOnStopIos?: any;
-  }
-
   export interface TranscribeResult {
     result: string;
-  }
-
-  export interface RealtimeTranscribeEvent {
-    isCapturing: boolean;
-    data?: {
-      result: string;
-    };
-    processTime?: number;
-    recordingTime?: number;
+    language: string;
+    segments: Array<{ text: string; t0: number; t1: number }>;
+    isAborted: boolean;
   }
 
   export interface WhisperContext {
@@ -60,12 +33,14 @@ declare module 'whisper.rn' {
       promise: Promise<TranscribeResult>;
     };
 
-    transcribeRealtime(
-      options?: TranscribeRealtimeOptions
-    ): Promise<{
-      stop: () => void;
-      subscribe: (callback: (event: RealtimeTranscribeEvent) => void) => void;
-    }>;
+    /** Transcribe 16 kHz mono 16-bit PCM. whisper.rn's realtime transcriber decodes each slice with it. */
+    transcribeData(
+      data: ArrayBuffer,
+      options?: TranscribeOptions
+    ): {
+      stop: () => Promise<void>;
+      promise: Promise<TranscribeResult>;
+    };
 
     release(): Promise<void>;
   }
@@ -73,23 +48,4 @@ declare module 'whisper.rn' {
   export function initWhisper(options: WhisperContextOptions): Promise<WhisperContext>;
 
   export function releaseAllWhisper(): Promise<void>;
-
-  export const AudioSessionIos: {
-    Category: {
-      PlayAndRecord: string;
-      Playback: string;
-      Record: string;
-    };
-    CategoryOption: {
-      MixWithOthers: string;
-      AllowBluetooth: string;
-    };
-    Mode: {
-      Default: string;
-      VoiceChat: string;
-    };
-    setCategory(category: string, options?: string[]): Promise<void>;
-    setMode(mode: string): Promise<void>;
-    setActive(active: boolean): Promise<void>;
-  };
 }

@@ -33,6 +33,8 @@ const proDependentTestPaths = [
 
 module.exports = {
   preset: 'react-native',
+  // Balances CI's --shard runs by recorded suite run time (scripts/jest-timings.json).
+  testSequencer: '<rootDir>/scripts/jest-sequencer.js',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   testMatch: ['**/__tests__/**/*.test.ts', '**/__tests__/**/*.test.tsx'],
   testPathIgnorePatterns: [

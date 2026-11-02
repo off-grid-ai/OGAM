@@ -1,13 +1,11 @@
-import {
-  initWhisper,
-  WhisperContext,
-  RealtimeTranscribeEvent,
-} from 'whisper.rn';
+import { initWhisper, WhisperContext } from 'whisper.rn';
+import { RealtimeTranscriber } from 'whisper.rn/realtime-transcription/RealtimeTranscriber';
 import { Platform, PermissionsAndroid } from 'react-native';
 import logger from '../utils/logger';
 import { audioSessionManager } from './audioSessionManager';
 import { noteMicPermissionRefused } from './micPermission';
 import { audioRecorderService } from './audioRecorderService';
+import { RecorderAudioStream } from './recorderAudioStream';
 import { cleanTranscription } from './whisperModels';
 import * as whisperModelFiles from './whisperModelFiles';
 import { whisperDecodeOptions } from './whisperDecodeOptions';
@@ -328,115 +326,88 @@ class WhisperService {
         throw new Error('Microphone permission denied');
       }
 
-      // B26/B28 ROOT: realtime capture yields NO audio on device (spoke, blank input). The reliable
-      // pipeline is record→file→transcribeFile (the voice-mode path, T079). So we record the SAME
-      // utterance to a file alongside the realtime stream, and on the stream's FINAL event, when it
-      // produced no usable transcript, we transcribe the recorded FILE and deliver THAT as the
-      // authoritative result — one uniform "voice in → transcribed text out" pipeline for every mode.
-      // Best-effort: if the recorder can't start (permission/hardware), realtime alone still runs.
-      try {
-        await audioRecorderService.startRecording();
-        recordedFile = true;
-      } catch (recErr) {
-        logger.error(
-          '[WhisperService] Fallback recorder failed to start (realtime only):',
-          recErr,
-        );
-      }
-
-      // Always close the parallel file recorder. Prefer a usable realtime result;
-      // when it is empty (B26), transcribe the captured file instead.
-      const resolveFinalText = async (
-        realtimeText: string,
-      ): Promise<string> => {
-        if (!recordedFile) return realtimeText;
-        try {
-          const { path } = await audioRecorderService.stopRecording();
-          if (cleanTranscription(realtimeText)) return realtimeText;
-          // This session already holds the native lane; the fallback runs inside it.
-          const fileText = await this.transcribeLocalFile(path, { language });
-          logger.log(
-            `[WhisperService] Realtime captured nothing — file transcript: ${fileText.length}ch`,
-          );
-          return fileText;
-        } catch (fileErr) {
-          logger.error(
-            '[WhisperService] File-transcribe fallback failed:',
-            fileErr,
-          );
-          return realtimeText;
-        }
-      };
+      // The recorder owns the microphone. It writes the recording the final transcript comes from,
+      // and it feeds whisper.rn's realtime transcriber the same buffers for the live preview.
+      await audioRecorderService.startRecording();
+      recordedFile = true;
 
       // Guard: context could have been released during the async permission check
       if (!this.context) {
-        this.isTranscribing = false;
-        if (recordedFile) audioRecorderService.cancelRecording();
-        resolveTranscriptionStopped();
         throw new Error(
           'Whisper context was released before transcription could start',
         );
       }
 
-      logger.log('[WhisperService] Calling transcribeRealtime...');
-      // Use the transcribeRealtime API
-      const { stop, subscribe } = await this.context.transcribeRealtime({
-        ...whisperDecodeOptions(language),
-        maxLen: options?.maxLen || 0, // 0 = no limit
-        realtimeAudioSec: 30, // Process in 30-second chunks
-        realtimeAudioSliceSec: 3, // Slice every 3 seconds for faster intermediate results
-        // Decode only slices that contain speech, so a quiet room is not decoded into invented
-        // words. This does NOT end the turn - only useVoiceInput does that, in voice mode.
-        useVad: true,
-        ...(Platform.OS === 'ios' && {
-          audioSessionOnStartIos: {
-            category: 'PlayAndRecord',
-            options: ['AllowBluetooth', 'MixWithOthers'],
-            mode: 'Default',
-          },
-          audioSessionOnStopIos: 'restore',
-        }),
-      });
+      // The live preview, slice by slice. whisper.rn transcribes the speech in slices and re-sends a
+      // slice as it grows, so the preview is every slice's latest text in order.
+      const slices = new Map<number, string>();
+      const preview = () =>
+        [...slices.entries()]
+          .sort(([a], [b]) => a - b)
+          .map(([, text]) => text.trim())
+          .filter(Boolean)
+          .join(' ');
 
-      logger.log('[WhisperService] transcribeRealtime started successfully');
-      this.stopFn = async () => {
-        await stop();
-      };
-      subscribe((evt: RealtimeTranscribeEvent) => {
-        logger.log('[WhisperService] Event received:', {
-          isCapturing: evt.isCapturing,
-          hasData: !!evt.data,
-          textLength: evt.data?.result?.length ?? 0,
-        });
-        // [WIRE] raw realtime transcription event shape from-device (voice-mode STT path) — full result +
-        // segments + timing, so we can ground the realtime-transcript fixtures (distinct from file transcribe).
-        logger.log(`[WIRE-STT-REALTIME] ${JSON.stringify({ isCapturing: evt.isCapturing, textLength: evt.data?.result?.length ?? 0, processTime: evt.processTime, recordingTime: evt.recordingTime })}`);
-
-        const { isCapturing, data, processTime, recordingTime } = evt;
-
-        if (isCapturing) {
-          // Live partial — surface immediately for the "listening…" preview.
-          onResult({
-            text: data?.result || '',
-            isCapturing: true,
-            processTime: processTime || 0,
-            recordingTime: recordingTime || 0,
-          });
-          return;
+      // The final transcript comes from the recording. The realtime transcriber drops the slice
+      // still decoding when it stops, so the preview can miss the last words; the file pass hears
+      // all of them. The preview stands in only when the file pass fails or hears nothing.
+      const resolveFinalText = async (realtimeText: string): Promise<string> => {
+        try {
+          const { path } = await audioRecorderService.stopRecording();
+          // This session already holds the native lane; the file pass runs inside it.
+          const fileText = await this.transcribeLocalFile(path, { language });
+          logger.log(`[WhisperService] File transcript: ${fileText.length}ch`);
+          return fileText || cleanTranscription(realtimeText);
+        } catch (fileErr) {
+          logger.error('[WhisperService] File transcription failed:', fileErr);
+          return cleanTranscription(realtimeText);
         }
+      };
 
-        // FINAL: the utterance ended. Deliver the authoritative transcript — the realtime result if
-        // it captured anything, else the file transcript (B26 fix). Emit it as the single final event.
+      logger.log('[WhisperService] Starting realtime transcriber...');
+      const transcriber = new RealtimeTranscriber(
+        { whisperContext: this.context, audioStream: new RecorderAudioStream() },
+        {
+          audioSliceSec: 30,
+          transcribeOptions: {
+            ...whisperDecodeOptions(language),
+            maxLen: options?.maxLen || 0, // 0 = no limit
+          },
+        },
+        {
+          onTranscribe: evt => {
+            if (evt.type !== 'transcribe' || !evt.data) return;
+            slices.set(evt.sliceIndex, evt.data.result ?? '');
+            // Shape only: the transcript is what the person said and never goes in the log.
+            logger.log(`[WIRE-STT-REALTIME] ${JSON.stringify({ sliceIndex: evt.sliceIndex, textLength: evt.data.result?.length ?? 0, processTime: evt.processTime, recordingTime: evt.recordingTime })}`);
+            onResult({
+              text: preview(),
+              isCapturing: true,
+              processTime: evt.processTime || 0,
+              recordingTime: evt.recordingTime || 0,
+            });
+          },
+          onError: message => logger.error('[WhisperService] Realtime transcriber:', message),
+        },
+      );
+      await transcriber.start();
+      logger.log('[WhisperService] Realtime transcriber started');
+
+      this.stopFn = async () => {
+        // A transcriber that fails to stop or release must not cost the person their words: the
+        // final transcript comes from the recording either way.
+        await transcriber.stop().catch(err => logger.error('[WhisperService] Realtime stop failed:', err));
+        await transcriber.release().catch(err => logger.error('[WhisperService] Realtime release failed:', err));
         logger.log('[WhisperService] Recording finished');
-        // The native callback cannot await the fallback transcription.
+        // The final transcript outlives stop(): callers wait on transcriptionFullyStopped for it.
         // eslint-disable-next-line no-void
-        void resolveFinalText(data?.result || '').then(finalText => {
+        void resolveFinalText(preview()).then(finalText => {
           endAnalytics('done');
           onResult({
             text: finalText,
             isCapturing: false,
-            processTime: processTime || 0,
-            recordingTime: recordingTime || 0,
+            processTime: 0,
+            recordingTime: 0,
           });
           // A newer session may already be waiting for the lane: its state is not ours to clear.
           if (session === this.realtimeSession) {
@@ -446,14 +417,14 @@ class WhisperService {
           // Signal that native processing is complete - safe to release context
           resolveTranscriptionStopped();
         });
-      });
-      // The native stop handle and its event subscriber now exist. A stop that
-      // arrived during startup can continue and close this exact session.
+      };
+      // The stop handle now exists. A stop that arrived during startup can continue and close this
+      // exact session.
       this.realtimeStart.settle();
     } catch (error) {
       this.realtimeStart.settle();
       if (recordedFile) audioRecorderService.cancelRecording();
-      logger.error('[WhisperService] transcribeRealtime error:', error);
+      logger.error('[WhisperService] Realtime transcription error:', error);
       endAnalytics('failed', { error });
       this.isTranscribing = false;
       this.stopFn = null;
@@ -497,10 +468,8 @@ class WhisperService {
     } finally {
       this.isTranscribing = false;
       // Hand the audio session back to the single owner. Realtime STT set mode='record'
-      // via ensureRecordingPermission on start; whisper.rn's audioSessionOnStopIos
-      // restores the NATIVE session but leaves this owner's `mode` stuck at 'record', so
-      // the next TTS ensurePlayback() early-returns and playback is silent after
-      // dictation. restorePlaybackAfterRecording resets mode + re-asserts playback
+      // via ensureRecordingPermission on start; left there, the next TTS ensurePlayback()
+      // early-returns and playback is silent after dictation. restorePlaybackAfterRecording resets mode + re-asserts playback
       // (iOS only; Android is a no-op). Best-effort — never throw into the stop path.
       audioSessionManager.restorePlaybackAfterRecording().catch(() => {});
     }

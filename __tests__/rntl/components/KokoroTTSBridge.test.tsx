@@ -15,7 +15,7 @@
 import React from 'react';
 import { render, act, waitFor } from '@testing-library/react-native';
 import { AudioContext, AudioManager } from 'react-native-audio-api';
-import { useTextToSpeech } from 'react-native-executorch';
+import { useTextToSpeech } from 'react-native-executorch/legacy';
 import { BareResourceFetcher } from 'react-native-executorch-bare-resource-fetcher';
 import { KokoroEngine } from '../../../pro/audio/engine/tts/engines/kokoro/KokoroEngine';
 import { useTTSStore } from '../../../pro/audio/ttsStore';

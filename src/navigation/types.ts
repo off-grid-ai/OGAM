@@ -29,6 +29,7 @@ export type RootStackParamList = {
   DeviceInfo: undefined;
   StorageSettings: undefined;
   SecuritySettings: undefined;
+  EngineUpdates: undefined;
   Sync: undefined;
   Notifications: undefined;
   // Already in RootStack
