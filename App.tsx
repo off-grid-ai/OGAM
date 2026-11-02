@@ -40,6 +40,7 @@ import { startTextAppearance } from './src/theme/globalText';
 import { useNearbyPairingIntent } from './src/services/nearbySync/useNearbyPairingIntent';
 import { startShareIntake, flushShare } from './src/share/shareIntake';
 import { UndoBar } from './src/chats/UndoBar';
+import { startScheduler } from './src/schedule/runner';
 import { navigationRef } from './src/navigation/navigationRef';
 import { startAppLinks, flushAppLink } from './src/navigation/appLinks';
 
@@ -89,6 +90,7 @@ function App() {
   useNearbyPairingIntent();
   useEffect(() => startShareIntake(), []);
   useEffect(() => startAppLinks(), []);
+  useEffect(() => startScheduler(), []);
   useDownloadListeners();
   // Reactive: when Pro is activated at runtime (license key → loadProFeatures),
   // the appRoot slot (TTS engine bridge) registers and this re-renders to mount

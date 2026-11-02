@@ -27,6 +27,7 @@ const STORES: Record<string, () => any> = {
   'atlas-language': () => require('../language/store').useLanguage,
   'atlas-recordings': () => require('../atlasRecorder/store').useRecordings,
   'atlas-skills': () => require('../skills/skillsStore').useSkills,
+  'atlas-schedule': () => require('../schedule/store').useSchedule,
 };
 
 /** Loads the given stores from storage again (unknown keys and missing stores are skipped). */

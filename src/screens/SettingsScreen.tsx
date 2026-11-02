@@ -173,6 +173,7 @@ export const SettingsScreen: React.FC = () => {
           <View style={styles.navSection}>
             {[
               { icon: 'monitor', title: 'Presentation Studio', desc: 'Create PowerPoint decks with templates and export PDF, offline', screen: 'Presentations' as const },
+              { icon: 'clock', title: 'Scheduled tasks', desc: 'Have the AI do something at a set time: a daily briefing, a plan, anything you can ask', screen: 'Schedule' as const },
               { icon: 'zap', title: 'Skills', desc: 'Reusable instructions in the SKILL.md format (Claude, OpenClaw): import, switch on or off, call with /name', screen: 'Skills' as const },
               { icon: 'droplet', title: 'Appearance & AI style', desc: 'Theme, colors, font, text size, bottom bar, and how talkative the AI is', screen: 'Appearance' as const },
               { icon: 'cpu', title: 'Models', desc: 'Browse, download and load text, image and voice models', screen: 'ModelsTab' as any },

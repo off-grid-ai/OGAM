@@ -7,6 +7,7 @@ import { useLanguage } from '../../../language/store';
 import { continueInfo } from '../../../language/continueInfo';
 import { BRIEF_PROJECT, todayKey } from '../../../atlasTools/dailyBrief';
 import { useStudyStore } from '../../../study/engine';
+import { useSchedule } from '../../../schedule/store';
 
 /**
  * "Pick up where you left off" for the two things Home does not already resume: your next Learn square and today's
@@ -17,6 +18,8 @@ export const ContinueCard: React.FC<{ navigation: any }> = ({ navigation }) => {
   useLanguage((s) => s.progress);
   useLanguage((s) => s.level);
   const next = continueInfo();
+  const tasks = useSchedule((st) => st.tasks);
+  const ready = React.useMemo(() => tasks.filter((t) => !!t.lastChatId && t.resultSeen === false), [tasks]);
   const briefing = useStudyStore((s) => (s.saved[BRIEF_PROJECT] ?? []).find((r) => todayKey(new Date(r.createdAt)) === todayKey()));
   const row = ({ icon, title, meta, onPress, testID }: { icon: string; title: string; meta: string; onPress: () => void; testID: string }) => (
     <AnimatedPressable key={testID} style={[styles.row, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={onPress} hapticType="selection" testID={testID}>
@@ -31,6 +34,10 @@ export const ContinueCard: React.FC<{ navigation: any }> = ({ navigation }) => {
   return (
     <View style={styles.wrap} testID="home-continue">
       {!!next && row({ icon: 'book', title: `Continue ${next.language}: ${next.title}`, meta: 'Next square on your board', onPress: () => navigation.navigate('Language'), testID: 'home-continue-learn' })}
+      {ready.map((t) => row({
+        icon: 'clock', title: `${t.name} is ready`, meta: 'Scheduled answer. Tap to read it.', testID: `home-scheduled-${t.id}`,
+        onPress: () => { useSchedule.getState().update(t.id, { resultSeen: true }); navigation.navigate('Chat', { conversationId: t.lastChatId }); },
+      }))}
       {briefing
         ? row({ icon: 'headphones', title: "Listen to today's briefing", meta: briefing.title ?? 'Daily briefing', onPress: () => navigation.navigate('Study', { projectId: BRIEF_PROJECT, openAt: briefing.createdAt }), testID: 'home-continue-briefing' })
         : row({ icon: 'headphones', title: "Today's news briefing", meta: 'Not made yet. Tap to make it.', onPress: () => navigation.navigate('DailyBrief'), testID: 'home-continue-briefing-make' })}

@@ -454,6 +454,13 @@ The **Build Atlas voices** workflow ran successfully on 2026-10-19, so `kitten-n
 - **Looks**: four more backgrounds (Terminal, Midnight, Dune, Rosewater).
 - Not verified on a device.
 
+## 8r. MTP built into the model, and scheduled tasks (0.0.122)
+
+- **MTP built into a model file**: importing a single file with MTP in its name now asks whether it is a complete model with MTP built in (it is then imported and drafts with its own MTP layers, no second file) or only the small MTP file (it explains how to attach it). My models shows **MTP built in: on/off** on every GGUF model without an attached file, to switch it by hand. "Use MTP files" in settings covers both kinds. Not measured on a device.
+- **Scheduled tasks** (Settings > Scheduled tasks): have the AI do something at a time you set. Two kinds: **Ask the AI** (any prompt; start it with /skill-name to use a skill) and **Daily briefing**. Repeat once, every day, weekdays or weekly on a day, at an hour and minute. Four starting ideas (morning briefing, plan my day, weekly review, word of the day). Each answer is kept as a chat and a row on Home says it is ready. **Run now**, switch on/off, edit, delete. A failed run keeps its reason and is tried again after 15 minutes. Included in backups; not synced between phones (both phones would run it).
+- **When tasks run**: while Atlas is open (when it comes to the front, then once a minute). Atlas has no background alarm yet, so a task due while the phone was away runs once when you come back, not once per missed time.
+- Not verified on a device.
+
 ## Build evidence and checks
 
 - New **Android unit tests** workflow runs the Kotlin/JVM tests (`:app:testDebugUnitTest`) on every push that
