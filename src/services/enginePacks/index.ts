@@ -172,7 +172,7 @@ async function removeIfPresent(path: string): Promise<void> {
  * How this phone's engine gets newer. The gap is data, not a platform branch in the UI: Android takes
  * signed packs over the air; iOS cannot load downloaded native code, so its engine updates with the app.
  */
-export type EngineUpdatePath = 'over-the-air' | 'with-app';
+type EngineUpdatePath = 'over-the-air' | 'with-app';
 
 export interface EngineUpdateInfo {
   path: EngineUpdatePath;
