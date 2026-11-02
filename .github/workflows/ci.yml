@@ -243,6 +243,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Start the simulator now, so its first-boot set-up runs during the install and build instead
+      # of during the tests; scripts/test-ios.sh waits for the boot to finish on this same device.
+      - name: Boot the iOS simulator
+        run: |
+          id="$(bash scripts/ios-simulator-id.sh)"
+          echo "IOS_SIMULATOR_ID=$id" >> "$GITHUB_ENV"
+          xcrun simctl boot "$id"
+
       - name: Set up the workspace
         uses: ./.github/actions/setup-mobile
         with:
