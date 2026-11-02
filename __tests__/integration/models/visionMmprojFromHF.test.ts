@@ -41,6 +41,7 @@ const POPULAR_VISION_REPOS = [
   'ggml-org/SmolVLM2-500M-Video-Instruct-GGUF',
   'ggml-org/SmolVLM-Instruct-GGUF',
   'ggml-org/SmolVLM2-2.2B-Instruct-GGUF',
+  'LiquidAI/LFM3-VL-2B-GGUF', // QAD-Q4_0 beside plain quants: QAD is packaging, not a variant
 ];
 const ALL_REPOS = [...new Set([...CURATED_VISION_REPOS, ...POPULAR_VISION_REPOS])];
 
@@ -161,5 +162,13 @@ describe('vision mmproj pairing/rename/download over cached REAL Hugging Face da
       return !pairs || !belongs;
     }).sort();
     expect(broken).toEqual([]);
+  });
+
+  it('every LFM3 VL file, the QAD one included, downloads with its vision projector', () => {
+    const files = fx?.['LiquidAI/LFM3-VL-2B-GGUF']?.ggufFiles ?? [];
+    const projectors = files.filter(isMMProjFile);
+    const unpaired = files.filter(f => !isMMProjFile(f) && !pickMmProjForDownload(f, projectors));
+    expect(files.length).toBeGreaterThan(0);
+    expect(unpaired).toEqual([]);
   });
 });

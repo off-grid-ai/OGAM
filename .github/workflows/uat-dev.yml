@@ -305,12 +305,19 @@ jobs:
         with: { ruby-version: '3.3', bundler-cache: true }
       # ios/Pods, so pod install does not download every pod again (hermes-engine alone is large).
       # pod install still runs and reconciles the restored tree with Podfile.lock.
+      #
+      # Keyed on package-lock.json too, with no fallback across it. The development pods live in
+      # node_modules, and pod install runs a pod's prepare_command (react-native-audio-api downloads
+      # its prebuilt libcrypto, libopus and libvorbis into node_modules) only when it installs that pod.
+      # A Pods tree restored beside a fresh node_modules skipped it, and the iOS build failed on the
+      # missing libraries. A new lock file installs the pods afresh, and the step before pod install
+      # runs that download itself, because node_modules is cached before pod install fills it.
       - name: Cache CocoaPods
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ios/Pods
-          key: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ios/Podfile', 'ios/Podfile.lock') }}
-          restore-keys: pods-${{ runner.os }}-${{ runner.arch }}-
+          key: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('ios/Podfile', 'ios/Podfile.lock') }}
+          restore-keys: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}-
       # The stable-diffusion.cpp xcframework that pod install builds (scripts/build-video-ios.sh).
       # Built once per runtime revision; the script still checks its own build key and rebuilds
       # when it does not match.
@@ -319,6 +326,11 @@ jobs:
         with:
           path: native/video/OffgridVideoRuntime.xcframework
           key: video-ios-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/video/**', 'scripts/build-video-ios.sh') }}
+      # react-native-audio-api's prepare_command, run here: pod install skips it for a restored pod.
+      # The script skips what is already there.
+      - name: Download react-native-audio-api's prebuilt libraries
+        working-directory: node_modules/react-native-audio-api
+        run: bash scripts/download-prebuilt-binaries.sh ios
       - name: pod install
         # Use the CocoaPods pinned in Gemfile.lock, so Podfile.lock is reproduced as committed.
         # Restoring a lock rewritten by another CocoaPods left Pods/Manifest.lock out of step with
@@ -346,8 +358,8 @@ jobs:
           path: ~/Library/Developer/Xcode/DerivedData/ModuleCache.noindex
           key: xcode-modules-release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ios/Podfile.lock') }}
           restore-keys: xcode-modules-release-${{ runner.os }}-${{ runner.arch }}-
-      # ccache's default macOS directory: React Native's clang wrapper points ccache at its own
-      # config file, so the cache must be where ccache looks by default.
+      # Outside the checkout: uat.sh refuses a dirty tree. scripts/xcode-ccache.sh writes this
+      # directory into its wrappers.
       - name: Locate the ccache directory
         run: echo "CCACHE_DIR=$HOME/Library/Caches/ccache" >> "$GITHUB_ENV"
       - name: Setup ccache
@@ -358,20 +370,14 @@ jobs:
           max-size: 2G
           # Keep only what this build used, so the saved cache does not grow run after run.
           evict-old-files: job
-      # Route every C/C++/Objective-C compile through ccache with React Native's own wrapper.
-      # XCODE_XCCONFIG_FILE overrides the build settings of every target from the environment, so
-      # the tracked Xcode project stays as committed (uat.sh refuses a dirty tree).
+      # Route every C/C++/Objective-C compile through ccache. XCODE_XCCONFIG_FILE overrides the
+      # build settings of every target from the environment, so the tracked Xcode project stays as
+      # committed (uat.sh refuses a dirty tree).
       - name: Route clang through ccache
-        run: |
-          {
-            echo "CC = $GITHUB_WORKSPACE/node_modules/react-native/scripts/xcode/ccache-clang.sh"
-            echo "CXX = $GITHUB_WORKSPACE/node_modules/react-native/scripts/xcode/ccache-clang++.sh"
-            echo "CCACHE_BINARY = $(command -v ccache)"
-          } > "$RUNNER_TEMP/ccache.xcconfig"
-          cat "$RUNNER_TEMP/ccache.xcconfig"
+        run: bash scripts/xcode-ccache.sh "$RUNNER_TEMP/xcode-ccache"
       - name: Build iOS (scripts/uat.sh --build-only --ios)
         env:
-          XCODE_XCCONFIG_FILE: ${{ runner.temp }}/ccache.xcconfig
+          XCODE_XCCONFIG_FILE: ${{ runner.temp }}/xcode-ccache/ccache.xcconfig
           # iOS signing (imported into a temp keychain by the Fastfile's setup_signing)
           ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}

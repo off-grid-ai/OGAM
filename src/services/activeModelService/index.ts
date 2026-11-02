@@ -120,6 +120,30 @@ class ActiveModelService {
     const loaded = this.loadedTextModelId;
     if (loaded && useAppStore.getState().activeModelId !== loaded) this.markSelected(loaded);
   }
+  /**
+   * Runs `work` on a utility text model (the image-intent classifier) without making it the person's
+   * chat model. Loading goes through the one text loader, which records what it loads as the
+   * selection; with no chat model loaded (a switch the memory gate refused) nothing restored that, so
+   * the classifier became the chat model and answered the next turn under the chosen model's name.
+   * The chat model that was selected is loaded back, and the selection is put back as it was.
+   */
+  async withUtilityTextModel<T>(modelId: string, work: () => Promise<T>): Promise<T> {
+    const before = useAppStore.getState();
+    const selection = { activeModelId: before.activeModelId, lastTextModelId: before.lastTextModelId };
+    const chatModelId = this.resolveSelectedTextModel()?.id ?? null;
+    await this.loadTextModel(modelId);
+    try {
+      return await work();
+    } finally {
+      try {
+        if (chatModelId && chatModelId !== modelId) await this.loadTextModel(chatModelId);
+      } finally {
+        const store = useAppStore.getState();
+        store.setActiveModelId(selection.activeModelId);
+        store.setLastTextModelId(selection.lastTextModelId);
+      }
+    }
+  }
   getLoadedModelIds(): {
     textModelId: string | null;
     imageModelId: string | null;

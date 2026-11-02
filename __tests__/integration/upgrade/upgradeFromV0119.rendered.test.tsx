@@ -403,6 +403,11 @@ const MIC_GRANT = {
   nativeEvent: { touches: [], changedTouches: [], identifier: 1, pageX: 0, pageY: 0, timestamp: 0 },
   touchHistory: { touchBank: [], numberActiveTouches: 0, indexOfSingleActiveTouch: -1, mostRecentTimeStamp: 0 },
 };
+/** The finger lifts after a long press (PanResponder release), as harness/chatHarness releaseMic sends it. */
+const MIC_RELEASE = {
+  nativeEvent: { touches: [], changedTouches: [], identifier: 1, pageX: 0, pageY: 0, timestamp: 500 },
+  touchHistory: { touchBank: [], numberActiveTouches: 0, indexOfSingleActiveTouch: -1, mostRecentTimeStamp: 500 },
+};
 
 const WAIT = { timeout: 8000 };
 
@@ -535,15 +540,14 @@ describe('an install upgraded from v0.0.119', () => {
     expect(input.props.value ?? '').toBe('');
     const mic = await waitFor(() => view.getByTestId('voice-record-button'), WAIT);
     expect(mic.props.accessibilityLabel).toBe('Start voice recording');
+    boundary.whisper!.setFileTranscript(SPOKEN);
     fireEvent(mic, 'responderGrant', MIC_GRANT);
     await waitFor(() => expect(boundary.whisper!.hasRealtimeSubscriber()).toBe(true), WAIT);
     await waitFor(
       () => expect(view.getByTestId('voice-record-button').props.accessibilityLabel).toBe('Stop voice recording'),
       WAIT,
     );
-    await rtl.act(async () => {
-      boundary.whisper!.emitRealtime({ text: SPOKEN, isCapturing: false });
-    });
+    fireEvent(view.getByTestId('voice-record-button'), 'responderRelease', MIC_RELEASE);
     await waitFor(() => expect(view.getByTestId('chat-input').props.value ?? '').toContain(SPOKEN), WAIT);
     expect(view.queryByTestId('voice-record-button-unavailable')).toBeNull();
     noCrash();

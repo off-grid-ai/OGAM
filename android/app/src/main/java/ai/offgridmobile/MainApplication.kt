@@ -21,6 +21,8 @@ import ai.offgridmobile.downloads.SyncDownloadsPackage
 import ai.offgridmobile.sync.BlobChannelPackage
 import ai.offgridmobile.screenshot.SyncScreenshotPackage
 import ai.offgridmobile.sync.MeshResidencyPackage
+import ai.offgridmobile.enginepack.EnginePackBoot
+import ai.offgridmobile.enginepack.EnginePackPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -44,6 +46,7 @@ class MainApplication : Application(), ReactApplication {
           add(SyncScreenshotPackage())
           add(SyncDownloadsPackage())
           add(BlobChannelPackage())
+          add(EnginePackPackage())
         },
       // A fatal JS error still crashes the app, as React Native's default does, but with its JS
       // stack as frames so Play Console can show and group it.
@@ -55,6 +58,8 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    // Before React Native: llama.rn reads the engine-pack folder when it first loads its libraries.
+    EnginePackBoot.apply(this)
     loadReactNative(this)
   }
 }

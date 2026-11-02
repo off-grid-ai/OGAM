@@ -197,13 +197,39 @@ jest.mock('whisper.rn', () => ({
     result: 'Transcribed text',
     segments: [],
   })),
-  transcribeRealtime: jest.fn(() => Promise.resolve()),
-  AudioSessionIos: {
-    setCategory: jest.fn(() => Promise.resolve()),
-    setMode: jest.fn(() => Promise.resolve()),
-    setActive: jest.fn(() => Promise.resolve()),
-  },
 }), { virtual: true });
+
+// whisper.rn's realtime transcriber: library JS over the native transcribeData and the microphone.
+// The fake keeps every session, so a test can read what it was given and deliver the live preview
+// one decoded slice at a time (emitSlice).
+jest.mock('whisper.rn/realtime-transcription/RealtimeTranscriber', () => {
+  const sessions: any[] = [];
+  class RealtimeTranscriber {
+    active = false;
+    released = false;
+    options: any;
+    callbacks: any;
+    constructor(_mockDependencies: any, mockOptions: any, mockCallbacks: any) {
+      this.options = mockOptions;
+      this.callbacks = mockCallbacks;
+      sessions.push(this);
+    }
+    async start() { this.active = true; }
+    async stop() { this.active = false; }
+    async release() { this.active = false; this.released = true; }
+    emitSlice(text: string | undefined, sliceIndex = 0, recordingTime = 500) {
+      this.callbacks?.onTranscribe?.({
+        type: 'transcribe',
+        sliceIndex,
+        data: text === undefined ? undefined : { result: text },
+        isCapturing: this.active,
+        processTime: 10,
+        recordingTime,
+      });
+    }
+  }
+  return { RealtimeTranscriber, __sessions: sessions };
+}, { virtual: true });
 
 // RN host-component native-measurement boundary. The RN jest preset stubs measure/measureInWindow as
 // no-op jest.fns that never invoke their callback, so any component that anchors UI off a measured node
@@ -300,7 +326,7 @@ const mockKokoroConfig = (voice: string, language: string) => ({
     neuralModelSource: `https://example.test/kokoro/${language}/phonemizer.pte`,
   },
 });
-jest.mock('react-native-executorch', () => ({
+jest.mock('react-native-executorch/legacy', () => ({
   // Faithful init leaf for the executorch native runtime (a genuine external native boundary):
   // initExecutorch registers the resource fetcher so the runtime is ready to load models through
   // it. With models faked at the fetcher + useTextToSpeech boundary there is nothing further to

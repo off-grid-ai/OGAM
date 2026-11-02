@@ -58,14 +58,12 @@ describe('realtime hold-to-talk dictation recovers when whisper load is blocked 
     expect(inputBefore.props.value ?? '').toBe('');
 
     // REAL chat-mode hold-to-talk on a non-audio (llama) model → the whisper REALTIME path.
+    // The finished utterance is the recording's transcript.
+    h.boundary.whisper!.setFileTranscript('take a note');
     await h.tapMic();      // grant → onStartRecording → the whisper realtime dictation path
     await h.settle(200);   // let the (blocked→free→retry) load resolve and the realtime session start
     await h.releaseMic();  // release → onStopRecording (whisper path finalizes)
 
-    // The realtime stream delivers the finished utterance (final event, isCapturing:false).
-    await h.rtl.act(async () => {
-      h.boundary.whisper!.emitRealtime({ text: 'take a note', isCapturing: false });
-    });
     await h.settle(800); // MIN_TRANSCRIBING_TIME + the finalResult → onTranscript effect
 
     // THE FIX — dictation RECOVERED: the transcript is in the INPUT BOX.

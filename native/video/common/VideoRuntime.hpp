@@ -5,6 +5,7 @@
 #include "stable-diffusion.h"
 #include "ggml-backend.h"
 #endif
+#include "BlankImage.hpp"
 #include <atomic>
 #include <cstdio>
 #include <sys/stat.h>
@@ -285,7 +286,12 @@ public:
     if (!imageContext) throw std::runtime_error("Image model is unloaded.");
     // The engine owns the result; free it whole, never its parts.
     sd_image_generation_result_t *result = nullptr;
-    auto produced = [&] { return result && result->count == 1 && result->items[0].image.data; };
+    // A one-colour frame is a graph that failed numerically: it takes the fallback below like any failure.
+    auto produced = [&] {
+      if (!result || result->count != 1) return false;
+      const sd_image_t &image = result->items[0].image;
+      return !isBlankImage(image.data, image.width, image.height, image.channel);
+    };
     auto cleanup = [&] {
       sd_set_progress_callback(nullptr, nullptr);
       sd_set_preview_callback(nullptr, PREVIEW_NONE, 0, false, false, nullptr);

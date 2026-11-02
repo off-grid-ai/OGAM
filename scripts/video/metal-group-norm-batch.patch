@@ -1,0 +1,68 @@
+diff --git a/src/ggml-metal/ggml-metal-impl.h b/src/ggml-metal/ggml-metal-impl.h
+index 4ffb5a77..786f4f87 100644
+--- a/src/ggml-metal/ggml-metal-impl.h
++++ b/src/ggml-metal/ggml-metal-impl.h
+@@ -663,6 +663,8 @@ typedef struct {
+     uint64_t nb00;
+     uint64_t nb01;
+     uint64_t nb02;
++    uint64_t nb03;
++    uint64_t nb3;
+     int32_t  ngrp;
+     float    eps;
+ } ggml_metal_kargs_group_norm;
+diff --git a/src/ggml-metal/ggml-metal-ops.cpp b/src/ggml-metal/ggml-metal-ops.cpp
+index 53c98161..829e9fdb 100644
+--- a/src/ggml-metal/ggml-metal-ops.cpp
++++ b/src/ggml-metal/ggml-metal-ops.cpp
+@@ -4373,6 +4373,8 @@ int ggml_metal_op_group_norm(ggml_metal_op_t ctx, int idx) {
+         /*.nb00 =*/ nb00,
+         /*.nb01 =*/ nb01,
+         /*.nb02 =*/ nb02,
++        /*.nb03 =*/ nb03,
++        /*.nb3  =*/ nb3,
+         /*.ngrp =*/ ngrp,
+         /*.eps  =*/ eps,
+     };
+@@ -4396,7 +4398,7 @@ int ggml_metal_op_group_norm(ggml_metal_op_t ctx, int idx) {
+ 
+     ggml_metal_encoder_set_threadgroup_memory_size(enc, smem, 0);
+ 
+-    ggml_metal_encoder_dispatch_threadgroups(enc, ngrp, 1, 1, nth, 1, 1);
++    ggml_metal_encoder_dispatch_threadgroups(enc, ngrp, ne03, 1, nth, 1, 1);
+ 
+     return 1;
+ }
+diff --git a/src/ggml-metal/kernels/norm.metal b/src/ggml-metal/kernels/norm.metal
+index c76d0c7f..8a923e1d 100644
+--- a/src/ggml-metal/kernels/norm.metal
++++ b/src/ggml-metal/kernels/norm.metal
+@@ -241,15 +241,22 @@ kernel void kernel_group_norm_f32(
+         device const float * src0,
+         device       float * dst,
+         threadgroup float  * buf [[threadgroup(0)]],
+-        uint tgpig[[threadgroup_position_in_grid]],
+-        uint tpitg[[thread_position_in_threadgroup]],
+-        uint sgitg[[simdgroup_index_in_threadgroup]],
+-        uint tiisg[[thread_index_in_simdgroup]],
+-        uint   ntg[[threads_per_threadgroup]]) {
++        uint2 tgpig[[threadgroup_position_in_grid]],
++        uint2 tpitg2[[thread_position_in_threadgroup]],
++        uint  sgitg[[simdgroup_index_in_threadgroup]],
++        uint  tiisg[[thread_index_in_simdgroup]],
++        uint2 ntg2[[threads_per_threadgroup]]) {
++    const uint tpitg = tpitg2.x;
++    const uint ntg   = ntg2.x;
++
+     const int64_t ne = args.ne00*args.ne01*args.ne02;
+     const int64_t gs = args.ne00*args.ne01*((args.ne02 + args.ngrp - 1) / args.ngrp);
+ 
+-    int start = tgpig * gs;
++    // one threadgroup per (group, batch): each batch is normalized on its own
++    src0 = (device const float *) ((device const char *) src0 + tgpig.y*args.nb03);
++    dst  = (device       float *) ((device       char *) dst  + tgpig.y*args.nb3);
++
++    int start = tgpig.x * gs;
+     int end   = start + gs;
+ 
+     start += tpitg;

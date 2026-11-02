@@ -11,15 +11,14 @@
     "pro/**/*.{ts,tsx}"
   ],
   "ignoreBinaries": [
-    "swiftlint"
+    "swiftlint",
+    "c\\+\\+"
   ],
   "ignoreDependencies": [
     "@offgrid/pro",
     "@offgrid/film-native",
     "buffer",
     "js-sha512",
-    "tweetnacl",
-    "tweetnacl-util",
     "react-compiler-runtime",
     "eslint-plugin-react-compiler",
     "eslint-plugin-react-native",

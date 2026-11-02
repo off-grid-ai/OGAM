@@ -97,6 +97,11 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1793102561
         versionName "0.0.119"
+        // An engine pack fits only the llama.rn Java/JS bridge this APK carries (see enginepack/).
+        def llamaRn = new groovy.json.JsonSlurper().parse(file("../../node_modules/llama.rn/package.json"))
+        buildConfigField "String", "LLAMA_ENGINE_BRIDGE", "\"${llamaRn.offgrid?.engineBridge ?: ''}\""
+        // ...and is taken only when its version is newer than the engine the APK bundles.
+        buildConfigField "String", "LLAMA_ENGINE_VERSION", "\"${llamaRn.version}\""
     }
     signingConfigs {
         debug {

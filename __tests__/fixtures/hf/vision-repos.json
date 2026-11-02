@@ -992,5 +992,32 @@
         "magic": "GGUF"
       }
     }
+  },
+  "LiquidAI/LFM3-VL-2B-GGUF": {
+    "exists": true,
+    "ggufFiles": [
+      "LFM3-VL-2B-BF16.gguf",
+      "LFM3-VL-2B-F16.gguf",
+      "LFM3-VL-2B-Q4_K_M.gguf",
+      "LFM3-VL-2B-Q5_K_M.gguf",
+      "LFM3-VL-2B-Q6_K.gguf",
+      "LFM3-VL-2B-Q8_0.gguf",
+      "LFM3-VL-2B-QAD-Q4_0.gguf",
+      "mmproj-LFM3-VL-2B-BF16.gguf",
+      "mmproj-LFM3-VL-2B-F16.gguf",
+      "mmproj-LFM3-VL-2B-Q8_0.gguf"
+    ],
+    "probe": {
+      "model": {
+        "name": "LFM3-VL-2B-QAD-Q4_0.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      },
+      "mmproj": {
+        "name": "mmproj-LFM3-VL-2B-F16.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      }
+    }
   }
 }

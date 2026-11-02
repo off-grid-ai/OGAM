@@ -108,8 +108,9 @@ git -C "$SHARED_DIR" fetch --no-recurse-submodules --quiet origin main || error 
 SHARED_SHA=$(git -C "$SHARED_DIR" rev-parse HEAD)
 [ "$SHARED_SHA" = "$(git -C "$SHARED_DIR" rev-parse origin/main)" ] || error "../shared HEAD must equal origin/main. Update ../shared before building."
 fi
-# A beta should ship the newest engines (an app cannot download new native code, so a release is
-# the only way one reaches people). Warn, never block: the weekly engine PR is where they move.
+# A beta should ship the newest engines (on iOS a release is the only way one reaches people; on
+# Android it is the fallback under over-the-air engine packs). Warn, never block: the daily engine
+# PR is where they move.
 if ! stage all plan; then :
 elif ENGINE_REPORT=$(node scripts/update-engines.js --check 2>/dev/null); then
   NEWER=$(node -e 'const r=JSON.parse(process.argv[1]);console.log([...r.changed,...r.held].map(c=>`${c.id} ${c.from} → ${c.to}`).join(", "))' "$ENGINE_REPORT")

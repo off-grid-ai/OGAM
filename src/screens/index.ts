@@ -20,6 +20,7 @@ export { ModelSettingsScreen } from './ModelSettingsScreen';
 export { DeviceInfoScreen } from './DeviceInfoScreen';
 export { StorageSettingsScreen } from './StorageSettingsScreen';
 export { SecuritySettingsScreen } from './SecuritySettingsScreen';
+export { EngineUpdatesScreen } from './EngineUpdatesScreen';
 export { RemoteServersScreen } from './RemoteServersScreen';
 export { RemoteServerEditorScreen } from './RemoteServerEditorScreen';
 export { ProDetailScreen } from './ProDetailScreen';

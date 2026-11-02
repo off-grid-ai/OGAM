@@ -1,33 +1,55 @@
 name: Engine updates
 
-# Every day, moves the app's native engines (llama.rn, whisper.rn, ExecuTorch, LiteRT-LM, stable-diffusion.cpp; see
-# scripts/lib/engines.js) to their newest upstream releases and opens one PR for CI to test.
-# A phone app cannot download new native code (App Store 2.5.2, Google Play's policy), so a new
-# engine reaches people only in an app release; so every beta carries the newest engines.
-# A release that needs peer dependencies the app does not meet is held and listed in the PR.
+# Every day, moves the app's native engines (@ogai/llama.rn, whisper.rn, ExecuTorch, LiteRT-LM,
+# stable-diffusion.cpp; see scripts/lib/engines.js) to their newest upstream releases and opens one
+# PR for CI to test. iOS cannot load downloaded native code (App Store 2.5.2), so there a new engine
+# reaches people in the next nightly + TestFlight; Android also takes signed llama.cpp engine packs
+# over the air, with the bundled engine as the fallback.
+# A release that needs peer dependencies the app does not meet, or would drop a local patch, is
+# held: the PR body names it, its blocker and its next step, and a hold older than 3 days gets one
+# issue per engine (scripts/engine-held-issues.js). Any failed step fails the run; the report is
+# written only when every step succeeded.
 #
-# The PR is pushed with PRO_SUBMODULE_PAT, not GITHUB_TOKEN: a push made with GITHUB_TOKEN does
+# When CI on the PR's head commit is green, the merge job merges it with a merge commit
+# (scripts/merge-engine-pr.js): only the bot's own bump, never one that moves pro, and never while a
+# nightly or store upload runs (it waits for them to end). Ali approved this for this PR only.
+#
+# The PR is pushed and merged with PRO_SUBMODULE_PAT, not GITHUB_TOKEN: a push made with GITHUB_TOKEN does
 # not start other workflows, so CI would never test the update.
 
 on:
   schedule:
-    - cron: '0 6 * * *'
+    # 21:23 UTC (02:53 IST), so the PR's CI is done before the mobile nightly. That nightly
+    # (uat-dev.yml) has no cron: it is dispatched by hand, never before ~11:00 UTC so far. GitHub
+    # starts round-hour crons late (the 06:00 run began at 12:54), hence an off-hour minute; the
+    # job (~35 min) plus CI (~2 h) still ends before 11:00 UTC with a 7 h delay.
+    - cron: '23 21 * * *'
   workflow_dispatch:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [chore/engine-updates]
 
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
-concurrency:
-  group: engine-updates
-  cancel-in-progress: false
+defaults:
+  run:
+    # -eo pipefail: any failed command, in a pipe or not, fails its step.
+    shell: bash
 
 env:
   BRANCH: chore/engine-updates
 
 jobs:
   update:
+    if: ${{ github.event_name != 'workflow_run' }}
     runs-on: macos-latest
+    concurrency:
+      group: engine-updates
+      cancel-in-progress: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -79,9 +101,15 @@ jobs:
           # stable-diffusion.cpp is read from GitHub's API; the token lifts the anonymous rate limit.
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          node scripts/update-engines.js --pods --summary "$RUNNER_TEMP/engines.md" | tee "$RUNNER_TEMP/engines.json"
+          # engines.json is written only when every engine was checked and every install succeeded.
+          node scripts/update-engines.js --pods --summary "$RUNNER_TEMP/engines.md" --json "$RUNNER_TEMP/engines.json"
           git status --porcelain -- package.json package-lock.json ios/Podfile.lock android/app/build.gradle scripts/video/revision > "$RUNNER_TEMP/changed.txt"
           if [ -s "$RUNNER_TEMP/changed.txt" ]; then echo "changed=true" >> "$GITHUB_OUTPUT"; else echo "changed=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Keep held-engine issues current
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/engine-held-issues.js "$RUNNER_TEMP/engines.json"
 
       - name: Open or update the engine PR
         if: ${{ steps.engines.outputs.changed == 'true' }}
@@ -105,3 +133,33 @@ jobs:
         if: always()
         run: |
           [ -f "$RUNNER_TEMP/engines.md" ] && cat "$RUNNER_TEMP/engines.md" >> "$GITHUB_STEP_SUMMARY" || true
+
+  merge:
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    # Waits up to 5 h for a nightly or upload to end.
+    timeout-minutes: 330
+    concurrency:
+      group: engine-merge
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+
+      - name: Merge the engine PR
+        env:
+          GH_TOKEN: ${{ secrets.PRO_SUBMODULE_PAT }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        # engines.js needs only semver.
+        run: |
+          npm install --no-save --no-audit --no-fund --ignore-scripts semver
+          node scripts/merge-engine-pr.js "$HEAD_SHA"

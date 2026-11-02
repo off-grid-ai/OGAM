@@ -77,6 +77,7 @@ export const resetStores = (): void => {
       voiceSilenceAfterSpeechMs: 5_000,
       voiceSpeakerDrainMs: 2_000,
       enhanceImagePrompts: false,
+      engineUpdates: true,
       enabledTools: ['calculator', 'get_current_datetime'],
       thinkingEnabled: true,
       liteRTBackend: 'gpu' as const,
@@ -413,12 +414,10 @@ export const createMockWhisperContext = (
 ) => ({
   id: 'test-whisper-id',
   release: jest.fn(() => Promise.resolve()),
-  transcribeRealtime: jest.fn(() =>
-    Promise.resolve({
-      stop: jest.fn(),
-      subscribe: jest.fn(),
-    }),
-  ),
+  transcribeData: jest.fn(() => ({
+    stop: jest.fn(),
+    promise: Promise.resolve({ result: '' }),
+  })),
   transcribe: jest.fn((_filePath: string, _opts: any) => ({
     promise: Promise.resolve({ result: 'transcribed text' }),
   })),

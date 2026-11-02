@@ -104,6 +104,8 @@ export const useChatScreen = () => {
     (id: string, text: string) => Promise<void>
   >(null);
   const genDepsRef = useRef<GenerationDeps | null>(null);
+  // Set once the chat actions exist below; a "Load Anyway" from the turn path resumes through it.
+  const resumePendingRef = useRef<() => void>(() => {});
   useChatAudioLifecycle(navigation);
   const { imageGenState, isCompacting, queuedMessages, queueHold } =
     useChatRuntimeSubscriptions(genDepsRef, startGenerationRef);
@@ -262,6 +264,8 @@ export const useChatScreen = () => {
         setShowModelSelector,
         setLoadingModel,
         setIsModelLoading,
+        setAlertState,
+        resumePendingMessage: () => resumePendingRef.current(),
       }),
     setPendingMessage: (text: string, attachments?: MediaAttachment[]) => {
       pendingMessageRef.current = { text, attachments };
@@ -381,6 +385,7 @@ export const useChatScreen = () => {
     viewerImageUri,
     setViewerImageUri,
   });
+  resumePendingRef.current = chatActions.resumePendingMessage;
 
   return {
     isModelLoading,

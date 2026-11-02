@@ -36,7 +36,7 @@ interface TtsRuntimeRecord {
  */
 function recordTtsRuntime(): TtsRuntimeRecord {
   const record: TtsRuntimeRecord = { loads: [], spoken: [] };
-  const executorch = require('react-native-executorch');
+  const executorch = require('react-native-executorch/legacy');
   executorch.useTextToSpeech =
     (config: { voiceSource?: string }, opts?: { preventLoad?: boolean }) => {
       const voice = /\/([^/]+)\.[^/.]+$/.exec(String(config.voiceSource))?.[1] ?? String(config.voiceSource);
