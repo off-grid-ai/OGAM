@@ -446,6 +446,14 @@ The **Build Atlas voices** workflow ran successfully on 2026-10-19, so `kitten-n
 - Importing a .gguf whose name is already in the models folder no longer fails with "already exists" when the model is not in the list. A complete leftover copy is added to the list as it is (no second copy); a partial one is replaced. If the model really is in the list, it says so and names it.
 - Not verified on a device.
 
+## 8q. MTP files, more slides, skills and looks (0.0.121)
+
+- **MTP files**: a model in My models has **Add MTP file** (and **Remove MTP file**). Import a model and its MTP .gguf together (pick both files) and the MTP file is attached; a lone MTP file explains how to add it. When the model loads, the engine drafts a few tokens ahead with the MTP file and the main model checks them. If the engine cannot start with the file, the model loads without it. Settings > Text generation > **Use MTP files** (on by default) switches it off. The runtime info says "MTP drafting on". Speed-up not measured on a device.
+- **Slides**: seven more templates (Minimal green, Sage, Forest, Sunrise, Ocean, Berry, Mono) and five more slide types (Section, Two columns, Agenda, Quote, Big number). PDF export turns the new slide types into the basic ones with all the text kept. Bullets in PowerPoint files now show a bullet dot instead of a question mark.
+- **Skills**: a library of 17 ready-made skills (summarize, explain simply, proofread, rewrite tone, email reply, meeting notes, text to table, study quiz, flashcards, math steps, decision helper, trip planner, recipe, daily planner, code explainer, careful fact-check, brainstorm), one tap each.
+- **Looks**: four more backgrounds (Terminal, Midnight, Dune, Rosewater).
+- Not verified on a device.
+
 ## Build evidence and checks
 
 - New **Android unit tests** workflow runs the Kotlin/JVM tests (`:app:testDebugUnitTest`) on every push that

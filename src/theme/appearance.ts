@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
 import { FONTS, TYPOGRAPHY } from '../constants';
 import type { ThemeColors } from './palettes';
 
-export type PaletteId = 'classic' | 'black' | 'forest' | 'ocean' | 'dusk' | 'paper' | 'mocha' | 'mint' | 'sakura' | 'graphite' | 'sunset' | 'contrast' | 'lavender' | 'peach' | 'navy';
+export type PaletteId = 'classic' | 'black' | 'forest' | 'ocean' | 'dusk' | 'paper' | 'mocha' | 'mint' | 'sakura' | 'graphite' | 'sunset' | 'contrast' | 'lavender' | 'peach' | 'navy' | 'terminal' | 'midnight' | 'dune' | 'rosewater';
 export type AccentId = 'amber' | 'emerald' | 'blue' | 'violet' | 'rose' | 'teal' | 'red' | 'slate' | 'multi' | 'orange' | 'lime' | 'cyan' | 'indigo' | 'fuchsia' | 'gold';
 export type FontId = 'atlas' | 'sans' | 'serif' | 'mono' | 'condensed' | 'light' | 'medium' | 'casual';
 export type TextSizeId = 'small' | 'normal' | 'large' | 'xlarge';
@@ -87,6 +87,18 @@ export const PALETTES: Array<{ id: PaletteId; name: string; light?: Surfaces; da
   { id: 'navy', name: 'Navy',
     light: surfaces(['#F3F5FA', '#E5E9F4', '#D6DDEE', '#C6D0E6', '#CED6EA', '#B7C2DD']),
     dark: surfaces(['#070B17', '#0D1426', '#141D36', '#1C2745', '#18223D', '#26335A']) },
+  { id: 'terminal', name: 'Terminal',
+    light: surfaces(['#F3FBF3', '#E3F3E3', '#D2EBD2', '#C1E2C1', '#CBE8CB', '#B0D8B0']),
+    dark: surfaces(['#030A04', '#07140A', '#0C1E10', '#112A17', '#0F2614', '#17391F']) },
+  { id: 'midnight', name: 'Midnight',
+    light: surfaces(['#F4F5FB', '#E7E9F6', '#D9DCEF', '#CACEE6', '#D1D5EC', '#BBC0DE']),
+    dark: surfaces(['#05060F', '#0B0D1C', '#121530', '#1A1E40', '#161A38', '#232850']) },
+  { id: 'dune', name: 'Dune',
+    light: surfaces(['#FBF7F0', '#F2EADB', '#E8DCC6', '#DDCEB0', '#E3D6BE', '#D2C19F']),
+    dark: surfaces(['#17130C', '#201A10', '#2A2216', '#352B1C', '#30271A', '#41351F']) },
+  { id: 'rosewater', name: 'Rosewater',
+    light: surfaces(['#FEF6F6', '#FBE8E8', '#F6D8D8', '#F0C7C7', '#F2D0D0', '#E7BABA']),
+    dark: surfaces(['#190D0D', '#251515', '#311D1D', '#3E2626', '#382121', '#4B2F2F']) },
 ];
 
 type Accent = Pick<ThemeColors, 'primary' | 'primaryDark' | 'primaryLight'>;
