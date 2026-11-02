@@ -13,7 +13,7 @@ import { modelManager } from '../services';
 import { modelDownloadService } from '../services/modelDownloadService';
 import { uniformDownloadId } from '../services/modelDownloadService/uniformId';
 import { CustomAlert, hideAlert, initialAlertState, AlertState, showAlert } from '../components/CustomAlert';
-import { pickAndAttachMmProj } from './ModelsScreen/importHelpers';
+import { pickAndAttachMmProj, pickAndAttachDraft } from './ModelsScreen/importHelpers';
 import { quickImportModel } from './ModelsScreen/quickImport';
 import { pickAndAttachImageSupport, modifyImageSupport, isPickerCancel, ImageSupport } from './ModelsScreen/imageSupportActions';
 import { imageJsonConfigHint, ATLAS_NATIVE_IMAGE_CONFIG_SAMPLE } from '../utils/imageSupportFormat';
@@ -100,6 +100,15 @@ export const MyModelsScreen: React.FC = () => {
       setImportProgress: (p) => setBusy(p ? { id: m.id, label: 'Adding vision file', fraction: p.fraction } : null),
     });
   };
+  const addDraft = async (m: DownloadedModel) => {
+    await pickAndAttachDraft(m.id, m.name, {
+      setAlertState,
+      setImportProgress: (p) => setBusy(p ? { id: m.id, label: 'Adding MTP file', fraction: p.fraction } : null),
+    });
+  };
+  const removeDraft = (m: DownloadedModel) => confirm('Remove MTP file?', `${m.name} will no longer draft with its MTP file.`, 'Remove', async () => {
+    await modelManager.removeDraft(m.id);
+  });
   const removeVision = (m: DownloadedModel) => confirm('Remove vision file?', `${m.name} will no longer look at pictures.`, 'Remove', async () => {
     const mm = (m as any).mmProjPath as string | undefined;
     await modelManager.clearMmProjLink(m.id);
@@ -186,7 +195,7 @@ export const MyModelsScreen: React.FC = () => {
             <View key={m.id} style={card}>
               <Text style={{ color: colors.text, fontWeight: '600', fontSize: 15 }}>{nicknames[m.id] || m.name}</Text>
               <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
-                {m.fileName} · {fmtBytes(size)} · {onSd ? 'SD card' : 'phone'}{m.engine === 'litert' ? ' · LiteRT' : ''}{vision ? ' · sees pictures' : ''}{m.id === activeId ? ' · in use' : ''}{speeds[m.id]?.decode ? ` · writes ~${Math.max(1, Math.round(speeds[m.id].decode * 0.75))} words/s` : ''}
+                {m.fileName} · {fmtBytes(size)} · {onSd ? 'SD card' : 'phone'}{m.engine === 'litert' ? ' · LiteRT' : ''}{m.engine === 'llama' && m.draftPath ? ' · MTP' : ''}{vision ? ' · sees pictures' : ''}{m.id === activeId ? ' · in use' : ''}{speeds[m.id]?.decode ? ` · writes ~${Math.max(1, Math.round(speeds[m.id].decode * 0.75))} words/s` : ''}
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                 <TouchableOpacity style={btn(colors.primary)} onPress={() => openNickname(m.id, m.name)}><Icon name="edit-2" size={14} color={colors.primary} /><Text style={{ color: colors.primary, marginLeft: 6 }}>Nickname</Text></TouchableOpacity>
@@ -195,6 +204,11 @@ export const MyModelsScreen: React.FC = () => {
                   <TouchableOpacity style={btn(colors.border)} onPress={() => removeVision(m)}><Icon name="eye-off" size={14} color={colors.textSecondary} /><Text style={{ color: colors.textSecondary, marginLeft: 6 }}>Remove vision file</Text></TouchableOpacity>
                 ) : (
                   <TouchableOpacity style={btn(colors.primary)} onPress={() => addVision(m)}><Icon name="eye" size={14} color={colors.primary} /><Text style={{ color: colors.primary, marginLeft: 6 }}>Add vision file</Text></TouchableOpacity>
+                ))}
+                {m.engine === 'llama' && (m.draftPath ? (
+                  <TouchableOpacity style={btn(colors.border)} testID={`remove-mtp-${m.id}`} onPress={() => removeDraft(m)}><Icon name="zap-off" size={14} color={colors.textSecondary} /><Text style={{ color: colors.textSecondary, marginLeft: 6 }}>Remove MTP file</Text></TouchableOpacity>
+                ) : (
+                  <TouchableOpacity style={btn(colors.primary)} disabled={!!busy} testID={`add-mtp-${m.id}`} onPress={() => addDraft(m)}><Icon name="zap" size={14} color={colors.primary} /><Text style={{ color: colors.primary, marginLeft: 6 }}>Add MTP file</Text></TouchableOpacity>
                 ))}
                 {(sd || onSd) && (
                   <TouchableOpacity style={btn(colors.border)} disabled={!!busy} onPress={() => move(m, !onSd)}>

@@ -20,6 +20,11 @@ export function isMmProj(name: string): boolean {
   );
 }
 
+/** An MTP (multi-token prediction) / draft file rather than a model of its own. */
+export function isDraftFile(name: string): boolean {
+  return /(^|[-_.\s])(mtp|nextn|draft)([-_.\s]|\.gguf$)/i.test(name);
+}
+
 export function classifyGgufPair(
   file1: GgufFileRef,
   file2: GgufFileRef,
@@ -50,6 +55,11 @@ export async function importGgufFiles(
     const isLitert = resolvedFileName.toLowerCase().endsWith('.litertlm');
     if (!isLitert && isMmProj(resolvedFileName)) {
       setAlertState(showAlert('This is a vision file', `"${resolvedFileName}" is a vision (mmproj) file, not a model. Import the model first, then open My models and tap "Add vision file" on it.`));
+      return;
+    }
+
+    if (!isLitert && isDraftFile(resolvedFileName)) {
+      setAlertState(showAlert('This is an MTP file', `"${resolvedFileName}" is an MTP (draft) file, not a model. Import the model first, then open My models and tap "Add MTP file" on it. Or pick both files together here.`));
       return;
     }
 
@@ -96,6 +106,23 @@ export async function importGgufFiles(
 
   const file1: GgufFileRef = { uri: files[0].uri, name: files[0].name ?? '', size: files[0].size ?? 0 };
   const file2: GgufFileRef = { uri: files[1].uri, name: files[1].name ?? '', size: files[1].size ?? 0 };
+
+  if (isDraftFile(file1.name) !== isDraftFile(file2.name)) {
+    const draftFile = isDraftFile(file1.name) ? file1 : file2;
+    const modelFile = draftFile === file1 ? file2 : file1;
+    const model = await modelManager.importLocalModel({
+      sourceUri: modelFile.uri, fileName: modelFile.name, sourceSize: modelFile.size,
+      onProgress: p => setImportProgress({ fraction: p.fraction * 0.8, fileName: p.fileName }),
+    });
+    addDownloadedModel(model);
+    try {
+      await modelManager.attachDraft(model.id, draftFile.uri, draftFile.name, draftFile.size, f => setImportProgress({ fraction: 0.8 + f * 0.2, fileName: draftFile.name }));
+      setAlertState(showAlert('Success', `${model.name} imported with its MTP file.`));
+    } catch (e) {
+      setAlertState(showAlert('Model imported, MTP file not added', getErrorMessage(e)));
+    }
+    return;
+  }
 
   const { mainFile, mmProjFile } = classifyGgufPair(file1, file2);
 
@@ -150,6 +177,25 @@ export async function pickAndAttachMmProj(modelId: string, modelName: string, de
     return true;
   } catch (e) {
     deps.setAlertState(showAlert('Could not add the vision file', getErrorMessage(e)));
+    return false;
+  } finally { deps.setImportProgress(null); }
+}
+
+/** Pick an MTP (draft) .gguf from the phone and attach it to a model that is already imported. */
+export async function pickAndAttachDraft(modelId: string, modelName: string, deps: Pick<GgufImportDeps, 'setAlertState' | 'setImportProgress'>): Promise<boolean> {
+  const { pick, types } = require('@react-native-documents/picker');
+  let file: { uri: string; name: string | null; size: number | null } | undefined;
+  try { file = (await pick({ type: [types.allFiles], allowMultiSelection: false }))?.[0]; } catch { return false; }
+  if (!file) return false;
+  const name = (file.name || decodeURIComponent(file.uri.split('/').pop() || '')).trim();
+  if (!name.toLowerCase().endsWith('.gguf')) { deps.setAlertState(showAlert('Not an MTP file', 'Pick the .gguf MTP (draft) file.')); return false; }
+  try {
+    deps.setImportProgress({ fraction: 0, fileName: name });
+    await modelManager.attachDraft(modelId, file.uri, name, file.size ?? undefined, (f) => deps.setImportProgress({ fraction: f, fileName: name }));
+    deps.setAlertState(showAlert('MTP file added', `${modelName} will draft with it. Reload the model (or restart the chat) to use it.`));
+    return true;
+  } catch (e) {
+    deps.setAlertState(showAlert('Could not add the MTP file', getErrorMessage(e)));
     return false;
   } finally { deps.setImportProgress(null); }
 }

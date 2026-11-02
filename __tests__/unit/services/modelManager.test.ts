@@ -1185,6 +1185,41 @@ describe('ModelManager', () => {
   // ========================================================================
   // importLocalModel
   // ========================================================================
+  describe('MTP file', () => {
+    const savedModels = () => JSON.parse(String(mockedAsyncStorage.setItem.mock.calls.filter(c => String(c[0]).includes('downloaded') || String(c[0]).includes('models')).filter(c => Array.isArray(JSON.parse(String(c[1])))).at(-1)?.[1]));
+    const base = { id: 'local_import/m.gguf', name: 'M', author: 'Local', filePath: '/mock/documents/models/m.gguf', fileName: 'm.gguf', fileSize: 1000, engine: 'llama', quantization: 'Q4_0' };
+    beforeEach(() => {
+      (mockedRNFS as any).copyFile = jest.fn(() => Promise.resolve());
+      (mockedRNFS as any).moveFile = jest.fn(() => Promise.resolve());
+      mockedRNFS.stat.mockResolvedValue({ size: 300, isFile: () => true } as any);
+      mockedRNFS.exists.mockImplementation(() => Promise.resolve(true));
+    });
+    afterEach(() => { mockedRNFS.exists.mockImplementation(() => Promise.resolve(false)); });
+
+    it('attaches an MTP file next to the model and records it on the model', async () => {
+      mockedAsyncStorage.getItem.mockResolvedValue(JSON.stringify([base]));
+      await modelManager.attachDraft(base.id, 'file:///downloads/Qwen-MTP.gguf', 'Qwen-MTP.gguf', 300);
+      const saved = savedModels();
+      expect(saved[0].draftFileName).toBe('Qwen-MTP.gguf');
+      expect(saved[0].draftPath).toBe('/mock/documents/models/m.mtp-Qwen-MTP.gguf');
+      expect(saved[0].draftFileSize).toBe(300);
+    });
+
+    it('removes the MTP file from the model and from the phone', async () => {
+      mockedAsyncStorage.getItem.mockResolvedValue(JSON.stringify([{ ...base, draftPath: '/mock/documents/models/m.mtp-x.gguf', draftFileName: 'x.gguf', draftFileSize: 300 }]));
+      mockedRNFS.unlink.mockClear();
+      await modelManager.removeDraft(base.id);
+      const saved = savedModels();
+      expect(saved[0].draftPath).toBeUndefined();
+      expect(mockedRNFS.unlink).toHaveBeenCalledWith('/mock/documents/models/m.mtp-x.gguf');
+    });
+
+    it('refuses a file that is not a .gguf', async () => {
+      mockedAsyncStorage.getItem.mockResolvedValue(JSON.stringify([base]));
+      await expect(modelManager.attachDraft(base.id, '/x/a.bin', 'a.bin')).rejects.toThrow('.gguf');
+    });
+  });
+
   describe('importLocalModel', () => {
     beforeEach(() => {
       // Override Platform.OS for these tests
