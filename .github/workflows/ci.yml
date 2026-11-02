@@ -256,13 +256,19 @@ jobs:
 
       # ios/Pods, so pod install does not download every pod again (hermes-engine alone is large).
       # pod install still runs and reconciles the restored tree with Podfile.lock.
+      #
+      # Keyed on package-lock.json too, with no fallback across it. The development pods live in
+      # node_modules, and pod install runs a pod's prepare_command (react-native-audio-api downloads
+      # its prebuilt libcrypto, libopus and libvorbis into node_modules) only when it installs that pod.
+      # A Pods tree restored beside a fresh node_modules skipped it, and the iOS build failed on the
+      # missing libraries. A new lock file now installs the pods afresh.
       - name: Restore CocoaPods
         id: pods_cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ios/Pods
-          key: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ios/Podfile', 'ios/Podfile.lock') }}
-          restore-keys: pods-${{ runner.os }}-${{ runner.arch }}-
+          key: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('ios/Podfile', 'ios/Podfile.lock') }}
+          restore-keys: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}-
 
       # The stable-diffusion.cpp xcframework that pod install builds (scripts/build-video-ios.sh).
       # It is built once per runtime revision; the script still checks its own build key and
