@@ -68,11 +68,12 @@
     "react-compiler-runtime": "^1.0.0",
     "react-native": "0.83.1",
     "react-native-audio-api": "^0.11.7",
+    "react-native-blob-util": "^0.25.1",
     "react-native-calendar-events": "^2.2.0",
     "react-native-device-info": "^15.0.1",
     "react-native-edge-to-edge": "^1.8.1",
-    "react-native-executorch": "^0.9.3",
-    "react-native-executorch-bare-resource-fetcher": "^0.9.1",
+    "react-native-executorch": "^0.11.0",
+    "react-native-executorch-bare-resource-fetcher": "^0.11.0",
     "react-native-gesture-handler": "^2.30.0",
     "react-native-get-random-values": "^1.11.0",
     "react-native-haptic-feedback": "^2.3.3",
@@ -81,7 +82,7 @@
     "react-native-keyboard-controller": "^1.21.12",
     "react-native-keychain": "^10.0.0",
     "react-native-qrcode-svg": "^6.3.21",
-    "react-native-reanimated": "~4.3.4",
+    "react-native-reanimated": "~4.6.0",
     "react-native-safe-area-context": "^5.6.2",
     "react-native-screens": "^4.20.0",
     "react-native-svg": "^15.15.3",
@@ -91,13 +92,13 @@
     "react-native-video": "^6.19.3",
     "react-native-video-player": "0.16.3",
     "react-native-vision-camera": "^4.7.3",
-    "react-native-worklets": "^0.8.3",
+    "react-native-worklets": "^0.12.2",
     "react-native-zeroconf": "^0.14.0",
     "react-native-zip-archive": "7.1.0",
     "text-encoding-polyfill": "^0.6.7",
     "tweetnacl": "^1.0.3",
     "tweetnacl-util": "^0.15.1",
-    "whisper.rn": "^0.5.5",
+    "whisper.rn": "^0.7.4",
     "zustand": "^5.0.10"
   },
   "devDependencies": {
@@ -142,6 +143,10 @@
   },
   "op-sqlite": {
     "fts5": true
+  },
+  "react-native-executorch": {
+    "backends": ["xnnpack"],
+    "libs": ["phonemis"]
   },
   "overrides": {
     "react": "19.2.0",

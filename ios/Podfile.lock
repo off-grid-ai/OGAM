@@ -74,7 +74,6 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - opencv-rne (4.11.0)
   - RCT-Folly (2024.11.18.00):
     - boost
     - DoubleConversion
@@ -1988,6 +1987,34 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
+  - react-native-blob-util (0.25.1):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
   - react-native-document-picker (12.0.1):
     - boost
     - DoubleConversion
@@ -2044,14 +2071,13 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - react-native-executorch (0.9.3):
+  - react-native-executorch (0.11.0):
     - boost
     - DoubleConversion
     - fast_float
     - fmt
     - glog
     - hermes-engine
-    - opencv-rne (~> 4.11.0)
     - RCT-Folly
     - RCT-Folly/Fabric
     - RCTRequired
@@ -3127,7 +3153,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - RNDeviceInfo (15.0.1):
+  - RNDeviceInfo (15.0.2):
     - React-Core
   - RNGestureHandler (2.30.0):
     - boost
@@ -3215,7 +3241,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - RNReanimated (4.3.4):
+  - RNReanimated (4.6.0):
     - boost
     - DoubleConversion
     - fast_float
@@ -3242,12 +3268,13 @@ PODS:
     - ReactCodegen
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
-    - RNReanimated/apple (= 4.3.4)
-    - RNReanimated/common (= 4.3.4)
+    - RNReanimated/apple (= 4.6.0)
+    - RNReanimated/common (= 4.6.0)
+    - RNReanimated/view (= 4.6.0)
     - RNWorklets
     - SocketRocket
     - Yoga
-  - RNReanimated/apple (4.3.4):
+  - RNReanimated/apple (4.6.0):
     - boost
     - DoubleConversion
     - fast_float
@@ -3277,7 +3304,37 @@ PODS:
     - RNWorklets
     - SocketRocket
     - Yoga
-  - RNReanimated/common (4.3.4):
+  - RNReanimated/common (4.6.0):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-hermes
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - RNWorklets
+    - SocketRocket
+    - Yoga
+  - RNReanimated/view (4.6.0):
     - boost
     - DoubleConversion
     - fast_float
@@ -3451,7 +3508,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - RNWorklets (0.8.3):
+  - RNWorklets (0.12.2):
     - boost
     - DoubleConversion
     - fast_float
@@ -3478,11 +3535,11 @@ PODS:
     - ReactCodegen
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
-    - RNWorklets/apple (= 0.8.3)
-    - RNWorklets/common (= 0.8.3)
+    - RNWorklets/apple (= 0.12.2)
+    - RNWorklets/common (= 0.12.2)
     - SocketRocket
     - Yoga
-  - RNWorklets/apple (0.8.3):
+  - RNWorklets/apple (0.12.2):
     - boost
     - DoubleConversion
     - fast_float
@@ -3511,7 +3568,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - RNWorklets/common (0.8.3):
+  - RNWorklets/common (0.12.2):
     - boost
     - DoubleConversion
     - fast_float
@@ -3555,7 +3612,7 @@ PODS:
   - VisionCamera/Core (4.7.3)
   - VisionCamera/React (4.7.3):
     - React-Core
-  - whisper-rn (0.5.5):
+  - whisper-rn (0.7.4):
     - boost
     - DoubleConversion
     - fast_float
@@ -3637,6 +3694,7 @@ DEPENDENCIES:
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
   - "react-native-background-downloader (from `../node_modules/@kesha-antonov/react-native-background-downloader`)"
+  - react-native-blob-util (from `../node_modules/react-native-blob-util`)
   - "react-native-document-picker (from `../node_modules/@react-native-documents/picker`)"
   - "react-native-document-viewer (from `../node_modules/@react-native-documents/viewer`)"
   - react-native-executorch (from `../node_modules/react-native-executorch`)
@@ -3707,7 +3765,6 @@ SPEC REPOS:
     - CocoaAsyncSocket
     - MMKV
     - MMKVCore
-    - opencv-rne
     - SocketRocket
     - SSZipArchive
 
@@ -3809,6 +3866,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
   react-native-background-downloader:
     :path: "../node_modules/@kesha-antonov/react-native-background-downloader"
+  react-native-blob-util:
+    :path: "../node_modules/react-native-blob-util"
   react-native-document-picker:
     :path: "../node_modules/@react-native-documents/picker"
   react-native-document-viewer:
@@ -3944,14 +4003,13 @@ SPEC CHECKSUMS:
   FBLazyVector: 309703e71d3f2f1ed7dc7889d58309c9d77a95a4
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
-  hermes-engine: 3de70ea2100f1780402cf146bb8110a0cdb2f34e
+  hermes-engine: faf345b14b9350df5cedceea656fbf1403de04c1
   llama-rn: e1b338fa7db4e692b33d8daf3142833808dfc4d8
   MMKV: 86859fdfa2b0b21db1fd6e48788474a6416a2c77
   MMKVCore: 3d16ce9f7d411e135020915fde98a056859a1efa
   OffgridFilm: d93b098e7b123a8f4b3d10145a3736cf38ff1481
   OffgridVideo: 3a0d4acebd54e2ab315c9ff737aa017ccc3d36b8
   op-sqlite: ab292d8057b994f220b8c61f2683f5ff9286958e
-  opencv-rne: 2305807573b6e29c8c87e3416ab096d09047a7a0
   RCT-Folly: 846fda9475e61ec7bcbf8a3fe81edfcaeb090669
   RCTDeprecation: a41bbdd9af30bf2e5715796b313e44ec43eefff1
   RCTRequired: 7be34aabb0b77c3cefe644528df0fa0afad4e4d0
@@ -3989,9 +4047,10 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 7b72a669e94662359dad4f42b5af005eb24b4e83
   React-microtasksnativemodule: cdc02da075f2857803ed63f24f5f72fc40e094c0
   react-native-background-downloader: b02d12c3961322ce1c85fa0f8b3e4adb5b652106
+  react-native-blob-util: 0889ba082222c5b3372cf632b825fe575c1e1d9a
   react-native-document-picker: dc2d83366e47e89e7c51e8a41eab99c1d54e941c
   react-native-document-viewer: 8c6ed07e7e27352743fa98e8dd6d288ad925b884
-  react-native-executorch: 863673cf458ceec5df61012fa30981ffa3ee8fc4
+  react-native-executorch: 5f547d5cb9c7e18865fcb09065caaeb7509033de
   react-native-get-random-values: d16467cf726c618e9c7a8c3c39c31faa2244bbba
   react-native-image-picker: 0314366753615115fa55c3cc937ac44cb7e75702
   react-native-keyboard-controller: 7534b5a39d1e8b2b79f86e8e998ed71c7154f69f
@@ -4038,21 +4097,21 @@ SPEC CHECKSUMS:
   RNAudioAPI: 106257d5f3713bb667d6d74ebb3105c9cf5d60db
   RNCalendarEvents: f90f73666b6bcbb3cc8a491ffbb5e48c0db3de37
   RNCAsyncStorage: 29f0230e1a25f36c20b05f65e2eb8958d6526e82
-  RNDeviceInfo: 36d7f232bfe7c9b5c494cb7793230424ed32c388
+  RNDeviceInfo: 4c852998208b60dc192ae3529e5867817719ad1e
   RNGestureHandler: cd4be101cfa17ea6bbd438710caa02e286a84381
   RNInAppBrowser: 904d24dc75e8e6c6c98a3160329192608946f9df
   RNKeychain: a2c134ab796272c3d605e035ab727591000b30f3
   RNReactNativeHapticFeedback: be4f1b4bf0398c30b59b76ed92ecb0a2ff3a69c6
-  RNReanimated: 05f56736a23707959436d907e0458eb4cb244c76
+  RNReanimated: 9197a9e61aecb12fd4a8bebb74910f7d594358b4
   RNScreens: 714e10b6b554f7dc7ad9f78dcf36dc8e3fc73415
   RNSVG: 595abfa0f9ac26d56afcaaedf4e37a00f54cab71
   RNVectorIcons: 791f13226ec4a3fd13062eda9e892159f0981fae
-  RNWorklets: 534af667da0c0049e0060ae43f03c7df8cc9a6e0
+  RNWorklets: aca4bb2334998d2bdd7a4423dadba0a7ec092c55
   RNZipArchive: f2806ba80e24cf1984d6a7cb361d8a07d734997d
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   SSZipArchive: c69881e8ac5521f0e622291387add5f60f30f3c4
   VisionCamera: b51af005669c6642dd1b4fca434eda4c1778de87
-  whisper-rn: 7566faf9b7d78e39ab9fc634cb90fdee81177793
+  whisper-rn: eee7cbc7850684522951f0ca3fc2b20de27770d1
   Yoga: 5456bb010373068fc92221140921b09d126b116e
 
 PODFILE CHECKSUM: a51a87720248f5187c458d3af5dfc690def5388e

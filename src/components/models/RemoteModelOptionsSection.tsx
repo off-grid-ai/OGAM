@@ -14,6 +14,14 @@ interface Props {
   onSelect?: () => void;
 }
 
+/** What a remote model does, as the facts line names it on every model card. */
+const KIND: Record<Props['category'], string> = {
+  image: 'Image',
+  video: 'Video',
+  transcription: 'Speech to text',
+  voice: 'Voice',
+};
+
 function isTransportFailure(reason: unknown): boolean {
   if (!(reason instanceof Error)) return false;
   return reason.name === 'AbortError' ||
@@ -82,12 +90,14 @@ export const RemoteModelOptionsSection: React.FC<Props> = ({
             return {
               id: option.id,
               testID: `remote-${category}-model-${key}`,
+              // The same lines as every other model card: the name, then what it does and where it runs.
               model: {
                 id: option.id,
                 name: option.name,
                 author: '',
                 modelType: category === 'image' ? 'vision' : undefined,
               },
+              facts: [KIND[category], `Runs on ${option.serverName}`],
               isCurrent: option.serverId === activeServerId && option.id === activeModelId,
               isLoading: selecting === key,
               onPress: () => { select(option).catch(() => undefined); },

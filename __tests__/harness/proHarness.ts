@@ -50,7 +50,7 @@ export async function launchVoiceApp(options: {
       return read(key);
     };
   }
-  const executorch = require('react-native-executorch');
+  const executorch = require('react-native-executorch/legacy');
   executorch.useTextToSpeech = (_config: unknown, opts?: { preventLoad?: boolean }) => ({
     isReady: !opts?.preventLoad, downloadProgress: opts?.preventLoad ? 0 : 1, error: null,
     stream: async () => {}, streamStop: () => {},

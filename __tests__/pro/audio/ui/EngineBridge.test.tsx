@@ -17,7 +17,7 @@ import React from 'react';
 import { Text } from 'react-native';
 import { render, screen } from '@testing-library/react-native';
 
-jest.mock('react-native-executorch', () => ({
+jest.mock('react-native-executorch/legacy', () => ({
   initExecutorch: jest.fn(),
   models: {
     text_to_speech: {

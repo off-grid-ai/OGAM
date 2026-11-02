@@ -123,9 +123,8 @@ describe('decide', () => {
 });
 
 describe('a pinned engine with a local fix', () => {
-  // whisper.rn 0.5.5 carries Android crash fixes in patches/whisper.rn+0.5.5.patch, and 0.7.4
-  // drops the file they patch and the transcribeRealtime API the app calls. Moving it would ship
-  // the crash and break live transcription, so it is held until the fix is ported.
+  // A patch-package fix is lost when its engine moves. The engine is held until the fix is ported
+  // or dropped, as whisper.rn 0.5.5 was until 0.7.4 removed the code its patch fixed.
   it('is held while its patch exists, even when every peer is met', () => {
     expect(
       decide({ current: '0.5.5', latest: '0.7.4', patch: 'patches/whisper.rn+0.5.5.patch', peerDependencies: {}, installed: {} }),

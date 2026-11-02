@@ -6,7 +6,7 @@ import {
   getKokoroAssetSources,
   getKokoroTTSVoices,
 } from '../../../pro/audio/engine/tts/engines/kokoro/voices';
-import { models } from 'react-native-executorch';
+import { models } from 'react-native-executorch/legacy';
 
 describe('Kokoro voice catalog', () => {
   it('uses shared voice names and language labels', () => {
