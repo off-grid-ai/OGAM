@@ -11,6 +11,7 @@ import { DownloadedModel, RemoteModel, ONNXImageModel, isLiteRTModel } from '../
 import logger from '../../utils/logger';
 import { ModelReadyOutcome, reasonFromLoadError } from './modelReadiness';
 import { isOverridableMemoryError } from '../../services/modelLoadErrors';
+import { loadModelWithOverride } from '../../services/loadModelWithOverride';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
 
@@ -198,6 +199,9 @@ export async function ensureTextModelForChatFn(deps: {
   setShowModelSelector: (v: boolean) => void;
   setLoadingModel: (m: DownloadedModel | null) => void;
   setIsModelLoading: (v: boolean) => void;
+  setAlertState: (a: AlertState) => void;
+  /** Sends the stashed turn once a "Load Anyway" retry has loaded the model. */
+  resumePendingMessage: () => void;
 }): Promise<boolean> {
   // The SELECTION first, remembered choice second - from the service, which owns that order. Reading
   // lastTextModelId alone loaded the previously-picked model and left the selected one on screen.
@@ -206,19 +210,31 @@ export async function ensureTextModelForChatFn(deps: {
     deps.setShowModelSelector(true);
     return false;
   }
-  deps.setLoadingModel(
-    useAppStore.getState().downloadedModels.find(m => m.id === modelId) ?? null,
+  const model = useAppStore.getState().downloadedModels.find(m => m.id === modelId) ?? null;
+  // A refused or failed load is shown (with "Load Anyway" when the memory gate refused it). This
+  // path used to swallow the error: the turn waited with no reply and nothing on screen.
+  let loadedNow = false;
+  let retrying = false;
+  await loadModelWithOverride(
+    opts => activeModelService.loadTextModel(modelId, undefined, opts),
+    {
+      setAlertState: deps.setAlertState,
+      onAttemptStart: () => {
+        deps.setLoadingModel(model);
+        deps.setIsModelLoading(true);
+      },
+      onAttemptEnd: () => {
+        deps.setIsModelLoading(false);
+        deps.setLoadingModel(null);
+      },
+      onSuccess: () => {
+        if (retrying) deps.resumePendingMessage();
+        else loadedNow = true;
+      },
+    },
   );
-  deps.setIsModelLoading(true);
-  try {
-    await activeModelService.loadTextModel(modelId);
-    return true;
-  } catch {
-    return false;
-  } finally {
-    deps.setIsModelLoading(false);
-    deps.setLoadingModel(null);
-  }
+  retrying = true;
+  return loadedNow;
 }
 
 export async function ensureModelLoadedFn(

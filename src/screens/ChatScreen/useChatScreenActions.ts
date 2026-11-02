@@ -149,13 +149,18 @@ export function useChatScreenActions({
     ],
   );
 
-  const handleModelSelect = async (model: DownloadedModel) => {
-    await handleModelSelectFn(modelDeps, model);
+  /** Sends the turn that waited for a text model (after a pick, or a "Load Anyway" that loaded it). */
+  const resumePendingMessage = () => {
     const pending = pendingMessageRef.current;
     if (pending) {
       pendingMessageRef.current = null;
       handleSend(pending.text, pending.attachments);
     }
+  };
+
+  const handleModelSelect = async (model: DownloadedModel) => {
+    await handleModelSelectFn(modelDeps, model);
+    resumePendingMessage();
   };
 
   const enabledTools = supportsToolCalling
@@ -174,6 +179,7 @@ export function useChatScreenActions({
       computePendingSettings(activeModel?.engine, settings, loadedSettings),
     handleReloadTextModel,
     handleSend,
+    resumePendingMessage,
     handleModelSelect,
     handleToggleTool: (toolId: string) => {
       const current = settings.enabledTools || [];
