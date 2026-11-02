@@ -46,7 +46,7 @@ jest.mock('../../../src/services/llm', () => ({
 // LiteRT boundary mocked as a dumb flag reader so engines.isModelReady/deriveEngineCapabilities
 // (which read this DIRECT module, not the barrel) resolve deterministically for the litert path.
 jest.mock('../../../src/services/litert', () => ({
-  liteRTService: { isModelLoaded: jest.fn(() => false), getLoadedModelPath: jest.fn(() => null) },
+  liteRTService: { isModelLoaded: jest.fn(() => false), getLoadedModelPath: jest.fn(() => null), loadedTextOnly: jest.fn(() => false) },
 }));
 
 // Get mock references after hoisting

@@ -46,6 +46,7 @@ jest.mock('../../../src/stores', () => ({
       addMessage: mockAddMessage,
       setStreamingMessage: mockSetStreamingMessage,
       setIsThinking: mockSetIsThinking,
+      conversations: [],
     }),
   },
   useRemoteServerStore: { getState: () => ({ activeServerId: null }) },
@@ -398,6 +399,21 @@ describe('runToolLoop — LiteRT loop branches', () => {
     const lastPrepare = mockedLiteRT.prepareConversation.mock.calls.at(-1)!;
     expect(lastPrepare[2]).toEqual(expect.objectContaining({ tools: [] }));
     expect(ctx.onFinalResponse).toHaveBeenCalledWith('recovered answer');
+  });
+
+  it('leaves a full context (also Status Code 3) to compaction instead of dropping the tools', async () => {
+    mockedLiteRT.generateRaw.mockRejectedValue(new Error(
+      'Status Code: 3. Message: Prefill length (128) plus current step (3990) exceeds max sequence length (4096).',
+    ));
+
+    const ctx = createContext({
+      messages: [makeMessage({ role: 'user', content: 'hi' })],
+    });
+    await expect(runToolLoop(ctx)).rejects.toThrow(/exceeds max sequence length/);
+    const toolless = mockedLiteRT.prepareConversation.mock.calls.filter(
+      (c: any[]) => Array.isArray(c[2]?.tools) && c[2].tools.length === 0,
+    );
+    expect(toolless).toEqual([]);
   });
 
   it('rethrows a non-parse error without retrying (line 427 negative branch)', async () => {

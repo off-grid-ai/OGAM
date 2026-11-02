@@ -95,6 +95,7 @@ jest.mock('../../../src/services/hardware', () => ({
     })),
     formatBytes: jest.fn((bytes: number) => `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`),
     formatModelSize: jest.fn(() => '4.0 GB'),
+    getTensorTpuGeneration: jest.fn(() => Promise.resolve(null)), // not a Pixel Tensor TPU
   },
 }));
 

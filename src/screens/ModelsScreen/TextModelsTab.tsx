@@ -29,10 +29,11 @@ import { TextFiltersSection } from './TextFiltersSection';
 import { FilterState, SortOption } from './types';
 import { SORT_OPTIONS } from './constants';
 import { formatNumber, getTextModelCompatibility, modelFactChips, modelSpeedBadges } from './utils';
-import { buildCuratedLiteRTFiles, curatedLiteRTDownloadWarning, getCuratedLiteRTEntry, LITERT_PARENT_ID, useCuratedLiteRTEntries } from '../../services/curatedLiteRTRegistry';
+import { buildCuratedLiteRTFiles, curatedLiteRTDownloadWarning, getCuratedLiteRTEntry, liteRTFileRunsOnDevice, LITERT_PARENT_ID, useCuratedLiteRTEntries } from '../../services/curatedLiteRTRegistry';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { liteRTFileMeta, liteRTRecommendedModel, LITERT_PARENT_RECOMMENDED } from './litertRecommended';
 import { modelManager } from '../../services';
+import { hardwareService } from '../../services/hardware';
 import { modelDownloadService } from '../../services/modelDownloadService';
 import { uniformDownloadId } from '../../services/modelDownloadService/uniformId';
 import { fetchModelFiles, preferredDownloadQuants } from '../../services/modelCatalogFiles';
@@ -40,9 +41,22 @@ import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
 import { DevicePicksRow } from '../../components/models/DevicePicksRow';
 import { devicePicks } from '../../services/devicePicks';
 import { sizeChoices } from './sizeChoices';
+import { liteRTTensorTarget } from '../../utils/modelHelpers';
 
 function hasNonSortFilters(fs: FilterState): boolean {
   return fs.orgs.length > 0 || fs.type !== 'all' || fs.source !== 'all' || fs.size !== 'all' || fs.quant !== 'all';
+}
+
+/** This phone's Google Tensor TPU generation, or null (not a Pixel, or before the probe answers).
+ *  Gates the TPU-only LiteRT build in the curated list. */
+function useTensorTpuGeneration(): number | null {
+  const [generation, setGeneration] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    hardwareService.getTensorTpuGeneration().then(g => { if (live) setGeneration(g); }).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
+  return generation;
 }
 
 function getEmptyText(hasSearched: boolean, hasActiveFilters: boolean): string {
@@ -117,6 +131,9 @@ const ModelDetailView: React.FC<DetailProps> = ({
   const [showAllFiles, setShowAllFiles] = useState(false);
   const liteRTEntries = useCuratedLiteRTEntries();
   const liteRTMetaByFile = useMemo(() => liteRTFileMeta(liteRTEntries), [liteRTEntries]);
+  const tpuGeneration = useTensorTpuGeneration();
+  // A build for THIS phone's TPU is listed (a Pixel 10a's Tensor G4 has none yet).
+  const tpuBuildListed = tpuGeneration !== null && modelFiles.some(f => liteRTTensorTarget(f.name) === tpuGeneration);
 
   // Pre-set the next pending (Download Manager icon) so it fires regardless of
   // how the user dismisses step 9 (button or backdrop tap).
@@ -168,7 +185,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
   // Every file this phone can run, best first for this phone (the recommended quant leads). A vision
   // file's projector downloads and loads with it, so the fit counts both, as the picks and load check do.
   const runnableFiles = modelFiles
-    .filter(f => f.size > 0 && !fileExceedsBudget(downloadBytes(f), ramGB, textModelBudget()) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
+    .filter(f => f.size > 0 && !fileExceedsBudget(downloadBytes(f), ramGB, textModelBudget()) && liteRTFileRunsOnDevice(f.name, tpuGeneration) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
     .sort((a, b) => {
       if (selectedModel.id === LITERT_PARENT_ID) return a.size - b.size; // curated: small-first
       // Tier: the preferred download quant (Q4_0 on Android CPU/NPU, else Q4_K_M) → GPU/NPU
@@ -296,7 +313,9 @@ const ModelDetailView: React.FC<DetailProps> = ({
       {selectedModel.id === LITERT_PARENT_ID && Platform.OS === 'android' && DeviceInfo.getModel().toLowerCase().includes('pixel 10') && (
         <Card style={styles.deviceBanner}>
           <Icon name="info" size={14} color={colors.trending} />
-          <Text style={styles.deviceBannerText}>{'GPU acceleration is not yet supported on Pixel 10. Models will run on CPU. Support coming soon.'}</Text>
+          <Text style={styles.deviceBannerText}>{!tpuBuildListed
+            ? 'GPU acceleration is not yet supported on Pixel 10. Models will run on CPU. Support coming soon.'
+            : "Pixel 10 can't run LiteRT models on its GPU. The Tensor TPU build runs on the TPU; the other files run on the CPU."}</Text>
         </Card>
       )}
       <Text style={styles.sectionTitle}>Sizes</Text>
@@ -404,6 +423,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
 
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const tpuGeneration = useTensorTpuGeneration();
 
   const downloadRecommendedFile = async (item: ModelInfo) => {
     const files = await fetchModelFiles([item]);
@@ -431,7 +451,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
   };
 
   const onboardingLiteRTCards = onboarding && Platform.OS === 'android'
-    ? buildCuratedLiteRTFiles(liteRTEntries).map((file, index) => {
+    ? buildCuratedLiteRTFiles(liteRTEntries).filter(file => liteRTFileRunsOnDevice(file.name, tpuGeneration)).map((file, index) => {
         const entry = getCuratedLiteRTEntry(file.name);
         const model = { ...liteRTModel, name: entry?.displayName ?? file.name };
         const proceedDownload = () => { handleDownload(model, file); };
