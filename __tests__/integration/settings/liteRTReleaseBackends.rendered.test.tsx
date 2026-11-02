@@ -10,6 +10,113 @@ it('uses GPU at the native boundary when an older build saved NPU', async () => 
   ]);
 });
 
+const TENSOR_G5_FILE = '/models/gemma-4-E2B-it_Google_Tensor_G5.litertlm';
+const PIXEL_10_TPU = { supported: true, tensorGeneration: 5, reason: null };
+
+it('loads a Tensor G5 build on the TPU of a phone with a Tensor G5 TPU, whatever the saved backend', async () => {
+  const boundary = installNativeBoundary();
+  boundary.litert.module.getTpuSupport.mockResolvedValue(PIXEL_10_TPU);
+  const { liteRTService } = require('../../../src/services/litert');
+  await liteRTService.loadModel(TENSOR_G5_FILE, 'gpu');
+  expect(boundary.litert.calls.loadModel).toEqual([[TENSOR_G5_FILE, 'npu', false, false, 4096]]);
+});
+
+it('keeps a portable LiteRT file off the NPU even on a phone with a Tensor TPU', async () => {
+  const boundary = installNativeBoundary();
+  boundary.litert.module.getTpuSupport.mockResolvedValue(PIXEL_10_TPU);
+  const { liteRTService } = require('../../../src/services/litert');
+  await liteRTService.loadModel('/models/gemma-4-E2B-it.litertlm', 'npu');
+  expect(boundary.litert.calls.loadModel).toEqual([['/models/gemma-4-E2B-it.litertlm', 'gpu', false, false, 4096]]);
+});
+
+it('does not send a Tensor G5 build to the NPU when the phone has no usable Tensor G5 TPU', async () => {
+  const boundary = installNativeBoundary();
+  boundary.litert.module.getTpuSupport.mockResolvedValue({ supported: false, tensorGeneration: 5, reason: 'dispatch_lib_missing' });
+  const { liteRTService } = require('../../../src/services/litert');
+  await liteRTService.loadModel(TENSOR_G5_FILE, 'cpu');
+  expect(boundary.litert.calls.loadModel).toEqual([[TENSOR_G5_FILE, 'cpu', false, false, 4096]]);
+});
+
+it('adopts the media the native engine came up with when a TPU load drops to text-only', async () => {
+  const boundary = installNativeBoundary();
+  boundary.litert.module.getTpuSupport.mockResolvedValue(PIXEL_10_TPU);
+  boundary.litert.module.loadModel.mockResolvedValueOnce({ backend: 'npu', maxNumTokens: 4096, vision: false, audio: false });
+  const { liteRTService } = require('../../../src/services/litert');
+  await liteRTService.loadModel(TENSOR_G5_FILE, 'gpu', { supportsVision: true, supportsAudio: true });
+  expect(liteRTService.getActiveBackend()).toBe('npu');
+  expect(liteRTService.loadedTextOnly(TENSOR_G5_FILE)).toBe(true);
+  expect(liteRTService.supportsAudio()).toBe(false);
+});
+
+it('refuses an image for a vision model whose TPU engine came up text-only, before any generation path', async () => {
+  const boundary = installNativeBoundary();
+  boundary.litert.module.getTpuSupport.mockResolvedValue(PIXEL_10_TPU);
+  boundary.litert.module.loadModel.mockResolvedValueOnce({ backend: 'npu', maxNumTokens: 4096, vision: false, audio: false });
+  const { liteRTService } = require('../../../src/services/litert');
+  const { localModelAcceptsImages, activeLocalTextCapabilities } = require('../../../src/services/engines');
+  const model = createDownloadedModel({ id: 'g5', engine: 'litert', filePath: TENSOR_G5_FILE, fileName: 'gemma-4-E2B-it_Google_Tensor_G5.litertlm', liteRTVision: true });
+  expect(localModelAcceptsImages(model)).toBe(true); // not loaded yet: the model's own flag decides
+  await liteRTService.loadModel(TENSOR_G5_FILE, 'gpu', { supportsVision: true });
+  expect(localModelAcceptsImages(model)).toBe(false);
+  expect(activeLocalTextCapabilities(model).vision).toBe(false);
+  await liteRTService.unloadModel();
+  expect(localModelAcceptsImages(model)).toBe(true);
+});
+
+it('refuses an image at the engine when the TPU load came up text-only, on the first turn after a lazy load', async () => {
+  const boundary = installNativeBoundary();
+  boundary.litert.module.getTpuSupport.mockResolvedValue(PIXEL_10_TPU);
+  boundary.litert.module.loadModel.mockResolvedValueOnce({ backend: 'npu', maxNumTokens: 4096, vision: false, audio: false });
+  const { liteRTService } = require('../../../src/services/litert');
+  await liteRTService.loadModel(TENSOR_G5_FILE, 'gpu', { supportsVision: true });
+  // The tool loop's entry point (generateRaw) and the plain path (sendMessage) both refuse.
+  await expect(liteRTService.generateRaw('what is this?', { imageUris: ['file:///pic.png'] }))
+    .rejects.toThrow(/Images are not available for this model on this device/);
+  const onError = jest.fn();
+  await liteRTService.sendMessage('what is this?', { onToken: jest.fn(), onReasoning: jest.fn(), onComplete: jest.fn(), onError }, { imageUris: ['file:///pic.png'] });
+  expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringMatching(/Images are not available/) }));
+  expect(boundary.litert.calls.sendMessageWithImages).toEqual([]);
+  // Audio on an engine that came up without it would reach the model as empty text: refused too.
+  await expect(liteRTService.generateRaw('', { audioUris: ['file:///note.wav'] }))
+    .rejects.toThrow(/Audio input is not available for this model on this device/);
+  expect(boundary.litert.calls.sendMessageWithMedia).toEqual([]);
+});
+
+it('reports a spent TPU context as context-full, so the chat compacts and retries instead of failing', async () => {
+  const boundary = installNativeBoundary();
+  boundary.litert.module.getTpuSupport.mockResolvedValue(PIXEL_10_TPU);
+  const { liteRTService } = require('../../../src/services/litert');
+  const { contextCompactionService } = require('../../../src/services/contextCompaction');
+  await liteRTService.loadModel(TENSOR_G5_FILE, 'gpu');
+  // LiteRT-LM's TPU executor refuses a prefill that would pass the context compiled into the model.
+  boundary.litert.scriptError('Prefill length (128) plus current step (3990) exceeds max sequence length (4096).');
+  const onError = jest.fn();
+  await liteRTService.sendMessage('hi', { onToken: jest.fn(), onReasoning: jest.fn(), onComplete: jest.fn(), onError });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(onError).toHaveBeenCalledTimes(1);
+  expect(contextCompactionService.isContextFullError(onError.mock.calls[0][0])).toBe(true);
+});
+
+it('rebuilds the native conversation from the compacted history when the chat retries a full context', async () => {
+  const boundary = installNativeBoundary();
+  boundary.litert.module.getTpuSupport.mockResolvedValue(PIXEL_10_TPU);
+  const { liteRTService } = require('../../../src/services/litert');
+  await liteRTService.loadModel(TENSOR_G5_FILE, 'gpu');
+  const history = [
+    { role: 'user', content: 'first question' }, { role: 'assistant', content: 'first answer' },
+    { role: 'user', content: 'second question' }, { role: 'assistant', content: 'second answer' },
+  ];
+  await liteRTService.prepareConversation('chat-1', 'sys', { history });
+  boundary.litert.scriptError('Status Code: 3. Message: Prefill length (128) plus current step (3990) exceeds max sequence length (4096).');
+  await liteRTService.sendMessage('third question', { onToken: jest.fn(), onReasoning: jest.fn(), onComplete: jest.fn(), onError: jest.fn() });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  // The native conversation still holds the refused turn, so the retry must not reuse it.
+  const compacted = [{ role: 'user', content: 'Summary: two questions answered.' }, { role: 'assistant', content: 'Noted.' }];
+  await liteRTService.prepareConversation('chat-1', 'sys', { history: compacted });
+  const historyJson = boundary.litert.calls.resetConversation.at(-1)?.[5];
+  expect(historyJson).toBe(JSON.stringify(compacted));
+});
+
 it('offers only CPU and GPU in Chat and Model Settings even with a saved NPU preference', async () => {
   installNativeBoundary();
   const React = require('react');

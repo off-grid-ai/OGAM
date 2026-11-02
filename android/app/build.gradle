@@ -155,6 +155,12 @@ android {
             useLegacyPackaging = true
             // The OpenCL engines link a Khronos loader stub; the phone's own libOpenCL.so must load instead.
             excludes += ["**/libOpenCL.so"]
+            // Google Tensor TPU runtime (see the dependency below). Off Grid loads only models
+            // compiled ahead of time for the TPU, which need the dispatch library alone, not the
+            // runtime's on-device compiler plugin. pickFirst guards against a second copy of the
+            // dispatch library arriving with a future litertlm-android.
+            excludes.add('**/libLiteRtCompilerPlugin_google_tensor.so')
+            pickFirsts.add('**/libLiteRtDispatch_GoogleTensor.so')
         }
     }
     aaptOptions {
@@ -188,6 +194,13 @@ dependencies {
 
     // LiteRT-LM on-device LLM inference (pinned — do not use latest.release)
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.19.0")
+    // Google Tensor TPU dispatch library (libLiteRtDispatch_GoogleTensor.so). LiteRT-LM's
+    // Backend.NPU loads it from nativeLibraryDir on a Pixel; litertlm-android does not ship it
+    // (Google's Pixel 10 TPU sample bundles it the same way). LiteRT's dispatch loader accepts it
+    // only if it reports the same dispatch API version as the LiteRT runtime inside
+    // litertlm-android, so bump the two together.
+    // Not transitive: only this .so, never a second LiteRT runtime beside litertlm's own.
+    implementation("com.google.ai.edge.litert:litert-npu-runtime-google-tensor:2.3.0") { transitive = false }
 
     // Download layer — Room + WorkManager + OkHttp
     def room_version = "2.8.2"
