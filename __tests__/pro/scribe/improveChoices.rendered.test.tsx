@@ -15,14 +15,13 @@ jest.unmock('@react-navigation/native');
 
 import type React from 'react';
 import { installNativeBoundary, GB, requireRTL, type NativeBoundary } from '../../harness/nativeBoundary';
-import { createDownloadedModel } from '../../utils/factories';
+import { importAndPickTextModel } from '../../harness/phoneTextModel';
 import { proIsPresent, requirePro } from '../helpers/requirePro';
 
 type ScreenModule = typeof import('../../../pro/scribe/ui/ImproveScreen');
 
 const describePro = proIsPresent() ? describe : describe.skip;
 
-const MODEL_PATH = '/models/small.gguf';
 
 /** Ali's "What we do" list, as an email field gives it as plain text. */
 const LABELS = [
@@ -47,17 +46,9 @@ function installPhone(): NativeBoundary {
   });
 }
 
+/** The phone's text model, imported and picked the way a person does it. */
 async function loadTextModel(boundary: NativeBoundary): Promise<void> {
-  const { llmService } = require('../../../src/services/llm');
-  const { hardwareService } = require('../../../src/services/hardware');
-  const { useAppStore } = require('../../../src/stores');
-  boundary.fs!.seedFile(MODEL_PATH, 500 * 1024 * 1024);
-  await hardwareService.refreshMemoryInfo();
-  await llmService.loadModel(MODEL_PATH);
-  useAppStore.setState({
-    downloadedModels: [createDownloadedModel({ id: 'llm', engine: 'llama', filePath: MODEL_PATH })],
-    activeModelId: 'llm',
-  });
+  await importAndPickTextModel(boundary.fs!, { fileName: 'small.gguf', sizeBytes: 500 * 1024 * 1024 });
 }
 
 function openImprove(text: string) {
@@ -156,6 +147,7 @@ describePro('Improve choices', () => {
 
     expect(await view.findByTestId('improve-unchanged')).toBeTruthy();
     expect(view.queryByTestId('improve-failed')).toBeNull();
-    expect(view.queryByText(/Our services/)).toBeNull();
+    // Nowhere on the screen, not only in the versions.
+    expect(view.root).not.toHaveTextContent(/Our services/);
   });
 });

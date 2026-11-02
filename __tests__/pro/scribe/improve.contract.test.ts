@@ -12,11 +12,11 @@
  * fix, Fix all applies the fixes, a word I add to the dictionary is never flagged again, and an
  * issue I ignore stays hidden.
  *
- * Real rewriteService, writingEngine, engines, llmService, stores and @offgrid/writing. Device
- * boundaries only: llama.rn, the disk, the RAM sensor (installNativeBoundary) and AsyncStorage.
+ * Real rewriteService, writingEngine, engines, llmService, stores and @offgrid/writing. Models are
+ * imported, picked and loaded through the app's own paths. Device boundaries only: llama.rn, the disk, the RAM sensor (installNativeBoundary) and AsyncStorage.
  */
 import { installNativeBoundary, GB, type NativeBoundary } from '../../harness/nativeBoundary';
-import { createDownloadedModel } from '../../utils/factories';
+import { importAndPickTextModel, importTextModel } from '../../harness/phoneTextModel';
 import { proIsPresent, requirePro } from '../helpers/requirePro';
 
 type RewriteModule = typeof import('../../../pro/scribe/rewriteService');
@@ -27,24 +27,16 @@ const describePro = proIsPresent() ? describe : describe.skip;
 /** Improve, in the text's own tone and layout, as plain text. */
 const IMPROVE = { action: 'improve', tone: null, layout: 'keep', format: 'plain' } as const;
 
-const MODEL_PATH = '/models/small.gguf';
-
 function rewrites(): RewriteModule {
   return requirePro<RewriteModule>('@offgrid/pro/scribe/rewriteService')!;
 }
 
 /** A llama.cpp text model on this phone, selected and loaded, as the person left it. */
-async function loadTextModel(boundary: NativeBoundary): Promise<void> {
-  const { llmService } = require('../../../src/services/llm');
-  const { hardwareService } = require('../../../src/services/hardware');
-  const { useAppStore } = require('../../../src/stores');
-  boundary.fs!.seedFile(MODEL_PATH, 500 * 1024 * 1024);
-  await hardwareService.refreshMemoryInfo();
-  await llmService.loadModel(MODEL_PATH);
-  useAppStore.setState({
-    downloadedModels: [createDownloadedModel({ id: 'llm', engine: 'llama', filePath: MODEL_PATH })],
-    activeModelId: 'llm',
-  });
+async function loadTextModel(boundary: NativeBoundary, fileName = 'small.gguf', sizeBytes = 500 * 1024 * 1024) {
+  const model = await importAndPickTextModel(boundary.fs!, { fileName, sizeBytes });
+  const { activeModelService } = require('../../../src/services/activeModelService');
+  await activeModelService.loadTextModel(model.id);
+  return model;
 }
 
 function installPhone(): NativeBoundary {
@@ -58,8 +50,6 @@ function installPhone(): NativeBoundary {
 describePro('Improve rewrites from the phone\'s model', () => {
   it('without a text model, rewrites are blocked with no-model', async () => {
     installPhone();
-    const { useAppStore } = require('../../../src/stores');
-    useAppStore.setState({ downloadedModels: [], activeModelId: null });
 
     await expect(rewrites().prepareRewrites()).resolves.toEqual({ ready: false, blocker: 'no-model' });
   });
@@ -124,14 +114,8 @@ describePro('Improve rewrites from the phone\'s model', () => {
 
   it('a model that thinks past the whole budget says so and names another model to try', async () => {
     const boundary = installPhone();
-    await loadTextModel(boundary);
-    const { useAppStore } = require('../../../src/stores');
-    useAppStore.setState({
-      downloadedModels: [
-        createDownloadedModel({ id: 'llm', name: 'Thinker 8B', engine: 'llama', filePath: MODEL_PATH }),
-        createDownloadedModel({ id: 'small', name: 'Qwen 3.5 0.8B', engine: 'llama', filePath: '/models/q.gguf' }),
-      ],
-    });
+    await loadTextModel(boundary, 'Thinker 8B.gguf');
+    const small = await importTextModel(boundary.fs!, { fileName: 'Qwen 3.5 0.8B.gguf', sizeBytes: 300 * 1024 * 1024 });
     const service = rewrites();
 
     const endless = `<think>${'I weigh one more word. '.repeat(800)}</think>\nOne`;
@@ -143,7 +127,7 @@ describePro('Improve rewrites from the phone\'s model', () => {
       ready: false,
       blocker: 'thinking-only',
       modelName: 'Thinker 8B',
-      alternative: { id: 'small', name: 'Qwen 3.5 0.8B' },
+      alternative: { id: small.id, name: 'Qwen 3.5 0.8B' },
     });
   });
 
@@ -163,55 +147,33 @@ describePro('Improve rewrites from the phone\'s model', () => {
       fs: true,
       ram: { platform: 'android', totalBytes: 6 * GB, availBytes: 1.5 * GB },
     });
-    const { hardwareService } = require('../../../src/services/hardware');
-    const { useAppStore } = require('../../../src/stores');
-    boundary.fs!.seedFile('/models/big.gguf', 5 * GB);
-    boundary.fs!.seedFile('/models/small.gguf', 300 * 1024 * 1024);
-    await hardwareService.refreshMemoryInfo();
-    useAppStore.setState({
-      downloadedModels: [
-        createDownloadedModel({ id: 'big', name: 'Big 8B', engine: 'llama', filePath: '/models/big.gguf', fileSize: 5 * GB }),
-        createDownloadedModel({ id: 'small', name: 'Small 0.8B', engine: 'llama', filePath: '/models/small.gguf', fileSize: 300 * 1024 * 1024 }),
-      ],
-      activeModelId: 'big',
-    });
+    await importAndPickTextModel(boundary.fs!, { fileName: 'Big 8B.gguf', sizeBytes: 5 * GB });
+    const small = await importTextModel(boundary.fs!, { fileName: 'Small 0.8B.gguf', sizeBytes: 300 * 1024 * 1024 });
     const service = rewrites();
 
     await expect(service.prepareRewrites()).resolves.toEqual({
       ready: false,
       blocker: 'no-memory',
       modelName: 'Big 8B',
-      alternative: { id: 'small', name: 'Small 0.8B' },
+      alternative: { id: small.id, name: 'Small 0.8B' },
     });
     expect(boundary.llama!.calls.initLlama).toHaveLength(0);
 
-    await expect(service.switchTextModel('small')).resolves.toEqual({ ready: true });
+    await expect(service.switchTextModel(small.id)).resolves.toEqual({ ready: true });
     expect(boundary.llama!.calls.initLlama).toHaveLength(1);
   });
 
   it('a large model gets an offer of a quicker one already on the phone', async () => {
     const boundary = installPhone();
-    await loadTextModel(boundary);
-    const { useAppStore } = require('../../../src/stores');
-    useAppStore.setState({
-      downloadedModels: [
-        createDownloadedModel({ id: 'llm', name: 'Big 8B', engine: 'llama', filePath: MODEL_PATH, fileSize: 5 * GB }),
-        createDownloadedModel({ id: 'small', name: 'Small 0.8B', engine: 'llama', filePath: '/models/q.gguf', fileSize: 300 * 1024 * 1024 }),
-      ],
-    });
+    await loadTextModel(boundary, 'Big 8B.gguf', 5 * GB);
+    const small = await importTextModel(boundary.fs!, { fileName: 'Small 0.8B.gguf', sizeBytes: 300 * 1024 * 1024 });
 
-    expect(rewrites().quickModelOffer()).toEqual({ kind: 'use', id: 'small', name: 'Small 0.8B' });
+    expect(rewrites().quickModelOffer()).toEqual({ kind: 'use', id: small.id, name: 'Small 0.8B' });
   });
 
   it('a small model that thinks first gets an offer of the smallest pick for this phone', async () => {
     const boundary = installPhone();
-    await loadTextModel(boundary);
-    const { useAppStore } = require('../../../src/stores');
-    useAppStore.setState({
-      downloadedModels: [
-        createDownloadedModel({ id: 'llm', name: 'Thinker 1B', engine: 'llama', filePath: MODEL_PATH, fileSize: 800 * 1024 * 1024 }),
-      ],
-    });
+    await loadTextModel(boundary, 'Thinker 1B.gguf', 800 * 1024 * 1024);
     const service = rewrites();
     expect(service.quickModelOffer()).toBeNull();
 

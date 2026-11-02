@@ -13,7 +13,7 @@ jest.unmock('@react-navigation/native');
 
 import type React from 'react';
 import { installNativeBoundary, GB, requireRTL, type NativeBoundary } from '../../harness/nativeBoundary';
-import { createDownloadedModel } from '../../utils/factories';
+import { importAndPickTextModel } from '../../harness/phoneTextModel';
 import { proIsPresent, requirePro } from '../helpers/requirePro';
 
 type ScreenModule = typeof import('../../../pro/scribe/ui/ImproveScreen');
@@ -21,7 +21,6 @@ type BarModule = typeof import('../../../pro/scribe/ui/ScribeInputBar');
 
 const describePro = proIsPresent() ? describe : describe.skip;
 
-const MODEL_PATH = '/models/small.gguf';
 const BEFORE = 'Hi Sam, ';
 const SELECTED = 'pls send me the report today';
 const AFTER = '. Thanks!';
@@ -35,17 +34,9 @@ function installPhone(): NativeBoundary {
   });
 }
 
+/** The phone's text model, imported and picked the way a person does it. */
 async function loadTextModel(boundary: NativeBoundary): Promise<void> {
-  const { llmService } = require('../../../src/services/llm');
-  const { hardwareService } = require('../../../src/services/hardware');
-  const { useAppStore } = require('../../../src/stores');
-  boundary.fs!.seedFile(MODEL_PATH, 500 * 1024 * 1024);
-  await hardwareService.refreshMemoryInfo();
-  await llmService.loadModel(MODEL_PATH);
-  useAppStore.setState({
-    downloadedModels: [createDownloadedModel({ id: 'llm', engine: 'llama', filePath: MODEL_PATH })],
-    activeModelId: 'llm',
-  });
+  await importAndPickTextModel(boundary.fs!, { fileName: 'small.gguf', sizeBytes: 500 * 1024 * 1024 });
 }
 
 /** A composer: its text, a selection, and the Scribe bar above it, with Improve one route away. */

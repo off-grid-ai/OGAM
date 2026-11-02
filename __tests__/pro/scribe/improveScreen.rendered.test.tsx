@@ -11,15 +11,16 @@
  * the Android selection menu opened Improve (a native entry injected how to give text back), Replace
  * hands exactly the picked text back to the app it came from.
  *
- * The real screen in a real navigator over the real rewrite service, engines and stores. Device
- * boundaries only: llama.rn, the disk, the RAM sensor, the OS clipboard, and the native Improve
- * entry's finisher (the seam core's PROCESS_TEXT activity injects).
+ * The real screen in a real navigator over the real rewrite service, engines and stores. Models are
+ * imported and picked the way a person does it. Device boundaries only: llama.rn, the disk, the RAM
+ * sensor, the OS clipboard, and the native Improve entry's finisher (the seam core's PROCESS_TEXT
+ * activity injects).
  */
 jest.unmock('@react-navigation/native');
 
 import type React from 'react';
 import { installNativeBoundary, GB, requireRTL, type NativeBoundary } from '../../harness/nativeBoundary';
-import { createDownloadedModel } from '../../utils/factories';
+import { importAndPickTextModel, importTextModel } from '../../harness/phoneTextModel';
 import { proIsPresent, requirePro } from '../helpers/requirePro';
 
 type ScreenModule = typeof import('../../../pro/scribe/ui/ImproveScreen');
@@ -27,7 +28,6 @@ type EntryModule = typeof import('../../../pro/scribe/scribeEntry');
 
 const describePro = proIsPresent() ? describe : describe.skip;
 
-const MODEL_PATH = '/models/small.gguf';
 const DRAFT = 'Please send me the report today.';
 const VERSIONS = 'Could you send the report today?';
 const ANOTHER = 'Send me the report today, please.';
@@ -40,17 +40,9 @@ function installPhone(): NativeBoundary {
   });
 }
 
-async function loadTextModel(boundary: NativeBoundary): Promise<void> {
-  const { llmService } = require('../../../src/services/llm');
-  const { hardwareService } = require('../../../src/services/hardware');
-  const { useAppStore } = require('../../../src/stores');
-  boundary.fs!.seedFile(MODEL_PATH, 500 * 1024 * 1024);
-  await hardwareService.refreshMemoryInfo();
-  await llmService.loadModel(MODEL_PATH);
-  useAppStore.setState({
-    downloadedModels: [createDownloadedModel({ id: 'llm', engine: 'llama', filePath: MODEL_PATH })],
-    activeModelId: 'llm',
-  });
+/** The phone's text model, imported and picked. */
+function getTextModel(boundary: NativeBoundary, fileName = 'small.gguf', sizeBytes = 500 * 1024 * 1024) {
+  return importAndPickTextModel(boundary.fs!, { fileName, sizeBytes });
 }
 
 /** Improve opened on `params`, inside a real stack navigator with one other screen to visit. */
@@ -84,8 +76,6 @@ function openImprove(params: { text: string; apply: 'copy' | 'replace' }) {
 describePro('Improve screen', () => {
   it('with no text model, says rewrites need one', async () => {
     installPhone();
-    const { useAppStore } = require('../../../src/stores');
-    useAppStore.setState({ downloadedModels: [], activeModelId: null });
 
     const { view } = openImprove({ text: DRAFT, apply: 'copy' });
 
@@ -95,14 +85,12 @@ describePro('Improve screen', () => {
 
   it('coming back with a model picked fills in the versions', async () => {
     const boundary = installPhone();
-    const { useAppStore } = require('../../../src/stores');
-    useAppStore.setState({ downloadedModels: [], activeModelId: null });
 
     const { rtl, view, navigation } = openImprove({ text: DRAFT, apply: 'copy' });
     expect(await view.findByTestId('improve-no-model')).toBeTruthy();
 
     rtl.act(() => navigation.navigate('Elsewhere'));
-    await loadTextModel(boundary);
+    await getTextModel(boundary);
     boundary.llama!.scriptCompletion({ text: VERSIONS });
     rtl.act(() => navigation.goBack());
 
@@ -115,15 +103,9 @@ describePro('Improve screen', () => {
 
   it('a model that only thinks says so, and using another model on the phone fills in the versions', async () => {
     const boundary = installPhone();
-    await loadTextModel(boundary);
+    const thinker = await getTextModel(boundary, 'Thinker 8B.gguf');
+    const small = await importTextModel(boundary.fs!, { fileName: 'Qwen 3.5 0.8B.gguf', sizeBytes: 300 * 1024 * 1024 });
     const { useAppStore } = require('../../../src/stores');
-    boundary.fs!.seedFile('/models/q.gguf', 300 * 1024 * 1024);
-    useAppStore.setState({
-      downloadedModels: [
-        createDownloadedModel({ id: 'llm', name: 'Thinker 8B', engine: 'llama', filePath: MODEL_PATH }),
-        createDownloadedModel({ id: 'small', name: 'Qwen 3.5 0.8B', engine: 'llama', filePath: '/models/q.gguf' }),
-      ],
-    });
     boundary.llama!.scriptCompletions([
       { text: `<think>${'I weigh one more word. '.repeat(800)}`, charsPerToken: 4 },
       { text: VERSIONS },
@@ -131,26 +113,28 @@ describePro('Improve screen', () => {
 
     const { rtl, view } = openImprove({ text: DRAFT, apply: 'copy' });
 
-    expect(await view.findByText('Thinker 8B spent its answer thinking.')).toBeTruthy();
+    expect(await view.findByTestId('improve-thinking-only')).toHaveTextContent(thinker.name, { exact: false });
     expect(view.queryByText(/I weigh one more word/)).toBeNull();
-    rtl.fireEvent.press(view.getByText('Use Qwen 3.5 0.8B'));
+    expect(view.getByTestId('improve-use-model')).toHaveTextContent(small.name, { exact: false });
+    rtl.fireEvent.press(view.getByTestId('improve-use-model'));
 
     await rtl.waitFor(() =>
       expect(view.getByTestId('improve-option-0').props.accessibilityState?.busy).toBe(false),
     );
     expect(view.getByTestId('improve-option-0')).toHaveTextContent('Could you send the report today?');
-    expect(useAppStore.getState().activeModelId).toBe('small');
+    expect(useAppStore.getState().activeModelId).toBe(small.id);
   });
 
   it('a model that only thinks, with no other model on the phone, leads to Get a model', async () => {
     const boundary = installPhone();
-    await loadTextModel(boundary);
+    await getTextModel(boundary);
     boundary.llama!.scriptCompletion({ text: `<think>${'I weigh one more word. '.repeat(800)}`, charsPerToken: 4 });
 
     const { view } = openImprove({ text: DRAFT, apply: 'copy' });
 
     expect(await view.findByTestId('improve-thinking-only')).toBeTruthy();
-    expect(view.getByText('Get a model')).toBeTruthy();
+    expect(view.getByTestId('improve-get-model')).toBeTruthy();
+    expect(view.queryByTestId('improve-use-model')).toBeNull();
   });
 
   it('a model too big for free memory is never loaded; Improve says so and offers a smaller one', async () => {
@@ -159,27 +143,19 @@ describePro('Improve screen', () => {
       fs: true,
       ram: { platform: 'android', totalBytes: 6 * GB, availBytes: 1.5 * GB },
     });
-    const { hardwareService } = require('../../../src/services/hardware');
-    const { useAppStore } = require('../../../src/stores');
-    boundary.fs!.seedFile('/models/big.gguf', 5 * GB);
-    await hardwareService.refreshMemoryInfo();
-    useAppStore.setState({
-      downloadedModels: [
-        createDownloadedModel({ id: 'big', name: 'Big 8B', engine: 'llama', filePath: '/models/big.gguf', fileSize: 5 * GB }),
-      ],
-      activeModelId: 'big',
-    });
+    const big = await getTextModel(boundary, 'Big 8B.gguf', 5 * GB);
 
     const { view } = openImprove({ text: DRAFT, apply: 'copy' });
 
-    expect(await view.findByText('Big 8B needs more free memory than this phone has now.')).toBeTruthy();
-    expect(view.getByText('Get a smaller model')).toBeTruthy();
+    expect(await view.findByTestId('improve-no-memory')).toHaveTextContent(big.name, { exact: false });
+    expect(view.getByTestId('improve-get-model')).toBeTruthy();
+    expect(view.queryByTestId('improve-use-model')).toBeNull();
     expect(boundary.llama!.calls.initLlama).toHaveLength(0);
   });
 
   it('Another version adds a second one; Copy puts the one I picked on the clipboard', async () => {
     const boundary = installPhone();
-    await loadTextModel(boundary);
+    await getTextModel(boundary);
     boundary.llama!.scriptCompletions([{ text: VERSIONS }, { text: ANOTHER }]);
     const { Clipboard } = require('react-native');
 
@@ -205,29 +181,23 @@ describePro('Improve screen', () => {
 
   it('a large model shows one quiet line offering a quicker model on the phone; Use it fills in a version', async () => {
     const boundary = installPhone();
-    await loadTextModel(boundary);
+    await getTextModel(boundary, 'Big 8B.gguf', 5 * GB);
+    const small = await importTextModel(boundary.fs!, { fileName: 'Small 0.8B.gguf', sizeBytes: 300 * 1024 * 1024 });
     const { useAppStore } = require('../../../src/stores');
-    boundary.fs!.seedFile('/models/q.gguf', 300 * 1024 * 1024);
-    useAppStore.setState({
-      downloadedModels: [
-        createDownloadedModel({ id: 'llm', name: 'Big 8B', engine: 'llama', filePath: MODEL_PATH, fileSize: 5 * GB }),
-        createDownloadedModel({ id: 'small', name: 'Small 0.8B', engine: 'llama', filePath: '/models/q.gguf', fileSize: 300 * 1024 * 1024 }),
-      ],
-    });
     boundary.llama!.scriptCompletions([{ text: VERSIONS }, { text: ANOTHER }]);
 
     const { rtl, view } = openImprove({ text: DRAFT, apply: 'copy' });
 
-    expect(await view.findByText('Small 0.8B is quicker for Improve.')).toBeTruthy();
-    rtl.fireEvent.press(view.getByText('Use it'));
+    expect(await view.findByTestId('improve-quick-model')).toHaveTextContent(small.name, { exact: false });
+    rtl.fireEvent.press(view.getByTestId('improve-quick-use'));
     await rtl.waitFor(() => expect(view.getByTestId('improve-option-0')).toHaveTextContent(ANOTHER));
-    expect(useAppStore.getState().activeModelId).toBe('small');
+    expect(useAppStore.getState().activeModelId).toBe(small.id);
     expect(view.queryByTestId('improve-quick-model')).toBeNull();
   });
 
   it('Replace from the selection menu gives the picked version back to the calling app', async () => {
     const boundary = installPhone();
-    await loadTextModel(boundary);
+    await getTextModel(boundary);
     boundary.llama!.scriptCompletion({ text: VERSIONS });
     const { Clipboard } = require('react-native');
     const finishImprove = jest.fn(async (_text: string | null) => undefined);
