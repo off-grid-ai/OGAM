@@ -310,7 +310,8 @@ jobs:
       # node_modules, and pod install runs a pod's prepare_command (react-native-audio-api downloads
       # its prebuilt libcrypto, libopus and libvorbis into node_modules) only when it installs that pod.
       # A Pods tree restored beside a fresh node_modules skipped it, and the iOS build failed on the
-      # missing libraries. A new lock file now installs the pods afresh.
+      # missing libraries. A new lock file installs the pods afresh, and the step before pod install
+      # runs that download itself, because node_modules is cached before pod install fills it.
       - name: Cache CocoaPods
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -325,6 +326,11 @@ jobs:
         with:
           path: native/video/OffgridVideoRuntime.xcframework
           key: video-ios-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/video/**', 'scripts/build-video-ios.sh') }}
+      # react-native-audio-api's prepare_command, run here: pod install skips it for a restored pod.
+      # The script skips what is already there.
+      - name: Download react-native-audio-api's prebuilt libraries
+        working-directory: node_modules/react-native-audio-api
+        run: bash scripts/download-prebuilt-binaries.sh ios
       - name: pod install
         # Use the CocoaPods pinned in Gemfile.lock, so Podfile.lock is reproduced as committed.
         # Restoring a lock rewritten by another CocoaPods left Pods/Manifest.lock out of step with
