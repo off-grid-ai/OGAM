@@ -46,6 +46,19 @@ describe('summarizeSession', () => {
     expect(result).toBe(summary);
   });
 
+  it('sends the transcript after the instruction when the session does not hold the conversation', async () => {
+    const summary = 'The user asked for stories about Paris and Lyon.';
+    const sendMessage = jest.fn((_text, callbacks) => {
+      callbacks.onToken(summary);
+      callbacks.onComplete('', '');
+    });
+
+    const result = await summarizeSession(sendMessage, true, undefined, undefined, 'user: Write a story about Paris');
+
+    expect(result).toBe(summary);
+    expect(sendMessage.mock.calls[0][0]).toMatch(/^Briefly summarize[\s\S]*\n\nuser: Write a story about Paris$/);
+  });
+
   it('returns null when summary is empty string after trim', async () => {
     const sendMessage = jest.fn((_text, callbacks) => {
       callbacks.onToken('   ');
@@ -96,13 +109,17 @@ describe('runCompaction', () => {
   const baseParams = {
     systemPrompt: 'You are helpful.',
     maxTokens: 1000,
-    cumulativeTokens: 900,
     conversationId: 'conv-1',
-    activeConversationId: 'conv-1',
     opts: {},
     summarize: jest.fn(() => Promise.resolve('A summary.')),
     resetFn: jest.fn(() => Promise.resolve()),
   };
+  type Turn = { role: 'user' | 'assistant'; content: string };
+  /** Six turns too long to keep together: compaction drops the older ones. */
+  const longHistory: Turn[] = Array.from({ length: 6 }, (_, i) => ({
+    role: i % 2 === 0 ? 'user' : 'assistant',
+    content: `turn ${i} ${'x'.repeat(600)}`,
+  }));
 
   it('shows the compacting state while it runs, then clears it', async () => {
     const watch = watchCompacting();
@@ -111,58 +128,39 @@ describe('runCompaction', () => {
     expect(watch.states.slice(-2)).toEqual([true, false]);
   });
 
-  it('uses summary in compacted history when activeConversationId matches', async () => {
+  it('summarizes only the turns it drops, and opens the rebuilt session with that summary', async () => {
+    const summarize = jest.fn((_dropped: Turn[]) => Promise.resolve('A summary.'));
     const resetFn = jest.fn(() => Promise.resolve());
-    await runCompaction({
-      ...baseParams,
-      history: [
-        { role: 'user', content: 'hi' },
-        { role: 'assistant', content: 'hello' },
-      ],
-      resetFn,
-    });
+    await runCompaction({ ...baseParams, history: longHistory, summarize, resetFn });
 
-    const callArgs = resetFn.mock.calls[0] as any[];
-    const compactedHistory = callArgs[1].history;
-    // First turn should be the summary context turn
+    const compactedHistory: Turn[] = (resetFn.mock.calls[0] as any[])[1].history;
+    const kept = compactedHistory.slice(2);
     expect(compactedHistory[0].content).toContain('A summary.');
     expect(compactedHistory[1].content).toBe('Understood.');
+    expect(summarize.mock.calls[0][0]).toEqual(longHistory.slice(0, longHistory.length - kept.length));
+    expect(kept).toEqual(longHistory.slice(-kept.length));
   });
 
-  it('slices only (no summary) when activeConversationId differs', async () => {
+  it('writes no summary when every turn still fits', async () => {
     const summarize = jest.fn(() => Promise.resolve('should not be called'));
     const resetFn = jest.fn(() => Promise.resolve());
-    await runCompaction({
-      ...baseParams,
-      activeConversationId: 'different-conv',
-      summarize,
-      history: [
-        { role: 'user', content: 'hi' },
-        { role: 'assistant', content: 'hello' },
-      ],
-      resetFn,
-    });
+    const history: Turn[] = [
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: 'hello' },
+    ];
+    await runCompaction({ ...baseParams, summarize, history, resetFn });
 
     expect(summarize).not.toHaveBeenCalled();
-    const compactedHistory = (resetFn.mock.calls[0] as any[])[1].history;
-    // No summary prefix turn
-    expect(compactedHistory[0].content).not.toContain('Context from earlier');
+    expect((resetFn.mock.calls[0] as any[])[1].history).toEqual(history);
   });
 
-  it('uses recent slice only when summarize returns null', async () => {
+  it('keeps the recent turns without a summary when summarizing fails', async () => {
     const resetFn = jest.fn(() => Promise.resolve());
-    await runCompaction({
-      ...baseParams,
-      summarize: jest.fn(() => Promise.resolve(null)),
-      history: [
-        { role: 'user', content: 'turn1' },
-        { role: 'assistant', content: 'resp1' },
-      ],
-      resetFn,
-    });
+    await runCompaction({ ...baseParams, summarize: jest.fn(() => Promise.resolve(null)), history: longHistory, resetFn });
 
-    const compactedHistory = (resetFn.mock.calls[0] as any[])[1].history;
+    const compactedHistory: Turn[] = (resetFn.mock.calls[0] as any[])[1].history;
     expect(compactedHistory[0].content).not.toContain('Context from earlier');
+    expect(compactedHistory.length).toBeLessThan(longHistory.length);
   });
 
   it('clears the compacting state even when the reset fails', async () => {
@@ -186,7 +184,6 @@ describe('runCompaction', () => {
       ...baseParams,
       maxTokens: 100, // small budget → forces slicing
       summarize: jest.fn(() => Promise.resolve(null)),
-      activeConversationId: 'different', // no summarization
       history,
       resetFn,
     });

@@ -104,6 +104,28 @@ describe('compact', () => {
     expect(result.map((m: Message) => m.content)).toEqual(['System', '[Previous conversation summary]\nEarlier talk', 'Hello']);
   });
 
+  it('has a loaded LiteRT model write the summary, since llama.cpp is not loaded beside it', async () => {
+    d = await launchGeneration({ engine: 'litert' });
+    compaction = require('../../../src/services/contextCompaction').contextCompactionService;
+    d.boundary.litert.scriptTurn({ content: 'The user asked for stories about Paris and Lyon.' });
+    const story = 'word '.repeat(2000); // ~2,500 tokens by the character estimate LiteRT falls back to
+    const messages = [
+      createMessage({ role: 'system', content: 'System' }),
+      createMessage({ role: 'user', content: 'Write a story about Paris' }),
+      createMessage({ role: 'assistant', content: story }),
+      createMessage({ role: 'user', content: 'Which city has the best food?' }),
+    ];
+
+    const result = await compactWith(messages);
+
+    expect(result.map((m: Message) => m.content)).toEqual([
+      'System',
+      '[Previous conversation summary]\nThe user asked for stories about Paris and Lyon.',
+      'Which city has the best food?',
+    ]);
+    expect(conversation().compactionSummary).toBe('The user asked for stories about Paris and Lyon.');
+  });
+
   it('trims without a summary when the model fails to write one, and stores nothing', async () => {
     tokenizer(2000);
     d.boundary.llama!.scriptCompletion({ throwMessage: 'generation failed' });

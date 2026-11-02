@@ -23,12 +23,17 @@ export type InstallToolHandlerFn = (h: ToolHandler) => () => void;
 const NEUTRAL_TOOL_HANDLER: ToolHandler = async () =>
   'No tool needed. Reply in plain text with the summary requested.';
 
+const SUMMARY_INSTRUCTION =
+  'Briefly summarize our conversation so far — key topics, decisions, and context. 3 to 5 sentences maximum. Do not call any tools, just answer in plain text.';
+
 // eslint-disable-next-line max-params
 export async function summarizeSession(
   sendMessage: SendMessageFn,
   isReady: boolean,
   installToolHandler?: InstallToolHandlerFn,
   stopGeneration?: () => Promise<void>,
+  /** The conversation to summarize, when the session does not already hold it. */
+  transcript?: string,
 ): Promise<string | null> {
   // Active conversation has tools registered with autoToolCalling=true. If the
   // model emits a tool_call mid-summary and the handler is null, sendMessage's
@@ -50,7 +55,7 @@ export async function summarizeSession(
       (stopGeneration?.() ?? Promise.resolve()).catch(() => {}).finally(() => finish(null));
     }, 20_000);
     sendMessage(
-      'Briefly summarize our conversation so far — key topics, decisions, and context. 3 to 5 sentences maximum. Do not call any tools, just answer in plain text.',
+      transcript ? `${SUMMARY_INSTRUCTION}\n\n${transcript}` : SUMMARY_INSTRUCTION,
       {
         onToken: (token) => { summary += token; },
         onReasoning: () => {},
@@ -72,19 +77,17 @@ export async function runCompaction(params: {
   history: Turn[];
   systemPrompt: string;
   maxTokens: number;
-  cumulativeTokens: number;
   conversationId: string;
-  activeConversationId: string | null;
   opts: { samplerConfig?: SamplerConfigOpts; tools?: any[] };
-  summarize: (fullHistory: Turn[]) => Promise<string | null>;
+  /** Summarizes the turns compaction drops; null when it could not. */
+  summarize: (droppedTurns: Turn[]) => Promise<string | null>;
   resetFn: ResetFn;
 }): Promise<void> {
-  const { history, systemPrompt, maxTokens, conversationId, activeConversationId, opts, summarize, resetFn } = params;
+  const { history, systemPrompt, maxTokens, conversationId, opts, summarize, resetFn } = params;
   contextCompactionService.signalCompacting(true);
   try {
     const POST_COMPACT_TARGET = 0.45;
-    const hasActiveSession = activeConversationId === conversationId;
-    const SUMMARY_RESERVE_TOKENS = hasActiveSession ? 200 : 0;
+    const SUMMARY_RESERVE_TOKENS = 200;
     const systemAndToolsChars = systemPrompt.length + (opts.tools && opts.tools.length > 0 ? JSON.stringify(opts.tools).length : 0);
     const systemAndToolsTokens = Math.ceil(systemAndToolsChars / 4);
     const historyBudgetTokens = Math.max(
@@ -102,11 +105,8 @@ export async function runCompaction(params: {
     }
     recentStart = Math.min(recentStart, Math.max(0, history.length - 2));
     const recentHistory = history.slice(recentStart);
-
-    let summary: string | null = null;
-    if (hasActiveSession) {
-      summary = await summarize(history);
-    }
+    const droppedTurns = history.slice(0, recentStart);
+    const summary = droppedTurns.length > 0 ? await summarize(droppedTurns) : null;
 
     const compactedHistory: Turn[] = summary
       ? [

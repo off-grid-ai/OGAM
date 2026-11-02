@@ -246,6 +246,14 @@ class ContextCompactionService {
       if (failure) throw failure;
       return summary.trim().slice(0, summaryTokenBudget * CHARS_PER_TOKEN_ESTIMATE);
     }
+    // engines imports litert, which imports this module, so it is loaded here rather than at the top.
+    const { generateStandalone, getActiveEngineService } = await import('./engines');
+    const { liteRTService } = await import('./litert');
+    if (getActiveEngineService() === liteRTService) {
+      // llama.cpp is not loaded beside a LiteRT model, so the LiteRT engine writes the summary.
+      const summary = await generateStandalone(summaryMessages);
+      return summary.trim().slice(0, summaryTokenBudget * CHARS_PER_TOKEN_ESTIMATE);
+    }
     return await llmService.generateWithMaxTokens(summaryMessages, summaryTokenBudget);
   }
 
