@@ -10,6 +10,13 @@ on:
       - main
       - 'release/*'
 
+# A new push to a pull request replaces its running checks, which would otherwise hold runners
+# (the macOS ones are few) for a commit nobody will merge. Pushes to main each finish: their
+# caches are the ones pull requests restore.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # Parallel jobs on one shared setup.
 #
 # This was ONE job, for a reason worth keeping: lint, typecheck, architecture and test used to be
