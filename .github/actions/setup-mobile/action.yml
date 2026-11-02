@@ -35,16 +35,27 @@ runs:
         TOKEN: ${{ inputs.private-token }}
         HEAD_REF: ${{ github.head_ref || github.ref_name }}
         BASE_REF: ${{ github.base_ref || 'main' }}
+      # The checkout of this repository saved its own login as a header for all of github.com, and
+      # that header would override the token in the address; it is cleared for these lookups.
+      # `--exit-code` exits 2 when the branch does not exist. Any other failure stops the job, so a
+      # bad token cannot quietly test against the base branch instead.
       run: |
         pick() {
-          if git ls-remote --exit-code --heads "https://x-access-token:${TOKEN}@github.com/off-grid-ai/$1.git" "$HEAD_REF" >/dev/null; then
-            echo "$HEAD_REF"
-          else
-            echo "$BASE_REF"
-          fi
+          local status=0
+          git -c http.https://github.com/.extraheader= ls-remote --exit-code --heads \
+            "https://x-access-token:${TOKEN}@github.com/off-grid-ai/$1.git" "$HEAD_REF" >/dev/null || status=$?
+          case "$status" in
+            0) echo "$HEAD_REF" ;;
+            2) echo "$BASE_REF" ;;
+            *) echo "::error::Could not read off-grid-ai/$1 (git exit $status)" >&2; return 1 ;;
+          esac
         }
-        echo "pro=$(pick mobile-pro)" >> "$GITHUB_OUTPUT"
-        echo "shared=$(pick shared)" >> "$GITHUB_OUTPUT"
+        # Assigned first: `echo "x=$(pick)"` would hide a failed lookup behind echo's success.
+        pro=$(pick mobile-pro)
+        shared=$(pick shared)
+        echo "pro=$pro" >> "$GITHUB_OUTPUT"
+        echo "shared=$shared" >> "$GITHUB_OUTPUT"
+        echo "pro: $pro, shared: $shared"
 
     - name: Check out pro
       if: ${{ inputs.private-token != '' }}
