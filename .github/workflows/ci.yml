@@ -70,12 +70,13 @@ jobs:
         run: npm run knip
 
   jest:
-    name: jest (${{ matrix.shard }}/4)
+    name: jest (${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        # Balanced by recorded suite run time (scripts/jest-sequencer.js), not by suite count.
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -101,9 +102,9 @@ jobs:
             jest-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'babel.config.js', 'jest.config.js') }}-shard${{ matrix.shard }}-
             jest-${{ runner.os }}-${{ runner.arch }}-
 
-      # A shard holds a quarter of the suites, so it cannot check coverageThreshold: the files the
+      # A shard holds a sixth of the suites, so it cannot check coverageThreshold: the files the
       # other shards cover would look uncovered. It saves its raw coverage instead, and the coverage
-      # job below merges all four and checks the thresholds as one unsharded run would.
+      # job below merges all six and checks the thresholds as one unsharded run would.
       - name: Run Jest tests
         id: jest
         env:
@@ -119,8 +120,9 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
           SHARD: ${{ matrix.shard }}
         run: >-
-          npx jest --shard="$SHARD/4" --coverage --coverageReporters=json --coverageThreshold='{}'
+          npx jest --shard="$SHARD/6" --coverage --coverageReporters=json --coverageThreshold='{}'
           --forceExit --maxWorkers=1 --workerIdleMemoryLimit=1GB --cacheDirectory="$JEST_CACHE_DIR"
+          --json --outputFile="$RUNNER_TEMP/jest-results.json"
 
       # Saved after a failing run too: the transforms are keyed by file content, not by the results.
       - name: Save Jest transforms
@@ -137,6 +139,15 @@ jobs:
           name: coverage-shard-${{ matrix.shard }}
           path: coverage/coverage-final.json
           retention-days: 1
+
+      # Each suite's run time, to refresh scripts/jest-timings.json (scripts/update-jest-timings.js).
+      - name: Upload the shard's suite times
+        if: ${{ !cancelled() && steps.jest.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: jest-results-${{ matrix.shard }}
+          path: ${{ runner.temp }}/jest-results.json
+          retention-days: 14
 
   coverage:
     name: coverage
