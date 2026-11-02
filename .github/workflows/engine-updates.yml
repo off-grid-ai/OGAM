@@ -57,39 +57,13 @@ jobs:
           ref: main
           token: ${{ secrets.PRO_SUBMODULE_PAT }}
 
-      - name: Check out pro
-        uses: actions/checkout@v4
+      # Pro and shared main, Node and node_modules: the CI setup (.github/actions/setup-mobile).
+      - name: Set up the workspace
+        uses: ./.github/actions/setup-mobile
         with:
-          repository: off-grid-ai/mobile-pro
-          token: ${{ secrets.PRO_SUBMODULE_PAT }}
-          path: pro
-          ref: main
-          persist-credentials: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '26'
-          cache: 'npm'
-
-      - name: Check out the shared monorepo
-        uses: actions/checkout@v4
-        with:
-          repository: off-grid-ai/shared
-          token: ${{ secrets.PRO_SUBMODULE_PAT }}
-          path: _shared
-          ref: main
-          persist-credentials: false
-
-      - name: Put shared beside this checkout
-        run: |
-          rm -rf ../shared
-          mv _shared ../shared
-          npm --prefix ../shared ci
-          for p in sync rag models speech ui; do npm --prefix ../shared/packages/$p run build; done
-
-      - name: Install dependencies
-        run: npm ci
+          private-token: ${{ secrets.PRO_SUBMODULE_PAT }}
+          pro-ref: main
+          shared-ref: main
 
       - name: Install CocoaPods 1.16.2
         # The version ios/Podfile.lock was written with, so the lock only changes where an engine moved.
@@ -149,10 +123,10 @@ jobs:
           ref: main
           persist-credentials: false
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Node
+        uses: ./.github/actions/setup-mobile
         with:
-          node-version: '26'
+          workspace: 'false'
 
       - name: Merge the engine PR
         env:
