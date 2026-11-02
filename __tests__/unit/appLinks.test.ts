@@ -6,6 +6,7 @@ describe('launcher shortcut links', () => {
     expect(appLinkTarget('atlas://app/CALL/')).toBe('call');
     expect(appLinkTarget('atlas://app/record')).toBe('record');
     expect(appLinkTarget('atlas://app/brief')).toBe('brief');
+    expect(appLinkTarget('atlas://app/schedule')).toBe('schedule');
     expect(appLinkTarget('atlas://app/delete-everything')).toBeNull();
     expect(appLinkTarget('atlas://sync?id=abc&key=xyz')).toBeNull();
     expect(appLinkTarget('https://example.com/chat')).toBeNull();

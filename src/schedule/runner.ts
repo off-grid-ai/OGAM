@@ -6,6 +6,7 @@
 import { AppState } from 'react-native';
 import { useSchedule, type ScheduledTask } from './store';
 import { isDue } from './due';
+import { startAlarmSync, syncAlarms } from './alarms';
 
 const RETRY_AFTER_MS = 15 * 60_000;
 let busy = false;
@@ -90,5 +91,8 @@ export function startScheduler(): () => void {
   const sub = AppState.addEventListener('change', (s) => { if (s === 'active') check(); });
   const timer = setInterval(check, 60_000);
   const first = setTimeout(check, 5_000);
-  return () => { sub.remove(); clearInterval(timer); clearTimeout(first); };
+  const alarms = startAlarmSync();
+  // Coming back to the front tops the alarms up, so the notifications keep coming for two more weeks.
+  const topUp = AppState.addEventListener('change', (s) => { if (s === 'active') void syncAlarms(); });
+  return () => { sub.remove(); topUp.remove(); alarms(); clearInterval(timer); clearTimeout(first); };
 }

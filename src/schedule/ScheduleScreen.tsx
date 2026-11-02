@@ -8,6 +8,7 @@ import { Button } from '../components/Button';
 import { describeTiming, nextOccurrence, nextTimeOfDay, type Repeat } from './due';
 import { useSchedule, type ScheduledTask, type TaskKind } from './store';
 import { runTask } from './runner';
+import { askForNotifications, alarmsAvailable } from './alarms';
 
 const REPEATS: { id: Repeat; label: string }[] = [
   { id: 'once', label: 'Once' }, { id: 'daily', label: 'Every day' }, { id: 'weekdays', label: 'Weekdays' }, { id: 'weekly', label: 'Weekly' },
@@ -68,6 +69,7 @@ export const ScheduleScreen: React.FC = () => {
     if (draft.id) update(draft.id, { ...fields, enabled: true, lastError: undefined });
     else add(fields);
     setDraft(null);
+    if (alarmsAvailable()) void askForNotifications();
   };
   const canSave = !!draft && (draft.kind === 'briefing' || !!draft.prompt.trim());
   const runNow = async (t: ScheduledTask) => {
@@ -99,7 +101,7 @@ export const ScheduleScreen: React.FC = () => {
       </View>
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <Text style={[styles.meta, { color: colors.textMuted }]}>
-          Atlas runs these at the time you set while it is open. If the phone was away at that time, the task runs once when you come back. Each answer is kept as a chat, and a row on Home tells you it is ready.
+          At the time you set, Atlas shows a notification; tap it and the task runs. A task also runs by itself whenever Atlas is open at that time. If the phone was away, it runs once when you come back. Each answer is kept as a chat, and a row on Home tells you it is ready.
         </Text>
 
         {tasks.map((t) => {

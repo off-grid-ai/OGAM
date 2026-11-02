@@ -49,3 +49,26 @@ describe('scheduled task timing', () => {
     expect(nextTimeOfDay(8, 0, at(2026, 11, 4, 9, 0))).toBe(at(2026, 11, 5, 8, 0));
   });
 });
+
+describe('notifications for scheduled tasks', () => {
+  const { alarmsFor, RUNS_AHEAD } = require('../../../src/schedule/alarms');
+  const task = (over: object) => ({ id: 't1', name: 'Plan my day', kind: 'prompt', prompt: 'x', repeat: 'daily', hour: 8, minute: 0, enabled: true, createdAt: 0, ...over });
+
+  it('gives a switched-on daily task its next several times, soonest first, and nothing for a switched-off one', () => {
+    const now = at(2026, 11, 4, 9, 0);
+    const list = alarmsFor([task({}), task({ id: 't2', enabled: false })], now);
+    expect(list).toHaveLength(RUNS_AHEAD);
+    expect(list[0].at).toBe(at(2026, 11, 5, 8, 0));
+    expect(list[1].at).toBe(at(2026, 11, 6, 8, 0));
+    expect(list.every((a: any) => a.id.startsWith('t1:') && a.title === 'Plan my day')).toBe(true);
+  });
+  it('gives a one-time task one notification, and none once it has passed', () => {
+    const now = at(2026, 11, 4, 9, 0);
+    expect(alarmsFor([task({ repeat: 'once', onceAt: at(2026, 11, 5, 18, 0) })], now)).toHaveLength(1);
+    expect(alarmsFor([task({ repeat: 'once', onceAt: at(2026, 11, 3, 18, 0) })], now)).toHaveLength(0);
+  });
+  it('skips weekends for a weekdays task', () => {
+    const list = alarmsFor([task({ repeat: 'weekdays' })], at(2026, 11, 6, 9, 0)); // Friday morning
+    expect(new Date(list[0].at).getDay()).toBe(1); // next is Monday
+  });
+});

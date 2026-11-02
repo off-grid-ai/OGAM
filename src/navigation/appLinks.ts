@@ -3,8 +3,8 @@ import { navigationRef } from './navigationRef';
 import { useAppStore, useAuthStore, useChatStore } from '../stores';
 
 /** Where an atlas://app/<where> link goes (the launcher shortcuts use these). */
-export type AppLinkTarget = 'chat' | 'call' | 'record' | 'brief';
-const TARGETS: AppLinkTarget[] = ['chat', 'call', 'record', 'brief'];
+export type AppLinkTarget = 'chat' | 'call' | 'record' | 'brief' | 'schedule';
+const TARGETS: AppLinkTarget[] = ['chat', 'call', 'record', 'brief', 'schedule'];
 
 /** The target in a link like "atlas://app/call", or null for any other link. */
 export function appLinkTarget(url: string | null | undefined): AppLinkTarget | null {
@@ -25,6 +25,7 @@ export function flushAppLink(): void {
   if (target === 'call') navigationRef.navigate('Call', {});
   else if (target === 'record') navigationRef.navigate('Recorder');
   else if (target === 'brief') navigationRef.navigate('DailyBrief');
+  else if (target === 'schedule') navigationRef.navigate('Schedule');
   else {
     const s = useAppStore.getState();
     const modelId = s.activeModelId || s.downloadedModels[0]?.id;
