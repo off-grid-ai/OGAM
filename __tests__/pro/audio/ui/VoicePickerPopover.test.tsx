@@ -17,7 +17,7 @@
 import React from 'react';
 import { render, fireEvent, act, waitFor } from '@testing-library/react-native';
 import HapticFeedback from 'react-native-haptic-feedback';
-import { useTextToSpeech } from 'react-native-executorch';
+import { useTextToSpeech } from 'react-native-executorch/legacy';
 
 jest.mock('react-native-vector-icons/Feather', () => {
   const { Text } = require('react-native');

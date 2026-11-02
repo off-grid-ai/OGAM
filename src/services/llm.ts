@@ -109,7 +109,12 @@ class LLMService {
         // A Stop that landed while the native completion was starting was cleared by it: send it again.
         if (this.stopRequested && !resent) {
           resent = true;
-          ctx.stopCompletion().catch(() => {});
+          // llama.rn types stopCompletion() as a Promise, but its JSI sets the interrupt flag and
+          // returns undefined: await it, never chain on what it returns.
+          // eslint-disable-next-line no-void
+          void (async () => {
+            try { await ctx.stopCompletion(); } catch { /* the context is already gone: nothing to stop */ }
+          })();
         }
         onToken?.(data);
       });

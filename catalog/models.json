@@ -1,8 +1,63 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-27",
+  "updatedAt": "2026-11-01",
   "sections": {
     "models": [
+      {
+        "id": "LiquidAI/LFM3-1.7B-GGUF",
+        "sourceModelId": "LiquidAI/LFM3-1.7B",
+        "quality": 8,
+        "name": "LFM3 1.7B",
+        "kind": "text",
+        "org": "LiquidAI",
+        "description": "Fast agent and tool use with reasoning; text only",
+        "params": 1.73,
+        "minRamGb": 4,
+        "quant": "Q4_K_M",
+        "minLlamaBuild": 11938,
+        "isNew": true,
+        "releaseDate": "2026-10-24",
+        "files": [
+          {
+            "name": "LFM3-1.7B-Q4_K_M.gguf",
+            "url": "https://huggingface.co/LiquidAI/LFM3-1.7B-GGUF/resolve/bad5729bba61d076fff20d2548e62526665af215/LFM3-1.7B-Q4_K_M.gguf",
+            "sizeBytes": 1099627808,
+            "sha256": "3793e1e6e2266919d6e015287221b41100175a98eddaba92e111aed3b05c93c4",
+            "role": "primary"
+          }
+        ]
+      },
+      {
+        "id": "LiquidAI/LFM3-VL-2B-GGUF",
+        "sourceModelId": "LiquidAI/LFM3-VL-2B",
+        "quality": 8,
+        "name": "LFM3 VL 2B",
+        "kind": "vision",
+        "org": "LiquidAI",
+        "description": "Fast reasoning with vision, reads documents and charts",
+        "params": 1.92,
+        "minRamGb": 4,
+        "quant": "Q4_K_M",
+        "minLlamaBuild": 11938,
+        "isNew": true,
+        "releaseDate": "2026-10-19",
+        "files": [
+          {
+            "name": "LFM3-VL-2B-Q4_K_M.gguf",
+            "url": "https://huggingface.co/LiquidAI/LFM3-VL-2B-GGUF/resolve/b36554cfd35854b06429900131730cd80f092cdb/LFM3-VL-2B-Q4_K_M.gguf",
+            "sizeBytes": 1099627808,
+            "sha256": "56dac2e192ff0d9ab8507f4f1aeb4aed0463449bbbefaac79497f041c95f21eb",
+            "role": "primary"
+          },
+          {
+            "name": "mmproj-LFM3-VL-2B-F16.gguf",
+            "url": "https://huggingface.co/LiquidAI/LFM3-VL-2B-GGUF/resolve/b36554cfd35854b06429900131730cd80f092cdb/mmproj-LFM3-VL-2B-F16.gguf",
+            "sizeBytes": 378996032,
+            "sha256": "1d8e6e58eefc093e09d6332f081516e1ddbd5b35cfca7f35463fb270db230b1e",
+            "role": "mmproj"
+          }
+        ]
+      },
       {
         "id": "XHToken/Spark-X2.6-4B-GGUF",
         "sourceModelId": "XHToken/Spark-X2.6-4B",

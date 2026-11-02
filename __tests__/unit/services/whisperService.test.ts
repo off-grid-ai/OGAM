@@ -10,6 +10,7 @@ import { Platform, PermissionsAndroid } from 'react-native';
 import RNFS from 'react-native-fs';
 import { whisperService } from '../../../src/services/whisperService';
 import { audioSessionManager } from '../../../src/services/audioSessionManager';
+import { audioRecorderService } from '../../../src/services/audioRecorderService';
 import { AudioManager } from 'react-native-audio-api';
 
 // The realtime permission path drives audioSessionManager, which calls these.
@@ -24,6 +25,10 @@ const RECORDED_FILE = '/mock/audio/input.wav';
 
 // Downloads (the native downloader, the download store and its rows) are covered on the phone's fakes in
 // transcriptionDownloads.test.ts.
+
+// whisper.rn's realtime transcriber (faked in jest.setup): every session the service opened.
+const sessions = (): any[] => require('whisper.rn/realtime-transcription/RealtimeTranscriber').__sessions;
+const lastTranscriber = () => sessions()[sessions().length - 1];
 
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
 const mockedInitWhisper = initWhisper as jest.MockedFunction<
@@ -170,7 +175,7 @@ describe('WhisperService', () => {
       const mockContext = {
         id: 'test-whisper',
         release: jest.fn(),
-        transcribeRealtime: jest.fn(),
+        transcribeData: jest.fn(),
         transcribe: jest.fn(),
       };
       mockedInitWhisper.mockResolvedValue(mockContext as any);
@@ -189,13 +194,13 @@ describe('WhisperService', () => {
       const mockContext1 = {
         id: 'ctx1',
         release: jest.fn(() => Promise.resolve()),
-        transcribeRealtime: jest.fn(),
+        transcribeData: jest.fn(),
         transcribe: jest.fn(),
       };
       const mockContext2 = {
         id: 'ctx2',
         release: jest.fn(() => Promise.resolve()),
-        transcribeRealtime: jest.fn(),
+        transcribeData: jest.fn(),
         transcribe: jest.fn(),
       };
 
@@ -214,7 +219,7 @@ describe('WhisperService', () => {
       const mockContext = {
         id: 'ctx',
         release: jest.fn(),
-        transcribeRealtime: jest.fn(),
+        transcribeData: jest.fn(),
         transcribe: jest.fn(),
       };
       mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
@@ -269,7 +274,7 @@ describe('WhisperService', () => {
       const mockContext = {
         id: 'ctx',
         release: jest.fn(() => Promise.resolve()),
-        transcribeRealtime: jest.fn(),
+        transcribeData: jest.fn(),
         transcribe: jest.fn(),
       };
       mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
@@ -435,6 +440,21 @@ describe('WhisperService', () => {
       Object.defineProperty(Platform, 'OS', { get: () => originalOS });
     });
 
+    const loadContext = async (transcript = 'transcribed text') => {
+      const mockContext = {
+        id: 'ctx',
+        release: jest.fn(),
+        transcribeData: jest.fn(),
+        transcribe: jest.fn(() => ({
+          stop: jest.fn(),
+          promise: Promise.resolve({ result: transcript }),
+        })),
+      };
+      mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
+      await whisperService.loadModel('/path/model.bin');
+      return mockContext;
+    };
+
     it('throws when no model loaded', async () => {
       await expect(
         whisperService.startRealtimeTranscription(jest.fn()),
@@ -442,44 +462,21 @@ describe('WhisperService', () => {
     });
 
     it('stops existing transcription before starting new one', async () => {
-      // Set up a loaded model
-      const mockStop = jest.fn();
-      const mockContext = {
-        id: 'ctx',
-        release: jest.fn(),
-        transcribeRealtime: jest.fn(() =>
-          Promise.resolve({
-            stop: mockStop,
-            subscribe: jest.fn(),
-          }),
-        ),
-        transcribe: jest.fn(),
-      };
-      mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
-      await whisperService.loadModel('/path/model.bin');
-
-      // Simulate existing transcription
+      await loadContext();
+      const previousStop = jest.fn();
       (whisperService as any).isTranscribing = true;
-      (whisperService as any).stopFn = jest.fn();
-
+      (whisperService as any).stopFn = previousStop;
       Object.defineProperty(Platform, 'OS', { get: () => 'ios' }); // auto-grant permissions
 
       await whisperService.startRealtimeTranscription(jest.fn());
 
-      // The old stopFn should have been called
-      expect((whisperService as any).stopFn).not.toBeNull(); // New stopFn is set
+      expect(previousStop).toHaveBeenCalledTimes(1);
+      expect(lastTranscriber().active).toBe(true);
+      await whisperService.stopTranscription();
     });
 
     it('throws when permission denied', async () => {
-      const mockContext = {
-        id: 'ctx',
-        release: jest.fn(),
-        transcribeRealtime: jest.fn(),
-        transcribe: jest.fn(),
-      };
-      mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
-      await whisperService.loadModel('/path/model.bin');
-
+      await loadContext();
       Object.defineProperty(Platform, 'OS', { get: () => 'android' });
       jest
         .spyOn(PermissionsAndroid, 'request')
@@ -491,19 +488,8 @@ describe('WhisperService', () => {
     });
 
     it('stops the exact session when stop arrives while permission is pending', async () => {
-      const nativeStop = jest.fn(async () => undefined);
-      const mockContext = {
-        id: 'ctx',
-        release: jest.fn(),
-        transcribeRealtime: jest.fn(async () => ({
-          stop: nativeStop,
-          subscribe: jest.fn(),
-        })),
-        transcribe: jest.fn(),
-      };
-      mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
-      await whisperService.loadModel('/path/model.bin');
-
+      await loadContext();
+      const sessionsBefore = sessions().length;
       Object.defineProperty(Platform, 'OS', { get: () => 'android' });
       let answerPermission!: (result: string) => void;
       let permissionRequests = 0;
@@ -521,31 +507,19 @@ describe('WhisperService', () => {
       await Promise.resolve();
       const stop = whisperService.stopTranscription();
       await Promise.resolve();
-      expect(mockContext.transcribeRealtime).not.toHaveBeenCalled();
+      expect(sessions().length).toBe(sessionsBefore);
 
       answerPermission(PermissionsAndroid.RESULTS.GRANTED);
       await Promise.all([start, stop]);
 
-      expect(mockContext.transcribeRealtime).toHaveBeenCalledTimes(1);
-      expect(nativeStop).toHaveBeenCalledTimes(1);
+      expect(sessions().length).toBe(sessionsBefore + 1);
+      expect(lastTranscriber().active).toBe(false);
+      expect(audioRecorderService.isCurrentlyRecording()).toBe(false);
       expect(whisperService.isCurrentlyTranscribing()).toBe(false);
     });
 
-    it('calls transcribeRealtime with correct options', async () => {
-      const mockContext = {
-        id: 'ctx',
-        release: jest.fn(),
-        transcribeRealtime: jest.fn(() =>
-          Promise.resolve({
-            stop: jest.fn(),
-            subscribe: jest.fn(),
-          }),
-        ),
-        transcribe: jest.fn(),
-      };
-      mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
-      await whisperService.loadModel('/path/model.bin');
-
+    it('decodes the live preview in the chosen language', async () => {
+      await loadContext();
       Object.defineProperty(Platform, 'OS', { get: () => 'ios' });
 
       await whisperService.startRealtimeTranscription(jest.fn(), {
@@ -553,7 +527,7 @@ describe('WhisperService', () => {
         maxLen: 100,
       });
 
-      expect(mockContext.transcribeRealtime).toHaveBeenCalledWith(
+      expect(lastTranscriber().options.transcribeOptions).toEqual(
         expect.objectContaining({
           language: 'fr',
           translate: false,
@@ -561,132 +535,114 @@ describe('WhisperService', () => {
           maxLen: 100,
         }),
       );
+      await whisperService.stopTranscription();
     });
 
-    it('includes audioSessionOnStartIos options on iOS', async () => {
-      const mockContext = {
-        id: 'ctx',
-        release: jest.fn(),
-        transcribeRealtime: jest.fn(() =>
-          Promise.resolve({
-            stop: jest.fn(),
-            subscribe: jest.fn(),
-          }),
-        ),
-        transcribe: jest.fn(),
-      };
-      mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
-      await whisperService.loadModel('/path/model.bin');
-
+    it('records the utterance while the preview runs, and stops recording on stop', async () => {
+      await loadContext();
       Object.defineProperty(Platform, 'OS', { get: () => 'ios' });
 
       await whisperService.startRealtimeTranscription(jest.fn());
+      expect(audioRecorderService.isCurrentlyRecording()).toBe(true);
 
-      expect(mockContext.transcribeRealtime).toHaveBeenCalledWith(
-        expect.objectContaining({
-          audioSessionOnStartIos: expect.objectContaining({
-            category: 'PlayAndRecord',
-            options: ['AllowBluetooth', 'MixWithOthers'],
-            mode: 'Default',
-          }),
-          audioSessionOnStopIos: 'restore',
-        }),
-      );
+      await whisperService.stopTranscription();
+      await (whisperService as any).transcriptionFullyStopped;
+      expect(audioRecorderService.isCurrentlyRecording()).toBe(false);
     });
 
-    it('does not include audioSession options on Android', async () => {
-      const mockContext = {
-        id: 'ctx',
-        release: jest.fn(),
-        transcribeRealtime: jest.fn((..._args: any[]) =>
-          Promise.resolve({
-            stop: jest.fn(),
-            subscribe: jest.fn(),
-          }),
-        ),
-        transcribe: jest.fn(),
-      };
-      mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
-      await whisperService.loadModel('/path/model.bin');
-
-      Object.defineProperty(Platform, 'OS', { get: () => 'android' });
-      jest
-        .spyOn(PermissionsAndroid, 'request')
-        .mockResolvedValue(PermissionsAndroid.RESULTS.GRANTED);
-
-      await whisperService.startRealtimeTranscription(jest.fn());
-
-      const callArgs = mockContext.transcribeRealtime.mock.calls[0]![0]!;
-      expect(callArgs.audioSessionOnStartIos).toBeUndefined();
-      expect(callArgs.audioSessionOnStopIos).toBeUndefined();
-    });
-
-    it('forwards events to callback via subscribe', async () => {
-      let subscribeFn: any;
-      const mockContext = {
-        id: 'ctx',
-        release: jest.fn(),
-        transcribeRealtime: jest.fn(() =>
-          Promise.resolve({
-            stop: jest.fn(),
-            subscribe: (fn: any) => {
-              subscribeFn = fn;
-            },
-          }),
-        ),
-        transcribe: jest.fn(),
-      };
-      mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
-      await whisperService.loadModel('/path/model.bin');
-
+    it('shows every decoded slice, in order, as the live preview', async () => {
+      await loadContext();
       Object.defineProperty(Platform, 'OS', { get: () => 'ios' });
-
       const resultCb = jest.fn();
       await whisperService.startRealtimeTranscription(resultCb);
 
-      // Simulate event from subscribe
-      subscribeFn({
-        isCapturing: true,
-        data: { result: 'hello world' },
-        processTime: 100,
-        recordingTime: 200,
-      });
+      lastTranscriber().emitSlice('world', 1);
+      lastTranscriber().emitSlice('hello', 0);
 
-      expect(resultCb).toHaveBeenCalledWith({
+      expect(resultCb).toHaveBeenLastCalledWith({
         text: 'hello world',
         isCapturing: true,
-        processTime: 100,
-        recordingTime: 200,
+        processTime: 10,
+        recordingTime: 500,
       });
+      await whisperService.stopTranscription();
     });
 
-    it('keeps the selected language when the realtime result falls back to the recorded file', async () => {
-      let subscribeFn: any;
-      const mockContext = {
-        id: 'ctx',
-        release: jest.fn(),
-        transcribeRealtime: jest.fn(() =>
-          Promise.resolve({
-            stop: jest.fn(),
-            subscribe: (fn: any) => {
-              subscribeFn = fn;
-            },
-          }),
-        ),
-        transcribe: jest.fn(() => ({
-          stop: jest.fn(),
-          promise: Promise.resolve({ result: 'नमस्ते दुनिया' }),
-        })),
-      };
-      mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
-      await whisperService.loadModel('/path/model.bin');
+    it('takes the final text from the recording, which hears the last words the preview missed', async () => {
+      await loadContext('hello world and goodbye');
+      Object.defineProperty(Platform, 'OS', { get: () => 'ios' });
+      const resultCb = jest.fn();
+      await whisperService.startRealtimeTranscription(resultCb);
+      lastTranscriber().emitSlice('hello world');
+
+      await whisperService.stopTranscription();
+      await (whisperService as any).transcriptionFullyStopped;
+
+      expect(resultCb).toHaveBeenLastCalledWith(
+        expect.objectContaining({ text: 'hello world and goodbye', isCapturing: false }),
+      );
+      expect(whisperService.isCurrentlyTranscribing()).toBe(false);
+    });
+
+    it('falls back to the preview when the recording cannot be transcribed', async () => {
+      const ctx = await loadContext();
+      ctx.transcribe.mockImplementation(() => ({
+        stop: jest.fn(),
+        promise: Promise.reject(new Error('decode failed')),
+      }));
+      Object.defineProperty(Platform, 'OS', { get: () => 'ios' });
+      const resultCb = jest.fn();
+      await whisperService.startRealtimeTranscription(resultCb);
+      lastTranscriber().emitSlice('hello world');
+
+      await whisperService.stopTranscription();
+      await (whisperService as any).transcriptionFullyStopped;
+
+      expect(resultCb).toHaveBeenLastCalledWith(
+        expect.objectContaining({ text: 'hello world', isCapturing: false }),
+      );
+    });
+
+    it('keeps the session live when the transcriber reports an error', async () => {
+      await loadContext();
+      Object.defineProperty(Platform, 'OS', { get: () => 'ios' });
+      await whisperService.startRealtimeTranscription(jest.fn());
+
+      lastTranscriber().callbacks.onError('slice decode failed');
+
+      expect(whisperService.isCurrentlyTranscribing()).toBe(true);
+      expect(lastTranscriber().active).toBe(true);
+      await whisperService.stopTranscription();
+    });
+
+    it('gives the microphone back when the model is released while permission is pending', async () => {
+      await loadContext();
+      Object.defineProperty(Platform, 'OS', { get: () => 'android' });
+      let answerPermission!: (result: string) => void;
+      jest.spyOn(PermissionsAndroid, 'request').mockImplementationOnce(
+        () => new Promise(resolve => { answerPermission = resolve; }) as Promise<any>,
+      ).mockResolvedValue(PermissionsAndroid.RESULTS.GRANTED);
+
+      const start = whisperService.startRealtimeTranscription(jest.fn());
+      while (!answerPermission) await new Promise(resolve => setImmediate(resolve));
+      // The context goes away while the permission prompt is open.
+      (whisperService as any).context = null;
+      answerPermission(PermissionsAndroid.RESULTS.GRANTED);
+
+      await expect(start).rejects.toThrow('Whisper context was released before transcription could start');
+      expect(audioRecorderService.isCurrentlyRecording()).toBe(false);
+      expect(whisperService.isCurrentlyTranscribing()).toBe(false);
+    });
+
+    it('keeps the selected language when the final text comes from the recorded file', async () => {
+      const mockContext = await loadContext('नमस्ते दुनिया');
       Object.defineProperty(Platform, 'OS', { get: () => 'ios' });
 
       const resultCb = jest.fn();
       await whisperService.startRealtimeTranscription(resultCb, {
         language: 'hi',
       });
-      subscribeFn({ isCapturing: false, data: { result: '' } });
+      await whisperService.stopTranscription();
       await (whisperService as any).transcriptionFullyStopped;
 
       expect(mockContext.transcribe).toHaveBeenCalledWith(
@@ -756,47 +712,40 @@ describe('WhisperService', () => {
       expect(whisperService.isModelLoaded()).toBe(false);
     });
 
-    it('starts the next live session only after the previous one has finished its file fallback', async () => {
-      const fallback = deferred<{ result: string }>();
-      let subscribeFn: any;
+    it('starts the next live session only after the previous one has finished its file pass', async () => {
+      const fileJob = deferred<{ result: string }>();
       const mockContext = {
         id: 'ctx',
         release: jest.fn(),
-        transcribeRealtime: jest.fn(() =>
-          Promise.resolve({
-            stop: jest.fn(),
-            subscribe: (fn: any) => {
-              subscribeFn = fn;
-            },
-          }),
-        ),
-        transcribe: jest.fn(() => ({ stop: jest.fn(), promise: fallback.promise })),
+        transcribeData: jest.fn(),
+        transcribe: jest.fn(() => ({ stop: jest.fn(), promise: fileJob.promise })),
       };
       mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
       mockValidModelFile();
       await whisperService.loadModel('/path/model.bin');
       Object.defineProperty(Platform, 'OS', { get: () => 'android' });
       jest.spyOn(PermissionsAndroid, 'request').mockResolvedValue(PermissionsAndroid.RESULTS.GRANTED);
+      const sessionsBefore = sessions().length;
 
       const firstResult = jest.fn();
       await whisperService.startRealtimeTranscription(firstResult);
-      // The utterance ends with nothing heard live, so the recorded file is transcribed.
-      subscribeFn({ isCapturing: false, data: { result: '' } });
+      // The utterance ends; the recording is transcribed for the final text.
       await whisperService.stopTranscription();
 
       // The user taps the mic again while that file job is still running.
       const second = whisperService.startRealtimeTranscription(jest.fn());
       await flush();
-      expect(mockContext.transcribeRealtime).toHaveBeenCalledTimes(1);
+      expect(sessions().length).toBe(sessionsBefore + 1);
 
-      fallback.resolve({ result: 'what I said' });
+      fileJob.resolve({ result: 'what I said' });
       await second;
-      expect(mockContext.transcribeRealtime).toHaveBeenCalledTimes(2);
+      expect(sessions().length).toBe(sessionsBefore + 2);
       // The first session finishing must not clear the live second one.
       expect(whisperService.isCurrentlyTranscribing()).toBe(true);
       expect(firstResult).toHaveBeenCalledWith(
         expect.objectContaining({ text: 'what I said', isCapturing: false }),
       );
+      await whisperService.stopTranscription();
     });
   });
 
@@ -862,7 +811,7 @@ describe('WhisperService', () => {
       const mockContext = {
         id: 'ctx',
         release: jest.fn(),
-        transcribeRealtime: jest.fn(),
+        transcribeData: jest.fn(),
         transcribe: jest.fn(() => ({
           promise: Promise.resolve({ result: 'transcribed text' }),
         })),

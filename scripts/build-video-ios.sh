@@ -5,22 +5,30 @@ REVISION="$(cat "$ROOT/scripts/video/revision")"
 CACHE="${OFFGRID_VIDEO_BUILD_DIR:-$ROOT/.video-build}"
 SOURCE="${OFFGRID_SD_SOURCE:-$CACHE/source}"
 OUTPUT="$ROOT/native/video/OffgridVideoRuntime.xcframework"
-BUILD_KEY="${OFFGRID_IOS_DEVICE_ONLY:-0}-$(cat "$ROOT/scripts/video/revision" "$ROOT/scripts/video/exports.txt" "$ROOT/scripts/video/CMakeLists.txt" "$ROOT/scripts/video/conditioning-errors.patch" "$ROOT/scripts/video/video-decode-observer.patch" | shasum -a 256 | cut -d' ' -f1)"
+BUILD_KEY="${OFFGRID_IOS_DEVICE_ONLY:-0}-$(cat "$ROOT/scripts/video/revision" "$ROOT/scripts/video/exports.txt" "$ROOT/scripts/video/CMakeLists.txt" "$ROOT/scripts/video/conditioning-errors.patch" "$ROOT/scripts/video/video-decode-observer.patch" "$ROOT/scripts/video/metal-group-norm-batch.patch" | shasum -a 256 | cut -d' ' -f1)"
 if [ -f "$OUTPUT/ios-arm64/OffgridVideoRuntime.framework/Headers/stable-diffusion.h" ] && [ -f "$OUTPUT/revision" ] && [ "$(cat "$OUTPUT/revision")" = "$BUILD_KEY" ]; then exit 0; fi
 mkdir -p "$CACHE"
 if [ ! -d "$SOURCE/.git" ]; then
   git clone --filter=blob:none --no-checkout https://github.com/leejet/stable-diffusion.cpp.git "$SOURCE"
 fi
-if [ "$(git -C "$SOURCE" rev-parse HEAD)" != "$REVISION" ]; then
+# A --no-checkout clone already has HEAD at upstream's tip, with nothing checked out; when the pin
+# is that tip, only an explicit checkout fills the tree (and the ggml submodule entry).
+if ! git -C "$SOURCE" cat-file -e "$REVISION^{commit}" 2>/dev/null; then
   git -C "$SOURCE" fetch origin "$REVISION"
-  git -C "$SOURCE" checkout --detach "$REVISION"
 fi
+git -C "$SOURCE" checkout --detach "$REVISION"
 git -C "$SOURCE" submodule update --init --depth 1 ggml
 for PATCH in "$ROOT/scripts/video/conditioning-errors.patch" "$ROOT/scripts/video/video-decode-observer.patch"; do
   if ! git -C "$SOURCE" apply --reverse --check "$PATCH" 2>/dev/null; then
     git -C "$SOURCE" apply "$PATCH"
   fi
 done
+# ggml's Metal GroupNorm normalizes only the first image of a batch. sd.cpp batches CFG's two UNet
+# passes, so the second came back unwritten and every picture rendered blank.
+PATCH="$ROOT/scripts/video/metal-group-norm-batch.patch"
+if ! git -C "$SOURCE/ggml" apply --reverse --check "$PATCH" 2>/dev/null; then
+  git -C "$SOURCE/ggml" apply "$PATCH"
+fi
 SDKS=(iphoneos)
 if [ "${OFFGRID_IOS_DEVICE_ONLY:-0}" != "1" ]; then SDKS+=(iphonesimulator); fi
 for SDK in "${SDKS[@]}"; do

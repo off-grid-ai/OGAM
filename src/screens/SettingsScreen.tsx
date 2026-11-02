@@ -242,6 +242,13 @@ export const SettingsScreen: React.FC = () => {
                 desc: 'Models and data usage',
                 screen: 'StorageSettings' as const,
               },
+              {
+                icon: 'cpu',
+                title: 'Engine updates',
+                desc: 'The engine that runs your models, and how it stays current',
+                screen: 'EngineUpdates' as const,
+                testID: 'open-engine-updates',
+              },
             ].map((item, index, arr) => (
               <AnimatedListItem
                 key={item.screen}

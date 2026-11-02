@@ -31,7 +31,7 @@ beforeEach(async () => {
   require('../../harness/kokoroResourceBoundary').installKokoroResourceBoundary().seedVoice();
   spoken = [];
   // A bridge mounted with preventLoad holds no model (not ready), as executorch's hook does.
-  require('react-native-executorch').useTextToSpeech = (_config: unknown, opts?: { preventLoad?: boolean }) => ({
+  require('react-native-executorch/legacy').useTextToSpeech = (_config: unknown, opts?: { preventLoad?: boolean }) => ({
     isReady: !opts?.preventLoad, downloadProgress: opts?.preventLoad ? 0 : 1, error: null,
     stream: async ({ text }: { text: string }) => { spoken.push(text); },
     streamStop: () => {},

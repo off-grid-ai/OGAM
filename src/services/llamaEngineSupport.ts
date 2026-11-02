@@ -1,10 +1,10 @@
-import { BuildInfo } from 'llama.rn';
 import { baseModelKey, type ModelEntry } from '@offgrid/models';
+import { runningLlamaBuild } from './enginePacks/running';
 
-/** The llama.cpp build inside this app's engine (llama.rn), or undefined when unknown. */
+/** The llama.cpp build this app's engine runs (an Android engine pack's, else llama.rn's bundled one),
+ *  or undefined when unknown. */
 export function engineLlamaBuild(): number | undefined {
-  const build = Number.parseInt(String(BuildInfo?.number ?? ''), 10);
-  return Number.isFinite(build) ? build : undefined;
+  return runningLlamaBuild();
 }
 
 /** Whether this app's engine loads a catalog model. An unknown engine build never loads a model

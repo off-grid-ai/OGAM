@@ -12,22 +12,28 @@ const proExists = fs.existsSync(path.resolve(proPackagePath, 'package.json'));
 // resolve the package + its subpath adapters. We map the subpaths to concrete built files rather
 // than enabling `unstable_enablePackageExports` globally (that flag changes resolution for every
 // dep and breaks libraries with malformed exports maps). The package ships prebuilt CJS in dist/.
-const syncPackagePath = path.resolve(__dirname, '../shared/packages/sync');
-const automationPackagePath = path.resolve(__dirname, '../shared/packages/automation');
-const ragPackagePath = path.resolve(__dirname, '../shared/packages/rag');
+// Metro indexes files by their real path, so a ../shared that is a symlink (a git worktree beside
+// the checkout links to the one shared clone) is resolved first, or no alias below would be found.
+const sharedRoot = (() => {
+  const linked = path.resolve(__dirname, '../shared');
+  return fs.existsSync(linked) ? fs.realpathSync(linked) : linked;
+})();
+const syncPackagePath = path.resolve(sharedRoot, 'packages/sync');
+const automationPackagePath = path.resolve(sharedRoot, 'packages/automation');
+const ragPackagePath = path.resolve(sharedRoot, 'packages/rag');
 // @offgrid/models: cross-platform model contracts (catalog, reasoning-budget rule) shared
 // with desktop. Out-of-root like rag, prebuilt CJS in dist/.
-const modelsPackagePath = path.resolve(__dirname, '../shared/packages/models');
-const uiPackagePath = path.resolve(__dirname, '../shared/packages/ui');
+const modelsPackagePath = path.resolve(sharedRoot, 'packages/models');
+const uiPackagePath = path.resolve(sharedRoot, 'packages/ui');
 // @offgrid/speech: voice-turn decisions (when a spoken turn begins and ends) shared with desktop.
 // Out-of-root like sync, so Metro must watch it and be pointed at its built entry.
-const speechPackagePath = path.resolve(__dirname, '../shared/packages/speech');
+const speechPackagePath = path.resolve(sharedRoot, 'packages/speech');
 // @offgrid/writing (Scribe engine) and @offgrid/notes (links, history rules): pure TS, prebuilt
 // CJS. Writing loads its dictionary lazily from a sibling chunk in dist/, so map the entry file and
 // let Metro resolve the chunk beside it.
-const writingPackagePath = path.resolve(__dirname, '../shared/packages/writing');
-const notesPackagePath = path.resolve(__dirname, '../shared/packages/notes');
-const sharedNodeModulesPath = path.resolve(__dirname, '../shared/node_modules');
+const writingPackagePath = path.resolve(sharedRoot, 'packages/writing');
+const notesPackagePath = path.resolve(sharedRoot, 'packages/notes');
+const sharedNodeModulesPath = path.resolve(sharedRoot, 'node_modules');
 const syncRuntimeModules = {
   '@noble/hashes/hkdf': path.resolve(sharedNodeModulesPath, '@noble/hashes/hkdf.js'),
   '@noble/hashes/hmac': path.resolve(sharedNodeModulesPath, '@noble/hashes/hmac.js'),

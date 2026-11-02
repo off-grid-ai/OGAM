@@ -938,6 +938,7 @@ describe('ModelSettingsScreen', () => {
           voiceSilenceAfterSpeechMs: 5_000,
           voiceSpeakerDrainMs: 2_000,
           enhanceImagePrompts: undefined as any,
+          engineUpdates: undefined as any,
           enabledTools: undefined as any,
           thinkingEnabled: undefined as any,
           liteRTBackend: undefined as any,

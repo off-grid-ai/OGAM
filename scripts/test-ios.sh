@@ -3,26 +3,16 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../ios"
 
-# Simulator names change between Xcode releases and CI images. Select an available iPhone by its
-# stable runtime identifier instead of assuming one named model is installed everywhere.
 if [ -n "${IOS_SIMULATOR_ID:-}" ]; then
   simulator_id="$IOS_SIMULATOR_ID"
 else
-  simulator_id="$(xcrun simctl list devices available -j | python3 -c '
-import json, re, sys
-
-devices = json.load(sys.stdin).get("devices", {})
-def runtime_version(runtime):
-    return tuple(int(part) for part in re.findall(r"\d+", runtime))
-
-for runtime in sorted(devices, key=runtime_version, reverse=True):
-    for device in devices[runtime]:
-        if device.get("isAvailable") and "iPhone" in device.get("deviceTypeIdentifier", ""):
-            print(device["udid"])
-            raise SystemExit(0)
-raise SystemExit("No available iPhone simulator is installed.")
-')"
+  simulator_id="$(bash ../scripts/ios-simulator-id.sh)"
 fi
+
+# Boot it, or wait for a boot already under way, until the simulator reports the boot finished. A
+# freshly created simulator spends its first minutes on set-up work; tests that started during it
+# stalled for seconds at a time (a 256-byte file move took 5.5 s) and missed their waits.
+xcrun simctl bootstatus "$simulator_id" -b
 
 xcodebuild test \
   -workspace OffgridMobile.xcworkspace \

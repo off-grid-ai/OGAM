@@ -97,6 +97,11 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1793102561
         versionName "0.0.119"
+        // An engine pack fits only the llama.rn Java/JS bridge this APK carries (see enginepack/).
+        def llamaRn = new groovy.json.JsonSlurper().parse(file("../../node_modules/llama.rn/package.json"))
+        buildConfigField "String", "LLAMA_ENGINE_BRIDGE", "\"${llamaRn.offgrid?.engineBridge ?: ''}\""
+        // ...and is taken only when its version is newer than the engine the APK bundles.
+        buildConfigField "String", "LLAMA_ENGINE_VERSION", "\"${llamaRn.version}\""
     }
     signingConfigs {
         debug {
@@ -182,7 +187,7 @@ dependencies {
     implementation("io.legere:pdfiumandroid:1.0.35")
 
     // LiteRT-LM on-device LLM inference (pinned — do not use latest.release)
-    implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.1")
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.19.0")
 
     // Download layer — Room + WorkManager + OkHttp
     def room_version = "2.8.2"

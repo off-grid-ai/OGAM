@@ -35,7 +35,7 @@ beforeEach(async () => {
   require('../../harness/kokoroResourceBoundary').installKokoroResourceBoundary().seedVoice();
   spoken = [];
   synthesis = 'finishes';
-  require('react-native-executorch').useTextToSpeech = (_config: unknown, opts?: { preventLoad?: boolean }) => ({
+  require('react-native-executorch/legacy').useTextToSpeech = (_config: unknown, opts?: { preventLoad?: boolean }) => ({
     isReady: !opts?.preventLoad, downloadProgress: opts?.preventLoad ? 0 : 1, error: null,
     stream: ({ text }: { text: string }) => {
       spoken.push(text);

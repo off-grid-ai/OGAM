@@ -193,7 +193,7 @@ export function installSpeechRuntime(): SpeechRuntime {
     },
   };
 
-  const executorch = require('react-native-executorch');
+  const executorch = require('react-native-executorch/legacy');
   function useTextToSpeech(config: { voiceSource?: string }, opts?: { preventLoad?: boolean }) {
     const React = require('react');
     const voice = /\/([^/]+)\.[^/.]+$/.exec(String(config.voiceSource))?.[1] ?? String(config.voiceSource);

@@ -339,6 +339,8 @@ export interface LlamaCompletionScript {
   throwMessage?: string;
   throwAfter?: string;
   pauseAfter?: string;
+  /** Tokens llama.cpp already decoded and queued to JS when Stop landed: they still arrive after it. */
+  tokensAfterStop?: number;
   holdBeforeStream?: boolean;
   thinkingText?: string;
   reasoning?: string;
@@ -359,6 +361,8 @@ export type LlamaBenchBackend = 'cpu' | 'htp' | 'opencl' | 'metal';
 export type LlamaBenchOutcome = number | 'fail' | 'hang' | { cpuFallback: number };
 
 export interface LlamaFake {
+  /** Errors the app's token callback threw: uncaught on a phone, never a rejected completion. */
+  tokenCallbackErrors: unknown[];
   /** Set the result the NEXT context.completion() resolves with (text drives the text tool-call parser).
    *  Pass { throwMessage } to make completion REJECT (e.g. a native context-overflow error).
    *  Pass { thinkingText } to model a reasoning-capable model: when the request carries
@@ -462,6 +466,7 @@ function makeLlamaFake(
   // `interrupted: true` (the exact device wire shape: predicted stops, stopped_eos=false). The flag
   // is per-completion (a fresh completion starts un-stopped), matching the native abort behavior.
   let stopRequested = false;
+  const tokenCallbackErrors: unknown[] = [];
   let htpUnavailable = false; // when true, the registry has no HTP device (session probe failed)
   let gpuInitFails = false; // when true, initLlama with n_gpu_layers>0 rejects (GPU/HTP init timeout → CPU fallback)
   let initFails = false; // when true, EVERY initLlama attempt rejects (a model that fails to load on any backend)
@@ -581,8 +586,10 @@ function makeLlamaFake(
           const chars = [...outText];
           let acc = '';
           let paused = false;
+          let lateTokens = scripted.tokensAfterStop ?? 0;
           for (const c of chars) {
-            if (stopRequested) break; // native abort: no further tokens after stopCompletion()
+            // Native abort: no further decode after stopCompletion(), only tokens already queued to JS.
+            if (stopRequested && lateTokens-- <= 0) break;
             if (backendFault) break; // the GPU refused the next decode (app went to background)
             acc += c;
             streamed = acc;
@@ -656,14 +663,25 @@ function makeLlamaFake(
         onToken?: (data: { token: string; content?: string; reasoning_content?: string }) => void,
       ) => {
         completionInFlight = true;
+        // llama.rn's JSI calls the token callback from native: a throw there never rejects the
+        // completion, it is an uncaught error on the JS thread (a red screen in a dev build).
+        const fromNative = onToken && ((data: { token: string; content?: string; reasoning_content?: string }) => {
+          try {
+            onToken(data);
+          } catch (error) {
+            tokenCallbackErrors.push(error);
+          }
+        });
         try {
-          return await runCompletion(params, onToken);
+          return await runCompletion(params, fromNative);
         } finally {
           completionInFlight = false;
         }
       },
     ),
-    stopCompletion: jest.fn(async () => {
+    // llama.rn types stopCompletion() as a Promise, but its JSI (llamaStopCompletion) sets the
+    // interrupt flag and returns undefined, synchronously. The fake does the same.
+    stopCompletion: jest.fn(() => {
       stopRequested = true;
       const f = releaseFn;
       releaseFn = null;
@@ -776,6 +794,8 @@ function makeLlamaFake(
   };
 
   const module: Record<string, jest.Mock> = {
+    // The native libraries load here on device; nothing to load in node.
+    installJsi: jest.fn(async () => {}),
     loadLlamaModelInfo: jest.fn(async () => modelInfo ?? {}),
     toggleNativeLog: jest.fn(async (enabled: boolean) => {
       nativeLogOn = enabled;
@@ -820,7 +840,7 @@ function makeLlamaFake(
     }),
     releaseContext: jest.fn().mockResolvedValue(undefined),
     completion: jest.fn().mockResolvedValue({ text: '' }),
-    stopCompletion: jest.fn().mockResolvedValue(undefined),
+    stopCompletion: jest.fn(() => undefined),
     tokenize: jest.fn().mockResolvedValue({ tokens: [1, 2, 3] }),
     detokenize: jest.fn().mockResolvedValue({ text: '' }),
   };
@@ -828,6 +848,7 @@ function makeLlamaFake(
   return {
     module,
     calls,
+    tokenCallbackErrors,
     osAppStateChanged: state => {
       // iOS refuses Metal command buffers once the app is in background; 'inactive' keeps the GPU.
       if (state !== 'background' || !completionInFlight || initBackend !== 'metal') return;
@@ -1090,30 +1111,31 @@ function makeDownloadFake(handle: FakeEmitterHandle): DownloadFake {
 }
 
 // ---------------------------------------------------------------------------
-// Fake: whisper.rn (STT). initWhisper returns a driveable CONTEXT (whisperService calls
-// this.context.transcribeRealtime / transcribeFile). Realtime is the chat-mode hold-to-talk path; the
-// fake lets the test emit device-shaped RealtimeTranscribeEvents ({ isCapturing, data:{result}, ... }) so
-// the REAL whisperService → useWhisperTranscription → onTranscript → input wiring runs on top. transcribeFile
-// is the voice-mode path. Opt-in ({ whisper: true }); overrides the dumb global jest.setup whisper.rn mock.
+// Fake: whisper.rn (STT). initWhisper returns a driveable CONTEXT. Realtime is the chat-mode
+// hold-to-talk path: whisper.rn's RealtimeTranscriber (faked in jest.setup) delivers the live preview a
+// slice at a time, and on stop the recording is transcribed (context.transcribe) for the final text, so
+// the REAL whisperService → useWhisperTranscription → onTranscript → input wiring runs on top. The file
+// pass is also the voice-mode path. Opt-in ({ whisper: true }); overrides the dumb global whisper.rn mock.
 // ---------------------------------------------------------------------------
 
 export interface WhisperFake {
   module: Record<string, jest.Mock>;
-  /** Emit a device-shaped realtime event to the LIVE subscriber (isCapturing:true = partial; false = final).
-   *  Pass { noData: true } to model the B26 device symptom (spoke, but the mic captured no audio). */
+  /** The live realtime session decodes a slice: the preview the person sees while speaking. The final
+   *  text comes from the recording on stop (setFileTranscript). Pass { noData: true } for a slice that
+   *  decoded nothing. */
   emitRealtime(opts: {
     text?: string;
-    isCapturing: boolean;
+    sliceIndex?: number;
     recordingTime?: number;
     noData?: boolean;
   }): void;
-  /** Set what the NEXT transcribeFile resolves with (voice-mode path). */
+  /** Set what the NEXT file transcription resolves with: a stopped recording, or the voice-mode path. */
   setFileTranscript(text: string): void;
   /** True once whisperService has started a realtime session (subscribe wired). */
   hasRealtimeSubscriber(): boolean;
-  /** True while the native mic realtime session is CAPTURING — set on transcribeRealtime(), cleared on
-   *  its stop() or on release(). Models the device mic: capture continues until explicitly stopped, so a
-   *  leaked session (never stopped on navigate-away) reads true. The device-boundary residue for B11. */
+  /** True while the realtime session is CAPTURING — from its start() until its stop(). Capture continues
+   *  until explicitly stopped, so a leaked session (never stopped on navigate-away) reads true. The
+   *  device-boundary residue for B11. */
   realtimeActive(): boolean;
   /** HOLD the next model load (initWhisper) open until releaseLoad() — the device-shaped load window a
    *  real ggml init has (seconds on device), so an in-flight tap-triggered load is observable. One-shot. */
@@ -1128,9 +1150,12 @@ export interface WhisperFake {
 }
 
 function makeWhisperFake(): WhisperFake {
-  let realtimeCb: ((evt: unknown) => void) | null = null;
+  // whisper.rn's realtime sessions, from the jest.setup fake, in the registry whisperService runs in.
+  const lastSession = () => {
+    const sessions: any[] = require('whisper.rn/realtime-transcription/RealtimeTranscriber').__sessions;
+    return sessions[sessions.length - 1];
+  };
   let fileTranscript = 'Transcribed text';
-  let rtActive = false; // the native mic session is capturing until stop()/release()
   // Load hold: opens the in-flight model-load window a real (seconds-long) ggml init has.
   let loadHoldPending = false;
   let loadHoldRelease: (() => void) | null = null;
@@ -1158,22 +1183,12 @@ function makeWhisperFake(): WhisperFake {
       result: fileTranscript,
       segments: [{ text: fileTranscript, t0: 0, t1: 100 }],
     })),
-    transcribeRealtime: jest.fn(async () => {
-      rtActive = true; // native mic session starts capturing
-      return {
-        stop: jest.fn(async () => {
-          rtActive =
-            false; /* native stop; test drives the final event explicitly */
-        }),
-        subscribe: (cb: (evt: unknown) => void) => {
-          realtimeCb = cb;
-        },
-      };
-    }),
-    release: jest.fn(async () => {
-      realtimeCb = null;
-      rtActive = false;
-    }),
+    // whisper.rn's realtime transcriber decodes PCM slices through this.
+    transcribeData: jest.fn(() => ({
+      stop: jest.fn(async () => {}),
+      promise: Promise.resolve({ result: '', segments: [] }),
+    })),
+    release: jest.fn(async () => {}),
     bench: jest.fn(async () => ''),
   };
   const module: Record<string, jest.Mock> = {
@@ -1194,27 +1209,16 @@ function makeWhisperFake(): WhisperFake {
   };
   return {
     module,
-    emitRealtime: ({ text, isCapturing, recordingTime, noData }) => {
-      if (!realtimeCb) return;
-      // whisper.rn sends the final event when its capture has ended (stop, or the realtimeAudioSec cap).
-      if (!isCapturing) rtActive = false;
-      realtimeCb({
-        isCapturing,
-        data: noData
-          ? undefined
-          : {
-              result: text ?? '',
-              segments: text ? [{ text, t0: 0, t1: 100 }] : [],
-            },
-        processTime: 10,
-        recordingTime: recordingTime ?? 500,
-      });
+    emitRealtime: ({ text, sliceIndex, recordingTime, noData }) => {
+      const session = lastSession();
+      if (!session?.active) return;
+      session.emitSlice(noData ? undefined : text ?? '', sliceIndex ?? 0, recordingTime ?? 500);
     },
     setFileTranscript: t => {
       fileTranscript = t;
     },
-    hasRealtimeSubscriber: () => realtimeCb != null,
-    realtimeActive: () => rtActive,
+    hasRealtimeSubscriber: () => !!lastSession()?.active,
+    realtimeActive: () => !!lastSession()?.active,
     holdNextLoad: () => {
       loadHoldPending = true;
     },

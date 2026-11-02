@@ -4,14 +4,17 @@
 // scripts/uat.sh (a beta warns when a newer engine exists). Plain CommonJS so node runs it
 // directly; typed via engines.d.ts so the jest test and `tsc --noEmit` resolve it.
 //
-// A phone app cannot download new native code (App Store guideline 2.5.2, Google Play's policy on
-// executable code), so a new engine reaches people only in an app release. Keeping the pins at the
-// newest release is how every beta ships the newest engine.
+// iOS cannot load downloaded native code (App Store guideline 2.5.2), so there a new engine reaches
+// people only in an app release (nightly + TestFlight). Android also takes signed llama.cpp engine
+// packs over the air (src/services/enginePacks); the bundled engine is still its fallback. Keeping
+// the pins at the newest release is how every build ships the newest engine.
 
 const semver = require('semver');
 
 /** Every native engine in the app, and where its version is pinned. */
 const ENGINES = [
+  // The app imports llama.cpp as `llama.rn`. Once package.json aliases it to our fork
+  // (`"llama.rn": "npm:@ogai/llama.rn@…"`), the check follows the alias (npmPackage).
   { id: 'llama.rn', what: 'chat models (llama.cpp)', source: 'npm', pkg: 'llama.rn' },
   { id: 'whisper.rn', what: 'speech to text (whisper.cpp)', source: 'npm', pkg: 'whisper.rn' },
   {
@@ -40,17 +43,31 @@ const ENGINES = [
 ];
 
 const PREFIX = /^([\^~]?)(.+)$/;
+const ALIAS = /^(npm:(?:@[^/@]+\/)?[^@]+@)(.*)$/;
 
-/** The version a dependency spec pins ("^0.7.4" → "0.7.4"), or null for a range or a path. */
+/** An npm alias spec split into its "npm:<name>@" head and its version spec. */
+function splitAlias(spec) {
+  const m = ALIAS.exec(String(spec || '').trim());
+  return m ? { head: m[1], version: m[2] } : { head: '', version: String(spec || '').trim() };
+}
+
+/** The package a dependency spec installs: an alias's target ("npm:@x/y@1" → "@x/y"), else `pkg`. */
+function npmPackage(spec, pkg) {
+  const { head } = splitAlias(spec);
+  return head ? head.slice('npm:'.length, -1) : pkg;
+}
+
+/** The version a dependency spec pins ("^0.7.4" or "npm:@x/y@0.7.4" → "0.7.4"), or null for a range or a path. */
 function pinnedVersion(spec) {
-  const m = PREFIX.exec(String(spec || '').trim());
+  const m = PREFIX.exec(splitAlias(spec).version);
   return m && semver.valid(m[2]) ? m[2] : null;
 }
 
-/** The spec for a new version, keeping the old spec's ^ or ~ (or exact pin). */
+/** The spec for a new version, keeping the old spec's alias and its ^ or ~ (or exact pin). */
 function specFor(oldSpec, version) {
-  const m = PREFIX.exec(String(oldSpec || '').trim());
-  return `${m ? m[1] : ''}${version}`;
+  const { head, version: old } = splitAlias(oldSpec);
+  const m = PREFIX.exec(old);
+  return `${head}${m ? m[1] : ''}${version}`;
 }
 
 /**
@@ -68,29 +85,78 @@ function unmetPeers(peerDependencies, peerDependenciesMeta, installed) {
   });
 }
 
+/** What unblocks a held engine; the daily job then bumps it by itself. */
+const THEN = 'The next daily run then moves it.';
+
 /**
  * Whether the newest release replaces the pinned one:
  *   current — the pin is already the newest release (or newer)
  *   bump    — the newest release installs as is
  *   held    — the newest release needs peers the app does not meet, or the pinned version
  *             carries a local fix (a patch-package patch) that a new version would drop;
- *             `reason` says which
+ *             `reason` says which, `next` what unblocks it
  */
 function decide({ current, latest, peerDependencies, peerDependenciesMeta, installed, patch }) {
   if (!latest || !semver.valid(latest) || (current && !semver.gt(latest, current))) {
     return { status: 'current' };
   }
   if (patch) {
-    return { status: 'held', to: latest, reason: `carries a local fix (${patch}); port the fix or drop the patch first` };
+    return {
+      status: 'held',
+      to: latest,
+      reason: `carries a local fix (${patch}); port the fix or drop the patch first`,
+      next: `Port ${patch} to ${latest}, or drop it if ${latest} has the fix. ${THEN}`,
+    };
   }
   const unmet = unmetPeers(peerDependencies, peerDependenciesMeta, installed || {});
   if (unmet.length > 0) {
     const reason = unmet
       .map(p => `${p.name} ${p.range} (the app has ${p.have ?? 'none'})`)
       .join(', ');
-    return { status: 'held', to: latest, reason: `needs ${reason}` };
+    const moves = unmet.map(p => `${p.name} to ${p.range}`).join(', ');
+    return { status: 'held', to: latest, reason: `needs ${reason}`, next: `Move ${moves} in its own PR. ${THEN}` };
   }
   return { status: 'bump', to: latest };
+}
+
+/**
+ * When an engine's hold began: the publish time of the oldest stable release newer than the pin
+ * (npm's `time` map), so a hold that outlives several releases keeps its first date. Null when
+ * none is newer.
+ */
+function heldSince(times, current) {
+  const newer = Object.entries(times || {})
+    .filter(([v]) => semver.valid(v) && !semver.prerelease(v) && (!current || semver.gt(v, current)))
+    .map(([, at]) => at)
+    .sort();
+  return newer[0] ?? null;
+}
+
+/** Days a hold may last before it gets an issue of its own. */
+const HELD_ISSUE_DAYS = 3;
+
+/** The issue title for a held engine: one issue per engine, found again by this title. */
+function heldIssueTitle(id) {
+  return `Engine held: ${id}`;
+}
+
+/** The issue for a held engine whose hold is older than HELD_ISSUE_DAYS, or null. */
+function heldIssue(result, now) {
+  if (result.status !== 'held' || !result.since) return null;
+  const days = Math.floor((now - Date.parse(result.since)) / 86_400_000);
+  if (Number.isNaN(days) || days <= HELD_ISSUE_DAYS) return null;
+  return {
+    title: heldIssueTitle(result.id),
+    body: [
+      `**${result.id}** (${result.what}) is on ${result.from}. ${result.to} has been out since ${result.since.slice(0, 10)} (${days} days) and cannot install as is.`,
+      '',
+      `**Blocker:** ${result.reason}`,
+      '',
+      `**Next step:** ${result.next}`,
+      '',
+      'The daily Engine updates workflow keeps this issue current and closes it once the engine moves.',
+    ].join('\n'),
+  };
 }
 
 /** The patch-package file name for a package at a version ("@scope/name" → "@scope+name+1.2.3.patch"). */
@@ -140,11 +206,60 @@ function summaryMarkdown(results) {
   }
   if (held.length > 0) {
     lines.push('## Held', '', 'A newer release exists but cannot install as is. It needs its own upgrade.', '');
-    for (const r of held) lines.push(`- **${r.id}** ${r.from} → ${r.to}: ${r.reason}`);
+    for (const r of held) {
+      const since = r.since ? ` Held since ${r.since.slice(0, 10)}.` : '';
+      lines.push(`- **${r.id}** ${r.from} → ${r.to}: ${r.reason}.${since} Next: ${r.next}`);
+    }
     lines.push('');
   }
   if (lines.length === 0) lines.push('Every engine is on its newest release.');
   return lines.join('\n');
+}
+
+/** The branch the daily job pushes its bump to, and the identity its commits carry. */
+const BUMP_BRANCH = 'chore/engine-updates';
+const BOT_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com';
+
+/** Check results that count as passed. */
+const PASSED = new Set(['SUCCESS', 'NEUTRAL', 'SKIPPED']);
+
+/**
+ * Whether the daily engine PR may merge (`gh pr view --json …`) after CI on `sha` ended:
+ *   merge  — the bot's own bump into main, every check on `sha` passed
+ *   skip   — not now (closed, a newer commit, or a check not green); a later CI run decides
+ *   refuse — not a PR this job may merge (another branch or author, or it moves pro)
+ * A PR that lists held engines still merges the engines that moved.
+ */
+function bumpMergeDecision(pr, sha) {
+  if (pr.headRefName !== BUMP_BRANCH || pr.baseRefName !== 'main' || pr.isCrossRepository) {
+    return { action: 'refuse', reason: `${pr.headRefName} → ${pr.baseRefName} is not the engine bump PR` };
+  }
+  const strangers = pr.commits.flatMap(c => c.authors).filter(a => a.email !== BOT_EMAIL);
+  if (strangers.length > 0) {
+    return { action: 'refuse', reason: `has commits by ${strangers.map(a => a.login || a.email).join(', ')}; a person merges it` };
+  }
+  // The job never moves pro. A bump that does needs mobile-pro merged first, so a person merges it.
+  if (pr.files.some(f => f.path === 'pro' || f.path.startsWith('pro/'))) {
+    return { action: 'refuse', reason: 'moves the pro submodule; merge mobile-pro first, then this, by hand' };
+  }
+  if (pr.state !== 'OPEN') return { action: 'skip', reason: `is ${pr.state.toLowerCase()}` };
+  if (pr.headRefOid !== sha) return { action: 'skip', reason: 'has a newer commit; its own CI run decides' };
+  const checks = pr.statusCheckRollup.map(c => ({ name: c.name || c.context, result: c.conclusion || c.state }));
+  const notGreen = checks.filter(c => !PASSED.has(c.result));
+  if (checks.length === 0) return { action: 'skip', reason: 'no checks ran' };
+  if (notGreen.length > 0) {
+    const listed = notGreen.map(c => `${c.name} ${c.result ?? 'running'}`).join(', ');
+    return { action: 'skip', reason: `checks not green: ${listed}` };
+  }
+  return { action: 'merge' };
+}
+
+/** Workflows that build or upload a mobile release: nothing merges to main while one runs. */
+const RELEASE_WORKFLOWS = ['uat-dev.yml', 'release.yml', 'release-ios.yml'];
+
+/** The runs (`gh run list --json …`) that have not finished. */
+function unfinishedRuns(runs) {
+  return runs.filter(r => r.status !== 'completed');
 }
 
 function escape(text) {
@@ -153,6 +268,7 @@ function escape(text) {
 
 module.exports = {
   ENGINES,
+  npmPackage,
   pinnedVersion,
   specFor,
   unmetPeers,
@@ -163,4 +279,13 @@ module.exports = {
   setGradlePin,
   summaryMarkdown,
   githubDecision,
+  heldSince,
+  heldIssue,
+  heldIssueTitle,
+  HELD_ISSUE_DAYS,
+  BUMP_BRANCH,
+  BOT_EMAIL,
+  bumpMergeDecision,
+  RELEASE_WORKFLOWS,
+  unfinishedRuns,
 };

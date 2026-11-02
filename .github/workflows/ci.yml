@@ -10,167 +10,43 @@ on:
       - main
       - 'release/*'
 
-# ONE job, not four.
-#
-# lint, typecheck, architecture and test used to be separate jobs, and the only thing that made them
-# separate was the gate at the end - all four repeated the SAME seven setup steps (checkout, pro
-# submodule, node, java, two shared checkouts, install). That duplication was not just slow, it was
-# the bug: the shared-provisioning step was wrong in all four copies at once, and one of the four
-# (lint) had silently lost its `env: PRO_SUBMODULE_PAT`, so it never provisioned shared at all.
-#
-# Setup happens once here and every gate runs as a step against it. Each gate carries
-# `if: ${{ !cancelled() && steps.install.outcome == 'success' }}`, so a red gate does NOT hide the
-# ones after it - the whole list still reports, which is the one thing the four separate checks were
-# genuinely good at. The trade-off is wall-clock: the gates no longer run in parallel.
-jobs:
-  ci:
-    runs-on: macos-latest
+# A new push to a pull request replaces its running checks, which would otherwise hold runners
+# (the macOS ones are few) for a commit nobody will merge. Pushes to main each finish: their
+# caches are the ones pull requests restore.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Parallel jobs on one shared setup.
+#
+# This was ONE job, for a reason worth keeping: lint, typecheck, architecture and test used to be
+# four jobs that each repeated the same setup steps, and the copies drifted (one lost its
+# `env: PRO_SUBMODULE_PAT` and never provisioned shared at all). The setup now lives once, in
+# .github/actions/setup-mobile, and every job calls it, so the jobs can run side by side without
+# copies to drift. Run serially, Jest alone took 37 minutes of a 55-minute job.
+#
+# Everything but the iOS tests runs on Linux runners, which a public repository gets many of at
+# once; only the iOS job waits for the scarce macOS runners.
+jobs:
+  gates:
+    name: lint, types, architecture
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Detect trusted private-source access
-        id: private_sources
-        if: ${{ github.event_name != 'workflow_dispatch' }}
-        env:
-          PRO_SUBMODULE_PAT: ${{ secrets.PRO_SUBMODULE_PAT }}
-        run: |
-          if [ -n "$PRO_SUBMODULE_PAT" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Set up the workspace
+        uses: ./.github/actions/setup-mobile
+        with:
+          private-token: ${{ github.event_name != 'workflow_dispatch' && secrets.PRO_SUBMODULE_PAT || '' }}
 
-      # Pull the private pro/ so the pro-dependent suites run against the REAL package — a green run
-      # then actually exercises pro, not a stub. It also matters to the other gates: tsc sees
-      # __tests__/pro/* importing @offgrid/pro/* (TS2307 without it), and knip/depcruise need it or
-      # their reachability graph is incomplete and reports false orphans. Forks without the secret skip
-      # this: proExists=false and jest runs the open-core suite instead.
+      # Every gate runs even when an earlier one failed, so a single red gate cannot hide the rest;
+      # the job still fails if any of them do.
       #
-      # An explicit checkout of the MATCHING branch, not `git submodule update --init`. The submodule
-      # pointer is deliberately a pin - it records which pro revision a core commit was verified against
-      # - but a pin is the wrong thing for CI to test: a coordinated core+pro change would run this
-      # branch's core against whatever commit the pointer happens to hold, so the two halves of one
-      # change are never seen together. Matching branch first, PR base branch as the fallback, exactly as the
-      # shared checkout below and as OGAD does it.
-      - name: Check out the matching pro branch
-        if: ${{ steps.private_sources.outputs.available == 'true' }}
-        id: pro_branch
-        continue-on-error: true
-        uses: actions/checkout@v4
-        with:
-          repository: off-grid-ai/mobile-pro
-          token: ${{ secrets.PRO_SUBMODULE_PAT }}
-          path: pro
-          ref: ${{ github.head_ref || github.ref_name }}
-          persist-credentials: false
-      - name: Fall back to pro base branch
-        if: ${{ steps.private_sources.outputs.available == 'true' && steps.pro_branch.outcome != 'success' }}
-        uses: actions/checkout@v4
-        with:
-          repository: off-grid-ai/mobile-pro
-          token: ${{ secrets.PRO_SUBMODULE_PAT }}
-          path: pro
-          ref: ${{ github.base_ref || 'main' }}
-          persist-credentials: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          # Node 26, pinned by the TEST gate and now shared by all of them. The RAG/knowledge-base
-          # suites run a REAL in-memory database via node's built-in `node:sqlite`
-          # (__tests__/harness/sqliteFake.ts). That module is absent on Node 20 and flag-gated on
-          # Node 22. On Node 24 it loads but its native teardown SEGFAULTs the process under jest's
-          # --forceExit (exit 139) — reproduced locally: the full suite exits 139 on Node 24 and
-          # exits 0 on Node 26. Node 26's node:sqlite fixes that teardown crash.
-          node-version: '26'
-          cache: 'npm'
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      # @offgrid/sync and @offgrid/rag are file: dependencies on the SIBLING shared monorepo
-      # ("file:../shared/packages/sync", "file:../shared/packages/rag"). They arrived with the sync
-      # work and nothing in CI ever provisioned them, so every gate failed on the same missing module
-      # wearing different hats: TS2307 in typecheck, 26 no-phantom-deps errors in the architecture
-      # gate, and 260 jest suites unable to resolve <workspace>/../shared/packages/sync/src/index.ts.
-      #
-      # actions/checkout refuses a path outside the workspace, so it lands inside and is moved up one
-      # level - which is exactly where the file: specifiers and jest's moduleNameMapper both point.
-      #
-      # Matching branch first, PR base branch as the fallback: a PR that changes the app and the shared package
-      # together has to be tested against the package it expects, not against main's copy.
-      - name: Check out the shared monorepo
-        if: ${{ steps.private_sources.outputs.available == 'true' }}
-        id: shared_branch
-        continue-on-error: true
-        uses: actions/checkout@v4
-        with:
-          repository: off-grid-ai/shared
-          token: ${{ secrets.PRO_SUBMODULE_PAT }}
-          path: _shared
-          ref: ${{ github.head_ref || github.ref_name }}
-          persist-credentials: false
-      - name: Fall back to shared base branch
-        if: ${{ steps.private_sources.outputs.available == 'true' && steps.shared_branch.outcome != 'success' }}
-        uses: actions/checkout@v4
-        with:
-          repository: off-grid-ai/shared
-          token: ${{ secrets.PRO_SUBMODULE_PAT }}
-          path: _shared
-          ref: ${{ github.base_ref || 'main' }}
-          persist-credentials: false
-      - name: Put shared beside this checkout
-        if: ${{ steps.private_sources.outputs.available == 'true' }}
-        run: |
-          rm -rf ../shared
-          mv _shared ../shared
-          # Install at the WORKSPACE ROOT, not inside packages/sync. shared is an npm-workspaces
-          # monorepo: the lock file and the build tool (tsup) live at the root, and packages/sync
-          # declares neither. Installing inside the member failed `npm ci` (no lock file there), fell
-          # through to `npm install`, pulled the member's five runtime deps, and left the build to die
-          # on `sh: 1: tsup: not found` (exit 127) — which took every gate down with it.
-          #
-          # A LOCKED install, and no fallback. `npm ci || npm install` was here to survive a drifted lock, but
-          # that just moves the failure: an unlocked install resolves a different graph and the later gates run
-          # against dependencies nobody committed. The drift it papered over was real (five packages committed to
-          # shared without regenerating its lock) and is fixed at the source; if it recurs, this should stop.
-          npm --prefix ../shared ci
-          # Build every shared package this app consumes, because npm resolves each file: dependency
-          # to its dist/ (Jest reads src/, but TypeScript and Metro read dist/).
-          npm --prefix ../shared/packages/sync run build
-          npm --prefix ../shared/packages/rag run build
-          npm --prefix ../shared/packages/models run build
-          npm --prefix ../shared/packages/speech run build
-          npm --prefix ../shared/packages/ui run build
-
-      - name: Install dependencies
-        id: install
-        run: npm ci
-
-      - name: Install SwiftLint
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: brew install swiftlint
-
-      # ── Gates. Every one runs even when an earlier one failed, so a single red gate cannot hide
-      # the rest; the job still fails if any of them do.
       # ESLint ONLY - deliberately not `npm run lint`, which chains ./gradlew :app:lintDebug.
-      #
-      # Measured on run 31020019489: eslint finished in 36 SECONDS (15:24:59 -> 15:25:35); Android Lint then ran
-      # for 68 MINUTES, cold-configuring every React Native native module on a macOS runner
-      # (react-native-fs, background-downloader, documents/picker, audio-api, ...). It was 68 of the job's 90
-      # minutes - the whole reason a mobile PR took an hour and a half to report.
-      #
-      # Same call, and same reason, as the Android BUILD already documented below: the hosted runner is the wrong
-      # place for gradle work on this project. Android Lint stays a LOCAL pre-merge gate, run alongside the build
-      # it shares all that configuration cost with:
-      #     npm run lint:android      (cd android && ./gradlew :app:lintDebug)
-      # Android unit tests still run here (:app:testDebugUnitTest, ~2 min) - it is lint's full-graph configure
-      # that is pathological, not gradle itself.
+      # Measured on run 31020019489: eslint finished in 36 SECONDS; Android Lint then ran for 68
+      # MINUTES, cold-configuring every React Native native module. Android Lint stays a LOCAL
+      # pre-merge gate (npm run lint:android); the Android unit tests still run below.
       - name: Lint the nightly workflow (actionlint)
         # The UAT nightly only runs on dispatch: this shows a broken uat-dev.yml on the pull request.
         # Its structure (pinned commit, uploads after builds, finalize after uploads, plan credentials)
@@ -179,74 +55,133 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7 "$RUNNER_TEMP"
-          "$RUNNER_TEMP/actionlint" -no-color -shellcheck= .github/workflows/uat-dev.yml
+          "$RUNNER_TEMP/actionlint" -no-color -shellcheck= .github/workflows/uat-dev.yml .github/workflows/ci.yml
 
       - name: Lint (eslint)
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        if: ${{ !cancelled() }}
         run: npx eslint .
 
       - name: Type check
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        if: ${{ !cancelled() }}
         run: npx tsc --noEmit
 
-      # Standing gates: dependency-cruiser (layering, engine DIP, import cycles, orphans — 0
-      # violations, no baseline) + knip (dead files/exports/types/deps — 0 issues). Both fail on
+      # Standing gates: dependency-cruiser (layering, engine DIP, import cycles, orphans - 0
+      # violations, no baseline) + knip (dead files/exports/types/deps - 0 issues). Both fail on
       # anything NEW.
       - name: Dependency-cruiser (architecture gate)
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        if: ${{ !cancelled() }}
         run: npm run depcruise
 
       - name: knip (dead-code gate)
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        if: ${{ !cancelled() }}
         run: npm run knip
 
+  jest:
+    name: jest (${{ matrix.shard }}/6)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Balanced by recorded suite run time (scripts/jest-sequencer.js), not by suite count.
+        shard: [1, 2, 3, 4, 5, 6]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up the workspace
+        uses: ./.github/actions/setup-mobile
+        with:
+          private-token: ${{ github.event_name != 'workflow_dispatch' && secrets.PRO_SUBMODULE_PAT || '' }}
+
+      # Jest's transform cache (babel output per file, keyed by file content and config), one per
+      # shard because each shard transforms its own suites. Restored and saved in separate steps:
+      # actions/cache saves in its post step only when the whole job succeeds, and a red test run
+      # would throw the cache away.
+      - name: Restore Jest transforms
+        id: jest_cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/jest-cache
+          key: jest-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'babel.config.js', 'jest.config.js') }}-shard${{ matrix.shard }}-${{ github.sha }}
+          # Any earlier cache last: transforms are keyed by file content and config, so a stale
+          # entry is never used, and a new lock file then retransforms only what changed.
+          restore-keys: |
+            jest-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'babel.config.js', 'jest.config.js') }}-shard${{ matrix.shard }}-
+            jest-${{ runner.os }}-${{ runner.arch }}-
+
+      # A shard holds a sixth of the suites, so it cannot check coverageThreshold: the files the
+      # other shards cover would look uncovered. It saves its raw coverage instead, and the coverage
+      # job below merges all six and checks the thresholds as one unsharded run would.
       - name: Run Jest tests
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        id: jest
         env:
-          # Serial, but in ONE recycled worker instead of --runInBand.
+          JEST_CACHE_DIR: ${{ runner.temp }}/jest-cache
+          # Serial within the shard, in ONE recycled worker instead of --runInBand.
           #
           # In band, every suite runs in the same process and the heap left after each suite only
-          # grows: measured locally on 2dbf3e75, it climbs from ~0.4 GB after the first suite to
-          # ~6.3 GB after the last, with a 7.1 GB peak RSS. The macos-26-arm64 runner has 7 GB of
-          # RAM, so the back half of the run swaps. That is why CI throughput collapses (100
-          # suites took ~3 min early in run 37503803398 and ~19 min at the end) and why a
-          # different set of late, otherwise fast tests times out on every run, on main too.
-          #
+          # grows (measured locally on 2dbf3e75: ~0.4 GB after the first suite, ~6.3 GB after the
+          # last), so the back half of the run swaps and late, otherwise fast tests time out.
           # --maxWorkers=1 keeps the run serial (the parallel run flaked on CPU contention, see
-          # b18e65f5). --workerIdleMemoryLimit replaces that worker once its heap passes 1 GB
-          # after a suite, so memory stays bounded for the whole run. The worker heap cap only
-          # has to fit one worker's lifetime now, not the whole suite, so it sits well below
-          # the runner's RAM and V8 collects before the box starts swapping.
+          # b18e65f5). --workerIdleMemoryLimit replaces that worker once its heap passes 1 GB after
+          # a suite, so memory stays bounded for the whole run.
           NODE_OPTIONS: --max-old-space-size=4096
-        run: npx jest --coverage --forceExit --maxWorkers=1 --workerIdleMemoryLimit=1GB
+          SHARD: ${{ matrix.shard }}
+        run: >-
+          npx jest --shard="$SHARD/6" --coverage --coverageReporters=json --coverageThreshold='{}'
+          --forceExit --maxWorkers=1 --workerIdleMemoryLimit=1GB --cacheDirectory="$JEST_CACHE_DIR"
+          --json --outputFile="$RUNNER_TEMP/jest-results.json"
 
-      - name: Install Android NDK
-        # Configuring the native modules (op-sqlite etc.) needs the pinned NDK; the macOS
-        # runner doesn't ship it, so the android test task failed at configure with
-        # "Failed to install ndk;...". Install the version android/build.gradle forces.
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMANAGER" "ndk;27.1.12297006" >/dev/null
-
-      - name: Run Android tests
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: cd android && ./gradlew :app:testDebugUnitTest --rerun-tasks
-
-      - name: Setup Ruby for iOS dependencies
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        uses: ruby/setup-ruby@v1
+      # Saved after a failing run too: the transforms are keyed by file content, not by the results.
+      - name: Save Jest transforms
+        if: ${{ !cancelled() && steps.jest.outcome != 'skipped' && steps.jest_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          ruby-version: '3.3'
-          bundler-cache: true
+          path: ${{ runner.temp }}/jest-cache
+          key: ${{ steps.jest_cache.outputs.cache-primary-key }}
 
-      - name: Install iOS dependencies
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: bundle exec pod install --project-directory=ios
+      - name: Upload the shard's coverage
+        if: ${{ !cancelled() && steps.jest.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-shard-${{ matrix.shard }}
+          path: coverage/coverage-final.json
+          retention-days: 1
 
-      - name: Run iOS tests
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: npm run test:ios
+      # Each suite's run time, to refresh scripts/jest-timings.json (scripts/update-jest-timings.js).
+      - name: Upload the shard's suite times
+        if: ${{ !cancelled() && steps.jest.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: jest-results-${{ matrix.shard }}
+          path: ${{ runner.temp }}/jest-results.json
+          retention-days: 14
+
+  coverage:
+    name: coverage
+    needs: jest
+    if: ${{ !cancelled() }}
+    # The same runner image as the shards: the coverage holds absolute file paths, and the
+    # thresholds match files by path.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # pro/ is needed: jest.config.js measures and gates it only when it is checked out.
+      - name: Set up the workspace
+        uses: ./.github/actions/setup-mobile
+        with:
+          private-token: ${{ github.event_name != 'workflow_dispatch' && secrets.PRO_SUBMODULE_PAT || '' }}
+          shared: 'false'
+
+      - name: Download the shards' coverage
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-shard-*
+          path: ${{ runner.temp }}/coverage-shards
+
+      - name: Merge the coverage and check the thresholds
+        run: node scripts/merge-coverage.js "$RUNNER_TEMP/coverage-shards"
 
       - name: Upload coverage to Codecov
         if: always()
@@ -256,13 +191,42 @@ jobs:
           files: ./coverage/lcov.info
           fail_ci_if_error: false
 
-      - name: Upload iOS test results
-        if: always()
-        uses: actions/upload-artifact@v4
+  android:
+    name: android tests
+    # Gradle unit tests need no Mac, and Linux runners start at once; only iOS waits for macOS.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up the workspace
+        uses: ./.github/actions/setup-mobile
         with:
-          name: ios-test-results
-          path: ~/Library/Developer/Xcode/DerivedData/**/Logs/Test/*.xcresult
-          if-no-files-found: ignore
+          private-token: ${{ github.event_name != 'workflow_dispatch' && secrets.PRO_SUBMODULE_PAT || '' }}
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # Gradle wrapper and dependency caches. The open-source 'basic' provider: the default
+      # 'enhanced' one is a commercial service. Pull requests read the cache that main writes.
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-provider: basic
+
+      - name: Install Android NDK
+        # Configuring the native modules (op-sqlite etc.) needs the pinned NDK; the runner image
+        # doesn't ship it, so the android test task failed at configure with
+        # "Failed to install ndk;...". Install the version android/build.gradle forces.
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" "ndk;27.1.12297006" >/dev/null
+
+      - name: Run Android tests
+        run: cd android && ./gradlew :app:testDebugUnitTest --rerun-tasks
 
       - name: Upload Android test results
         if: always()
@@ -271,6 +235,147 @@ jobs:
           name: android-test-results
           path: android/app/build/reports/tests/
           if-no-files-found: ignore
+
+  ios:
+    name: ios tests
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Start the simulator now, so its first-boot set-up runs during the install and build instead
+      # of during the tests; scripts/test-ios.sh waits for the boot to finish on this same device.
+      - name: Boot the iOS simulator
+        run: |
+          id="$(bash scripts/ios-simulator-id.sh)"
+          echo "IOS_SIMULATOR_ID=$id" >> "$GITHUB_ENV"
+          xcrun simctl boot "$id"
+
+      - name: Set up the workspace
+        uses: ./.github/actions/setup-mobile
+        with:
+          private-token: ${{ github.event_name != 'workflow_dispatch' && secrets.PRO_SUBMODULE_PAT || '' }}
+
+      - name: Setup Ruby for iOS dependencies
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      # ios/Pods, so pod install does not download every pod again (hermes-engine alone is large).
+      # pod install still runs and reconciles the restored tree with Podfile.lock.
+      #
+      # Keyed on package-lock.json too, with no fallback across it. The development pods live in
+      # node_modules, and pod install runs a pod's prepare_command (react-native-audio-api downloads
+      # its prebuilt libcrypto, libopus and libvorbis into node_modules) only when it installs that pod.
+      # A Pods tree restored beside a fresh node_modules skipped it, and the iOS build failed on the
+      # missing libraries. A new lock file installs the pods afresh, and the step below the restore
+      # runs that download itself, because node_modules is cached before pod install fills it.
+      - name: Restore CocoaPods
+        id: pods_cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ios/Pods
+          key: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('ios/Podfile', 'ios/Podfile.lock') }}
+          restore-keys: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}-
+
+      # The stable-diffusion.cpp xcframework that pod install builds (scripts/build-video-ios.sh).
+      # It is built once per runtime revision; the script still checks its own build key and
+      # rebuilds when it does not match.
+      - name: Restore the iOS video runtime
+        id: video_cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: native/video/OffgridVideoRuntime.xcframework
+          key: video-ios-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/video/**', 'scripts/build-video-ios.sh') }}
+
+      # react-native-audio-api's prepare_command, run here: pod install skips it for a restored pod.
+      # The script skips what is already there.
+      - name: Download react-native-audio-api's prebuilt libraries
+        working-directory: node_modules/react-native-audio-api
+        run: bash scripts/download-prebuilt-binaries.sh ios
+
+      - name: Install iOS dependencies
+        id: pods
+        run: bundle exec pod install --project-directory=ios
+
+      - name: Save CocoaPods
+        if: ${{ steps.pods_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ios/Pods
+          key: ${{ steps.pods_cache.outputs.cache-primary-key }}
+
+      - name: Save the iOS video runtime
+        if: ${{ steps.video_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: native/video/OffgridVideoRuntime.xcframework
+          key: ${{ steps.video_cache.outputs.cache-primary-key }}
+
+      # Clang modules that Xcode builds for the SDK and the pods. A full DerivedData restore does not
+      # make the build incremental (Xcode's file signatures include inodes, which a restore changes);
+      # ccache below is what reuses compiled objects.
+      - name: Restore Xcode module cache
+        id: modules_cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData/ModuleCache.noindex
+          key: xcode-modules-debug-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: xcode-modules-debug-${{ runner.os }}-${{ runner.arch }}-
+
+      # Outside the checkout. scripts/xcode-ccache.sh writes this directory into its wrappers.
+      - name: Locate the ccache directory
+        run: echo "CCACHE_DIR=$HOME/Library/Caches/ccache" >> "$GITHUB_ENV"
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
+        with:
+          key: ios-debug-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'scripts/video/revision') }}
+          restore-keys: ios-debug-${{ runner.os }}-${{ runner.arch }}-
+          max-size: 2G
+          # Keep only what this build used, so the saved cache does not grow run after run.
+          evict-old-files: job
+
+      # Route every C/C++/Objective-C compile through ccache. XCODE_XCCONFIG_FILE overrides the
+      # build settings of every target from the environment, so the tracked Xcode project stays as
+      # committed.
+      - name: Route clang through ccache
+        run: bash scripts/xcode-ccache.sh "$RUNNER_TEMP/xcode-ccache"
+
+      - name: Run iOS tests
+        id: ios_tests
+        env:
+          XCODE_XCCONFIG_FILE: ${{ runner.temp }}/xcode-ccache/ccache.xcconfig
+        run: npm run test:ios
+
+      - name: Save Xcode module cache
+        if: ${{ !cancelled() && steps.ios_tests.outcome != 'skipped' && steps.modules_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData/ModuleCache.noindex
+          key: ${{ steps.modules_cache.outputs.cache-primary-key }}
+
+      - name: Upload iOS test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-results
+          path: ~/Library/Developer/Xcode/DerivedData/**/Logs/Test/*.xcresult
+          if-no-files-found: ignore
+
+  # One check to require, and the name the single job had: green only when every job above is.
+  ci:
+    needs: [gates, jest, coverage, android, ios]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for result in $RESULTS; do [ "$result" = success ] || exit 1; done
 
   # NOTE: the Android build is NOT run in CI — it is a LOCAL pre-merge gate instead (the hosted
   # runner repeatedly hung for 3+ hours on the native C++ builds and burned hours). Run it locally

@@ -25,6 +25,8 @@ describe('chat mic tap-to-record', () => {
       expect(h.view!.getByText('Tap mic to stop')).toBeTruthy();
     });
 
+    // The final text is the recording's transcript.
+    h.boundary.whisper!.setFileTranscript('tap recording works');
     await h.tapMicOnce();
     await h.rtl.waitFor(
       () => {
@@ -34,10 +36,6 @@ describe('chat mic tap-to-record', () => {
       { timeout: 4000 },
     );
 
-    h.boundary.whisper!.emitRealtime({
-      text: 'tap recording works',
-      isCapturing: false,
-    });
     await h.rtl.waitFor(() => {
       expect(h.view!.getByTestId('chat-input').props.value).toContain(
         'tap recording works',

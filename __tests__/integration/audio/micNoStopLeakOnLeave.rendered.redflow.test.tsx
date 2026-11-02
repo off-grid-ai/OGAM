@@ -9,7 +9,7 @@
  *
  * Device-boundary assertion (the sanctioned native-residue exception, like the audio/TTS seam): the mic
  * capture is a native whisper.rn realtime session. The fake tracks whether it is still CAPTURING
- * (transcribeRealtime → stop()/release()). Product-correct: leaving the screen stops the session. RED on
+ * (the realtime transcriber → stop()/release()). Product-correct: leaving the screen stops the session. RED on
  * HEAD: after the ChatScreen unmounts, the session is STILL active (the leak). The fake test proves the
  * JS-lifecycle bug; the "7-minute / battery / privacy-indicator" residue is the human's on-device check.
  *

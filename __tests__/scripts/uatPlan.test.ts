@@ -16,11 +16,10 @@ import os from 'os';
 import path from 'path';
 
 const UAT = path.join(__dirname, '../../scripts/uat.sh');
-// A push hook exports GIT_DIR and friends for the repo being pushed. Passed on, `git init --bare` in
-// the sandbox re-inits that real repo as bare, so the sandbox's git sees none of them.
-const sandboxEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+// A pre-push hook exports GIT_DIR and friends; passed on, they point git at this repo, not the temp one.
+const hostEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
 const git = (cwd: string, ...args: string[]) =>
-  execFileSync('git', args, { cwd, encoding: 'utf8', env: { ...sandboxEnv(), GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } }).trim();
+  execFileSync('git', args, { cwd, encoding: 'utf8', env: { ...hostEnv, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } }).trim();
 
 /** A repository with one commit on main, pushed to a bare remote it tracks as origin. */
 function repo(dir: string, files: Record<string, string>) {

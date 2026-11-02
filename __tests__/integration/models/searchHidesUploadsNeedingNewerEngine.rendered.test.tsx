@@ -44,11 +44,6 @@ function engineReportsBuild(number: string | undefined) {
   llama.BuildInfo = number === undefined ? undefined : { number, commit: 'test' };
 }
 
-/** The build this app ships: llama.rn's own version file. */
-function shippedBuild(): string {
-  const src: string = require('fs').readFileSync(require.resolve('llama.rn/src/version.ts'), 'utf8');
-  return /BUILD_NUMBER = '(\d+)'/.exec(src)![1];
-}
 
 async function clearStorage() {
   const AsyncStorage =
@@ -83,7 +78,6 @@ describe('Models search leaves out uploads of a model this engine cannot load', 
   it('a Hugging Face upload of K2 Horizon is offered only when the engine is new enough', async () => {
     const { CATALOG } = require('@offgrid/models');
     const needsNewer = CATALOG.find((e: { id: string }) => e.id === CATALOG_REPO);
-    expect(needsNewer.minLlamaBuild).toBeGreaterThan(Number(shippedBuild()));
 
     const restoreFetches: (() => void)[] = [];
     restoreFetch = () => restoreFetches.reverse().forEach(r => r());
@@ -107,14 +101,15 @@ describe('Models search leaves out uploads of a model this engine cannot load', 
     expect(newer.queryByText('K2-Horizon-3.7B-GGUF')).toBeNull();
     newer.unmount();
 
-    // The engine this app ships: neither the catalog card nor any Hugging Face upload of the model.
-    const shipped = await run(shippedBuild());
+    // An engine one build older than the model needs: neither the catalog card nor any Hugging Face
+    // upload of the model.
+    const older = await run(String(needsNewer.minLlamaBuild - 1));
     rtl = requireRTL();
-    await rtl.waitFor(() => expect(shipped.getByText('Horizon-Chat-1B-GGUF')).toBeTruthy());
-    expect(shipped.queryByText('K2 Horizon 3.7B')).toBeNull();
-    expect(shipped.queryByText('K2-Horizon-3.7B-GGUF')).toBeNull();
-    expect(shipped.queryByText('IFM_K2-Horizon-7B-GGUF')).toBeNull();
-    shipped.unmount();
+    await rtl.waitFor(() => expect(older.getByText('Horizon-Chat-1B-GGUF')).toBeTruthy());
+    expect(older.queryByText('K2 Horizon 3.7B')).toBeNull();
+    expect(older.queryByText('K2-Horizon-3.7B-GGUF')).toBeNull();
+    expect(older.queryByText('IFM_K2-Horizon-7B-GGUF')).toBeNull();
+    older.unmount();
 
     // An engine that cannot say its build: still not offered.
     const unknown = await run(undefined);
