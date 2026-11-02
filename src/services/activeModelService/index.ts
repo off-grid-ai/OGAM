@@ -131,8 +131,9 @@ class ActiveModelService {
     const before = useAppStore.getState();
     const selection = { activeModelId: before.activeModelId, lastTextModelId: before.lastTextModelId };
     const chatModelId = this.resolveSelectedTextModel()?.id ?? null;
-    await this.loadTextModel(modelId);
     try {
+      // Inside the try: a failed or partial load still gets its selection put back.
+      await this.loadTextModel(modelId);
       return await work();
     } finally {
       try {
