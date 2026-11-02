@@ -18,8 +18,8 @@ on:
 # .github/actions/setup-mobile, and every job calls it, so the jobs can run side by side without
 # copies to drift. Run serially, Jest alone took 37 minutes of a 55-minute job.
 #
-# The JS work runs on Linux runners, which a public repository gets many of at once; the iOS and
-# Android tests stay on macOS, where they have always run.
+# Everything but the iOS tests runs on Linux runners, which a public repository gets many of at
+# once; only the iOS job waits for the scarce macOS runners.
 jobs:
   gates:
     name: lint, types, architecture
@@ -175,7 +175,8 @@ jobs:
 
   android:
     name: android tests
-    runs-on: macos-latest
+    # Gradle unit tests need no Mac, and Linux runners start at once; only iOS waits for macOS.
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -199,8 +200,8 @@ jobs:
           cache-provider: basic
 
       - name: Install Android NDK
-        # Configuring the native modules (op-sqlite etc.) needs the pinned NDK; the macOS
-        # runner doesn't ship it, so the android test task failed at configure with
+        # Configuring the native modules (op-sqlite etc.) needs the pinned NDK; the runner image
+        # doesn't ship it, so the android test task failed at configure with
         # "Failed to install ndk;...". Install the version android/build.gradle forces.
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
