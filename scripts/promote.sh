@@ -151,9 +151,9 @@ if [ "$DO_GITHUB" = 1 ]; then
   else
     APK=""
   fi
-  # mktemp returns a REAL path; appending ".md" would orphan that file and misdirect the
+  # A template ending in XXXXXX: GNU mktemp (Linux CI) rejects `-t name` without one. mktemp returns a REAL path; appending ".md" would orphan that file and misdirect the
   # `rm -f "$NOTES_FILE"` cleanup. Use the path mktemp actually created.
-  NOTES_FILE="$(mktemp -t promote-notes)"
+  NOTES_FILE="$(mktemp "${TMPDIR:-/tmp}/promote-notes.XXXXXX")"
   # Carry the beta's own notes forward if present, else a minimal note.
   gh release view "$BETA_TAG" --json body -q .body > "$NOTES_FILE" 2>/dev/null || echo "Off Grid ${TARGET_VERSION}" > "$NOTES_FILE"
   if gh release view "v${TARGET_VERSION}" >/dev/null 2>&1; then
