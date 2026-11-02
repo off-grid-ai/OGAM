@@ -66,3 +66,18 @@ it('reads a SKILL.md the person picks, and warns about programs it expects', asy
   expect(useSkills.getState().skills[0].needs).toEqual(['curl']);
   mockPicked = null;
 });
+
+it('adds a ready-made skill from the library with one tap, and it then fits a matching message', async () => {
+  installNativeBoundary({ fs: true });
+  const { render, fireEvent, waitFor } = requireRTL();
+  const React = require('react');
+  const { SkillsScreen } = require('../../../src/skills/SkillsScreen');
+  const { useSkills } = require('../../../src/skills/skillsStore');
+  const { pickSkill } = require('../../../src/skills/selectSkills');
+  useSkills.setState({ skills: [] });
+  const screen = render(React.createElement(SkillsScreen));
+  fireEvent.press(screen.getByTestId('library-skill-summarize'));
+  await waitFor(() => expect(useSkills.getState().skills.map((s: any) => s.name)).toContain('summarize'));
+  expect(screen.queryByTestId('library-skill-summarize')).toBeNull();
+  expect(pickSkill('Please summarize this long article into the key points', useSkills.getState().skills)?.name).toBe('summarize');
+});

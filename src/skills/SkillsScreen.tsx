@@ -8,6 +8,7 @@ import { Button } from '../components/Button';
 import { parseSkill, type ParsedSkill } from './parseSkill';
 import { useSkills } from './skillsStore';
 import { pickSkill } from './importSkill';
+import { SKILL_LIBRARY } from './library';
 
 /**
  * Skills: reusable instructions in the open SKILL.md format (the one Claude and OpenClaw use). A skill is added after a preview;
@@ -75,6 +76,17 @@ export const SkillsScreen: React.FC = () => {
           </View>
         )}
         {!!error && <Text style={[styles.warn, { color: colors.error }]} testID="skill-error">{error}</Text>}
+
+        <Text style={[styles.name, { color: colors.text }]}>Skill library</Text>
+        <Text style={[styles.meta, { color: colors.textMuted }]}>Ready-made skills that come with Atlas. Tap one to add it.</Text>
+        {SKILL_LIBRARY.filter((l) => !skills.some((s) => s.name === l.name)).map((l) => (
+          <TouchableOpacity key={l.name} style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => add(l)}
+            testID={`library-skill-${l.name}`} accessibilityLabel={`Add the ${l.name} skill`}>
+            <Text style={[styles.name, { color: colors.text }]}>/{l.name}</Text>
+            <Text style={[styles.meta, { color: colors.textSecondary }]}>{l.description}</Text>
+          </TouchableOpacity>
+        ))}
+        {SKILL_LIBRARY.every((l) => skills.some((s) => s.name === l.name)) && <Text style={[styles.meta, { color: colors.textMuted }]}>Every library skill is added.</Text>}
 
         <Text style={[styles.name, { color: colors.text }]}>Add a skill</Text>
         <Button title="Choose a SKILL.md or zip" onPress={() => preview(pickSkill)} testID="skill-choose" />
