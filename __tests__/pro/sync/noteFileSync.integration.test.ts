@@ -9,15 +9,20 @@
  * wins. An attachment lands byte for byte. And when I delete a synced note here, paired devices
  * are told exactly which bytes went.
  *
- * Real noteFileSyncService, noteFileTransfer, fileTransferService's sink registry, notesLibrary and
- * @offgrid/sync's NoteFileSync / planNoteRevision. The revision bytes go through the sink the
- * service registers, built from a FileRequestMessage the way the sender builds one. Device
- * boundaries only: the disk (memfs-backed react-native-fs, real sha256), AsyncStorage, and the
- * native TCP / mDNS modules the sync services build over at import.
+ * The real App with Pro decided by a real licence, paired with a Desktop on the LAN by the code the
+ * Sync screen shows. The Desktop is the shared sync engine over the in-memory TCP boundary: it puts
+ * each revision's bytes on the wire as a file_request and its record as a state op, exactly as a
+ * Desktop does. The phone joins the Desktop's vault the way it does in the field, by adopting the
+ * vault of the first revision it is sent. Device boundaries only: the disk (memfs-backed
+ * react-native-fs, real sha256), AsyncStorage, the Keychain, SQLite and the native TCP / mDNS modules.
  */
 import { createHash, randomUUID } from 'node:crypto';
-import { installNativeBoundary, type FsFake } from '../../harness/nativeBoundary';
+import type { FsFake } from '../../harness/nativeBoundary';
+import type { LicensedMesh } from '../../harness/licensedMesh';
+import type { PairedPeer } from '../../harness/proHarness';
 import { proIsPresent, requirePro } from '../helpers/requirePro';
+
+jest.unmock('@react-navigation/native');
 
 jest.mock('react-native-tcp-socket', () => {
   const { createNativeTcpBoundary } = require('../../utils/nativeSyncBoundaries');
@@ -29,20 +34,23 @@ jest.mock('react-native-zeroconf', () => {
   return { __esModule: true, default: createNativeDiscoveryBoundary() };
 });
 
-type ServiceModule = typeof import('../../../pro/sync/noteFileSyncService');
-type TransferServiceModule = typeof import('../../../pro/sync/fileTransferService');
+jest.mock('@op-engineering/op-sqlite', () =>
+  require('../../harness/sqliteFake').realSqliteModule({ only: ['offgrid-sync.sqlite'] }),
+);
+
+type App = Awaited<ReturnType<typeof import('../../harness/proHarness').launchLicensedApp>>;
 type LibraryModule = typeof import('../../../pro/notes/notesLibrary');
 type SyncModule = typeof import('@offgrid/sync');
-type ChecksumModule = typeof import('../../../src/services/sync/fileChecksum');
-type SyncMutation = import('../../../src/services/sync/mutation').SyncMutation;
 type NoteFileDescriptor = import('@offgrid/sync').NoteFileDescriptor;
 
 const describePro = proIsPresent() ? describe : describe.skip;
 
+const DESKTOP = { id: 'desktop-notes', name: 'Studio Mac' };
 const VAULT = '6f1c2a4e-8d3b-4c5a-9e7f-0a1b2c3d4e5f';
-const VAULT_KEY = 'offgrid-notes-sync-vault-v1';
 const APPLIED_KEY = 'offgrid-notes-sync-applied-v1';
 const NOTE = 'Projects/Plan.md';
+/** The Desktop's first revision, which the phone joins its vault by. In a folder of its own. */
+const WELCOME = 'Welcome.md';
 const EARLY = '2000-01-01T00:00:00.000Z';
 const LATE = '2099-01-01T00:00:00.000Z';
 
@@ -60,78 +68,54 @@ async function waitFor(condition: () => boolean | Promise<boolean>, what: string
 interface Phone {
   fs: FsFake;
   library: LibraryModule;
-  service: ServiceModule['noteFileSyncService'];
-  mutations: SyncMutation[];
+  desktop: PairedPeer;
   file(path: string): string;
   bytes(path: string): Promise<Buffer>;
   history(path: string): Promise<Array<{ id: string; why: string }> | null>;
   historyText(path: string, id: string): Promise<string>;
-  /** A revision from the paired desktop: bytes through the registered sink, then its record. */
+  /** A revision from the paired desktop: its bytes as a file transfer, its record as a state op. */
   receive(descriptor: NoteFileDescriptor, bytes: Buffer | null, order?: 'bytes-first' | 'record-first'): Promise<void>;
   /** Files in the folder of `path` other than it (conflict copies). */
   siblings(path: string): string[];
 }
 
-let active: Phone | null = null;
+let mesh: LicensedMesh;
+let app: App | undefined;
+let desktop: PairedPeer | undefined;
 
 async function installPhone(): Promise<Phone> {
-  const boundary = installNativeBoundary({ fs: true });
-  const fs = boundary.fs!;
-  const storageModule = require('@react-native-async-storage/async-storage');
-  const AsyncStorage = storageModule.default ?? storageModule;
-  await AsyncStorage.clear();
-  // This phone already joined the desktop's vault on an earlier run.
-  await AsyncStorage.setItem(VAULT_KEY, JSON.stringify({ vaultId: VAULT, joined: true }));
+  const { launchLicensedApp, startPairedPeer } = require('../../harness/proHarness');
+  app = await launchLicensedApp({ mesh, secrets: new Map() });
+  const { view, rtl } = app!;
+  const fs = app!.boundary.fs!;
+  rtl.fireEvent.press(view.getByTestId('settings-tab'));
+  rtl.fireEvent.press(await view.findByTestId('open-sync-settings'));
+  desktop = (await startPairedPeer({ mesh, device: DESKTOP })) as PairedPeer;
+  const phoneId = await desktop.pairWithPhone(view);
 
-  const { noteFileSyncService: service } = requirePro<ServiceModule>('@offgrid/pro/sync/noteFileSyncService')!;
-  const { fileTransferService } = requirePro<TransferServiceModule>('@offgrid/pro/sync/fileTransferService')!;
   const library = requirePro<LibraryModule>('@offgrid/pro/notes/notesLibrary')!;
   const sync = require('@offgrid/sync') as SyncModule;
-  const { fileTransferChecksum } = require('../../../src/services/sync/fileChecksum') as ChecksumModule;
-
-  // Call-through: only reads which sink factory the service registered.
-  const registerSink = jest.spyOn(fileTransferService, 'registerSink');
-  const mutations: SyncMutation[] = [];
-  service.start({ recordStateMutation: m => mutations.push(m), sendEnabled: () => false });
-  const registration = registerSink.mock.calls.find(([mime]) => mime === sync.NOTE_FILE_MIME);
-  if (!registration) throw new Error('the note-file sink was not registered');
-  const createSink = registration[1];
-  // The startup scan of the (empty) library has made it.
-  await waitFor(() => fs.exists(library.LIBRARY_ROOT), 'the library folder');
+  const storageModule = require('@react-native-async-storage/async-storage');
+  const AsyncStorage = storageModule.default ?? storageModule;
+  const peer = desktop;
 
   const file = (path: string) => `${library.LIBRARY_ROOT}/${path}`;
   const historyDir = (path: string) => `${fs.DocumentDirectoryPath}/notes-history/${encodeURIComponent(path)}`;
   const applied = async (syncId: string) =>
     ((await AsyncStorage.getItem(APPLIED_KEY)) ?? '').includes(syncId);
 
-  const sendBytes = async (descriptor: NoteFileDescriptor, bytes: Buffer) => {
-    // The desktop's copy of the revision, as its sender reads it.
-    const senderCopy = `${fs.module.CachesDirectoryPath}/desktop-outbox/${descriptor.syncId}`;
-    await fs.module.writeFile(senderCopy, bytes.toString('base64'), 'base64');
-    const request = {
-      type: 'file_request' as const,
-      id: randomUUID(),
-      timestamp: Date.now(),
-      payload: {
-        fileName: descriptor.path.split('/').pop()!,
-        fileSize: bytes.length,
-        mimeType: sync.NOTE_FILE_MIME,
-        checksum: await fileTransferChecksum(senderCopy, bytes.length),
-        metadata: sync.createNoteFileTransferMetadata(descriptor),
-      },
-    };
-    const sink = await createSink('desktop', request);
-    if (!sink) throw new Error('the note-file sink refused a well-formed revision');
-    expect(await sink.prepare(request)).toBe(0);
-    await sink.write(0, new Uint8Array(bytes));
-    expect(await sink.finalize(request)).toBe(true);
-  };
+  const sendBytes = (descriptor: NoteFileDescriptor, bytes: Buffer) =>
+    peer.sendFile(phoneId, {
+      fileName: descriptor.path.split('/').pop()!,
+      bytes: new Uint8Array(bytes),
+      mimeType: sync.NOTE_FILE_MIME,
+      metadata: sync.createNoteFileTransferMetadata(descriptor) as unknown as Record<string, unknown>,
+    });
 
   const phone: Phone = {
     fs,
     library,
-    service,
-    mutations,
+    desktop: peer,
     file,
     bytes: async path => Buffer.from(await fs.module.readFile(file(path), 'base64'), 'base64'),
     history: async path => {
@@ -140,9 +124,9 @@ async function installPhone(): Promise<Phone> {
     },
     historyText: (path, id) => fs.module.readFile(`${historyDir(path)}/${id}.txt`, 'utf8'),
     receive: async (descriptor, bytes, order = 'bytes-first') => {
-      const record = sync.createNoteFileStateFields(descriptor);
+      const record = sync.createNoteFileStateFields(descriptor) as unknown as Record<string, unknown>;
       if (bytes && order === 'bytes-first') await sendBytes(descriptor, bytes);
-      service.applyControlPut(descriptor.syncId, record);
+      peer.record(sync.NOTE_FILE_ENTITY, descriptor.syncId, 'put', record);
       if (bytes && order === 'record-first') await sendBytes(descriptor, bytes);
       await waitFor(() => applied(descriptor.syncId), `revision ${descriptor.syncId} to settle`);
     },
@@ -151,7 +135,9 @@ async function installPhone(): Promise<Phone> {
       return fs.listFiles(dir).filter(p => p !== file(path) && !p.split('/').pop()!.startsWith('.'));
     },
   };
-  active = phone;
+  // The phone joins the Desktop's vault by the first revision it is sent there.
+  const welcome = utf8('# Welcome\n');
+  await phone.receive(revision({ path: WELCOME, bytes: welcome }), welcome);
   return phone;
 }
 
@@ -181,9 +167,18 @@ function writesTo(fs: FsFake, absolute: string): unknown[][] {
 }
 
 describePro('Notes sync on the phone', () => {
+  beforeEach(() => {
+    const { createLicensedMesh } = require('../../harness/licensedMesh');
+    mesh = createLicensedMesh();
+    mesh.reset();
+  });
+
   afterEach(async () => {
-    await active?.service.stop();
-    active = null;
+    await desktop?.stop();
+    desktop = undefined;
+    await app?.close();
+    app = undefined;
+    mesh.restore();
   });
 
   const LOCAL = '# Plan\r\n\r\nAs on this phone.  \r\n';
@@ -329,21 +324,18 @@ describePro('Notes sync on the phone', () => {
     expect(await phone.history('img/a.png')).toBeNull();
   });
 
-  it('deleting a synced note here records a tombstone naming the deleted bytes', async () => {
+  it('deleting a synced note here tells the desktop exactly which bytes went', async () => {
     const phone = await installPhone();
     const rev = revision({ path: NOTE, bytes: utf8(INCOMING) });
     await phone.receive(rev, utf8(INCOMING));
-    const before = phone.mutations.length;
+    const { NOTE_FILE_ENTITY } = require('@offgrid/sync') as SyncModule;
+    const tombstoneOf = () =>
+      phone.desktop.findRecord(NOTE_FILE_ENTITY, fields => fields.path === NOTE && fields.deleted === 1);
 
     await phone.library.deleteNote(NOTE);
 
-    await waitFor(
-      () => phone.mutations.slice(before).some(m => m.kind === 'put' && m.fields?.deleted === 1),
-      'the tombstone mutation',
-    );
-    const tombstone = phone.mutations.slice(before).find(m => m.kind === 'put' && m.fields?.deleted === 1)!;
-    expect(tombstone.entity).toBe('note_file');
-    expect(tombstone.fields).toMatchObject({
+    await waitFor(() => tombstoneOf() !== undefined, 'the tombstone on the desktop');
+    expect(phone.desktop.records.get(`${NOTE_FILE_ENTITY}:${tombstoneOf()}`)).toMatchObject({
       vault_id: VAULT,
       path: NOTE,
       deleted: 1,
