@@ -2,7 +2,7 @@ import { describeTiming, isDue, latestOccurrence, nextOccurrence, nextTimeOfDay,
 
 const at = (y: number, m: number, d: number, h = 0, min = 0) => new Date(y, m - 1, d, h, min, 0, 0).getTime();
 // 2026-11-04 is a Wednesday.
-const base = (over: Partial<ScheduleTiming>): ScheduleTiming & { enabled: boolean } =>
+const base = (over: Partial<ScheduleTiming & { enabled: boolean }>): ScheduleTiming & { enabled: boolean } =>
   ({ repeat: 'daily', hour: 8, minute: 0, createdAt: at(2026, 11, 1), enabled: true, ...over });
 
 describe('scheduled task timing', () => {

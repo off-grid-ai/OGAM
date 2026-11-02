@@ -178,6 +178,12 @@ async function doLoadLiteRTModel(ctx: TextLoadContext): Promise<void> {
 }
 
 /** Atlas: if a bigger memory size (context) broke the load, go back to the last size that worked and try once more. */
+/** The MTP options of a model, only the ones it has (so a model without MTP loads exactly as before). */
+function mtpOptions(model: { engine: string; draftPath?: string; embeddedMtp?: boolean }): { draftPath?: string; embeddedMtp?: boolean } {
+  if (model.engine !== 'llama') return {};
+  return { ...(model.draftPath ? { draftPath: model.draftPath } : {}), ...(model.embeddedMtp ? { embeddedMtp: true } : {}) };
+}
+
 export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
   const engine = ctx.model.engine === 'litert' ? 'litert' : 'llama';
   try {
@@ -217,7 +223,7 @@ async function doLoadTextModelOnce(ctx: TextLoadContext): Promise<void> {
     await beginLoad('llama', ctx.modelId);
     try {
       await Promise.race([
-        llmService.loadModel(ctx.model.filePath, mmProjPath, { override: ctx.override, draftPath: ctx.model.engine === 'llama' ? ctx.model.draftPath : undefined, embeddedMtp: ctx.model.engine === 'llama' && !!ctx.model.embeddedMtp }),
+        llmService.loadModel(ctx.model.filePath, mmProjPath, { override: ctx.override, ...mtpOptions(ctx.model) }),
         timeoutPromise,
       ]);
     } finally {

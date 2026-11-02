@@ -31,7 +31,7 @@ function Chip({ label, on, onPress, testID }: { label: string; on: boolean; onPr
   const { colors } = useTheme();
   return (
     <TouchableOpacity onPress={onPress} testID={testID} accessibilityRole="button" accessibilityState={{ selected: on }}
-      style={[styles.chip, { borderColor: on ? colors.primary : colors.border, backgroundColor: on ? colors.surface : 'transparent' }]}>
+      style={[styles.chip, on ? { borderColor: colors.primary, backgroundColor: colors.surface } : { borderColor: colors.border }]}>
       <Text style={{ color: on ? colors.primary : colors.textSecondary }}>{label}</Text>
     </TouchableOpacity>
   );
@@ -42,7 +42,7 @@ function Stepper({ label, value, onChange, testID }: { label: string; value: num
   return (
     <View style={styles.stepper}>
       <TouchableOpacity onPress={() => onChange(-1)} testID={`${testID}-down`} accessibilityLabel={`${label} down`}><Icon name="minus-circle" size={24} color={colors.primary} /></TouchableOpacity>
-      <Text style={{ color: colors.text, fontSize: 22, minWidth: 36, textAlign: 'center' }} testID={testID}>{pad(value)}</Text>
+      <Text style={[styles.big, { color: colors.text }]} testID={testID}>{pad(value)}</Text>
       <TouchableOpacity onPress={() => onChange(1)} testID={`${testID}-up`} accessibilityLabel={`${label} up`}><Icon name="plus-circle" size={24} color={colors.primary} /></TouchableOpacity>
     </View>
   );
@@ -162,7 +162,7 @@ export const ScheduleScreen: React.FC = () => {
             )}
             <View style={styles.row}>
               <Stepper label="Hour" value={draft.hour} onChange={(by) => bump('hour', by)} testID="task-hour" />
-              <Text style={{ color: colors.text, fontSize: 22 }}>:</Text>
+              <Text style={[styles.big, { color: colors.text }]}>:</Text>
               <Stepper label="Minute" value={draft.minute} onChange={(by) => bump('minute', by)} testID="task-minute" />
             </View>
             <View style={styles.actions}>
@@ -191,5 +191,6 @@ const styles = StyleSheet.create({
   chip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
   input: { borderWidth: 1, borderRadius: 8, padding: 10 },
   multi: { minHeight: 90, textAlignVertical: 'top' },
+  big: { fontSize: 22, minWidth: 36, textAlign: 'center' },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });
