@@ -38,6 +38,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Android 13+ needs this to SHOW the ongoing download notification (requested at runtime). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Scheduled tasks: set their alarms again after a reboot. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- For reading and creating calendar events -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
@@ -136,6 +138,14 @@
               <data android:mimeType="text/plain" />
           </intent-filter>
       </activity-alias>
+
+<!-- Scheduled tasks: the alarm that shows a notification, and the reboot hook that sets the alarms again -->
+      <receiver android:name=".atlasdevice.TaskAlarmReceiver" android:exported="false" />
+      <receiver android:name=".atlasdevice.TaskAlarmBootReceiver" android:exported="true">
+          <intent-filter>
+              <action android:name="android.intent.action.BOOT_COMPLETED" />
+          </intent-filter>
+      </receiver>
 
 <!-- Receiver for background download completion events -->
       <receiver
