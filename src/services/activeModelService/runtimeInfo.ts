@@ -46,10 +46,10 @@ function loadedLlamaInfo(modelId: string, model: any): TextRuntimeInfo {
     ...baseInfo(modelId, model),
     state: 'loaded',
     backend: gpu.gpu ? (npu ? 'NPU' : 'GPU') : 'CPU',
-    backendDetail: gpu.gpu ?
+    backendDetail: (llmService.isMtpActive?.() ? 'MTP drafting on. ' : '') + (gpu.gpu ?
       (selected === 'vulkan' ? `Vulkan (llama.kt): ${describeOffload(gpu.gpuLayers, gpu.totalLayers ?? -1)}` :
         selected === 'htp' ? 'HTP / Hexagon (native context GPU flag confirmed)' :
-          'OpenCL (native context GPU flag confirmed): ' + gpu.gpuBackend) : 'CPU',
+          'OpenCL (native context GPU flag confirmed): ' + gpu.gpuBackend) : 'CPU'),
     contextLength: llmService.getPerformanceSettings().contextLength,
     gpuLayers: gpu.gpu ? gpu.gpuLayers : 0,
     totalLayers: (gpu.totalLayers ?? -1) > 0 ? gpu.totalLayers : undefined,

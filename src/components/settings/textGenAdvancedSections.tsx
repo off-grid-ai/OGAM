@@ -296,6 +296,22 @@ export const WarmUpToggle: React.FC = () => {
   );
 };
 
+// ─── MTP (multi-token prediction) ─────────────────────────────────────────────
+
+export const MtpToggle: React.FC = () => {
+  const { settings, updateSettings } = useAppStore();
+  return (
+    <SegmentedRow<'off' | 'on'>
+      label="Use MTP files"
+      description="A model with an MTP file attached (My models, Add MTP file) drafts a few words ahead with it and the main model checks them, so replies can come faster. If the engine cannot start with the file, the model loads without it. Requires model reload."
+      options={BOOL_OPTIONS}
+      current={settings.useMtp === false ? 'off' : 'on'}
+      onSelect={(id) => updateSettings({ useMtp: id === 'on' })}
+      testIdFor={(id) => `use-mtp-${id}-button`}
+    />
+  );
+};
+
 // ─── CPU Threads & Batch Size ────────────────────────────────────────────────
 
 export const CpuThreadsSlider: React.FC = () => {

@@ -115,6 +115,15 @@ export function buildModelParams(
     usesF16Cache: cacheType === 'f16',
   };
 }
+/**
+ * Extra context params that turn on MTP (multi-token prediction): the engine drafts a few tokens ahead with the attached MTP
+ * file and the main model checks them. Empty when there is no file or the switch is off.
+ */
+export function mtpParams(draftPath: string | undefined, enabled: boolean): Record<string, unknown> {
+  if (!draftPath || !enabled) return {};
+  return { model_draft: draftPath, speculative: { enabled: true, type: 'mtp', n_max: 3 } };
+}
+
 export interface ContextInitResult {
   context: LlamaContext;
   gpuAttemptFailed: boolean;

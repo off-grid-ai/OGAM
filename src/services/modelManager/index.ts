@@ -149,6 +149,8 @@ class ModelManager {
       }
     }
 
+    if (llamaModel?.draftPath && allowed(llamaModel.draftPath)) await RNFS.unlink(llamaModel.draftPath).catch(() => {});
+
     await saveModelsList(models.filter(m => m.id !== modelId));
   }
 
@@ -376,6 +378,55 @@ class ModelManager {
     const old = target.mmProjPath;
     await this.saveModelWithMmproj(modelId, dest, true);
     if (old && old !== dest && !models.some(m => m.id !== modelId && m.engine === 'llama' && m.mmProjPath === old)) await RNFS.unlink(old).catch(() => {});
+  }
+
+  /**
+   * Atlas: attach an MTP (multi-token prediction) file to a model already on the phone. The engine drafts several
+   * tokens ahead with it and the main model checks them, so replies come faster when the guesses are right.
+   * Copied next to the model; the old MTP file (if any) is replaced.
+   */
+  async attachDraft(modelId: string, sourceUri: string, fileName: string, size?: number, onProgress?: (f: number) => void): Promise<void> {
+    const models = await this.getDownloadedModels();
+    const target = models.find(m => m.id === modelId);
+    if (!target || target.engine !== 'llama') throw new Error('MTP files can only be added to GGUF (llama) models.');
+    if (!fileName.toLowerCase().endsWith('.gguf')) throw new Error('The MTP file must be a .gguf file.');
+    const dir = target.filePath.substring(0, target.filePath.lastIndexOf('/'));
+    const stem = target.fileName.replace(/\.gguf$/i, '');
+    const dest = `${dir}/${stem}.mtp-${fileName.replace(/[^\w.-]+/g, '_')}`;
+    const src = sourceUri.startsWith('file://') ? decodeURIComponent(sourceUri.replace('file://', '')) : sourceUri;
+    const tmp = `${dest}.tmp`;
+    if (src !== dest) {
+      await RNFS.unlink(tmp).catch(() => {});
+      try {
+        await copyFileWithProgress(src, tmp, { knownTotalBytes: size ?? null, onProgress });
+        if (size && Number((await RNFS.stat(tmp)).size) < size) throw new Error('The copy was incomplete (is there enough space?)');
+        if (await RNFS.exists(dest)) await RNFS.unlink(dest);
+        await RNFS.moveFile(tmp, dest);
+      } catch (e) { await RNFS.unlink(tmp).catch(() => {}); throw e; }
+    }
+    const stat = await RNFS.stat(dest);
+    const old = target.draftPath;
+    const updated = models.map(m => (m.id === modelId && m.engine === 'llama'
+      ? { ...m, draftPath: dest, draftFileName: fileName, draftFileSize: Number(stat.size) } : m));
+    await saveModelsList(updated);
+    useAppStore.getState().setDownloadedModels(updated);
+    if (old && old !== dest) await RNFS.unlink(old).catch(() => {});
+  }
+
+  /** Atlas: detach (and delete) a model's MTP file. */
+  async removeDraft(modelId: string): Promise<void> {
+    const models = await this.getDownloadedModels();
+    const target = models.find(m => m.id === modelId);
+    if (!target || target.engine !== 'llama' || !target.draftPath) return;
+    const old = target.draftPath;
+    const updated = models.map(m => {
+      if (m.id !== modelId || m.engine !== 'llama') return m;
+      const { draftPath: _p, draftFileName: _n, draftFileSize: _s, ...rest } = m;
+      return rest as typeof m;
+    });
+    await saveModelsList(updated);
+    useAppStore.getState().setDownloadedModels(updated);
+    await RNFS.unlink(old).catch(() => {});
   }
 
   /** Atlas: move a model (and its vision file) to the SD card folder, or back to the phone. */

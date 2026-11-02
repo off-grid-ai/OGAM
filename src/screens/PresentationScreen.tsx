@@ -6,15 +6,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../theme';
-import { defaultPresentationSlides, PRESENTATION_TEMPLATES, cleanPresentationSlides,
+import { defaultPresentationSlides, PRESENTATION_TEMPLATES, SLIDE_LAYOUTS, slideHasBullets, cleanPresentationSlides,
   type PresentationSlide, type PresentationStyleId } from '../services/presentationTemplates';
 import { exportPresentation, sharePresentation, type ExportedPresentation, type PresentationFormat } from '../services/presentationExport';
 
 const DRAFT_KEY = 'atlas-presentation-draft-v1';
 type Layout = PresentationSlide['layout'];
 const defaultSlide = (layout: Layout): PresentationSlide =>
-  ({ layout, title: layout === 'closing' ? 'Thank You' : layout === 'title' ? 'New Presentation' : 'New Slide',
-    subtitle: '', bullets: layout === 'bullets' ? ['First point'] : [] });
+  ({ layout, title: layout === 'closing' ? 'Thank You' : layout === 'title' ? 'New Presentation' : layout === 'section' ? 'New Section'
+      : layout === 'quote' ? 'A sentence worth remembering' : layout === 'stat' ? '85%' : layout === 'agenda' ? 'Agenda' : 'New Slide',
+    subtitle: layout === 'quote' ? 'Who said it' : layout === 'stat' ? 'What the number means' : '',
+    bullets: slideHasBullets(layout) ? (layout === 'twoColumn' ? ['First point', 'Second point'] : ['First point']) : [] });
 
 export const PresentationScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -36,7 +38,7 @@ export const PresentationScreen: React.FC = () => {
       const saved = JSON.parse(raw);
       if (Array.isArray(saved.slides) && saved.slides.length) {
         const cleaned = cleanPresentationSlides(saved.slides.filter((s: any) =>
-          s && ['title', 'bullets', 'closing'].includes(s.layout) && typeof s.title === 'string' &&
+          s && SLIDE_LAYOUTS.some(l => l.id === s.layout) && typeof s.title === 'string' &&
           typeof s.subtitle === 'string' && Array.isArray(s.bullets) && s.bullets.every((b: any) => typeof b === 'string')));
         if (cleaned.length) setSlides(cleaned);
       }
@@ -173,23 +175,19 @@ export const PresentationScreen: React.FC = () => {
         </View>
         <View>{label('Slide layout')}
           <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-            {(['title', 'bullets', 'closing'] as const).map(layout =>
-              action(layout === 'title' ? 'Title' : layout === 'bullets' ? 'Content' : 'Closing',
-                () => update({ layout }), layout === 'bullets' ? 'list' : 'layout', false, slide.layout === layout))}
+            {SLIDE_LAYOUTS.map(l => action(l.label, () => update({ layout: l.id }), l.icon, false, slide.layout === l.id))}
           </View>
         </View>
         <View>{label('Slide title')}{field(slide.title, text => update({ title: text.slice(0,140) }), 'Slide title')}</View>
         <View>{label('Subtitle')}{field(slide.subtitle, text => update({ subtitle: text.slice(0,260) }), 'Slide subtitle')}</View>
-        {slide.layout === 'bullets' && <View>
-          {label('Bullet points - one per line')}
+        {slideHasBullets(slide.layout) && <View>
+          {label(slide.layout === 'stat' ? 'Notes under the number - one per line' : 'Bullet points - one per line')}
           {field(slide.bullets.join('\n'), text => update({ bullets: text.split('\n').slice(0, 10).map(b => b.slice(0,260)) }),
             'Main points', true)}
         </View>}
         <View>{label('Add another slide')}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {action('Title slide', () => add('title'), 'plus')}
-            {action('Content slide', () => add('bullets'), 'plus')}
-            {action('Closing', () => add('closing'), 'plus')}
+            {SLIDE_LAYOUTS.map(l => action(l.label, () => add(l.id), 'plus'))}
           </View>
         </View>
         <View style={{ borderTopWidth: 1, borderColor: colors.border, paddingTop: 18, gap: 10 }}>

@@ -88,6 +88,8 @@ type AppSettings = {
   backendUserChosen?: boolean;
   /** Run one tiny silent reply after a model loads so a GPU backend does its one-time setup early (off by default). */
   warmUpAfterLoad?: boolean;
+  /** Use a model's attached MTP file to draft tokens (on unless set to false). */
+  useMtp?: boolean;
   /** Set once the one-time move of automatic installs to the Auto backend has run. */
   autoBackendMigrated?: boolean;
   /** What agents call the user (fills {{name}} in agent prompts). */

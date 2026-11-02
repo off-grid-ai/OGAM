@@ -217,7 +217,7 @@ async function doLoadTextModelOnce(ctx: TextLoadContext): Promise<void> {
     await beginLoad('llama', ctx.modelId);
     try {
       await Promise.race([
-        llmService.loadModel(ctx.model.filePath, mmProjPath, { override: ctx.override }),
+        llmService.loadModel(ctx.model.filePath, mmProjPath, { override: ctx.override, draftPath: ctx.model.engine === 'llama' ? ctx.model.draftPath : undefined }),
         timeoutPromise,
       ]);
     } finally {

@@ -16,7 +16,7 @@ import {
   buildCompletionParams, buildThinkingCompletionParams, supportsNativeThinking,
   getMaxContextForDevice, getGpuLayersForDevice, BYTES_PER_GB,
   validateModelFile, checkMemoryForModel, safeCompletion, resolveSafeContext,
-  describeGpuFallback, isTruncatedResult,
+  describeGpuFallback, isTruncatedResult, mtpParams,
 } from './llmHelpers';
 import { awaitMemoryReclaim, effectiveAvailableMB } from './memoryBudget';
 import { modelResidencyManager } from './modelResidency';
@@ -46,6 +46,8 @@ class LLMService {
   private requestedBackendAtLoad: InferenceBackend | null = null;
   private acceleratorAttempts: string[] = [];
   private cpuForFileType = false;
+  /** True while the loaded context drafts with an attached MTP file. */
+  private mtpActive = false;
   private currentModelPath: string | null = null;
   private isGenerating: boolean = false;
   private activeCompletionPromise: Promise<void> | null = null;
@@ -166,7 +168,7 @@ class LLMService {
     useAppStore.getState().setModelMaxContext(getModelMaxContext(context));
     logger.log(`[LLM] Model loaded, vision: ${this.supportsVision()}, tools: ${this.toolCallingSupported}, thinking: ${this.thinkingSupported}`);
   }
-  async loadModel(modelPath: string, mmProjPath?: string, opts?: { override?: boolean; forceCpu?: boolean }): Promise<void> {
+  async loadModel(modelPath: string, mmProjPath?: string, opts?: { override?: boolean; forceCpu?: boolean; draftPath?: string }): Promise<void> {
     const mutex = this.acquireContextMutex();
     try {
       await mutex.ready;
@@ -250,11 +252,23 @@ class LLMService {
             // Auto may try other candidate engines, including CPU, and report the choice.
             const requireAcceleration = Platform.OS === 'android' &&
               backend !== INFERENCE_BACKENDS.CPU;
-            const { context, gpuAttemptFailed, actualLength, attemptedGpuLayers } =
-              await this.initWithAutoContext(
-                { baseParams, ctxLen, nGpuLayers, fileSize },
+            // An attached MTP file speeds replies up; if the engine cannot start with it, load without it.
+            const draftOn = !!opts?.draftPath && useAppStore.getState().settings.useMtp !== false
+              && await RNFS.exists(opts.draftPath);
+            let init;
+            try {
+              init = await this.initWithAutoContext(
+                { baseParams: { ...baseParams, ...mtpParams(opts?.draftPath, draftOn) }, ctxLen, nGpuLayers, fileSize },
                 backend, requireAcceleration,
               );
+              this.mtpActive = draftOn;
+            } catch (mtpError) {
+              if (!draftOn || isOverridableMemoryError(mtpError)) throw mtpError;
+              logger.warn('[LLM] MTP file could not be used, loading without it:', mtpError);
+              init = await this.initWithAutoContext({ baseParams, ctxLen, nGpuLayers, fileSize }, backend, requireAcceleration);
+              this.mtpActive = false;
+            }
+            const { context, gpuAttemptFailed, actualLength, attemptedGpuLayers } = init;
             try {
               await this.applyLoadedContext({
                 context, actualLength, gpuAttemptFailed,
@@ -712,6 +726,8 @@ class LLMService {
    *  offloaded — init failure/timeout, capability refusal, or a RAM cap). Null when nothing to report. */
   /** True when this model runs on the CPU on purpose (file type the GPU/NPU can't speed up). */
   isCpuForFileType(): boolean { return this.cpuForFileType; }
+  /** True when the loaded model is drafting with its attached MTP file. */
+  isMtpActive(): boolean { return this.mtpActive; }
   getBackendFallbackNotice(): string | null {
     if (this.acceleratorAttempts.length && (this.context || this.vulkanLoaded)) {
       const verb = this.requestedBackendAtLoad === INFERENCE_BACKENDS.AUTO ? 'Auto selected' : 'Running on';

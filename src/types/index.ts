@@ -71,6 +71,10 @@ export interface LlamaDownloadedModel extends DownloadedModelBase {
   mmProjFileSize?: number;
   /** Atlas: the user attached this vision file themselves (keep it even if the names don't match). */
   mmProjManual?: boolean;
+  /** Atlas: an MTP (multi-token prediction / draft) file the user attached; the engine drafts tokens with it to speed up replies. */
+  draftPath?: string;
+  draftFileName?: string;
+  draftFileSize?: number;
 }
 
 export interface LiteRTDownloadedModel extends DownloadedModelBase {

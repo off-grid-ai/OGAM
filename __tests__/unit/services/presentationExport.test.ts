@@ -1,4 +1,4 @@
-import { defaultPresentationSlides, cleanPresentationSlides, PRESENTATION_TEMPLATES } from '../../../src/services/presentationTemplates';
+import { defaultPresentationSlides, cleanPresentationSlides, basicLayouts, PRESENTATION_TEMPLATES, SLIDE_LAYOUTS, type PresentationSlide } from '../../../src/services/presentationTemplates';
 
 jest.mock('react-native-fs', () => ({ __esModule: true, default: { CachesDirectoryPath: '/cache' } }));
 jest.mock('react-native-zip-archive', () => ({ zip: jest.fn() }));
@@ -36,5 +36,28 @@ describe('Atlas Presentation Studio', () => {
   });
   test('rejects a blank presentation instead of saving a broken archive', () => {
     expect(() => pptxParts([], PRESENTATION_TEMPLATES[0])).toThrow(/at least one slide/);
+  });
+  test('has more than a dozen templates, including a minimal green one', () => {
+    expect(PRESENTATION_TEMPLATES.length).toBeGreaterThanOrEqual(12);
+    expect(PRESENTATION_TEMPLATES.some(t => t.id === 'minimal-green')).toBe(true);
+  });
+  test('every slide type builds in every template, with its own text in the slide', () => {
+    for (const template of PRESENTATION_TEMPLATES) {
+      const slides: PresentationSlide[] = SLIDE_LAYOUTS.map(l => ({ layout: l.id, title: `T-${l.id}`, subtitle: `S-${l.id}`, bullets: ['one', 'two', 'three'] }));
+      const parts = pptxParts(slides, template);
+      slides.forEach((slide, i) => {
+        const xml = parts[`ppt/slides/slide${i + 1}.xml`];
+        expect(xml).toContain(`T-${slide.layout}`);
+        if (slide.layout !== 'closing') expect(xml.length).toBeGreaterThan(500);
+      });
+    }
+  });
+  test('the PDF writer gets only the three layouts it knows, keeping all the text', () => {
+    const slides: PresentationSlide[] = SLIDE_LAYOUTS.map(l => ({ layout: l.id, title: `T-${l.id}`, subtitle: `S-${l.id}`, bullets: ['one', 'two'] }));
+    const mapped = basicLayouts(slides);
+    expect(mapped.every(s => ['title', 'bullets', 'closing'].includes(s.layout))).toBe(true);
+    expect(JSON.stringify(mapped.find((_, i) => slides[i].layout === 'quote'))).toContain('T-quote');
+    expect(mapped.find((_, i) => slides[i].layout === 'agenda')?.bullets).toEqual(['1. one', '2. two']);
+    expect(mapped.find((_, i) => slides[i].layout === 'stat')?.bullets).toEqual(['S-stat', 'one', 'two']);
   });
 });
