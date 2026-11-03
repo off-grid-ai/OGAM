@@ -8,11 +8,8 @@
  */
 import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {}, replace: () => {} }),
-  useRoute: () => ({ params: {} }),
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+// Real navigation: the screen is the one route of a real stack, so its navigation and focus are the library's own.
+jest.unmock('@react-navigation/native');
 
 async function renderOnboarding(tpu: { supported: boolean; tensorGeneration: number | null; reason: string | null }) {
   const boundary = installNativeBoundary({ ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB } });
@@ -22,8 +19,20 @@ async function renderOnboarding(tpu: { supported: boolean; tensorGeneration: num
   const { hardwareService } = require('../../../src/services/hardware');
   const { AdvancedSetupScreen } = require('../../../src/screens/ModelDownloadScreen');
   await hardwareService.getDeviceInfo();
-  const nav: any = { navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {}, replace: () => {} };
-  const view = rtl.render(React.createElement(AdvancedSetupScreen, { navigation: nav }));
+  const { NavigationContainer } = require('@react-navigation/native');
+  const { createNativeStackNavigator } = require('@react-navigation/native-stack');
+  const Stack = createNativeStackNavigator();
+  const view = rtl.render(
+    React.createElement(
+      NavigationContainer,
+      null,
+      React.createElement(
+        Stack.Navigator,
+        { screenOptions: { headerShown: false } },
+        React.createElement(Stack.Screen, { name: 'AdvancedSetup', component: AdvancedSetupScreen }),
+      ),
+    ),
+  );
   await rtl.waitFor(() => { expect(view.getByTestId('onboarding-litert-model-1')).toBeTruthy(); }, { timeout: 10000 });
   return { rtl, view };
 }
