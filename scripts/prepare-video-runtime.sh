@@ -3,9 +3,10 @@ set -euo pipefail
 # Gradle shows only the exit code, so name the command that failed.
 trap 'echo "prepare-video-runtime.sh: line $LINENO failed: $BASH_COMMAND" >&2' ERR
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SOURCE="$ROOT/.video-build/source"
-REVISION="$(cat "$ROOT/scripts/video/revision")"
-mkdir -p "$ROOT/.video-build"
+# The engine-update job checks a newer release here before it bumps the pin (--patches-only).
+SOURCE="${OFFGRID_SD_SOURCE:-$ROOT/.video-build/source}"
+REVISION="${OFFGRID_SD_REVISION:-$(cat "$ROOT/scripts/video/revision")}"
+mkdir -p "$(dirname "$SOURCE")"
 if [ ! -d "$SOURCE/.git" ]; then
   git clone --filter=blob:none --no-checkout https://github.com/leejet/stable-diffusion.cpp.git "$SOURCE"
 fi
@@ -32,6 +33,11 @@ for entry in "ggml:android-vulkan-device-fault.patch" "ggml:android-vulkan-pipel
     git -C "$SOURCE/$target" apply "$patch"
   fi
 done
+# iOS also applies the Metal GroupNorm fix to ggml; check it so a bump never breaks the iPhone build.
+if [ "${1:-}" = "--patches-only" ]; then
+  git -C "$SOURCE/ggml" apply --check "$ROOT/scripts/video/metal-group-norm-batch.patch"
+  exit 0
+fi
 # Match the header versions used by the runtime's Vulkan build. These are build
 # inputs only; the device still supplies its Vulkan driver.
 prepare_headers() {
