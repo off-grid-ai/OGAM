@@ -1,4 +1,4 @@
-import { parsePlan, parseContent, parseGrade, planMessages, starsForShare, FORMATS } from '../../src/topics/formats';
+import { parsePlan, parseContent, parseGrade, planMessages, starsForShare, FORMATS, subjectAdvice } from '../../src/topics/formats';
 
 const plan = (squares: object[]) => JSON.stringify({ title: 'Accounting basics', summary: 'Read a balance sheet', style: 'Worked examples first', theme: 'The Ledger Road', units: [{ title: 'Foundations', squares }] });
 
@@ -78,3 +78,38 @@ describe('topic courses: more kinds of square', () => {
     expect(FORMATS.length).toBeGreaterThanOrEqual(12);
   });
 });
+
+describe('topic courses: teaching almost anything', () => {
+  it('offers the AI twenty kinds of square, enough for maths, science, accounting, English and code', () => {
+    expect(FORMATS.length).toBeGreaterThanOrEqual(19);
+    expect(new Set(FORMATS.map((f) => f.id)).size).toBe(FORMATS.length);
+  });
+  it('gives teaching advice for big subject areas, and none for an unknown one', () => {
+    expect(subjectAdvice('Algebra 1')).toMatch(/calculate/i);
+    expect(subjectAdvice('GCSE Biology')).toMatch(/sort-into-groups/);
+    expect(subjectAdvice('Financial accounting')).toMatch(/fill-the-table/);
+    expect(subjectAdvice('English grammar')).toMatch(/fix-the-mistake/);
+    expect(subjectAdvice('Python for beginners')).toMatch(/predict-the-result/);
+    expect(subjectAdvice('Medieval basket weaving')).toBe('');
+    expect(planMessages({ topic: 'Algebra 1', goal: '', level: 'x', how: '', minutes: 10 }).user).toContain('Subject area: mathematics');
+  });
+  it('reads typed-answer, fix, sort, dictation, reading and predict squares', () => {
+    expect(parseContent('recall', JSON.stringify({ items: [{ prompt: 'Left side of a ledger?', answer: 'debit', alternatives: ['Dr'] }, { prompt: 'b', answer: 'b' }, { prompt: 'c', answer: 'c' }] }))).toMatchObject({ kind: 'typed', mode: 'recall' });
+    expect(parseContent('fix', JSON.stringify({ items: [{ prompt: 'She dont like it.', answer: "She doesn't like it.", why: 'agreement' }, { prompt: 'a', answer: 'b' }, { prompt: 'c', answer: 'd' }] }))).toMatchObject({ kind: 'typed', mode: 'fix' });
+    expect(parseContent('sort', JSON.stringify({ groups: ['Acid', 'Base'], items: [{ text: 'lemon', group: 0 }, { text: 'soap', group: 1 }, { text: 'vinegar', group: 0 }, { text: 'bleach', group: 1 }, { text: 'bad', group: 7 }] }))).toMatchObject({ kind: 'sort' });
+    expect(parseContent('dictation', JSON.stringify({ lang: 'es-ES', sentences: ['Hola', 'Adios', 'Gracias'] }))).toMatchObject({ kind: 'dictation', lang: 'es-ES' });
+    expect(parseContent('dictation', JSON.stringify({ lang: 'whatever', sentences: ['a', 'b', 'c'] }))).toMatchObject({ lang: 'en-US' });
+    expect(parseContent('reading', JSON.stringify({ passage: 'The cat sat.', questions: [{ q: 'Who sat?', options: ['cat', 'dog'], answer: 0, why: 'w' }, { q: 'q2', options: ['a', 'b'], answer: 1, why: 'w' }] }))).toMatchObject({ kind: 'quiz', passage: 'The cat sat.' });
+    expect(parseContent('reading', JSON.stringify({ questions: [{ q: 'q', options: ['a', 'b'], answer: 0, why: '' }, { q: 'q2', options: ['a', 'b'], answer: 1, why: '' }] }))).toBeNull(); // no passage
+    expect(parseContent('predict', JSON.stringify({ questions: [{ q: '```\nprint(2+2)\n```\nWhat prints?', options: ['4', '22'], answer: 0, why: 'adds' }, { q: 'b', options: ['x', 'y'], answer: 1, why: '' }] }))).toMatchObject({ kind: 'quiz' });
+  });
+  it('reads a table to fill: the full table, with some cells hidden', () => {
+    const c = parseContent('tablefill', JSON.stringify({ title: 'Sale', columns: ['Account', 'Debit', 'Credit'], rows: [['Cash', '500', ''], ['Sales', '', '500']], blank: [[0, 1], [1, 2], [0, 0]], why: 'cash in, sales up' }));
+    expect(c).toMatchObject({ kind: 'tablefill', rows: [['Cash', null, ''], ['Sales', '', null]] });
+  });
+  it('reads a lesson with common mistakes and a self-test question', () => {
+    const c = parseContent('lesson', JSON.stringify({ sections: [{ heading: 'h', text: 't' }], commonMistakes: ['mixing up debit and credit'], quickCheck: { q: 'Which side is debit?', a: 'Left' }, keyPoints: ['k'] }));
+    expect(c).toMatchObject({ commonMistakes: ['mixing up debit and credit'], quickCheck: { q: 'Which side is debit?', a: 'Left' } });
+  });
+});
+

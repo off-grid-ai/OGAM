@@ -4,7 +4,7 @@ import { useTheme } from '../theme';
 import { Button } from '../components/Button';
 import { MarkdownText } from '../components/MarkdownText';
 import { Choice, GOOD } from '../components/games/kit';
-import { shuffle } from '../study/games/logic';
+import { editDistance, shuffle } from '../study/games/logic';
 import { gradeAnswer } from './service';
 import { starsForShare, type SquareContent } from './formats';
 
@@ -33,6 +33,13 @@ export function LessonView({ content, onDone }: ViewProps<'lesson'>) {
           {!!s.example && <Text style={[styles.example, t.card, { color: t.colors.text }]}>{s.example}</Text>}
         </View>
       ))}
+      {!!content.commonMistakes?.length && (
+        <View style={[styles.box, t.card]} testID="lesson-mistakes">
+          <Text style={t.head}>Common mistakes</Text>
+          {content.commonMistakes.map((k, i) => <Text key={i} style={t.body}>{'\u2022  '}{k}</Text>)}
+        </View>
+      )}
+      {!!content.quickCheck && <QuickCheck q={content.quickCheck.q} a={content.quickCheck.a} />}
       {!!content.keyPoints.length && (
         <View style={[styles.box, t.card]}>
           <Text style={t.head}>Key points</Text>
@@ -54,8 +61,9 @@ export function QuizView({ content, onDone }: ViewProps<'quiz'>) {
   const pick = (n: number) => { if (picked !== null) return; setPicked(n); if (n === q.answer) setRight((r) => r + 1); };
   return (
     <View style={styles.gap} testID="square-quiz">
+      {!!content.passage && <View style={[styles.box, t.card]} testID="quiz-passage"><MarkdownText>{content.passage}</MarkdownText></View>}
       <Text style={t.meta}>Question {i + 1} of {content.questions.length}</Text>
-      <Text style={t.body}>{q.q}</Text>
+      <MarkdownText>{q.q}</MarkdownText>
       {q.options.map((o, n) => (
         <Choice key={n} label={o} disabled={picked !== null} onPress={() => pick(n)}
           state={picked === null ? null : n === q.answer ? 'right' : n === picked ? 'wrong' : null} />
@@ -279,6 +287,178 @@ export function TableView({ content, onDone }: ViewProps<'table'>) {
   );
 }
 
+/** Test yourself: think of the answer, then reveal it. */
+function QuickCheck({ q, a }: { q: string; a: string }) {
+  const t = useText();
+  const [shown, setShown] = useState(false);
+  return (
+    <View style={[styles.box, t.card]} testID="lesson-quickcheck">
+      <Text style={t.head}>Test yourself</Text>
+      <Text style={t.body}>{q}</Text>
+      {shown ? <Text style={t.body} testID="quickcheck-answer">{a}</Text>
+        : <TouchableOpacity onPress={() => setShown(true)} testID="quickcheck-show"><Text style={{ color: t.colors.primary }}>Show the answer</Text></TouchableOpacity>}
+    </View>
+  );
+}
+
+/** Lower case, no punctuation, one space between words: how typed answers are compared. */
+export const normalizeAnswer = (text: string) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\u0400-\u04ff\u4e00-\u9fff\u3040-\u30ff ]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+/** True when a typed answer is the answer (or an accepted alternative): same words, ignoring case, accents and punctuation, one slip allowed in longer answers. */
+export function answersMatch(typed: string, answer: string, alternatives: string[] = []): boolean {
+  const t = normalizeAnswer(typed);
+  if (!t) return false;
+  return [answer, ...alternatives].some((a) => {
+    const n = normalizeAnswer(a);
+    if (t === n) return true;
+    return n.length >= 8 && Math.abs(t.length - n.length) <= 1 && editDistance(t, n) <= 1;
+  });
+}
+
+/** Type the answer (or the corrected text) for each item, one at a time. */
+export function TypedView({ content, onDone }: ViewProps<'typed'>) {
+  const t = useText();
+  const [i, setI] = useState(0);
+  const [typed, setTyped] = useState('');
+  const [state, setState] = useState<'asking' | 'right' | 'wrong'>('asking');
+  const [right, setRight] = useState(0);
+  const item = content.items[i];
+  const last = i === content.items.length - 1;
+  const check = () => {
+    const ok = answersMatch(typed, item.answer, item.alternatives);
+    setState(ok ? 'right' : 'wrong');
+    if (ok) setRight(right + 1);
+  };
+  const next = () => {
+    if (last) { onDone(starsForShare(right / content.items.length)); return; }
+    setI(i + 1); setTyped(''); setState('asking');
+  };
+  return (
+    <View style={styles.gap} testID="square-typed">
+      <Text style={t.meta}>{i + 1} of {content.items.length} · {content.mode === 'fix' ? 'Correct it' : 'Type the answer'}</Text>
+      <MarkdownText>{item.prompt}</MarkdownText>
+      <TextInput value={typed} onChangeText={setTyped} editable={state === 'asking'} multiline={content.mode === 'fix'} autoCapitalize="none" autoCorrect={false}
+        placeholder="Your answer" placeholderTextColor={t.colors.textMuted} style={[styles.numberInput, { color: t.colors.text, borderColor: t.colors.border }]} testID="typed-input" />
+      {state === 'asking' && <Button title="Check" disabled={!typed.trim()} onPress={check} testID="typed-check" />}
+      {state === 'right' && <Text style={{ color: t.colors.primary }} testID="typed-right">Right.</Text>}
+      {state === 'wrong' && <Text style={{ color: t.colors.error }} testID="typed-wrong">Not quite. The answer: {item.answer}</Text>}
+      {state !== 'asking' && !!item.why && <Text style={t.meta}>{item.why}</Text>}
+      {state !== 'asking' && <Button title={last ? 'Finish' : 'Next'} onPress={next} testID="typed-next" />}
+    </View>
+  );
+}
+
+/** A table with blank cells: type into each, then check them all. */
+export function TableFillView({ content, onDone }: ViewProps<'tablefill'>) {
+  const t = useText();
+  const [typed, setTyped] = useState<Record<string, string>>({});
+  const [checked, setChecked] = useState(false);
+  const blanks = content.rows.flatMap((r, ri) => r.map((c, ci) => (c === null ? `${ri}:${ci}` : null))).filter((x): x is string => !!x);
+  const correct = (cell: string) => { const [ri, ci] = cell.split(':').map(Number); return answersMatch(typed[cell] ?? '', content.answers[ri][ci]); };
+  const rightCount = blanks.filter(correct).length;
+  return (
+    <ScrollView contentContainerStyle={styles.gap} keyboardShouldPersistTaps="handled" testID="square-tablefill">
+      {!!content.title && <Text style={t.head}>{content.title}</Text>}
+      <View style={[styles.box, t.card]}>
+        <View style={styles.tableRow}>{content.columns.map((c) => <Text key={c} style={[t.meta, styles.cell, styles.headCell]}>{c}</Text>)}</View>
+        {content.rows.map((row, ri) => (
+          <View key={ri} style={styles.tableRow}>
+            {row.map((c, ci) => {
+              const cell = `${ri}:${ci}`;
+              if (c !== null) return <Text key={ci} style={[t.body, styles.cell]}>{c}</Text>;
+              const bad = checked && !correct(cell);
+              return (
+                <TextInput key={ci} value={typed[cell] ?? ''} onChangeText={(v) => { setTyped({ ...typed, [cell]: v }); setChecked(false); }} autoCapitalize="none" autoCorrect={false}
+                  style={[styles.cell, styles.blank, { color: t.colors.text, borderColor: bad ? t.colors.error : checked ? '#16A34A' : t.colors.border }]} testID={`tablefill-${ri}-${ci}`} />
+              );
+            })}
+          </View>
+        ))}
+      </View>
+      {checked && <Text style={t.body} testID="tablefill-score">{rightCount} of {blanks.length} right</Text>}
+      {checked && rightCount < blanks.length && (
+        <View style={[styles.box, t.card]}>
+          <Text style={t.head}>The full table</Text>
+          {content.answers.map((r, ri) => <Text key={ri} style={t.body}>{r.join('  |  ')}</Text>)}
+          {!!content.why && <Text style={t.meta}>{content.why}</Text>}
+        </View>
+      )}
+      {!checked
+        ? <Button title="Check" onPress={() => setChecked(true)} testID="tablefill-check" />
+        : <Button title="Finish" onPress={() => onDone(starsForShare(rightCount / blanks.length))} testID="tablefill-done" />}
+    </ScrollView>
+  );
+}
+
+/** Sort items into groups: tap an item, then its group. */
+export function SortView({ content, onDone }: ViewProps<'sort'>) {
+  const t = useText();
+  const [placed, setPlaced] = useState<Record<number, number>>({});
+  const [chosen, setChosen] = useState<number | null>(null);
+  const [wrong, setWrong] = useState(0);
+  const left = content.items.map((_, n) => n).filter((n) => placed[n] === undefined);
+  const drop = (group: number) => {
+    if (chosen === null) return;
+    if (content.items[chosen].group === group) {
+      const all = { ...placed, [chosen]: group };
+      setPlaced(all);
+      if (Object.keys(all).length === content.items.length) onDone(starsForShare(content.items.length / (content.items.length + wrong)));
+    } else setWrong(wrong + 1);
+    setChosen(null);
+  };
+  return (
+    <View style={styles.gap} testID="square-sort">
+      <Text style={t.meta}>Tap an item, then the group it belongs to.</Text>
+      <View style={styles.chipsRow}>
+        {left.map((n) => <Choice key={n} label={content.items[n].text} onPress={() => setChosen(n)} state={chosen === n ? 'picked' : null} />)}
+      </View>
+      {content.groups.map((g, gi) => (
+        <TouchableOpacity key={g} onPress={() => drop(gi)} style={[styles.box, t.card]} testID={`sort-group-${gi}`}>
+          <Text style={t.head}>{g}</Text>
+          <Text style={t.meta}>{content.items.filter((_, n) => placed[n] === gi).map((x) => x.text).join(', ') || 'Tap here to put the chosen item in'}</Text>
+        </TouchableOpacity>
+      ))}
+      <Text style={t.meta} testID="sort-mistakes">{wrong ? `${wrong} in the wrong group` : ' '}</Text>
+    </View>
+  );
+}
+
+/** Hear a sentence read aloud and type it. */
+export function DictationView({ content, onDone }: ViewProps<'dictation'>) {
+  const t = useText();
+  const [i, setI] = useState(0);
+  const [typed, setTyped] = useState('');
+  const [state, setState] = useState<'asking' | 'right' | 'wrong'>('asking');
+  const [tries, setTries] = useState(0);
+  const [right, setRight] = useState(0);
+  const sentence = content.sentences[i];
+  const last = i === content.sentences.length - 1;
+  const play = () => { try { require('../atlasVoice/tts').speakIn(sentence, content.lang, 'dictation'); } catch { /* no voice on this phone */ } };
+  React.useEffect(play, [i]); // eslint-disable-line react-hooks/exhaustive-deps
+  const check = () => {
+    const ok = answersMatch(typed, sentence);
+    setTries(tries + 1);
+    if (ok) { setState('right'); setRight(right + (tries === 0 ? 1 : 0.5)); } else if (tries >= 1) setState('wrong'); else setTyped('');
+  };
+  const next = () => {
+    if (last) { onDone(starsForShare(right / content.sentences.length)); return; }
+    setI(i + 1); setTyped(''); setState('asking'); setTries(0);
+  };
+  return (
+    <View style={styles.gap} testID="square-dictation">
+      <Text style={t.meta}>{i + 1} of {content.sentences.length}</Text>
+      <Button title="Play the sentence" variant="outline" onPress={play} testID="dictation-play" />
+      <TextInput value={typed} onChangeText={setTyped} editable={state === 'asking'} multiline autoCapitalize="none" autoCorrect={false} placeholder="Type what you hear"
+        placeholderTextColor={t.colors.textMuted} style={[styles.numberInput, { color: t.colors.text, borderColor: t.colors.border }]} testID="dictation-input" />
+      {tries === 1 && state === 'asking' && <Text style={t.meta} testID="dictation-again">Not quite. Listen again and try once more.</Text>}
+      {state === 'asking' && <Button title="Check" disabled={!typed.trim()} onPress={check} testID="dictation-check" />}
+      {state === 'right' && <Text style={{ color: t.colors.primary }} testID="dictation-right">Right: {sentence}</Text>}
+      {state === 'wrong' && <Text style={{ color: t.colors.error }} testID="dictation-wrong">It was: {sentence}</Text>}
+      {state !== 'asking' && <Button title={last ? 'Finish' : 'Next'} onPress={next} testID="dictation-next" />}
+    </View>
+  );
+}
+
 export function SquareView({ content, onDone }: { content: SquareContent; onDone: (stars: 1 | 2 | 3) => void }) {
   switch (content.kind) {
     case 'lesson': return <LessonView content={content} onDone={onDone} />;
@@ -288,6 +468,10 @@ export function SquareView({ content, onDone }: { content: SquareContent; onDone
     case 'numeric': return <NumericView content={content} onDone={onDone} />;
     case 'worked': return <WorkedView content={content} onDone={onDone} />;
     case 'table': return <TableView content={content} onDone={onDone} />;
+    case 'typed': return <TypedView content={content} onDone={onDone} />;
+    case 'tablefill': return <TableFillView content={content} onDone={onDone} />;
+    case 'sort': return <SortView content={content} onDone={onDone} />;
+    case 'dictation': return <DictationView content={content} onDone={onDone} />;
     case 'order': return <OrderView content={content} onDone={onDone} />;
     default: return <PracticeView content={content} onDone={onDone} />;
   }
@@ -304,5 +488,10 @@ const styles = StyleSheet.create({
   step: { borderWidth: 1, borderRadius: 10, padding: 12 },
   input: { borderWidth: 1, borderRadius: 8, padding: 10, minHeight: 120, textAlignVertical: 'top' },
   code: { fontFamily: 'monospace', fontSize: 14 },
+  tableRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  cell: { flex: 1, minWidth: 0, paddingVertical: 6 },
+  headCell: { fontWeight: '400', textTransform: 'uppercase' },
+  blank: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 4 },
+  chipsRow: { gap: 6 },
   numberInput: { borderWidth: 1, borderRadius: 8, padding: 10, fontSize: 18 },
 });
