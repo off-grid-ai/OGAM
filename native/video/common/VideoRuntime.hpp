@@ -201,8 +201,9 @@ class VideoRuntime {
 #endif
       }
       sd_ctx_t *loaded = nullptr;
+      // Each attempt starts with an empty error log: a failed load names what its LAST attempt hit.
 #ifdef __ANDROID__
-      try { loaded = new_sd_ctx(&config); }
+      engineErrors.clear(); try { loaded = new_sd_ctx(&config); }
       catch (const std::exception &) {
         if (request.cpuOnly || cancelled.load()) throw;
       }
@@ -211,7 +212,7 @@ class VideoRuntime {
         config.params_backend = nullptr;
         config.auto_fit = true;
         config.backend = gpuBackend.c_str();
-        try { loaded = new_sd_ctx(&config); }
+        engineErrors.clear(); try { loaded = new_sd_ctx(&config); }
         catch (const std::exception &) {
           if (cancelled.load()) throw;
         }
@@ -219,10 +220,10 @@ class VideoRuntime {
       if (!loaded && !cancelled.load()) {
         config.backend = "cpu";
         lastLoadOnCpu = true;
-        loaded = new_sd_ctx(&config);
+        engineErrors.clear(); loaded = new_sd_ctx(&config);
       }
 #else
-      loaded = new_sd_ctx(&config);
+      engineErrors.clear(); loaded = new_sd_ctx(&config);
 #endif
       return loaded;
   }
@@ -373,7 +374,6 @@ public:
     try {
       if (cancelled.load()) throw std::runtime_error("Video generation stopped.");
       std::string preferred;
-      engineErrors.clear();
       sd_ctx_t *loaded = loadContext(request, preferred);
       {
         std::lock_guard<std::mutex> guard(contextMutex);

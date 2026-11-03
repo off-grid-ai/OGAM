@@ -16,13 +16,16 @@ import path from 'path';
 
 const HEADER_DIR = path.join(__dirname, '../../../native/video/common');
 
-type Level = 'error' | 'warn' | 'debug';
+/** 'attempt' is the runtime starting its next backend (NPU, then GPU, then CPU on Android). */
+type Level = 'error' | 'warn' | 'debug' | 'attempt';
 
 /** Feed `lines` to a fresh log, as sd.cpp emits them, then return what a failed load would say. */
-function failedLoadMessage(lines: Array<[Level, string]>): string {
+function failedLoadMessage(lines: Array<[Level, string] | ['attempt']>): string {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'engine-error-log-'));
   const notes = lines
-    .map(([level, text]) => `  log.note(${level === 'error'}, ${level === 'warn'}, ${JSON.stringify(text)});`)
+    .map(([level, text]) => level === 'attempt'
+      ? '  log.clear();'
+      : `  log.note(${level === 'error'}, ${level === 'warn'}, ${JSON.stringify(text)});`)
     .join('\n');
   const source = `#include "EngineErrorLog.hpp"
 #include <iostream>
@@ -67,6 +70,18 @@ it('says memory, and what to do, when the engine could not allocate', () => {
   ])).toBe(
     'Not enough free memory to load the video model pack. Close other apps, then try again. ' +
     '(ggml_vulkan: Device memory allocation of size 3221225472 failed.)',
+  );
+});
+
+it('names what the last backend hit, not an earlier one', () => {
+  expect(failedLoadMessage([
+    ['attempt'],
+    ['error', 'ggml_vulkan: Device memory allocation of size 3221225472 failed.\n'],
+    ['attempt'],
+    ['warn', `loading diffusion model from '${PACK}/Wan2.1-T2V-1.3B-calibrated-Q4_K_S.gguf' failed\n`],
+  ])).toBe(
+    'The video model pack has a file that cannot be read: Wan2.1-T2V-1.3B-calibrated-Q4_K_S.gguf. ' +
+    'Delete the model, then download it again.',
   );
 });
 
