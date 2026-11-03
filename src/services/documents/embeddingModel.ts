@@ -21,6 +21,12 @@ interface EmbeddingModelChange {
   fraction?: number;
 }
 
+/** The sentence that says what went wrong; an engine error's technical detail follows a blank line. */
+function headline(error: unknown): string {
+  const first = (error instanceof Error ? error.message : String(error)).split('\n\n')[0].trim();
+  return /[.!?]$/.test(first) ? first : `${first}.`;
+}
+
 class EmbeddingModelChanger {
   private change: EmbeddingModelChange = { busy: false, message: '', error: '' };
   private listeners = new Set<() => void>();
@@ -79,7 +85,7 @@ class EmbeddingModelChanger {
         '',
         controller.signal.aborted
           ? 'Model change cancelled. The previous model is still active.'
-          : `${error instanceof Error ? error.message : String(error)} The previous model is still active.`,
+          : `${headline(error)} The previous model is still active.`,
       );
       throw error;
     } finally {
