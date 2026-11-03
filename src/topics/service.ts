@@ -8,7 +8,8 @@ import { useTopics, type Course } from './store';
 
 const MAX_TRIES = 2;
 
-async function askUntil<T>(system: string, user: string, read: (raw: string) => T | null, what: string): Promise<T> {
+async function askUntil<T>(prompt: { system: string; user: string }, read: (raw: string) => T | null, what: string): Promise<T> {
+  const { system, user } = prompt;
   for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
     const raw = await askModel(system, attempt ? `${user}\n\nYour last answer could not be read. Reply with ONLY the JSON, nothing else.` : user);
     const value = read(raw);
@@ -19,8 +20,7 @@ async function askUntil<T>(system: string, user: string, read: (raw: string) => 
 
 /** Plans a course for the request and saves it. Returns its id. */
 export async function createCourse(request: CourseRequest): Promise<string> {
-  const { system, user } = planMessages(request);
-  const plan = await askUntil(system, user, parsePlan, 'a course plan');
+  const plan = await askUntil(planMessages(request), parsePlan, 'a course plan');
   return useTopics.getState().add(request, plan);
 }
 
@@ -32,17 +32,15 @@ export async function squareContent(course: Course, key: string): Promise<Square
   const square = course.squares[index];
   if (!square) throw new Error('That square is not in this course.');
   const before = course.squares.slice(0, index).map((s) => s.title);
-  const { system, user } = contentMessages({
+  const content = await askUntil(contentMessages({
     courseTitle: course.title, topic: course.topic, level: course.request.level, how: course.request.how, style: course.style,
     square, before, minutes: course.request.minutes,
-  });
-  const content = await askUntil(system, user, (raw) => parseContent(square.format, raw), `the "${square.title}" square`);
+  }), (raw) => parseContent(square.format, raw), `the "${square.title}" square`);
   useTopics.getState().setContent(course.id, key, content);
   return content;
 }
 
 /** Asks the AI to mark a practice answer. */
-export async function gradeAnswer(task: string, model: string, rubric: string[], answer: string): Promise<{ score: number; feedback: string }> {
-  const { system, user } = gradeMessages(task, model, rubric, answer);
-  return askUntil(system, user, parseGrade, 'a mark');
+export async function gradeAnswer(input: { task: string; model: string; rubric: string[]; answer: string }): Promise<{ score: number; feedback: string }> {
+  return askUntil(gradeMessages(input), parseGrade, 'a mark');
 }

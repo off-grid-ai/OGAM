@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../theme';
 import { Button } from '../components/Button';
-import { Choice } from '../components/games/kit';
+import { Choice, GOOD } from '../components/games/kit';
 import { shuffle } from '../study/games/logic';
 import { gradeAnswer } from './service';
 import { starsForShare, type SquareContent } from './formats';
@@ -150,7 +150,7 @@ export function OrderView({ content, onDone }: ViewProps<'order'>) {
       <Text style={t.meta}>Tap the steps in the right order.</Text>
       {chosen.map((n, i) => (
         <TouchableOpacity key={n} onPress={() => { if (checked !== 'right') { setChosen(chosen.filter((x) => x !== n)); setChecked(null); } }}
-          style={[styles.step, t.card, checked === 'right' && styles.stepRight]} testID={`order-chosen-${i}`}>
+          style={[styles.step, t.card, checked === 'right' && { borderColor: GOOD }]} testID={`order-chosen-${i}`}>
           <Text style={t.body}>{i + 1}. {content.steps[n]}</Text>
         </TouchableOpacity>
       ))}
@@ -177,7 +177,7 @@ export function PracticeView({ content, onDone }: ViewProps<'practice'>) {
   const [hint, setHint] = useState(false);
   const check = async () => {
     setBusy(true); setError(null);
-    try { setResult(await gradeAnswer(content.task, content.model, content.rubric, answer)); } catch (e: any) { setError(String(e?.message || e)); }
+    try { setResult(await gradeAnswer({ task: content.task, model: content.model, rubric: content.rubric, answer })); } catch (e: any) { setError(String(e?.message || e)); }
     setBusy(false);
   };
   const finished = !!result || skipped;
@@ -226,6 +226,5 @@ const styles = StyleSheet.create({
   flash: { borderWidth: 1, borderRadius: 14, minHeight: 160, padding: 16, alignItems: 'center', justifyContent: 'center', gap: 10 },
   center: { textAlign: 'center' },
   step: { borderWidth: 1, borderRadius: 10, padding: 12 },
-  stepRight: { borderColor: '#16A34A' },
   input: { borderWidth: 1, borderRadius: 8, padding: 10, minHeight: 120, textAlignVertical: 'top' },
 });

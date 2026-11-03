@@ -144,7 +144,7 @@ export function parseContent(format: SquareFormat, raw: string): SquareContent |
   return { kind: 'practice', task, hint: str(j.hint, 300) || undefined, model: str(j.model, 1200), rubric: list(j.rubric).map((r) => str(r, 200)).filter(Boolean).slice(0, 6) };
 }
 
-export function gradeMessages(task: string, model: string, rubric: string[], answer: string) {
+export function gradeMessages({ task, model, rubric, answer }: { task: string; model: string; rubric: string[]; answer: string }) {
   return {
     system: 'You are a fair, encouraging teacher marking a learner\'s answer. Reply with ONLY JSON.',
     user: `Task: ${task}\nA good answer: ${model}\nIt should include: ${rubric.join('; ') || '(see the good answer)'}\nLearner's answer:\n${answer}\n\nReply with ONLY: {"score": 0 to 100, "feedback": "2 to 4 sentences: what is right, what is missing or wrong, how to improve"}`,
