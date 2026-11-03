@@ -1,0 +1,133 @@
+name: Set up the iOS build
+description: >
+  Ruby and CocoaPods, the pods and the stable-diffusion.cpp video runtime, the Xcode module cache and
+  ccache: what every iOS build runs after setup-mobile, in CI, UAT and release. One definition of
+  each cache key, so a beta restores what main's CI saved. Only ccache differs by configuration.
+
+inputs:
+  configuration:
+    description: debug or release. Only the compiler cache is kept apart by it.
+    required: true
+  save:
+    description: Save fresh pods, video runtime and compiler cache. Release passes 'false' and only restores.
+    required: false
+    default: 'true'
+
+outputs:
+  modules-key:
+    description: The Xcode module cache key, for the save after the build (the module cache fills during it).
+    value: ${{ steps.modules_cache.outputs.cache-primary-key }}
+  modules-hit:
+    description: Whether the module cache was restored exactly.
+    value: ${{ steps.modules_cache.outputs.cache-hit }}
+  xcconfig:
+    description: The xcconfig that routes clang through ccache; set XCODE_XCCONFIG_FILE to it for the build.
+    value: ${{ runner.temp }}/xcode-ccache/ccache.xcconfig
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Ruby for iOS dependencies
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.3'
+        bundler-cache: true
+
+    # ios/Pods, so pod install does not download every pod again (hermes-engine alone is large).
+    # pod install still runs and reconciles the restored tree with Podfile.lock.
+    #
+    # Keyed on package-lock.json too, with no fallback across it. The development pods live in
+    # node_modules, and pod install runs a pod's prepare_command (react-native-audio-api downloads
+    # its prebuilt libcrypto, libopus and libvorbis into node_modules) only when it installs that pod.
+    # A Pods tree restored beside a fresh node_modules skipped it, and the iOS build failed on the
+    # missing libraries. A new lock file installs the pods afresh, and the step below the restore
+    # runs that download itself, because node_modules is cached before pod install fills it.
+    - name: Restore CocoaPods
+      id: pods_cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ios/Pods
+        key: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('ios/Podfile', 'ios/Podfile.lock') }}
+        restore-keys: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}-
+
+    # The stable-diffusion.cpp xcframework that pod install builds (scripts/build-video-ios.sh).
+    # It is built once per runtime revision; the script still checks its own build key and
+    # rebuilds when it does not match.
+    - name: Restore the iOS video runtime
+      id: video_cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: native/video/OffgridVideoRuntime.xcframework
+        key: video-ios-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/video/**', 'scripts/build-video-ios.sh') }}
+
+    # react-native-audio-api's prepare_command, run here: pod install skips it for a restored pod.
+    # The script skips what is already there.
+    - name: Download react-native-audio-api's prebuilt libraries
+      shell: bash
+      working-directory: node_modules/react-native-audio-api
+      run: bash scripts/download-prebuilt-binaries.sh ios
+
+    # Use the CocoaPods pinned in Gemfile.lock, so Podfile.lock is reproduced as committed. Restoring
+    # a lock rewritten by another CocoaPods left Pods/Manifest.lock out of step with it, and the iOS
+    # archive then stopped with "The sandbox is not in sync with the Podfile.lock". On the runner
+    # even the pinned CocoaPods still rewrites two lines of Podfile.lock. uat.sh needs the committed
+    # lock, and the build's Check Pods Manifest.lock step compares it with Pods/Manifest.lock, so
+    # print the drift, restore the lock and record it as the manifest. setup-ruby's bundler-cache
+    # writes .bundle/config and can rewrite Gemfile.lock, restored for the same reason.
+    - name: Install iOS dependencies
+      shell: bash
+      run: |
+        bundle exec pod install --project-directory=ios
+        git diff -- ios/Podfile.lock
+        git checkout -- ios/Podfile.lock
+        cp ios/Podfile.lock ios/Pods/Manifest.lock
+        git checkout -- .bundle/config Gemfile.lock 2>/dev/null || true
+
+    - name: Save CocoaPods
+      if: ${{ inputs.save == 'true' && steps.pods_cache.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ios/Pods
+        key: ${{ steps.pods_cache.outputs.cache-primary-key }}
+
+    - name: Save the iOS video runtime
+      if: ${{ inputs.save == 'true' && steps.video_cache.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: native/video/OffgridVideoRuntime.xcframework
+        key: ${{ steps.video_cache.outputs.cache-primary-key }}
+
+    # Clang modules that Xcode builds for the SDK and the pods, shared by Debug and Release. A full
+    # DerivedData restore does not make the build incremental (Xcode's file signatures include
+    # inodes, which a restore changes); ccache below is what reuses compiled objects. Saved by the
+    # caller after the build, which is what fills it.
+    - name: Restore Xcode module cache
+      id: modules_cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/Library/Developer/Xcode/DerivedData/ModuleCache.noindex
+        key: xcode-modules-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ios/Podfile.lock') }}
+        restore-keys: xcode-modules-${{ runner.os }}-${{ runner.arch }}-
+
+    # Outside the checkout: uat.sh refuses a dirty tree. scripts/xcode-ccache.sh writes this
+    # directory into its wrappers.
+    - name: Locate the ccache directory
+      shell: bash
+      run: echo "CCACHE_DIR=$HOME/Library/Caches/ccache" >> "$GITHUB_ENV"
+
+    - name: Setup ccache
+      uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
+      with:
+        key: ios-${{ inputs.configuration }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'scripts/video/revision') }}
+        restore-keys: ios-${{ inputs.configuration }}-${{ runner.os }}-${{ runner.arch }}-
+        max-size: 2G
+        # Keep only what this build used, so the saved cache does not grow run after run.
+        evict-old-files: job
+        save: ${{ inputs.save == 'true' }}
+
+    # Route every C/C++/Objective-C compile through ccache. XCODE_XCCONFIG_FILE overrides the build
+    # settings of every target from the environment, so the tracked Xcode project stays as
+    # committed (uat.sh refuses a dirty tree).
+    - name: Route clang through ccache
+      shell: bash
+      run: bash scripts/xcode-ccache.sh "$RUNNER_TEMP/xcode-ccache"
