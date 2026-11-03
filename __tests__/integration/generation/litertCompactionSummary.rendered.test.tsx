@@ -25,10 +25,12 @@ const historyOf = (resetArgs: unknown[]): Turn[] => JSON.parse(String(resetArgs[
 
 describe('LiteRT compaction from the chat', () => {
   it('the LiteRT model summarizes the dropped turns, and the next session opens with that summary', async () => {
-    const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', deferInitialLoad: true });
     h.render();
     const view = h.view!;
     const native = h.boundary.litert;
+    // Native fits the context to free RAM; on the phone it loaded well under the 4096 setting.
+    native.module.loadModel.mockResolvedValueOnce({ backend: 'gpu', maxNumTokens: 2048 });
     const parisQuestion = `Write a long story about Paris. ${'Paris '.repeat(800)}`;
 
     await h.send(parisQuestion, { content: 'Once upon a time in Paris.' });
