@@ -204,26 +204,10 @@ jobs:
         with:
           private-token: ${{ github.event_name != 'workflow_dispatch' && secrets.PRO_SUBMODULE_PAT || '' }}
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Set up the Android build
+        uses: ./.github/actions/setup-android
         with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      # Gradle wrapper and dependency caches. The open-source 'basic' provider: the default
-      # 'enhanced' one is a commercial service. Pull requests read the cache that main writes.
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
-        with:
-          cache-provider: basic
-
-      - name: Install Android NDK
-        # Configuring the native modules (op-sqlite etc.) needs the pinned NDK; the runner image
-        # doesn't ship it, so the android test task failed at configure with
-        # "Failed to install ndk;...". Install the version android/build.gradle forces.
-        run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMANAGER" "ndk;27.1.12297006" >/dev/null
+          video: 'false'
 
       - name: Run Android tests
         run: cd android && ./gradlew :app:testDebugUnitTest --rerun-tasks
@@ -256,105 +240,24 @@ jobs:
         with:
           private-token: ${{ github.event_name != 'workflow_dispatch' && secrets.PRO_SUBMODULE_PAT || '' }}
 
-      - name: Setup Ruby for iOS dependencies
-        uses: ruby/setup-ruby@v1
+      - name: Set up the iOS build
+        id: ios
+        uses: ./.github/actions/setup-ios
         with:
-          ruby-version: '3.3'
-          bundler-cache: true
-
-      # ios/Pods, so pod install does not download every pod again (hermes-engine alone is large).
-      # pod install still runs and reconciles the restored tree with Podfile.lock.
-      #
-      # Keyed on package-lock.json too, with no fallback across it. The development pods live in
-      # node_modules, and pod install runs a pod's prepare_command (react-native-audio-api downloads
-      # its prebuilt libcrypto, libopus and libvorbis into node_modules) only when it installs that pod.
-      # A Pods tree restored beside a fresh node_modules skipped it, and the iOS build failed on the
-      # missing libraries. A new lock file installs the pods afresh, and the step below the restore
-      # runs that download itself, because node_modules is cached before pod install fills it.
-      - name: Restore CocoaPods
-        id: pods_cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ios/Pods
-          key: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('ios/Podfile', 'ios/Podfile.lock') }}
-          restore-keys: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}-
-
-      # The stable-diffusion.cpp xcframework that pod install builds (scripts/build-video-ios.sh).
-      # It is built once per runtime revision; the script still checks its own build key and
-      # rebuilds when it does not match.
-      - name: Restore the iOS video runtime
-        id: video_cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: native/video/OffgridVideoRuntime.xcframework
-          key: video-ios-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/video/**', 'scripts/build-video-ios.sh') }}
-
-      # react-native-audio-api's prepare_command, run here: pod install skips it for a restored pod.
-      # The script skips what is already there.
-      - name: Download react-native-audio-api's prebuilt libraries
-        working-directory: node_modules/react-native-audio-api
-        run: bash scripts/download-prebuilt-binaries.sh ios
-
-      - name: Install iOS dependencies
-        id: pods
-        run: bundle exec pod install --project-directory=ios
-
-      - name: Save CocoaPods
-        if: ${{ steps.pods_cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ios/Pods
-          key: ${{ steps.pods_cache.outputs.cache-primary-key }}
-
-      - name: Save the iOS video runtime
-        if: ${{ steps.video_cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: native/video/OffgridVideoRuntime.xcframework
-          key: ${{ steps.video_cache.outputs.cache-primary-key }}
-
-      # Clang modules that Xcode builds for the SDK and the pods. A full DerivedData restore does not
-      # make the build incremental (Xcode's file signatures include inodes, which a restore changes);
-      # ccache below is what reuses compiled objects.
-      - name: Restore Xcode module cache
-        id: modules_cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/Library/Developer/Xcode/DerivedData/ModuleCache.noindex
-          key: xcode-modules-debug-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ios/Podfile.lock') }}
-          restore-keys: xcode-modules-debug-${{ runner.os }}-${{ runner.arch }}-
-
-      # Outside the checkout. scripts/xcode-ccache.sh writes this directory into its wrappers.
-      - name: Locate the ccache directory
-        run: echo "CCACHE_DIR=$HOME/Library/Caches/ccache" >> "$GITHUB_ENV"
-
-      - name: Setup ccache
-        uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
-        with:
-          key: ios-debug-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'scripts/video/revision') }}
-          restore-keys: ios-debug-${{ runner.os }}-${{ runner.arch }}-
-          max-size: 2G
-          # Keep only what this build used, so the saved cache does not grow run after run.
-          evict-old-files: job
-
-      # Route every C/C++/Objective-C compile through ccache. XCODE_XCCONFIG_FILE overrides the
-      # build settings of every target from the environment, so the tracked Xcode project stays as
-      # committed.
-      - name: Route clang through ccache
-        run: bash scripts/xcode-ccache.sh "$RUNNER_TEMP/xcode-ccache"
+          configuration: debug
 
       - name: Run iOS tests
         id: ios_tests
         env:
-          XCODE_XCCONFIG_FILE: ${{ runner.temp }}/xcode-ccache/ccache.xcconfig
+          XCODE_XCCONFIG_FILE: ${{ steps.ios.outputs.xcconfig }}
         run: npm run test:ios
 
       - name: Save Xcode module cache
-        if: ${{ !cancelled() && steps.ios_tests.outcome != 'skipped' && steps.modules_cache.outputs.cache-hit != 'true' }}
+        if: ${{ !cancelled() && steps.ios_tests.outcome != 'skipped' && steps.ios.outputs.modules-hit != 'true' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Developer/Xcode/DerivedData/ModuleCache.noindex
-          key: ${{ steps.modules_cache.outputs.cache-primary-key }}
+          key: ${{ steps.ios.outputs.modules-key }}
 
       - name: Upload iOS test results
         if: always()
@@ -363,6 +266,23 @@ jobs:
           name: ios-test-results
           path: ~/Library/Developer/Xcode/DerivedData/**/Logs/Test/*.xcresult
           if-no-files-found: ignore
+
+  # The Android video runtime a UAT build restores (.github/actions/setup-android). The JVM tests
+  # above never build it, so main's push saves it here and the first beta after a merge restores it
+  # instead of building cold. It looks up its key without downloading and builds only on a miss.
+  # The iOS pods and video runtime are saved by the iOS job.
+  release-caches:
+    name: release caches (Android video)
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up the Android build
+        uses: ./.github/actions/setup-android
+        with:
+          lookup-only: 'true'
 
   # One check to require, and the name the single job had: green only when every job above is.
   ci:
