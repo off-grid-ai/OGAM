@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../theme';
 import { Button } from '../components/Button';
+import { MarkdownText } from '../components/MarkdownText';
 import { Choice, GOOD } from '../components/games/kit';
 import { shuffle } from '../study/games/logic';
 import { gradeAnswer } from './service';
@@ -186,7 +187,7 @@ export function PracticeView({ content, onDone }: ViewProps<'practice'>) {
       <Text style={t.body}>{content.task}</Text>
       {!!content.hint && (hint ? <Text style={t.meta}>Hint: {content.hint}</Text> : <TouchableOpacity onPress={() => setHint(true)} testID="practice-hint"><Text style={{ color: t.colors.primary }}>Show a hint</Text></TouchableOpacity>)}
       <TextInput value={answer} onChangeText={setAnswer} multiline editable={!finished} placeholder="Your answer" placeholderTextColor={t.colors.textMuted}
-        style={[styles.input, { color: t.colors.text, borderColor: t.colors.border }]} testID="practice-input" autoCapitalize="none" />
+        style={[styles.input, content.code && styles.code, { color: t.colors.text, borderColor: t.colors.border }]} testID="practice-input" autoCapitalize="none" autoCorrect={!content.code} />
       {busy && <ActivityIndicator color={t.colors.primary} />}
       {!!error && <Text style={{ color: t.colors.error }} testID="practice-error">{error}</Text>}
       {!finished && (
@@ -206,12 +207,87 @@ export function PracticeView({ content, onDone }: ViewProps<'practice'>) {
   );
 }
 
+/** A problem with a number for an answer: type it, see if it is within the tolerance, then read the working. */
+export function NumericView({ content, onDone }: ViewProps<'numeric'>) {
+  const t = useText();
+  const [typed, setTyped] = useState('');
+  const [tries, setTries] = useState(0);
+  const [result, setResult] = useState<'right' | 'wrong' | null>(null);
+  const [shown, setShown] = useState(false);
+  const check = () => {
+    const value = Number(typed.replace(/[,\s]/g, '').replace(/[^\d.+\-eE]/g, ''));
+    const ok = Number.isFinite(value) && Math.abs(value - content.answer) <= Math.max(content.tolerance, 1e-9);
+    setTries(tries + 1);
+    setResult(ok ? 'right' : 'wrong');
+    if (ok) setShown(true);
+  };
+  return (
+    <ScrollView contentContainerStyle={styles.gap} keyboardShouldPersistTaps="handled" testID="square-numeric">
+      <Text style={t.body}>{content.task}</Text>
+      <View style={styles.row}>
+        <TextInput value={typed} onChangeText={(v) => { setTyped(v); setResult(null); }} keyboardType="numbers-and-punctuation" editable={result !== 'right'} placeholder="Your answer"
+          placeholderTextColor={t.colors.textMuted} style={[styles.numberInput, styles.flex, { color: t.colors.text, borderColor: t.colors.border }]} testID="numeric-input" />
+        {!!content.unit && <Text style={t.body}>{content.unit}</Text>}
+      </View>
+      {result === 'wrong' && <Text style={{ color: t.colors.error }} testID="numeric-wrong">Not quite. Check the working and try again{tries >= 2 ? ', or look at the working below' : ''}.</Text>}
+      {result === 'right' && <Text style={{ color: t.colors.primary }} testID="numeric-right">Correct: {content.answer} {content.unit}</Text>}
+      {result !== 'right' && <Button title="Check" disabled={!typed.trim()} onPress={check} testID="numeric-check" />}
+      {result !== 'right' && !shown && <TouchableOpacity onPress={() => setShown(true)} testID="numeric-show"><Text style={t.meta}>Show the working</Text></TouchableOpacity>}
+      {shown && (
+        <View style={[styles.box, t.card]} testID="numeric-working">
+          <Text style={t.head}>Working</Text>
+          {content.working.map((w, i) => <Text key={i} style={t.body}>{i + 1}. {w}</Text>)}
+          {result !== 'right' && <Text style={t.body}>Answer: {content.answer} {content.unit}</Text>}
+        </View>
+      )}
+      {(result === 'right' || shown) && <Button title="Finish" onPress={() => onDone(result === 'right' ? starsForShare(1 / tries) : 1)} testID="numeric-done" />}
+    </ScrollView>
+  );
+}
+
+/** One problem solved a step at a time, each step with its reason. */
+export function WorkedView({ content, onDone }: ViewProps<'worked'>) {
+  const t = useText();
+  const [shown, setShown] = useState(1);
+  const all = shown >= content.steps.length;
+  return (
+    <View style={styles.gap} testID="square-worked">
+      <Text style={t.head}>{content.problem}</Text>
+      {content.steps.slice(0, shown).map((x, i) => (
+        <View key={i} style={[styles.box, t.card]}>
+          <Text style={t.body}>{i + 1}. {x.step}</Text>
+          {!!x.why && <Text style={t.meta}>Why: {x.why}</Text>}
+        </View>
+      ))}
+      {all && !!content.takeaway && <Text style={t.body} testID="worked-takeaway">Remember: {content.takeaway}</Text>}
+      {all
+        ? <Button title="Got it" onPress={() => onDone(3)} testID="worked-done" />
+        : <Button title="Next step" onPress={() => setShown(shown + 1)} testID="worked-next" />}
+    </View>
+  );
+}
+
+/** A reference table, drawn like a chat table so it can be copied the same way. */
+export function TableView({ content, onDone }: ViewProps<'table'>) {
+  const t = useText();
+  return (
+    <View style={styles.gap} testID="square-table">
+      {!!content.title && <Text style={t.head}>{content.title}</Text>}
+      <MarkdownText>{content.markdown}</MarkdownText>
+      <Button title="Got it" onPress={() => onDone(3)} testID="table-done" />
+    </View>
+  );
+}
+
 export function SquareView({ content, onDone }: { content: SquareContent; onDone: (stars: 1 | 2 | 3) => void }) {
   switch (content.kind) {
     case 'lesson': return <LessonView content={content} onDone={onDone} />;
     case 'quiz': return <QuizView content={content} onDone={onDone} />;
     case 'cards': return <CardsView content={content} onDone={onDone} />;
     case 'match': return <MatchView content={content} onDone={onDone} />;
+    case 'numeric': return <NumericView content={content} onDone={onDone} />;
+    case 'worked': return <WorkedView content={content} onDone={onDone} />;
+    case 'table': return <TableView content={content} onDone={onDone} />;
     case 'order': return <OrderView content={content} onDone={onDone} />;
     default: return <PracticeView content={content} onDone={onDone} />;
   }
@@ -227,4 +303,6 @@ const styles = StyleSheet.create({
   center: { textAlign: 'center' },
   step: { borderWidth: 1, borderRadius: 10, padding: 12 },
   input: { borderWidth: 1, borderRadius: 8, padding: 10, minHeight: 120, textAlignVertical: 'top' },
+  code: { fontFamily: 'monospace', fontSize: 14 },
+  numberInput: { borderWidth: 1, borderRadius: 8, padding: 10, fontSize: 18 },
 });

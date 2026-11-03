@@ -20,11 +20,13 @@ export interface Course {
   lastPlayedAt?: number;
   /** The learner's own material (pages found online, notes, files) the squares are written from. */
   sources: CourseSource[];
+  /** The project this course belongs to: its shared documents are material for the squares, and its chats are where the tutor talks. */
+  projectId?: string;
 }
 
 interface TopicsState {
   courses: Course[];
-  add: (request: CourseRequest, plan: CoursePlan, sources?: CourseSource[]) => string;
+  add: (request: CourseRequest, plan: CoursePlan, sources?: CourseSource[], projectId?: string) => string;
   addSources: (id: string, sources: CourseSource[]) => void;
   removeSource: (id: string, sourceId: string) => void;
   clearContent: (id: string, key: string) => void;
@@ -37,11 +39,11 @@ interface TopicsState {
 
 export const useTopics = create<TopicsState>()(persist((set) => ({
   courses: [],
-  add: (request, plan, sources = []) => {
+  add: (request, plan, sources = [], projectId) => {
     const id = localUniqueId('course');
     const course: Course = {
       id, topic: request.topic, title: plan.title, summary: plan.summary, style: plan.style, theme: plan.theme, request,
-      squares: plan.squares, content: {}, progress: {}, createdAt: Date.now(), sources,
+      squares: plan.squares, content: {}, progress: {}, createdAt: Date.now(), sources, projectId,
     };
     set((s) => ({ courses: [course, ...s.courses].slice(0, 20) }));
     return id;

@@ -480,6 +480,14 @@ The **Build Atlas voices** workflow ran successfully on 2026-10-19, so `kitten-n
 - **Contact actions**: the draft tool can also **open the phone app with a number ready** to call. Not done: reply notifications and watch alerts.
 - Not verified on a device.
 
+## 8u. Styles, Gemma 4 fix, more kinds of square, courses inside projects (0.0.125)
+
+- **Styles** (Settings > Appearance > Style): **Aero glass**, **Retro desktop** (Windows 95 look), **Windows XP**, **Classic Mac**, **iOS**, **Material You**, **Neon night**, **Green terminal**. A style sets the colors, accent, font and chat style, and also the **shape of boxes**: corner size, border weight and shadow or glow, applied to every themed screen. You can still change any part afterwards; "Atlas" returns to the standard look and "Reset the look" clears the style. Screens with hard-coded sizes only take the colors, not the shape.
+- **Gemma 4 and Gemma 3n files load with an f16 cache** whatever the cache setting says (quantized KV cache crashed them), including when the chosen cache is q8_0 or q4_0. Applies by file name (gemma-4, gemma4, gemma-3n). If a model still crashes on load, pull the debug log (see CLAUDE.md) and send the last lines.
+- **Twelve kinds of square for Learn a topic**: lesson, quiz, flashcards, match, put in order, practice (code answers get a code box), plus **fill the gap**, **true or false**, **scenario**, **calculate** (a number with a tolerance and the working), **worked example** (revealed step by step) and **table** (copyable like a chat table). The AI picks per square. **Ask the tutor about this** on every square opens a chat about it.
+- **Courses are part of projects**: a project has a **Courses** row (courses for its subject, built from the project's shared documents as well as the course's own sources), and its tutor chats are in the project. The Home entry still makes a course without a project.
+- Not verified on a device.
+
 ## Build evidence and checks
 
 - New **Android unit tests** workflow runs the Kotlin/JVM tests (`:app:testDebugUnitTest`) on every push that

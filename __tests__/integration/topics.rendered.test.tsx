@@ -172,3 +172,30 @@ it('finds sources online, has the AI choose, reads the pages, and keeps only tho
   expect(found.length).toBeGreaterThan(0);
   expect(found.every((s: any) => s.kind === 'web' && s.url && s.text.length >= 300)).toBe(true);
 }, 60000);
+
+it('a course made from a project belongs to that project, and the project\'s page only lists its own courses', async () => {
+  const boundary = installNativeBoundary({ llama: true, fs: true, ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB } });
+  const rtl = requireRTL();
+  const React = require('react');
+  const { useAppStore } = require('../../src/stores');
+  const { hardwareService } = require('../../src/services/hardware');
+  const { TopicsScreen } = require('../../src/topics/TopicScreens');
+  const { useTopics } = require('../../src/topics/store');
+  useAppStore.getState().updateSettings({ inferenceBackend: 'cpu' });
+  boundary.fs!.seedFile('/models/small.gguf', 500 * 1024 * 1024);
+  await hardwareService.refreshMemoryInfo();
+  useAppStore.setState({ downloadedModels: [createDownloadedModel({ id: 'llm', engine: 'llama', filePath: '/models/small.gguf', fileSize: 500 * 1024 * 1024 })], activeModelId: 'llm' });
+  const plan = { title: 'Other', summary: '', style: '', theme: '', squares: [{ key: 's1', format: 'lesson' as const, title: 'A', focus: 'a', unit: 'U' }] };
+  useTopics.setState({ courses: [] });
+  useTopics.getState().add({ topic: 'Elsewhere', goal: '', level: 'x', how: '', minutes: 10 }, plan, [], 'other-project');
+
+  mockParams = { projectId: 'p1', topic: 'Biology 101' };
+  boundary.llama!.scriptCompletion({ text: PLAN });
+  const screen = rtl.render(React.createElement(TopicsScreen));
+  expect(screen.queryByText('Other')).toBeNull();
+  rtl.fireEvent.press(screen.getByTestId('course-new'));
+  expect(screen.getByTestId('course-topic').props.value).toBe('Biology 101');
+  rtl.fireEvent.press(screen.getByTestId('course-make'));
+  await rtl.waitFor(() => expect(useTopics.getState().courses.length).toBe(2), { timeout: 8000 });
+  expect(useTopics.getState().courses.find((c: any) => c.title === 'Accounting basics')?.projectId).toBe('p1');
+}, 60000);

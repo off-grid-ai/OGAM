@@ -55,3 +55,26 @@ describe('topic courses: what the AI writes for a square', () => {
     expect([0.5, 0.7, 0.95].map(starsForShare)).toEqual([1, 2, 3]);
   });
 });
+
+describe('topic courses: more kinds of square', () => {
+  it('fill the gap, true or false and scenario squares are read as quiz questions', () => {
+    for (const format of ['fill', 'truefalse', 'scenario'] as const) {
+      const c = parseContent(format, JSON.stringify({ questions: [{ q: 'A ____ is', options: ['x', 'y'], answer: 1, why: 'w' }, { q: 'B', options: ['True', 'False'], answer: 0, why: 'w' }] }));
+      expect(c).toMatchObject({ kind: 'quiz' });
+    }
+  });
+  it('reads a calculation with its tolerance, and sets one when the AI gives none', () => {
+    expect(parseContent('numeric', JSON.stringify({ task: 'Depreciation per year?', answer: 4500, tolerance: 1, unit: 'USD', working: ['(25000-4000)/... '] }))).toMatchObject({ kind: 'numeric', answer: 4500, tolerance: 1, unit: 'USD' });
+    expect(parseContent('numeric', JSON.stringify({ task: 'x', answer: 200 }))).toMatchObject({ tolerance: 2 });
+    expect(parseContent('numeric', JSON.stringify({ task: 'x', answer: 'lots' }))).toBeNull();
+  });
+  it('reads a worked example and a table, and rejects thin ones', () => {
+    expect(parseContent('worked', JSON.stringify({ problem: 'Solve x+2=5', steps: [{ step: 'Subtract 2', why: 'undo +2' }, { step: 'x = 3', why: '' }], takeaway: 'Do the same to both sides' }))).toMatchObject({ kind: 'worked' });
+    expect(parseContent('worked', JSON.stringify({ problem: 'p', steps: [{ step: 'only one', why: '' }] }))).toBeNull();
+    const table = parseContent('table', JSON.stringify({ title: 'Methods', columns: ['Method', 'Formula'], rows: [['Straight-line', '(c-s)/n'], ['Declining', 'rate x book value'], ['bad row'] ] }));
+    expect(table).toMatchObject({ kind: 'table', markdown: '| Method | Formula |\n| --- | --- |\n| Straight-line | (c-s)/n |\n| Declining | rate x book value |' });
+  });
+  it('offers the AI at least twelve kinds of square to choose from', () => {
+    expect(FORMATS.length).toBeGreaterThanOrEqual(12);
+  });
+});

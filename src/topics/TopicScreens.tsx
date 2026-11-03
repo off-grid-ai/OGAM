@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../theme';
+import { useAppStore, useChatStore, useProjectStore } from '../stores';
 import { Button } from '../components/Button';
 import { ForceLoadModel } from '../components/ForceLoadModel';
 import { Board } from '../language/Board';
@@ -17,6 +18,7 @@ import { SquareView } from './SquareViews';
 /** The board's colored band is chosen by a square's kind; each format borrows one so formats read apart at a glance. */
 const BOARD_KIND: Record<SquareFormat, SpaceKind> = {
   lesson: 'lesson', quiz: 'speed', cards: 'story', match: 'wordsearch', order: 'podcast', practice: 'call',
+  fill: 'speed', truefalse: 'speed', scenario: 'call', numeric: 'crossword', worked: 'lesson', table: 'review',
 };
 const iconOf = (format: SquareFormat) => FORMATS.find((f) => f.id === format)?.icon ?? 'circle';
 
@@ -47,9 +49,13 @@ function Header({ title, onBack }: { title: string; onBack: () => void }) {
 export const TopicsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { colors } = useTheme();
-  const { courses, remove } = useTopics();
+  const given = (useRoute<any>().params ?? {}) as { projectId?: string; topic?: string };
+  const all = useTopics((s) => s.courses);
+  const remove = useTopics((s) => s.remove);
+  const projectName = useProjectStore((s) => s.projects.find((p) => p.id === given.projectId)?.name);
+  const courses = given.projectId ? all.filter((c) => c.projectId === given.projectId) : all;
   const [form, setForm] = useState(false);
-  const [topic, setTopic] = useState('');
+  const [topic, setTopic] = useState(given.topic ?? '');
   const [goal, setGoal] = useState('');
   const [how, setHow] = useState('');
   const [level, setLevel] = useState(LEVELS[0]);
@@ -64,7 +70,7 @@ export const TopicsScreen: React.FC = () => {
     try {
       const sources = online ? await findSources(topic.trim(), goal.trim(), setStep) : [];
       setStep('Designing your board...');
-      const id = await createCourse({ topic: topic.trim(), goal: goal.trim(), level, how: how.trim(), minutes }, sources);
+      const id = await createCourse({ topic: topic.trim(), goal: goal.trim(), level, how: how.trim(), minutes }, sources, given.projectId);
       setForm(false); setTopic(''); setGoal(''); setHow('');
       navigation.navigate('TopicBoard', { courseId: id });
     } catch (e: any) { setError(String(e?.message || e)); }
@@ -76,10 +82,10 @@ export const TopicsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <Header title="Learn a topic" onBack={() => navigation.goBack()} />
+      <Header title={projectName ? `Courses in ${projectName}` : 'Learn a topic'} onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <Text style={[styles.meta, { color: colors.textMuted }]}>
-          Name anything: accounting, Python, the French Revolution, guitar chords. The AI on your phone designs a board for it, choosing lessons, quizzes, flashcards, matching, ordering and practice problems to suit the subject and how you like to learn, and writes each square when you reach it.
+          {projectName ? `A course in this project: the project's shared documents are used as material, and the tutor chats live in the project. ` : ''}Name anything: accounting, Python, the French Revolution, guitar chords. The AI on your phone designs a board for it, choosing lessons, quizzes, flashcards, matching, ordering and practice problems to suit the subject and how you like to learn, and writes each square when you reach it.
         </Text>
         {courses.map((c) => {
           const p = courseProgress(c);
@@ -251,6 +257,17 @@ export const TopicSquareScreen: React.FC = () => {
     setStars(n);
   };
   const again = () => { useTopics.getState().clearContent(courseId, key); setContent(null); setStars(null); setAddedRemedial(false); load(); };
+  const askTutor = () => {
+    const app = useAppStore.getState();
+    const modelId = app.activeModelId ?? app.downloadedModels[0]?.id;
+    if (!modelId) { Alert.alert('No model', 'Download or pick a text model first.'); return; }
+    const chat = useChatStore.getState();
+    const id = chat.createConversation(modelId, `${course.title}: ${square.title}`, course.projectId);
+    navigation.navigate('Chat', {
+      conversationId: id, ...(course.projectId ? { projectId: course.projectId } : {}),
+      starter: `I'm working through the course "${course.title}" (${course.topic}), on the square "${square.title}": ${square.focus}. `,
+    });
+  };
   const index = course.squares.findIndex((s) => s.key === key);
   const next = useTopics.getState().courses.find((c) => c.id === courseId)?.squares[index + 1] ?? course.squares[index + 1];
   const results = course.squares.slice(Math.max(0, index - 2), index).map((q) => course.progress[q.key]?.stars ?? 0);
@@ -271,6 +288,9 @@ export const TopicSquareScreen: React.FC = () => {
           </View>
         ) : content ? (
           <>
+            <TouchableOpacity onPress={askTutor} testID="square-tutor" accessibilityLabel="Ask the tutor about this square">
+              <Text style={{ color: colors.primary }}>Ask the tutor about this</Text>
+            </TouchableOpacity>
             {square.format === 'lesson' && (
               <TouchableOpacity onPress={() => finish(2)} testID="square-skip" accessibilityLabel="I already know this">
                 <Text style={{ color: colors.primary }}>{cruising ? 'You got the last two right. Skip this lesson?' : 'I already know this'}</Text>

@@ -20,9 +20,19 @@ async function askUntil<T>(prompt: { system: string; user: string }, read: (raw:
 }
 
 /** Plans a course for the request and saves it. Returns its id. */
-export async function createCourse(request: CourseRequest, sources: CourseSource[] = []): Promise<string> {
+export async function createCourse(request: CourseRequest, sources: CourseSource[] = [], projectId?: string): Promise<string> {
   const plan = await askUntil(planMessages(request, sources), parsePlan, 'a course plan');
-  return useTopics.getState().add(request, plan, sources);
+  return useTopics.getState().add(request, plan, sources, projectId);
+}
+
+/** Passages from the shared documents of the course's project that match the square (none when there is no project or no documents). */
+async function projectExcerpts(projectId: string | undefined, query: string): Promise<{ source: string; text: string }[]> {
+  if (!projectId) return [];
+  try {
+    const { ragService } = require('../services/rag');
+    const found = await ragService.searchProject(projectId, query);
+    return (found?.chunks ?? []).slice(0, 3).map((c: { name: string; content: string }) => ({ source: c.name, text: String(c.content).slice(0, 700) }));
+  } catch { return []; }
 }
 
 /** The content of a square: kept from before, or written now. */
@@ -36,7 +46,7 @@ export async function squareContent(course: Course, key: string): Promise<Square
   const content = await askUntil(contentMessages({
     courseTitle: course.title, topic: course.topic, level: course.request.level, how: course.request.how, style: course.style,
     square, before, minutes: course.request.minutes,
-    excerpts: relevantExcerpts(course.sources ?? [], `${square.title} ${square.focus}`),
+    excerpts: [...await projectExcerpts(course.projectId, `${square.title} ${square.focus}`), ...relevantExcerpts(course.sources ?? [], `${square.title} ${square.focus}`)].slice(0, 5),
   }), (raw) => parseContent(square.format, raw), `the "${square.title}" square`);
   useTopics.getState().setContent(course.id, key, content);
   return content;

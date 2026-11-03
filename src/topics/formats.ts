@@ -6,7 +6,7 @@
  */
 import { parseJsonLoose, str } from '../study/games/json';
 
-export type SquareFormat = 'lesson' | 'quiz' | 'cards' | 'match' | 'order' | 'practice';
+export type SquareFormat = 'lesson' | 'quiz' | 'cards' | 'match' | 'order' | 'practice' | 'fill' | 'truefalse' | 'scenario' | 'numeric' | 'worked' | 'table';
 export const FORMATS: { id: SquareFormat; label: string; icon: string; use: string }[] = [
   { id: 'lesson', label: 'Lesson', icon: 'book-open', use: 'a short explanation with sections, an example and key points: for new ideas, rules, worked examples, code to read' },
   { id: 'quiz', label: 'Quiz', icon: 'help-circle', use: 'multiple choice questions with a reason for each answer: to check understanding, scenarios, case studies' },
@@ -14,6 +14,12 @@ export const FORMATS: { id: SquareFormat; label: string; icon: string; use: stri
   { id: 'match', label: 'Match', icon: 'link', use: 'pairs to join: terms to meanings, causes to effects, accounts to types, functions to results' },
   { id: 'order', label: 'Put in order', icon: 'list', use: 'steps or events to put in the right order: procedures, algorithms, timelines, processes' },
   { id: 'practice', label: 'Practice', icon: 'edit-3', use: 'an open task the learner answers in their own words or code, which the AI then checks: problems, exercises, short writing' },
+  { id: 'fill', label: 'Fill the gap', icon: 'minus-square', use: 'sentences, formulas or code lines with one gap to fill from options: terminology, syntax, key facts' },
+  { id: 'truefalse', label: 'True or false', icon: 'check-circle', use: 'quick statements to judge, with the reason: spotting common mistakes and myths' },
+  { id: 'scenario', label: 'Scenario', icon: 'git-branch', use: 'a short real-world situation with a decision to make: applying a rule, ethics, judgement calls, troubleshooting' },
+  { id: 'numeric', label: 'Calculate', icon: 'hash', use: 'a problem with a numeric answer the learner works out, then sees the working: accounting, maths, physics, finance, statistics' },
+  { id: 'worked', label: 'Worked example', icon: 'layers', use: 'one problem solved step by step, each step revealed with its reason: procedures, proofs, debugging, case analysis' },
+  { id: 'table', label: 'Table', icon: 'grid', use: 'a comparison or reference table to read and copy: differences between things, formulas, syntax cheat sheets, timelines' },
 ];
 export const FORMAT_IDS = FORMATS.map((f) => f.id);
 
@@ -83,7 +89,10 @@ export type SquareContent =
   | { kind: 'cards'; cards: { front: string; back: string }[] }
   | { kind: 'match'; pairs: { left: string; right: string }[] }
   | { kind: 'order'; prompt: string; steps: string[] }
-  | { kind: 'practice'; task: string; hint?: string; model: string; rubric: string[] };
+  | { kind: 'practice'; task: string; hint?: string; model: string; rubric: string[]; code?: boolean }
+  | { kind: 'numeric'; task: string; answer: number; tolerance: number; unit: string; working: string[] }
+  | { kind: 'worked'; problem: string; steps: { step: string; why: string }[]; takeaway: string }
+  | { kind: 'table'; title: string; markdown: string };
 
 export interface SquareRequest { courseTitle: string; topic: string; level: string; how: string; style: string; square: PlannedSquare; before: string[]; minutes: number; excerpts?: { source: string; text: string }[] }
 
@@ -93,7 +102,13 @@ const SHAPES: Record<SquareFormat, string> = {
   cards: '{"cards": [{"front": "term or question", "back": "short definition or answer"}]}  (8 to 14 cards)',
   match: '{"pairs": [{"left": "...", "right": "..."}]}  (5 or 6 pairs, every left and every right different)',
   order: '{"prompt": "what to put in order", "steps": ["first step", "second step", "..."]}  (4 to 7 steps, listed in the CORRECT order)',
-  practice: '{"task": "what the learner must do, self-contained", "hint": "a nudge (optional)", "model": "a good answer", "rubric": ["what a good answer must include"]}',
+  practice: '{"task": "what the learner must do, self-contained", "hint": "a nudge (optional)", "model": "a good answer", "rubric": ["what a good answer must include"], "code": true if the answer is code}',
+  fill: '{"questions": [{"q": "a sentence, formula or code line with ____ where the gap is", "options": ["A", "B", "C"], "answer": 0, "why": "..."}]}  (6 to 8 items, "answer" is the index of the right option)',
+  truefalse: '{"questions": [{"q": "a statement", "options": ["True", "False"], "answer": 0, "why": "the reason it is true or false"}]}  (6 to 8 statements; "answer" is 0 for True or 1 for False; about half false)',
+  scenario: '{"questions": [{"q": "a short situation, then the decision to make", "options": ["choice 1", "choice 2", "choice 3"], "answer": 0, "why": "why that is the best choice"}]}  (3 to 5 different situations)',
+  numeric: '{"task": "a problem with all the numbers it needs and a single numeric answer", "answer": 1250.5, "tolerance": 0.5, "unit": "unit or currency (empty if none)", "working": ["step 1 of the working", "step 2"]}',
+  worked: '{"problem": "the problem being solved", "steps": [{"step": "what is done", "why": "the reason"}], "takeaway": "the one thing to remember"}  (4 to 8 steps)',
+  table: '{"title": "table title", "columns": ["Column 1", "Column 2"], "rows": [["cell", "cell"]]}  (2 to 5 columns, 3 to 10 rows, short cells)',
 };
 
 export function contentMessages(r: SquareRequest) {
@@ -117,7 +132,7 @@ export function parseContent(format: SquareFormat, raw: string): SquareContent |
     const keyPoints = list(j.keyPoints).map((k) => str(k, 200)).filter(Boolean).slice(0, 8);
     return sections.length ? { kind: 'lesson', sections: sections.slice(0, 7), keyPoints } : null;
   }
-  if (format === 'quiz') {
+  if (format === 'quiz' || format === 'fill' || format === 'truefalse' || format === 'scenario') {
     const questions = list(j.questions).map((q) => {
       const options = list(q?.options).map((o) => str(o, 160)).filter(Boolean).slice(0, 5);
       const answer = Number(q?.answer);
@@ -142,9 +157,28 @@ export function parseContent(format: SquareFormat, raw: string): SquareContent |
     const steps = list(j.steps).map((s) => str(s, 200)).filter(Boolean);
     return steps.length >= 3 ? { kind: 'order', prompt: str(j.prompt, 200) || 'Put these in the right order.', steps: steps.slice(0, 8) } : null;
   }
+  if (format === 'numeric') {
+    const task = str(j.task, 700);
+    const answer = Number(j.answer);
+    if (!task || !Number.isFinite(answer)) return null;
+    const tolerance = Number.isFinite(Number(j.tolerance)) && Number(j.tolerance) >= 0 ? Number(j.tolerance) : Math.abs(answer) * 0.01;
+    return { kind: 'numeric', task, answer, tolerance, unit: str(j.unit, 20), working: list(j.working).map((w) => str(w, 300)).filter(Boolean).slice(0, 10) };
+  }
+  if (format === 'worked') {
+    const steps = list(j.steps).map((x) => ({ step: str(x?.step, 400), why: str(x?.why, 300) })).filter((x) => x.step);
+    const problem = str(j.problem, 500);
+    return problem && steps.length >= 2 ? { kind: 'worked', problem, steps: steps.slice(0, 10), takeaway: str(j.takeaway, 300) } : null;
+  }
+  if (format === 'table') {
+    const columns = list(j.columns).map((c) => str(c, 40)).filter(Boolean).slice(0, 5);
+    const rows = list(j.rows).map((r) => list(r).slice(0, columns.length).map((c) => str(c, 80).replace(/\|/g, '/'))).filter((r) => r.length === columns.length && r.some(Boolean)).slice(0, 12);
+    if (columns.length < 2 || rows.length < 2) return null;
+    const line = (cells: string[]) => `| ${cells.join(' | ')} |`;
+    return { kind: 'table', title: str(j.title, 80), markdown: [line(columns), line(columns.map(() => '---')), ...rows.map(line)].join('\n') };
+  }
   const task = str(j.task, 700);
   if (!task) return null;
-  return { kind: 'practice', task, hint: str(j.hint, 300) || undefined, model: str(j.model, 1200), rubric: list(j.rubric).map((r) => str(r, 200)).filter(Boolean).slice(0, 6) };
+  return { kind: 'practice', task, hint: str(j.hint, 300) || undefined, model: str(j.model, 1200), rubric: list(j.rubric).map((r) => str(r, 200)).filter(Boolean).slice(0, 6), code: j.code === true || undefined };
 }
 
 export function gradeMessages({ task, model, rubric, answer }: { task: string; model: string; rubric: string[]; answer: string }) {

@@ -26,6 +26,7 @@ import { isTextDocument } from '../services/rag/textDocument';
 import { LanguageCourseCard } from '../language/LanguageCourseCard';
 import { ProjectPinGate } from '../components/ProjectPinGate';
 import { useActiveTextModel } from '../hooks/useActiveTextModel';
+import { useTopics } from '../topics/store';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProjectDetail'>;
@@ -46,6 +47,7 @@ export const ProjectDetailScreen: React.FC = () => {
   const { downloadedModels, activeModelId } = useAppStore();
 
   const project = getProject(projectId);
+  const projectCourses = useTopics((st) => st.courses.filter((c) => c.projectId === projectId).length);
   // A connected remote model (Ollama, LM Studio...) counts, as it does on Home and in the chat list.
   const { modelId: activeTextModelId } = useActiveTextModel();
   const hasModels = downloadedModels.length > 0 || !!activeTextModelId;
@@ -200,6 +202,20 @@ export const ProjectDetailScreen: React.FC = () => {
           <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>Ask with sources, study guide, flashcards, quiz, mind map, podcast, video</Text>
         </View>
         <Icon name="chevron-right" size={18} color="#fff" />
+      </TouchableOpacity>
+
+      {/* Courses: a subject learned on a board, built from this project's documents */}
+      <TouchableOpacity
+        onPress={() => navigation.navigate('Topics', { projectId, topic: project?.name })}
+        style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 8, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.primary }}
+        testID="project-courses"
+      >
+        <Icon name="compass" size={20} color={colors.primary} />
+        <View style={{ marginLeft: 12, flex: 1 }}>
+          <Text style={{ color: colors.text, fontSize: 15 }}>Courses{projectCourses ? ` (${projectCourses})` : ''}</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Learn this subject on a board, built from the documents in this project</Text>
+        </View>
+        <Icon name="chevron-right" size={18} color={colors.textMuted} />
       </TouchableOpacity>
 
       <View style={styles.sectionsContainer}>

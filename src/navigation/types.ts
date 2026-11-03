@@ -30,7 +30,7 @@ export type RootStackParamList = {
   Share: { text: string };
   Skills: undefined;
   Schedule: undefined;
-  Topics: undefined;
+  Topics: { projectId?: string; topic?: string } | undefined;
   TopicBoard: { courseId: string };
   TopicSquare: { courseId: string; key: string };
   Language: undefined;
