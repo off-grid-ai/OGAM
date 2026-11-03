@@ -160,6 +160,10 @@ export const AppearanceScreen: React.FC = () => {
         <Text style={styles.label}>Follow-up questions</Text>
         <Chips testID="ai-followups" value={ai.followUps} onPick={followUps => setAi({ followUps })}
           options={[{ id: undefined, name: 'Model decides' }, { id: false, name: 'Never' }, { id: true, name: 'When useful' }]} />
+        <Text style={styles.label}>Where I am</Text>
+        <Chips testID="share-location" value={settings.shareLocation !== false} onPick={on => updateSettings({ shareLocation: on })}
+          options={[{ id: true, name: 'Tell the AI the city' }, { id: false, name: 'Never' }]} />
+        <Text style={styles.note}>The AI can say what city you are in or near, from the phone's last GPS reading and a built-in list of large cities. It never leaves the phone, and the AI only gets the city and country, not coordinates. Needs location allowed once (open Maps).</Text>
         <Text style={styles.label}>Always remember</Text>
         <TextInput testID="ai-custom" value={ai.custom ?? ''} onChangeText={custom => setAi({ custom: custom.slice(0, 1200) })}
           placeholder="e.g. Use metric units. I am studying nursing. Call me Sam."

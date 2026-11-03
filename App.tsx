@@ -5,7 +5,7 @@
 
 import 'react-native-gesture-handler';
 import React, { useEffect, useState, useCallback } from 'react';
-import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
+import { ActivityIndicator, AppState, View, StyleSheet, LogBox } from 'react-native';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -41,6 +41,7 @@ import { useNearbyPairingIntent } from './src/services/nearbySync/useNearbyPairi
 import { startShareIntake, flushShare } from './src/share/shareIntake';
 import { UndoBar } from './src/chats/UndoBar';
 import { startScheduler } from './src/schedule/runner';
+import { refreshLastFix } from './src/atlasMaps/locationNote';
 import { navigationRef } from './src/navigation/navigationRef';
 import { startAppLinks, flushAppLink } from './src/navigation/appLinks';
 
@@ -91,6 +92,12 @@ function App() {
   useEffect(() => startShareIntake(), []);
   useEffect(() => startAppLinks(), []);
   useEffect(() => startScheduler(), []);
+  // Keep the last GPS reading fresh (only if location was already allowed) so the AI can say roughly where you are.
+  useEffect(() => {
+    void refreshLastFix();
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') void refreshLastFix(); });
+    return () => sub.remove();
+  }, []);
   useDownloadListeners();
   // Reactive: when Pro is activated at runtime (license key → loadProFeatures),
   // the appRoot slot (TTS engine bridge) registers and this re-renders to mount

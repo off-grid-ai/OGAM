@@ -92,6 +92,8 @@ type AppSettings = {
   useMtp?: boolean;
   /** Send only the tools a message could need (on unless set to false): a faster first reply. */
   trimTools?: boolean;
+  /** Tell the AI roughly where the user is (city and country, from the last GPS reading). On unless set to false. */
+  shareLocation?: boolean;
   /** Set once the one-time move of automatic installs to the Auto backend has run. */
   autoBackendMigrated?: boolean;
   /** What agents call the user (fills {{name}} in agent prompts). */

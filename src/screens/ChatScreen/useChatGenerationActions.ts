@@ -2,6 +2,7 @@
 /* eslint-disable max-lines -- cohesive generation-action orchestrator (send/regenerate/dispatch/route share the same GenerationDeps + session state); splitting it would scatter tightly-coupled turn logic. */
 import { useSkills } from '../../skills/skillsStore';
 import { relevantTools } from '../../services/tools/relevantTools';
+import { locationNote } from '../../atlasMaps/locationNote';
 import { skillsNote } from '../../skills/selectSkills';
 import { Dispatch, SetStateAction } from 'react';
 import { resolveAgentPrompt } from '../../stores/agentStore';
@@ -60,6 +61,7 @@ export type GenerationDeps = {
     imageGuidanceScale?: number;
     enabledTools?: string[];
     trimTools?: boolean;
+    shareLocation?: boolean;
     cacheType?: CacheType;
     thinkingEnabled?: boolean;
   };
@@ -404,6 +406,7 @@ function resolveToolsAndPrompt(deps: GenerationDeps, conversation: any, messageT
   const chatNote = (conversation as any)?.instructions?.trim();
   const rawPrompt = resolveAgentPrompt(project?.systemPrompt, deps.settings.systemPrompt || APP_CONFIG.defaultSystemPrompt)
     + (chatNote ? `\n\nInstructions for this chat:\n${chatNote}` : '')
+    + locationNote()
     + skillsNote(messageText, useSkills.getState().skills, llmService.getPerformanceSettings?.()?.contextLength || 4096)
     + (llmService.isThinkingEnabled?.() ? thinkingNote(deps.settings as any) : '');
   return { enabledTools, rawPrompt, localToolSupport };

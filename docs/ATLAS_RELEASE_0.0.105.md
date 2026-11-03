@@ -488,6 +488,13 @@ The **Build Atlas voices** workflow ran successfully on 2026-10-19, so `kitten-n
 - **Courses are part of projects**: a project has a **Courses** row (courses for its subject, built from the project's shared documents as well as the course's own sources), and its tutor chats are in the project. The Home entry still makes a course without a project.
 - Not verified on a device.
 
+## 8v. Teach almost anything, and the AI knows your city (0.0.126)
+
+- **Twenty kinds of square** for Learn a topic. Added: **type the answer** (vocabulary, terms, formulas; ignores case, accents and punctuation), **fix the mistake** (grammar, a wrong line of code), **fill the table** (journal entries, truth tables, conjugations), **sort into groups**, **listen and type** (dictation, in any language the phone can speak), **read and answer** (a passage, case or data, then questions) and **predict the result** (code, circuits, experiments, formulas, with code shown properly). Lessons now also have **common mistakes** and a **test yourself** question that reveals its answer.
+- **Subject playbooks**: for maths, science, accounting and finance, English and writing, programming, history and social studies, skills and crafts, and health, the AI is told how teachers of that subject mix the squares (for example accounting: worked examples, fill-the-table journal entries, calculations, sorting assets and liabilities). Any other subject is worked out by the AI. It is told to use at least five kinds of square in a course, and to write maths in plain symbols.
+- **The AI knows roughly where you are**: a built-in offline list of 6,456 cities (every city of 100,000 people or more, plus the three largest of every country; GeoNames, CC BY 4.0). The AI is told the city and country nearest your phone's last GPS reading (read when Atlas opens and comes to the front, if location was allowed once, for example in Maps), never the coordinates, and not if the reading is over 12 hours old. The "My location" tool also lists the nearest cities. **Appearance > AI style > Where I am** turns it off. Only large cities are known, so a small town is described as near the closest city.
+- Not verified on a device.
+
 ## Build evidence and checks
 
 - New **Android unit tests** workflow runs the Kotlin/JVM tests (`:app:testDebugUnitTest`) on every push that

@@ -106,8 +106,10 @@ async function dispatchTool(call: ToolCall): Promise<string> {
       const places = M.useMaps.getState().waypoints;
       if (!fix) return `No GPS position yet. Ask the user to open the Maps screen (Home > Maps) and allow location; GPS works without internet.${places.length ? ` Saved places: ${places.map((w: any) => `${w.name} (${M.fmtCoord(w.lat, w.lon)})`).join('; ')}` : ''}`;
       const age = Math.round((Date.now() - fix.time) / 60000);
-      const lines = ['Only coordinates and the saved places below are known. Atlas has no list of what is nearby, so do not name airports, towns, roads or landmarks; say "I only have your coordinates" if asked what is near.', `Position: ${M.fmtCoord(fix.lat, fix.lon)} (decimal ${fix.lat.toFixed(6)}, ${fix.lon.toFixed(6)}), accuracy about ${M.fmtDistance(fix.accuracy, imperial)}, ${age <= 1 ? 'just now' : `${age} minutes ago`}.`];
+      const lines = ['Known: the coordinates, the saved places below, and the nearest large cities (a built-in list, not every town). Do not name airports, roads or landmarks you were not given; for a small town, say the user is near the closest city.', `Position: ${M.fmtCoord(fix.lat, fix.lon)} (decimal ${fix.lat.toFixed(6)}, ${fix.lon.toFixed(6)}), accuracy about ${M.fmtDistance(fix.accuracy, imperial)}, ${age <= 1 ? 'just now' : `${age} minutes ago`}.`];
       if (fix.altitude > -99999) lines.push(`Altitude: ${imperial ? `${Math.round(fix.altitude * 3.28084)} ft` : `${Math.round(fix.altitude)} m`}.`);
+      const spot = require('../../atlasMaps/whereAmI').describePlace(fix.lat, fix.lon);
+      if (spot) lines.push(`Nearest cities: the user is ${spot.sentence}.`);
       for (const w of places.slice(0, 20)) {
         const b = M.bearingDeg(fix, w);
         lines.push(`${w.name}: ${M.fmtDistance(M.distanceM(fix, w), imperial)} to the ${M.compassName(b)} (bearing ${Math.round(b)}° from true north).`);
