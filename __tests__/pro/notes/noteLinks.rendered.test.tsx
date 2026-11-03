@@ -207,10 +207,10 @@ describePro('Note links and contents', () => {
     expect(await phone.text('Projects/Launch.md')).toBe('');
   });
 
-  it('[[#Heading]] scrolls within the note, and a note linking here opens from Linked from', async () => {
+  it('[[#Heading]] scrolls within the note, and a note linking here is listed once in Linked from and opens', async () => {
     const phone = await installPhone();
     const plan = await phone.write('Plan', 'Jump to [[#Steps]].\n\n## Steps\n\nDo it.\n');
-    const ideas = await phone.write('Ideas', 'See [[Plan]].\n');
+    const ideas = await phone.write('Ideas', 'See [[Plan]], and again [[Plan#Steps]].\n');
 
     const { rtl, view, navigation } = openNote(plan);
     await view.findByTestId('note-editor');
@@ -220,6 +220,7 @@ describePro('Note links and contents', () => {
     rtl.fireEvent.press(view.getByRole('link'));
     expect(nativeScrolls()).toEqual([[{ y: 200, animated: true }]]);
 
+    expect(view.getAllByTestId('note-backlink')).toHaveLength(1);
     rtl.fireEvent.press(view.getByTestId('note-backlink'));
     expect(navigation.getCurrentRoute()).toMatchObject({ name: 'Note', params: { path: ideas } });
   });
