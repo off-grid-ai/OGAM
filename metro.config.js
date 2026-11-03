@@ -33,6 +33,8 @@ const speechPackagePath = path.resolve(sharedRoot, 'packages/speech');
 // let Metro resolve the chunk beside it.
 const writingPackagePath = path.resolve(sharedRoot, 'packages/writing');
 const notesPackagePath = path.resolve(sharedRoot, 'packages/notes');
+// @offgrid/notes-editor: the Notes Page editor, prebuilt as one HTML page for the WebView.
+const notesEditorPackagePath = path.resolve(sharedRoot, 'packages/notes-editor');
 const sharedNodeModulesPath = path.resolve(sharedRoot, 'node_modules');
 const syncRuntimeModules = {
   '@noble/hashes/hkdf': path.resolve(sharedNodeModulesPath, '@noble/hashes/hkdf.js'),
@@ -51,6 +53,7 @@ const config = {
     speechPackagePath,
     writingPackagePath,
     notesPackagePath,
+    notesEditorPackagePath,
     uiPackagePath,
     sharedNodeModulesPath,
   ],
@@ -80,6 +83,7 @@ const config = {
       '@offgrid/ui': path.resolve(uiPackagePath, 'dist/index.js'),
       '@offgrid/writing': path.resolve(writingPackagePath, 'dist/index.cjs'),
       '@offgrid/notes': path.resolve(notesPackagePath, 'dist/index.cjs'),
+      '@offgrid/notes-editor/webview-html': path.resolve(notesEditorPackagePath, 'dist/webview-html.js'),
       // @offgrid/sync owns this dependency in its package manifest. Metro still needs the
       // out-of-root file dependency mapped to a watched, built CommonJS entry.
       '@offgrid/automation': path.resolve(automationPackagePath, 'dist/index.js'),
