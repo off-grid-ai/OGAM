@@ -9,9 +9,16 @@
 
 namespace offgrid {
 
+inline const std::regex &allocationFailurePattern() {
+  static const std::regex pattern("alloc|out of memory|\\bOOM\\b", std::regex::icase);
+  return pattern;
+}
+
 class EngineErrorLog {
   std::mutex mutex;
   std::string lastError;
+  // Kept apart: sd.cpp can log a vaguer error after the allocation that caused it.
+  std::string allocationError;
   std::string unreadableFile;
 public:
   /** Lines that mention the prompt are dropped: they can carry its words. */
@@ -28,20 +35,23 @@ public:
     std::smatch match;
     std::lock_guard<std::mutex> guard(mutex);
     if (std::regex_match(line, match, fileFailed)) unreadableFile = match[1];
-    else if (error) lastError = line.substr(0, 300);
+    else if (error) {
+      lastError = line.substr(0, 300);
+      if (std::regex_search(lastError, allocationFailurePattern())) allocationError = lastError;
+    }
   }
   void clear() {
     std::lock_guard<std::mutex> guard(mutex);
     lastError.clear();
+    allocationError.clear();
     unreadableFile.clear();
   }
   /** What a failed load says, then forget it so the next load starts clean. */
   std::string takeLoadFailure() {
     std::lock_guard<std::mutex> guard(mutex);
     std::string message;
-    static const std::regex memory("alloc|out of memory|\\bOOM\\b", std::regex::icase);
-    if (!lastError.empty() && std::regex_search(lastError, memory))
-      message = "Not enough free memory to load the video model pack. Close other apps, then try again. (" + lastError + ")";
+    if (!allocationError.empty())
+      message = "Not enough free memory to load the video model pack. Close other apps, then try again. (" + allocationError + ")";
     else if (!unreadableFile.empty())
       message = "The video model pack has a file that cannot be read: " + unreadableFile +
         ". Delete the model, then download it again.";
@@ -50,6 +60,7 @@ public:
     else
       message = "Could not load the video model pack.";
     lastError.clear();
+    allocationError.clear();
     unreadableFile.clear();
     return message;
   }

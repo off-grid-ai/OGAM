@@ -73,6 +73,16 @@ it('says memory, and what to do, when the engine could not allocate', () => {
   );
 });
 
+it('keeps the memory advice when sd.cpp logs a vaguer error after the allocation', () => {
+  expect(failedLoadMessage([
+    ['error', 'ggml_vulkan: Device memory allocation of size 3221225472 failed.\n'],
+    ['error', 'read tensor data failed: too less memory for conversion\n'],
+  ])).toBe(
+    'Not enough free memory to load the video model pack. Close other apps, then try again. ' +
+    '(ggml_vulkan: Device memory allocation of size 3221225472 failed.)',
+  );
+});
+
 it('names what the last backend hit, not an earlier one', () => {
   expect(failedLoadMessage([
     ['attempt'],
