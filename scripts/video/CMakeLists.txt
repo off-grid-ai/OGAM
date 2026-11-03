@@ -18,6 +18,11 @@ set_target_properties(stable-diffusion PROPERTIES
   OUTPUT_NAME OffgridVideoRuntime
   MACOSX_FRAMEWORK_IDENTIFIER ai.offgrid.video.runtime
   XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER ai.offgrid.video.runtime
+  # App Store Connect refuses an embedded framework whose Info.plist has no version keys.
+  MACOSX_FRAMEWORK_SHORT_VERSION_STRING 1.0
+  MACOSX_FRAMEWORK_BUNDLE_VERSION 1
+  XCODE_ATTRIBUTE_MARKETING_VERSION 1.0
+  XCODE_ATTRIBUTE_CURRENT_PROJECT_VERSION 1
   PUBLIC_HEADER "${SD_SOURCE}/include/stable-diffusion.h"
   XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED NO
   INSTALL_NAME_DIR "@rpath")
