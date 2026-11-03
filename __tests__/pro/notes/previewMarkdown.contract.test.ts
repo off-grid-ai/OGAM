@@ -52,7 +52,7 @@ describePro('note preview', () => {
     const { previewBlocks, parseNoteLinkUrl, openLinkQuery } = load();
     const [only] = previewBlocks('See [[[draft] Launch]].\n');
     if (only?.kind !== 'markdown') throw new Error('expected markdown');
-    const m = /\[((?:\\.|[^\]])+)\]\(([^)]+)\)/.exec(only.markdown);
+    const m = /\[((?:\\.|[^\]\\])+)\]\(([^)]+)\)/.exec(only.markdown);
     expect(m?.[1]).toBe('\\[draft\\] Launch');
     expect(parseNoteLinkUrl(m![2]!)).toEqual({ target: '[draft] Launch' });
 

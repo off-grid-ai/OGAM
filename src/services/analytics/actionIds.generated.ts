@@ -211,7 +211,6 @@ export const FIXED_ACTION_IDS: readonly string[] = [
   "improve-copied",
   "improve-failed",
   "improve-get-model",
-  "improve-layout",
   "improve-nothing-chosen",
   "improve-original",
   "improve-quick-get",
