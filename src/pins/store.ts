@@ -18,7 +18,7 @@ interface PinsState {
   remove: (id: string) => void;
 }
 
-/** Answers (or any message) kept from any chat, in one place. On this phone and in backups; not synced. */
+/** Answers (or any message) kept from any chat, in one place. On this phone, in backups, and over nearby sync (merged pin by pin). */
 export const usePins = create<PinsState>()(persist((set) => ({
   pins: [],
   add: (pin) => set((s) => (s.pins.some((p) => p.id === pin.id) ? s : { pins: [{ ...pin, pinnedAt: Date.now() }, ...s.pins].slice(0, 500) })),

@@ -507,6 +507,17 @@ The **Build Atlas voices** workflow ran successfully on 2026-10-19, so `kitten-n
   course says so instead of failing.
 - Not verified on a device.
 
+## 8x. Courses, pinned answers, skills and scheduled tasks merge over nearby sync (0.0.128)
+
+- These four were already sent across, but as a whole store where the newest copy replaced the other phone's, so work
+  done on both phones was lost. They now merge item by item, like saved places and checklists.
+- **Courses:** a course made on each phone is kept. The same course on both phones keeps the best stars per square, every
+  square written on either phone, any extra lesson added after a bad score, and the union of sources.
+- **Deleting:** a course, pin, skill or task deleted on one phone stays deleted on the other, and one added on the other
+  phone since the last sync is kept. Nothing is deleted on the very first sync.
+- Skills are matched by name; pins, courses and tasks by id.
+- Not verified on two real phones.
+
 ## Build evidence and checks
 
 - New **Android unit tests** workflow runs the Kotlin/JVM tests (`:app:testDebugUnitTest`) on every push that

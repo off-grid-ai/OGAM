@@ -222,6 +222,48 @@ describe('lists you add to on either phone', () => {
     expect(items).toEqual(['water', 'radio', 'torch']);
   });
 
+  describe('courses (learn a topic)', () => {
+    const TOPICS = 'atlas-topics';
+    const sq = (key: string) => ({ key, format: 'lesson', title: key, focus: key, unit: 'U' });
+    const course = (id: string, o: { keys?: string[]; written?: string[]; stars?: Record<string, number> } = {}) => ({
+      id, topic: id, title: id, summary: '', style: '', theme: '', request: {}, sources: [], createdAt: 1,
+      squares: (o.keys ?? ['a', 'b']).map(sq),
+      content: Object.fromEntries((o.written ?? []).map((k) => [k, { kind: 'table', markdown: k }])),
+      progress: Object.fromEntries(Object.entries(o.stars ?? {}).map(([k, n]) => [k, { stars: n }])),
+    });
+    const topics = (...courses: object[]) => store({ courses });
+    const read = async () => JSON.parse((await AsyncStorage.getItem(TOPICS))!).state.courses;
+
+    it('keeps a course made on each phone, and merges the same course: best stars, squares written on either phone', async () => {
+      await phone({ [TOPICS]: topics(course('shared', { written: ['a'], stars: { a: 3 } }), course('from-a')) });
+      const fromA = await localStores(2000);
+      await phone({ [TOPICS]: topics(course('shared', { written: ['b'], stars: { a: 1, b: 2 } }), course('from-b')) });
+      await localStores(1000);
+      await applyStores(fromA); // on B
+      const got = await read();
+      expect(got.map((c: { id: string }) => c.id).sort()).toEqual(['from-a', 'from-b', 'shared']);
+      const shared = got.find((c: { id: string }) => c.id === 'shared');
+      expect(Object.keys(shared.content).sort()).toEqual(['a', 'b']);
+      expect(shared.progress).toEqual({ a: { stars: 3 }, b: { stars: 2 } });
+    });
+
+    it('keeps a course deleted on one phone deleted, and a course added on the other', async () => {
+      await phone({ [TOPICS]: topics(course('keep'), course('gone')) });
+      await applyStores(await localStores(1000));
+      await AsyncStorage.setItem(TOPICS, topics(course('keep'), course('gone'), course('new-on-b')));
+      await localStores(1500);
+      await applyStores({ [TOPICS]: { value: topics(course('keep')), changedAt: 2000 } });
+      expect((await read()).map((c: { id: string }) => c.id).sort()).toEqual(['keep', 'new-on-b']);
+    });
+
+    it('brings across a lesson added after a bad score without losing the other phone\'s squares', async () => {
+      await phone({ [TOPICS]: topics(course('c', { keys: ['a', 'b'] })) });
+      await localStores(1000);
+      await applyStores({ [TOPICS]: { value: topics(course('c', { keys: ['a', 'a-again', 'b'] })), changedAt: 2000 } });
+      expect((await read())[0].squares.map((q: { key: string }) => q.key)).toEqual(['a', 'a-again', 'b']);
+    });
+  });
+
   it('does not sync the offline library list: it holds file paths that exist only on one phone', async () => {
     await phone({ 'atlas-offline-library': store({ files: [{ uri: 'file:///phone-a/wiki.zim', title: 'Wiki' }] }) });
     expect(Object.keys(await localStores(1000))).not.toContain('atlas-offline-library');
