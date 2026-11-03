@@ -54,7 +54,7 @@ function settingsContextLength(): number {
 }
 
 /** Writes a compaction summary from the summarizer messages, within a token budget. */
-export type LocalSummarizer = (messages: Message[], maxTokens: number) => Promise<string>;
+type LocalSummarizer = (messages: Message[], maxTokens: number) => Promise<string>;
 
 class ContextCompactionService {
   private _isCompacting = false;
