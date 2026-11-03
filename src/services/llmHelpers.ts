@@ -71,9 +71,18 @@ export function backendForcesF16Cache(backend: string | undefined): boolean {
     || (HTP_ENABLED && backend === INFERENCE_BACKENDS.HTP);
 }
 
-/** The KV cache type that will ACTUALLY be used, after backend coercion to f16. */
-export function effectiveCacheType(backend: string | undefined, requested: string | undefined): string {
-  return backendForcesF16Cache(backend) ? 'f16' : (requested || 'q8_0');
+/**
+ * Model families whose attention layers cannot use a quantized KV cache: the app crashes when they are loaded with one
+ * (Gemma 4 and Gemma 3n mix attention layouts). They always run with an f16 cache, whatever the setting says.
+ */
+export function modelForcesF16Cache(modelPath: string | undefined): boolean {
+  const name = (modelPath ?? '').split('/').pop() ?? '';
+  return /gemma[-_ ]?(3n|4)/i.test(name);
+}
+
+/** The KV cache type that will ACTUALLY be used, after backend (and model family) coercion to f16. */
+export function effectiveCacheType(backend: string | undefined, requested: string | undefined, modelPath?: string): string {
+  return backendForcesF16Cache(backend) || modelForcesF16Cache(modelPath) ? 'f16' : (requested || 'q8_0');
 }
 
 export function buildModelParams(
@@ -96,7 +105,7 @@ export function buildModelParams(
   const requestedCache = settings.cacheType || (isFlashAttnEffective ? 'q8_0' : 'f16');
   // OpenCL init on affected Adreno devices can fail when cache_type_k/v are passed.
   // effectiveCacheType coerces OpenCL/HTP to f16 (single source shared with the UI).
-  const cacheType = effectiveCacheType(backend, requestedCache);
+  const cacheType = effectiveCacheType(backend, requestedCache, modelPath);
   return {
     baseParams: {
       model: modelPath, use_mlock: false, n_batch: nBatch, n_ubatch: nBatch, n_threads: nThreads,

@@ -40,6 +40,16 @@ describe('AppearanceScreen', () => {
     expect(useAppStore.getState().settings.appearance?.palette).toBeUndefined();
   });
 
+  it('picking a style sets the colors, font, chat style and shape together, and Atlas puts it back', () => {
+    const view = render(<AppearanceScreen />);
+    fireEvent.press(view.getByTestId('skin-ios'));
+    expect(useAppStore.getState().settings.appearance).toMatchObject({ skin: 'ios', palette: 'ios', accent: 'iosblue', font: 'sans', chatLayout: 'bubbles' });
+    fireEvent.press(view.getByTestId('skin-retro'));
+    expect(useAppStore.getState().settings.appearance).toMatchObject({ skin: 'retro', palette: 'win95', accent: 'navy95' });
+    fireEvent.press(view.getByTestId('skin-none'));
+    expect(useAppStore.getState().settings.appearance?.skin).toBeUndefined();
+  });
+
   it('puts the chosen AI style into the system prompt', () => {
     const view = render(<AppearanceScreen />);
     fireEvent.press(view.getByText('Brief'));

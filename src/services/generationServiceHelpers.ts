@@ -123,7 +123,7 @@ function buildBaseGenerationMeta(svc: any): GenerationMeta {
     decodeTokensPerSecond: perf.lastDecodeTokensPerSecond,
     timeToFirstToken: perf.lastTimeToFirstToken,
     tokenCount: perf.lastTokenCount,
-    cacheType: effectiveCacheType(settings.inferenceBackend, settings.cacheType),
+    cacheType: effectiveCacheType(settings.inferenceBackend, settings.cacheType, llmService.getLoadedModelPath?.() ?? undefined),
     truncated: perf.lastTruncated,
   };
 }

@@ -8,7 +8,7 @@ import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useAppStore } from '../stores';
-import { ACCENTS, CHAT_LAYOUTS, FONT_CHOICES, PALETTES, TEXT_SIZES, LAYOUT_MODES, type Appearance } from '../theme/appearance';
+import { ACCENTS, SKINS, CHAT_LAYOUTS, FONT_CHOICES, PALETTES, TEXT_SIZES, LAYOUT_MODES, type Appearance } from '../theme/appearance';
 import { NavBarSettings } from '../components/NavBarSettings';
 import { AI_LENGTHS, AI_LEVELS, AI_TONES, type AiStyle } from '../services/aiStyle';
 
@@ -60,6 +60,14 @@ export const AppearanceScreen: React.FC = () => {
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.section}>Look</Text>
+        <Text style={styles.label}>Style</Text>
+        <Chips testID="skin" value={appearance.skin ?? 'none'}
+          onPick={id => (id === 'none'
+            ? setLook({ skin: undefined })
+            : setLook({ ...SKINS.find(k => k.id === id)!.look, skin: id as typeof SKINS[number]['id'] }))}
+          options={[{ id: 'none', name: 'Atlas', hint: 'The standard look' }, ...SKINS.map(k => ({ id: k.id, name: k.name, hint: k.hint }))]} />
+        <Text style={styles.note}>A style sets the colors, font, chat style and the shape of boxes in one go. You can still change any part below.</Text>
+
         <Text style={styles.label}>Light or dark</Text>
         <Chips testID="theme-mode" value={themeMode} onPick={setThemeMode}
           options={[{ id: 'system', name: 'Match phone' }, { id: 'light', name: 'Light' }, { id: 'dark', name: 'Dark' }]} />

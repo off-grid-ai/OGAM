@@ -7,8 +7,8 @@ import { Platform } from 'react-native';
 import { FONTS, TYPOGRAPHY } from '../constants';
 import type { ThemeColors } from './palettes';
 
-export type PaletteId = 'classic' | 'black' | 'forest' | 'ocean' | 'dusk' | 'paper' | 'mocha' | 'mint' | 'sakura' | 'graphite' | 'sunset' | 'contrast' | 'lavender' | 'peach' | 'navy' | 'terminal' | 'midnight' | 'dune' | 'rosewater';
-export type AccentId = 'amber' | 'emerald' | 'blue' | 'violet' | 'rose' | 'teal' | 'red' | 'slate' | 'multi' | 'orange' | 'lime' | 'cyan' | 'indigo' | 'fuchsia' | 'gold';
+export type PaletteId = 'classic' | 'black' | 'forest' | 'ocean' | 'dusk' | 'paper' | 'mocha' | 'mint' | 'sakura' | 'graphite' | 'sunset' | 'contrast' | 'lavender' | 'peach' | 'navy' | 'terminal' | 'midnight' | 'dune' | 'rosewater' | 'aero' | 'win95' | 'ios' | 'mac' | 'xp' | 'material' | 'neon';
+export type AccentId = 'amber' | 'emerald' | 'blue' | 'violet' | 'rose' | 'teal' | 'red' | 'slate' | 'multi' | 'orange' | 'lime' | 'cyan' | 'indigo' | 'fuchsia' | 'gold' | 'aeroblue' | 'iosblue' | 'navy95' | 'xpgreen' | 'hotpink';
 export type FontId = 'atlas' | 'sans' | 'serif' | 'mono' | 'condensed' | 'light' | 'medium' | 'casual';
 export type TextSizeId = 'small' | 'normal' | 'large' | 'xlarge';
 export type LayoutMode = 'standard' | 'simple' | 'compact' | 'colorful' | 'grid' | 'focus';
@@ -28,7 +28,15 @@ export const LAYOUT_MODES: Array<{ id: LayoutMode; name: string; hint: string }>
   { id: 'focus', name: 'Focus', hint: 'Only chat, learn and the briefing' },
 ];
 
+/** Shape of the interface: how round the corners are, how heavy the borders, and whether boxes cast a shadow. */
+export interface SkinShape { radius: number; minBorder: number; shadow: 'none' | 'soft' | 'glow' }
+export type SkinId = 'aero' | 'retro' | 'terminal' | 'mac' | 'xp' | 'ios' | 'material' | 'neon';
+export interface Skin { id: SkinId; name: string; hint: string; look: Partial<Appearance>; shape: SkinShape }
+export const SKIN_DEFAULT_SHAPE: SkinShape = { radius: 1, minBorder: 0, shadow: 'none' };
+
 export interface Appearance {
+  /** A whole look chosen at once (colors, font, chat style and the shape of boxes); the pieces can still be changed. */
+  skin?: SkinId;
   palette?: PaletteId;
   accent?: AccentId;
   font?: FontId;
@@ -42,6 +50,18 @@ type Surfaces = Pick<ThemeColors, 'background' | 'surface' | 'surfaceLight' | 's
 /** [background, surface, surfaceLight, surfaceHover, border, borderLight] */
 const surfaces = (c: [string, string, string, string, string, string]): Surfaces =>
   ({ background: c[0], surface: c[1], surfaceLight: c[2], surfaceHover: c[3], border: c[4], borderLight: c[5], divider: c[2] });
+
+export const SKINS: Skin[] = [
+  { id: 'aero', name: 'Aero glass', hint: 'Glossy blue panels with soft shadows, like Windows Vista and 7', look: { palette: 'aero', accent: 'aeroblue', font: 'sans', chatLayout: 'bubbles' }, shape: { radius: 1.4, minBorder: 1, shadow: 'soft' } },
+  { id: 'retro', name: 'Retro desktop', hint: 'Silver boxes, square corners and heavy borders, like Windows 95', look: { palette: 'win95', accent: 'navy95', font: 'sans', chatLayout: 'bubbles' }, shape: { radius: 0, minBorder: 2, shadow: 'none' } },
+  { id: 'terminal', name: 'Green terminal', hint: 'Black screen, green text, monospace, no rounded corners', look: { palette: 'terminal', accent: 'lime', font: 'mono', chatLayout: 'clean' }, shape: { radius: 0, minBorder: 1, shadow: 'none' } },
+  { id: 'mac', name: 'Classic Mac', hint: 'Black and white, thin black borders, a book font', look: { palette: 'mac', accent: 'slate', font: 'serif', chatLayout: 'bubbles' }, shape: { radius: 0.3, minBorder: 2, shadow: 'none' } },
+  { id: 'xp', name: 'Windows XP', hint: 'Beige and blue with green accents and gently rounded boxes', look: { palette: 'xp', accent: 'xpgreen', font: 'sans', chatLayout: 'bubbles' }, shape: { radius: 1.2, minBorder: 1, shadow: 'soft' } },
+  { id: 'ios', name: 'iOS', hint: 'Light grey and white cards, big corners, iOS blue, bubble chats', look: { palette: 'ios', accent: 'iosblue', font: 'sans', chatLayout: 'bubbles' }, shape: { radius: 1.5, minBorder: 0, shadow: 'none' } },
+  { id: 'material', name: 'Material You', hint: 'Soft tonal surfaces and very round corners, like recent Android', look: { palette: 'material', accent: 'violet', font: 'sans', chatLayout: 'clean' }, shape: { radius: 2, minBorder: 0, shadow: 'none' } },
+  { id: 'neon', name: 'Neon night', hint: 'Dark purple with hot pink glow', look: { palette: 'neon', accent: 'hotpink', font: 'condensed', chatLayout: 'bubbles' }, shape: { radius: 0.6, minBorder: 1, shadow: 'glow' } },
+];
+export const shapeOf = (skin?: SkinId): SkinShape => SKINS.find((k) => k.id === skin)?.shape ?? SKIN_DEFAULT_SHAPE;
 
 export const PALETTES: Array<{ id: PaletteId; name: string; light?: Surfaces; dark?: Surfaces }> = [
   { id: 'classic', name: 'Atlas' },
@@ -99,6 +119,27 @@ export const PALETTES: Array<{ id: PaletteId; name: string; light?: Surfaces; da
   { id: 'rosewater', name: 'Rosewater',
     light: surfaces(['#FEF6F6', '#FBE8E8', '#F6D8D8', '#F0C7C7', '#F2D0D0', '#E7BABA']),
     dark: surfaces(['#190D0D', '#251515', '#311D1D', '#3E2626', '#382121', '#4B2F2F']) },
+  { id: 'aero', name: 'Aero glass',
+    light: surfaces(['#DCEBF8', '#EEF6FD', '#C9E1F5', '#B7D6F0', '#7FA9D1', '#A8C8E6']),
+    dark: surfaces(['#071B2E', '#0D2A45', '#143A5C', '#1C4B73', '#2F6EA3', '#3F83BC']) },
+  { id: 'win95', name: 'Retro desktop',
+    light: surfaces(['#C0C0C0', '#D4D0C8', '#BDBAB0', '#A9A69C', '#404040', '#808080']),
+    dark: surfaces(['#0A0A12', '#1A1A2A', '#242438', '#2E2E48', '#808080', '#A0A0A0']) },
+  { id: 'ios', name: 'iOS',
+    light: surfaces(['#F2F2F7', '#FFFFFF', '#E5E5EA', '#D1D1D6', '#D1D1D6', '#C7C7CC']),
+    dark: surfaces(['#000000', '#1C1C1E', '#2C2C2E', '#3A3A3C', '#38383A', '#48484A']) },
+  { id: 'mac', name: 'Classic Mac',
+    light: surfaces(['#FFFFFF', '#F4F4F4', '#E4E4E4', '#D4D4D4', '#000000', '#444444']),
+    dark: surfaces(['#000000', '#111111', '#1E1E1E', '#2C2C2C', '#FFFFFF', '#BBBBBB']) },
+  { id: 'xp', name: 'Windows XP',
+    light: surfaces(['#ECE9D8', '#F7F6EE', '#D9E5F7', '#C5D7F2', '#7F9DB9', '#9DB6D1']),
+    dark: surfaces(['#0A1A3A', '#0F2A5C', '#173A7C', '#1F4C9C', '#3C6BC4', '#5585D8']) },
+  { id: 'material', name: 'Material You',
+    light: surfaces(['#FEF7FF', '#F3EDF7', '#E6E0E9', '#D9D2DD', '#CAC4D0', '#B8B2BE']),
+    dark: surfaces(['#141218', '#211F26', '#2B2930', '#36343B', '#49454F', '#605C66']) },
+  { id: 'neon', name: 'Neon night',
+    light: surfaces(['#FFF5FB', '#FFE3F2', '#FFD0E8', '#FFBCDD', '#FF8AC4', '#FF6FB5']),
+    dark: surfaces(['#06000F', '#12002A', '#1C0040', '#280059', '#7A1FD6', '#B13BFF']) },
 ];
 
 type Accent = Pick<ThemeColors, 'primary' | 'primaryDark' | 'primaryLight'>;
@@ -117,6 +158,11 @@ export const ACCENTS: Array<{ id: AccentId; name: string; light: Accent; dark: A
   { id: 'indigo', name: 'Indigo', light: { primary: '#4338CA', primaryDark: '#3730A3', primaryLight: '#6366F1' }, dark: { primary: '#818CF8', primaryDark: '#6366F1', primaryLight: '#A5B4FC' } },
   { id: 'fuchsia', name: 'Fuchsia', light: { primary: '#A21CAF', primaryDark: '#86198F', primaryLight: '#D946EF' }, dark: { primary: '#E879F9', primaryDark: '#D946EF', primaryLight: '#F0ABFC' } },
   { id: 'gold', name: 'Gold', light: { primary: '#A16207', primaryDark: '#854D0E', primaryLight: '#EAB308' }, dark: { primary: '#FACC15', primaryDark: '#EAB308', primaryLight: '#FDE047' } },
+  { id: 'aeroblue', name: 'Aero blue', light: { primary: '#1F6FB8', primaryDark: '#155289', primaryLight: '#4C9BE0' }, dark: { primary: '#5BB0F0', primaryDark: '#2B8AD8', primaryLight: '#9BD0F8' } },
+  { id: 'iosblue', name: 'iOS blue', light: { primary: '#007AFF', primaryDark: '#0A5FD0', primaryLight: '#4DA3FF' }, dark: { primary: '#0A84FF', primaryDark: '#0060DF', primaryLight: '#64A8FF' } },
+  { id: 'navy95', name: 'Retro navy', light: { primary: '#000080', primaryDark: '#000050', primaryLight: '#1010A0' }, dark: { primary: '#7B7BFF', primaryDark: '#5555E0', primaryLight: '#A5A5FF' } },
+  { id: 'xpgreen', name: 'XP green', light: { primary: '#2A8A2A', primaryDark: '#1D6A1D', primaryLight: '#4FB04F' }, dark: { primary: '#6FD66F', primaryDark: '#3FB03F', primaryLight: '#A0EBA0' } },
+  { id: 'hotpink', name: 'Hot pink', light: { primary: '#D6107A', primaryDark: '#A80A5E', primaryLight: '#FF4DA6' }, dark: { primary: '#FF4DA6', primaryDark: '#E0267F', primaryLight: '#FF8CC6' } },
   { id: 'multi', name: 'Multicolor', light: { primary: '#1D4ED8', primaryDark: '#1E3A8A', primaryLight: '#3B82F6' }, dark: { primary: '#60A5FA', primaryDark: '#3B82F6', primaryLight: '#93C5FD' } },
   { id: 'slate', name: 'Slate', light: { primary: '#334155', primaryDark: '#1E293B', primaryLight: '#64748B' }, dark: { primary: '#CBD5E1', primaryDark: '#94A3B8', primaryLight: '#E2E8F0' } },
 ];

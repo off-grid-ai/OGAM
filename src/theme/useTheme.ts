@@ -15,7 +15,7 @@ import {
   createElevation,
 } from './palettes';
 import type { ThemeShadows } from './palettes';
-import { applyAppearanceColors, applyTypography, type Appearance } from './appearance';
+import { applyAppearanceColors, applyTypography, shapeOf, type Appearance, type SkinShape } from './appearance';
 
 
 export interface Theme {
@@ -26,6 +26,8 @@ export interface Theme {
   /** Font + text size in effect; part of the theme so themed styles rebuild when it changes. */
   typographyKey: string;
   densityScale: number;
+  /** How round, how bordered and how shadowed boxes are (the chosen skin). */
+  shape: SkinShape;
 }
 
 /** Get theme for a given mode (non-hook, for use outside components) */
@@ -37,7 +39,7 @@ export function getTheme(mode: 'light' | 'dark', appearance?: Appearance): Theme
   const typographyKey = applyTypography(appearance);
   const density = appearance?.density ?? (appearance?.layoutMode === 'compact' ? 'compact' : appearance?.layoutMode === 'simple' ? 'spacious' : 'comfortable');
   const densityScale = density === 'compact' ? 0.8 : density === 'spacious' ? 1.15 : 1;
-  return { colors, shadows, elevation, isDark, typographyKey, densityScale };
+  return { colors, shadows, elevation, isDark, typographyKey, densityScale, shape: shapeOf(appearance?.skin) };
 }
 
 /** Hook that returns the current theme based on appStore themeMode */
