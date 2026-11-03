@@ -55,7 +55,7 @@ export function mavenRelease(metadataXml: string): string | null;
 export function gradlePin(gradle: string, group: string, artifact: string): string | null;
 export function setGradlePin(gradle: string, group: string, artifact: string, version: string): string;
 export function summaryMarkdown(results: EngineResult[]): string;
-export function githubDecision(input: { current: string | null; latest: string | null; status: string | null }): Decision;
+export function githubDecision(input: { current: string | null; latest: string | null; status: string | null; patchProblem?: string | null }): Decision;
 export function heldSince(times: Record<string, string> | undefined, current: string | null): string | null;
 export const HELD_ISSUE_DAYS: number;
 export function heldIssueTitle(id: string): string;

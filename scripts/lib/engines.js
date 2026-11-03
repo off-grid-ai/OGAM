@@ -39,6 +39,7 @@ const ENGINES = [
     source: 'github',
     repo: 'leejet/stable-diffusion.cpp',
     file: 'scripts/video/revision',
+    patchCheck: 'scripts/prepare-video-runtime.sh',
   },
 ];
 
@@ -166,11 +167,19 @@ function patchFileName(pkg, version) {
 
 /**
  * A pinned commit against the repo's newest release, by GitHub's compare status: 'ahead' means the
- * release has commits the pin does not. The local patches are re-applied by the build, so CI says
- * whether they still fit.
+ * release has commits the pin does not. CI does not build the Android video runtime, so the job
+ * applies the local patches to the release first (`patchProblem`: what failed, or null when all fit).
  */
-function githubDecision({ current, latest, status }) {
+function githubDecision({ current, latest, status, patchProblem = null }) {
   if (!latest || !current || latest === current || status !== 'ahead') return { status: 'current' };
+  if (patchProblem) {
+    return {
+      status: 'held',
+      to: latest,
+      reason: `a local patch does not apply: ${patchProblem}`,
+      next: `Rebase the patch in scripts/video onto ${latest.slice(0, 7)} in its own PR. ${THEN}`,
+    };
+  }
   return { status: 'bump', to: latest };
 }
 

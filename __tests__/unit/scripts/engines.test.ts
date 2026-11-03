@@ -47,6 +47,15 @@ describe('githubDecision', () => {
   ])('stays when the compare says %p', (status, latest) => {
     expect(githubDecision({ current: 'aaa', latest, status })).toEqual({ status: 'current' });
   });
+  it('holds a release a local patch does not apply to, naming the failure and the next step', () => {
+    const decision = githubDecision({ current: 'aaa', latest: '3be23788fc0c', status: 'ahead', patchProblem: 'error: src/ggml-vulkan/ggml-vulkan.cpp: patch does not apply' });
+    expect(decision).toEqual({
+      status: 'held',
+      to: '3be23788fc0c',
+      reason: 'a local patch does not apply: error: src/ggml-vulkan/ggml-vulkan.cpp: patch does not apply',
+      next: 'Rebase the patch in scripts/video onto 3be2378 in its own PR. The next daily run then moves it.',
+    });
+  });
 });
 
 describe('pinnedVersion and specFor', () => {
