@@ -95,8 +95,26 @@ async function githubEngine(engine) {
   const release = await github(`/repos/${engine.repo}/releases/latest`);
   const latest = (await github(`/repos/${engine.repo}/commits/${encodeURIComponent(release.tag_name)}`)).sha;
   const { status } = await github(`/repos/${engine.repo}/compare/${current}...${latest}`);
-  const decision = engines.githubDecision({ current, latest, status });
+  const patchProblem = engine.patchCheck && status === 'ahead' ? patchesFailAt(engine, latest) : null;
+  const decision = engines.githubDecision({ current, latest, status, patchProblem });
   return { decision: decision.status === 'bump' ? { ...decision, tag: release.tag_name } : decision, from: current.slice(0, 7) };
+}
+
+/** Apply the local patches to `revision` in a scratch checkout: null when they all fit, else the failure. */
+function patchesFailAt(engine, revision) {
+  const source = fs.mkdtempSync(path.join(require('os').tmpdir(), 'engine-patches-'));
+  try {
+    execFileSync('bash', [path.join(ROOT, engine.patchCheck), '--patches-only'], {
+      env: { ...process.env, OFFGRID_SD_REVISION: revision, OFFGRID_SD_SOURCE: path.join(source, 'source') },
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    return null;
+  } catch (error) {
+    const lines = String(error.stderr || error.message).split('\n').filter(line => /error|failed/i.test(line));
+    return lines.slice(-3).join(' ').trim() || 'the patch check failed';
+  } finally {
+    fs.rmSync(source, { recursive: true, force: true });
+  }
 }
 
 function applyGithub(engine, to) {
