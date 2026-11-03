@@ -161,6 +161,18 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
     },
   },
   {
+    id: 'schedule_task', name: 'schedule_task', displayName: 'Schedule a task',
+    description: 'Schedule something to happen later or repeatedly: a notification at that time, and the task runs when the user opens it (for example a reminder, a daily briefing, a plan). Use when the user says remind me, every morning, tomorrow at, each week.', icon: 'clock',
+    parameters: {
+      task: { type: 'string', description: 'What the AI should do at that time (a prompt). Leave empty for a daily briefing.' },
+      time: { type: 'string', description: 'Time of day, like 07:30 or 7am', required: true },
+      repeat: { type: 'string', description: 'once, daily, weekdays or weekly', enum: ['once', 'daily', 'weekdays', 'weekly'], required: true },
+      weekday: { type: 'string', description: 'For weekly: monday ... sunday' },
+      kind: { type: 'string', description: 'briefing for the daily news briefing, otherwise prompt', enum: ['prompt', 'briefing'] },
+      name: { type: 'string', description: 'Short name (optional)' },
+    },
+  },
+  {
     id: 'my_location', name: 'my_location', displayName: 'My location',
     description: "The user's GPS position (works offline) and the distance and direction to their saved places (camp, car, water...). Use for 'where am I', 'how far to camp', 'which way is the car'. It gives coordinates only: it does not know what is nearby, so never name airports, towns or landmarks from it.", icon: 'map-pin',
     parameters: {},

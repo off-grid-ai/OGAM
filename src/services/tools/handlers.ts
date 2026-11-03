@@ -89,6 +89,10 @@ async function dispatchTool(call: ToolCall): Promise<string> {
       if (!body) throw new Error('Missing required parameter: body');
       return DT.draftMessage(String(call.arguments?.kind ?? 'text'), body, String(call.arguments?.to ?? ''), String(call.arguments?.subject ?? ''));
     }
+    case 'schedule_task': {
+      const { createScheduledTask } = require('../../schedule/createFromTool');
+      return createScheduledTask(call.arguments ?? {});
+    }
     case 'my_location': {
       const M = require('../../atlasMaps/maps');
       let fix = M.useMaps.getState().lastFix;

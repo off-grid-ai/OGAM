@@ -38,6 +38,7 @@ const TOOL_CHOICES: { id: string; label: string }[] = [
   { id: 'calendar_events', label: 'Read calendar' },
   { id: 'add_calendar_event', label: 'Add calendar events' },
   { id: 'draft_message', label: 'Draft texts and emails' },
+  { id: 'schedule_task', label: 'Schedule tasks and reminders' },
   { id: 'remember', label: 'Remember things you tell it' },
   { id: 'my_location', label: 'My location (GPS) and saved places' },
   { id: 'calculator', label: 'Calculator' },

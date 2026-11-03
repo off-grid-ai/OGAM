@@ -23,6 +23,7 @@ const TRIGGERS: Record<string, RegExp> = {
   add_calendar_event: /\b(calendar|event|meeting|appointment|schedule|remind|reminder|book|add)\b/i,
   my_location: /\b(where am i|location|gps|near|nearby|how far|direction|which way|camp|car|waypoint|coordinates|altitude)\b/i,
   remember: /\b(remember|don't forget|keep in mind|my name|i am|i'm|i like|i prefer|i live|i work|allergic|birthday)\b/i,
+  schedule_task: /\b(remind|reminder|schedule|every (day|morning|evening|night|week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|daily|weekly|each (day|morning|week)|tomorrow at|at \d|alarm|notify)\b/i,
   draft_message: /\b(text|sms|email|e-mail|message|reply|send|write to|tell)\b/i,
 };
 
