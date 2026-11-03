@@ -60,7 +60,7 @@
     "buffer": "^6.0.3",
     "js-sha256": "^0.11.0",
     "js-sha512": "^0.9.0",
-    "llama.rn": "npm:@ogai/llama.rn@0.13.0-b12032.1",
+    "llama.rn": "npm:@ogai/llama.rn@0.13.0-b12034",
     "node-html-parser": "^7.1.0",
     "patch-package": "^8.0.1",
     "posthog-react-native": "^4.81.10",
@@ -148,8 +148,12 @@
     "fts5": true
   },
   "react-native-executorch": {
-    "backends": ["xnnpack"],
-    "libs": ["phonemis"]
+    "backends": [
+      "xnnpack"
+    ],
+    "libs": [
+      "phonemis"
+    ]
   },
   "overrides": {
     "react": "19.2.0",
