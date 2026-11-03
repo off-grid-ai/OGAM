@@ -339,9 +339,10 @@ jobs:
         run: bash scripts/prepare-video-runtime.sh --android
 
       # Only needed to build the parts above, and several GB the native build needs on the runner.
+      # sudo: the Hexagon build ran as root in Docker and owns its build tree.
       - name: Remove the Hexagon SDK
         run: |
-          rm -rf .video-build/hexagon-sdk .video-build/hexagon-sdk.tar.xz .video-build/hexagon-build
+          sudo rm -rf .video-build/hexagon-sdk .video-build/hexagon-sdk.tar.xz .video-build/hexagon-build
           docker image prune -af
           df -h .
 
