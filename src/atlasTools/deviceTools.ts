@@ -152,7 +152,8 @@ export async function addCalendarEvent(title: string, start: string, end?: strin
 }
 
 /** The link that opens the phone's Messages or Email app with a draft filled in (nothing is sent from here). */
-export function messageUrl(kind: 'text' | 'email', body: string, to = '', subject = ''): string {
+export function messageUrl(kind: 'text' | 'email' | 'call', body: string, to = '', subject = ''): string {
+  if (kind === 'call') return `tel:${to.replace(/[^\d+*#]/g, '')}`;
   if (kind === 'text') return `sms:${to.replace(/[^\d+,;]/g, '')}?body=${encodeURIComponent(body)}`;
   const recipient = to.replace(/[^\w@+.,;-]/g, '');
   return `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -160,14 +161,16 @@ export function messageUrl(kind: 'text' | 'email', body: string, to = '', subjec
 
 /** Opens Messages or Email with the draft ready; the user reads it and presses send themselves. */
 export async function draftMessage(kind: string, body: string, to = '', subject = ''): Promise<string> {
-  const which = kind === 'email' ? 'email' : 'text';
-  if (!body.trim()) return 'The draft has no text. Write the message first.';
+  const which = kind === 'email' ? 'email' : kind === 'call' ? 'call' : 'text';
+  if (which === 'call' && !to.replace(/\D/g, '')) return 'There is no phone number to call. Ask the user for it.';
+  if (which !== 'call' && !body.trim()) return 'The draft has no text. Write the message first.';
   const { Linking } = require('react-native');
   try {
     await Linking.openURL(messageUrl(which, body, to, subject));
   } catch {
-    return `This phone could not open ${which === 'email' ? 'an email app' : 'a messaging app'}.`;
+    return `This phone could not open ${which === 'email' ? 'an email app' : which === 'call' ? 'the phone app' : 'a messaging app'}.`;
   }
+  if (which === 'call') return 'Opened the phone app with the number filled in. The call starts only when the user presses call.';
   return `Opened ${which === 'email' ? 'the email app' : 'Messages'} with the draft filled in. Nothing is sent until the user presses send there.`;
 }
 

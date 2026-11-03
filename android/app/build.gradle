@@ -88,7 +88,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1784144539
         // CI passes -PatlasBuild=<run number>, so the version shown in the app says which build it is.
-        versionName "0.0.123" + (project.hasProperty('atlasBuild') ? " (build ${project.property('atlasBuild')})" : "")
+        versionName "0.0.124" + (project.hasProperty('atlasBuild') ? " (build ${project.property('atlasBuild')})" : "")
     }
     signingConfigs {
         debug {

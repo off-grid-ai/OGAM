@@ -1,9 +1,9 @@
 /**
- * Runs scheduled tasks. Atlas has no background alarm of its own, so tasks run while Atlas is open: when it comes to the
- * front and once a minute after that, the due ones run (a task that was due while the phone was away runs once, on
+ * Runs scheduled tasks. While Atlas is running (in front, or in the background and not closed) the due ones run when it comes to the
+ * front and once a minute (a task that was due while the phone was away runs once, on
  * return). A prompt task asks the AI and keeps the answer as a new chat; the briefing task makes today's briefing.
  */
-import { AppState } from 'react-native';
+import { AppState, NativeModules, Platform } from 'react-native';
 import { useSchedule, type ScheduledTask } from './store';
 import { isDue } from './due';
 import { startAlarmSync, syncAlarms } from './alarms';
@@ -40,6 +40,13 @@ async function keepAsChat(task: ScheduledTask, answer: string): Promise<string> 
   return id;
 }
 
+/** Keeps the phone from stopping Atlas while a task is being written (the same foreground notice the chat uses), then lets go. */
+async function whileAwake<T>(label: string, job: () => Promise<T>): Promise<T> {
+  const device = Platform.OS === 'android' ? NativeModules.AtlasDevice : undefined;
+  try { await device?.setAiWorkActive?.(true, label); } catch { /* the task still runs while the app is in front */ }
+  try { return await job(); } finally { try { await device?.setAiWorkActive?.(false, null); } catch { /* already stopped */ } }
+}
+
 async function doTask(task: ScheduledTask): Promise<{ chatId?: string }> {
   if (task.kind === 'briefing') {
     const { makeBriefing, todaysBrief } = require('../atlasTools/dailyBrief');
@@ -64,7 +71,7 @@ export async function runTask(id: string, scheduledFor = Date.now()): Promise<st
   busy = true; emit();
   update(id, { lastTriedAt: scheduledFor });
   try {
-    const { chatId } = await doTask(task);
+    const { chatId } = await whileAwake(`Running: ${task.name}`, () => doTask(task));
     update(id, {
       lastRunAt: scheduledFor, lastError: undefined,
       ...(chatId ? { lastChatId: chatId, resultSeen: false } : {}),
@@ -87,7 +94,8 @@ export async function runDueTasks(now = Date.now()): Promise<void> {
 
 /** Starts checking for due tasks while Atlas is open. Returns the stop function. */
 export function startScheduler(): () => void {
-  const check = () => { if (AppState.currentState === 'active') void runDueTasks(); };
+  // Runs whenever the app process is alive, in front or not: a task due while Atlas sits in the background runs then.
+  const check = () => { void runDueTasks(); };
   const sub = AppState.addEventListener('change', (s) => { if (s === 'active') check(); });
   const timer = setInterval(check, 60_000);
   const first = setTimeout(check, 5_000);

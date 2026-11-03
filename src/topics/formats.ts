@@ -17,7 +17,7 @@ export const FORMATS: { id: SquareFormat; label: string; icon: string; use: stri
 ];
 export const FORMAT_IDS = FORMATS.map((f) => f.id);
 
-export interface PlannedSquare { key: string; format: SquareFormat; title: string; focus: string; unit: string; checkpoint?: boolean }
+export interface PlannedSquare { key: string; format: SquareFormat; title: string; focus: string; unit: string; checkpoint?: boolean; remedial?: boolean }
 export interface CoursePlan { title: string; summary: string; style: string; theme: string; squares: PlannedSquare[] }
 
 export const MAX_SQUARES = 36;
@@ -25,8 +25,10 @@ const asFormat = (v: unknown): SquareFormat => (FORMAT_IDS.includes(String(v).to
 
 /** What the person asked for, passed to the AI. */
 export interface CourseRequest { topic: string; goal: string; level: string; how: string; minutes: number }
+/** The learner's own material the course should be built around (titles and the start of each). */
+export type PlanSources = { title: string; text: string }[];
 
-export function planMessages(r: CourseRequest) {
+export function planMessages(r: CourseRequest, sources: PlanSources = []) {
   const menu = FORMATS.map((f) => `- ${f.id}: ${f.use}`).join('\n');
   return {
     system: 'You are an expert teacher and course designer who can teach any subject. You design a course as a path of squares on a board game. Reply with ONLY JSON.',
@@ -36,6 +38,7 @@ What the learner wants to be able to do: ${r.goal || '(not said: choose a sensib
 Their level now: ${r.level}
 How they like to learn: ${r.how || '(not said: choose what suits this subject best)'}
 Each sitting should take about ${r.minutes} minutes.
+${sources.length ? `The learner has gathered this material; build the course around what it covers, in a sensible order:\n${sources.map((x) => `- ${x.title}: ${x.text.slice(0, 220).replace(/\s+/g, ' ')}`).join('\n')}\n` : ''}
 
 Every square is one sitting, and has a format chosen to suit the subject and the learner:
 ${menu}
@@ -82,7 +85,7 @@ export type SquareContent =
   | { kind: 'order'; prompt: string; steps: string[] }
   | { kind: 'practice'; task: string; hint?: string; model: string; rubric: string[] };
 
-export interface SquareRequest { courseTitle: string; topic: string; level: string; how: string; style: string; square: PlannedSquare; before: string[]; minutes: number }
+export interface SquareRequest { courseTitle: string; topic: string; level: string; how: string; style: string; square: PlannedSquare; before: string[]; minutes: number; excerpts?: { source: string; text: string }[] }
 
 const SHAPES: Record<SquareFormat, string> = {
   lesson: '{"sections": [{"heading": "...", "text": "plain explanation, 2-5 sentences, may use short code or numbers", "example": "a worked example or code (optional)"}], "keyPoints": ["..."]}  (3 to 5 sections, 3 to 6 key points)',
@@ -99,7 +102,7 @@ export function contentMessages(r: SquareRequest) {
     user: `Course: ${r.courseTitle}. Learner level: ${r.level}.${r.how ? ` They like to learn: ${r.how}.` : ''}
 ${r.before.length ? `Squares already done: ${r.before.slice(-8).join('; ')}.\n` : ''}Write the next square: "${r.square.title}" (${r.square.format}). It covers: ${r.square.focus}.${r.square.checkpoint ? ' This is the final check: cover the whole course.' : ''}
 It should take about ${r.minutes} minutes. Do not repeat earlier squares.
-Reply with ONLY JSON in this shape: ${SHAPES[r.square.format]}`,
+${r.excerpts?.length ? `Use these passages from the learner's own sources for the facts they cover, and say which source in the text when you rely on one. Where they say nothing, teach from what you know.\n${r.excerpts.map((e) => `[${e.source}] ${e.text}`).join('\n')}\n` : ''}${r.square.remedial ? 'The learner struggled with this before: explain it again in a different way, in simpler words, with a new example.\n' : ''}Reply with ONLY JSON in this shape: ${SHAPES[r.square.format]}`,
   };
 }
 

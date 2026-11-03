@@ -467,6 +467,19 @@ The **Build Atlas voices** workflow ran successfully on 2026-10-19, so `kitten-n
 - **Learn a topic** (Home > Learn a topic): the language board for any subject. Name it, say what you want to be able to do, where you are now, how you like to learn and how long a sitting is. The AI designs the board: how many squares (12 to 30, in units), and for each square a format of its own choosing to suit the subject: **lesson** (sections, an example, key points), **quiz** (multiple choice with reasons), **flashcards**, **match**, **put in order**, **practice** (an open task you answer in words or code, which the AI marks and shows a good answer for). It also names the board journey and says how it will teach. Each square is written when you reach it and kept, so it works again offline. Stars, progress, and a final quiz that covers the course. Courses are in backups, not synced. Hold a course to delete it.
 - Not verified on a device.
 
+## 8t. Courses from your sources, pins, slides from replies, and more (0.0.124)
+
+- **Topic courses use sources**: each course has a **Sources** card. **Find sources online** searches, has the AI pick the best few, reads them and adds them (remove any you do not want); **Paste notes**; **Add a text file**. Squares are written from the passages that match what the square covers, and say which source they rely on. In the new-course form, **Look for good sources online first** builds the whole plan around what the sources cover (needs the internet; not in off-grid mode). Squares already written stay as they are.
+- **Courses adapt**: a quiz, practice, flashcard, match or order square that goes badly (one star) gets a lesson right after it that explains the same thing another way (up to six per course). **I already know this** on a lesson skips it (and says "skip this lesson?" after two three-star squares in a row). **Try new questions** rewrites a finished square.
+- **Pinned answers (all chats)**: the message menu has **Pin** (and Unpin). Settings > **Pinned** lists them with search, copy, open the chat and unpin.
+- **Make slides from this**: the message menu on a reply turns it into slides (no AI needed): title from the first heading, a slide per heading, bullets from lists, sentences and table rows. It opens in the slide editor; the draft it replaces is kept.
+- **Schedule by talking**: the AI has a **Schedule a task** tool ("remind me every weekday at 7 to read the news"), also for typed or voice messages. Turn it on for an agent (Schedule tasks and reminders).
+- **Scheduled tasks run in the background** while Atlas is running but not in front (with the same ongoing notice the chat uses); a closed app still gets the notification, and the answer is made when you tap it.
+- **Merge duplicate chats**: a banner on the Chats list when chats share a title (for example after syncing) merges each set into one chat with all the messages in time order.
+- **Faster first reply**: only the tools a message could need are sent (Settings > text generation > Send only the tools a message needs; on by default).
+- **Contact actions**: the draft tool can also **open the phone app with a number ready** to call. Not done: reply notifications and watch alerts.
+- Not verified on a device.
+
 ## Build evidence and checks
 
 - New **Android unit tests** workflow runs the Kotlin/JVM tests (`:app:testDebugUnitTest`) on every push that
