@@ -4,7 +4,7 @@ import { ActivityIndicator, Alert, Platform, ScrollView, Text, TextInput, Toucha
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../theme';
 import { defaultPresentationSlides, PRESENTATION_TEMPLATES, SLIDE_LAYOUTS, slideHasBullets, cleanPresentationSlides,
   type PresentationSlide, type PresentationStyleId } from '../services/presentationTemplates';
@@ -20,6 +20,7 @@ const defaultSlide = (layout: Layout): PresentationSlide =>
 
 export const PresentationScreen: React.FC = () => {
   const navigation = useNavigation();
+  const given = (useRoute<any>().params ?? {}) as { slides?: PresentationSlide[]; name?: string };
   const { colors } = useTheme();
   const [slides, setSlides] = useState<PresentationSlide[]>(defaultPresentationSlides);
   const [active, setActive] = useState(0);
@@ -44,7 +45,16 @@ export const PresentationScreen: React.FC = () => {
       }
       if (PRESENTATION_TEMPLATES.some(t => t.id === saved.styleId)) setStyleId(saved.styleId);
       if (typeof saved.name === 'string') setName(saved.name.slice(0, 70));
-    }).catch(() => undefined).finally(() => { if (alive) setHydrated(true); });
+    }).catch(() => undefined).finally(() => {
+      if (!alive) return;
+      // Slides made from a chat reply replace the draft (the old draft is kept under another key).
+      if (given.slides?.length) {
+        AsyncStorage.getItem(DRAFT_KEY).then(old => { if (old) void AsyncStorage.setItem(`${DRAFT_KEY}-previous`, old); }).catch(() => undefined);
+        setSlides(cleanPresentationSlides(given.slides)); setActive(0);
+        if (given.name) setName(given.name.slice(0, 70));
+      }
+      setHydrated(true);
+    });
     return () => { alive = false; };
   }, []);
   useEffect(() => {

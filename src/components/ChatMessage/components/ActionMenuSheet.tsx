@@ -25,6 +25,8 @@ interface ActionMenuSheetProps {
   onSpeak: () => void;
   /** When provided, shows a "Select text" item (chat mode) for partial copy. */
   onSelectText?: () => void;
+  /** Pin this message to the Pinned page, and make slides from it. */
+  extras?: { pinned: boolean; onPin: () => void; onSlides?: () => void };
 }
 
 export function ActionMenuSheet({
@@ -46,6 +48,7 @@ export function ActionMenuSheet({
   onGenerateImage,
   onSpeak,
   onSelectText,
+  extras,
 }: ActionMenuSheetProps) {
   const { colors } = useTheme();
 
@@ -114,6 +117,19 @@ export function ActionMenuSheet({
           >
             <Icon name="image" size={18} color={colors.textSecondary} />
             <Text style={styles.actionSheetText}>Generate Image</Text>
+          </AnimatedPressable>
+        )}
+
+        {extras && (
+          <AnimatedPressable testID="action-pin" hapticType="selection" style={styles.actionSheetItem} onPress={extras.onPin}>
+            <Icon name="bookmark" size={18} color={colors.textSecondary} />
+            <Text style={styles.actionSheetText}>{extras.pinned ? 'Unpin' : 'Pin'}</Text>
+          </AnimatedPressable>
+        )}
+        {extras?.onSlides && !isUser && (
+          <AnimatedPressable testID="action-slides" hapticType="selection" style={styles.actionSheetItem} onPress={extras.onSlides}>
+            <Icon name="monitor" size={18} color={colors.textSecondary} />
+            <Text style={styles.actionSheetText}>Make slides from this</Text>
           </AnimatedPressable>
         )}
 

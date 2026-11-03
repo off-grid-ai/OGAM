@@ -29,6 +29,7 @@ const STORES: Record<string, () => any> = {
   'atlas-skills': () => require('../skills/skillsStore').useSkills,
   'atlas-schedule': () => require('../schedule/store').useSchedule,
   'atlas-topics': () => require('../topics/store').useTopics,
+  'atlas-pins': () => require('../pins/store').usePins,
 };
 
 /** Loads the given stores from storage again (unknown keys and missing stores are skipped). */

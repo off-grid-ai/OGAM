@@ -38,13 +38,14 @@ interface MessageOverlaysProps {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onCloseAlert: () => void;
+  extras?: { pinned: boolean; onPin: () => void; onSlides?: () => void };
 }
 
 export const MessageOverlays: React.FC<MessageOverlaysProps> = ({
   message, styles, colors, showActionMenu, showSelectText, isEditing, isUser,
   canEdit, canRetry, canDelete, canSaveToProject, canGenerateImage, canSpeak, showSelectTextAction, displayContent,
   alertState, onCloseActionMenu, onCloseSelectText, onChangeEditText, onCopy, onEdit,
-  onRetry, onDelete, onSaveToProject, onGenerateImage, onSpeak, onSelectText, onSaveEdit, onCancelEdit, onCloseAlert,
+  onRetry, onDelete, onSaveToProject, onGenerateImage, onSpeak, onSelectText, onSaveEdit, onCancelEdit, onCloseAlert, extras,
 }) => (
   <>
     <ActionMenuSheet
@@ -66,6 +67,7 @@ export const MessageOverlays: React.FC<MessageOverlaysProps> = ({
       onGenerateImage={onGenerateImage}
       onSpeak={onSpeak}
       onSelectText={showSelectTextAction ? onSelectText : undefined}
+      extras={extras}
     />
     <SelectTextSheet
       visible={showSelectText}

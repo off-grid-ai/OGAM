@@ -49,7 +49,8 @@ export type RootStackParamList = {
   StorageSettings: undefined;
   SecuritySettings: undefined;
   Appearance: undefined;
-  Presentations: undefined;
+  Presentations: { slides?: import('../services/presentationTemplates').PresentationSlide[]; name?: string } | undefined;
+  Pins: undefined;
   // Already in RootStack
   DownloadManager: undefined;
   Gallery: { conversationId?: string } | undefined;

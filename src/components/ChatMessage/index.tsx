@@ -20,6 +20,9 @@ import { formatTime, formatDuration, buildMessageData } from './utils';
 import { ThinkingBlock } from './components/ThinkingBlock';
 import type { ChatMessageProps } from './types';
 import type { Message } from '../../types';
+import { usePins } from '../../pins/store';
+import { slidesFromReply } from '../../presentations/replySlides';
+import { navigationRef } from '../../navigation/navigationRef';
 
 function getToolIcon(toolName?: string): string {
   switch (toolName) {
@@ -363,6 +366,23 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     setShowActionMenu(false);
     onDelete?.(message);
   };
+  const pinned = usePins((st) => st.pins.some((p) => p.id === message.id));
+  const handlePin = () => {
+    setShowActionMenu(false);
+    if (pinned) { usePins.getState().remove(message.id); return; }
+    const chat = useChatStore.getState();
+    const conversation = chat.conversations.find((c: { id: string }) => c.id === chat.activeConversationId);
+    usePins.getState().add({ id: message.id, text: displayContent, role: message.role, conversationId: conversation?.id ?? null, conversationTitle: conversation?.title ?? 'Chat' });
+    triggerHaptic('notificationSuccess');
+  };
+  const handleSlides = () => {
+    setShowActionMenu(false);
+    const chat = useChatStore.getState();
+    const title = chat.conversations.find((c: { id: string }) => c.id === chat.activeConversationId)?.title;
+    const made = slidesFromReply(displayContent, title);
+    navigationRef.navigate('Presentations', { slides: made.slides, name: made.name });
+  };
+
   const handleSaveToProject = () => {
     setShowActionMenu(false);
     onSaveToProject?.(message);
@@ -474,6 +494,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         onRetry={handleRetry}
         onDelete={handleDelete}
         onSaveToProject={handleSaveToProject}
+        extras={{ pinned, onPin: handlePin, onSlides: isStreaming ? undefined : handleSlides }}
         onGenerateImage={handleGenerateImage}
         onSpeak={handleSpeak}
         onSelectText={handleSelectText}
