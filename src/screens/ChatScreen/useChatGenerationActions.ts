@@ -1,6 +1,7 @@
 /* eslint-disable max-params, complexity -- Generation orchestrator retains the legacy routing and retry interfaces. */
 /* eslint-disable max-lines -- cohesive generation-action orchestrator (send/regenerate/dispatch/route share the same GenerationDeps + session state); splitting it would scatter tightly-coupled turn logic. */
 import { useSkills } from '../../skills/skillsStore';
+import { relevantTools } from '../../services/tools/relevantTools';
 import { skillsNote } from '../../skills/selectSkills';
 import { Dispatch, SetStateAction } from 'react';
 import { resolveAgentPrompt } from '../../stores/agentStore';
@@ -58,6 +59,7 @@ export type GenerationDeps = {
     imageSteps?: number;
     imageGuidanceScale?: number;
     enabledTools?: string[];
+    trimTools?: boolean;
     cacheType?: CacheType;
     thinkingEnabled?: boolean;
   };
@@ -391,8 +393,13 @@ function resolveToolsAndPrompt(deps: GenerationDeps, conversation: any, messageT
   // SENT identical to the tools the quick-settings count SHOWS (both read settings.enabledTools), so
   // the two can never drift ("0 tools" in the popover but "Tools sent in request (1)" — device 2026-07-14).
   // The user enables KB search explicitly when they want it.
-  const enabledTools = (canUseTools ? toolsForConversation(conversation, deps.settings.enabledTools ?? []) : [])
+  const allowed = (canUseTools ? toolsForConversation(conversation, deps.settings.enabledTools ?? []) : [])
     .filter((t: string) => !(offGridOn() && NETWORK_TOOLS.includes(t))); // off-grid mode: no internet tools
+  // Fewer tools means a faster first reply: keep the ones this message could need (and ones already used in this chat).
+  const enabledTools = deps.settings.trimTools === false ? allowed : relevantTools(messageText, allowed, {
+    used: (conversation?.messages ?? []).slice(-10).flatMap((m: any) => (m.toolCalls ?? []).map((c: any) => c.name)),
+    projectHasDocs: !!conversation?.projectId,
+  });
 
   const chatNote = (conversation as any)?.instructions?.trim();
   const rawPrompt = resolveAgentPrompt(project?.systemPrompt, deps.settings.systemPrompt || APP_CONFIG.defaultSystemPrompt)

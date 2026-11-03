@@ -18,6 +18,7 @@ import {
   ModelLoadingModeSelector,
   WarmUpToggle,
   MtpToggle,
+  TrimToolsToggle,
   CpuThreadsSlider,
   BatchSizeSlider,
 } from '../../components/settings/textGenAdvancedSections';
@@ -53,6 +54,7 @@ export const TextGenerationAdvanced: React.FC = () => {
       <ModelLoadingModeSelector />
       <WarmUpToggle />
       <MtpToggle />
+      <TrimToolsToggle />
     </>
   );
 };
@@ -75,6 +77,7 @@ export const LiteRTTextGenerationAdvanced: React.FC = () => {
       <ModelLoadingModeSelector />
       <WarmUpToggle />
       <MtpToggle />
+      <TrimToolsToggle />
     </>
   );
 };

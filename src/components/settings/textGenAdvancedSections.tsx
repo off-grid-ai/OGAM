@@ -296,6 +296,22 @@ export const WarmUpToggle: React.FC = () => {
   );
 };
 
+// ─── Trim tools ───────────────────────────────────────────────────────────────
+
+export const TrimToolsToggle: React.FC = () => {
+  const { settings, updateSettings } = useAppStore();
+  return (
+    <SegmentedRow<'off' | 'on'>
+      label="Send only the tools a message needs"
+      description="The model reads every tool's description before it answers, which slows the first reply. With this on, only the tools your message could use (and ones already used in the chat) are sent. Turn it off to send every tool you have switched on, every time."
+      options={BOOL_OPTIONS}
+      current={settings.trimTools === false ? 'off' : 'on'}
+      onSelect={(id) => updateSettings({ trimTools: id === 'on' })}
+      testIdFor={(id) => `trim-tools-${id}-button`}
+    />
+  );
+};
+
 // ─── MTP (multi-token prediction) ─────────────────────────────────────────────
 
 export const MtpToggle: React.FC = () => {
