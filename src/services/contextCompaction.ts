@@ -28,6 +28,9 @@ const CONTEXT_FULL_PATTERNS = [
   'not enough context space',
   'context window exceeded',
   'context length exceeded',
+  // LiteRT-LM, when the session plus the input outgrow the context it loaded
+  'not enough space left in the context window',
+  'exceeds available state entries',
 ];
 
 /** Fraction of context allocated to the summary */

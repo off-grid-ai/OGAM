@@ -40,6 +40,25 @@ export function keepShownPartialOnError(svc: any, conversationId: string): void 
     );
   svc.resetState('error');
 }
+/**
+ * End an attempt its caller is about to retry (a full context is compacted and sent again). A partial the
+ * user saw is kept, as on any error; an attempt that showed nothing leaves no message, because a failed
+ * turn is otherwise stored even when empty and would sit as a blank reply above the retried one.
+ */
+export function endAttemptForRetry(svc: any, conversationId: string): void {
+  svc.forceFlushTokens();
+  const { streamingMessage, streamingReasoningContent } = useChatStore.getState();
+  if (streamingMessage.trim() || streamingReasoningContent.trim()) {
+    keepShownPartialOnError(svc, conversationId);
+    return;
+  }
+  if (svc.flushTimer) {
+    clearTimeout(svc.flushTimer);
+    svc.flushTimer = null;
+  }
+  useChatStore.getState().clearStreamingMessage();
+  svc.resetState('error');
+}
 type StreamChunk = string | { content?: string; reasoningContent?: string };
 
 /** Returns true when the currently active model uses LiteRT engine. */
