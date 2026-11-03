@@ -1,0 +1,16 @@
+diff --git a/src/pipeline/diffusion_engine.cpp b/src/pipeline/diffusion_engine.cpp
+index d161d9e..98159dd 100644
+--- a/src/pipeline/diffusion_engine.cpp
++++ b/src/pipeline/diffusion_engine.cpp
+@@ -1866,6 +1866,11 @@ bool StableDiffusionGGML::apply_loras(const sd_lora_t* loras, uint32_t lora_coun
+ }
+ 
+ SDCondition StableDiffusionGGML::get_learned_condition(const ConditionerParams& params) {
++    // A prompt pass cannot be interrupted, but a cancelled run must not start the next one: on a
++    // phone CPU each pass takes about two minutes. Every caller stops on an empty condition.
++    if (get_cancel_flag() == SD_CANCEL_ALL) {
++        return {};
++    }
+     return conditioning_cache_->get(*cond_stage_model, n_threads, params);
+ }
+ 

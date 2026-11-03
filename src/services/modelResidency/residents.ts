@@ -12,12 +12,6 @@ export type UnloadFn = () => Promise<void>;
 
 /** Physical-budget floor for clean, pageable models; never force dirty loads past live RAM. */
 export const MIN_BUDGET_MB = 1024;
-/** For DIRTY-memory models (CoreML/ONNX image): keep this much real RAM free for the
- *  OS + other apps so a dirty load never spills into swap. (Not applied to mmap'd
- *  GGUF - their clean weights don't pressure this limit.) */
-export const DIRTY_AVAILABILITY_HEADROOM_MB = 1024;
-/** Aggressive-mode dirty headroom - leaner, still non-zero (lenient safeguard). */
-export const AGGRESSIVE_DIRTY_HEADROOM_MB = 512;
 
 export interface RegisteredResident extends Resident {
   unload: UnloadFn;

@@ -11,12 +11,13 @@
  *
  * See docs/design/MODEL_ROUTING.md §5.1–5.2.
  */
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { hardwareService } from '../hardware';
 import logger from '../../utils/logger';
 import {
   planEviction,
   admissionBudgetMB,
+  dirtyHeadroomMB,
   hasDirtyPressure,
   exceedsDirtyCeiling,
   fitsWithoutEviction,
@@ -34,8 +35,6 @@ import {
 import {
   UnloadFn,
   MIN_BUDGET_MB,
-  DIRTY_AVAILABILITY_HEADROOM_MB,
-  AGGRESSIVE_DIRTY_HEADROOM_MB,
   RegisteredResident,
   ResidentSpec,
   EnsureResult,
@@ -220,10 +219,7 @@ class ModelResidencyManager {
       dirtyPressure: hasDirtyPressure(residents, spec),
       residentMB: residents.reduce((sum, r) => sum + r.sizeMB, 0),
       availableMB: hardwareService.getAvailableMemoryGB() * 1024,
-      headroomMB:
-        this.loadPolicy === 'aggressive'
-          ? AGGRESSIVE_DIRTY_HEADROOM_MB
-          : DIRTY_AVAILABILITY_HEADROOM_MB,
+      headroomMB: dirtyHeadroomMB(hardwareService.getTotalMemoryGB() * 1024, this.loadPolicy, Platform.OS),
     });
   }
 
