@@ -31,7 +31,7 @@ static std::string string(JNIEnv *env, jstring value) {
 extern "C" JNIEXPORT void JNICALL Java_ai_offgridmobile_video_VideoGenerationModule_nativePrepare(JNIEnv *, jobject) {
   // Release builds too: a failed load names sd.cpp's last error, which is otherwise only in this log.
   sd_set_log_callback([](sd_log_level_t level, const char *text, void *) {
-    runtime.engineErrors.note(level == SD_LOG_ERROR, text);
+    runtime.engineErrors.note(level == SD_LOG_ERROR, level == SD_LOG_WARN, text);
 #ifndef NDEBUG
     const int priority = level == SD_LOG_ERROR ? ANDROID_LOG_ERROR :
       level == SD_LOG_WARN ? ANDROID_LOG_WARN : ANDROID_LOG_DEBUG;

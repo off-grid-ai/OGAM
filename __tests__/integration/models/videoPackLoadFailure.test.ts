@@ -16,38 +16,54 @@ import path from 'path';
 
 const HEADER_DIR = path.join(__dirname, '../../../native/video/common');
 
-/** Feed `lines` ([isError, text]) to a fresh log, then return what a failed load would say. */
-function failedLoadMessage(lines: Array<[boolean, string]>): string {
+type Level = 'error' | 'warn' | 'debug';
+
+/** Feed `lines` to a fresh log, as sd.cpp emits them, then return what a failed load would say. */
+function failedLoadMessage(lines: Array<[Level, string]>): string {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'engine-error-log-'));
-  const notes = lines.map(([error, text]) => `  log.note(${error}, ${JSON.stringify(text)});`).join('\n');
+  const notes = lines
+    .map(([level, text]) => `  log.note(${level === 'error'}, ${level === 'warn'}, ${JSON.stringify(text)});`)
+    .join('\n');
   const source = `#include "EngineErrorLog.hpp"
 #include <iostream>
 int main() {
   offgrid::EngineErrorLog log;
 ${notes}
-  std::cout << offgrid::videoPackLoadFailure(log.take());
-  std::cout << "|" << log.take().size();
+  std::cout << log.takeLoadFailure() << "|" << log.takeLoadFailure();
 }
 `;
   fs.writeFileSync(path.join(folder, 'driver.cpp'), source);
   const binary = path.join(folder, 'driver');
   execFileSync('c++', ['-std=c++17', '-I', HEADER_DIR, path.join(folder, 'driver.cpp'), '-o', binary]);
-  const [message, leftAfterTake] = execFileSync(binary, { encoding: 'utf8' }).split('|');
-  expect(leftAfterTake).toBe('0'); // one load's reason never leaks into the next
+  const [message, next] = execFileSync(binary, { encoding: 'utf8' }).split('|');
+  expect(next).toBe('Could not load the video model pack.'); // one load's reason never leaks into the next
   return message;
 }
 
-it('names the last engine error when the pack cannot be opened', () => {
+// What a OnePlus SM8635 logged for a Wan 2.1 pack whose weight header was damaged (2026-11-03).
+const PACK = '/data/user/0/ai.offgridmobile.dev/files/video-models/off-grid-ai%2FWan2.1-T2V-1.3B-GGUF-Q4';
+
+it('names the file it could not read, and says to download the model again', () => {
   expect(failedLoadMessage([
-    [false, 'loading diffusion model from /models/wan/wan2.2-ti2v-5b-Q4_K.gguf\n'],
-    [true, "tensor 'blocks.0.attn.q.weight' has wrong shape in model file\n"],
-    [true, 'load tensors from model loader failed\n'],
+    ['debug', `loading diffusion model from '${PACK}/Wan2.1-T2V-1.3B-calibrated-Q4_K_S.gguf' --- diffusion_engine.cpp:740\n`],
+    ['warn', `loading diffusion model from '${PACK}/Wan2.1-T2V-1.3B-calibrated-Q4_K_S.gguf' failed --- diffusion_engine.cpp:765\n`],
+    ['error', "get sd version from file failed: '' --- diffusion_engine.cpp:972\n"],
+  ])).toBe(
+    'The video model pack has a file that cannot be read: Wan2.1-T2V-1.3B-calibrated-Q4_K_S.gguf. ' +
+    'Delete the model, then download it again.',
+  );
+});
+
+it('names the last engine error, without its source location, when no file was named', () => {
+  expect(failedLoadMessage([
+    ['error', 'load tensors from model loader failed --- diffusion_engine.cpp:1012\n'],
   ])).toBe('Could not load the video model pack: load tensors from model loader failed');
 });
 
 it('says memory, and what to do, when the engine could not allocate', () => {
   expect(failedLoadMessage([
-    [true, 'ggml_vulkan: Device memory allocation of size 3221225472 failed.\n'],
+    ['warn', `loading diffusion model from '${PACK}/Wan2.1-T2V-1.3B-calibrated-Q4_K_S.gguf' failed\n`],
+    ['error', 'ggml_vulkan: Device memory allocation of size 3221225472 failed.\n'],
   ])).toBe(
     'Not enough free memory to load the video model pack. Close other apps, then try again. ' +
     '(ggml_vulkan: Device memory allocation of size 3221225472 failed.)',
@@ -56,7 +72,7 @@ it('says memory, and what to do, when the engine could not allocate', () => {
 
 it('keeps the plain message when the engine logged no error, and never keeps a line with the prompt', () => {
   expect(failedLoadMessage([
-    [false, 'auto-fit: diffusion model on Vulkan0\n'],
-    [true, 'prompt "a baby boy playing in the garden" too long\n'],
+    ['debug', 'auto-fit: diffusion model on Vulkan0\n'],
+    ['error', 'prompt "a baby boy playing in the garden" too long\n'],
   ])).toBe('Could not load the video model pack.');
 });

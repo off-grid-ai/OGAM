@@ -379,7 +379,7 @@ public:
         std::lock_guard<std::mutex> guard(contextMutex);
         context = loaded;
       }
-      if (!loaded) throw std::runtime_error(videoPackLoadFailure(engineErrors.take()));
+      if (!loaded) throw std::runtime_error(engineErrors.takeLoadFailure());
       if (cancelled.load()) throw std::runtime_error("Video generation stopped.");
       sd_set_progress_callback([](int step, int total, float, void *data) {
         (*static_cast<const std::function<void(int, int)> *>(data))(step, total);

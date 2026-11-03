@@ -246,7 +246,7 @@ RCT_REMAP_METHOD(generate, generate:(NSDictionary *)input resolver:(RCTPromiseRe
           if (!text) return;
           std::fputs(text, stderr);
           VideoGenerationModule *owner = (__bridge VideoGenerationModule *)data;
-          owner->_runtime.engineErrors.note(level == SD_LOG_ERROR, text);
+          owner->_runtime.engineErrors.note(level == SD_LOG_ERROR, level == SD_LOG_WARN, text);
           if (!std::strstr(text, "Wan VAE decode backend=")) return;
           NSString *detail = [NSString stringWithUTF8String:text];
           dispatch_async(dispatch_get_main_queue(), ^{ [owner logLifecycle:detail]; });
