@@ -22,7 +22,12 @@ import {
   summaryMarkdown,
   unfinishedRuns,
   unmetPeers,
+  VIDEO_RUNTIME_CHECKS,
+  videoRuntimeMoved,
 } from '../../../scripts/lib/engines';
+import fs from 'fs';
+import path from 'path';
+import { parse } from 'yaml';
 
 describe('the engines the app ships', () => {
   it('lists every native inference engine once', () => {
@@ -300,6 +305,78 @@ describe('bumpMergeDecision', () => {
   ])('waits on %s', (_label, over, reason) => {
     const verdict = bumpMergeDecision({ ...green, ...over }, sha);
     expect(verdict).toEqual({ action: 'skip', reason: expect.stringContaining(reason) });
+  });
+});
+
+describe('a bump that moves the video runtime', () => {
+  const sha = 'a'.repeat(40);
+  const built = VIDEO_RUNTIME_CHECKS.map(name => ({ name, conclusion: 'SUCCESS' }));
+  const bump = (checks: Array<{ name: string; conclusion: string | null }>) => ({
+    state: 'OPEN',
+    headRefName: 'chore/engine-updates',
+    baseRefName: 'main',
+    headRefOid: sha,
+    isCrossRepository: false,
+    commits: [{ authors: [{ login: 'github-actions[bot]', email: BOT_EMAIL }] }],
+    files: [{ path: 'package.json' }, { path: 'scripts/video/revision' }],
+    statusCheckRollup: [{ name: 'ci', conclusion: 'SUCCESS' }, ...checks],
+  });
+  const [android, ios] = VIDEO_RUNTIME_CHECKS;
+
+  it('merges once both runtimes built', () => {
+    expect(bumpMergeDecision(bump(built), sha)).toEqual({ action: 'merge' });
+  });
+
+  it.each([
+    ['a skipped Android build', [{ name: android, conclusion: 'SKIPPED' }, built[1]], `${android} SKIPPED`],
+    ['a failed iOS build', [built[0], { name: ios, conclusion: 'FAILURE' }], `${ios} FAILURE`],
+    ['a cancelled build', [{ name: android, conclusion: 'CANCELLED' }, built[1]], `${android} CANCELLED`],
+    ['a missing iOS build', [built[0]], `${ios} did not run`],
+    ['no runtime builds', [], `${android} did not run, ${ios} did not run`],
+  ])('refuses %s', (_label, checks, reason) => {
+    expect(bumpMergeDecision(bump(checks), sha)).toEqual({
+      action: 'refuse',
+      reason: `moves the video runtime, but it did not build: ${reason}`,
+    });
+  });
+
+  it('waits while a build runs', () => {
+    expect(bumpMergeDecision(bump([built[0], { name: ios, conclusion: null }]), sha)).toEqual({
+      action: 'skip',
+      reason: `checks not green: ${ios} running`,
+    });
+  });
+
+  it('does not ask for runtime builds when the bump leaves the runtime alone', () => {
+    const llamaOnly = { ...bump([]), files: [{ path: 'package.json' }, { path: 'ios/Podfile.lock' }] };
+    expect(bumpMergeDecision(llamaOnly, sha)).toEqual({ action: 'merge' });
+  });
+
+  it.each([
+    ['scripts/video/revision', true],
+    ['scripts/video/android-hexagon.patch', true],
+    ['scripts/prepare-video-runtime.sh', true],
+    ['scripts/build-video-ios.sh', true],
+    ['scripts/videos.js', false],
+    ['package.json', false],
+  ])('counts %s as a runtime input: %p', (file, moved) => {
+    expect(videoRuntimeMoved(file)).toBe(moved);
+  });
+
+  // The merge script finds the builds by their check names, and CI decides when they run.
+  it('CI names its runtime builds as the merge script expects, and runs them on the same paths', () => {
+    const ci = parse(fs.readFileSync(path.join(__dirname, '../../../.github/workflows/ci.yml'), 'utf8')) as {
+      jobs: Record<string, { name?: string; needs?: string[]; if?: string; steps?: Array<{ run?: string }> }>;
+    };
+    expect([ci.jobs['video-android'].name, ci.jobs['video-ios'].name]).toEqual(VIDEO_RUNTIME_CHECKS);
+    for (const job of ['video-android', 'video-ios']) {
+      expect(ci.jobs[job].if).toContain("needs.changes.outputs.video == 'true'");
+      expect(ci.jobs.ci.needs).toContain(job);
+    }
+    const filter = ci.jobs.changes.steps!.map(step => step.run ?? '').join('\n').match(/grep -Eq '([^']+)'/)![1];
+    for (const file of ['scripts/video/revision', 'scripts/prepare-video-runtime.sh', 'scripts/build-video-ios.sh', 'scripts/videos.js', 'package.json']) {
+      expect(new RegExp(filter).test(file)).toBe(videoRuntimeMoved(file));
+    }
   });
 });
 

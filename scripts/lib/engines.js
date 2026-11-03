@@ -224,10 +224,23 @@ const BOT_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com';
 const PASSED = new Set(['SUCCESS', 'NEUTRAL', 'SKIPPED']);
 
 /**
+ * The CI jobs (.github/workflows/ci.yml) that build each video runtime from source. CI runs them
+ * only when the PR changes a file videoRuntimeMoved matches; a bump that moves stable-diffusion.cpp
+ * merges only once both built, never on a skip.
+ */
+const VIDEO_RUNTIME_CHECKS = ['video runtime (Android)', 'video runtime (iOS)'];
+
+/** Whether a changed file (repository path) is an input of the video runtime builds. Same paths as ci.yml's changes job. */
+function videoRuntimeMoved(path) {
+  return path.startsWith('scripts/video/') || path === 'scripts/prepare-video-runtime.sh' || path === 'scripts/build-video-ios.sh';
+}
+
+/**
  * Whether the daily engine PR may merge (`gh pr view --json …`) after CI on `sha` ended:
  *   merge  — the bot's own bump into main, every check on `sha` passed
  *   skip   — not now (closed, a newer commit, or a check not green); a later CI run decides
- *   refuse — not a PR this job may merge (another branch or author, or it moves pro)
+ *   refuse — not a PR this job may merge (another branch or author, or it moves pro), or it moves
+ *            the video runtime and a runtime build was skipped, missing or failed
  * A PR that lists held engines still merges the engines that moved.
  */
 function bumpMergeDecision(pr, sha) {
@@ -247,6 +260,16 @@ function bumpMergeDecision(pr, sha) {
   const checks = pr.statusCheckRollup.map(c => ({ name: c.name || c.context, result: c.conclusion || c.state }));
   const notGreen = checks.filter(c => !PASSED.has(c.result));
   if (checks.length === 0) return { action: 'skip', reason: 'no checks ran' };
+  if (pr.files.some(f => videoRuntimeMoved(f.path))) {
+    const unbuilt = VIDEO_RUNTIME_CHECKS.flatMap(name => {
+      const runs = checks.filter(c => c.name === name);
+      if (runs.length === 0) return [`${name} did not run`];
+      return runs.filter(c => c.result && c.result !== 'SUCCESS').map(c => `${name} ${c.result}`);
+    });
+    if (unbuilt.length > 0) {
+      return { action: 'refuse', reason: `moves the video runtime, but it did not build: ${unbuilt.join(', ')}` };
+    }
+  }
   if (notGreen.length > 0) {
     const listed = notGreen.map(c => `${c.name} ${c.result ?? 'running'}`).join(', ');
     return { action: 'skip', reason: `checks not green: ${listed}` };
@@ -286,6 +309,8 @@ module.exports = {
   BUMP_BRANCH,
   BOT_EMAIL,
   bumpMergeDecision,
+  VIDEO_RUNTIME_CHECKS,
+  videoRuntimeMoved,
   RELEASE_WORKFLOWS,
   unfinishedRuns,
 };

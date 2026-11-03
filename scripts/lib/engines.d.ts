@@ -73,5 +73,7 @@ export interface BumpPr {
   statusCheckRollup: Array<{ name?: string; context?: string; conclusion?: string | null; state?: string | null }>;
 }
 export function bumpMergeDecision(pr: BumpPr, sha: string): { action: 'merge' | 'skip' | 'refuse'; reason?: string };
+export const VIDEO_RUNTIME_CHECKS: string[];
+export function videoRuntimeMoved(path: string): boolean;
 export const RELEASE_WORKFLOWS: string[];
 export function unfinishedRuns<T extends { status: string }>(runs: T[]): T[];
