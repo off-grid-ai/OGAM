@@ -48,6 +48,20 @@ describePro('note preview', () => {
     expect(install.markdown).toContain('[TOC]');
   });
 
+  it('links a note named with [brackets]: the preview shows its name, and the [[ query keeps the brackets', () => {
+    const { previewBlocks, parseNoteLinkUrl, openLinkQuery } = load();
+    const [only] = previewBlocks('See [[[draft] Launch]].\n');
+    if (only?.kind !== 'markdown') throw new Error('expected markdown');
+    const m = /\[((?:\\.|[^\]])+)\]\(([^)]+)\)/.exec(only.markdown);
+    expect(m?.[1]).toBe('\\[draft\\] Launch');
+    expect(parseNoteLinkUrl(m![2]!)).toEqual({ target: '[draft] Launch' });
+
+    const typed = 'See [[[draft] La';
+    expect(openLinkQuery(typed, typed.length)).toEqual({ start: 6, query: '[draft] La' });
+    const open = 'See [[[dra';
+    expect(openLinkQuery(open, open.length)).toEqual({ start: 6, query: '[dra' });
+  });
+
   it('inserts a link over the typed [[, or around the selection', () => {
     const { insertNoteLink } = load();
 
