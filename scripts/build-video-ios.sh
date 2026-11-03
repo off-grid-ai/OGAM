@@ -5,7 +5,10 @@ REVISION="$(cat "$ROOT/scripts/video/revision")"
 CACHE="${OFFGRID_VIDEO_BUILD_DIR:-$ROOT/.video-build}"
 SOURCE="${OFFGRID_SD_SOURCE:-$CACHE/source}"
 OUTPUT="$ROOT/native/video/OffgridVideoRuntime.xcframework"
-BUILD_KEY="${OFFGRID_IOS_DEVICE_ONLY:-0}-$(cat "$ROOT/scripts/video/revision" "$ROOT/scripts/video/exports.txt" "$ROOT/scripts/video/CMakeLists.txt" "$ROOT/scripts/video/conditioning-errors.patch" "$ROOT/scripts/video/video-decode-observer.patch" "$ROOT/scripts/video/metal-group-norm-batch.patch" "$ROOT/scripts/video/stop-between-prompt-passes.patch" | shasum -a 256 | cut -d' ' -f1)"
+# The build key covers every iOS patch in scripts/video/patches.txt, so a new one rebuilds the framework.
+IOS_PATCHES=()
+while IFS= read -r patch; do IOS_PATCHES+=("$patch"); done < <(bash "$ROOT/scripts/video/apply-patches.sh" --list ios)
+BUILD_KEY="${OFFGRID_IOS_DEVICE_ONLY:-0}-$(cat "$ROOT/scripts/video/revision" "$ROOT/scripts/video/exports.txt" "$ROOT/scripts/video/CMakeLists.txt" "$ROOT/scripts/video/patches.txt" "${IOS_PATCHES[@]}" | shasum -a 256 | cut -d' ' -f1)"
 if [ -f "$OUTPUT/ios-arm64/OffgridVideoRuntime.framework/Headers/stable-diffusion.h" ] && [ -f "$OUTPUT/revision" ] && [ "$(cat "$OUTPUT/revision")" = "$BUILD_KEY" ]; then exit 0; fi
 mkdir -p "$CACHE"
 if [ ! -d "$SOURCE/.git" ]; then
@@ -18,17 +21,10 @@ if ! git -C "$SOURCE" cat-file -e "$REVISION^{commit}" 2>/dev/null; then
 fi
 git -C "$SOURCE" checkout --detach "$REVISION"
 git -C "$SOURCE" submodule update --init --depth 1 ggml
-for PATCH in "$ROOT/scripts/video/conditioning-errors.patch" "$ROOT/scripts/video/video-decode-observer.patch" "$ROOT/scripts/video/stop-between-prompt-passes.patch"; do
-  if ! git -C "$SOURCE" apply --reverse --check "$PATCH" 2>/dev/null; then
-    git -C "$SOURCE" apply "$PATCH"
-  fi
-done
-# ggml's Metal GroupNorm normalizes only the first image of a batch. sd.cpp batches CFG's two UNet
-# passes, so the second came back unwritten and every picture rendered blank.
-PATCH="$ROOT/scripts/video/metal-group-norm-batch.patch"
-if ! git -C "$SOURCE/ggml" apply --reverse --check "$PATCH" 2>/dev/null; then
-  git -C "$SOURCE/ggml" apply "$PATCH"
-fi
+# The iOS patches in scripts/video/patches.txt, among them ggml's Metal GroupNorm fix: it normalized
+# only the first image of a batch, so CFG's second UNet pass came back unwritten and every picture
+# rendered blank.
+bash "$ROOT/scripts/video/apply-patches.sh" ios "$SOURCE"
 SDKS=(iphoneos)
 if [ "${OFFGRID_IOS_DEVICE_ONLY:-0}" != "1" ]; then SDKS+=(iphonesimulator); fi
 for SDK in "${SDKS[@]}"; do
