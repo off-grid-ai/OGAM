@@ -37,7 +37,10 @@ public:
     if (std::regex_match(line, match, fileFailed)) unreadableFile = match[1];
     else if (error) {
       lastError = line.substr(0, 300);
-      if (std::regex_search(lastError, allocationFailurePattern())) allocationError = lastError;
+      // Quoted text is a path or a name (a file can be called "alloc..."), never the engine's diagnosis.
+      static const std::regex quoted("'[^']*'");
+      if (std::regex_search(std::regex_replace(lastError, quoted, "''"), allocationFailurePattern()))
+        allocationError = lastError;
     }
   }
   void clear() {

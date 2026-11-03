@@ -83,6 +83,13 @@ it('keeps the memory advice when sd.cpp logs a vaguer error after the allocation
   );
 });
 
+it('does not read a file name with "alloc" in it as a memory failure', () => {
+  expect(failedLoadMessage([
+    ['error', "failed to open '/models/allocator-test/wan.gguf' with GGUFReader\n"],
+    ['warn', "loading diffusion model from '/models/allocator-test/wan.gguf' failed\n"],
+  ])).toBe('The video model pack has a file that cannot be read: wan.gguf. Delete the model, then download it again.');
+});
+
 it('names what the last backend hit, not an earlier one', () => {
   expect(failedLoadMessage([
     ['attempt'],
