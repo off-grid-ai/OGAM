@@ -22,6 +22,9 @@ import { proIsPresent, requirePro } from '../helpers/requirePro';
 type RewriteModule = typeof import('../../../pro/scribe/rewriteService');
 type EngineModule = typeof import('../../../pro/scribe/writingEngine');
 
+// The Models screen's import runs on the real navigation stack.
+jest.unmock('@react-navigation/native');
+
 const describePro = proIsPresent() ? describe : describe.skip;
 
 /** Improve, in the text's own tone and layout, as plain text. */
