@@ -86,7 +86,9 @@ it('the viewer pauses on a tap and saves the clip to Downloads', async () => {
   await makeClipInChat(app, CLIP);
   await openLibrary(app);
   rtl.fireEvent.press(view.getAllByTestId(/^expand-library-item-/)[0]);
-  const toggle = await view.findByTestId('play-viewer', {}, { timeout: 10_000 });
+  // It plays with nothing over the picture; a tap on the picture brings Pause.
+  rtl.fireEvent.press(await view.findByTestId('frame-viewer', {}, { timeout: 10_000 }));
+  const toggle = view.getByTestId('play-viewer');
   expect(toggle.props.accessibilityLabel).toBe('Pause');
   rtl.fireEvent.press(toggle);
   await rtl.waitFor(() => expect(view.getByTestId('play-viewer').props.accessibilityLabel).toBe('Play'));
