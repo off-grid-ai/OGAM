@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { localUniqueId } from '../utils/uniqueId';
 import type { CoursePlan, CourseRequest, PlannedSquare, SquareContent } from './formats';
 import { MAX_SOURCES, type CourseSource } from './sources';
+import type { SharedCourse } from './shareCourse';
 
 export interface Course {
   id: string;
@@ -27,6 +28,8 @@ export interface Course {
 interface TopicsState {
   courses: Course[];
   add: (request: CourseRequest, plan: CoursePlan, sources?: CourseSource[], projectId?: string) => string;
+  /** A course opened from a file someone sent: its squares and content, with no progress and no project. */
+  addShared: (shared: SharedCourse, projectId?: string) => string;
   addSources: (id: string, sources: CourseSource[]) => void;
   removeSource: (id: string, sourceId: string) => void;
   clearContent: (id: string, key: string) => void;
@@ -49,6 +52,16 @@ export const useTopics = create<TopicsState>()(persist((set) => ({
     return id;
   },
   remove: (id) => set((s) => ({ courses: s.courses.filter((c) => c.id !== id) })),
+  addShared: (shared, projectId) => {
+    const id = localUniqueId('course');
+    const course: Course = {
+      id, topic: shared.topic, title: shared.title, summary: shared.summary, style: shared.style, theme: shared.theme, request: shared.request,
+      squares: shared.squares, content: shared.content, progress: {}, createdAt: Date.now(), projectId,
+      sources: shared.sources.filter((x) => x.text).map((x, i) => ({ id: `shared-${Date.now()}-${i}`, title: x.title, kind: x.kind, url: x.url, text: x.text, addedAt: Date.now() })),
+    };
+    set((s) => ({ courses: [course, ...s.courses].slice(0, 20) }));
+    return id;
+  },
   addSources: (id, sources) => set((s) => ({ courses: s.courses.map((c) => (c.id === id ? { ...c, sources: [...(c.sources ?? []), ...sources].slice(-MAX_SOURCES) } : c)) })),
   removeSource: (id, sourceId) => set((s) => ({ courses: s.courses.map((c) => (c.id === id ? { ...c, sources: (c.sources ?? []).filter((x) => x.id !== sourceId) } : c)) })),
   clearContent: (id, key) => set((s) => ({ courses: s.courses.map((c) => {

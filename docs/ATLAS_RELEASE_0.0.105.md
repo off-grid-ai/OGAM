@@ -495,6 +495,18 @@ The **Build Atlas voices** workflow ran successfully on 2026-10-19, so `kitten-n
 - **The AI knows roughly where you are**: a built-in offline list of 6,456 cities (every city of 100,000 people or more, plus the three largest of every country; GeoNames, CC BY 4.0). The AI is told the city and country nearest your phone's last GPS reading (read when Atlas opens and comes to the front, if location was allowed once, for example in Maps), never the coordinates, and not if the reading is over 12 hours old. The "My location" tool also lists the nearest cities. **Appearance > AI style > Where I am** turns it off. Only large cities are known, so a small town is described as near the closest city.
 - Not verified on a device.
 
+## 8w. Send a course to another phone (0.0.127)
+
+- **Learn a topic > open a course > "Send this course to another phone"** saves the course as a
+  `.atlascourse.json` file with the phone's own save dialog (Downloads, Drive, a messaging app's share, and so on).
+- **Learn a topic > "Open a course someone sent"** picks that file and adds the course. It opens at once, offline: the
+  plan and every square already written come with it.
+- Not sent: your progress and stars, the project link, and the text of web pages (a web source keeps only its title
+  and address). Your own notes and added text files do travel with it.
+- The file is checked square by square on opening (sizes, formats, answers in range); a file that is not an Atlas
+  course says so instead of failing.
+- Not verified on a device.
+
 ## Build evidence and checks
 
 - New **Android unit tests** workflow runs the Kotlin/JVM tests (`:app:testDebugUnitTest`) on every push that

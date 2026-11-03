@@ -12,6 +12,7 @@ import type { Space, SpaceKind } from '../language/board';
 import { FORMATS, type SquareContent, type SquareFormat } from './formats';
 import { courseProgress, useTopics, type Course } from './store';
 import { createCourse, findSources, squareContent } from './service';
+import { importCourseFile, shareCourseFile } from './courseFiles';
 import { makeSource, type CourseSource } from './sources';
 import { SquareView } from './SquareViews';
 
@@ -77,6 +78,12 @@ export const TopicsScreen: React.FC = () => {
     } catch (e: any) { setError(String(e?.message || e)); }
     setBusy(false);
   };
+  const openFile = async () => {
+    try {
+      const id = await importCourseFile(given.projectId);
+      if (id) navigation.navigate('TopicBoard', { courseId: id });
+    } catch (e: any) { Alert.alert('Could not open that course', String(e?.message || e)); }
+  };
   const confirmDelete = (c: Course) => Alert.alert('Delete this course?', c.title, [
     { text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => remove(c.id) },
   ]);
@@ -102,6 +109,7 @@ export const TopicsScreen: React.FC = () => {
         {!courses.length && !form && <Text style={[styles.meta, { color: colors.textMuted }]} testID="topics-empty">No courses yet.</Text>}
 
         {!form && <Button title="New course" onPress={() => setForm(true)} testID="course-new" />}
+        {!form && <Button title="Open a course someone sent" variant="outline" onPress={openFile} testID="course-import" />}
         {form && (
           <View style={[styles.card, { borderColor: colors.primary, backgroundColor: colors.surface }]} testID="course-form">
             <TextInput value={topic} onChangeText={setTopic} placeholder="What do you want to learn?" placeholderTextColor={colors.textMuted}
@@ -224,6 +232,8 @@ export const TopicBoardScreen: React.FC = () => {
         {!!course.style && <Text style={[styles.meta, { color: colors.textMuted }]} testID="course-style">How it teaches: {course.style}</Text>}
         <Text style={[styles.meta, { color: colors.textMuted }]} testID="course-progress">{p.done} of {p.total} squares · {stars} stars</Text>
         <SourcesCard course={course} />
+        <Button title="Send this course to another phone" variant="outline" testID="course-share"
+          onPress={() => shareCourseFile(course).catch((e) => Alert.alert('Could not save the course', String(e?.message || e)))} />
         <Board spaces={spaces} isDone={done} isOpen={open} current={current}
           onPress={(s) => navigation.navigate('TopicSquare', { courseId, key: s.key })} />
       </ScrollView>
