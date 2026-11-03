@@ -21,6 +21,7 @@ import {
   localModelAcceptsImages,
   stopAllTextEngines,
   activeLiteRTContextTokens,
+  summarizeWithActiveEngine,
 } from '../../services/engines';
 import { needsVisionRepair } from '../../utils/visionRepair';
 import { ensureDefaultClassifier } from '../../services/classifierProvisioning';
@@ -599,6 +600,7 @@ async function generateWithCompactionRetry(
       allMessages: opts.messages,
       previousSummary: conversation?.compactionSummary,
       contextLength: liteRTContextTokens,
+      summarize: summarizeWithActiveEngine,
     }).catch(() => opts.messages);
     if (!generationSession.isGeneratingFor(opts.id)) return true;
   }
@@ -625,6 +627,7 @@ async function generateWithCompactionRetry(
         allMessages: messagesForFirstAttempt,
         previousSummary,
         contextLength: liteRTContextTokens,
+        summarize: summarizeWithActiveEngine,
       })
       .catch(async () => {
         await llmService.clearKVCache(true).catch(() => {});

@@ -53,6 +53,9 @@ function settingsContextLength(): number {
     : llmService.getPerformanceSettings().contextLength || 2048;
 }
 
+/** Writes a compaction summary from the summarizer messages, within a token budget. */
+export type LocalSummarizer = (messages: Message[], maxTokens: number) => Promise<string>;
+
 class ContextCompactionService {
   private _isCompacting = false;
   private readonly compactingListeners = new Set<(v: boolean) => void>();
@@ -108,6 +111,9 @@ class ContextCompactionService {
       /** The context the active engine actually holds, when the settings can't tell (a LiteRT engine
        *  whose context native clamped to free RAM). */
       contextLength?: number;
+      /** Writes the summary on the active local engine. Without it llama.cpp writes it, which is not
+       *  loaded beside a LiteRT model. */
+      summarize?: LocalSummarizer;
     },
   ): Promise<Message[]> {
     const { conversationId, systemPrompt, allMessages, previousSummary } = opts;
@@ -160,7 +166,7 @@ class ContextCompactionService {
       // Try to summarize old messages via LLM
       let summary: string | undefined;
       try {
-        summary = await this.summarizeMessages({ oldMessages, previousSummary, summaryTokenBudget, ctxLength });
+        summary = await this.summarizeMessages({ oldMessages, previousSummary, summaryTokenBudget, ctxLength, summarize: opts.summarize });
       } catch (e) {
         logger.warn('[ContextCompaction] Summarization failed, falling back to trim-only:', e);
       }
@@ -204,9 +210,15 @@ class ContextCompactionService {
 
   /** Summarize old messages using the LLM with a hard token cap. */
   private async summarizeMessages(
-    opts: { oldMessages: Message[]; previousSummary?: string; summaryTokenBudget: number; ctxLength: number },
+    opts: {
+      oldMessages: Message[];
+      previousSummary?: string;
+      summaryTokenBudget: number;
+      ctxLength: number;
+      summarize?: LocalSummarizer;
+    },
   ): Promise<string> {
-    const { oldMessages, previousSummary, summaryTokenBudget, ctxLength } = opts;
+    const { oldMessages, previousSummary, summaryTokenBudget, ctxLength, summarize } = opts;
     // Format old messages as a transcript
     const transcript = oldMessages
       .map(m => `${m.role}: ${m.content.replaceAll(/^(\w+: )/gm, '>$1')}`)
@@ -259,12 +271,8 @@ class ContextCompactionService {
       if (failure) throw failure;
       return summary.trim().slice(0, summaryTokenBudget * CHARS_PER_TOKEN_ESTIMATE);
     }
-    // engines imports litert, which imports this module, so it is loaded here rather than at the top.
-    const { generateStandalone, getActiveEngineService } = await import('./engines');
-    const { liteRTService } = await import('./litert');
-    if (getActiveEngineService() === liteRTService) {
-      // llama.cpp is not loaded beside a LiteRT model, so the LiteRT engine writes the summary.
-      const summary = await generateStandalone(summaryMessages);
+    if (summarize) {
+      const summary = await summarize(summaryMessages, summaryTokenBudget);
       return summary.trim().slice(0, summaryTokenBudget * CHARS_PER_TOKEN_ESTIMATE);
     }
     return await llmService.generateWithMaxTokens(summaryMessages, summaryTokenBudget);

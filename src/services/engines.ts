@@ -271,6 +271,16 @@ export function activeLiteRTContextTokens(): number | undefined {
 }
 
 /**
+ * Writes a compaction summary on the active local engine. llama.cpp is not loaded beside a LiteRT model,
+ * so a loaded LiteRT model writes it.
+ */
+export function summarizeWithActiveEngine(messages: Message[], maxTokens: number): Promise<string> {
+  return getActiveEngineService() === liteRTService
+    ? generateStandalone(messages)
+    : llmService.generateWithMaxTokens(messages, maxTokens);
+}
+
+/**
  * Is a REMOTE (gateway / OpenAI-compatible) text model the ACTIVE text engine right now?
  *
  * THE single source of truth for "route text to a remote provider" — the exact rule

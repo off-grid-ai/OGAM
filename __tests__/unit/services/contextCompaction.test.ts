@@ -27,7 +27,7 @@ function tokenizer(perMessage: number) {
   }));
 }
 
-const compactWith = (messages: Message[], extra: { previousSummary?: string } = {}) =>
+const compactWith = (messages: Message[], extra: { previousSummary?: string; summarize?: unknown } = {}) =>
   compaction.compact({ conversationId: d.conversationId, systemPrompt: 'System', allMessages: messages, ...extra });
 const conversation = () =>
   d.useChatStore.getState().conversations.find((c: any) => c.id === d.conversationId);
@@ -130,7 +130,7 @@ describe('compact', () => {
     expect(result.map((m: Message) => m.content)).toEqual(['System', '[Previous conversation summary]\nEarlier talk', 'Hello']);
   });
 
-  it('has a loaded LiteRT model write the summary, since llama.cpp is not loaded beside it', async () => {
+  it('has a loaded LiteRT model write the summary when the chat hands it the active engine, since llama.cpp is not loaded beside it', async () => {
     d = await launchGeneration({ engine: 'litert' });
     compaction = require('../../../src/services/contextCompaction').contextCompactionService;
     d.boundary.litert.scriptTurn({ content: 'The user asked for stories about Paris and Lyon.' });
@@ -142,7 +142,8 @@ describe('compact', () => {
       createMessage({ role: 'user', content: 'Which city has the best food?' }),
     ];
 
-    const result = await compactWith(messages);
+    const { summarizeWithActiveEngine } = require('../../../src/services/engines');
+    const result = await compactWith(messages, { summarize: summarizeWithActiveEngine });
 
     expect(result.map((m: Message) => m.content)).toEqual([
       'System',
