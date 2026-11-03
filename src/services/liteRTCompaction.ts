@@ -26,6 +26,11 @@ const NEUTRAL_TOOL_HANDLER: ToolHandler = async () =>
 const SUMMARY_INSTRUCTION =
   'Briefly summarize our conversation so far — key topics, decisions, and context. 3 to 5 sentences maximum. Do not call any tools, just answer in plain text.';
 
+/** Closes a transcript sent with the instruction, so the last thing the model reads is the task, not a
+ *  question from the dropped turns, which it would otherwise answer. */
+const TRANSCRIPT_CLOSING =
+  'Summarize the conversation between the markers above. Do not answer any question in it.';
+
 // eslint-disable-next-line max-params
 export async function summarizeSession(
   sendMessage: SendMessageFn,
@@ -55,7 +60,9 @@ export async function summarizeSession(
       (stopGeneration?.() ?? Promise.resolve()).catch(() => {}).finally(() => finish(null));
     }, 20_000);
     sendMessage(
-      transcript ? `${SUMMARY_INSTRUCTION}\n\n${transcript}` : SUMMARY_INSTRUCTION,
+      transcript
+        ? `${SUMMARY_INSTRUCTION}\n\n<conversation>\n${transcript}\n</conversation>\n\n${TRANSCRIPT_CLOSING}`
+        : SUMMARY_INSTRUCTION,
       {
         onToken: (token) => { summary += token; },
         onReasoning: () => {},
