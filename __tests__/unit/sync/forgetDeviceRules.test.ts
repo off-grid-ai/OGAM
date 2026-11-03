@@ -24,6 +24,8 @@ const PREFERENCES: SyncPreferences = {
   chats: true,
   projects: true,
   settings: true,
+  notes: true,
+  writing: true,
   screenshots: true,
   downloads: false,
   generatedMedia: false,

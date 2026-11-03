@@ -104,6 +104,11 @@ export async function loadProFeatures(isPro?: boolean): Promise<boolean> {
       console.warn('[pro] MCP OAuth adapters not configured:', err);
     }
   }
+  // The native Improve entry gives Scribe's pick back to the app the text came from.
+  if (typeof pro.configureScribeEntry === 'function') {
+    const { finishImprove } = require('../services/scribeEntry');
+    pro.configureScribeEntry({ finishImprove });
+  }
   logger.log('[BOOT-PRO] done');
   return true;
 }

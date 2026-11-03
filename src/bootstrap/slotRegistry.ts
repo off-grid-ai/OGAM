@@ -114,4 +114,10 @@ export const SLOTS = {
   imageAnimateAction: 'image.animateAction',
   /** Films and characters at the top of the Gallery. Props: none. */
   galleryVideoSection: 'gallery.videoSection',
+  /** Scribe is Pro. The text of a field with spelling and grammar underlined, rendered as the
+   *  TextInput's children in place of `value`. Props: { text: string }. */
+  scribeInputText: 'scribe.inputText',
+  /** The fix for the flagged word at the caret, above a field. Props: { text: string;
+   *  selection: { start: number; end: number }; onChangeText: (next: string) => void }. */
+  scribeInputBar: 'scribe.inputBar',
 } as const;
