@@ -894,7 +894,7 @@ describe('startGenerationFn', () => {
     });
 
     // classifyToolsNeeded mock returns get_current_datetime, so it survives the filter
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'Hi' });
+    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'What is the latest news today?' });
 
     expect(mockGenerateWithTools).toHaveBeenCalled();
     expect(mockGenerateResponse).not.toHaveBeenCalled();
@@ -966,7 +966,7 @@ describe('UI tool gate (supportsToolCalling) gates generation', () => {
     const deps = makeGenerationDeps({
       settings: { ...makeGenerationDeps().settings, enabledTools: ['web_search'] },
     });
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'hi' });
+    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'What is the latest news today?' });
 
     expect(mockGenerateWithTools).toHaveBeenCalled();
   });
@@ -1283,7 +1283,7 @@ describe('startGenerationFn — remote model path', () => {
     });
     const conv = { id: 'conv-1', messages: [{ id: 'm1', role: 'user', content: 'Hi', timestamp: 0 }] };
     mockChatStoreGetState.mockReturnValue({ conversations: [conv], updateCompactionState: jest.fn() });
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'Hi' });
+    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'What is the latest news today?' });
     // Remote: isRemote=true → all tools used regardless of heuristic
     expect(mockGenerateWithTools).toHaveBeenCalledWith('conv-1', expect.any(Array), expect.objectContaining({ enabledToolIds: ['get_current_datetime'] }));
   });

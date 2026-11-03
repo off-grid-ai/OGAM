@@ -22,7 +22,6 @@ import type { ChatMessageProps } from './types';
 import type { Message } from '../../types';
 import { usePins } from '../../pins/store';
 import { slidesFromReply } from '../../presentations/replySlides';
-import { navigationRef } from '../../navigation/navigationRef';
 
 function getToolIcon(toolName?: string): string {
   switch (toolName) {
@@ -380,7 +379,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     const chat = useChatStore.getState();
     const title = chat.conversations.find((c: { id: string }) => c.id === chat.activeConversationId)?.title;
     const made = slidesFromReply(displayContent, title);
-    navigationRef.navigate('Presentations', { slides: made.slides, name: made.name });
+    // Loaded when used: screens that mock the navigation library do not need it.
+    require('../../navigation/navigationRef').navigationRef.navigate('Presentations', { slides: made.slides, name: made.name });
   };
 
   const handleSaveToProject = () => {
