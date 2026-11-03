@@ -6,6 +6,7 @@
 #include "ggml-backend.h"
 #endif
 #include "BlankImage.hpp"
+#include "EngineErrorLog.hpp"
 #include <atomic>
 #include <cstdio>
 #include <sys/stat.h>
@@ -231,6 +232,8 @@ public:
     if (imageContext) free_sd_ctx(imageContext);
   }
   std::atomic_bool cancelled{false};
+  /** Fed by the bindings' sd.cpp log callback; a failed video load names its last error. */
+  EngineErrorLog engineErrors;
   void cancel() {
     cancelled.store(true);
     std::lock_guard<std::mutex> guard(contextMutex);
@@ -370,12 +373,13 @@ public:
     try {
       if (cancelled.load()) throw std::runtime_error("Video generation stopped.");
       std::string preferred;
+      engineErrors.clear();
       sd_ctx_t *loaded = loadContext(request, preferred);
       {
         std::lock_guard<std::mutex> guard(contextMutex);
         context = loaded;
       }
-      if (!loaded) throw std::runtime_error("Could not load the video model pack.");
+      if (!loaded) throw std::runtime_error(videoPackLoadFailure(engineErrors.take()));
       if (cancelled.load()) throw std::runtime_error("Video generation stopped.");
       sd_set_progress_callback([](int step, int total, float, void *data) {
         (*static_cast<const std::function<void(int, int)> *>(data))(step, total);

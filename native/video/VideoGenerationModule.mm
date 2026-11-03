@@ -242,11 +242,12 @@ RCT_REMAP_METHOD(generate, generate:(NSDictionary *)input resolver:(RCTPromiseRe
         NSString *output = input[@"outputPath"];
         NSError *failure = nil;
         // Keep targeted runtime diagnostics in the same persistent lifecycle log.
-        sd_set_log_callback([](enum sd_log_level_t, const char *text, void *data) {
+        sd_set_log_callback([](enum sd_log_level_t level, const char *text, void *data) {
           if (!text) return;
           std::fputs(text, stderr);
-          if (!std::strstr(text, "Wan VAE decode backend=")) return;
           VideoGenerationModule *owner = (__bridge VideoGenerationModule *)data;
+          owner->_runtime.engineErrors.note(level == SD_LOG_ERROR, text);
+          if (!std::strstr(text, "Wan VAE decode backend=")) return;
           NSString *detail = [NSString stringWithUTF8String:text];
           dispatch_async(dispatch_get_main_queue(), ^{ [owner logLifecycle:detail]; });
         }, (__bridge void *)self);
