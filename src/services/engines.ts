@@ -262,6 +262,26 @@ export function getActiveEngineService(): typeof llmService | typeof liteRTServi
 }
 
 /**
+ * The context the loaded LiteRT engine holds, when LiteRT is the active text engine; otherwise undefined.
+ * Native clamps the requested budget to free RAM, so the context setting can be far larger than this.
+ */
+export function activeLiteRTContextTokens(): number | undefined {
+  if (isRemoteTextModelActive()) return undefined;
+  if (getActiveEngineService() !== liteRTService || !liteRTService.isModelLoaded()) return undefined;
+  return liteRTService.getContextUsage().max;
+}
+
+/**
+ * Writes a compaction summary on the active local engine. llama.cpp is not loaded beside a LiteRT model,
+ * so a loaded LiteRT model writes it.
+ */
+export function summarizeWithActiveEngine(messages: Message[], maxTokens: number): Promise<string> {
+  return getActiveEngineService() === liteRTService
+    ? generateStandalone(messages)
+    : llmService.generateWithMaxTokens(messages, maxTokens);
+}
+
+/**
  * Is a REMOTE (gateway / OpenAI-compatible) text model the ACTIVE text engine right now?
  *
  * THE single source of truth for "route text to a remote provider" — the exact rule

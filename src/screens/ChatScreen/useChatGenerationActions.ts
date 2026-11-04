@@ -24,6 +24,8 @@ import {
   wantsLeadingThinkToken,
   localModelAcceptsImages,
   stopAllTextEngines,
+  activeLiteRTContextTokens,
+  summarizeWithActiveEngine,
 } from '../../services/engines';
 import { needsVisionRepair } from '../../utils/visionRepair';
 import { ensureDefaultClassifier } from '../../services/classifierProvisioning';
@@ -588,11 +590,14 @@ async function generateWithCompactionRetry(
           contextUsage,
         );
   };
-  const contextWindowTokens = useRemoteServerStore.getState().activeServerId
-    ? useAppStore.getState().settings.contextLength ||
-      APP_CONFIG.maxContextLength
-    : llmService.getPerformanceSettings().contextLength ||
-      APP_CONFIG.maxContextLength;
+  const liteRTContextTokens = activeLiteRTContextTokens();
+  const contextWindowTokens =
+    liteRTContextTokens ??
+    (useRemoteServerStore.getState().activeServerId
+      ? useAppStore.getState().settings.contextLength ||
+        APP_CONFIG.maxContextLength
+      : llmService.getPerformanceSettings().contextLength ||
+        APP_CONFIG.maxContextLength);
   const estimatedPromptTokens = Math.ceil(
     JSON.stringify(
       opts.messages.map(m => ({ role: m.role, content: m.content })),
@@ -609,6 +614,8 @@ async function generateWithCompactionRetry(
       systemPrompt: opts.prompt,
       allMessages: opts.messages,
       previousSummary: conversation?.compactionSummary,
+      contextLength: liteRTContextTokens,
+      summarize: summarizeWithActiveEngine,
     }).catch(() => opts.messages);
     if (!generationSession.isGeneratingFor(opts.id)) return true;
   }
@@ -634,6 +641,8 @@ async function generateWithCompactionRetry(
         systemPrompt: opts.prompt,
         allMessages: messagesForFirstAttempt,
         previousSummary,
+        contextLength: liteRTContextTokens,
+        summarize: summarizeWithActiveEngine,
       })
       .catch(async () => {
         await llmService.clearKVCache(true).catch(() => {});

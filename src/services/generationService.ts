@@ -25,6 +25,7 @@ import {
   prepareGenerationImpl,
   generateResponseImpl,
   keepShownPartialOnError,
+  endAttemptForRetry,
   type GenerationRequest,
   type GenerationWithToolsRequest,
 } from './generationServiceHelpers';
@@ -370,7 +371,7 @@ class GenerationService {
       } catch (error) {
         if (this.abortRequested) return;
         if (contextCompactionService.isContextFullError(error)) {
-          keepShownPartialOnError(this, conversationId);
+          endAttemptForRetry(this, conversationId);
           throw error;
         }
         logger.warn(
