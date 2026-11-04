@@ -537,6 +537,17 @@ platform :ios do
     ENV["OFFGRID_PROFILE_NAME"] = profile["Name"]
     UI.message("Signing manually with profile '#{profile['Name']}' (expires #{profile['ExpirationDate']})")
 
+    # Apple Distribution certificates chain to Apple's WWDR G3 intermediate. A runner without it
+    # holds the identity but treats it as untrusted, so codesign sees no valid identity.
+    %w[AppleWWDRCAG3 AppleWWDRCAG6].each do |ca|
+      cer = File.join(Dir.tmpdir, "#{ca}.cer")
+      sh("curl", "-fsSL", "-o", cer, "https://www.apple.com/certificateauthority/#{ca}.cer")
+      sh("security", "import", cer, "-k", File.expand_path("~/Library/Keychains/#{keychain}"), "-T", "/usr/bin/codesign") do |status, _out, _cmd|
+        UI.message("#{ca}: #{status.success? ? 'installed' : 'already present'}")
+      end
+    end
+    UI.message("All codesigning identities (valid or not):\n#{`security find-identity -p codesigning #{keychain.shellescape}`}")
+
     # The archive signs with an identity in this keychain that the profile also lists. Say which
     # side is wrong here, in one line, instead of xcodebuild's "no signing certificate found".
     identities = `security find-identity -v -p codesigning #{keychain.shellescape}`
