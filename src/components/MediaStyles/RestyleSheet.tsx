@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import { AppSheet } from '../AppSheet';
 import { useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
@@ -22,7 +22,7 @@ export const RestyleSheet: React.FC<{
   return (
     <AppSheet visible={!!request} onClose={close} title="Restyle" sheet="chat:restyle" enableDynamicSizing>
       {request ? (
-        <>
+        <View style={styles.body} testID="restyle-sheet">
           <Text style={styles.prompt} numberOfLines={2}>
             {request.prompt}
           </Text>
@@ -36,17 +36,14 @@ export const RestyleSheet: React.FC<{
               onSend(request.prompt, request.kind);
             }}
           />
-        </>
+        </View>
       ) : null}
     </AppSheet>
   );
 };
 
+// The same rhythm as the Extend sheet: the sheet's padding around, one gap between the prompt and the styles.
 const createStyles = (colors: ThemeColors) => ({
-  prompt: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.textSecondary,
-    paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.sm,
-  },
+  body: { padding: SPACING.lg, gap: SPACING.md },
+  prompt: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
 });
