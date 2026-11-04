@@ -1,6 +1,5 @@
 import React from 'react';
 import { FlatList, Image, Text, View } from 'react-native';
-import Animated, { useAnimatedStyle, useReducedMotion, withTiming } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
 import type { MediaStyle, MediaStyleKind } from '@offgrid/models';
 import { TouchableOpacity } from '../Touchable';
@@ -10,7 +9,7 @@ import { RADIUS, SPACING, TYPOGRAPHY } from '../../constants';
 import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import { stylePreview, stylesFor } from '../../services/mediaStyles';
 
-const THUMB = 56;
+const THUMB = 60;
 
 /**
  * The styles a picture or a clip can take, as one row of previews. Nothing is chosen by default;
@@ -72,11 +71,6 @@ const StyleTile: React.FC<{
 }> = ({ kind, style, selected, onPress, testID }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const reducedMotion = useReducedMotion();
-  // The chosen tile lifts slightly: a clear, quick state change rather than a bare border swap.
-  const lift = useAnimatedStyle(() => ({
-    transform: [{ scale: reducedMotion ? 1 : withTiming(selected ? 1.06 : 1, { duration: 150 }) }],
-  }));
   return (
     <TouchableOpacity
       testID={testID}
@@ -86,14 +80,14 @@ const StyleTile: React.FC<{
       onPress={onPress}
       style={styles.tile}
     >
-      <Animated.View style={[styles.thumb, selected && styles.thumbSelected, lift]}>
+      <View style={[styles.thumb, selected && styles.thumbSelected]}>
         <Image source={stylePreview(kind, style.id)} style={styles.image} />
         {selected ? (
           <View style={styles.check}>
             <Icon name="check" size={11} color={colors.background} />
           </View>
         ) : null}
-      </Animated.View>
+      </View>
       <Text numberOfLines={1} style={[styles.name, selected && styles.nameSelected]}>
         {style.name}
       </Text>
@@ -102,7 +96,16 @@ const StyleTile: React.FC<{
 };
 
 const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
-  row: { paddingTop: SPACING.sm, paddingBottom: SPACING.xs },
+  // The app's elevated card (as the chat list's rows), flush with the composer's edges.
+  row: {
+    backgroundColor: colors.surface,
+    borderRadius: RADIUS.md,
+    paddingTop: SPACING.sm + 2,
+    paddingBottom: SPACING.sm,
+    marginBottom: SPACING.sm,
+    overflow: 'hidden' as const,
+    ...shadows.small,
+  },
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -113,16 +116,15 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   label: { ...TYPOGRAPHY.label, color: colors.textMuted, textTransform: 'uppercase' as const, letterSpacing: 1 },
   list: { paddingHorizontal: SPACING.md, gap: SPACING.sm },
-  tile: { width: THUMB + 4, alignItems: 'center' as const, gap: SPACING.xs },
+  tile: { width: THUMB, alignItems: 'center' as const, gap: SPACING.xs },
   thumb: {
     width: THUMB,
     height: THUMB,
     borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     overflow: 'hidden' as const,
-    ...shadows.small,
   },
   thumbSelected: { borderWidth: 2, borderColor: colors.primary },
   image: { width: '100%' as const, height: '100%' as const },
@@ -137,6 +139,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
-  name: { ...TYPOGRAPHY.meta, color: colors.textSecondary, maxWidth: THUMB + 4 },
+  name: { ...TYPOGRAPHY.meta, color: colors.textSecondary, maxWidth: THUMB, textAlign: 'center' as const },
   nameSelected: { color: colors.primary },
 });
