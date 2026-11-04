@@ -518,6 +518,38 @@ The **Build Atlas voices** workflow ran successfully on 2026-10-19, so `kitten-n
 - Skills are matched by name; pins, courses and tasks by id.
 - Not verified on two real phones.
 
+## 8y. Gemma 4 12B on the phone GPU (0.0.129)
+
+What was found (checked on a computer with the same llama.cpp code the app ships, not on the phone):
+- The exact file (Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf) decodes correctly on the CPU with both the
+  old (rc.4) and the new (rc.9) llama.cpp: "hi" gives "Hello! How can I help you today?" with ordinary token ids. Its
+  tokenizer, chat template (checked against llama.cpp's own jinja renderer) and this QAT quantization are fine.
+- Its projector (mmproj-...-BF16.gguf) works on the CPU: shown a red square with a blue circle it answers "This image
+  features a blue circle centered inside a large red square."
+- Its MTP file (mtp-gemma-4-12B-it.gguf) is a gemma4-assistant file that loads in the engine, its output width (3840)
+  matches the model, and Atlas's MTP settings map to the engine's. Drafting itself was NOT run end to end.
+- So the `<unused19><unused10><unk>...` reply came from the GPU (OpenCL) path on the phone, not from the file. The cause
+  inside the GPU path cannot be found without the phone.
+
+What changed:
+- llama.rn 0.13.0-rc.4 to 0.13.0-rc.9 (newer llama.cpp and a large OpenCL backend update, including the flash-attention
+  path for Gemma 4's 512-wide global layers that this 12B uses). Whether it fixes the noise on the Razr is not known
+  until it is tried. (rc.9 also keeps the per-layer embedding lookup of the E2B/E4B models in host memory; the 12B has
+  no per-layer embeddings, so that part does not apply to it.)
+- After an accelerated Gemma 4 load, Atlas checks one short reply (words, sampled token ids, how sure the model was).
+  Noise fails the load with a plain reason (Automatic moves on to the CPU), the context is released, and the result is
+  remembered per model file, backend and GPU layer count, and llama.rn version. It runs before pictures are set up.
+- GPU load timeout: no longer one flat 45 s. A load whose weights are still loading (the percentage keeps moving) is
+  left alone; a stall says where ("weights stopped loading at 63%" or "weights are loaded but GPU setup has not
+  finished"); the log gets the progress steps, free memory and llama.cpp's last lines. A timed-out load is finished and
+  released before another load (including the CPU fallback) starts, or you are told to close and reopen Atlas.
+- Settings > About > Test GPU on this model: loads the model on the CPU and at 24, 16 and 8 GPU layers with flash
+  attention on and off (2,048 context, batch 128, f16 cache, MTP off), checks the reply of each, then asks the projector
+  what colour a red picture is. The report can be copied. Copy diagnostics now includes the llama.rn version and the
+  remembered GPU checks.
+- Fix: an MTP file attached to a model was offered by the model scan as a "recovered model".
+- Not verified on a phone: the OpenCL result, the timeout behaviour on a 12B load, the picture check on the GPU, and MTP.
+
 ## Build evidence and checks
 
 - New **Android unit tests** workflow runs the Kotlin/JVM tests (`:app:testDebugUnitTest`) on every push that
