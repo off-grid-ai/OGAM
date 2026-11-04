@@ -88,3 +88,26 @@ it('Retry draws the turn again in the style it was made in, whatever the chat pi
   expect(retried.endsWith(`, ${WATERCOLOR}`)).toBe(true);
   expect(retried).not.toContain(SKETCH);
 }, 90_000);
+
+it('a style picked in the image settings is the chat\'s style, and an auto-detected picture ask uses it', async () => {
+  const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android' });
+  h.render();
+  await h.placeImageModel();
+  const view = h.view!;
+  // The image settings carry the same choice the composer shows.
+  const { ImageGenerationSection } = require('../../../src/components/GenerationSettingsModal/ImageGenerationSection');
+  const s = h.renderAside(h.React.createElement(ImageGenerationSection, {}));
+  h.rtl.fireEvent.press(s.getByTestId('image-settings-style-sketch'));
+  expect(s.getByTestId('image-settings-style-sketch').props.accessibilityState).toMatchObject({ selected: true });
+  s.unmount();
+  // Image mode all the way round to Auto (the first tap also picks the downloaded image model). No image mode:
+  // the ask is detected as a picture, and the chat's style still applies.
+  await h.cycleImageMode();
+  await h.cycleImageMode();
+  await h.cycleImageMode();
+  await h.tapSend('draw a mountain cabin at dawn');
+  await h.rtl.waitFor(() => expect(h.boundary.diffusion.calls.generateImage.length).toBe(1), { timeout: 8000 });
+  expect(String(h.boundary.diffusion.calls.generateImage[0].prompt)).toContain(SKETCH);
+  const userMessage = (await view.findAllByTestId('user-message'))[0];
+  expect(h.rtl.within(userMessage).getByTestId('message-style').props.children).toBe('Sketch');
+}, 90_000);
