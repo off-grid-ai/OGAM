@@ -110,19 +110,19 @@ export const SHADOWS_LIGHT: ThemeShadows = {
   },
 };
 
-// ── Dark shadows (crisp white glow for depth) ───────────────────────
+// ── Dark shadows (DESIGN_PHILOSOPHY_SYSTEM.md: tight 1-3px radius keeps card edges crisp, no halo) ──
 export const SHADOWS_DARK: ThemeShadows = {
   small: {
-    boxShadow: '0px 0px 6px 0px rgba(255,255,255,0.18)',
+    boxShadow: '0px 0px 1px 0px rgba(255,255,255,0.08)',
   },
   medium: {
-    boxShadow: '0px 0px 6px 0px rgba(255,255,255,0.20)',
+    boxShadow: '0px 0px 2px 0px rgba(255,255,255,0.10)',
   },
   large: {
-    boxShadow: '0px 0px 10px 0px rgba(255,255,255,0.25)',
+    boxShadow: '0px 0px 3px 0px rgba(255,255,255,0.12)',
   },
   glow: {
-    boxShadow: '0px 0px 8px 0px rgba(52,211,153,0.30)',
+    boxShadow: '0px 0px 4px 0px rgba(52,211,153,0.15)',
   },
   edge: {
     boxShadow: '0px 6px 6px -6px rgba(0,0,0,0.6)',
