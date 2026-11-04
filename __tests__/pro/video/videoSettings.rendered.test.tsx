@@ -68,3 +68,21 @@ it('a seed that is not a whole number is not kept', async () => {
   await rtl.waitFor(() => expect(view.getByLabelText('Video seed').props.value).toBe(''));
 }, 90_000);
 
+
+it('shows the recommended settings, and Use recommended drops the ones I changed for the next clip', async () => {
+  // SPEC (2026-11-04): video quality complaints. Settings someone changed once kept overriding the
+  // model's corrected defaults. The section says what is recommended, and one tap goes back to it.
+  const app = await videoSettings();
+  const { view, rtl } = app;
+  const recommended = view.getByTestId('video-settings-recommended').props.children as string;
+  const steps = Number(recommended.match(/(\d+) steps/)![1]);
+  expect(view.queryByTestId('video-settings-use-recommended')).toBeNull();
+  // A change made earlier, through the settings store the sliders write to.
+  const { useAppStore } = require('../../../src/stores');
+  const key = Object.keys(useAppStore.getState().settings.videoParams ?? {})[0] ?? DESKTOP_VIDEO_MODEL.id;
+  rtl.act(() => useAppStore.getState().updateSettings({ videoParams: { [key]: { steps: steps + 10 } } }));
+  rtl.fireEvent.press(await view.findByTestId('video-settings-use-recommended'));
+  await rtl.waitFor(() => expect(view.queryByTestId('video-settings-use-recommended')).toBeNull());
+  await sendClip(app, CLIP);
+  expect(app.jobs.submissions[0].steps).toBe(steps);
+}, 90_000);
