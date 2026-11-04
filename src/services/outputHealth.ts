@@ -160,7 +160,7 @@ export async function forgetVerdicts(model?: string): Promise<void> {
  */
 const BACKEND_NAMES: Record<string, string> = { opencl: 'OpenCL GPU', htp: 'Hexagon NPU', vulkan: 'Vulkan GPU' };
 export function describeBadOutput(backend: string, reason: string, explicitChoice: boolean): string {
-  const name = BACKEND_NAMES[backend] ?? backend + ' accelerator';
+  const name = BACKEND_NAMES[backend] ?? `${backend} accelerator`;
   const parts = [`The ${name} gave unusable output for this model (${reason}). The same model file works on the CPU, so this is the accelerated path on this device, not the file.`];
   if (explicitChoice) parts.push('Choose CPU or Automatic for this model, or open Settings > About > Test GPU on this model to see which setting works.');
   return parts.join(' ');
