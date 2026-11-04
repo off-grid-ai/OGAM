@@ -144,6 +144,15 @@ export async function knownVerdict(key: VerdictKey): Promise<Verdict | null> {
   return (await readVerdicts())[keyOf(key)] ?? null;
 }
 
+/** One plain line per remembered check ("file | size | backend | layers | llama.rn version: OK/FAILED - why"), for diagnostics. */
+export async function describeVerdicts(): Promise<string[]> {
+  const all = await readVerdicts();
+  return Object.entries(all).map(([key, v]) => {
+    const [model, size, backend, layers, build] = key.split('|');
+    return `${model} (${Math.round(Number(size) / 1048576)} MB), ${backend}, ${layers} GPU layers, llama.rn ${build}: ${v.ok ? 'wrote real text' : `FAILED - ${v.reason}`}`;
+  });
+}
+
 export async function forgetVerdicts(model?: string): Promise<void> {
   try {
     if (!model) { await AsyncStorage.removeItem(VERDICTS_KEY); return; }

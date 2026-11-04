@@ -12,6 +12,9 @@ export interface DiagnosticsInput {
   speed: { decode: number; prefill: number; replies: number } | null;
   tuned: boolean;
   lastCall: string | null;
+  /** The llama.rn version and what the first-reply check found for each GPU setting tried (see services/outputHealth.ts). */
+  llamaRn?: string;
+  gpuChecks?: string[];
 }
 
 const num = (n: number, d = 1) => (Number.isFinite(n) ? n.toFixed(d) : '?');
@@ -33,6 +36,8 @@ export function formatDiagnostics(d: DiagnosticsInput): string {
   } else {
     lines.push('Model: none selected');
   }
+  if (d.llamaRn) lines.push(`llama.rn: ${d.llamaRn}`);
+  if (d.gpuChecks?.length) lines.push('GPU output checks:', ...d.gpuChecks.map((c) => `  ${c}`));
   lines.push(`Last call: ${d.lastCall ?? 'none yet'}`);
   return lines.join('\n');
 }
@@ -80,5 +85,7 @@ export async function gatherDiagnostics(): Promise<string> {
     speed: speed ? { decode: speed.decode, prefill: speed.prefill, replies: speed.samples } : null,
     tuned: !!(active && useTuned.getState().at[active.id]),
     lastCall: lastCallTiming(),
+    llamaRn: await safe(() => require('llama.rn/package.json').version as string, undefined),
+    gpuChecks: await safe(() => require('../services/outputHealth').describeVerdicts() as Promise<string[]>, []),
   });
 }
