@@ -6,7 +6,7 @@ import type { ThemeColors } from '../../theme';
 import { SPACING, TYPOGRAPHY } from '../../constants';
 import { useRestyleStore } from '../../stores/restyleStore';
 import { useMediaStyleStore } from '../../stores/mediaStyleStore';
-import { StyleRow } from './StyleRow';
+import { StyleGrid } from './StyleGrid';
 
 /**
  * Restyle: the same prompt again, in the style picked here. The pick becomes the chat's style and
@@ -26,11 +26,11 @@ export const RestyleSheet: React.FC<{
           <Text style={styles.prompt} numberOfLines={2}>
             {request.prompt}
           </Text>
-          <StyleRow
+          <StyleGrid
             kind={request.kind}
             selectedId={request.styleId}
             testID="restyle-row"
-            onChange={styleId => {
+            onPick={styleId => {
               setStyle(request.conversationId, request.kind, styleId);
               close();
               onSend(request.prompt, request.kind);

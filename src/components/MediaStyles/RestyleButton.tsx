@@ -1,14 +1,13 @@
 import React from 'react';
-import { View } from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
+import { Text, View } from 'react-native';
 import type { MediaStyleKind } from '@offgrid/models';
 import { TouchableOpacity } from '../Touchable';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
-import { RADIUS, SPACING } from '../../constants';
+import { RADIUS, SPACING, TYPOGRAPHY } from '../../constants';
 import { restyleRequestFor, useRestyleStore } from '../../stores/restyleStore';
 
-/** Under a finished picture: the same prompt again, in another style. Same size and edge as the clip's chips. */
+/** Under a finished picture: the same prompt again, in another style. The same pill as the clip's Extend. */
 export const RestyleButton: React.FC<{
   kind: MediaStyleKind;
   conversationId: string;
@@ -22,13 +21,14 @@ export const RestyleButton: React.FC<{
         testID={`${kind}-restyle`}
         accessibilityRole="button"
         accessibilityLabel="Restyle"
+        hitSlop={{ top: 4, bottom: 4 }}
         style={styles.button}
         onPress={() => {
           const request = restyleRequestFor(conversationId, messageId, kind);
           if (request) useRestyleStore.getState().open(request);
         }}
       >
-        <Icon name="droplet" size={16} color={colors.text} />
+        <Text style={[styles.label, { color: colors.text }]}>Restyle</Text>
       </TouchableOpacity>
     </View>
   );
@@ -47,4 +47,5 @@ const createStyles = (colors: ThemeColors) => ({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
+  label: { ...TYPOGRAPHY.bodySmall },
 });
