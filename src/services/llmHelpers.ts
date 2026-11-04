@@ -169,6 +169,9 @@ function gpuInitWindows(isHtp: boolean): InitWindows {
   const base = isHtp ? HTP_INIT_TIMEOUT_MS : (Platform.OS === 'ios' ? GPU_INIT_TIMEOUT_MS_IOS : GPU_INIT_TIMEOUT_MS);
   return { stallMs: base, setupMs: base * 2, hardCapMs: 300000 };
 }
+/** initLlama, with the progress callback only when there is one (so a load without it is called exactly as before). */
+const initWith = (params: object, onProgress?: (percent: number) => void): Promise<LlamaContext> =>
+  (onProgress ? initLlama(params as any, onProgress) : initLlama(params as any));
 /** Why a load stalled, written to the log at the moment it happens: free memory and llama.cpp's own last lines. */
 async function logInitStall(label: string): Promise<void> {
   try {
@@ -184,15 +187,16 @@ async function logInitStall(label: string): Promise<void> {
  * load (a 7 GB model still reading its weights) is left alone. A timed-out load keeps running natively; it is
  * remembered so the next load waits for it to finish and release its context (nativeInit.settleAbandonedInit).
  */
-async function tryGpuInit(start: (onProgress: (percent: number) => void) => Promise<LlamaContext>, nGpuLayers: number, isHtp: boolean = false): Promise<LlamaContext> {
+async function tryGpuInit(start: (onProgress?: (percent: number) => void) => Promise<LlamaContext>, nGpuLayers: number, isHtp: boolean = false): Promise<LlamaContext> {
   const trace = startInitTrace();
   let lastLogged = -1;
+  // A pure-CPU init is started exactly as before (no progress callback) and has nothing to time out.
+  if (nGpuLayers <= 0) return start();
   const promise = start((percent) => {
     recordInitProgress(trace, percent);
     const step = Math.floor(trace.percent / 10);
     if (step > lastLogged) { lastLogged = step; logger.log(`[LLM] init progress ${trace.percent}% after ${((Date.now() - trace.startedAt) / 1000).toFixed(1)}s`); }
   });
-  if (nGpuLayers <= 0) return promise; // pure-CPU init — nothing to time out
   const label = isHtp ? 'HTP context init' : 'GPU context init';
   try {
     const context = await watchInit(promise, trace, { label, windows: gpuInitWindows(isHtp) });
@@ -243,7 +247,7 @@ export async function initContextWithFallback(
   let gpuAttemptFailed = false;
   try {
     logger.log(`[LLM] Attempt 1/3: ${isHtp ? 'HTP' : 'GPU'} init (ctx=${contextLength}, gpu_layers=${nGpuLayers})`);
-    const context = await tryGpuInit((onProgress) => initLlama({ ...params, n_ctx: contextLength, n_gpu_layers: nGpuLayers } as any, onProgress), nGpuLayers, isHtp);
+    const context = await tryGpuInit((onProgress) => initWith({ ...params, n_ctx: contextLength, n_gpu_layers: nGpuLayers }, onProgress), nGpuLayers, isHtp);
     if (!allowCpuFallback && nGpuLayers > 0 && context.gpu !== true) {
       await safeRelease(context);
       throw new Error('Native context did not confirm GPU/NPU acceleration');
@@ -269,7 +273,7 @@ export async function initContextWithFallback(
       delete gpuParams.devices;
       try {
         logger.log('[LLM] Hexagon failed; attempting OpenCL GPU before CPU');
-        const context = await tryGpuInit((onProgress) => initLlama({ ...gpuParams, n_ctx: contextLength, n_gpu_layers: nGpuLayers } as any, onProgress), nGpuLayers);
+        const context = await tryGpuInit((onProgress) => initWith({ ...gpuParams, n_ctx: contextLength, n_gpu_layers: nGpuLayers }, onProgress), nGpuLayers);
         return { context, gpuAttemptFailed: !(context.gpu ?? false), actualLength: contextLength };
       } catch (openclError: any) {
         const message = openclError?.message || String(openclError);

@@ -2366,7 +2366,7 @@ describe('LLMService', () => {
       await llmService.loadModel('/models/test-Q4_0.gguf');
 
       expect(mockedInitLlama).toHaveBeenCalledWith(
-        expect.objectContaining({ devices: ['HTP0'], n_gpu_layers: 99 }),
+        expect.objectContaining({ devices: ['HTP0'], n_gpu_layers: 99 }), expect.any(Function),
       );
     });
 
