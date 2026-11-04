@@ -623,7 +623,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, styleKind && styles.containerWithStyles]}>
       <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
       <QueueRow queue={queue} actions={queueActions} />
       {transcriptionNotice ? (

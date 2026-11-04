@@ -13,8 +13,6 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingTop: 12,
     paddingBottom: 8,
     backgroundColor: colors.background,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   // Attachment previews row
   attachmentsContainer: {
@@ -159,16 +157,21 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     minHeight: 56,
     ...shadows.small,
   },
-  // Image or video mode: one box holds the styles above and the input and send below.
+  // Image or video mode: one box holds the styles above and the input and send below. It runs edge to edge,
+  // so the bar has no side margins of its own; only the box's top corners are rounded.
+  containerWithStyles: { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0 },
   composerWithStyles: {
     backgroundColor: colors.surface,
-    borderRadius: 24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     overflow: 'hidden' as const,
-    paddingRight: 6,
-    paddingBottom: 6,
+    paddingRight: 12,
+    paddingBottom: 8,
     ...shadows.small,
   },
-  pillUnderStyles: { backgroundColor: 'transparent', borderRadius: 0, shadowOpacity: 0, elevation: 0 },
+  // Inside the box the input draws no edge of its own: the box's rounded edge is the only one. The theme shadow
+  // is a boxShadow, so it is cleared as a boxShadow (shadowOpacity/elevation do not turn it off).
+  pillUnderStyles: { backgroundColor: 'transparent', borderRadius: 0, boxShadow: [] },
   mainRowWithStyles: { alignItems: 'flex-end' as const },
   allStyles: { padding: SPACING.lg },
   pillInput: {
