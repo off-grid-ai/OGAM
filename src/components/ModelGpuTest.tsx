@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Clipboard, Platform, StyleSheet, Text, View } from 'react-native';
+import { Clipboard, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../theme';
 import { SPACING, TYPOGRAPHY } from '../constants';
 import { useAppStore } from '../stores/appStore';
@@ -13,7 +13,12 @@ import type { LlamaDownloadedModel } from '../types';
  */
 export const ModelGpuTest: React.FC = () => {
   const { colors } = useTheme();
-  const model = useAppStore((s) => s.downloadedModels.find((m) => m.id === s.activeModelId && m.engine === 'llama')) as LlamaDownloadedModel | undefined;
+  // Any downloaded GGUF model can be tested, loaded or not: a model whose GPU load is refused could not otherwise be selected.
+  const downloaded = useAppStore((s) => s.downloadedModels);
+  const models = React.useMemo(() => downloaded.filter((m) => m.engine === 'llama') as LlamaDownloadedModel[], [downloaded]);
+  const activeId = useAppStore((s) => s.activeModelId);
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const model = models.find((m) => m.id === pickedId) ?? models.find((m) => m.id === activeId) ?? models.find((m) => /gemma-?4/i.test(m.fileName)) ?? models[0];
   const [lines, setLines] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
   const [report, setReport] = useState<string | null>(null);
@@ -39,8 +44,14 @@ export const ModelGpuTest: React.FC = () => {
       <Text style={[styles.body, { color: colors.textSecondary }]}>
         {model
           ? `Loads ${model.fileName} on the CPU and on the GPU with 24, 16 and 8 layers (flash attention on and off), 2,048 tokens of context, f16 cache, and checks that it writes real words each time. Then it checks pictures with the model's picture file. It takes several minutes and uses a lot of memory; the model is unloaded when it ends.`
-          : 'Pick a downloaded GGUF model as your current model first.'}
+          : 'Download a GGUF model first.'}
       </Text>
+      {models.length > 1 && !running && models.map((m) => (
+        <TouchableOpacity key={m.id} onPress={() => setPickedId(m.id)} testID={`model-gpu-test-pick-${m.id}`}
+          style={[styles.pick, { borderColor: m.id === model?.id ? colors.primary : colors.border }]}>
+          <Text style={[styles.body, { color: m.id === model?.id ? colors.primary : colors.textSecondary }]}>{m.fileName}</Text>
+        </TouchableOpacity>
+      ))}
       {!running
         ? <Button title="Run the test" onPress={start} disabled={!model} testID="model-gpu-test-run" />
         : <Button title="Stop after this step" variant="outline" onPress={() => { stop.current = true; }} testID="model-gpu-test-stop" />}
@@ -62,4 +73,5 @@ const styles = StyleSheet.create({
   body: { ...TYPOGRAPHY.meta },
   line: { ...TYPOGRAPHY.meta },
   report: { ...TYPOGRAPHY.meta },
+  pick: { borderWidth: 1, padding: SPACING.sm },
 });

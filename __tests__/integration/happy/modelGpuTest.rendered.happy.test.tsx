@@ -53,3 +53,28 @@ it('reports which GPU layer counts give real words and which give noise, and put
   const { llmService } = require('../../../src/services/llm');
   expect(llmService.isModelLoaded()).toBe(false);
 }, 120000);
+
+it('can test a model that is not the current one and cannot be loaded for chat (its GPU load is refused), chosen on the screen', async () => {
+  const h = await setupChatScreen({ engine: 'llama', platform: 'android', modelFileName: 'Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf' });
+  const DeviceInfo = require('react-native-device-info');
+  const { hardwareService } = require('../../../src/services/hardware');
+  (DeviceInfo.getHardware as jest.Mock).mockResolvedValue('qcom');
+  jest.spyOn(hardwareService, 'getOpenCLCapability').mockResolvedValue({ supported: true });
+  const gemma = h.useAppStore.getState().downloadedModels[0];
+  // A second model is the current one; Gemma is merely downloaded.
+  h.useAppStore.setState({ downloadedModels: [{ ...gemma, id: 'qwen', name: 'Qwen', fileName: 'Qwen3.5-4B-Q4_0.gguf' }, gemma], activeModelId: 'qwen' });
+  const { initLlama } = require('llama.rn');
+  const real = (initLlama as jest.Mock).getMockImplementation()!;
+  (initLlama as jest.Mock).mockImplementation(async (params: Record<string, unknown>, cb?: (p: number) => void) => {
+    const context = await real(params, cb);
+    h.boundary.llama!.scriptCompletion({ text: GOOD });
+    return context;
+  });
+  const { ModelGpuTest } = require('../../../src/components/ModelGpuTest');
+  const view = h.rtl.render(h.React.createElement(ModelGpuTest));
+  expect(view.queryAllByText(/Qwen3\.5-4B-Q4_0\.gguf/).length).toBeGreaterThan(0);
+  h.rtl.fireEvent.press(view.getByTestId(`model-gpu-test-pick-${gemma.id}`));
+  h.rtl.fireEvent.press(view.getByTestId('model-gpu-test-run'));
+  const report = await h.rtl.waitFor(() => view.getByTestId('model-gpu-test-report'), { timeout: 110000 });
+  expect(JSON.stringify(report.props.children)).toMatch(/GPU test for Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M\.gguf/);
+}, 120000);

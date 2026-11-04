@@ -518,7 +518,7 @@ The **Build Atlas voices** workflow ran successfully on 2026-10-19, so `kitten-n
 - Skills are matched by name; pins, courses and tasks by id.
 - Not verified on two real phones.
 
-## 8y. Gemma 4 12B on the phone GPU (0.0.129)
+## 8y. Gemma 4 12B on the phone GPU (0.0.129, picker in 0.0.130)
 
 What was found (checked on a computer with the same llama.cpp code the app ships, not on the phone):
 - The exact file (Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf) decodes correctly on the CPU with both the
@@ -547,6 +547,8 @@ What changed:
   attention on and off (2,048 context, batch 128, f16 cache, MTP off), checks the reply of each, then asks the projector
   what colour a red picture is. The report can be copied. Copy diagnostics now includes the llama.rn version and the
   remembered GPU checks.
+- 0.0.130: Test GPU on this model has a model picker. A model whose GPU load is refused by the output check can no longer
+  be selected for chat, so the test now takes any downloaded GGUF model (default: the current one, else a Gemma 4).
 - Fix: an MTP file attached to a model was offered by the model scan as a "recovered model".
 - Not verified on a phone: the OpenCL result, the timeout behaviour on a 12B load, the picture check on the GPU, and MTP.
 
