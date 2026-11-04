@@ -35,7 +35,7 @@ export function sweepSettings(layers: number[] = DEFAULT_SWEEP_LAYERS): SweepSet
 /** A solid red 224x224 picture, for asking a vision model what colour it sees. */
 const RED_SQUARE_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAOAAAADgCAIAAACVT/22AAABr0lEQVR42u3SAQkAAAzDsImYf2UXcxs/BKKgNNPCWZEAg4JBMSgYFAyKQcGgGBQMCgbFoGBQDAoGBYNiUDAoBgWDgkExKBgUg6qAQcGgGBQMCgbFoGBQDAoGBYNiUDAoBgWDgkExKBgUg4JBwaAYFAyKQVXAoGBQDAoGBYNiUDAoBgWDgkExKBgUg4JBwaAYFAyKQcGgYFAMCgbFoGBQMCgGBYOCQTEoGBSDgkHBoBgUDIpBwaBgUAwKBsWgYFAwKAYFg2JQMCgYFIOCQcGgGBQMikHBoGBQDAoGxaBgUDAoBgWDYlAwKBgUg4JBMSgYFAyKQcGgYFAMCgbFoGBQMCgGBYNiUDAoGBSDgkExKBgUDIpBwaAYFAwKBsWgYFAwKAYFg2JQMCgYFIOCQTEoGBQMikHBoBgUDAoGxaBgUAwKBgWDYlAwKBgUg4JBMSgYFAyKQcGgGBQMCgbFoGBQDAoGBYNiUDAoBgWDgkExKBgUDIpBwaAYFAwKBsWgYFAMCgYFg2JQMCgGBYOCQTEoGBSDgkHBoBgUDAoGxaBgUAwKBgWDYlAwKAYFg4JB+WgBgzMbqihZzw0AAAAASUVORK5CYII=';
 
-async function checkPicture(model: LlamaDownloadedModel): Promise<SweepResult['vision']> {
+async function checkPicture(): Promise<SweepResult['vision']> {
   const path = `${RNFS.CachesDirectoryPath}/atlas-vision-test.png`;
   try {
     await RNFS.writeFile(path, RED_SQUARE_PNG, 'base64');
@@ -54,61 +54,78 @@ async function checkPicture(model: LlamaDownloadedModel): Promise<SweepResult['v
   }
 }
 
+/** The settings a step runs with: the diagnostic's fixed shape (small context and batch, f16 cache, no MTP) plus what is being tried. */
+function applySetting(setting: SweepSetting): void {
+  useAppStore.getState().updateSettings({
+    inferenceBackend: setting.backend === 'cpu' ? INFERENCE_BACKENDS.CPU : INFERENCE_BACKENDS.OPENCL,
+    gpuLayers: setting.gpuLayers, flashAttn: setting.flashAttn, cacheType: 'f16', contextLength: 2048, nBatch: 128, useMtp: false,
+  } as any);
+}
+
+const seconds = (since: number) => Number(((Date.now() - since) / 1000).toFixed(1));
+
+/** One step: load with the setting, judge the first reply. Never throws; the loader's own refusal (noise, memory) is the step's error. */
+async function runStep(model: LlamaDownloadedModel, setting: SweepSetting): Promise<SweepStep> {
+  applySetting(setting);
+  const started = Date.now();
+  const step: SweepStep = { setting, ok: false, loadSeconds: 0 };
+  try {
+    await llmService.loadModel(model.filePath, undefined, { override: true });
+    step.loadSeconds = seconds(started);
+    step.check = llmService.getLastOutputCheck() ?? await llmService.runOutputCheck() ?? undefined;
+    step.ok = !!step.check?.ok;
+    if (!step.ok) step.error = step.check?.reason;
+  } catch (e: any) {
+    step.loadSeconds = seconds(started);
+    step.error = String(e?.message || e);
+    step.check = llmService.getLastOutputCheck() ?? undefined;
+  }
+  return step;
+}
+
+const describeStep = (step: SweepStep): string => (step.ok
+  ? `  works: "${step.check?.text.trim().slice(0, 60)}" at ${step.check?.tokensPerSecond} tok/s, first word after ${step.check?.firstTokenMs} ms`
+  : `  FAILED: ${step.error}`);
+
+/** The picture check: load with the projector on the given setting, ask for the colour, unload. */
+async function runPictureStep(model: LlamaDownloadedModel, projector: string, setting: SweepSetting): Promise<SweepResult['vision']> {
+  applySetting(setting);
+  try {
+    await llmService.loadModel(model.filePath, projector, { override: true });
+    return await checkPicture();
+  } catch (e: any) {
+    return { ok: false, reply: '', error: String(e?.message || e) };
+  }
+}
+
 /**
  * Runs the sweep. `shouldStop` is polled between steps (the person pressed Stop). `onProgress` gets a line per event for the screen.
  * The model that was loaded before is not reloaded: the person's own load happens when they next use it.
  */
 export async function runModelSweep(model: LlamaDownloadedModel, opts: { layers?: number[]; onProgress?: (line: string) => void; shouldStop?: () => boolean } = {}): Promise<SweepResult> {
   const say = (line: string) => { logger.log(`[GPU-TEST] ${line}`); opts.onProgress?.(line); };
-  const store = useAppStore.getState();
-  const saved = { ...store.settings };
+  const saved = { ...useAppStore.getState().settings };
   const steps: SweepStep[] = [];
-  const projector = model.mmProjPath && await RNFS.exists(model.mmProjPath) ? model.mmProjPath : undefined;
-  let best: SweepSetting | undefined;
+  let vision: SweepResult['vision'];
   try {
     await forgetVerdicts(model.filePath);
     await llmService.unloadModel();
     for (const setting of sweepSettings(opts.layers)) {
       if (opts.shouldStop?.()) { say('Stopped.'); break; }
       say(`Trying: ${setting.label}`);
-      useAppStore.getState().updateSettings({
-        inferenceBackend: setting.backend === 'cpu' ? INFERENCE_BACKENDS.CPU : INFERENCE_BACKENDS.OPENCL,
-        gpuLayers: setting.gpuLayers, flashAttn: setting.flashAttn, cacheType: 'f16', contextLength: 2048, nBatch: 128, useMtp: false,
-      } as any);
-      const started = Date.now();
-      const step: SweepStep = { setting, ok: false, loadSeconds: 0 };
-      try {
-        await llmService.loadModel(model.filePath, undefined, { override: true });
-        step.loadSeconds = Number(((Date.now() - started) / 1000).toFixed(1));
-        step.check = llmService.getLastOutputCheck() ?? await llmService.runOutputCheck() ?? undefined;
-        step.ok = !!step.check?.ok;
-        if (!step.ok) step.error = step.check?.reason;
-      } catch (e: any) {
-        step.loadSeconds = Number(((Date.now() - started) / 1000).toFixed(1));
-        step.error = String(e?.message || e);
-        step.check = llmService.getLastOutputCheck() ?? undefined;
-      }
+      const step = await runStep(model, setting);
       steps.push(step);
-      say(`  ${step.ok ? 'works' : 'FAILED'}: ${step.ok ? `"${step.check?.text.trim().slice(0, 60)}" at ${step.check?.tokensPerSecond} tok/s, first word after ${step.check?.firstTokenMs} ms` : step.error}`);
-      if (step.ok && !best && setting.backend === 'opencl') best = setting;
+      say(describeStep(step));
       await llmService.unloadModel();
     }
-    let vision: SweepResult['vision'];
-    if (projector && !opts.shouldStop?.()) {
-      const target = best ?? steps.find((s) => s.ok)?.setting;
-      if (target) {
-        say(`Picture check with the projector, on: ${target.label}`);
-        useAppStore.getState().updateSettings({
-          inferenceBackend: target.backend === 'cpu' ? INFERENCE_BACKENDS.CPU : INFERENCE_BACKENDS.OPENCL,
-          gpuLayers: target.gpuLayers, flashAttn: target.flashAttn, cacheType: 'f16', contextLength: 2048, nBatch: 128, useMtp: false,
-        } as any);
-        try {
-          await llmService.loadModel(model.filePath, projector, { override: true });
-          vision = await checkPicture(model);
-        } catch (e: any) { vision = { ok: false, reply: '', error: String(e?.message || e) }; }
-        say(`  ${vision?.ok ? `works: "${vision.reply}"` : `FAILED: ${vision?.error}`}`);
-        await llmService.unloadModel();
-      }
+    const best = steps.find((s) => s.ok && s.setting.backend === 'opencl')?.setting;
+    const target = best ?? steps.find((s) => s.ok)?.setting;
+    const projector = model.mmProjPath && await RNFS.exists(model.mmProjPath) ? model.mmProjPath : undefined;
+    if (projector && target && !opts.shouldStop?.()) {
+      say(`Picture check with the projector, on: ${target.label}`);
+      vision = await runPictureStep(model, projector, target);
+      say(vision?.ok ? `  works: "${vision.reply}"` : `  FAILED: ${vision?.error}`);
+      await llmService.unloadModel();
     }
     return { steps, vision, best, report: formatSweepReport(model, steps, vision) };
   } finally {
