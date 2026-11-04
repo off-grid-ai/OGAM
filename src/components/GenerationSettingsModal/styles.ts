@@ -43,7 +43,8 @@ const createStatsStyles = (colors: ThemeColors) => ({
   },
 });
 
-const createAccordionStyles = (colors: ThemeColors) => ({
+/** The settings section header and card, shared by chat settings and Model Settings so their rows line up. */
+export const createAccordionStyles = (colors: ThemeColors) => ({
   accordionHeaderNoMargin: {
     marginTop: 0,
   },
