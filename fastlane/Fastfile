@@ -291,7 +291,9 @@ platform :ios do
         use_automatic_signing: false,
         team_id: APPLE_TEAM_ID,
         bundle_identifier: "ai.offgridmobile",
-        code_sign_identity: "iPhone Distribution",
+        # The team's distribution certificates are the Xcode 11+ "Apple Distribution" kind; Xcode reads
+        # "iPhone Distribution" as the legacy "iOS Distribution" kind and finds none to sign with.
+        code_sign_identity: "Apple Distribution",
         profile_name: profile_name
       )
       build_app(
@@ -304,6 +306,7 @@ platform :ios do
           method: "app-store-connect",
           teamID: APPLE_TEAM_ID,
           signingStyle: "manual",
+          signingCertificate: "Apple Distribution",
           provisioningProfiles: { "ai.offgridmobile" => profile_name }
         },
         output_directory: "build",
