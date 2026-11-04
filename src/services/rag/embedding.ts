@@ -73,7 +73,7 @@ class EmbeddingService {
 
   /** Caller holds the operation lock; failure leaves the stored model and index intact. */
   async withRebuildModel<T>(model: EmbeddingModelSelection | null, rebuild: () => Promise<T>): Promise<T> {
-    if (this.loading) await this.loading;
+    if (this.loading !== null) await this.loading;
     await this.unload();
     this.pendingModel = model;
     try {
