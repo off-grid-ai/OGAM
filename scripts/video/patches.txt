@@ -1,0 +1,26 @@
+# Every local patch to stable-diffusion.cpp, and the one list each build and check reads:
+# prepare-video-runtime.sh (Android, and --patches-only before an engine bump), build-video-ios.sh
+# (iOS, and its build key). scripts/video/apply-patches.sh reads it.
+#
+#   <target> <patch> <platforms>
+#   target:    the tree the patch applies to: . (stable-diffusion.cpp) or ggml (its submodule)
+#   platforms: android, ios, or both, comma-separated
+#
+# A platform applies its patches in this order. A new patch goes here, or no build applies it.
+ggml android-vulkan-dispatch.patch android
+ggml android-vulkan-device-fault.patch android
+ggml android-vulkan-pipeline-diagnostics.patch android
+ggml android-vulkan-matvec-fallback.patch android
+ggml android-vulkan-attention-fallback.patch android
+ggml android-hexagon.patch android
+ggml android-hexagon-buffer-validation.patch android
+ggml android-hexagon-precision.patch android
+. android-hardware-fallback.patch android
+. conditioning-errors.patch android,ios
+. android-attention-buffer-ownership.patch android
+. android-attention-query-chunks.patch android
+. android-attention-query-routing.patch android
+. video-decode-observer.patch android,ios
+. android-video-numerics.patch android
+. stop-between-prompt-passes.patch android,ios
+ggml metal-group-norm-batch.patch ios

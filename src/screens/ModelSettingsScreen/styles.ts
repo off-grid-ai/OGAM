@@ -1,5 +1,6 @@
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
+import { createAccordionStyles } from '../../components/GenerationSettingsModal/styles';
 
 export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   flex1: { flex: 1 },
@@ -120,19 +121,9 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   systemPromptContainer: {
     marginBottom: SPACING.md,
   },
-  accordionHeader: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'space-between' as const,
-    marginBottom: SPACING.md,
-    paddingVertical: SPACING.sm,
-  },
-  accordionTitle: {
-    ...TYPOGRAPHY.label,
-    color: colors.textMuted,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 1,
-  },
+  // The same section header as chat settings, so a section shared by both (Video) lines up in each.
+  accordionHeader: createAccordionStyles(colors).accordionHeader,
+  accordionTitle: createAccordionStyles(colors).accordionTitle,
   advancedToggle: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,

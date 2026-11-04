@@ -43,7 +43,8 @@ const createStatsStyles = (colors: ThemeColors) => ({
   },
 });
 
-const createAccordionStyles = (colors: ThemeColors) => ({
+/** The settings section header and card, shared by chat settings and Model Settings so their rows line up. */
+export const createAccordionStyles = (colors: ThemeColors) => ({
   accordionHeaderNoMargin: {
     marginTop: 0,
   },
@@ -103,6 +104,19 @@ const createSliderStyles = (colors: ThemeColors) => ({
     color: colors.textSecondary,
     marginBottom: SPACING.md,
     lineHeight: 18,
+  },
+  /** A text field in a settings card: the same filled box the system prompt uses. */
+  settingInput: {
+    ...TYPOGRAPHY.bodySmall,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: SPACING.md,
+    minHeight: 44,
+    color: colors.text,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.sm,
   },
   settingWarning: {
     ...TYPOGRAPHY.bodySmall,

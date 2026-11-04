@@ -28,6 +28,9 @@ const EVENT_TOOL_CALL = 'litert_tool_call';
 /** Context a summary session keeps free of transcript: the instruction and the summary it writes. */
 const SUMMARY_SESSION_RESERVE_TOKENS = 260;
 
+/** The smallest context native gives a load it can afford (LiteRTModule's MIN_TOKEN_FLOOR). */
+const MIN_USABLE_CONTEXT_TOKENS = 1024;
+
 type LiteRTBackend = 'cpu' | 'gpu' | 'npu';
 
 interface GenerateRawHandlers {
@@ -133,6 +136,15 @@ class LiteRTService {
       if (typeof res === 'object' && typeof res.maxNumTokens === 'number' && res.maxNumTokens > 0) {
         if (res.maxNumTokens !== this.configuredMaxTokens) {
           logger.log(TAG, `loadModel — native clamped context ${this.configuredMaxTokens} → ${res.maxNumTokens}`);
+        }
+        // Native clamps below its own floor only when free RAM cannot hold even the weights; it leaves
+        // refusing to the caller, and a Load Anyway has no other guard. A context that small cannot fit
+        // the system prompt, so every turn would fail as "context full".
+        if (res.maxNumTokens < maxNumTokens && res.maxNumTokens < MIN_USABLE_CONTEXT_TOKENS) {
+          await LiteRTModule.unloadModel().catch(() => {});
+          throw new Error(
+            'Not enough free memory to run this model right now. Close other apps or choose a smaller model.',
+          );
         }
         this.configuredMaxTokens = res.maxNumTokens;
       }

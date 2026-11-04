@@ -11,8 +11,9 @@ name: Engine updates
 # written only when every step succeeded.
 #
 # When CI on the PR's head commit is green, the merge job merges it with a merge commit
-# (scripts/merge-engine-pr.js): only the bot's own bump, never one that moves pro, and never while a
-# nightly or store upload runs (it waits for them to end). Ali approved this for this PR only.
+# (scripts/merge-engine-pr.js): only the bot's own bump, never one that moves pro, never one that moves
+# stable-diffusion.cpp unless CI built both video runtimes from source (ci.yml, video-android and
+# video-ios), and never while a nightly or store upload runs (it waits for them to end). Ali approved this for this PR only.
 #
 # The PR is pushed and merged with PRO_SUBMODULE_PAT, not GITHUB_TOKEN: a push made with GITHUB_TOKEN does
 # not start other workflows, so CI would never test the update.

@@ -797,6 +797,31 @@ describe('appStore', () => {
 
       await AsyncStorage.removeItem('local-llm-app-storage');
     });
+
+    it('takes a model\'s reasoning out of saved video prompts, and leaves plain prompts alone', async () => {
+      const AsyncStorage = require('@react-native-async-storage/async-storage');
+      // An older build kept a thinking model's whole rewrite as the clip's prompt (and so its title).
+      const clip = (id: string, prompt: string) => ({ id, prompt, videoPath: `/v/${id}.mp4`, createdAt: '2026-11-03T10:00:00.000Z' });
+      await AsyncStorage.setItem('local-llm-app-storage', JSON.stringify({
+        state: {
+          generatedVideos: [
+            clip('answered', '<think>The user wants calm water.</think>A sailboat drifts at sunset.'),
+            clip('cut-off', '<think>The user wants a car on a wet road'),
+            clip('plain', 'A dog running on a beach.'),
+          ],
+        },
+        version: 0,
+      }));
+
+      await (useAppStore as any).persist.rehydrate();
+
+      expect(useAppStore.getState().generatedVideos.map(video => video.prompt)).toEqual([
+        'A sailboat drifts at sunset.',
+        'The user wants a car on a wet road',
+        'A dog running on a beach.',
+      ]);
+      await AsyncStorage.removeItem('local-llm-app-storage');
+    });
   });
 
   // ============================================================================

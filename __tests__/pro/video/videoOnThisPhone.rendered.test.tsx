@@ -133,10 +133,13 @@ it('downloads every file of a video model, then makes a clip on the phone', asyn
   // In flight on the phone: the engine's step count, and no clip card yet.
   await view.findByText(/Making frames · 1 of \d+/, {}, { timeout: 15_000 });
   expect(view.queryByTestId('chat-clip-card')).toBeNull();
+  // A 24 GB phone renders the model's trained size, so nothing says the clip was made smaller.
+  expect(view.queryByTestId('video-smaller-on-phone')).toBeNull();
   current.engine.release();
   await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
   await rtl.waitFor(() => expect(view.queryByTestId('video-progress')).toBeNull());
   expect(current.engine.generations).toHaveLength(1);
+  expect([current.engine.generations[0].width, current.engine.generations[0].height]).toEqual([832, 480]);
   expect(current.engine.generations[0].prompt).toBe('a hummingbird hovering over a red flower');
 }, 90_000);
 
@@ -591,4 +594,49 @@ it('a clip the worker could not finish while the app was away shows the engine\'
   await openOnlyChat(current, 'a whale breaching at sunset');
   await view.findByText(/The video engine ran out of memory\./, {}, { timeout: 15_000 });
   expect(view.queryByTestId('chat-clip-card')).toBeNull();
+}, 90_000);
+
+it('a phone that cannot hold the trained size makes the clip smaller, and the card says why and what to do', async () => {
+  // SPEC (2026-11-04): Wan 2.1 at 832x480 ran out of memory on a 12 GB Nord. A 12 GB phone renders a
+  // smaller clip, and while it is made the card says so and how to get sharper video.
+  const current = await launch({ ram: { totalBytes: 12 * GB, availBytes: 10 * GB } });
+  const { view } = current;
+  await downloadVideoModel(current);
+  current.engine.hold();
+  await describeClipOnPhone(current, 'a lighthouse at night');
+  await view.findByText(/Making frames · 1 of \d+/, {}, { timeout: 15_000 });
+  expect(view.getByTestId('video-smaller-on-phone').props.children).toMatch(/pair a computer or use a 16 GB phone/);
+  expect([current.engine.generations[0].width, current.engine.generations[0].height]).toEqual([320, 192]);
+  current.engine.release();
+  await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
+}, 90_000);
+
+it('a phone judged too small can still ask for the full size in settings, and the next clip is made at it', async () => {
+  // SPEC (2026-11-04, Ali): "what if we made a mistake in classifying?" A 12 GB phone gets the smaller
+  // size, but its video settings offer the model's own size in one tap, and Use recommended goes back.
+  const current = await launch({ ram: { totalBytes: 12 * GB, availBytes: 10 * GB } });
+  const { view, rtl } = current;
+  await downloadVideoModel(current);
+  rtl.fireEvent.press(await view.findByTestId('home-tab'));
+  rtl.fireEvent.press(await view.findByTestId('model-summary-video-open'));
+  rtl.fireEvent.press(await view.findByTestId(`video-model-row-${MODEL.id}`, {}, { timeout: 5000 }));
+  rtl.fireEvent.press(await view.findByTestId('new-chat-button', {}, { timeout: 5000 }));
+  await view.findByTestId('chat-input');
+  rtl.fireEvent.press(view.getByTestId('chat-settings-icon'));
+  rtl.fireEvent.press(await view.findByLabelText('Video generation'));
+  rtl.fireEvent.press(await view.findByTestId('video-settings-try-full-size'));
+  await view.findByTestId('video-settings-use-recommended');
+  expect(view.queryByTestId('video-settings-try-full-size')).toBeNull();
+  const close = view.queryAllByTestId('app-sheet-close');
+  if (close.length) rtl.fireEvent.press(close[close.length - 1]);
+  current.engine.hold();
+  rtl.fireEvent.press(view.getByTestId('quick-settings-button'));
+  rtl.fireEvent.press(await view.findByTestId('quick-video-mode'));
+  rtl.fireEvent.changeText(view.getByTestId('chat-input'), 'a lighthouse at night');
+  rtl.fireEvent.press(view.getByTestId('send-button'));
+  await view.findByText(/Making frames · 1 of \d+/, {}, { timeout: 15_000 });
+  expect([current.engine.generations[0].width, current.engine.generations[0].height]).toEqual([832, 480]);
+  expect(view.queryByTestId('video-smaller-on-phone')).toBeNull();
+  current.engine.release();
+  await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
 }, 90_000);

@@ -241,6 +241,15 @@ export function parseModelOutput(
 ): ParsedModelOutput {
   return parseChatModelOutput(content, reasoningContent);
 }
+
+/**
+ * Text a model wrote, as a prompt or a title: its answer, or (a reply cut off mid-thought, saved by an
+ * older build) its reasoning without the markup. Plain text comes back as it was.
+ */
+export function withoutReasoning(text: string): string {
+  const { answer, reasoning } = parseModelOutput(text);
+  return (answer || reasoning || text).trim();
+}
 import {
   REASONING_DELIMITERS as SHARED_REASONING_DELIMITERS,
   TOOL_CALL_CLOSERS as SHARED_TOOL_CALL_CLOSERS,
