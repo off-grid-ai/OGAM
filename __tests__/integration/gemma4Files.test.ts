@@ -35,3 +35,14 @@ it('pairs the projector with the model, and the recovery scan offers neither the
   const withoutRecord = await scanForUntrackedTextModels(dir, async () => [{ ...registered[0], draftPath: undefined }]);
   expect(withoutRecord.map((m: { fileName: string }) => m.fileName)).toEqual([]);
 });
+
+it('judges a model file by size and checksum even when the file was renamed', () => {
+  const { judgeFile, describeFileVerdict, KNOWN_MODEL_FILES } = require('../../src/services/knownModelFiles');
+  const real = KNOWN_MODEL_FILES[0];
+  expect(judgeFile(real.bytes, real.sha256).kind).toBe('match');
+  expect(describeFileVerdict(judgeFile(real.bytes, real.sha256.toUpperCase()))).toMatch(/^OK: 7,381,381,760 bytes, identical to the published Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M\.gguf/);
+  // Right size, wrong bytes: the copy on the phone is damaged.
+  expect(describeFileVerdict(judgeFile(real.bytes, '0'.repeat(64)))).toMatch(/^DAMAGED:.*delete it and copy or download it again/);
+  // A file Atlas knows nothing about is reported with its checksum, not called good or bad.
+  expect(describeFileVerdict(judgeFile(123, 'abc'))).toMatch(/not in the list of known files \(123 bytes, SHA-256 abc\)/);
+});

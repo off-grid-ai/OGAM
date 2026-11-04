@@ -65,6 +65,23 @@ describe('Gemma 4 on the GPU: noise is caught at load, not in the first reply', 
     expect((initLlama as jest.Mock).mock.calls.length).toBe(loadsBefore);
   }, 40000);
 
+  it('on the CPU too: noise fails the load and points at the file and the CPU kernels, not at a GPU', async () => {
+    const h = await setupChatScreen({ engine: 'llama', platform: 'android', modelFileName: 'Gemma4-12B-QAT-Uncensored-HauhauCSQ4_K_M.gguf' });
+    h.render();
+    h.useAppStore.getState().updateSettings({ inferenceBackend: 'cpu' } as any);
+    const { initLlama } = require('llama.rn');
+    const real = (initLlama as jest.Mock).getMockImplementation()!;
+    (initLlama as jest.Mock).mockImplementation(async (params: Record<string, unknown>, cb?: (p: number) => void) => {
+      const context = await real(params, cb);
+      h.boundary.llama!.scriptCompletion({ text: '<pad><pad><pad><pad><pad><pad><pad><pad><pad><pad><pad><pad>' });
+      return context;
+    });
+    const { llmService } = require('../../../src/services/llm');
+    await expect(llmService.loadModel(h.useAppStore.getState().downloadedModels[0].filePath))
+      .rejects.toThrow(/wrote only noise on the CPU.*checks the file against its published checksum/);
+    expect(llmService.isModelLoaded()).toBe(false);
+  }, 40000);
+
   it('falsify: a normal reply passes the check and the model loads on the GPU as before', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android', modelFileName: 'Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf' });
     h.render();

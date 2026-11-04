@@ -518,7 +518,7 @@ The **Build Atlas voices** workflow ran successfully on 2026-10-19, so `kitten-n
 - Skills are matched by name; pins, courses and tasks by id.
 - Not verified on two real phones.
 
-## 8y. Gemma 4 12B on the phone GPU (0.0.129, picker in 0.0.130)
+## 8y. Gemma 4 12B writes noise on the phone (0.0.129 to 0.0.131)
 
 What was found (checked on a computer with the same llama.cpp code the app ships, not on the phone):
 - The exact file (Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf) decodes correctly on the CPU with both the
@@ -528,22 +528,31 @@ What was found (checked on a computer with the same llama.cpp code the app ships
   features a blue circle centered inside a large red square."
 - Its MTP file (mtp-gemma-4-12B-it.gguf) is a gemma4-assistant file that loads in the engine, its output width (3840)
   matches the model, and Atlas's MTP settings map to the engine's. Drafting itself was NOT run end to end.
-- So the `<unused19><unused10><unk>...` reply came from the GPU (OpenCL) path on the phone, not from the file. The cause
-  inside the GPU path cannot be found without the phone.
+- CORRECTION (from the phone's own test report, 0.0.130): the same file also writes only `<pad>` on the phone's CPU, with
+  every sampled token id 0 and a probability of exactly 1/262,144, so the model computes the same value for every word on
+  every backend. It is not specific to OpenCL, and the earlier reading that "the GPU path is at fault" was wrong. Either
+  the copy on the phone has wrong bytes (the file size, 7.38 GB, is right), or the phone's ARM CPU kernels mishandle this
+  model. 0.0.131 tests both (see below). The published file's SHA-256 is 59656d74...b5134; the copy tested on a computer
+  matches it.
+- The phone's copy was renamed (...HauhauCSQ4_K_M.gguf) because Atlas treated the original name as already installed. The
+  name does not affect decoding, but it breaks the automatic projector pairing; use My Models > Add vision file.
 
 What changed:
 - llama.rn 0.13.0-rc.4 to 0.13.0-rc.9 (newer llama.cpp and a large OpenCL backend update, including the flash-attention
   path for Gemma 4's 512-wide global layers that this 12B uses). Whether it fixes the noise on the Razr is not known
   until it is tried. (rc.9 also keeps the per-layer embedding lookup of the E2B/E4B models in host memory; the 12B has
   no per-layer embeddings, so that part does not apply to it.)
-- After an accelerated Gemma 4 load, Atlas checks one short reply (words, sampled token ids, how sure the model was).
+- After a Gemma 4 load (0.0.131: on the CPU too), Atlas checks one short reply (words, sampled token ids, how sure the model was).
   Noise fails the load with a plain reason (Automatic moves on to the CPU), the context is released, and the result is
   remembered per model file, backend and GPU layer count, and llama.rn version. It runs before pictures are set up.
 - GPU load timeout: no longer one flat 45 s. A load whose weights are still loading (the percentage keeps moving) is
   left alone; a stall says where ("weights stopped loading at 63%" or "weights are loaded but GPU setup has not
   finished"); the log gets the progress steps, free memory and llama.cpp's last lines. A timed-out load is finished and
   released before another load (including the CPU fallback) starts, or you are told to close and reopen Atlas.
-- Settings > About > Test GPU on this model: loads the model on the CPU and at 24, 16 and 8 GPU layers with flash
+- Settings > About > Test GPU on this model (0.0.131: now a model test): first checks the model, picture and MTP files by
+  size and SHA-256 against the published values (a renamed file is still recognised by size), then loads the model on the
+  CPU three ways (the app's settings, ARM-optimized kernels off, batch 512) and at 24, 16 and 8 GPU layers (OpenCL always
+  runs with flash attention off in Atlas, so there is no on/off pair). Earlier text: loads the model on the CPU and at 24, 16 and 8 GPU layers with flash
   attention on and off (2,048 context, batch 128, f16 cache, MTP off), checks the reply of each, then asks the projector
   what colour a red picture is. The report can be copied. Copy diagnostics now includes the llama.rn version and the
   remembered GPU checks.

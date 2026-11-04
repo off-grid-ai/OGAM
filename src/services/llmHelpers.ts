@@ -90,7 +90,7 @@ export function effectiveCacheType(backend: string | undefined, requested: strin
 
 export function buildModelParams(
   modelPath: string,
-  settings: { nThreads?: number; nBatch?: number; contextLength?: number; flashAttn?: boolean; enableGpu?: boolean; gpuLayers?: number; cacheType?: string; inferenceBackend?: string },
+  settings: { nThreads?: number; nBatch?: number; contextLength?: number; flashAttn?: boolean; enableGpu?: boolean; gpuLayers?: number; cacheType?: string; inferenceBackend?: string; cpuRepack?: boolean },
 ): ModelLoadParams {
   const nThreads = settings.nThreads || getOptimalThreadCount();
   const nBatch = settings.nBatch || getOptimalBatchSize();
@@ -118,7 +118,7 @@ export function buildModelParams(
       // its interleaved sliding-window + heterogeneous KV layers froze building the
       // unified KV-cache reuse map ("kv_cache: reusing layers"). The engine's
       // per-arch default (false) handles SWA models correctly and keeps GPU/Metal.
-      no_extra_bufts: false,
+      no_extra_bufts: settings.cpuRepack === false,
       ...(backend === INFERENCE_BACKENDS.OPENCL ? {} : { cache_type_k: cacheType, cache_type_v: cacheType }),
     },
     nThreads, nBatch, ctxLen, nGpuLayers,

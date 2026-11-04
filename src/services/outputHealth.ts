@@ -40,10 +40,13 @@ export interface OutputCheck {
 
 export const isGemma4Path = (modelPath: string): boolean => /gemma-?4/i.test(modelPath);
 
-/** Text-level judgement: placeholder tokens (`<unusedN>`, `<unk>`, `<pad>`) standing in for words, or nothing at all. */
+/**
+ * Text-level judgement: placeholder tokens (`<unusedN>`, `<unk>`, `<pad>`) standing in for words. An empty reply proves nothing
+ * (a healthy model may stop at once), so it is not a failure: blocking someone's model on it would do more harm than missing it.
+ */
 export function judgeText(text: string): string {
   const visible = text.replace(/\s+/g, '');
-  if (!visible) return 'the model wrote nothing';
+  if (!visible) return '';
   const placeholders = text.match(PLACEHOLDER) ?? [];
   const placeholderChars = placeholders.join('').length;
   if (placeholders.length >= 3 && placeholderChars >= visible.length * 0.5) {
@@ -169,8 +172,11 @@ export async function forgetVerdicts(model?: string): Promise<void> {
  */
 const BACKEND_NAMES: Record<string, string> = { opencl: 'OpenCL GPU', htp: 'Hexagon NPU', vulkan: 'Vulkan GPU' };
 export function describeBadOutput(backend: string, reason: string, explicitChoice: boolean): string {
+  if (backend === 'cpu') {
+    return `This model wrote only noise on the CPU (${reason}). The same file decodes correctly on a computer, so either the copy on this phone has wrong bytes in it or this phone's CPU math mishandles it. Open Settings > About > Test GPU on this model: it checks the file against its published checksum and tries the CPU with the optimized kernels off.`;
+  }
   const name = BACKEND_NAMES[backend] ?? `${backend} accelerator`;
-  const parts = [`The ${name} gave unusable output for this model (${reason}). The same model file works on the CPU, so this is the accelerated path on this device, not the file.`];
+  const parts = [`The ${name} gave unusable output for this model (${reason}).`];
   if (explicitChoice) parts.push('Choose CPU or Automatic for this model, or open Settings > About > Test GPU on this model to see which setting works.');
   return parts.join(' ');
 }

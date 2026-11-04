@@ -37,12 +37,19 @@ it('reports which GPU layer counts give real words and which give noise, and put
 
   const report = await h.rtl.waitFor(() => view.getByTestId('model-gpu-test-report'), { timeout: 110000 });
   const text = JSON.stringify(report.props.children);
-  expect(text).toMatch(/CPU only \(0 GPU layers\): OK/);
-  expect(text).toMatch(/OpenCL GPU, 24 layers, flash attention on: FAILED/);
+  expect(text).toMatch(/CPU only, the app's usual settings: OK/);
+  expect(text).toMatch(/CPU only, optimized ARM kernels off: OK/);
+  expect(text).toMatch(/Model file: not in the list of known files/);
+  expect(text).toMatch(/OpenCL GPU, 24 layers: FAILED/);
   expect(text).toMatch(/placeholder tokens/);
-  expect(text).toMatch(/OpenCL GPU, 16 layers, flash attention on: OK/);
-  expect(text).toMatch(/OpenCL GPU, 8 layers, flash attention off: OK/);
+  expect(text).toMatch(/OpenCL GPU, 16 layers: OK/);
+  expect(text).toMatch(/OpenCL GPU, 8 layers: OK/);
   expect(text).toMatch(/Working GPU settings: .*16 layers/);
+
+  // The CPU step with the optimized kernels off really reached the engine as no_extra_bufts.
+  const loads = (initLlama as jest.Mock).mock.calls.map((c) => c[0] as Record<string, unknown>);
+  expect(loads.some((p) => p.no_extra_bufts === true && Number(p.n_gpu_layers) === 0)).toBe(true);
+  expect(loads.some((p) => p.no_extra_bufts === false)).toBe(true);
 
   // Their own settings come back, and the model is not left loaded by the test.
   const after = h.useAppStore.getState().settings;
@@ -76,5 +83,5 @@ it('can test a model that is not the current one and cannot be loaded for chat (
   h.rtl.fireEvent.press(view.getByTestId(`model-gpu-test-pick-${gemma.id}`));
   h.rtl.fireEvent.press(view.getByTestId('model-gpu-test-run'));
   const report = await h.rtl.waitFor(() => view.getByTestId('model-gpu-test-report'), { timeout: 110000 });
-  expect(JSON.stringify(report.props.children)).toMatch(/GPU test for Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M\.gguf/);
+  expect(JSON.stringify(report.props.children)).toMatch(/Test for Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M\.gguf/);
 }, 120000);

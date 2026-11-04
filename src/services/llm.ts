@@ -259,7 +259,7 @@ class LLMService {
             const wantsMtp = useAppStore.getState().settings.useMtp !== false;
             const draftFile = opts?.draftPath && wantsMtp && await RNFS.exists(opts.draftPath) ? opts.draftPath : undefined;
             const draftOn = !!draftFile || (!!opts?.embeddedMtp && wantsMtp);
-            const checkOutput = requireAcceleration && isGemma4Path(modelPath);
+            const checkOutput = isGemma4Path(modelPath);
             const verdictKey = { model: modelPath, size: fileSize, backend, gpuLayers: nGpuLayers };
             if (checkOutput) {
               const known = await knownVerdict(verdictKey);
@@ -279,9 +279,9 @@ class LLMService {
               this.mtpActive = false;
             }
             const { context, gpuAttemptFailed, actualLength, attemptedGpuLayers } = init;
-            // Gemma 4 on a phone GPU has produced noise ("<unused19><unused10>...") from a perfectly good file. Look at one
-            // short reply before anything else (pictures included) is set up on top of it; a bad one is a failed load.
-            if (checkOutput && context.gpu) {
+            // Gemma 4 has produced noise ("<unused19><unused10>...", "<pad><pad>...") on a phone from a file that decodes correctly elsewhere.
+            // Look at one short reply before anything else (pictures included) is set up on top of it; a bad one is a failed load.
+            if (checkOutput) {
               const check = await runOutputCheck(context, { isGemma4: true });
               this.lastOutputCheck = check;
               logOutputReport(check, { model: modelPath.split('/').pop(), backend, gpuLayers: attemptedGpuLayers, context: actualLength, kvCache: 'f16', devices: String((context as any).devices ?? '') });

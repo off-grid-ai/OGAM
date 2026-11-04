@@ -43,7 +43,7 @@ export const ModelGpuTest: React.FC = () => {
       <Text style={[styles.title, { color: colors.text }]}>Test GPU on this model</Text>
       <Text style={[styles.body, { color: colors.textSecondary }]}>
         {model
-          ? `Loads ${model.fileName} on the CPU and on the GPU with 24, 16 and 8 layers (flash attention on and off), 2,048 tokens of context, f16 cache, and checks that it writes real words each time. Then it checks pictures with the model's picture file. It takes several minutes and uses a lot of memory; the model is unloaded when it ends.`
+          ? `First checks ${model.fileName} against its published checksum (a minute or two). Then loads it on the CPU three ways and on the GPU with 24, 16 and 8 layers (2,048 tokens of context, f16 cache) and checks that it writes real words each time, and last checks pictures with the model's picture file. It takes several minutes and uses a lot of memory; the model is unloaded when it ends.`
           : 'Download a GGUF model first.'}
       </Text>
       {models.length > 1 && !running && models.map((m) => (

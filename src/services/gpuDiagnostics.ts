@@ -14,21 +14,28 @@ import { INFERENCE_BACKENDS, type Message } from '../types';
 import type { LlamaDownloadedModel } from '../types';
 import { llmService } from './llm';
 import { forgetVerdicts, formatOutputReport, judgeText, type OutputCheck } from './outputHealth';
+import { describeFileVerdict, judgeFile } from './knownModelFiles';
 import logger from '../utils/logger';
 
-export interface SweepSetting { label: string; backend: 'cpu' | 'opencl'; gpuLayers: number; flashAttn: boolean }
+export interface SweepSetting { label: string; backend: 'cpu' | 'opencl'; gpuLayers: number; flashAttn: boolean; cpuRepack?: boolean; nBatch?: number }
 export interface SweepStep { setting: SweepSetting; ok: boolean; loadSeconds: number; error?: string; check?: OutputCheck }
-export interface SweepResult { steps: SweepStep[]; vision?: { ok: boolean; reply: string; error?: string }; report: string; best?: SweepSetting }
+export interface SweepResult { steps: SweepStep[]; files: string[]; vision?: { ok: boolean; reply: string; error?: string }; report: string; best?: SweepSetting }
 
 export const DEFAULT_SWEEP_LAYERS = [24, 16, 8];
 
-/** The settings tried: the CPU as the reference, then each GPU layer count with flash attention on (the app's default) and off. */
+/**
+ * The settings tried. The CPU first, three ways: the app's own settings, with the ARM-optimized weight kernels off, and with the
+ * larger batch a computer run uses (a computer decodes this file correctly, so a CPU failure that only some of these show
+ * points at the phone's kernels; one that all show points at the file). Then each GPU layer count. OpenCL always runs with
+ * flash attention off in Atlas, so there is no on/off pair.
+ */
 export function sweepSettings(layers: number[] = DEFAULT_SWEEP_LAYERS): SweepSetting[] {
-  const settings: SweepSetting[] = [{ label: 'CPU only (0 GPU layers)', backend: 'cpu', gpuLayers: 0, flashAttn: false }];
-  for (const n of layers) {
-    settings.push({ label: `OpenCL GPU, ${n} layers, flash attention on`, backend: 'opencl', gpuLayers: n, flashAttn: true });
-    settings.push({ label: `OpenCL GPU, ${n} layers, flash attention off`, backend: 'opencl', gpuLayers: n, flashAttn: false });
-  }
+  const settings: SweepSetting[] = [
+    { label: 'CPU only, the app\'s usual settings', backend: 'cpu', gpuLayers: 0, flashAttn: false },
+    { label: 'CPU only, optimized ARM kernels off', backend: 'cpu', gpuLayers: 0, flashAttn: false, cpuRepack: false },
+    { label: 'CPU only, batch 512 (as on the computer)', backend: 'cpu', gpuLayers: 0, flashAttn: false, nBatch: 512 },
+  ];
+  for (const n of layers) settings.push({ label: `OpenCL GPU, ${n} layers`, backend: 'opencl', gpuLayers: n, flashAttn: false });
   return settings;
 }
 
@@ -58,7 +65,8 @@ async function checkPicture(): Promise<SweepResult['vision']> {
 function applySetting(setting: SweepSetting): void {
   useAppStore.getState().updateSettings({
     inferenceBackend: setting.backend === 'cpu' ? INFERENCE_BACKENDS.CPU : INFERENCE_BACKENDS.OPENCL,
-    gpuLayers: setting.gpuLayers, flashAttn: setting.flashAttn, cacheType: 'f16', contextLength: 2048, nBatch: 128, useMtp: false,
+    gpuLayers: setting.gpuLayers, flashAttn: setting.flashAttn, cacheType: 'f16', contextLength: 2048, nBatch: setting.nBatch ?? 128, useMtp: false,
+    cpuRepack: setting.cpuRepack !== false,
   } as any);
 }
 
@@ -87,6 +95,17 @@ const describeStep = (step: SweepStep): string => (step.ok
   ? `  works: "${step.check?.text.trim().slice(0, 60)}" at ${step.check?.tokensPerSecond} tok/s, first word after ${step.check?.firstTokenMs} ms`
   : `  FAILED: ${step.error}`);
 
+/** Size and SHA-256 of a file against the published values. The checksum takes a minute or two on a 7 GB model. */
+async function checkFile(path: string, label: string): Promise<string> {
+  try {
+    const bytes = Number((await RNFS.stat(path)).size);
+    const sha = await RNFS.hash(path, 'sha256');
+    return `${label}: ${describeFileVerdict(judgeFile(bytes, sha))}`;
+  } catch (e: any) {
+    return `${label}: could not be read (${String(e?.message || e)})`;
+  }
+}
+
 /** The picture check: load with the projector on the given setting, ask for the colour, unload. */
 async function runPictureStep(model: LlamaDownloadedModel, projector: string, setting: SweepSetting): Promise<SweepResult['vision']> {
   applySetting(setting);
@@ -106,10 +125,16 @@ export async function runModelSweep(model: LlamaDownloadedModel, opts: { layers?
   const say = (line: string) => { logger.log(`[GPU-TEST] ${line}`); opts.onProgress?.(line); };
   const saved = { ...useAppStore.getState().settings };
   const steps: SweepStep[] = [];
+  const files: string[] = [];
   let vision: SweepResult['vision'];
   try {
     await forgetVerdicts(model.filePath);
     await llmService.unloadModel();
+    say('Checking the model file against its published checksum (a minute or two)...');
+    files.push(await checkFile(model.filePath, 'Model file'));
+    say(`  ${files[0]}`);
+    if (model.mmProjPath && await RNFS.exists(model.mmProjPath)) files.push(await checkFile(model.mmProjPath, 'Picture file'));
+    if (model.draftPath && await RNFS.exists(model.draftPath)) files.push(await checkFile(model.draftPath, 'MTP file'));
     for (const setting of sweepSettings(opts.layers)) {
       if (opts.shouldStop?.()) { say('Stopped.'); break; }
       say(`Trying: ${setting.label}`);
@@ -127,20 +152,23 @@ export async function runModelSweep(model: LlamaDownloadedModel, opts: { layers?
       say(vision?.ok ? `  works: "${vision.reply}"` : `  FAILED: ${vision?.error}`);
       await llmService.unloadModel();
     }
-    return { steps, vision, best, report: formatSweepReport(model, steps, vision) };
+    return { steps, files, vision, best, report: formatSweepReport(model, { steps, vision, files }) };
   } finally {
-    useAppStore.getState().updateSettings(saved as any);
+    useAppStore.getState().updateSettings({ ...saved, cpuRepack: saved.cpuRepack } as any);
   }
 }
 
-export function formatSweepReport(model: Pick<LlamaDownloadedModel, 'fileName'>, steps: SweepStep[], vision?: SweepResult['vision']): string {
-  const lines = [`GPU test for ${model.fileName}`, 'Each step: 2,048-token context, batch 128, f16 KV cache, MTP off.'];
+export function formatSweepReport(model: Pick<LlamaDownloadedModel, 'fileName'>, parts: { steps: SweepStep[]; vision?: SweepResult['vision']; files?: string[] }): string {
+  const { steps, vision, files = [] } = parts;
+  const lines = [`Test for ${model.fileName}`, ...files.map((f) => `- ${f}`), 'Each step: 2,048-token context, batch 128 unless stated, f16 KV cache, MTP off.'];
   for (const s of steps) {
     lines.push(`- ${s.setting.label}: ${s.ok ? 'OK' : 'FAILED'} (load ${s.loadSeconds}s)${s.error ? ` - ${s.error}` : ''}`);
     if (s.check) lines.push(formatOutputReport(s.check, {}).split('\n').map((l) => `    ${l}`).join('\n'));
   }
   if (vision) lines.push(`- Picture check: ${vision.ok ? 'OK' : 'FAILED'}${vision.error ? ` - ${vision.error}` : ''}${vision.reply ? ` (reply: ${JSON.stringify(vision.reply)})` : ''}`);
   const working = steps.filter((s) => s.ok && s.setting.backend === 'opencl');
-  lines.push(working.length ? `Working GPU settings: ${working.map((s) => s.setting.label).join('; ')}` : 'No GPU setting produced correct text on this phone for this model. Use the CPU.');
+  const cpuWorking = steps.filter((s) => s.ok && s.setting.backend === 'cpu');
+  lines.push(cpuWorking.length ? `Working CPU settings: ${cpuWorking.map((s) => s.setting.label).join('; ')}` : 'No CPU setting produced correct text either.');
+  lines.push(working.length ? `Working GPU settings: ${working.map((s) => s.setting.label).join('; ')}` : 'No GPU setting produced correct text on this phone for this model.');
   return lines.join('\n');
 }
