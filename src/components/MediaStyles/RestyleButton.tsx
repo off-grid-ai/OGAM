@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import type { MediaStyleKind } from '@offgrid/models';
 import { TouchableOpacity } from '../Touchable';
 import { useTheme, useThemedStyles } from '../../theme';
-import type { ThemeColors } from '../../theme';
+import type { ThemeColors, ThemeShadows } from '../../theme';
 import { RADIUS, SPACING, TYPOGRAPHY } from '../../constants';
 import { restyleRequestFor, useRestyleStore } from '../../stores/restyleStore';
 
@@ -34,7 +34,7 @@ export const RestyleButton: React.FC<{
   );
 };
 
-const createStyles = (colors: ThemeColors) => ({
+const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   row: { flexDirection: 'row' as const, paddingTop: SPACING.sm, paddingBottom: SPACING.xs },
   button: {
     height: 36,
@@ -43,7 +43,9 @@ const createStyles = (colors: ThemeColors) => ({
     borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.background,
+    // Lifted like the clip's Extend and the chat cards.
+    backgroundColor: colors.surface,
+    ...shadows.small,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
