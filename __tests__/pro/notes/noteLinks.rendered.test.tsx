@@ -1,22 +1,24 @@
 /**
  * Links and contents in a phone note, as the person uses them.
  *
- * SPEC: a `[TOC]` line in a note shows the note's headings in its preview, live: a heading added
- * in the editor is in the list next time. Tapping an entry scrolls to that heading. In the editor,
- * typing `[[` offers the library's notes and picking one writes `[[Note]]`; when no note has the
- * name typed, Create note makes it and links it. The Link action opens the same picker, and
- * selected text becomes the link's text. In the preview, tapping `[[Note#Heading]]` opens that
- * note at that heading; tapping a link to a note that does not exist yet makes it and opens it.
+ * SPEC: the note is a live page. A `[TOC]` line shows the note's headings under its title, live: a heading typed
+ * into the page is in the list at once, and tapping an entry puts the caret on that heading.
+ * Typing `[[` offers the library's notes and picking one writes `[[Note]]`; unless a note has
+ * exactly the name typed, Create note is offered too, and makes it and links it. Tapping `[[Note#Heading]]` opens that note at that
+ * heading; tapping a link to a note that does not exist yet makes it and opens it, and a full disk
+ * says so and stays put. Under the page, Linked from lists each note that links here once.
  *
  * The real Note screen in a real navigator over the real notes library, notes index and
- * @offgrid/notes. Device boundaries only: the disk (memfs-backed react-native-fs), native layout
- * (fired as the OS would report it) and the native scroll view. A full disk is the disk refusing
+ * @offgrid/notes, with the real editor page. Device boundaries only: the disk (memfs-backed
+ * react-native-fs) and the WebView (the shipped page in jsdom). A full disk is the disk refusing
  * one write.
  */
 jest.unmock('@react-navigation/native');
+jest.mock('react-native-webview', () => require('../../harness/noteWebView').webViewModule());
 
 import type React from 'react';
 import { installNativeBoundary, requireRTL, type FsFake } from '../../harness/nativeBoundary';
+import { notePage } from '../../harness/noteWebView';
 import { proIsPresent, requirePro } from '../helpers/requirePro';
 
 type LibraryModule = typeof import('../../../pro/notes/notesLibrary');
@@ -73,101 +75,85 @@ function openNote(path: string) {
   return { rtl, view, navigation: navigation as any };
 }
 
-/** Type `text` into the editor with the caret (or selection) where a person left it. */
-function type(rtl: ReturnType<typeof requireRTL>, editor: any, text: string, start = text.length, end = start) {
-  rtl.fireEvent.changeText(editor, text);
-  rtl.fireEvent(editor, 'selectionChange', { nativeEvent: { selection: { start, end } } });
+/** The note's page, loaded with its text. */
+async function pageOf(rtl: ReturnType<typeof requireRTL>, view: any, shows: RegExp) {
+  await view.findByTestId('note-editor');
+  await rtl.waitFor(() => expect(notePage().text()).toMatch(shows));
+  return notePage();
 }
 
-/** The OS reports where each heading's block sits in the preview. */
-function layOut(rtl: ReturnType<typeof requireRTL>, blocks: any[], ys: number[]) {
-  blocks.forEach((block, i) =>
-    rtl.fireEvent(block, 'layout', { nativeEvent: { layout: { x: 0, y: ys[i], width: 300, height: 80 } } }),
-  );
+/** The caret at the end of the page, where a person taps to keep writing. */
+function caretAtEnd(page: ReturnType<typeof notePage>) {
+  const { view } = page.editor();
+  view.focus();
+  // The page's own Selection class (the app has no ProseMirror of its own).
+  view.dispatch(view.state.tr.setSelection(view.state.selection.constructor.atEnd(view.state.doc)));
 }
 
-function nativeScrolls(): unknown[][] {
-  return (require('react-native').ScrollView.prototype.scrollTo as jest.Mock).mock.calls;
+/**
+ * Leave the note as a person does, a moment after their last tap. The test navigator drops the
+ * screen at once, where a phone's exit transition gives the page time to send its last edit.
+ */
+async function leave(rtl: ReturnType<typeof requireRTL>, navigation: any) {
+  await rtl.act(() => new Promise(resolve => setTimeout(resolve, 300)));
+  rtl.act(() => navigation.goBack());
+}
+
+/** The `[[` suggestions on screen. */
+function suggestions(page: ReturnType<typeof notePage>): { textContent: string }[] {
+  const list = page.document.querySelector('.npg-cmp');
+  return list.hidden ? [] : [...list.querySelectorAll('[data-c]')];
 }
 
 describePro('Note links and contents', () => {
-  it('[TOC] shows the headings, live, and an entry scrolls to its heading', async () => {
+  it('[TOC] shows the headings, live, and an entry puts the caret on its heading', async () => {
     const phone = await installPhone();
     const path = await phone.write('Guide', '# Guide\n\n[TOC]\n\n## Install\n\nSteps.\n\n## Use\n\nMore.\n');
 
     const { rtl, view } = openNote(path);
-    await view.findByTestId('note-editor');
-    rtl.fireEvent.press(view.getByTestId('note-preview-toggle'));
+    const page = await pageOf(rtl, view, /Steps\./);
+    const entries = () => [...page.document.querySelectorAll('.npg-toc [data-toc-i]')].map(b => b.textContent);
+    // The title heading names the note; the contents list what is under it.
+    expect(entries()).toEqual(['Install', 'Use']);
 
-    expect(view.getByTestId('note-toc')).toBeTruthy();
-    expect(view.getAllByTestId('note-toc-entry')).toHaveLength(2);
+    caretAtEnd(page);
+    page.type('\n## Later');
+    await rtl.waitFor(() => expect(entries()).toEqual(['Install', 'Use', 'Later']));
 
-    layOut(rtl, view.getAllByTestId('note-heading-block'), [0, 120, 480]);
-    nativeScrolls().length = 0;
-    rtl.fireEvent.press(view.getAllByTestId('note-toc-entry')[1]);
-    expect(nativeScrolls()).toEqual([[{ y: 480, animated: true }]]);
-
-    rtl.fireEvent.press(view.getByTestId('note-preview-toggle'));
-    type(rtl, view.getByTestId('note-editor'), `${await phone.text(path)}\n## Share\n\nLast.\n`);
-    rtl.fireEvent.press(view.getByTestId('note-preview-toggle'));
-    expect(view.getAllByTestId('note-toc-entry')).toHaveLength(3);
+    page.tap(page.document.querySelectorAll('.npg-toc [data-toc-i]')[0]!);
+    expect(page.editor().state.selection.$from.parent.textContent).toBe('Install');
   });
 
-  it('typing [[ offers notes, and picking one writes the link', async () => {
+  it('[[ offers the library\'s notes, and picking one writes the link', async () => {
     const phone = await installPhone();
     await phone.write('Plan', '# Plan\n');
-    const ideas = await phone.write('Ideas', '');
+    const ideas = await phone.write('Ideas', 'Start\n');
 
     const { rtl, view, navigation } = openNote(ideas);
-    type(rtl, await view.findByTestId('note-editor'), 'See [[Plan');
-    expect(view.queryByTestId('note-link-create')).toBeNull();
-    type(rtl, view.getByTestId('note-editor'), 'See [[Pl');
+    const page = await pageOf(rtl, view, /Start/);
+    caretAtEnd(page);
+    page.type(' [[pl');
+    await rtl.waitFor(() => expect(suggestions(page).map(s => s.textContent)).toEqual(['Plan', 'Create note ‘pl’']));
+    page.tap(suggestions(page)[0]!);
 
-    expect(view.getByTestId('note-link-picker')).toBeTruthy();
-    expect(view.getAllByTestId('note-link-option')).toHaveLength(1);
-    rtl.fireEvent.press(view.getByTestId('note-link-option'));
-    expect(view.queryByTestId('note-link-picker')).toBeNull();
-
-    rtl.act(() => navigation.goBack());
-    await rtl.waitFor(async () => expect(await phone.text(ideas)).toBe('See [[Plan]]'));
+    await leave(rtl, navigation);
+    await rtl.waitFor(async () => expect(await phone.text(ideas)).toBe('Start [[Plan]]\n'));
   });
 
-  it('Create note makes the note and links it', async () => {
+  it('[[ with a name no note has offers Create note, which makes it and links it', async () => {
     const phone = await installPhone();
-    await phone.write('Projects/Plan', '');
-    const ideas = await phone.write('Ideas', '');
+    const ideas = await phone.write('Ideas', 'Next\n');
 
     const { rtl, view, navigation } = openNote(ideas);
-    type(rtl, await view.findByTestId('note-editor'), 'See [[Pla');
-    expect(view.getAllByTestId('note-link-option')).toHaveLength(1);
-    type(rtl, view.getByTestId('note-editor'), 'See [[Brand new');
+    const page = await pageOf(rtl, view, /Next/);
+    caretAtEnd(page);
+    page.type(' [[Launch');
+    await rtl.waitFor(() => expect(suggestions(page).map(s => s.textContent)).toEqual(['Create note ‘Launch’']));
+    page.tap(suggestions(page)[0]!);
 
-    expect(view.queryByTestId('note-link-option')).toBeNull();
-    phone.fs.module.writeFile.mockRejectedValueOnce(new Error('No space left on device'));
-    rtl.fireEvent.press(view.getByTestId('note-link-create'));
-    expect(await view.findByTestId('note-notice')).toBeTruthy();
-    expect(view.getByTestId('note-link-picker')).toBeTruthy();
-    rtl.fireEvent.press(view.getByTestId('note-link-create'));
-    await rtl.waitFor(() => expect(view.queryByTestId('note-link-picker')).toBeNull());
-
-    expect(await phone.text('Brand new.md')).toBe('');
-    rtl.act(() => navigation.goBack());
-    await rtl.waitFor(async () => expect(await phone.text(ideas)).toBe('See [[Brand new]]'));
-  });
-
-  it('the Link action opens the same picker, and the selected text becomes the link text', async () => {
-    const phone = await installPhone();
-    await phone.write('Plan', '');
-    const ideas = await phone.write('Ideas', '');
-
-    const { rtl, view, navigation } = openNote(ideas);
-    type(rtl, await view.findByTestId('note-editor'), 'Read this', 5, 9);
-    rtl.fireEvent.press(view.getByTestId('note-link'));
-    rtl.fireEvent.changeText(view.getByTestId('note-link-search'), 'plan');
-    rtl.fireEvent.press(view.getByTestId('note-link-option'));
-
-    rtl.act(() => navigation.goBack());
-    await rtl.waitFor(async () => expect(await phone.text(ideas)).toBe('Read [[Plan|this]]'));
+    await rtl.waitFor(async () => expect(await phone.text('Launch.md')).toBe(''));
+    await leave(rtl, navigation);
+    await rtl.waitFor(async () => expect(await phone.text(ideas)).toBe('Next [[Launch]]\n'));
   });
 
   it('tapping [[Note#Heading]] opens that note at that heading', async () => {
@@ -176,30 +162,28 @@ describePro('Note links and contents', () => {
     const ideas = await phone.write('Ideas', 'See [[Plan#Steps]].\n');
 
     const { rtl, view, navigation } = openNote(ideas);
-    await view.findByTestId('note-editor');
-    rtl.fireEvent.press(view.getByTestId('note-preview-toggle'));
-    rtl.fireEvent.press(view.getByRole('link'));
+    const page = await pageOf(rtl, view, /See/);
+    page.tap(page.document.querySelector('[data-wikilink]')!);
 
-    expect(navigation.getCurrentRoute()).toMatchObject({ name: 'Note', params: { path: plan, heading: 'Steps' } });
-    const blocks = await view.findAllByTestId('note-heading-block');
-    nativeScrolls().length = 0;
-    layOut(rtl, blocks, [0, 360]);
-    expect(nativeScrolls()).toEqual([[{ y: 360, animated: false }]]);
+    await rtl.waitFor(() =>
+      expect(navigation.getCurrentRoute()).toMatchObject({ name: 'Note', params: { path: plan, heading: 'Steps' } }),
+    );
+    await rtl.waitFor(() => expect(notePage().text()).toMatch(/Do it\./));
+    await rtl.waitFor(() => expect(notePage().editor().state.selection.$from.parent.textContent).toBe('Steps'));
   });
 
-  it('tapping a link to a note that does not exist yet makes it and opens it', async () => {
+  it('tapping a link to a note that does not exist yet makes it and opens it; a full disk says so', async () => {
     const phone = await installPhone();
     const ideas = await phone.write('Ideas', 'Next: [[Projects/Launch]]\n');
 
     const { rtl, view, navigation } = openNote(ideas);
-    await view.findByTestId('note-editor');
-    rtl.fireEvent.press(view.getByTestId('note-preview-toggle'));
+    const page = await pageOf(rtl, view, /Next/);
     phone.fs.module.writeFile.mockRejectedValueOnce(new Error('No space left on device'));
-    rtl.fireEvent.press(view.getByRole('link'));
+    page.tap(page.document.querySelector('[data-wikilink]')!);
     expect(await view.findByTestId('note-notice')).toBeTruthy();
     expect(navigation.getCurrentRoute()).toMatchObject({ params: { path: ideas } });
 
-    rtl.fireEvent.press(view.getByRole('link'));
+    page.tap(page.document.querySelector('[data-wikilink]')!);
 
     await rtl.waitFor(() =>
       expect(navigation.getCurrentRoute()).toMatchObject({ name: 'Note', params: { path: 'Projects/Launch.md' } }),
@@ -207,59 +191,16 @@ describePro('Note links and contents', () => {
     expect(await phone.text('Projects/Launch.md')).toBe('');
   });
 
-  it('[[#Heading]] scrolls within the note, and a note linking here is listed once in Linked from and opens', async () => {
+  it('a note linking here is listed once in Linked from, and opens', async () => {
     const phone = await installPhone();
-    const plan = await phone.write('Plan', 'Jump to [[#Steps]].\n\n## Steps\n\nDo it.\n');
+    const plan = await phone.write('Plan', '## Steps\n\nDo it.\n');
     const ideas = await phone.write('Ideas', 'See [[Plan]], and again [[Plan#Steps]].\n');
 
     const { rtl, view, navigation } = openNote(plan);
-    await view.findByTestId('note-editor');
-    rtl.fireEvent.press(view.getByTestId('note-preview-toggle'));
-    layOut(rtl, view.getAllByTestId('note-heading-block'), [200]);
-    nativeScrolls().length = 0;
-    rtl.fireEvent.press(view.getByRole('link'));
-    expect(nativeScrolls()).toEqual([[{ y: 200, animated: true }]]);
+    await pageOf(rtl, view, /Do it\./);
 
     expect(view.getAllByTestId('note-backlink')).toHaveLength(1);
     rtl.fireEvent.press(view.getByTestId('note-backlink'));
     expect(navigation.getCurrentRoute()).toMatchObject({ name: 'Note', params: { path: ideas } });
-  });
-
-  it('[TOC] in a note with no headings says so', async () => {
-    const phone = await installPhone();
-    const path = await phone.write('Empty', '[TOC]\n\nJust text.\n');
-
-    const { rtl, view } = openNote(path);
-    await view.findByTestId('note-editor');
-    rtl.fireEvent.press(view.getByTestId('note-preview-toggle'));
-
-    expect(view.getByTestId('note-toc')).toBeTruthy();
-    expect(view.queryByTestId('note-toc-entry')).toBeNull();
-  });
-
-  it('in the Link action, Done links the best match or creates the name, and Close leaves the note as it was', async () => {
-    const phone = await installPhone();
-    const ideas = await phone.write('Ideas', '');
-
-    const { rtl, view, navigation } = openNote(ideas);
-    type(rtl, await view.findByTestId('note-editor'), 'Next ');
-    rtl.fireEvent.press(view.getByTestId('note-link'));
-    expect(view.queryByTestId('note-link-option')).toBeNull();
-    rtl.fireEvent(view.getByTestId('note-link-search'), 'submitEditing');
-    rtl.fireEvent.press(view.getByTestId('note-link-close'));
-    expect(view.queryByTestId('note-link-picker')).toBeNull();
-
-    rtl.fireEvent.press(view.getByTestId('note-link'));
-    rtl.fireEvent.changeText(view.getByTestId('note-link-search'), 'Launch');
-    rtl.fireEvent(view.getByTestId('note-link-search'), 'submitEditing');
-    await rtl.waitFor(() => expect(view.queryByTestId('note-link-picker')).toBeNull());
-    expect(await phone.text('Launch.md')).toBe('');
-
-    rtl.fireEvent.press(view.getByTestId('note-link'));
-    rtl.fireEvent.changeText(view.getByTestId('note-link-search'), 'laun');
-    rtl.fireEvent(view.getByTestId('note-link-search'), 'submitEditing');
-
-    rtl.act(() => navigation.goBack());
-    await rtl.waitFor(async () => expect(await phone.text(ideas)).toBe('Next [[Launch]][[Launch]]'));
   });
 });

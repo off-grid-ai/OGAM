@@ -5,14 +5,17 @@
  * shows it at once, not only after I leave and come back. If I have typed something not yet saved,
  * nothing of mine is lost: both versions are kept.
  *
- * The real Note screen in a real navigator over the real notes library and index. Device
- * boundaries only: the disk (memfs-backed react-native-fs). Sync's write is the library's own
- * installFile, the call sync makes for a received note.
+ * The real Note screen in a real navigator over the real notes library and index, with the real
+ * editor page. Device boundaries only: the disk (memfs-backed react-native-fs) and the WebView (the
+ * shipped page in jsdom). Sync's write is the library's own installFile, the call sync makes for a
+ * received note.
  */
 jest.unmock('@react-navigation/native');
+jest.mock('react-native-webview', () => require('../../harness/noteWebView').webViewModule());
 
 import type React from 'react';
 import { installNativeBoundary, requireRTL } from '../../harness/nativeBoundary';
+import { notePage } from '../../harness/noteWebView';
 import { proIsPresent, requirePro } from '../helpers/requirePro';
 
 type LibraryModule = typeof import('../../../pro/notes/notesLibrary');
@@ -71,26 +74,30 @@ describePro('an open note when a sync edit arrives', () => {
   it('shows the other device\'s version at once', async () => {
     const { library, path } = await installPhone();
     const { rtl, view } = openNote(path);
-    const editor = await view.findByTestId('note-editor');
-    await rtl.waitFor(() => expect(editor).toHaveTextContent(/Written on the phone\./));
+    await view.findByTestId('note-editor');
+    await rtl.waitFor(() => expect(notePage().text()).toMatch(/Written on the phone\./));
 
     await later();
     await rtl.act(() => syncWrites(library, path, 'Written on the phone.\nEdited on the Mac.\n'));
 
-    await rtl.waitFor(() => expect(view.getByTestId('note-editor')).toHaveTextContent(/Edited on the Mac\./));
+    await rtl.waitFor(() => expect(notePage().text()).toMatch(/Edited on the Mac\./));
   });
 
   it('keeps both versions when I have unsaved typing', async () => {
     const { library, path } = await installPhone();
     const { rtl, view } = openNote(path);
-    const editor = await view.findByTestId('note-editor');
+    await view.findByTestId('note-editor');
+    await rtl.waitFor(() => expect(notePage().text()).toMatch(/Written on the phone\./));
     await later();
     // Typed, and the edit arrives before the note's autosave: my typing is not on disk yet.
-    rtl.fireEvent.changeText(editor, 'Written on the phone.\nTyping here.\n');
+    const page = notePage();
+    page.editor().view.focus();
+    page.type(' Typing here.');
+    await rtl.waitFor(() => expect(page.text()).toMatch(/Typing here\./));
     await rtl.act(() => syncWrites(library, path, 'Written on the phone.\nEdited on the Mac.\n'));
 
     expect(await view.findByText('Two versions kept.')).toBeTruthy();
-    expect(view.getByTestId('note-editor')).toHaveTextContent(/Typing here\./);
-    expect(view.getByTestId('note-editor')).not.toHaveTextContent(/Edited on the Mac\./);
+    expect(page.text()).toMatch(/Typing here\./);
+    expect(page.text()).not.toMatch(/Edited on the Mac\./);
   });
 });
