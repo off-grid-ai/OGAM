@@ -30,6 +30,12 @@ async function newChatInVideoMode(): Promise<StudioApp> {
   return app;
 }
 
+async function toggleVideoMode(app: StudioApp): Promise<void> {
+  const { view, rtl } = app;
+  rtl.fireEvent.press(view.getByTestId('quick-settings-button'));
+  rtl.fireEvent.press(await view.findByTestId('quick-video-mode'));
+}
+
 async function send(app: StudioApp, prompt: string, clips: number): Promise<void> {
   const { view, rtl } = app;
   rtl.fireEvent.changeText(view.getByTestId('chat-input'), prompt);
@@ -43,7 +49,13 @@ it('with no style a clip is my words as typed; a chosen style adds its words and
   // Nothing chosen: the label is plain and there is nothing to clear.
   expect(view.queryByTestId('style-row-clear')).toBeNull();
   rtl.fireEvent.press(view.getByTestId('style-row-cinematic'));
-  expect(view.getByTestId('style-row-cinematic').props.accessibilityState).toMatchObject({ selected: true });
+  // A pick folds the row to the line that names it; video mode off and on again opens it, with the pick chosen.
+  await rtl.waitFor(() => expect(view.queryByTestId('style-row-cinematic')).toBeNull());
+  expect(view.getByText('Style · Cinematic')).toBeTruthy();
+  await toggleVideoMode(app);
+  expect(view.queryByTestId('style-row')).toBeNull();
+  await toggleVideoMode(app);
+  expect((await view.findByTestId('style-row-cinematic')).props.accessibilityState).toMatchObject({ selected: true });
   await send(app, 'a lighthouse at night', 1);
   expect(app.jobs.submissions[0].prompt).toBe(`a lighthouse at night, ${CINEMATIC}`);
   // My message keeps my words and says which style it was made in.
@@ -82,8 +94,17 @@ it('All opens every style at once; a pick there becomes the chat\'s style', asyn
   const { view, rtl } = app;
   rtl.fireEvent.press(view.getByTestId('style-row-all'));
   rtl.fireEvent.press(await view.findByTestId('style-grid-vintage'));
-  await rtl.waitFor(() =>
-    expect(view.getByTestId('style-row-vintage').props.accessibilityState).toMatchObject({ selected: true }),
-  );
+  // The sheet closes and the row folds to the line that names the pick; it is the chat's style when video mode comes back.
+  await rtl.waitFor(() => expect(view.getByText('Style · Vintage film')).toBeTruthy());
+  expect(view.queryByTestId('style-row-vintage')).toBeNull();
   expect(view.queryByTestId('style-grid')).toBeNull();
+  await toggleVideoMode(app);
+  await toggleVideoMode(app);
+  expect((await view.findByTestId('style-row-vintage')).props.accessibilityState).toMatchObject({ selected: true });
+  // Clear on the folded line goes back to no style and opens the row again.
+  rtl.fireEvent.press(view.getByTestId('style-row-nature'));
+  await rtl.waitFor(() => expect(view.queryByTestId('style-row-nature')).toBeNull());
+  rtl.fireEvent.press(view.getByTestId('style-row-clear'));
+  expect((await view.findByTestId('style-row-nature')).props.accessibilityState).toMatchObject({ selected: false });
+  expect(view.getByText('Style')).toBeTruthy();
 }, 90_000);

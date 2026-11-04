@@ -43,6 +43,8 @@ interface ChatInputProps {
   placeholder?: string;
   supportsVision?: boolean;
   conversationId?: string | null;
+  /** Space under the bar for the home indicator or nav bar; the composer's box runs down through it. */
+  bottomInset?: number;
   imageModelLoaded?: boolean;
   onImageModeChange?: (mode: ImageModeState) => void;
   /** Video is Pro. Called instead of turning video on when Pro is not active. */
@@ -166,6 +168,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   supportsVision = false,
   visionNeedsRepair = false,
   conversationId,
+  bottomInset = 0,
   imageModelLoaded = false,
   onImageModeChange,
   onVideoUpgrade,
@@ -211,6 +214,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
   const setChatStyle = useMediaStyleStore(state => state.setStyle);
   const [allStylesOpen, setAllStylesOpen] = useState(false);
+  // A pick folds the row to the line that names it; turning the mode off and on, or Clear, opens it again.
+  const [stylesShown, setStylesShown] = useState(true);
+  useEffect(() => {
+    if (styleKind) setStylesShown(true);
+  }, [styleKind]);
+  const pickStyle = (kind: 'image' | 'video', styleId: string | null) => {
+    setChatStyle(styleChatKey, kind, styleId);
+    setStylesShown(!styleId);
+  };
   const [voiceInteractionMode, setVoiceInteractionMode] = useState<VoiceRecordInteractionMode>('idle');
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const quickSettings = useKeyboardAwarePopover();
@@ -623,26 +635,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
 
   return (
-    <View style={[styles.container, styleKind && styles.containerWithStyles]}>
-      <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
-      <QueueRow queue={queue} actions={queueActions} />
-      {transcriptionNotice ? (
-        <Text style={styles.transcriptionNotice} testID="transcription-notice">
-          {transcriptionNotice}
-        </Text>
-      ) : null}
-      {/* In image or video mode the styles are the top of the composer itself: one box across the
-          full width, the styles above, the input and send below. */}
-      <View style={styleKind ? styles.composerWithStyles : undefined}>
-      {styleKind ? (
-        <StyleRow
-          attached
-          kind={styleKind}
-          selectedId={chosenStyle}
-          onChange={styleId => setChatStyle(styleChatKey, styleKind, styleId)}
-          onShowAll={() => setAllStylesOpen(true)}
-        />
-      ) : null}
+    <View style={styles.container}>
+      <View style={styles.aboveComposer}>
+        <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
+        <QueueRow queue={queue} actions={queueActions} />
+        {transcriptionNotice ? (
+          <Text style={styles.transcriptionNotice} testID="transcription-notice">
+            {transcriptionNotice}
+          </Text>
+        ) : null}
+      </View>
       {styleKind ? (
         <AppSheet visible={allStylesOpen} onClose={() => setAllStylesOpen(false)} title="Styles" sheet="chat:styles" enableDynamicSizing>
           <View style={styles.allStyles}>
@@ -650,15 +652,28 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               kind={styleKind}
               selectedId={chosenStyle}
               onPick={styleId => {
-                setChatStyle(styleChatKey, styleKind, styleId === chosenStyle ? null : styleId);
+                pickStyle(styleKind, styleId === chosenStyle ? null : styleId);
                 setAllStylesOpen(false);
               }}
             />
           </View>
         </AppSheet>
       ) : null}
-      <View style={[styles.mainRow, styleKind && styles.mainRowWithStyles]}>
-        <View style={[styles.pill, styleKind && styles.pillUnderStyles]}>
+      {/* One box across the full width, down to the screen's bottom edge; in image or video mode the styles
+          are its top, the input and send below. */}
+      <View style={[styles.composer, { paddingBottom: 8 + bottomInset }]}>
+      {styleKind && (stylesShown || chosenStyle) ? (
+        <StyleRow
+          attached
+          collapsed={!stylesShown}
+          kind={styleKind}
+          selectedId={chosenStyle}
+          onChange={styleId => pickStyle(styleKind, styleId)}
+          onShowAll={() => setAllStylesOpen(true)}
+        />
+      ) : null}
+      <View style={styles.mainRow}>
+        <View style={[styles.pill, styles.pillInComposer]}>
           {showVoiceStatus ? (
             <RecordingHint
               awaitingSpeech={isAwaitingSpeech}
@@ -696,7 +711,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 value={message}
                 onChangeText={setMessage}
                 placeholder={
-                  imageMode === 'video' ? 'Describe a video' : placeholder
+                  imageMode === 'video' ? 'Describe a video' : imageMode === 'force' ? 'Describe a picture' : placeholder
                 }
                 placeholderTextColor={colors.textMuted}
                 multiline

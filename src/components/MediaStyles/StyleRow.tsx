@@ -24,13 +24,15 @@ export const StyleRow: React.FC<{
   attached?: boolean;
   /** Opens every style at once; the row only shows the first few. */
   onShowAll?: () => void;
-}> = ({ kind, selectedId, onChange, testID = 'style-row', attached = false, onShowAll }) => {
+  /** Only the line that names the chosen style, with Clear and All; the previews are put away. */
+  collapsed?: boolean;
+}> = ({ kind, selectedId, onChange, testID = 'style-row', attached = false, onShowAll, collapsed = false }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const selected = stylesFor(kind).find(style => style.id === selectedId);
   return (
     <View style={attached ? styles.attached : styles.row} testID={testID} accessibilityLabel="Style">
-      <View style={styles.header}>
+      <View style={[styles.header, attached && styles.headerAttached, collapsed && styles.headerCollapsed]}>
         <Text style={styles.label}>{selected ? `Style · ${selected.name}` : 'Style'}</Text>
         <View style={styles.actions}>
           {selected ? (
@@ -59,13 +61,14 @@ export const StyleRow: React.FC<{
           ) : null}
         </View>
       </View>
+      {collapsed ? null : (
       <FlatList
         {...LIST_CLIPPING_PROPS}
         horizontal
         data={stylesFor(kind) as MediaStyle[]}
         keyExtractor={style => style.id}
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, attached && styles.listAttached]}
         keyboardShouldPersistTaps="handled"
         renderItem={({ item }) => (
           <StyleTile
@@ -77,6 +80,7 @@ export const StyleRow: React.FC<{
           />
         )}
       />
+      )}
     </View>
   );
 };
@@ -125,7 +129,11 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     overflow: 'hidden' as const,
     ...shadows.small,
   },
+  // On the composer the row lines up with the input below: 16 in from the left, the send button's 12 from the right.
   attached: { paddingTop: SPACING.md, paddingBottom: SPACING.xs },
+  headerAttached: { paddingLeft: SPACING.lg, paddingRight: SPACING.md },
+  listAttached: { paddingHorizontal: SPACING.lg },
+  headerCollapsed: { paddingBottom: 0 },
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,

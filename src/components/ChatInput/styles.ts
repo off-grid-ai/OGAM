@@ -8,12 +8,11 @@ export const ANIM_DURATION_OUT = 200;
 const TOOL_WARNING_COLOR = '#F59E0B';
 
 export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+  // The bar holds one box, edge to edge: anything queued or attached above it keeps the side inset.
   container: {
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 8,
     backgroundColor: colors.background,
   },
+  aboveComposer: { paddingHorizontal: 12 },
   // Attachment previews row
   attachmentsContainer: {
     marginBottom: 6,
@@ -139,10 +138,12 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textSecondary,
     marginBottom: SPACING.xs,
   },
+  // The send button sits 12 in from the right edge; the styles above scroll to the edge.
   mainRow: {
     flexDirection: 'row' as const,
-    alignItems: 'center' as const,
+    alignItems: 'flex-end' as const,
     gap: 8,
+    paddingRight: 12,
   },
   // Pill container
   pill: {
@@ -157,22 +158,18 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     minHeight: 56,
     ...shadows.small,
   },
-  // Image or video mode: one box holds the styles above and the input and send below. It runs edge to edge,
-  // so the bar has no side margins of its own; only the box's top corners are rounded.
-  containerWithStyles: { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0 },
-  composerWithStyles: {
+  // One box, edge to edge, in every mode: image or video mode adds the styles at its top, and nothing else moves.
+  // Only the top corners are rounded; the input inside draws no edge of its own (the theme shadow is a boxShadow,
+  // so it is cleared as one). Its bottom padding (with the home-indicator inset) is set where it is drawn.
+  composer: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     overflow: 'hidden' as const,
-    paddingRight: 12,
-    paddingBottom: 8,
+    paddingTop: 4,
     ...shadows.small,
   },
-  // Inside the box the input draws no edge of its own: the box's rounded edge is the only one. The theme shadow
-  // is a boxShadow, so it is cleared as a boxShadow (shadowOpacity/elevation do not turn it off).
-  pillUnderStyles: { backgroundColor: 'transparent', borderRadius: 0, boxShadow: [] },
-  mainRowWithStyles: { alignItems: 'flex-end' as const },
+  pillInComposer: { backgroundColor: 'transparent', borderRadius: 0, boxShadow: [] },
   allStyles: { padding: SPACING.lg },
   pillInput: {
     flex: 1,

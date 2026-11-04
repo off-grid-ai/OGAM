@@ -417,10 +417,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
       />
       <View
         onLayout={e => setInputHeight(e.nativeEvent.layout.height)}
-        style={{
-          backgroundColor: colors.background,
-          paddingBottom: footerPaddingBottom,
-        }}
+        style={{ backgroundColor: colors.background }}
       >
         <RestyleSheet
           onSend={(prompt, kind) => chat.handleSend(prompt, undefined, kind === 'video' ? 'video' : 'force')}
@@ -437,6 +434,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           supportsVision={chat.supportsVision}
           visionNeedsRepair={chat.visionNeedsRepair}
           conversationId={chat.activeConversationId}
+          bottomInset={footerPaddingBottom}
           imageModelLoaded={chat.imageModelLoaded}
           onOpenSettings={() => chat.setShowSettingsPanel(true)}
           queue={chat.queue}
