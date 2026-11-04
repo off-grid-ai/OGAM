@@ -20,12 +20,14 @@ export const StyleRow: React.FC<{
   selectedId: string | undefined;
   onChange: (styleId: string | null) => void;
   testID?: string;
-}> = ({ kind, selectedId, onChange, testID = 'style-row' }) => {
+  /** Drawn as the top of the composer: no card of its own, a hairline between it and the input. */
+  attached?: boolean;
+}> = ({ kind, selectedId, onChange, testID = 'style-row', attached = false }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const selected = stylesFor(kind).find(style => style.id === selectedId);
   return (
-    <View style={styles.row} testID={testID} accessibilityLabel="Style">
+    <View style={attached ? styles.attached : styles.row} testID={testID} accessibilityLabel="Style">
       <View style={styles.header}>
         <Text style={styles.label}>{selected ? `Style · ${selected.name}` : 'Style'}</Text>
         {selected ? (
@@ -105,6 +107,12 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     marginBottom: SPACING.sm,
     overflow: 'hidden' as const,
     ...shadows.small,
+  },
+  attached: {
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   header: {
     flexDirection: 'row' as const,

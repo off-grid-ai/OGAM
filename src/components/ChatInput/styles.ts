@@ -159,6 +159,17 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     minHeight: 56,
     ...shadows.small,
   },
+  // The box the pill sits in: alone it adds nothing; with styles it holds the strip and the pill as one.
+  composerBox: { flex: 1 },
+  composerBoxWithStyles: {
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    overflow: 'hidden' as const,
+    ...shadows.small,
+  },
+  pillUnderStyles: { borderRadius: 0, shadowOpacity: 0, elevation: 0 },
+  // A taller composer keeps the send button at its bottom, beside the input line.
+  mainRowWithStyles: { alignItems: 'flex-end' as const },
   pillInput: {
     flex: 1,
     color: colors.text,

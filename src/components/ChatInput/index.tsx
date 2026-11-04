@@ -624,20 +624,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     <View style={styles.container}>
       <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
       <QueueRow queue={queue} actions={queueActions} />
-      {styleKind ? (
-        <StyleRow
-          kind={styleKind}
-          selectedId={chosenStyle}
-          onChange={styleId => setChatStyle(styleChatKey, styleKind, styleId)}
-        />
-      ) : null}
       {transcriptionNotice ? (
         <Text style={styles.transcriptionNotice} testID="transcription-notice">
           {transcriptionNotice}
         </Text>
       ) : null}
-      <View style={styles.mainRow}>
-        <View style={styles.pill}>
+      <View style={[styles.mainRow, styleKind && styles.mainRowWithStyles]}>
+        {/* In image or video mode the styles are the top of the composer itself: one box, one edge. */}
+        <View style={[styles.composerBox, styleKind && styles.composerBoxWithStyles]}>
+        {styleKind ? (
+          <StyleRow
+            attached
+            kind={styleKind}
+            selectedId={chosenStyle}
+            onChange={styleId => setChatStyle(styleChatKey, styleKind, styleId)}
+          />
+        ) : null}
+        <View style={[styles.pill, styleKind && styles.pillUnderStyles]}>
           {showVoiceStatus ? (
             <RecordingHint
               awaitingSpeech={isAwaitingSpeech}
@@ -697,6 +700,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               />
             </>
           )}
+        </View>
         </View>
 
         {actionButton}
