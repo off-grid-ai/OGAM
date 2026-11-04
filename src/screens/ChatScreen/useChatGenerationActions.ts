@@ -1,4 +1,7 @@
 import { videoSeam } from '../../bootstrap/videoSeam';
+import { mediaStyle } from '@offgrid/models';
+import { adoptDraftStyles, chatStyleId } from '../../stores/mediaStyleStore';
+import type { MediaStyleIds } from '../../services/generationService';
 /* eslint-disable max-lines -- cohesive generation-action orchestrator (send/regenerate/dispatch/route share the same GenerationDeps + session state); splitting it would scatter tightly-coupled turn logic. */
 import { Dispatch, SetStateAction } from 'react';
 import { AlertState, showAlert, hideAlert } from '../../components';
@@ -438,6 +441,8 @@ async function shouldRouteToImageGenerationFn(
 export type ImageGenCall = {
   prompt: string;
   conversationId: string;
+  /** The turn's style: its words go after the prompt, and the user message records it. */
+  styleId?: string;
   skipUserMessage?: boolean;
   attachments?: MediaAttachment[]; // kept on the user message (e.g. a voice note)
 };
@@ -452,7 +457,7 @@ export async function handleImageGenerationFn(
   >,
   call: ImageGenCall,
 ): Promise<void> {
-  const { prompt, conversationId, skipUserMessage = false, attachments } = call;
+  const { prompt, conversationId, skipUserMessage = false, attachments, styleId } = call;
   if (!deps.activeImageModel) {
     deps.setAlertState(showAlert('Error', 'No image model loaded.'));
     return;
@@ -466,6 +471,7 @@ export async function handleImageGenerationFn(
       content: prompt,
       attachments,
       turnKind: 'image',
+      ...(styleId ? { mediaStyleId: styleId } : {}),
     });
   }
   // Do NOT thread steps/guidanceScale from deps.settings — that is a React render snapshot, one
@@ -475,6 +481,7 @@ export async function handleImageGenerationFn(
   // didn't). Passing nothing here makes all four tunables read from the one fresh source.
   const image = await imageGenerationService.generateImage({
     prompt,
+    styleWords: mediaStyle('image', styleId)?.words,
     conversationId,
     previewInterval: 2,
   });
@@ -983,6 +990,8 @@ async function dispatchResolvedTurn(
     conversationId: string;
     /** True on resend: the user message already exists in history, so the image path must not re-add it. */
     imageSkipsUserMessage: boolean;
+    /** The style a picture or clip is made with: the chat's choice on send, the turn's own on resend. */
+    styleId?: string;
     /** Called when the text route needs a text model (image-only device) but none could be provisioned —
      *  send stashes a pending message here; resend just bails. Return value is ignored (the turn is handled). */
     onTextModelUnavailable: () => void;
@@ -1004,12 +1013,14 @@ async function dispatchResolvedTurn(
         content: opts.text,
         attachments: opts.attachments,
         turnKind: 'video',
+        ...(opts.styleId ? { mediaStyleId: opts.styleId } : {}),
       });
     const shownBefore = videoFailureShown();
     try {
       await videoSeam.generate({
         prompt: opts.text,
         conversationId: opts.conversationId,
+        ...(opts.styleId ? { styleId: opts.styleId } : {}),
       });
     } catch (error) {
       // A clip that ran and failed is on its own failure card. One refused before it started (the
@@ -1032,6 +1043,7 @@ async function dispatchResolvedTurn(
       conversationId: opts.conversationId,
       attachments: opts.attachments,
       skipUserMessage: opts.imageSkipsUserMessage,
+      styleId: opts.styleId,
     });
     return { handled: true };
   }
@@ -1064,6 +1076,8 @@ export type DispatchCall = {
   conversationId: string;
   imageMode?: 'auto' | 'force' | 'disabled' | 'video';
   assistantEnabled?: boolean;
+  /** Fixed when a queued turn was sent; absent for a send that goes at once, which reads the chat's style now. */
+  styleIds?: MediaStyleIds;
 };
 /**
  * THE routing layer: the single place a message is classified and dispatched to
@@ -1100,6 +1114,7 @@ export async function dispatchGenerationFn(
     attachments,
     conversationId,
     imageSkipsUserMessage: false,
+    styleId: kind === 'text' ? undefined : call.styleIds ? call.styleIds[kind] : chatStyleId(conversationId, kind),
     onTextModelUnavailable: () => {
       deps.setPendingMessage?.(text, attachments);
     },
@@ -1160,6 +1175,7 @@ export async function handleSendFn(
       undefined,
       deps.pendingProjectId,
     );
+    adoptDraftStyles(targetConversationId);
     deps.setActiveConversation(targetConversationId);
   }
   reportMessageSent(attachments);
@@ -1181,6 +1197,10 @@ export async function handleSendFn(
       messageText,
       imageMode,
       assistantEnabled,
+      styleIds: {
+        image: chatStyleId(targetConversationId, 'image'),
+        video: chatStyleId(targetConversationId, 'video'),
+      },
     });
     if (call.sendNow) await sendQueuedNowFn(deps, queuedId);
     return;
@@ -1317,6 +1337,7 @@ export async function regenerateResponseFn(
     attachments: userMessage.attachments,
     conversationId: targetConversationId,
     imageSkipsUserMessage: true,
+    styleId: userMessage.mediaStyleId,
     onTextModelUnavailable: () => {
       deps.setPendingMessage?.(userMessage.content, userMessage.attachments);
     },
