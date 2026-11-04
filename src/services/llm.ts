@@ -28,6 +28,7 @@ import { fitMessagesToContext } from './contextWindow';
 import type { ToolCall } from './tools/types';
 import type { MultimodalSupport, LLMPerformanceSettings, LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
+import { isGemma4Path, knownVerdict, recordVerdict, runOutputCheck, logOutputReport, describeBadOutput } from './outputHealth';
 ;
 import type { StreamToken } from './llmStreamTypes';
 export type { StreamToken };
@@ -256,6 +257,12 @@ class LLMService {
             const wantsMtp = useAppStore.getState().settings.useMtp !== false;
             const draftFile = opts?.draftPath && wantsMtp && await RNFS.exists(opts.draftPath) ? opts.draftPath : undefined;
             const draftOn = !!draftFile || (!!opts?.embeddedMtp && wantsMtp);
+            const checkOutput = requireAcceleration && isGemma4Path(modelPath);
+            const verdictKey = { model: modelPath, size: fileSize, backend, gpuLayers: nGpuLayers };
+            if (checkOutput) {
+              const known = await knownVerdict(verdictKey);
+              if (known && !known.ok) throw new Error(describeBadOutput(backend, `${known.reason}; found by an earlier test on this phone`, !auto));
+            }
             let init;
             try {
               init = await this.initWithAutoContext(
@@ -270,6 +277,17 @@ class LLMService {
               this.mtpActive = false;
             }
             const { context, gpuAttemptFailed, actualLength, attemptedGpuLayers } = init;
+            // Gemma 4 on a phone GPU has produced noise ("<unused19><unused10>...") from a perfectly good file. Look at one
+            // short reply before anything else (pictures included) is set up on top of it; a bad one is a failed load.
+            if (checkOutput && context.gpu) {
+              const check = await runOutputCheck(context, { isGemma4: true });
+              logOutputReport(check, { model: modelPath.split('/').pop(), backend, gpuLayers: attemptedGpuLayers, context: actualLength, kvCache: 'f16', devices: String((context as any).devices ?? '') });
+              await recordVerdict(verdictKey, check);
+              if (!check.ok) {
+                try { await context.release(); } catch { /* load failed */ }
+                throw new Error(describeBadOutput(backend, check.reason, !auto));
+              }
+            }
             try {
               await this.applyLoadedContext({
                 context, actualLength, gpuAttemptFailed,
