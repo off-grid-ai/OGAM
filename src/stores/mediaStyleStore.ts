@@ -47,15 +47,19 @@ mediaStyleStorage.attach(useMediaStyleStore);
 /** Where a chat with no id yet (before its first message) keeps the style it chose. */
 export const NEW_CHAT_STYLE_KEY = 'new-chat';
 
-/** The style a chat uses for its next picture or clip, if it chose one. A style chosen before the
- *  chat had an id moves to the chat here, so the choice follows the chat it was made in. */
+/** The style a chat uses for its next picture or clip, if it chose one. Only the chat's own choice: a draft from
+ *  before the chat had an id moved to it when it got one (adoptDraftStyles), so no other chat can take it. */
 export function chatStyleId(conversationId: string, kind: MediaStyleKind): string | undefined {
+  return useMediaStyleStore.getState().byChat[conversationId]?.[kind];
+}
+
+/** A new chat just got its id: the picture and clip styles chosen before that move to it, and the draft is empty. */
+export function adoptDraftStyles(conversationId: string): void {
   const state = useMediaStyleStore.getState();
-  const own = state.byChat[conversationId]?.[kind];
-  if (own) return own;
-  const draft = state.byChat[NEW_CHAT_STYLE_KEY]?.[kind];
-  if (!draft) return undefined;
-  state.setStyle(conversationId, kind, draft);
-  state.setStyle(NEW_CHAT_STYLE_KEY, kind, null);
-  return draft;
+  const draft = state.byChat[NEW_CHAT_STYLE_KEY];
+  if (!draft) return;
+  for (const kind of Object.keys(draft) as MediaStyleKind[]) {
+    if (draft[kind]) state.setStyle(conversationId, kind, draft[kind] as string);
+    state.setStyle(NEW_CHAT_STYLE_KEY, kind, null);
+  }
 }
