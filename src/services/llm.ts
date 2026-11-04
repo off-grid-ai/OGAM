@@ -28,7 +28,7 @@ import { fitMessagesToContext } from './contextWindow';
 import type { ToolCall } from './tools/types';
 import type { MultimodalSupport, LLMPerformanceSettings, LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
-import { isGemma4Path, knownVerdict, recordVerdict, runOutputCheck, logOutputReport, describeBadOutput } from './outputHealth';
+import { isGemma4Path, knownVerdict, recordVerdict, runOutputCheck, logOutputReport, describeBadOutput, type OutputCheck } from './outputHealth';
 ;
 import type { StreamToken } from './llmStreamTypes';
 export type { StreamToken };
@@ -48,6 +48,7 @@ class LLMService {
   private acceleratorAttempts: string[] = [];
   private cpuForFileType = false;
   /** True while the loaded context drafts with an attached MTP file. */
+  private lastOutputCheck: OutputCheck | null = null;
   private mtpActive = false;
   private currentModelPath: string | null = null;
   private isGenerating: boolean = false;
@@ -183,6 +184,7 @@ class LLMService {
           (this.context || this.vulkanLoaded) && (!mmProjPath || this.multimodalInitialized)) return;
       if (this.context || this.vulkanLoaded) await this.doUnloadModel();
       this.vulkanFallbackReason = null;
+      this.lastOutputCheck = null;
       this.acceleratorAttempts = [];
       this.selectedBackend = INFERENCE_BACKENDS.CPU;
       this.requestedBackendAtLoad = null;
@@ -281,6 +283,7 @@ class LLMService {
             // short reply before anything else (pictures included) is set up on top of it; a bad one is a failed load.
             if (checkOutput && context.gpu) {
               const check = await runOutputCheck(context, { isGemma4: true });
+              this.lastOutputCheck = check;
               logOutputReport(check, { model: modelPath.split('/').pop(), backend, gpuLayers: attemptedGpuLayers, context: actualLength, kvCache: 'f16', devices: String((context as any).devices ?? '') });
               await recordVerdict(verdictKey, check);
               if (!check.ok) {
@@ -747,6 +750,12 @@ class LLMService {
   isCpuForFileType(): boolean { return this.cpuForFileType; }
   /** True when the loaded model is drafting with its attached MTP file. */
   isMtpActive(): boolean { return this.mtpActive; }
+  /** One short deterministic reply from the loaded model, judged for noise (see outputHealth.ts); null when nothing is loaded. */
+  getLastOutputCheck(): OutputCheck | null { return this.lastOutputCheck; }
+  async runOutputCheck(): Promise<OutputCheck | null> {
+    if (!this.context) return null;
+    return runOutputCheck(this.context, { isGemma4: this.isGemma4Model() });
+  }
   getBackendFallbackNotice(): string | null {
     if (this.acceleratorAttempts.length && (this.context || this.vulkanLoaded)) {
       const verb = this.requestedBackendAtLoad === INFERENCE_BACKENDS.AUTO ? 'Auto selected' : 'Running on';

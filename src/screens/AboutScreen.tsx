@@ -12,6 +12,7 @@ import packageJson from '../../package.json';
 import { appVersionLabel } from '../utils/appVersion';
 import { gatherDiagnostics } from '../atlasTools/diagnostics';
 import { BuildInfo, getBackendDevicesInfo } from 'llama.rn';
+import { ModelGpuTest } from '../components/ModelGpuTest';
 
 
 export const AboutScreen: React.FC = () => {
@@ -58,6 +59,7 @@ export const AboutScreen: React.FC = () => {
           </TouchableOpacity>
           <Text style={styles.runtimeInfo} testID="copy-diagnostics-note">{copied ?? 'Copy diagnostics: a summary of this phone and its speeds, with nothing personal in it.'}</Text>
         </View>
+        <ModelGpuTest />
 
         {/* App identity */}
         <View style={styles.heroSection}>
