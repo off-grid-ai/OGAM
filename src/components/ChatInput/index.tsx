@@ -529,6 +529,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   if (isAudioMode && AudioInput) {
     return (
       <>
+      {/* The composer owns the footer inset; this branch returns before it, so it clears the home indicator here. */}
+      <View style={{ paddingBottom: bottomInset }}>
       <AudioInput
         styles={styles}
         disabled={disabled}
@@ -573,6 +575,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         assistantSelected={assistantEnabled}
         onAssistantPress={handleAssistantPress}
       />
+      </View>
       <AppSheet
         sheet="assistant-gate"
         visible={assistantGateOpen}
