@@ -5,6 +5,7 @@ import { providerRegistry } from './providers';
 import { isLiteRTModel, type DownloadedModel, type Message } from '../types';
 import { predictGgufCapabilities, type PredictedGgufCapabilities } from '../utils/ggufCapabilities';
 import logger from '../utils/logger';
+import { parseModelOutput } from '../utils/messageContent';
 
 /** Every text-generation engine, defined ONCE here so callers never hardcode the concrete set. */
 const TEXT_ENGINES = [liteRTService, llmService];
@@ -314,8 +315,20 @@ export async function stopStandalone(): Promise<void> {
  * Callers depend on this seam, never on a concrete engine (the enhancement path used to
  * hardcode llmService, so a LiteRT text model reported "not loaded" and enhancement was
  * skipped even though the model was resident).
+ *
+ * Returns the answer only. Thinking is asked off, yet some models reason anyway (a `<think>` block,
+ * Gemma/Qwen channels, or one cut off mid-thought); that text became a video's prompt and title.
+ * A reply that was all reasoning returns '' and each caller keeps what it had. `onToken` still
+ * streams the raw text, for live progress.
  */
 export async function generateStandalone(
+  messages: Message[],
+  onToken?: (token: string) => void,
+): Promise<string> {
+  return parseModelOutput(await standaloneRaw(messages, onToken)).answer.trim();
+}
+
+async function standaloneRaw(
   messages: Message[],
   onToken?: (token: string) => void,
 ): Promise<string> {

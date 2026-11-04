@@ -375,10 +375,12 @@ export const RECOMMENDED_EMBEDDING_MODELS = [
     sha256: '161d07a32057e754e1fe82e30547c736032ab255a6719890b7e76414c565b748',
   },
   {
-    id: 'armand01/paraphrase-multilingual-MiniLM-L12-v2-Q6_K-GGUF@34b69e1683fccf80bbbe7255b8651cd7a76e8891/paraphrase-multilingual-minilm-l12-v2.Q6_K.gguf',
-    name: 'Multilingual MiniLM L12', description: 'Text search across multiple languages.', size: 130844160,
-    downloadUrl: 'https://huggingface.co/armand01/paraphrase-multilingual-MiniLM-L12-v2-Q6_K-GGUF/resolve/34b69e1683fccf80bbbe7255b8651cd7a76e8891/paraphrase-multilingual-minilm-l12-v2.Q6_K.gguf',
-    sha256: 'b5780f54a02b2e9a1cded186d349800aedfd6fb38635c41f532a9385fed34d32',
+    // The armand01 conversion this replaced carried a WordPiece vocabulary of 250,002 tokens over a
+    // 250,037-row embedding table, so llama.cpp refused it ("token_embd.weight has wrong shape").
+    id: 'mykor/paraphrase-multilingual-MiniLM-L12-v2.gguf@a964c09982b6e28b13646d5f9860b8a04f4182c4/paraphrase-multilingual-MiniLM-L12-118M-v2-Q6_K.gguf',
+    name: 'Multilingual MiniLM L12', description: 'Text search across multiple languages.', size: 130724128,
+    downloadUrl: 'https://huggingface.co/mykor/paraphrase-multilingual-MiniLM-L12-v2.gguf/resolve/a964c09982b6e28b13646d5f9860b8a04f4182c4/paraphrase-multilingual-MiniLM-L12-118M-v2-Q6_K.gguf',
+    sha256: '83199ec9f234f797cadce91b2f96a492610ab0a274c808dc3c67a87ef65a01be',
   },
 ] as const;
 

@@ -3,7 +3,7 @@ export { huggingFaceService } from './huggingface';
 export { modelManager } from './modelManager';
 export { llmService } from './llm';
 export { localDreamGeneratorService as onnxImageGeneratorService } from './localDreamGenerator';
-export { intentClassifier } from './intentClassifier';
+export { intentClassifier, isVideoRequest } from './intentClassifier';
 export { authService } from './authService';
 export { whisperService, WHISPER_MODELS } from './whisperService';
 // ttsService deprecated — logic absorbed into OuteTTSEngine (src/engine/tts/engines/outetts/).

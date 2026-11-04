@@ -1,3 +1,4 @@
+import { FastestSettingsButton } from '../../components/settings/FastestSettingsButton';
 import React, { useState } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
@@ -85,6 +86,8 @@ export const ModelSettingsScreen: React.FC = () => {
         style={styles.scrollView}
         contentContainerStyle={styles.content}
       >
+        {/* It places every modality (text, image, video, speech, voice, search), so it leads the screen. */}
+        <FastestSettingsButton />
         <TouchableOpacity
           style={styles.accordionHeader}
           onPress={() => setGeneralOpen(!generalOpen)}

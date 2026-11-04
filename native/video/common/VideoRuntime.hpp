@@ -6,6 +6,7 @@
 #include "ggml-backend.h"
 #endif
 #include "BlankImage.hpp"
+#include "EngineErrorLog.hpp"
 #include <atomic>
 #include <cstdio>
 #include <sys/stat.h>
@@ -200,8 +201,9 @@ class VideoRuntime {
 #endif
       }
       sd_ctx_t *loaded = nullptr;
+      // Each attempt starts with an empty error log: a failed load names what its LAST attempt hit.
 #ifdef __ANDROID__
-      try { loaded = new_sd_ctx(&config); }
+      engineErrors.clear(); try { loaded = new_sd_ctx(&config); }
       catch (const std::exception &) {
         if (request.cpuOnly || cancelled.load()) throw;
       }
@@ -210,7 +212,7 @@ class VideoRuntime {
         config.params_backend = nullptr;
         config.auto_fit = true;
         config.backend = gpuBackend.c_str();
-        try { loaded = new_sd_ctx(&config); }
+        engineErrors.clear(); try { loaded = new_sd_ctx(&config); }
         catch (const std::exception &) {
           if (cancelled.load()) throw;
         }
@@ -218,10 +220,10 @@ class VideoRuntime {
       if (!loaded && !cancelled.load()) {
         config.backend = "cpu";
         lastLoadOnCpu = true;
-        loaded = new_sd_ctx(&config);
+        engineErrors.clear(); loaded = new_sd_ctx(&config);
       }
 #else
-      loaded = new_sd_ctx(&config);
+      engineErrors.clear(); loaded = new_sd_ctx(&config);
 #endif
       return loaded;
   }
@@ -231,6 +233,8 @@ public:
     if (imageContext) free_sd_ctx(imageContext);
   }
   std::atomic_bool cancelled{false};
+  /** Fed by the bindings' sd.cpp log callback; a failed video load names its last error. */
+  EngineErrorLog engineErrors;
   void cancel() {
     cancelled.store(true);
     std::lock_guard<std::mutex> guard(contextMutex);
@@ -375,7 +379,7 @@ public:
         std::lock_guard<std::mutex> guard(contextMutex);
         context = loaded;
       }
-      if (!loaded) throw std::runtime_error("Could not load the video model pack.");
+      if (!loaded) throw std::runtime_error(engineErrors.takeLoadFailure());
       if (cancelled.load()) throw std::runtime_error("Video generation stopped.");
       sd_set_progress_callback([](int step, int total, float, void *data) {
         (*static_cast<const std::function<void(int, int)> *>(data))(step, total);

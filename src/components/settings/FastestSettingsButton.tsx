@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
-import { useAppStore } from '../../stores';
+import { selectIsLiteRT, useAppStore } from '../../stores';
 import { useThemedStyles } from '../../theme';
 import { Button } from '../Button';
 import { applyFastestSettings } from '../../services/fastestSettings';
@@ -27,6 +27,8 @@ export const FastestSettingsButton: React.FC = () => {
   const { colors } = useTheme();
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
+  // A LiteRT text model picks its own backend; there is nothing to measure.
+  const isLiteRT = useAppStore(selectIsLiteRT);
 
   const run = async (): Promise<void> => {
     abort.current = new AbortController();
@@ -41,6 +43,7 @@ export const FastestSettingsButton: React.FC = () => {
     }
   };
 
+  if (isLiteRT) return null;
   return (
     <View style={styles.container}>
       {running ? (
