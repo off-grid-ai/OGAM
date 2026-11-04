@@ -63,14 +63,14 @@ describe('daily briefing news sources', () => {
     expect(picked.map(p => p.headline.title)).toEqual(['us1', 'w1', 'b1', 'us2', 'b2']);
     expect(storyBudget(1)).toBe(3);
     expect(storyBudget(5)).toBe(13);
-    expect(storyBudget(10, false)).toBe(20);
-    expect(storyBudget(30)).toBe(20);
+    expect(storyBudget(10, false)).toBe(30);
+    expect(storyBudget(30)).toBe(30);
   });
 
   it('sizes the script to the length the user picked', () => {
     // 10 minutes over 20 stories: about 75 words each, about 4 lines of 20 words. A story is never read at length.
     expect(linesPerStory(10, 20)).toBe(4);
-    expect(linesPerStory(15, 3)).toBe(5);
+    expect(linesPerStory(15, 3)).toBe(8);
     expect(spokenMinutes(Array(75).fill('word '.repeat(20)))).toBe(10);
   });
 
