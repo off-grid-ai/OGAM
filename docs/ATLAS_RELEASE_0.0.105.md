@@ -561,13 +561,17 @@ What changed:
 - 0.0.132: importing a model file now REPLACES any file and saved-list entry of the same name instead of refusing with
   "already in your models list" (which appeared even after the model had been removed). A same-size leftover is also
   copied over now: the same size does not mean the same bytes, and a damaged copy was being kept. Same for a picture file.
-- 0.0.133 (after the phone's report with the intact file): the file is intact (checksum identical) and the CPU writes
-  correctly in all three CPU settings; the OpenCL GPU gets the FIRST word wrong (`<pad>` with NaN scores at 24 and 16
-  layers, a stray token leading to "ASU is a great choice!" at 8 layers) while every later word is right, and it is no
-  faster than the CPU (2.7 to 3.5 tok/s against 3.5). The output check was too lenient and passed those; it now asks
-  "7 plus 5", fails on NaN scores, on a placeholder as the first word and on a wrong answer, and remembered verdicts of
-  the old check are ignored. The remembered verdict also records the batch size and CPU-kernel setting, so one test never
-  blocks another.
+- 0.0.134 (0.0.133 was cancelled before publishing): the phone's report showed the file intact (checksum identical) and the
+  CPU correct in all three settings, but a 14-token prompt on the OpenCL GPU got a wrong FIRST word (`<pad>` with NaN
+  scores, or a stray token leading to "ASU is a great choice!") with every later word right. Real chats, which always carry
+  a system prompt, were fine. So the load-time check now uses a prompt of realistic length and BLOCKS a load only on clear
+  noise (placeholder tokens, NaN or flat scores). A wrong answer, or a check that cannot run, is a warning and never blocks a
+  model. A second, short-prompt check decides whether to use the first-word workaround: prompts under about 192 tokens run
+  once first so the first word comes from the engine's single-token step; it is switched on only if the same check passes with
+  it, and never for long prompts. The remembered verdict records the batch size and CPU-kernel setting.
+- 0.0.134: sampling defaults per model. The HauhauCS Gemma 4 files use the author's recommendation (temperature 0.6, top-k 64,
+  top-p 0.9, min-p 0.05, repeat penalty 1.1). Order: the active agent's value, then a value changed in Settings (anything
+  other than the app default), then the model's recommendation, then the app default. Other models behave as before.
 - 0.0.133: the model test takes a checksum or a Hugging Face download link (read from the page's small LFS pointer, no big
   download) and says whether the file matches; it remembers it per file. New steps: GPU with the prompt fed one token at a
   time (tests whether the wrong first word comes from processing a whole prompt at once on the GPU) and, with an MTP file

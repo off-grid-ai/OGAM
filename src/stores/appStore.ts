@@ -239,7 +239,7 @@ const DEFAULT_CHECKLIST: OnboardingChecklist = {
   triedImageGen: false, exploredSettings: false, createdProject: false,
 };
 
-const DEFAULT_SETTINGS: AppSettings = {
+export const DEFAULT_SETTINGS: AppSettings = {
   systemPrompt: 'You are a helpful AI assistant running locally on the user\'s device. Be concise and helpful.',
   temperature: 0.7,
   maxTokens: 1024,

@@ -128,6 +128,8 @@ export interface ToolGenerationDeps {
   isThinkingEnabled: boolean;
   isGemma4Model: boolean;
   disableCtxShift: boolean;
+  /** The loaded model's file path, for its recommended sampling defaults. */
+  modelPath?: string | null;
   manageContextWindow: (messages: Message[], extraReserve?: number) => Promise<Message[]>;
   convertToOAIMessages: (messages: Message[]) => any[];
   setPerformanceStats: (stats: any) => void;
@@ -166,7 +168,7 @@ export async function generateWithToolsImpl(
 
     const completionParams = {
       messages: oaiMessages,
-      ...buildCompletionParams(settings, { disableCtxShift: deps.disableCtxShift }),
+      ...buildCompletionParams(settings, { disableCtxShift: deps.disableCtxShift, modelPath: deps.modelPath }),
       tools: options.tools,
       tool_choice: 'auto',
       ...buildThinkingCompletionParams(deps.isThinkingEnabled, deps.isGemma4Model),

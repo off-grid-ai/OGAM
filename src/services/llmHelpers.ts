@@ -6,6 +6,7 @@ import { APP_CONFIG } from '../constants';
 import { Message, INFERENCE_BACKENDS } from '../types';
 import { MultimodalSupport, LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
+import { resolveSampling, samplingDefaultsFor } from './modelSamplingDefaults';
 import { templateEmitsReasoning } from '../utils/messageContent';
 import { ensureNativeLogCapture, resetNativeLogCapture, recentNativeLog } from './llmNativeLog';
 import {
@@ -557,15 +558,19 @@ export { validateModelFile, checkMemoryForModel, safeCompletion, resolveSafeCont
 const STOP_TOKENS = ['</s>', '<|end|>', '<|eot_id|>'];
 export function buildCompletionParams(settings: {
   maxTokens?: number; temperature?: number; topP?: number; repeatPenalty?: number;
-}, options?: { disableCtxShift?: boolean }): Record<string, any> {
-  // Atlas: the active agent's own temperature / top-p / max tokens / repeat penalty win.
-  settings = { ...settings, ...activeAgentOverrides() };
+}, options?: { disableCtxShift?: boolean; modelPath?: string | null }): Record<string, any> {
+  // Atlas: the active agent's own temperature / top-p / max tokens / repeat penalty win; then what the person set in Settings;
+  // then the model author's recommendation for this model (modelSamplingDefaults.ts); then the app's defaults.
+  const agent = activeAgentOverrides();
+  const sampling = resolveSampling({ agent, user: settings, model: samplingDefaultsFor(options?.modelPath) });
+  settings = { ...settings, ...agent };
   return {
     n_predict: settings.maxTokens || RESPONSE_RESERVE,
-    temperature: settings.temperature ?? 0.7,
-    top_k: 40,
-    top_p: settings.topP ?? 0.95,
-    penalty_repeat: settings.repeatPenalty ?? 1.1,
+    temperature: sampling.temperature,
+    top_k: sampling.topK,
+    top_p: sampling.topP,
+    ...(sampling.minP != null ? { min_p: sampling.minP } : {}),
+    penalty_repeat: sampling.repeatPenalty,
     stop: STOP_TOKENS,
     ctx_shift: options?.disableCtxShift ? false : true,
   };

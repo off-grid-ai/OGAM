@@ -19,7 +19,7 @@ import { describeAgainstExpected, resolveExpected, type Expected } from './expec
 import logger from '../utils/logger';
 
 export interface SweepSetting { label: string; backend: 'cpu' | 'opencl'; gpuLayers: number; flashAttn: boolean; cpuRepack?: boolean; nBatch?: number; mtp?: boolean }
-export interface SweepStep { setting: SweepSetting; ok: boolean; loadSeconds: number; error?: string; check?: OutputCheck; note?: string }
+export interface SweepStep { setting: SweepSetting; ok: boolean; loadSeconds: number; error?: string; check?: OutputCheck; note?: string; scan?: string[] }
 export interface SweepResult { steps: SweepStep[]; files: string[]; vision?: { ok: boolean; reply: string; error?: string }; report: string; best?: SweepSetting }
 
 export const DEFAULT_SWEEP_LAYERS = [24, 16, 8];
@@ -78,7 +78,7 @@ function applySetting(setting: SweepSetting): void {
 const seconds = (since: number) => Number(((Date.now() - since) / 1000).toFixed(1));
 
 /** One step: load with the setting, judge the first reply. Never throws; the loader's own refusal (noise, memory) is the step's error. */
-async function runStep(model: LlamaDownloadedModel, setting: SweepSetting): Promise<SweepStep> {
+async function runStep(model: LlamaDownloadedModel, setting: SweepSetting, scan: boolean): Promise<SweepStep> {
   applySetting(setting);
   const started = Date.now();
   const step: SweepStep = { setting, ok: false, loadSeconds: 0 };
@@ -89,6 +89,11 @@ async function runStep(model: LlamaDownloadedModel, setting: SweepSetting): Prom
     step.check = llmService.getLastOutputCheck() ?? await llmService.runOutputCheck() ?? undefined;
     step.ok = !!step.check?.ok;
     if (!step.ok) step.error = step.check?.reason;
+    if (setting.backend === 'opencl' && step.ok) {
+      const status = llmService.getShortPromptStatus();
+      if (status !== 'ok') step.note = [step.note, status === 'workaround' ? 'very short prompts need the first-word workaround' : 'very short prompts may still start with a wrong word'].filter(Boolean).join('; ');
+      if (scan) step.scan = await llmService.scanPromptLengths();
+    }
   } catch (e: any) {
     step.loadSeconds = seconds(started);
     step.error = String(e?.message || e);
@@ -132,6 +137,7 @@ export async function runModelSweep(model: LlamaDownloadedModel, opts: { layers?
   const saved = { ...useAppStore.getState().settings };
   const steps: SweepStep[] = [];
   const files: string[] = [];
+  let scanned = false;
   let vision: SweepResult['vision'];
   try {
     await forgetVerdicts(model.filePath);
@@ -147,7 +153,8 @@ export async function runModelSweep(model: LlamaDownloadedModel, opts: { layers?
     for (const setting of sweepSettings(opts.layers, { mtp: !!model.draftPath })) {
       if (opts.shouldStop?.()) { say('Stopped.'); break; }
       say(`Trying: ${setting.label}`);
-      const step = await runStep(model, setting);
+      const step = await runStep(model, setting, !scanned);
+      if (step.scan) scanned = true;
       steps.push(step);
       say(describeStep(step));
       await llmService.unloadModel();
@@ -173,6 +180,7 @@ export function formatSweepReport(model: Pick<LlamaDownloadedModel, 'fileName'>,
   for (const s of steps) {
     lines.push(`- ${s.setting.label}: ${s.ok ? 'OK' : 'FAILED'} (load ${s.loadSeconds}s)${s.note ? ` [${s.note}]` : ''}${s.error ? ` - ${s.error}` : ''}`);
     if (s.check) lines.push(formatOutputReport(s.check, {}).split('\n').map((l) => `    ${l}`).join('\n'));
+    if (s.scan) lines.push('    Prompt length scan (how long a prompt must be before the first word is right):', ...s.scan.map((l) => `      ${l}`));
   }
   if (vision) lines.push(`- Picture check: ${vision.ok ? 'OK' : 'FAILED'}${vision.error ? ` - ${vision.error}` : ''}${vision.reply ? ` (reply: ${JSON.stringify(vision.reply)})` : ''}`);
   const working = steps.filter((s) => s.ok && s.setting.backend === 'opencl');

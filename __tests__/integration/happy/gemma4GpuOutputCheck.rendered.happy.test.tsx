@@ -82,6 +82,73 @@ describe('Gemma 4 on the GPU: noise is caught at load, not in the first reply', 
     expect(llmService.isModelLoaded()).toBe(false);
   }, 40000);
 
+  it('keeps a GPU whose very short prompts start with a wrong first word, using the workaround for short prompts only', async () => {
+    const h = await setupChatScreen({ engine: 'llama', platform: 'android', modelFileName: 'Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf' });
+    h.render();
+    // The fake GPU as the phone reports showed it: a very short prompt processed for the first time gets a wrong first word;
+    // a realistic one (system prompt) is fine, and so is any prompt the engine already holds (it then recomputes only the
+    // last token, on its own).
+    const seen = new Set<string>();
+    const calls: Array<{ nPredict: number; cached: boolean }> = [];
+    const { initLlama } = require('llama.rn');
+    const real = (initLlama as jest.Mock).getMockImplementation()!;
+    (initLlama as jest.Mock).mockImplementation(async (params: Record<string, unknown>, cb?: (p: number) => void) => {
+      const context: any = await real(params, cb);
+      if (!context.__fakeGpu) {
+        const original = context.completion;
+        context.completion = async (p: any, tokenCb: any) => {
+          const key = JSON.stringify(p.messages);
+          const cached = seen.has(key);
+          seen.add(key);
+          calls.push({ nPredict: p.n_predict, cached });
+          const shortPrompt = key.length < 400;
+          h.boundary.llama!.scriptCompletion({ text: !cached && shortPrompt ? '<pad>! How can I help you today?' : '12' });
+          return original.call(context, p, tokenCb);
+        };
+        context.__fakeGpu = true;
+      }
+      return context;
+    });
+    await reloadOnOpenCL(h);
+    const { llmService } = require('../../../src/services/llm');
+    expect(llmService.isModelLoaded()).toBe(true);
+    expect(llmService.getGpuInfo().gpu).toBe(true);
+    expect(llmService.usesFirstWordWorkaround()).toBe(true);
+    expect(llmService.getShortPromptStatus()).toBe('workaround');
+
+    calls.length = 0;
+    const reply = await llmService.generateResponse([{ id: 'u1', role: 'user', content: 'Tell me something.', timestamp: Date.now() }]);
+    // The prompt ran once for one throwaway word, then the real reply started from it.
+    expect(calls).toEqual([{ nPredict: 1, cached: false }, expect.objectContaining({ cached: true })]);
+    expect(reply).toBe('12');
+
+    // A realistic prompt is not affected, so it is not run twice.
+    calls.length = 0;
+    await llmService.generateResponse([{ id: 'u2', role: 'user', content: 'Please summarise this. '.repeat(120), timestamp: Date.now() }]);
+    expect(calls).toHaveLength(1);
+  }, 60000);
+
+  it('never blocks a model on a wrong-but-fluent answer: that is a warning, the model loads and the short-prompt status says so', async () => {
+    const h = await setupChatScreen({ engine: 'llama', platform: 'android', modelFileName: 'Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf' });
+    h.render();
+    h.boundary.llama!.scriptCompletion({ text: 'Sure! Happy to help with that.' });
+    await reloadOnOpenCL(h);
+    const { llmService } = require('../../../src/services/llm');
+    expect(llmService.isModelLoaded()).toBe(true);
+    expect(llmService.getLastOutputCheck()).toMatchObject({ ok: true, warning: expect.stringMatching(/did not answer "7 plus 5"/) });
+    expect(llmService.getShortPromptStatus()).toBe('unreliable');
+  }, 40000);
+
+  it('never blocks a model because the check itself could not run', async () => {
+    const h = await setupChatScreen({ engine: 'llama', platform: 'android', modelFileName: 'Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf' });
+    h.render();
+    h.boundary.llama!.scriptCompletion({ throwMessage: 'completion failed inside the engine' });
+    await reloadOnOpenCL(h);
+    const { llmService } = require('../../../src/services/llm');
+    expect(llmService.isModelLoaded()).toBe(true);
+    expect(llmService.getLastOutputCheck()).toMatchObject({ ok: true, warning: expect.stringMatching(/check could not run/) });
+  }, 40000);
+
   it('falsify: a normal reply passes the check and the model loads on the GPU as before', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android', modelFileName: 'Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf' });
     h.render();

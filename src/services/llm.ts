@@ -28,7 +28,7 @@ import { fitMessagesToContext } from './contextWindow';
 import type { ToolCall } from './tools/types';
 import type { MultimodalSupport, LLMPerformanceSettings, LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
-import { isGemma4Path, knownVerdict, recordVerdict, runOutputCheck, logOutputReport, describeBadOutput, type OutputCheck } from './outputHealth';
+import { isGemma4Path, knownVerdict, recordVerdict, runOutputCheck, logOutputReport, describeBadOutput, primeFirstWord, estimatePromptTokens, scanPromptLengths, SHORT_PROMPT_TOKENS, type OutputCheck } from './outputHealth';
 ;
 import type { StreamToken } from './llmStreamTypes';
 export type { StreamToken };
@@ -49,6 +49,10 @@ class LLMService {
   private cpuForFileType = false;
   /** True while the loaded context drafts with an attached MTP file. */
   private lastOutputCheck: OutputCheck | null = null;
+  /** True when the GPU only writes this model's first word correctly after the prompt was run once (outputHealth.primeFirstWord). */
+  private firstWordWorkaround = false;
+  /** How very short prompts behave on this accelerated load: fine, fine with the workaround, or still wrong. */
+  private shortPromptStatus: 'ok' | 'workaround' | 'unreliable' = 'ok';
   private mtpActive = false;
   private currentModelPath: string | null = null;
   private isGenerating: boolean = false;
@@ -185,6 +189,8 @@ class LLMService {
       if (this.context || this.vulkanLoaded) await this.doUnloadModel();
       this.vulkanFallbackReason = null;
       this.lastOutputCheck = null;
+      this.firstWordWorkaround = false;
+      this.shortPromptStatus = 'ok';
       this.acceleratorAttempts = [];
       this.selectedBackend = INFERENCE_BACKENDS.CPU;
       this.requestedBackendAtLoad = null;
@@ -282,7 +288,8 @@ class LLMService {
             // Gemma 4 has produced noise ("<unused19><unused10>...", "<pad><pad>...") on a phone from a file that decodes correctly elsewhere.
             // Look at one short reply before anything else (pictures included) is set up on top of it; a bad one is a failed load.
             if (checkOutput) {
-              const check = await runOutputCheck(context, { isGemma4: true });
+              // 1. The check that decides: a reply to a prompt of realistic length (a real chat always has a system prompt).
+              const check = await runOutputCheck(context, { isGemma4: true, long: true });
               this.lastOutputCheck = check;
               logOutputReport(check, { model: modelPath.split('/').pop(), backend, gpuLayers: attemptedGpuLayers, context: actualLength, kvCache: 'f16', devices: String((context as any).devices ?? '') });
               await recordVerdict(verdictKey, check);
@@ -290,6 +297,18 @@ class LLMService {
                 try { await context.release(); } catch { /* load failed */ }
                 throw new Error(describeBadOutput(backend, check.reason, !auto));
               }
+              // 2. Very short prompts (a phone report: a 14-token prompt got a wrong first word on the OpenCL GPU while real chats
+              //    were fine). That never blocks the load; if the first-word workaround fixes it, short prompts use it.
+              this.shortPromptStatus = 'ok';
+              if (context.gpu) {
+                const short = await runOutputCheck(context, { isGemma4: true, strictAnswer: true });
+                if (!short.ok) {
+                  const primedShort = await runOutputCheck(context, { isGemma4: true, primed: true, strictAnswer: true });
+                  this.shortPromptStatus = primedShort.ok ? 'workaround' : 'unreliable';
+                  logger.warn(`[LLM][OUTPUT-CHECK] very short prompts: ${short.reason}; ${primedShort.ok ? 'the first-word workaround fixes it and is on for prompts under ~' + SHORT_PROMPT_TOKENS + ' tokens' : 'the workaround does not fix it, so very short prompts may start with a wrong word'}`);
+                }
+              }
+              this.firstWordWorkaround = this.shortPromptStatus === 'workaround';
             }
             try {
               await this.applyLoadedContext({
@@ -314,7 +333,7 @@ class LLMService {
             try { await vulkanEngine.unload(); } catch { /* bridge may be unavailable */ }
             this.vulkanFallbackReason = message;
           }
-          this.context = null; this.vulkanLoaded = false; this.currentModelPath = null;
+          this.context = null; this.vulkanLoaded = false; this.currentModelPath = null; this.firstWordWorkaround = false;
           this.multimodalSupport = null; this.multimodalInitialized = false;
           this.toolCallingSupported = false; this.thinkingSupported = false;
           Object.assign(this, {
@@ -543,11 +562,12 @@ class LLMService {
       // regardless of the global thinkingEnabled — a rewrite is not a reasoning task, and
       // letting it think leaked "Thinking Process:..." into the enhanced prompt (B30).
       const thinkingOn = this.isThinkingEnabled() && !opts?.disableThinking;
-      const completionParams = { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift() }), ...buildThinkingCompletionParams(thinkingOn, this.isGemma4Model()) };
+      const completionParams = { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift(), modelPath: this.currentModelPath }), ...buildThinkingCompletionParams(thinkingOn, this.isGemma4Model()) };
       logger.log(`[LLM][THINKING] thinkingSupported=${this.thinkingSupported}, thinkingEnabled=${useAppStore.getState().settings.thinkingEnabled}, isThinkingEnabled=${this.isThinkingEnabled()}, enable_thinking=${(completionParams as any).enable_thinking}, reasoning_format=${(completionParams as any).reasoning_format}`);
       // Never log chat prompts, streamed text, reasoning, or model file paths: even
       // development logcat output may outlive private/PIN-protected conversations.
       logger.log(`[LLM] Native completion settings: thinking=${thinkingOn}, contextShiftDisabled=${this.shouldDisableCtxShift()}`);
+      if (!hasImages && this.shouldPrime(oaiMessages)) await primeFirstWord(ctx, completionParams);
       const completionResult = await safeCompletion(ctx, () => ctx.completion(completionParams, (data: any) => {
         if (!this.isGenerating || !data.token) return;
         if (!firstReceived) { firstReceived = true; firstTokenMs = Date.now() - startTime; logger.log('[LLM] First token received'); }
@@ -588,6 +608,7 @@ class LLMService {
       isThinkingEnabled: this.isThinkingEnabled(),
       isGemma4Model: this.isGemma4Model(),
       disableCtxShift: this.shouldDisableCtxShift(),
+      modelPath: this.currentModelPath,
       manageContextWindow: (msgs, extra?) => this.manageContextWindow(msgs, extra),
       convertToOAIMessages: (msgs) => this.convertToOAIMessages(msgs),
       setPerformanceStats: (s) => { this.performanceStats = s; },
@@ -683,8 +704,10 @@ class LLMService {
     const { settings } = useAppStore.getState();
     let fullResponse = '';
     const ctx = this.context;
+    const maxParams = { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift(), modelPath: this.currentModelPath }), n_predict: maxTokens };
+    if (this.shouldPrime(oaiMessages)) await primeFirstWord(ctx, maxParams);
     const completionWork = safeCompletion(ctx, () => ctx.completion(
-      { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift() }), n_predict: maxTokens },
+      maxParams,
       (data) => { if (this.isGenerating && data.token) fullResponse += data.token; },
     ), 'generateWithMaxTokens');
     this.activeCompletionPromise = completionWork.then(() => { }, () => { });
@@ -752,6 +775,13 @@ class LLMService {
   isMtpActive(): boolean { return this.mtpActive; }
   /** One short deterministic reply from the loaded model, judged for noise (see outputHealth.ts); null when nothing is loaded. */
   getLastOutputCheck(): OutputCheck | null { return this.lastOutputCheck; }
+  /** True when replies run the prompt once first so the GPU's first word is right (see outputHealth.primeFirstWord). */
+  usesFirstWordWorkaround(): boolean { return this.firstWordWorkaround; }
+  getShortPromptStatus(): 'ok' | 'workaround' | 'unreliable' { return this.shortPromptStatus; }
+  /** How the loaded model does at several prompt lengths (a diagnostic; see outputHealth.scanPromptLengths). */
+  async scanPromptLengths(): Promise<string[]> { return this.context ? scanPromptLengths(this.context, this.isGemma4Model()) : []; }
+  /** The workaround applies to short prompts only: a longer one is not affected, and a long prompt may not be reusable from the cache. */
+  private shouldPrime(oaiMessages: Array<{ content?: unknown }>): boolean { return this.firstWordWorkaround && estimatePromptTokens(oaiMessages) < SHORT_PROMPT_TOKENS; }
   async runOutputCheck(): Promise<OutputCheck | null> {
     if (!this.context) return null;
     return runOutputCheck(this.context, { isGemma4: this.isGemma4Model() });

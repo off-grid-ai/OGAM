@@ -46,6 +46,8 @@ it('reports which GPU layer counts give real words and which give noise, and put
   expect(text).toMatch(/OpenCL GPU, 16 layers: OK/);
   expect(text).toMatch(/OpenCL GPU, 8 layers: OK/);
   expect(text).toMatch(/OpenCL GPU, 24 layers, prompt fed one token at a time \(batch 1\): OK/);
+  expect(text).toMatch(/Prompt length scan/);
+  expect(text).toMatch(/about 14 tokens: OK/);
   expect(text).toMatch(/Working GPU settings: .*16 layers/);
 
   // The CPU step with the optimized kernels off really reached the engine as no_extra_bufts.
