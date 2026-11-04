@@ -8,6 +8,9 @@ import { MultimodalSupport, LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
 import { templateEmitsReasoning } from '../utils/messageContent';
 import { ensureNativeLogCapture, resetNativeLogCapture, recentNativeLog } from './llmNativeLog';
+import {
+  startInitTrace, recordInitProgress, watchInit, describeTrace, trackAbandonedInit, settleAbandonedInit, type InitWindows,
+} from './nativeInit';
 
 import { HTP_ENABLED } from '../config/featureFlags';
 import { BYTES_PER_GB } from '../utils/contextLimits';
@@ -154,41 +157,55 @@ const HTP_INIT_TIMEOUT_MS = 90000;
  *  gemma3n froze indefinitely at kv-cache/graph construction) falls back to CPU
  *  instead of spinning the loader forever. */
 const GPU_INIT_TIMEOUT_MS_IOS = 45000;
-/** Race a promise against a timeout; rejects with descriptive error on expiry. */
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
 /** Safely release a context, swallowing errors (used during fallback cleanup). */
 async function safeRelease(ctx: LlamaContext | null): Promise<void> {
   if (!ctx) return;
   try { await ctx.release(); } catch (e) { logger.warn('[LLM] Error releasing context during fallback:', e); }
 }
-/** The bounded time a GPU/HTP context init may take before we fall back to CPU.
- *  Platform/backend only changes the DURATION (data) — the timeout policy itself
- *  is uniform. */
-function gpuInitTimeoutMs(isHtp: boolean): number {
-  if (isHtp) return HTP_INIT_TIMEOUT_MS;            // Android HTP/NPU
-  return Platform.OS === 'ios' ? GPU_INIT_TIMEOUT_MS_IOS : GPU_INIT_TIMEOUT_MS;
+/** How long a GPU/HTP context init may go quiet before it counts as hung. Platform/backend only changes the DURATION
+ *  (data); the policy itself is uniform. The window it applies to depends on what the load is doing (see nativeInit.ts):
+ *  a load whose weight-loading percentage is still moving is not hung. */
+function gpuInitWindows(isHtp: boolean): InitWindows {
+  const base = isHtp ? HTP_INIT_TIMEOUT_MS : (Platform.OS === 'ios' ? GPU_INIT_TIMEOUT_MS_IOS : GPU_INIT_TIMEOUT_MS);
+  return { stallMs: base, setupMs: base * 2, hardCapMs: 300000 };
+}
+/** Why a load stalled, written to the log at the moment it happens: free memory and llama.cpp's own last lines. */
+async function logInitStall(label: string): Promise<void> {
+  try {
+    const { hardwareService } = require('./hardware');
+    const info = await hardwareService.getDeviceInfo();
+    logger.error(`[LLM] ${label} stalled. Memory now: ${(info.availableMemory / BYTES_PER_GB).toFixed(2)} GB free of ${(info.totalMemory / BYTES_PER_GB).toFixed(1)} GB`);
+  } catch { /* memory info is best effort */ }
+  logger.error(`[LLM] llama.cpp native log tail at the stall:\n${recentNativeLog()}`);
 }
 /**
- * Race a GPU/HTP context init against a timeout so a HUNG backend (an iOS Metal
- * graph that never returns, an Android Adreno ANR) falls back to CPU instead of
- * spinning the loader forever. This applies on EVERY platform — the only
- * platform/backend difference is the timeout duration (see gpuInitTimeoutMs).
- * Previously it was gated to Android, which is exactly why a hung iOS Metal load
- * (e.g. gemma3n freezing at kv-cache/graph construction) had no escape hatch.
+ * Starts a native load and, for GPU/HTP loads, watches it so a HUNG backend (an iOS Metal graph that never returns, an
+ * Android OpenCL driver that wedges) falls back instead of spinning the loader forever, while a slow but advancing
+ * load (a 7 GB model still reading its weights) is left alone. A timed-out load keeps running natively; it is
+ * remembered so the next load waits for it to finish and release its context (nativeInit.settleAbandonedInit).
  */
-async function tryGpuInit(promise: Promise<LlamaContext>, nGpuLayers: number, isHtp: boolean = false): Promise<LlamaContext> {
+async function tryGpuInit(start: (onProgress: (percent: number) => void) => Promise<LlamaContext>, nGpuLayers: number, isHtp: boolean = false): Promise<LlamaContext> {
+  const trace = startInitTrace();
+  let lastLogged = -1;
+  const promise = start((percent) => {
+    recordInitProgress(trace, percent);
+    const step = Math.floor(trace.percent / 10);
+    if (step > lastLogged) { lastLogged = step; logger.log(`[LLM] init progress ${trace.percent}% after ${((Date.now() - trace.startedAt) / 1000).toFixed(1)}s`); }
+  });
   if (nGpuLayers <= 0) return promise; // pure-CPU init — nothing to time out
-  const timeoutMs = gpuInitTimeoutMs(isHtp);
-  let timedOut = false;
-  promise.then(ctx => { if (timedOut) safeRelease(ctx); }).catch(() => {});
-  try { return await withTimeout(promise, timeoutMs, isHtp ? 'HTP context init' : 'GPU context init'); }
-  catch (e) { timedOut = true; throw e; }
+  const label = isHtp ? 'HTP context init' : 'GPU context init';
+  try {
+    const context = await watchInit(promise, trace, { label, windows: gpuInitWindows(isHtp) });
+    logger.log(`[LLM] ${label} finished: ${describeTrace(trace)}`);
+    return context;
+  } catch (e: any) {
+    if (/timed out after/i.test(String(e?.message))) {
+      trackAbandonedInit(promise, safeRelease);
+      logger.error(`[LLM] ${e.message} | ${describeTrace(trace)}`);
+      await logInitStall(label);
+    }
+    throw e;
+  }
 }
 
 /** Errors that indicate the app's native llama runtime is unavailable, not a bad model. */
@@ -217,6 +234,8 @@ export async function initContextWithFallback(
   // Capture llama.cpp's own log so a load failure surfaces its REAL reason
   // (missing tensor / unknown architecture / wrong size) instead of rnllama's
   // opaque "Failed to load model". Reset the buffer for this attempt.
+  // A GPU load that timed out earlier may still be running natively: wait for it to finish and release (or refuse).
+  await settleAbandonedInit();
   ensureNativeLogCapture();
   resetNativeLogCapture();
   logger.log(`[LLM] initContextWithFallback: model=${modelPath}, ctx=${contextLength}, gpuLayers=${nGpuLayers}${isHtp ? ', backend=HTP' : ''}`);
@@ -224,8 +243,7 @@ export async function initContextWithFallback(
   let gpuAttemptFailed = false;
   try {
     logger.log(`[LLM] Attempt 1/3: ${isHtp ? 'HTP' : 'GPU'} init (ctx=${contextLength}, gpu_layers=${nGpuLayers})`);
-    const gpuInitPromise = initLlama({ ...params, n_ctx: contextLength, n_gpu_layers: nGpuLayers } as any);
-    const context = await tryGpuInit(gpuInitPromise, nGpuLayers, isHtp);
+    const context = await tryGpuInit((onProgress) => initLlama({ ...params, n_ctx: contextLength, n_gpu_layers: nGpuLayers } as any, onProgress), nGpuLayers, isHtp);
     if (!allowCpuFallback && nGpuLayers > 0 && context.gpu !== true) {
       await safeRelease(context);
       throw new Error('Native context did not confirm GPU/NPU acceleration');
@@ -251,8 +269,7 @@ export async function initContextWithFallback(
       delete gpuParams.devices;
       try {
         logger.log('[LLM] Hexagon failed; attempting OpenCL GPU before CPU');
-        const next = initLlama({ ...gpuParams, n_ctx: contextLength, n_gpu_layers: nGpuLayers } as any);
-        const context = await tryGpuInit(next, nGpuLayers);
+        const context = await tryGpuInit((onProgress) => initLlama({ ...gpuParams, n_ctx: contextLength, n_gpu_layers: nGpuLayers } as any, onProgress), nGpuLayers);
         return { context, gpuAttemptFailed: !(context.gpu ?? false), actualLength: contextLength };
       } catch (openclError: any) {
         const message = openclError?.message || String(openclError);
@@ -260,6 +277,8 @@ export async function initContextWithFallback(
         logger.warn(`[LLM] OpenCL retry failed; continuing to CPU: ${message}`);
       }
     }
+    // The failed GPU load may still be running (it timed out): never start the CPU load beside it.
+    await settleAbandonedInit();
     try {
       logger.log(`[LLM] Attempt 2/3: CPU init (ctx=${contextLength}, gpu_layers=0)`);
       // Strip devices — HTP requires n_gpu_layers > 0; CPU fallback must not request it
