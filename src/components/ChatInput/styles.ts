@@ -8,14 +8,11 @@ export const ANIM_DURATION_OUT = 200;
 const TOOL_WARNING_COLOR = '#F59E0B';
 
 export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+  // The bar holds one box, edge to edge: anything queued or attached above it keeps the side inset.
   container: {
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 8,
     backgroundColor: colors.background,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
+  aboveComposer: { paddingHorizontal: 12 },
   // Attachment previews row
   attachmentsContainer: {
     marginBottom: 6,
@@ -141,10 +138,12 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textSecondary,
     marginBottom: SPACING.xs,
   },
+  // The send button sits 12 in from the right edge; the styles above scroll to the edge.
   mainRow: {
     flexDirection: 'row' as const,
-    alignItems: 'center' as const,
+    alignItems: 'flex-end' as const,
     gap: 8,
+    paddingRight: 12,
   },
   // Pill container
   pill: {
@@ -159,6 +158,18 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     minHeight: 56,
     ...shadows.small,
   },
+  // One box, edge to edge, in every mode: image or video mode adds the styles at its top, and nothing else moves.
+  // Only the top corners are rounded; the input inside draws no edge of its own (the theme shadow is a boxShadow,
+  // so it is cleared as one). Its bottom padding (with the home-indicator inset) is set where it is drawn.
+  composer: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: 'hidden' as const,
+    paddingTop: 4,
+    ...shadows.small,
+  },
+  pillInComposer: { backgroundColor: 'transparent', borderRadius: 0, boxShadow: [] },
   pillInput: {
     flex: 1,
     color: colors.text,

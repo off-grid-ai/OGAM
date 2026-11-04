@@ -168,12 +168,12 @@ Dark mode shadows use very tight radius (1-3px) to preserve crisp card edges whi
 
 #### Buttons
 - **Default:** Transparent with border (outline style)
-- **Primary:** Transparent with emerald border, emerald text
+- **Primary:** the screen's main action. `colors.surface` fill, a subtle `colors.border` edge, emerald text, and the soft emerald halo (`shadows.glow`), as the brand's "Primary actions carry a soft emerald halo". Never a flat bright outline.
 - **Secondary:** Transparent with gray border, white text
 - **Ghost:** No border, just text
 - Padding: Use spacing scale (`sm`, `md`, `lg` for different sizes)
 - Border radius: `8px` (sharp, minimal)
-- No shadows or gradients
+- No gradients. Only the primary button carries a shadow (its halo).
 
 #### Cards
 - Background: `colors.surface`

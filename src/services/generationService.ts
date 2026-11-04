@@ -6,6 +6,10 @@ import { activeModelService } from './activeModelService';
 import { remoteServerManager } from './remoteServerManager';
 import { useAppStore, useChatStore, useRemoteServerStore } from '../stores';
 import { Message, GenerationMeta, MediaAttachment } from '../types';
+import type { MediaStyleKind } from '@offgrid/models';
+
+/** A turn's picture and clip styles, fixed when it was sent. */
+export type MediaStyleIds = Partial<Record<MediaStyleKind, string>>;
 import { runToolLoop } from './generationToolLoop';
 import type { ToolResult } from './tools/types';
 import { providerRegistry } from './providers';
@@ -56,6 +60,8 @@ export interface QueuedMessage {
   assistantEnabled?: boolean;
   /** The user asked for it to go at once: it goes first and on its own. */
   now?: boolean;
+  /** The chat's picture and clip styles when it was sent, so a style change while it waits cannot change it. */
+  styleIds?: MediaStyleIds;
 }
 
 /**
@@ -671,6 +677,8 @@ class GenerationService {
       // user's explicit force must never be dropped by the merge (mirror of the single-message carry).
       imageMode: all.some(m => m.imageMode === 'force') ? 'force' : all[0].imageMode,
       assistantEnabled: all.some(m => m.assistantEnabled),
+      // The styles of the latest send: the merged turn is made once, with the choice the person made last.
+      styleIds: all[all.length - 1].styleIds,
       now: false,
     };
     this.sendingQueuedTurn = true;

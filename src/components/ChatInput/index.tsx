@@ -28,6 +28,8 @@ import { hardwareService } from '../../services/hardware';
 import { bestInstalledVideoModel, videoPacksForPhone } from '../../services/phoneVideoPacks';
 import { AppSheet } from '../AppSheet';
 import { Button } from '../Button';
+import { StyleRow } from '../MediaStyles/StyleRow';
+import { NEW_CHAT_STYLE_KEY, useMediaStyleStore } from '../../stores/mediaStyleStore';
 
 type AssistantAvailability = 'no-pro' | 'needs-sync' | 'unavailable' | 'ready';
 
@@ -40,6 +42,8 @@ interface ChatInputProps {
   placeholder?: string;
   supportsVision?: boolean;
   conversationId?: string | null;
+  /** Space under the bar for the home indicator or nav bar; the composer's box runs down through it. */
+  bottomInset?: number;
   imageModelLoaded?: boolean;
   onImageModeChange?: (mode: ImageModeState) => void;
   /** Video is Pro. Called instead of turning video on when Pro is not active. */
@@ -163,6 +167,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   supportsVision = false,
   visionNeedsRepair = false,
   conversationId,
+  bottomInset = 0,
   imageModelLoaded = false,
   onImageModeChange,
   onVideoUpgrade,
@@ -200,6 +205,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [assistantTransitioning, setAssistantTransitioning] = useState(false);
   const [assistantGateOpen, setAssistantGateOpen] = useState(false);
   const [imageMode, setImageMode] = useState<ImageModeState>('auto');
+  // Image or video mode shows the styles for that kind; the chat remembers the one it chose.
+  const styleKind = imageMode === 'force' ? 'image' : imageMode === 'video' ? 'video' : null;
+  const styleChatKey = conversationId ?? NEW_CHAT_STYLE_KEY;
+  const chosenStyle = useMediaStyleStore(state =>
+    styleKind ? state.byChat[styleChatKey]?.[styleKind] : undefined,
+  );
+  const setChatStyle = useMediaStyleStore(state => state.setStyle);
+  // A pick folds the row to the line that names it; turning the mode off and on, or Clear, opens it again.
+  const [stylesShown, setStylesShown] = useState(true);
+  useEffect(() => {
+    if (styleKind) setStylesShown(true);
+  }, [styleKind]);
+  const pickStyle = (kind: 'image' | 'video', styleId: string | null) => {
+    setChatStyle(styleChatKey, kind, styleId);
+    setStylesShown(!styleId);
+  };
   const [voiceInteractionMode, setVoiceInteractionMode] = useState<VoiceRecordInteractionMode>('idle');
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const quickSettings = useKeyboardAwarePopover();
@@ -508,6 +529,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   if (isAudioMode && AudioInput) {
     return (
       <>
+      {/* The composer owns the footer inset; this branch returns before it, so it clears the home indicator here. */}
+      <View style={{ paddingBottom: bottomInset }}>
       <AudioInput
         styles={styles}
         disabled={disabled}
@@ -552,6 +575,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         assistantSelected={assistantEnabled}
         onAssistantPress={handleAssistantPress}
       />
+      </View>
       <AppSheet
         sheet="assistant-gate"
         visible={assistantGateOpen}
@@ -613,15 +637,29 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <View style={styles.container}>
-      <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
-      <QueueRow queue={queue} actions={queueActions} />
-      {transcriptionNotice ? (
-        <Text style={styles.transcriptionNotice} testID="transcription-notice">
-          {transcriptionNotice}
-        </Text>
+      <View style={styles.aboveComposer}>
+        <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
+        <QueueRow queue={queue} actions={queueActions} />
+        {transcriptionNotice ? (
+          <Text style={styles.transcriptionNotice} testID="transcription-notice">
+            {transcriptionNotice}
+          </Text>
+        ) : null}
+      </View>
+      {/* One box across the full width, down to the screen's bottom edge; in image or video mode the styles
+          are its top, the input and send below. */}
+      <View style={[styles.composer, { paddingBottom: 8 + bottomInset }]}>
+      {styleKind && (stylesShown || chosenStyle) ? (
+        <StyleRow
+          attached
+          collapsed={!stylesShown}
+          kind={styleKind}
+          selectedId={chosenStyle}
+          onChange={styleId => pickStyle(styleKind, styleId)}
+        />
       ) : null}
       <View style={styles.mainRow}>
-        <View style={styles.pill}>
+        <View style={[styles.pill, styles.pillInComposer]}>
           {showVoiceStatus ? (
             <RecordingHint
               awaitingSpeech={isAwaitingSpeech}
@@ -659,7 +697,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 value={message}
                 onChangeText={setMessage}
                 placeholder={
-                  imageMode === 'video' ? 'Describe a video' : placeholder
+                  imageMode === 'video' ? 'Describe a video' : imageMode === 'force' ? 'Describe a picture' : placeholder
                 }
                 placeholderTextColor={colors.textMuted}
                 multiline
@@ -684,6 +722,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </View>
 
         {actionButton}
+      </View>
       </View>
 
       {Platform.OS !== 'ios' && (
