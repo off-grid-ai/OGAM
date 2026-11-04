@@ -32,7 +32,8 @@ export const popoverStyles = StyleSheet.create({
   },
   popover: {
     position: 'absolute',
-    minWidth: 180,
+    // The width the edge clamp assumes; content-sized, a row's flex label shrinks and wraps under its badge.
+    width: POPOVER_WIDTH,
     borderRadius: 12,
     borderWidth: 1,
     paddingVertical: 6,
