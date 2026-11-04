@@ -223,7 +223,7 @@ jobs:
           grep -q 'lib/arm64-v8a/libatlas_sdcli.so' apk-contents.txt
           grep -q 'lib/arm64-v8a/libatlas_sdcli_opencl.so' apk-contents.txt
           node scripts/verify-vulkan-apk.cjs
-          node -e "const p=require('./node_modules/llama.rn/package.json'); if(p.version!=='0.13.0-rc.4') { console.error('Unexpected llama.rn version:',p.version); process.exit(1) } console.log('Verified llama.rn',p.version)"
+          node -e "const p=require('./node_modules/llama.rn/package.json'); if(p.version!=='0.13.0-rc.9') { console.error('Unexpected llama.rn version:',p.version); process.exit(1) } console.log('Verified llama.rn',p.version)"
           echo "Verified Atlas release contains the ARM64 llama.rn and llama.kt Vulkan native runtimes."
           APKSIGNER="$ANDROID_SDK_ROOT/build-tools/$(ls "$ANDROID_SDK_ROOT/build-tools" | sort -V | tail -1)/apksigner"
           "$APKSIGNER" verify --verbose --print-certs "$APK"
