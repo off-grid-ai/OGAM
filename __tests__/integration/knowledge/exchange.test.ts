@@ -203,8 +203,8 @@ describe('import', () => {
   it('refuses a package whose files were changed, whose paths escape, or whose version it does not read, and touches nothing', async () => {
     const a = device(); await teach(a);
     const b64 = await snapshot(a, (await a.ex.createExport({ scope: { kind: 'all' } })).path);
-    const tamper = rebuild(b64, (files) => { const k = Object.keys(files).find((p) => p.endsWith('findings.jsonl'))!; files[k] = files[k].replace('Realization', 'Realizatiox'); }, { fixManifest: false }); // same length, different bytes
-    const resized = rebuild(b64, (files) => { const k = Object.keys(files).find((p) => p.endsWith('findings.jsonl'))!; files[k] = files[k].replace('Realization', 'Fabricated'); }, { fixManifest: false });
+    const tamper = rebuild(b64, (files) => { const k = Object.keys(files).find((p) => p.endsWith('findings.jsonl') && files[p].includes('Realization'))!; files[k] = files[k].replace('Realization', 'Realizatiox'); }, { fixManifest: false }); // same length, different bytes
+    const resized = rebuild(b64, (files) => { const k = Object.keys(files).find((p) => p.endsWith('findings.jsonl') && files[p].includes('Realization'))!; files[k] = files[k].replace('Realization', 'Fabricated'); }, { fixManifest: false });
     const escape = rebuild(b64, (files) => { files['../evil.txt'] = 'x'; const m = JSON.parse(files['manifest.json']); const { sha256 } = require('js-sha256'); m.files.push({ path: '../evil.txt', bytes: 1, sha256: sha256('x') }); files['manifest.json'] = JSON.stringify(m); }, { fixManifest: false });
     const future = rebuild(b64, (files) => { const m = JSON.parse(files['manifest.json']); m.schemaVersion = '2.0'; files['manifest.json'] = JSON.stringify(m); }, { fixManifest: false });
     const notAnExport = rebuild(b64, (files) => { delete files['manifest.json']; }, { fixManifest: false });
