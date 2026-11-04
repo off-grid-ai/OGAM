@@ -76,3 +76,14 @@ it('Restyle on a clip makes the same prompt again in the style I pick', async ()
   expect(app.jobs.submissions[1].prompt).toBe(`a lighthouse at night, ${NATURE}`);
   await rtl.waitFor(() => expect(view.getAllByTestId('chat-clip-card')).toHaveLength(2), { timeout: 15_000 });
 }, 90_000);
+
+it('All opens every style at once; a pick there becomes the chat\'s style', async () => {
+  const app = await newChatInVideoMode();
+  const { view, rtl } = app;
+  rtl.fireEvent.press(view.getByTestId('style-row-all'));
+  rtl.fireEvent.press(await view.findByTestId('style-grid-vintage'));
+  await rtl.waitFor(() =>
+    expect(view.getByTestId('style-row-vintage').props.accessibilityState).toMatchObject({ selected: true }),
+  );
+  expect(view.queryByTestId('style-grid')).toBeNull();
+}, 90_000);

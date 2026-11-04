@@ -29,6 +29,7 @@ import { bestInstalledVideoModel, videoPacksForPhone } from '../../services/phon
 import { AppSheet } from '../AppSheet';
 import { Button } from '../Button';
 import { StyleRow } from '../MediaStyles/StyleRow';
+import { StyleGrid } from '../MediaStyles/StyleGrid';
 import { NEW_CHAT_STYLE_KEY, useMediaStyleStore } from '../../stores/mediaStyleStore';
 
 type AssistantAvailability = 'no-pro' | 'needs-sync' | 'unavailable' | 'ready';
@@ -209,6 +210,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     styleKind ? state.byChat[styleChatKey]?.[styleKind] : undefined,
   );
   const setChatStyle = useMediaStyleStore(state => state.setStyle);
+  const [allStylesOpen, setAllStylesOpen] = useState(false);
   const [voiceInteractionMode, setVoiceInteractionMode] = useState<VoiceRecordInteractionMode>('idle');
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const quickSettings = useKeyboardAwarePopover();
@@ -629,17 +631,33 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           {transcriptionNotice}
         </Text>
       ) : null}
+      {/* In image or video mode the styles are the top of the composer itself: one box across the
+          full width, the styles above, the input and send below. */}
+      <View style={styleKind ? styles.composerWithStyles : undefined}>
+      {styleKind ? (
+        <StyleRow
+          attached
+          kind={styleKind}
+          selectedId={chosenStyle}
+          onChange={styleId => setChatStyle(styleChatKey, styleKind, styleId)}
+          onShowAll={() => setAllStylesOpen(true)}
+        />
+      ) : null}
+      {styleKind ? (
+        <AppSheet visible={allStylesOpen} onClose={() => setAllStylesOpen(false)} title="Styles" sheet="chat:styles" enableDynamicSizing>
+          <View style={styles.allStyles}>
+            <StyleGrid
+              kind={styleKind}
+              selectedId={chosenStyle}
+              onPick={styleId => {
+                setChatStyle(styleChatKey, styleKind, styleId === chosenStyle ? null : styleId);
+                setAllStylesOpen(false);
+              }}
+            />
+          </View>
+        </AppSheet>
+      ) : null}
       <View style={[styles.mainRow, styleKind && styles.mainRowWithStyles]}>
-        {/* In image or video mode the styles are the top of the composer itself: one box, one edge. */}
-        <View style={[styles.composerBox, styleKind && styles.composerBoxWithStyles]}>
-        {styleKind ? (
-          <StyleRow
-            attached
-            kind={styleKind}
-            selectedId={chosenStyle}
-            onChange={styleId => setChatStyle(styleChatKey, styleKind, styleId)}
-          />
-        ) : null}
         <View style={[styles.pill, styleKind && styles.pillUnderStyles]}>
           {showVoiceStatus ? (
             <RecordingHint
@@ -701,9 +719,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             </>
           )}
         </View>
-        </View>
 
         {actionButton}
+      </View>
       </View>
 
       {Platform.OS !== 'ios' && (

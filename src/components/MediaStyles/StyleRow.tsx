@@ -20,9 +20,11 @@ export const StyleRow: React.FC<{
   selectedId: string | undefined;
   onChange: (styleId: string | null) => void;
   testID?: string;
-  /** Drawn as the top of the composer: no card of its own, a hairline between it and the input. */
+  /** Drawn as the top of the composer, with no card of its own. */
   attached?: boolean;
-}> = ({ kind, selectedId, onChange, testID = 'style-row', attached = false }) => {
+  /** Opens every style at once; the row only shows the first few. */
+  onShowAll?: () => void;
+}> = ({ kind, selectedId, onChange, testID = 'style-row', attached = false, onShowAll }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const selected = stylesFor(kind).find(style => style.id === selectedId);
@@ -30,17 +32,32 @@ export const StyleRow: React.FC<{
     <View style={attached ? styles.attached : styles.row} testID={testID} accessibilityLabel="Style">
       <View style={styles.header}>
         <Text style={styles.label}>{selected ? `Style · ${selected.name}` : 'Style'}</Text>
-        {selected ? (
-          <TouchableOpacity
-            testID={`${testID}-clear`}
-            accessibilityRole="button"
-            accessibilityLabel="Clear style"
-            hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
-            onPress={() => onChange(null)}
-          >
-            <Icon name="x" size={16} color={colors.textSecondary} />
-          </TouchableOpacity>
-        ) : null}
+        <View style={styles.actions}>
+          {selected ? (
+            <TouchableOpacity
+              testID={`${testID}-clear`}
+              accessibilityRole="button"
+              accessibilityLabel="Clear style"
+              hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
+              onPress={() => onChange(null)}
+            >
+              <Icon name="x" size={16} color={colors.textSecondary} />
+            </TouchableOpacity>
+          ) : null}
+          {onShowAll ? (
+            <TouchableOpacity
+              testID={`${testID}-all`}
+              accessibilityRole="button"
+              accessibilityLabel="All styles"
+              hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
+              onPress={onShowAll}
+              style={styles.all}
+            >
+              <Text style={styles.allText}>All</Text>
+              <Icon name="chevron-right" size={14} color={colors.primary} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
       <FlatList
         {...LIST_CLIPPING_PROPS}
@@ -108,12 +125,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     overflow: 'hidden' as const,
     ...shadows.small,
   },
-  attached: {
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
+  attached: { paddingTop: SPACING.md, paddingBottom: SPACING.xs },
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -122,6 +134,9 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingBottom: SPACING.sm,
     minHeight: 20,
   },
+  actions: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.lg },
+  all: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2 },
+  allText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
   label: { ...TYPOGRAPHY.label, color: colors.textMuted, textTransform: 'uppercase' as const, letterSpacing: 1 },
   list: { paddingHorizontal: SPACING.md, gap: SPACING.sm },
   tile: { width: THUMB, alignItems: 'center' as const, gap: SPACING.xs },
