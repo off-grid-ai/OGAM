@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { CATALOG, isVideoWeightAvailableOn, videoArchitecture, videoPackError, videoTakesStartImage, type ModelEntry } from '@offgrid/models';
+import { CATALOG, isVideoWeightAvailableOn, videoArchitecture, videoModelDefaults, videoPackError, videoTakesStartImage, type ModelEntry } from '@offgrid/models';
 
 /** Light and Turbo builds: offered on 11 GB+ phones, below the packs' desktop minimum. */
 const LIGHT_BUILDS_ON_11GB = new Set([
@@ -64,3 +64,13 @@ export function phoneVideoSize(weight: string, ramGB: number): { width: number; 
 }
 
 const TRAINED_SIZE_MIN_RAM_GB = 16;
+
+/** What a person sees when a clip renders below its model's trained size on this phone. */
+export const SMALLER_ON_PHONE_NOTE =
+  'Made smaller to fit this phone\'s memory. For sharper video, pair a computer or use a phone with 16 GB or more.';
+
+/** Whether a clip of this size renders below the size its model was trained at. */
+export function isBelowTrainedSize(weight: string, size: { width: number; height: number }): boolean {
+  const trained = videoModelDefaults(weight);
+  return size.width * size.height < trained.width * trained.height;
+}
