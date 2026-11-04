@@ -21,7 +21,15 @@ import { buildThinkingCompletionParams } from './llmHelpers';
 
 const VERDICTS_KEY = 'atlas-gpu-output-verdicts';
 const PLACEHOLDER = /<unused\d+>|<unk>|<pad>/gi;
-const TEST_PROMPT = 'hi';
+/**
+ * A question with one right answer, not "hi": a greeting passes almost whatever comes out, and the phone reports showed the
+ * cost. On the OpenCL GPU the first word was `<pad>` (probability NaN) or a stray token that led to "ASU is a great
+ * choice!", while the rest of the reply was fine.
+ */
+const TEST_PROMPT = 'What is 7 plus 5? Answer with just the number.';
+const EXPECTED_ANSWER = /\b12\b|twelve/i;
+/** Bump when the check changes meaning, so verdicts made by an older, more lenient check are not trusted. */
+const CHECK_VERSION = 2;
 const TEST_TOKENS = 12;
 const TEST_TIMEOUT_MS = 120_000;
 /** A winner this weak, on token after token, is not language: 1/262,144 is what a flat vocabulary gives. */
@@ -55,14 +63,25 @@ export function judgeText(text: string): string {
   return '';
 }
 
-/** Distribution-level judgement: no clear winner on most tokens means the logits are noise. */
+/** Distribution-level judgement: probabilities that are not numbers, or no clear winner on most tokens, mean the scores are noise. */
 export function judgeConfidence(tokens: SampledToken[]): string {
   const known = tokens.filter((t) => typeof t.topProbability === 'number');
+  const nan = known.filter((t) => Number.isNaN(t.topProbability)).length;
+  if (nan) return `the model's scores were not numbers (NaN) for ${nan} of ${known.length} tokens`;
   if (known.length < 5) return '';
   const flat = known.filter((t) => (t.topProbability as number) < FLAT_TOP_PROBABILITY).length;
   return flat >= known.length * 0.8
     ? `the model had no clear choice for ${flat} of ${known.length} tokens (top probability under ${FLAT_TOP_PROBABILITY}), which is what noise looks like`
     : '';
+}
+
+/** A reply that opens with a placeholder token, or does not answer the question, is wrong even when the rest reads fine. */
+export function judgeAnswer(text: string, tokens: SampledToken[]): string {
+  if (!text.replace(/\s+/g, '')) return '';
+  if (tokens.length && new RegExp(`^(?:${PLACEHOLDER.source})`, 'i').test(tokens[0].piece.trim())) {
+    return `the first word was a placeholder token (${tokens[0].piece.trim()}), not a word`;
+  }
+  return EXPECTED_ANSWER.test(text) ? '' : `it did not answer "7 plus 5" (it wrote ${JSON.stringify(text.trim().slice(0, 60))})`;
 }
 
 /** Runs the short reply and judges it. Never throws: a crash or hang is also a failed check, with its reason. */
@@ -105,7 +124,7 @@ export async function runOutputCheck(context: LlamaContext, opts: { isGemma4: bo
   } finally {
     if (timer) clearTimeout(timer);
   }
-  return done(judgeText(text) || judgeConfidence(tokens));
+  return done(judgeText(text) || judgeConfidence(tokens) || judgeAnswer(text, tokens));
 }
 
 /** Multi-line report for the log and for "Copy diagnostics": setup, what came back, the token ids. */
@@ -129,7 +148,7 @@ export interface Verdict { ok: boolean; reason: string; at: number; build: strin
 const llamaRnVersion = (): string => {
   try { return String(require('llama.rn/package.json').version); } catch { return 'unknown'; }
 };
-const keyOf = (k: VerdictKey) => `${k.model.split('/').pop()}|${k.size}|${k.backend}|${k.gpuLayers}|${llamaRnVersion()}`;
+const keyOf = (k: VerdictKey) => `${k.model.split('/').pop()}|${k.size}|${k.backend}|${k.gpuLayers}|${llamaRnVersion()}+c${CHECK_VERSION}`;
 
 async function readVerdicts(): Promise<Record<string, Verdict>> {
   try { return JSON.parse((await AsyncStorage.getItem(VERDICTS_KEY)) ?? '{}'); } catch { return {}; }

@@ -85,7 +85,7 @@ describe('Gemma 4 on the GPU: noise is caught at load, not in the first reply', 
   it('falsify: a normal reply passes the check and the model loads on the GPU as before', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android', modelFileName: 'Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf' });
     h.render();
-    h.boundary.llama!.scriptCompletion({ text: 'Hello! How can I help you today?' });
+    h.boundary.llama!.scriptCompletion({ text: '12' });
     await reloadOnOpenCL(h);
     const { llmService } = require('../../../src/services/llm');
     expect(llmService.isModelLoaded()).toBe(true);

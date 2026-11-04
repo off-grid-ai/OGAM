@@ -12,7 +12,7 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 const GARBAGE = '<unused19><unused10><unused16><unused8><unused26><unused30><unused28><unused0><unused28><unk><unused21><unused19>';
-const GOOD = 'Hello! How can I help you today?';
+const GOOD = '12';
 
 it('reports which GPU layer counts give real words and which give noise, and puts the person\'s settings back', async () => {
   const h = await setupChatScreen({ engine: 'llama', platform: 'android', modelFileName: 'Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf' });
