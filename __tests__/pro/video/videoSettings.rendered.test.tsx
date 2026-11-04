@@ -26,6 +26,7 @@ async function videoSettings(): Promise<StudioApp> {
   rtl.fireEvent.press(view.getByTestId('chat-settings-icon'));
   expect(view.queryByLabelText('Video seed')).toBeNull();
   rtl.fireEvent.press(await view.findByLabelText('Video generation'));
+  rtl.fireEvent.press(await view.findByTestId('video-settings-advanced-toggle'));
   await view.findByLabelText('Video seed');
   return app;
 }
