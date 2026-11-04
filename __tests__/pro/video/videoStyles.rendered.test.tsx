@@ -89,15 +89,28 @@ it('Restyle on a clip makes the same prompt again in the style I pick', async ()
   await rtl.waitFor(() => expect(view.getAllByTestId('chat-clip-card')).toHaveLength(2), { timeout: 15_000 });
 }, 90_000);
 
-it('All opens every style at once; a pick there becomes the chat\'s style', async () => {
+it('the row shows an arrow on each side while more styles lie that way; a pick folds the row', async () => {
   const app = await newChatInVideoMode();
   const { view, rtl } = app;
-  rtl.fireEvent.press(view.getByTestId('style-row-all'));
-  rtl.fireEvent.press(await view.findByTestId('style-grid-vintage'));
-  // The sheet closes and the row folds to the line that names the pick; it is the chat's style when video mode comes back.
+  const scrollTo = (x: number) =>
+    rtl.fireEvent.scroll(view.getByTestId('style-row-list'), {
+      nativeEvent: { contentOffset: { x, y: 0 }, contentSize: { width: 900, height: 80 }, layoutMeasurement: { width: 300, height: 80 } },
+    });
+  rtl.fireEvent(view.getByTestId('style-row-viewport'), 'layout', { nativeEvent: { layout: { width: 300, height: 80 } } });
+  // At the start only the right arrow shows; in the middle both; at the end only the left.
+  scrollTo(0);
+  expect(view.getByTestId('style-row-more-right')).toBeTruthy();
+  expect(view.queryByTestId('style-row-more-left')).toBeNull();
+  scrollTo(300);
+  expect(view.getByTestId('style-row-more-left')).toBeTruthy();
+  expect(view.getByTestId('style-row-more-right')).toBeTruthy();
+  scrollTo(600);
+  expect(view.getByTestId('style-row-more-left')).toBeTruthy();
+  expect(view.queryByTestId('style-row-more-right')).toBeNull();
+  // A pick folds the row to the line that names it; it is the chat's style when video mode comes back.
+  rtl.fireEvent.press(view.getByTestId('style-row-vintage'));
   await rtl.waitFor(() => expect(view.getByText('Style · Vintage film')).toBeTruthy());
   expect(view.queryByTestId('style-row-vintage')).toBeNull();
-  expect(view.queryByTestId('style-grid')).toBeNull();
   await toggleVideoMode(app);
   await toggleVideoMode(app);
   expect((await view.findByTestId('style-row-vintage')).props.accessibilityState).toMatchObject({ selected: true });

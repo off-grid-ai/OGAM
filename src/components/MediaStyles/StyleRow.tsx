@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { FlatList, Image, Text, View } from 'react-native';
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import type { MediaStyle, MediaStyleKind } from '@offgrid/models';
 import { TouchableOpacity } from '../Touchable';
@@ -10,6 +11,8 @@ import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import { stylePreview, stylesFor } from '../../services/mediaStyles';
 
 const THUMB = 60;
+/** How close to the end of the row counts as the end, so the arrow does not flicker on the last pixels. */
+const END_SLACK = 4;
 
 /**
  * The styles a picture or a clip can take, as one row of previews. Nothing is chosen by default;
@@ -22,14 +25,30 @@ export const StyleRow: React.FC<{
   testID?: string;
   /** Drawn as the top of the composer, with no card of its own. */
   attached?: boolean;
-  /** Opens every style at once; the row only shows the first few. */
-  onShowAll?: () => void;
-  /** Only the line that names the chosen style, with Clear and All; the previews are put away. */
+  /** Only the line that names the chosen style, with Clear; the previews are put away. */
   collapsed?: boolean;
-}> = ({ kind, selectedId, onChange, testID = 'style-row', attached = false, onShowAll, collapsed = false }) => {
+}> = ({ kind, selectedId, onChange, testID = 'style-row', attached = false, collapsed = false }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const selected = stylesFor(kind).find(style => style.id === selectedId);
+  const listRef = useRef<FlatList<MediaStyle>>(null);
+  const [width, setWidth] = useState(0);
+  // An arrow on each side while more styles lie that way; a tap pages the row towards them.
+  const [more, setMore] = useState({ left: false, right: false });
+  const offset = useRef(0);
+  const contentWidth = useRef(0);
+  const updateMore = (viewWidth: number) => {
+    const left = offset.current > END_SLACK;
+    const right = offset.current + viewWidth < contentWidth.current - END_SLACK;
+    setMore(prev => (prev.left === left && prev.right === right ? prev : { left, right }));
+  };
+  const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    offset.current = event.nativeEvent.contentOffset.x;
+    contentWidth.current = event.nativeEvent.contentSize.width;
+    updateMore(width);
+  };
+  const page = (direction: 1 | -1) =>
+    listRef.current?.scrollToOffset({ offset: Math.max(0, offset.current + direction * width * 0.8), animated: true });
   return (
     <View style={attached ? styles.attached : styles.row} testID={testID} accessibilityLabel="Style">
       <View style={[styles.header, attached && styles.headerAttached, collapsed && styles.headerCollapsed]}>
@@ -46,23 +65,19 @@ export const StyleRow: React.FC<{
               <Icon name="x" size={16} color={colors.textSecondary} />
             </TouchableOpacity>
           ) : null}
-          {onShowAll ? (
-            <TouchableOpacity
-              testID={`${testID}-all`}
-              accessibilityRole="button"
-              accessibilityLabel="All styles"
-              hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
-              onPress={onShowAll}
-              style={styles.all}
-            >
-              <Text style={styles.allText}>All</Text>
-              <Icon name="chevron-right" size={14} color={colors.primary} />
-            </TouchableOpacity>
-          ) : null}
         </View>
       </View>
       {collapsed ? null : (
+      <View
+        testID={`${testID}-viewport`}
+        onLayout={event => {
+          setWidth(event.nativeEvent.layout.width);
+          updateMore(event.nativeEvent.layout.width);
+        }}
+      >
       <FlatList
+        ref={listRef}
+        testID={`${testID}-list`}
         {...LIST_CLIPPING_PROPS}
         horizontal
         data={stylesFor(kind) as MediaStyle[]}
@@ -70,6 +85,12 @@ export const StyleRow: React.FC<{
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={[styles.list, attached && styles.listAttached]}
         keyboardShouldPersistTaps="handled"
+        onScroll={onScroll}
+        scrollEventThrottle={32}
+        onContentSizeChange={size => {
+          contentWidth.current = size;
+          updateMore(width);
+        }}
         renderItem={({ item }) => (
           <StyleTile
             kind={kind}
@@ -80,8 +101,29 @@ export const StyleRow: React.FC<{
           />
         )}
       />
+      {more.left ? <PageArrow side="left" onPress={() => page(-1)} testID={`${testID}-more-left`} /> : null}
+      {more.right ? <PageArrow side="right" onPress={() => page(1)} testID={`${testID}-more-right`} /> : null}
+      </View>
       )}
     </View>
+  );
+};
+
+/** A round arrow over the row's edge, saying more styles lie that way. */
+const PageArrow: React.FC<{ side: 'left' | 'right'; onPress: () => void; testID: string }> = ({ side, onPress, testID }) => {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  return (
+    <TouchableOpacity
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={side === 'left' ? 'Earlier styles' : 'More styles'}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      onPress={onPress}
+      style={[styles.more, side === 'left' ? styles.moreLeft : styles.moreRight]}
+    >
+      <Icon name={side === 'left' ? 'chevron-left' : 'chevron-right'} size={16} color={colors.textSecondary} />
+    </TouchableOpacity>
   );
 };
 
@@ -143,8 +185,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     minHeight: 20,
   },
   actions: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.lg },
-  all: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2 },
-  allText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
   label: { ...TYPOGRAPHY.label, color: colors.textMuted, textTransform: 'uppercase' as const, letterSpacing: 1 },
   list: { paddingHorizontal: SPACING.md, gap: SPACING.sm },
   tile: { width: THUMB, alignItems: 'center' as const, gap: SPACING.xs },
@@ -172,4 +212,20 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   name: { ...TYPOGRAPHY.meta, color: colors.textSecondary, maxWidth: THUMB, textAlign: 'center' as const },
   nameSelected: { color: colors.primary },
+  // Centred on the previews at the row's edge, on the surface so it reads over a tile.
+  moreLeft: { left: SPACING.xs },
+  moreRight: { right: SPACING.xs },
+  more: {
+    position: 'absolute' as const,
+    top: THUMB / 2 - 12,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    ...shadows.small,
+  },
 });

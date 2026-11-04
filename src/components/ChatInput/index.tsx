@@ -29,7 +29,6 @@ import { bestInstalledVideoModel, videoPacksForPhone } from '../../services/phon
 import { AppSheet } from '../AppSheet';
 import { Button } from '../Button';
 import { StyleRow } from '../MediaStyles/StyleRow';
-import { StyleGrid } from '../MediaStyles/StyleGrid';
 import { NEW_CHAT_STYLE_KEY, useMediaStyleStore } from '../../stores/mediaStyleStore';
 
 type AssistantAvailability = 'no-pro' | 'needs-sync' | 'unavailable' | 'ready';
@@ -213,7 +212,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     styleKind ? state.byChat[styleChatKey]?.[styleKind] : undefined,
   );
   const setChatStyle = useMediaStyleStore(state => state.setStyle);
-  const [allStylesOpen, setAllStylesOpen] = useState(false);
   // A pick folds the row to the line that names it; turning the mode off and on, or Clear, opens it again.
   const [stylesShown, setStylesShown] = useState(true);
   useEffect(() => {
@@ -645,20 +643,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </Text>
         ) : null}
       </View>
-      {styleKind ? (
-        <AppSheet visible={allStylesOpen} onClose={() => setAllStylesOpen(false)} title="Styles" sheet="chat:styles" enableDynamicSizing>
-          <View style={styles.allStyles}>
-            <StyleGrid
-              kind={styleKind}
-              selectedId={chosenStyle}
-              onPick={styleId => {
-                pickStyle(styleKind, styleId === chosenStyle ? null : styleId);
-                setAllStylesOpen(false);
-              }}
-            />
-          </View>
-        </AppSheet>
-      ) : null}
       {/* One box across the full width, down to the screen's bottom edge; in image or video mode the styles
           are its top, the input and send below. */}
       <View style={[styles.composer, { paddingBottom: 8 + bottomInset }]}>
@@ -669,7 +653,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           kind={styleKind}
           selectedId={chosenStyle}
           onChange={styleId => pickStyle(styleKind, styleId)}
-          onShowAll={() => setAllStylesOpen(true)}
         />
       ) : null}
       <View style={styles.mainRow}>

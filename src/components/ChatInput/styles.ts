@@ -170,7 +170,6 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     ...shadows.small,
   },
   pillInComposer: { backgroundColor: 'transparent', borderRadius: 0, boxShadow: [] },
-  allStyles: { padding: SPACING.lg },
   pillInput: {
     flex: 1,
     color: colors.text,
