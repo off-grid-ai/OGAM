@@ -651,6 +651,8 @@ export const MB = 1024 * 1024;
 
 export interface FsFake {
   module: Record<string, unknown>;
+  /** react-native-zip-archive over the same in-memory disk: zip(dir|files, target) and unzip(source, dir). */
+  zipModule: Record<string, unknown>;
   /** Seed a file on the virtual disk with an exact byte size (for truncated/partial-file cases). */
   seedFile(path: string, sizeBytes: number): void;
   /** Seed a directory so exists()/readDir() see it even when empty. */
@@ -698,13 +700,18 @@ function makeFsFake(): FsFake {
       });
     }),
     stat: jest.fn(async (p: string) => mkStat(p, vol.statSync(norm(p)) as never)),
-    writeFile: jest.fn(async (p: string, contents: string) => {
+    writeFile: jest.fn(async (p: string, contents: string, enc?: string) => {
       const np = norm(p);
       vol.mkdirSync(np.slice(0, np.lastIndexOf('/')) || '/', { recursive: true });
       virtualFileSizes.delete(np);
-      vol.writeFileSync(np, String(contents ?? ''));
+      vol.writeFileSync(np, enc === 'base64' ? Buffer.from(String(contents ?? ''), 'base64') : String(contents ?? ''));
     }),
-    readFile: jest.fn(async (p: string) => vol.readFileSync(norm(p), 'utf8')),
+    readFile: jest.fn(async (p: string, enc?: string) => vol.readFileSync(norm(p), enc === 'base64' ? 'base64' : 'utf8')),
+    appendFile: jest.fn(async (p: string, contents: string, enc?: string) => {
+      const np = norm(p);
+      vol.mkdirSync(np.slice(0, np.lastIndexOf('/')) || '/', { recursive: true });
+      vol.appendFileSync(np, enc === 'base64' ? Buffer.from(String(contents), 'base64') : String(contents ?? ''));
+    }),
     read: jest.fn(async () => 'GGUF'),
     unlink: jest.fn(async (p: string) => { virtualFileSizes.delete(norm(p)); vol.rmSync(norm(p), { recursive: true, force: true }); }),
     moveFile: jest.fn(async (from: string, to: string) => {
@@ -718,11 +725,42 @@ function makeFsFake(): FsFake {
       if (size !== undefined) virtualFileSizes.set(norm(to), size);
       vol.copyFileSync(norm(from), norm(to));
     }),
-    hash: jest.fn(async () => 'deadbeef'),
+    // A real digest of the file's bytes (the device computes the same), so checksum logic is exercised, not stubbed.
+    hash: jest.fn(async (p: string, algo: string = 'sha256') => require('crypto').createHash(algo).update(vol.readFileSync(norm(p))).digest('hex')),
     downloadFile: jest.fn(() => ({ jobId: 1, promise: Promise.resolve({ statusCode: 200, bytesWritten: 0 }) })),
     stopDownload: jest.fn(),
   };
-  return { module, seedFile, seedDir, DocumentDirectoryPath };
+  const zipModule: Record<string, unknown> = {
+    zip: jest.fn(async (source: string | string[], target: string) => {
+      const files: Record<string, string> = {};
+      const walk = (dir: string, rel: string) => {
+        for (const name of vol.readdirSync(dir) as string[]) {
+          const full = `${dir}/${name}`;
+          const r = rel ? `${rel}/${name}` : name;
+          if (vol.statSync(full).isDirectory()) walk(full, r);
+          else files[r] = (vol.readFileSync(full) as Buffer).toString('base64');
+        }
+      };
+      for (const root of ([] as string[]).concat(source).map(norm)) {
+        if (vol.statSync(root).isDirectory()) walk(root, '');
+        else files[base(root)] = (vol.readFileSync(root) as Buffer).toString('base64');
+      }
+      const t = norm(target);
+      vol.mkdirSync(t.slice(0, t.lastIndexOf('/')) || '/', { recursive: true });
+      vol.writeFileSync(t, JSON.stringify({ zip: true, files }));
+      return target;
+    }),
+    unzip: jest.fn(async (source: string, dest: string) => {
+      const archive = JSON.parse(vol.readFileSync(norm(source), 'utf8') as string) as { files: Record<string, string> };
+      for (const [rel, b64] of Object.entries(archive.files)) {
+        const out = `${norm(dest)}/${rel}`;
+        vol.mkdirSync(out.slice(0, out.lastIndexOf('/')), { recursive: true });
+        vol.writeFileSync(out, Buffer.from(b64, 'base64'));
+      }
+      return dest;
+    }),
+  };
+  return { module, zipModule, seedFile, seedDir, DocumentDirectoryPath };
 }
 
 // ---------------------------------------------------------------------------
@@ -795,7 +833,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
 
   // Stateful FS: override the dumb global react-native-fs stub BEFORE any service requires it.
   const fsFake = opts.fs ? makeFsFake() : undefined;
-  if (fsFake) jest.doMock('react-native-fs', () => fsFake.module);
+  if (fsFake) { jest.doMock('react-native-fs', () => fsFake.module); jest.doMock('react-native-zip-archive', () => fsFake.zipModule); }
 
   // Diffusion writes its rendered PNG to the (memfs) disk when fs is present, like the native module.
   const diffusion = makeDiffusionFake(fsFake?.seedFile);
