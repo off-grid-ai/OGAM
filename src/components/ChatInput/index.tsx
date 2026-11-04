@@ -28,6 +28,8 @@ import { hardwareService } from '../../services/hardware';
 import { bestInstalledVideoModel, videoPacksForPhone } from '../../services/phoneVideoPacks';
 import { AppSheet } from '../AppSheet';
 import { Button } from '../Button';
+import { StyleRow } from '../MediaStyles/StyleRow';
+import { NEW_CHAT_STYLE_KEY, useMediaStyleStore } from '../../stores/mediaStyleStore';
 
 type AssistantAvailability = 'no-pro' | 'needs-sync' | 'unavailable' | 'ready';
 
@@ -200,6 +202,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [assistantTransitioning, setAssistantTransitioning] = useState(false);
   const [assistantGateOpen, setAssistantGateOpen] = useState(false);
   const [imageMode, setImageMode] = useState<ImageModeState>('auto');
+  // Image or video mode shows the styles for that kind; the chat remembers the one it chose.
+  const styleKind = imageMode === 'force' ? 'image' : imageMode === 'video' ? 'video' : null;
+  const styleChatKey = conversationId ?? NEW_CHAT_STYLE_KEY;
+  const chosenStyle = useMediaStyleStore(state =>
+    styleKind ? state.byChat[styleChatKey]?.[styleKind] : undefined,
+  );
+  const setChatStyle = useMediaStyleStore(state => state.setStyle);
   const [voiceInteractionMode, setVoiceInteractionMode] = useState<VoiceRecordInteractionMode>('idle');
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const quickSettings = useKeyboardAwarePopover();
@@ -615,6 +624,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     <View style={styles.container}>
       <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
       <QueueRow queue={queue} actions={queueActions} />
+      {styleKind ? (
+        <StyleRow
+          kind={styleKind}
+          selectedId={chosenStyle}
+          onChange={styleId => setChatStyle(styleChatKey, styleKind, styleId)}
+        />
+      ) : null}
       {transcriptionNotice ? (
         <Text style={styles.transcriptionNotice} testID="transcription-notice">
           {transcriptionNotice}
