@@ -558,6 +558,9 @@ What changed:
   remembered GPU checks.
 - 0.0.130: Test GPU on this model has a model picker. A model whose GPU load is refused by the output check can no longer
   be selected for chat, so the test now takes any downloaded GGUF model (default: the current one, else a Gemma 4).
+- 0.0.132: importing a model file now REPLACES any file and saved-list entry of the same name instead of refusing with
+  "already in your models list" (which appeared even after the model had been removed). A same-size leftover is also
+  copied over now: the same size does not mean the same bytes, and a damaged copy was being kept. Same for a picture file.
 - Fix: an MTP file attached to a model was offered by the model scan as a "recovered model".
 - Not verified on a phone: the OpenCL result, the timeout behaviour on a 12B load, the picture check on the GPU, and MTP.
 

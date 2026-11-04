@@ -46,3 +46,26 @@ it('judges a model file by size and checksum even when the file was renamed', ()
   // A file Atlas knows nothing about is reported with its checksum, not called good or bad.
   expect(describeFileVerdict(judgeFile(123, 'abc'))).toMatch(/not in the list of known files \(123 bytes, SHA-256 abc\)/);
 });
+
+it('imports a model again when the saved list still has an entry for the same file name, replacing it instead of saying it is already in the list', async () => {
+  const boundary = installNativeBoundary({ fs: true });
+  requireRTL();
+  const AsyncStorage = require('@react-native-async-storage/async-storage');
+  const RNFS = require('react-native-fs');
+  const { importLocalModel } = require('../../src/services/modelManager/scan');
+  const dir = '/models';
+  const dest = `${dir}/${MODEL}`;
+  // What a removal left behind: the file in the folder (an older, different copy) and its entry in the saved list.
+  boundary.fs!.seedFile(dest, 6 * 1024 * 1024);
+  await AsyncStorage.setItem('@local_llm/downloaded_models', JSON.stringify([
+    { id: `local_import/${MODEL}`, name: 'Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced', fileName: MODEL, filePath: dest, fileSize: 6 * 1024 * 1024, engine: 'llama' },
+  ]));
+  boundary.fs!.seedFile('/downloads/picked.gguf', 7 * 1024 * 1024);
+
+  const model = await importLocalModel({ sourceUri: 'file:///downloads/picked.gguf', fileName: MODEL, modelsDir: dir, sourceSize: 7 * 1024 * 1024 });
+  expect(model.id).toBe(`local_import/${MODEL}`);
+  expect(Number((await RNFS.stat(dest)).size)).toBe(7 * 1024 * 1024); // the picked file's bytes, not the old copy's
+  const { loadDownloadedModels } = require('../../src/services/modelManager/storage');
+  const list = await loadDownloadedModels(dir);
+  expect(list.filter((m: { fileName: string }) => m.fileName === MODEL)).toHaveLength(1);
+});

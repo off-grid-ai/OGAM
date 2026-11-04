@@ -424,19 +424,14 @@ export async function importLocalModel(opts: ImportLocalModelOpts): Promise<Down
   const resolvedMmProjSource = mmProjSourceUri ? resolveUri(mmProjSourceUri) : undefined;
 
   const destPath = `${modelsDir}/${fileName}`;
-  // A file with this name is already in the models folder. If the list has it, say so. If the list does not (an earlier
-  // import or removal left it behind), it is not a duplicate: a complete copy is added to the list as it is, a partial one
-  // is replaced. Before, this refused with "already exists" while the model was nowhere in the list to pick.
-  let alreadyCopied = false;
-  if (await RNFS.exists(destPath)) {
-    const known = (await loadDownloadedModels(modelsDir)).find((m) => m.filePath === destPath);
-    if (known) throw new Error(`"${fileName}" is already in your models list as "${known.name}"`);
-    const have = parseSizeInt((await RNFS.stat(destPath)).size);
-    if (sourceSize && have === sourceSize) alreadyCopied = true;
-    else await RNFS.unlink(destPath);
-  }
-  if (mmProjFileName && await RNFS.exists(`${modelsDir}/${mmProjFileName}`)) {
-    throw new Error(`A file named "${mmProjFileName}" already exists`);
+  // Importing a file is an explicit request, so it REPLACES whatever is already under that name: an earlier copy that is still
+  // in the models folder, and/or an entry in the saved list that My Models no longer shows. Refusing ("already in your models
+  // list") left people unable to import a model they had removed, and keeping a same-size leftover left a damaged copy in
+  // place (the same size does not mean the same bytes). The entry is keyed by file name, so it is replaced, never duplicated.
+  const alreadyCopied = resolvedSource === destPath; // picked from the models folder itself: nothing to copy
+  if (!alreadyCopied && await RNFS.exists(destPath)) await RNFS.unlink(destPath);
+  if (mmProjFileName && resolvedMmProjSource !== `${modelsDir}/${mmProjFileName}` && await RNFS.exists(`${modelsDir}/${mmProjFileName}`)) {
+    await RNFS.unlink(`${modelsDir}/${mmProjFileName}`);
   }
 
   // Copy main model: progress 0→0.5 when mmproj present, 0→1 otherwise
