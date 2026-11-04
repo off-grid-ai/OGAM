@@ -55,6 +55,7 @@ import {
   AboutScreen,
   ToolsScreen,
 } from '../screens';
+import { KnowledgeScreen } from '../knowledge/KnowledgeScreen';
 import { useLayoutClass } from '../hooks/useLayoutClass';
 import {
   RootStackParamList,
@@ -304,6 +305,7 @@ export const AppNavigator: React.FC = () => {
           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
         />
         <RootStack.Screen name="Learning" component={LearningScreen} />
+        <RootStack.Screen name="Knowledge" component={KnowledgeScreen} />
         <RootStack.Screen name="Emergency" component={EmergencyScreen} />
         <RootStack.Screen name="OfflineLibrary" component={OfflineLibraryScreen} />
         <RootStack.Screen name="SurvivalManual" component={SurvivalManualScreen} />

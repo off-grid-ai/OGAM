@@ -260,6 +260,9 @@ export const LearningScreen: React.FC = () => {
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}><Icon name="arrow-left" size={20} color={colors.text} /></TouchableOpacity>
         <Text style={styles.title}>Learning mode</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('Knowledge')} style={styles.back} accessibilityLabel="Knowledge: documents, experts, library, import and export" testID="open-knowledge">
+          <Icon name="book-open" size={20} color={colors.text} />
+        </TouchableOpacity>
       </View>
       {wide ? (
         <View style={styles.wideRow}>

@@ -407,6 +407,8 @@ jest.mock('@react-native-documents/picker', () => ({
     pdf: 'application/pdf',
   },
   // Android hands back a content:// uri; the device copies it into app storage. The fake "copy" is the same readable path.
+  // The "save to" dialog: the person picks a place; the fake accepts and reports the file name.
+  saveDocuments: jest.fn(async ({ fileName }: { fileName: string }) => [{ name: fileName }]),
   keepLocalCopy: jest.fn(async ({ files }: { files: Array<{ uri: string }> }) => files.map((f) => ({ status: 'success', sourceUri: f.uri, localUri: f.uri }))),
   isErrorWithCode: jest.fn(() => false),
   errorCodes: {

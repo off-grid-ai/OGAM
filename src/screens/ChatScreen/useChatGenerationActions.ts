@@ -3,6 +3,7 @@
 import { useSkills } from '../../skills/skillsStore';
 import { relevantTools } from '../../services/tools/relevantTools';
 import { locationNote } from '../../atlasMaps/locationNote';
+import { expertKnowledgeNote } from '../../knowledge/chatHook';
 import { skillsNote } from '../../skills/selectSkills';
 import { Dispatch, SetStateAction } from 'react';
 import { resolveAgentPrompt } from '../../stores/agentStore';
@@ -431,7 +432,8 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
     return;
   }
   const conversation = useChatStore.getState().conversations.find(c => c.id === targetConversationId);
-  const { enabledTools, rawPrompt, localToolSupport } = resolveToolsAndPrompt(deps, conversation, messageText);
+  const { enabledTools, rawPrompt: promptBase, localToolSupport } = resolveToolsAndPrompt(deps, conversation, messageText);
+  const rawPrompt = promptBase + await expertKnowledgeNote(messageText);
   let researchMessage = messageText;
   let usedOfflineProjectEvidence = false;
   if (deps.researchMode) {
@@ -716,7 +718,8 @@ export async function regenerateResponseFn(deps: GenerationDeps, call: Regenerat
   const messages = (conversation?.messages || []).filter((m: Message) => !m.isSystemInfo);
   const messagesUpToUser = messages.slice(0, messages.findIndex((m: Message) => m.id === userMessage.id) + 1)
     .map(m => m.id === userMessage.id ? { ...m, content: messageText } : m);
-  const { enabledTools, rawPrompt, localToolSupport } = resolveToolsAndPrompt(deps, conversation, messageText);
+  const { enabledTools, rawPrompt: promptBase, localToolSupport } = resolveToolsAndPrompt(deps, conversation, messageText);
+  const rawPrompt = promptBase + await expertKnowledgeNote(messageText);
   const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;
   const activeTools = enabledTools;
   const basePrompt = await injectRagContext(conversation?.projectId, messageText, rawPrompt, enabledTools);

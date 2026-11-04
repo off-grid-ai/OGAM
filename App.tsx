@@ -95,6 +95,7 @@ function App() {
   // Keep the last GPS reading fresh (only if location was already allowed) so the AI can say roughly where you are.
   useEffect(() => {
     void refreshLastFix();
+    void require('./src/knowledge/controller').recoverKnowledge().catch(() => undefined);
     const sub = AppState.addEventListener('change', (s) => { if (s === 'active') void refreshLastFix(); });
     return () => sub.remove();
   }, []);
