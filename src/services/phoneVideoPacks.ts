@@ -65,9 +65,10 @@ export function phoneVideoSize(weight: string, ramGB: number): { width: number; 
 
 const TRAINED_SIZE_MIN_RAM_GB = 16;
 
-/** What a person sees when a clip renders below its model's trained size on this phone. */
-export const SMALLER_ON_PHONE_NOTE =
-  'Made smaller to fit this phone\'s memory. For sharper video, pair a computer or use a phone with 16 GB or more.';
+/** What a person sees on a clip this phone renders below its model's trained size. */
+export const SMALLER_ON_PHONE_NOTE = 'Smaller to fit this phone. For sharper video, pair a computer or use a 16 GB phone.';
+/** The same, in video settings, where the full size is one tap away. */
+export const SMALLER_ON_PHONE_SETTING = 'Smaller to fit this phone. Full size may run out of memory.';
 
 /** Whether a clip of this size renders below the size its model was trained at. */
 export function isBelowTrainedSize(weight: string, size: { width: number; height: number }): boolean {

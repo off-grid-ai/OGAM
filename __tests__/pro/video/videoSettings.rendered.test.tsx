@@ -74,7 +74,7 @@ it('shows the recommended settings, and Use recommended drops the ones I changed
   // model's corrected defaults. The section says what is recommended, and one tap goes back to it.
   const app = await videoSettings();
   const { view, rtl } = app;
-  const recommended = view.getByTestId('video-settings-recommended').props.children as string;
+  const recommended = [view.getByTestId('video-settings-recommended').props.children].flat().join('');
   const steps = Number(recommended.match(/(\d+) steps/)![1]);
   expect(view.queryByTestId('video-settings-use-recommended')).toBeNull();
   // A change made earlier, through the settings store the sliders write to.

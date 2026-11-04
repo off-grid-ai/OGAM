@@ -605,8 +605,38 @@ it('a phone that cannot hold the trained size makes the clip smaller, and the ca
   current.engine.hold();
   await describeClipOnPhone(current, 'a lighthouse at night');
   await view.findByText(/Making frames · 1 of \d+/, {}, { timeout: 15_000 });
-  expect(view.getByTestId('video-smaller-on-phone').props.children).toMatch(/pair a computer or use a phone with 16 GB/);
+  expect(view.getByTestId('video-smaller-on-phone').props.children).toMatch(/pair a computer or use a 16 GB phone/);
   expect([current.engine.generations[0].width, current.engine.generations[0].height]).toEqual([320, 192]);
+  current.engine.release();
+  await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
+}, 90_000);
+
+it('a phone judged too small can still ask for the full size in settings, and the next clip is made at it', async () => {
+  // SPEC (2026-11-04, Ali): "what if we made a mistake in classifying?" A 12 GB phone gets the smaller
+  // size, but its video settings offer the model's own size in one tap, and Use recommended goes back.
+  const current = await launch({ ram: { totalBytes: 12 * GB, availBytes: 10 * GB } });
+  const { view, rtl } = current;
+  await downloadVideoModel(current);
+  rtl.fireEvent.press(await view.findByTestId('home-tab'));
+  rtl.fireEvent.press(await view.findByTestId('model-summary-video-open'));
+  rtl.fireEvent.press(await view.findByTestId(`video-model-row-${MODEL.id}`, {}, { timeout: 5000 }));
+  rtl.fireEvent.press(await view.findByTestId('new-chat-button', {}, { timeout: 5000 }));
+  await view.findByTestId('chat-input');
+  rtl.fireEvent.press(view.getByTestId('chat-settings-icon'));
+  rtl.fireEvent.press(await view.findByLabelText('Video generation'));
+  rtl.fireEvent.press(await view.findByTestId('video-settings-try-full-size'));
+  await view.findByTestId('video-settings-use-recommended');
+  expect(view.queryByTestId('video-settings-try-full-size')).toBeNull();
+  const close = view.queryAllByTestId('app-sheet-close');
+  if (close.length) rtl.fireEvent.press(close[close.length - 1]);
+  current.engine.hold();
+  rtl.fireEvent.press(view.getByTestId('quick-settings-button'));
+  rtl.fireEvent.press(await view.findByTestId('quick-video-mode'));
+  rtl.fireEvent.changeText(view.getByTestId('chat-input'), 'a lighthouse at night');
+  rtl.fireEvent.press(view.getByTestId('send-button'));
+  await view.findByText(/Making frames · 1 of \d+/, {}, { timeout: 15_000 });
+  expect([current.engine.generations[0].width, current.engine.generations[0].height]).toEqual([832, 480]);
+  expect(view.queryByTestId('video-smaller-on-phone')).toBeNull();
   current.engine.release();
   await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
 }, 90_000);
