@@ -7,6 +7,7 @@ import { APP_CONFIG } from '../../constants';
 import {
   llmService,
   intentClassifier,
+  isVideoRequest,
   generationService,
   imageGenerationService,
   ImageGenerationState,
@@ -295,6 +296,13 @@ async function resolveTurnKind(
   if (input.recordedKind) return input.recordedKind; // replay: the recorded fact wins
   if (input.forceVideoMode) return 'video';
   if (input.imageEnabled === false) return 'text'; // image route explicitly disabled for this turn
+  // "Create a video of…" makes a video in auto mode, as "draw a…" makes an image. Checked before the
+  // image rule, which would read "make a video of a sunset scene" as a picture. Manual mode leaves it
+  // to the video toggle, and free builds (no video) fall through to the image/text rule.
+  if (deps.settings.imageGenerationMode !== 'manual' && videoSeam.available() && isVideoRequest(input.text)) {
+    logger.log('[ROUTE-SM] → video: the message asks for a video');
+    return 'video';
+  }
   return (await shouldRouteToImageGenerationFn(
     deps,
     input.text,

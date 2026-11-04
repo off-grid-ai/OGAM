@@ -3,6 +3,9 @@ import { activeModelService } from './activeModelService';
 import { DownloadedModel } from '../types';
 import logger from '../utils/logger';
 
+/** The video-request rule is shared with Desktop (@offgrid/models). */
+export { isVideoRequest } from '@offgrid/models';
+
 type Intent = 'image' | 'text';
 
 interface ClassifyOptions {
