@@ -18,6 +18,7 @@ import {
   stateIndex, terms, uuid, withLock, writeJson, type RecordState,
 } from './storage';
 import RNFS from 'react-native-fs';
+import { readJson } from './storage';
 
 // ------------------------------------------------------------------ identity of a finding
 const normalise = (t: string) => t.toLowerCase().replace(/\s+/g, ' ').replace(/[^a-z0-9% .,'-]/g, '').trim();
@@ -62,7 +63,17 @@ export async function startCycle(input: { agentId: string; topicId: string; topi
     };
     await writeJson(cycleFile(dir, 'report.json'), report);
     await appendJsonl(P.cyclesIndex(), [{ cycleId, dir, agentId: input.agentId, topicId: input.topicId, startedAt: report.startedAt }]);
+    await setOpen(dir, true);
     return { cycleId, dir, agentId: input.agentId, topicId: input.topicId, startedAtMs: Date.now(), report };
+  });
+}
+
+/** Cycles that have started and not finished: all that startup has to look at, however long the history is. */
+async function setOpen(dir: string, open: boolean): Promise<void> {
+  await withLock('open-cycles', async () => {
+    const list = await readJson<{ dirs: string[] }>(P.openCycles(), { dirs: [] });
+    const next = open ? Array.from(new Set([...list.dirs, dir])) : list.dirs.filter((d) => d !== dir);
+    await writeJson(P.openCycles(), { dirs: next });
   });
 }
 
@@ -175,6 +186,7 @@ export async function finalizeCycle(
   await writeJson(cycleFile(handle.dir, 'report.json'), r);
   await atomicWriteText(cycleFile(handle.dir, 'report.md'), cycleMarkdown(r));
   await atomicWriteText(cycleFile(handle.dir, 'final.json'), JSON.stringify({ finalizedAt: ended, findings: findings.length }));
+  await setOpen(handle.dir, false);
   return r;
 }
 
@@ -193,11 +205,24 @@ export function cycleMarkdown(r: CycleReport): string {
 }
 
 // ------------------------------------------------------------------ reading a finding
+// Parsed revision files, reused while a file's size is unchanged (a month's file only grows by appending), so looking up
+// many findings does not re-read and re-parse the same revisions each time. At most a dozen files are held.
+const revisionCache = new Map<string, { size: number; rows: RevisionRecord[] }>();
+async function revisionRows(path: string): Promise<RevisionRecord[]> {
+  const size = Number((await RNFS.stat(path)).size);
+  const hit = revisionCache.get(path);
+  if (hit && hit.size === size) return hit.rows;
+  const rows = await readJsonl<RevisionRecord>(path);
+  revisionCache.set(path, { size, rows });
+  if (revisionCache.size > 12) revisionCache.delete(revisionCache.keys().next().value as string);
+  return rows;
+}
+
 async function revisionsFor(recordId: string): Promise<RevisionRecord[]> {
   const out: RevisionRecord[] = [];
   for (const file of await listDir(P.revisionsDir())) {
     if (!file.endsWith('.jsonl')) continue;
-    for (const r of await readJsonl<RevisionRecord>(`${P.revisionsDir()}/${file}`)) if (r.recordId === recordId) out.push(r);
+    for (const r of await revisionRows(`${P.revisionsDir()}/${file}`)) if (r.recordId === recordId) out.push(r);
   }
   return out.sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
 }
@@ -404,11 +429,13 @@ export async function readReport(dir: string): Promise<CycleReport | null> {
 /** An unfinished cycle left by a killed app is closed as interrupted, so it shows what it reached rather than looking alive. */
 export async function closeInterruptedCycles(): Promise<number> {
   let closed = 0;
-  for (const c of await listCycles()) {
-    if (await isFinalized(c.dir)) continue;
-    const report = await readReport(c.dir);
-    if (!report || report.status !== 'running') continue;
-    const handle: CycleHandle = { cycleId: c.cycleId, dir: c.dir, agentId: c.agentId, topicId: c.topicId, startedAtMs: Date.parse(c.startedAt), report };
+  const open = (await readJson<{ dirs: string[] }>(P.openCycles(), { dirs: [] })).dirs;
+  const index = open.length ? await listCycles() : [];
+  for (const dir of open) {
+    const c = index.find((x) => x.dir === dir);
+    const report = await readReport(dir);
+    if (!c || !report || (await isFinalized(dir)) || report.status !== 'running') { await setOpen(dir, false); continue; }
+    const handle: CycleHandle = { cycleId: c.cycleId, dir, agentId: c.agentId, topicId: c.topicId, startedAtMs: Date.parse(c.startedAt), report };
     await finalizeCycle(handle, { status: 'interrupted', summary: 'This cycle was interrupted before it finished. Its findings so far were kept.' });
     closed++;
   }

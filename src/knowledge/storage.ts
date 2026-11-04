@@ -47,6 +47,7 @@ export const P = {
   revisionsDir: () => `${knowledgeRoot()}/knowledge/revisions`,
   tombstones: () => `${knowledgeRoot()}/knowledge/tombstones.jsonl`,
   checkpoint: (name: string) => `${knowledgeRoot()}/checkpoints/${name}.json`,
+  openCycles: () => `${knowledgeRoot()}/checkpoints/open-cycles.json`,
   lock: () => `${knowledgeRoot()}/checkpoints/job.lock`,
   exportsDir: () => `${knowledgeRoot()}/exports`,
   importsDir: () => `${knowledgeRoot()}/imports`,
