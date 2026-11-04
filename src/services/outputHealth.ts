@@ -142,13 +142,14 @@ export function formatOutputReport(check: OutputCheck, setup: Record<string, str
 
 // ---- Remembering the verdict ------------------------------------------------------------------------------------
 
-export interface VerdictKey { model: string; size: number; backend: string; gpuLayers: number }
+/** `variant` is any other load setting that can change the result (batch size, CPU kernels), so a test of one never blocks another. */
+export interface VerdictKey { model: string; size: number; backend: string; gpuLayers: number; variant?: string }
 export interface Verdict { ok: boolean; reason: string; at: number; build: string }
 
 const llamaRnVersion = (): string => {
   try { return String(require('llama.rn/package.json').version); } catch { return 'unknown'; }
 };
-const keyOf = (k: VerdictKey) => `${k.model.split('/').pop()}|${k.size}|${k.backend}|${k.gpuLayers}|${llamaRnVersion()}+c${CHECK_VERSION}`;
+const keyOf = (k: VerdictKey) => `${k.model.split('/').pop()}|${k.size}|${k.backend}|${k.gpuLayers}|${llamaRnVersion()}+c${CHECK_VERSION}|${k.variant ?? ''}`;
 
 async function readVerdicts(): Promise<Record<string, Verdict>> {
   try { return JSON.parse((await AsyncStorage.getItem(VERDICTS_KEY)) ?? '{}'); } catch { return {}; }
@@ -170,8 +171,8 @@ export async function knownVerdict(key: VerdictKey): Promise<Verdict | null> {
 export async function describeVerdicts(): Promise<string[]> {
   const all = await readVerdicts();
   return Object.entries(all).map(([key, v]) => {
-    const [model, size, backend, layers, build] = key.split('|');
-    return `${model} (${Math.round(Number(size) / 1048576)} MB), ${backend}, ${layers} GPU layers, llama.rn ${build}: ${v.ok ? 'wrote real text' : `FAILED - ${v.reason}`}`;
+    const [model, size, backend, layers, build, variant] = key.split('|');
+    return `${model} (${Math.round(Number(size) / 1048576)} MB), ${backend}, ${layers} GPU layers${variant ? `, ${variant}` : ''}, llama.rn ${build}: ${v.ok ? 'wrote real text' : `FAILED - ${v.reason}`}`;
   });
 }
 

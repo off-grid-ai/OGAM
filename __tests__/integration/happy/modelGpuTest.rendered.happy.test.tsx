@@ -26,7 +26,8 @@ it('reports which GPU layer counts give real words and which give noise, and put
   const real = (initLlama as jest.Mock).getMockImplementation()!;
   (initLlama as jest.Mock).mockImplementation(async (params: Record<string, unknown>, cb?: (p: number) => void) => {
     const context = await real(params, cb);
-    h.boundary.llama!.scriptCompletion({ text: Number(params.n_gpu_layers) >= 24 ? GARBAGE : GOOD });
+    // Noise only when the GPU processes a whole prompt in one batch (the hypothesis the batch-1 step tests).
+    h.boundary.llama!.scriptCompletion({ text: Number(params.n_gpu_layers) >= 24 && Number(params.n_batch) > 1 ? GARBAGE : GOOD });
     return context;
   });
 
@@ -44,6 +45,7 @@ it('reports which GPU layer counts give real words and which give noise, and put
   expect(text).toMatch(/placeholder tokens/);
   expect(text).toMatch(/OpenCL GPU, 16 layers: OK/);
   expect(text).toMatch(/OpenCL GPU, 8 layers: OK/);
+  expect(text).toMatch(/OpenCL GPU, 24 layers, prompt fed one token at a time \(batch 1\): OK/);
   expect(text).toMatch(/Working GPU settings: .*16 layers/);
 
   // The CPU step with the optimized kernels off really reached the engine as no_extra_bufts.
@@ -84,4 +86,32 @@ it('can test a model that is not the current one and cannot be loaded for chat (
   h.rtl.fireEvent.press(view.getByTestId('model-gpu-test-run'));
   const report = await h.rtl.waitFor(() => view.getByTestId('model-gpu-test-report'), { timeout: 110000 });
   expect(JSON.stringify(report.props.children)).toMatch(/Test for Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M\.gguf/);
+}, 120000);
+
+it('checks the file against a checksum the person gives, or the link they downloaded from', async () => {
+  const SHA = '59656d7494d6376ca97e9e20b64ea2e16cd97f12ec6d47bfccba91cb785b5134';
+  const h = await setupChatScreen({ engine: 'llama', platform: 'android', modelFileName: 'Gemma4-12B-QAT-Uncensored-HauhauCSQ4_K_M.gguf' });
+  const RNFS = require('react-native-fs');
+  (RNFS.hash as jest.Mock).mockResolvedValue(SHA);
+  const { initLlama } = require('llama.rn');
+  const real = (initLlama as jest.Mock).getMockImplementation()!;
+  (initLlama as jest.Mock).mockImplementation(async (params: Record<string, unknown>, cb?: (p: number) => void) => {
+    const context = await real(params, cb);
+    h.boundary.llama!.scriptCompletion({ text: GOOD });
+    return context;
+  });
+  const { ModelGpuTest } = require('../../../src/components/ModelGpuTest');
+  const view = h.rtl.render(h.React.createElement(ModelGpuTest));
+  // A wrong checksum is called out; the stop button ends the run after the file check so this stays quick.
+  h.rtl.fireEvent.changeText(view.getByTestId('model-gpu-test-expected'), `${'0'.repeat(64)}  some.gguf`);
+  h.rtl.fireEvent.press(view.getByTestId('model-gpu-test-run'));
+  h.rtl.fireEvent.press(await h.rtl.waitFor(() => view.getByTestId('model-gpu-test-stop')));
+  let report = await h.rtl.waitFor(() => view.getByTestId('model-gpu-test-report'), { timeout: 60000 });
+  expect(JSON.stringify(report.props.children)).toMatch(/Model file: DAMAGED: does NOT match the checksum you gave/);
+  // The right one is confirmed.
+  h.rtl.fireEvent.changeText(view.getByTestId('model-gpu-test-expected'), SHA);
+  h.rtl.fireEvent.press(view.getByTestId('model-gpu-test-run'));
+  h.rtl.fireEvent.press(await h.rtl.waitFor(() => view.getByTestId('model-gpu-test-stop')));
+  report = await h.rtl.waitFor(() => view.getByTestId('model-gpu-test-report'), { timeout: 60000 });
+  expect(JSON.stringify(report.props.children)).toMatch(/Model file: OK: identical to the checksum you gave/);
 }, 120000);

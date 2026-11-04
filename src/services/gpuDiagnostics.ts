@@ -15,10 +15,11 @@ import type { LlamaDownloadedModel } from '../types';
 import { llmService } from './llm';
 import { forgetVerdicts, formatOutputReport, judgeText, type OutputCheck } from './outputHealth';
 import { describeFileVerdict, judgeFile } from './knownModelFiles';
+import { describeAgainstExpected, resolveExpected, type Expected } from './expectedChecksum';
 import logger from '../utils/logger';
 
-export interface SweepSetting { label: string; backend: 'cpu' | 'opencl'; gpuLayers: number; flashAttn: boolean; cpuRepack?: boolean; nBatch?: number }
-export interface SweepStep { setting: SweepSetting; ok: boolean; loadSeconds: number; error?: string; check?: OutputCheck }
+export interface SweepSetting { label: string; backend: 'cpu' | 'opencl'; gpuLayers: number; flashAttn: boolean; cpuRepack?: boolean; nBatch?: number; mtp?: boolean }
+export interface SweepStep { setting: SweepSetting; ok: boolean; loadSeconds: number; error?: string; check?: OutputCheck; note?: string }
 export interface SweepResult { steps: SweepStep[]; files: string[]; vision?: { ok: boolean; reply: string; error?: string }; report: string; best?: SweepSetting }
 
 export const DEFAULT_SWEEP_LAYERS = [24, 16, 8];
@@ -29,13 +30,17 @@ export const DEFAULT_SWEEP_LAYERS = [24, 16, 8];
  * points at the phone's kernels; one that all show points at the file). Then each GPU layer count. OpenCL always runs with
  * flash attention off in Atlas, so there is no on/off pair.
  */
-export function sweepSettings(layers: number[] = DEFAULT_SWEEP_LAYERS): SweepSetting[] {
+export function sweepSettings(layers: number[] = DEFAULT_SWEEP_LAYERS, opts: { mtp?: boolean } = {}): SweepSetting[] {
   const settings: SweepSetting[] = [
     { label: 'CPU only, the app\'s usual settings', backend: 'cpu', gpuLayers: 0, flashAttn: false },
     { label: 'CPU only, optimized ARM kernels off', backend: 'cpu', gpuLayers: 0, flashAttn: false, cpuRepack: false },
     { label: 'CPU only, batch 512 (as on the computer)', backend: 'cpu', gpuLayers: 0, flashAttn: false, nBatch: 512 },
   ];
   for (const n of layers) settings.push({ label: `OpenCL GPU, ${n} layers`, backend: 'opencl', gpuLayers: n, flashAttn: false });
+  // Phone reports showed only the FIRST word wrong on the GPU (every later word right). The first word is the only one computed
+  // from a whole prompt at once; feeding the prompt one token at a time avoids that path, so a pass here points straight at it.
+  if (layers.length) settings.push({ label: `OpenCL GPU, ${layers[0]} layers, prompt fed one token at a time (batch 1)`, backend: 'opencl', gpuLayers: layers[0], flashAttn: false, nBatch: 1 });
+  if (opts.mtp) settings.push({ label: 'CPU only, with the MTP file', backend: 'cpu', gpuLayers: 0, flashAttn: false, mtp: true });
   return settings;
 }
 
@@ -65,7 +70,7 @@ async function checkPicture(): Promise<SweepResult['vision']> {
 function applySetting(setting: SweepSetting): void {
   useAppStore.getState().updateSettings({
     inferenceBackend: setting.backend === 'cpu' ? INFERENCE_BACKENDS.CPU : INFERENCE_BACKENDS.OPENCL,
-    gpuLayers: setting.gpuLayers, flashAttn: setting.flashAttn, cacheType: 'f16', contextLength: 2048, nBatch: setting.nBatch ?? 128, useMtp: false,
+    gpuLayers: setting.gpuLayers, flashAttn: setting.flashAttn, cacheType: 'f16', contextLength: 2048, nBatch: setting.nBatch ?? 128, useMtp: !!setting.mtp,
     cpuRepack: setting.cpuRepack !== false,
   } as any);
 }
@@ -78,8 +83,9 @@ async function runStep(model: LlamaDownloadedModel, setting: SweepSetting): Prom
   const started = Date.now();
   const step: SweepStep = { setting, ok: false, loadSeconds: 0 };
   try {
-    await llmService.loadModel(model.filePath, undefined, { override: true });
+    await llmService.loadModel(model.filePath, undefined, { override: true, ...(setting.mtp && model.draftPath ? { draftPath: model.draftPath } : {}) });
     step.loadSeconds = seconds(started);
+    if (setting.mtp) step.note = llmService.isMtpActive() ? 'MTP drafting was active' : 'the MTP file did not start, so it loaded without it';
     step.check = llmService.getLastOutputCheck() ?? await llmService.runOutputCheck() ?? undefined;
     step.ok = !!step.check?.ok;
     if (!step.ok) step.error = step.check?.reason;
@@ -92,15 +98,15 @@ async function runStep(model: LlamaDownloadedModel, setting: SweepSetting): Prom
 }
 
 const describeStep = (step: SweepStep): string => (step.ok
-  ? `  works: "${step.check?.text.trim().slice(0, 60)}" at ${step.check?.tokensPerSecond} tok/s, first word after ${step.check?.firstTokenMs} ms`
+  ? `  works: "${step.check?.text.trim().slice(0, 60)}" at ${step.check?.tokensPerSecond} tok/s, first word after ${step.check?.firstTokenMs} ms${step.note ? ` (${step.note})` : ''}`
   : `  FAILED: ${step.error}`);
 
-/** Size and SHA-256 of a file against the published values. The checksum takes a minute or two on a 7 GB model. */
-async function checkFile(path: string, label: string): Promise<string> {
+/** Size and SHA-256 of a file against the checksum the person gave, else the published values Atlas knows. A minute or two on a 7 GB model. */
+async function checkFile(path: string, label: string, expected?: Expected): Promise<string> {
   try {
     const bytes = Number((await RNFS.stat(path)).size);
-    const sha = await RNFS.hash(path, 'sha256');
-    return `${label}: ${describeFileVerdict(judgeFile(bytes, sha))}`;
+    const sha256 = await RNFS.hash(path, 'sha256');
+    return `${label}: ${expected ? describeAgainstExpected({ bytes, sha256 }, expected) : describeFileVerdict(judgeFile(bytes, sha256))}`;
   } catch (e: any) {
     return `${label}: could not be read (${String(e?.message || e)})`;
   }
@@ -121,7 +127,7 @@ async function runPictureStep(model: LlamaDownloadedModel, projector: string, se
  * Runs the sweep. `shouldStop` is polled between steps (the person pressed Stop). `onProgress` gets a line per event for the screen.
  * The model that was loaded before is not reloaded: the person's own load happens when they next use it.
  */
-export async function runModelSweep(model: LlamaDownloadedModel, opts: { layers?: number[]; onProgress?: (line: string) => void; shouldStop?: () => boolean } = {}): Promise<SweepResult> {
+export async function runModelSweep(model: LlamaDownloadedModel, opts: { layers?: number[]; expected?: string; onProgress?: (line: string) => void; shouldStop?: () => boolean } = {}): Promise<SweepResult> {
   const say = (line: string) => { logger.log(`[GPU-TEST] ${line}`); opts.onProgress?.(line); };
   const saved = { ...useAppStore.getState().settings };
   const steps: SweepStep[] = [];
@@ -130,12 +136,15 @@ export async function runModelSweep(model: LlamaDownloadedModel, opts: { layers?
   try {
     await forgetVerdicts(model.filePath);
     await llmService.unloadModel();
+    // The checksum or Hugging Face link the person gave (read from the page's small pointer; needs the internet only for a link).
+    const given = opts.expected ? await resolveExpected(opts.expected) : null;
+    if (given && 'error' in given) files.push(`Checksum you gave: ${given.error}`);
     say('Checking the model file against its published checksum (a minute or two)...');
-    files.push(await checkFile(model.filePath, 'Model file'));
+    files.push(await checkFile(model.filePath, 'Model file', given && !('error' in given) ? given : undefined));
     say(`  ${files[0]}`);
     if (model.mmProjPath && await RNFS.exists(model.mmProjPath)) files.push(await checkFile(model.mmProjPath, 'Picture file'));
     if (model.draftPath && await RNFS.exists(model.draftPath)) files.push(await checkFile(model.draftPath, 'MTP file'));
-    for (const setting of sweepSettings(opts.layers)) {
+    for (const setting of sweepSettings(opts.layers, { mtp: !!model.draftPath })) {
       if (opts.shouldStop?.()) { say('Stopped.'); break; }
       say(`Trying: ${setting.label}`);
       const step = await runStep(model, setting);
@@ -162,7 +171,7 @@ export function formatSweepReport(model: Pick<LlamaDownloadedModel, 'fileName'>,
   const { steps, vision, files = [] } = parts;
   const lines = [`Test for ${model.fileName}`, ...files.map((f) => `- ${f}`), 'Each step: 2,048-token context, batch 128 unless stated, f16 KV cache, MTP off.'];
   for (const s of steps) {
-    lines.push(`- ${s.setting.label}: ${s.ok ? 'OK' : 'FAILED'} (load ${s.loadSeconds}s)${s.error ? ` - ${s.error}` : ''}`);
+    lines.push(`- ${s.setting.label}: ${s.ok ? 'OK' : 'FAILED'} (load ${s.loadSeconds}s)${s.note ? ` [${s.note}]` : ''}${s.error ? ` - ${s.error}` : ''}`);
     if (s.check) lines.push(formatOutputReport(s.check, {}).split('\n').map((l) => `    ${l}`).join('\n'));
   }
   if (vision) lines.push(`- Picture check: ${vision.ok ? 'OK' : 'FAILED'}${vision.error ? ` - ${vision.error}` : ''}${vision.reply ? ` (reply: ${JSON.stringify(vision.reply)})` : ''}`);

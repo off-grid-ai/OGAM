@@ -260,7 +260,7 @@ class LLMService {
             const draftFile = opts?.draftPath && wantsMtp && await RNFS.exists(opts.draftPath) ? opts.draftPath : undefined;
             const draftOn = !!draftFile || (!!opts?.embeddedMtp && wantsMtp);
             const checkOutput = isGemma4Path(modelPath);
-            const verdictKey = { model: modelPath, size: fileSize, backend, gpuLayers: nGpuLayers };
+            const verdictKey = { model: modelPath, size: fileSize, backend, gpuLayers: nGpuLayers, variant: `batch ${nBatch}${useAppStore.getState().settings.cpuRepack === false ? ', CPU kernels off' : ''}` };
             if (checkOutput) {
               const known = await knownVerdict(verdictKey);
               if (known && !known.ok) throw new Error(describeBadOutput(backend, `${known.reason}; found by an earlier test on this phone`, !auto));
