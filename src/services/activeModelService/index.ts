@@ -235,9 +235,17 @@ class ActiveModelService {
     );
     // First refusal is OVERRIDABLE ("Load Anyway"); a refusal UNDER override is a hard limit → plain Error.
     if (!room.fits) {
+      // A LiteRT model is refused on what free RAM can spare (budgetMB already holds back the OS
+      // headroom), so the two numbers say how far off the phone is. They are quoted only when they
+      // plainly disagree, so the copy can never say the model fits while refusing it.
+      const needGB = (textSizeMB / 1024).toFixed(1);
+      const spareGB = (room.budgetMB / 1024).toFixed(1);
+      const shortfall = textIsDirty && Number(needGB) > Number(spareGB)
+        ? `: it needs about ${needGB} GB and the phone can spare ${spareGB} GB right now`
+        : '';
       throw opts?.override
-        ? new Error('Not enough free memory to load this model, even after freeing other models. Close other apps or choose a smaller model.')
-        : new OverridableMemoryError('Not enough free memory to load this model. Close other apps or choose a smaller model.');
+        ? new Error(`Not enough free memory to load this model, even after freeing other models${shortfall}. Close other apps or choose a smaller model.`)
+        : new OverridableMemoryError(`Not enough free memory to load this model${shortfall}. Close other apps or choose a smaller model.`);
     }
     this.loadingState.text = true;
     this.notifyListeners();
