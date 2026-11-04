@@ -315,18 +315,20 @@ export async function searchFindings(q: Query): Promise<Finding[]> {
   const agentIds = q.agentId ? [q.agentId] : (await listDir(P.indexDir())).filter((n) => n.startsWith('agent-') && n.endsWith('.jsonl')).map((n) => n.slice(6, -6));
   const wanted = q.text ? terms(q.text, 8) : [];
   const statuses = q.status ? ([] as FindingStatus[]).concat(q.status) : null;
-  const scored: Array<{ id: string; score: number }> = [];
+  const best = new Map<string, number>();
   for (const agentId of agentIds) {
     for (const entry of await readJsonl<{ recordId: string; terms: string[] }>(P.agentKeywords(agentId))) {
       const score = wanted.length ? wanted.filter((w) => entry.terms.some((t) => t === w || t.startsWith(w) || w.startsWith(t))).length : 1;
-      if (score > 0) scored.push({ id: entry.recordId, score });
+      // The same finding can be listed under two agents after a split or merge; it counts once.
+      if (score > 0 && score > (best.get(entry.recordId) ?? 0)) best.set(entry.recordId, score);
     }
   }
-  scored.sort((a, b) => b.score - a.score);
+  const scored = [...best.entries()].map(([id, score]) => ({ id, score })).sort((a, b) => b.score - a.score);
   const out: Finding[] = [];
   for (const { id } of scored) {
     const state = await stateIndex.get(id);
-    if (!state || (statuses && !statuses.includes(state.status as FindingStatus))) continue;
+    // A finding belongs to the agent its state says it belongs to now (a split or merge moves it), not to every index that lists it.
+    if (!state || (q.agentId && state.agentId !== q.agentId) || (statuses && !statuses.includes(state.status as FindingStatus))) continue;
     const f = await getFinding(id);
     if (f) out.push(f);
     if (out.length >= (q.limit ?? 20)) break;
