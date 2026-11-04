@@ -14,6 +14,8 @@ export const videoSeam = {
     prompt: string;
     conversationId: string;
     initImagePath?: string;
+    /** A shared video style id: its words go after the prompt once the turn is known to be a clip. */
+    styleId?: string;
   }): Promise<unknown> =>
     callHook<Promise<unknown>>(HOOKS.videoGenerate, input) ??
     Promise.reject(new Error('Video needs Off Grid AI Pro.')),
