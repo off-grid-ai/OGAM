@@ -40,3 +40,19 @@ class PDFExtractor {
 }
 
 export const pdfExtractor = new PDFExtractor();
+
+/**
+ * Page-by-page access (the same contract on both platforms): `pageCount` and `extractPages`. Unlike extractText, which joins pages
+ * into one capped string, this keeps each page separate so knowledge can cite page numbers and large documents can be read in
+ * small batches.
+ */
+export async function pdfPageCount(filePath: string): Promise<number> {
+  if (!PDFExtractorModule?.pageCount) throw new Error('PDF page reading is not available on this platform');
+  return Number(await PDFExtractorModule.pageCount(filePath));
+}
+
+/** The text of `count` pages starting at the 0-based `start`, one string per page; empty where a page has no text. */
+export async function pdfExtractPages(filePath: string, start: number, count: number): Promise<string[]> {
+  if (!PDFExtractorModule?.extractPages) throw new Error('PDF page reading is not available on this platform');
+  return (await PDFExtractorModule.extractPages(filePath, start, count)) as string[];
+}

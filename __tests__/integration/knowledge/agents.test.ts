@@ -19,6 +19,9 @@ async function learn(m: ReturnType<typeof load>, agentId: string, topicId: strin
   await m.cycles.finalizeCycle(h, { status: 'completed', summary: 'ok' });
 }
 
+// Each test gets its own disk: modules are loaded fresh so none keeps a handle to an earlier test's file system.
+beforeEach(() => jest.resetModules());
+
 describe('specialised agents', () => {
   it('routes two cycles on the same subject to the same agent, however the subject is worded', async () => {
     const m = load();

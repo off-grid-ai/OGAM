@@ -119,4 +119,49 @@ class PDFExtractorModule: NSObject {
       resolve(fullText)
     }
   }
+
+  /// A PDF opened from a path or file:// URL, or nil.
+  private func openDocument(_ filePath: String) -> (PDFDocument, URL, Bool)? {
+    let url: URL = filePath.hasPrefix("file://") ? (URL(string: filePath) ?? URL(fileURLWithPath: filePath)) : URL(fileURLWithPath: filePath)
+    let didStart = url.startAccessingSecurityScopedResource()
+    guard let document = PDFDocument(url: url) else {
+      if didStart { url.stopAccessingSecurityScopedResource() }
+      return nil
+    }
+    return (document, url, didStart)
+  }
+
+  /// How many pages the PDF has.
+  @objc
+  func pageCount(_ filePath: String, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      guard let (document, url, didStart) = self.openDocument(filePath) else {
+        reject("PDF_ERROR", "Could not open PDF file: \(filePath)", nil as NSError?)
+        return
+      }
+      defer { if didStart { url.stopAccessingSecurityScopedResource() } }
+      resolve(document.pageCount)
+    }
+  }
+
+  /// The text of `count` pages from the 0-based `start`, one string per page, in order (empty for a page with no text).
+  @objc
+  func extractPages(_ filePath: String, start: Double, count: Double, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      guard let (document, url, didStart) = self.openDocument(filePath) else {
+        reject("PDF_ERROR", "Could not open PDF file: \(filePath)", nil as NSError?)
+        return
+      }
+      defer { if didStart { url.stopAccessingSecurityScopedResource() } }
+      let from = max(0, Int(start))
+      let to = min(document.pageCount, from + Int(count))
+      var pages: [String] = []
+      if from < to {
+        for index in from..<to {
+          pages.append((document.page(at: index)?.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+      }
+      resolve(pages)
+    }
+  }
 }

@@ -17,6 +17,9 @@ function load() {
 
 const base = { question: 'What drives profit?', finding: 'Realization rate drives law firm profit.', confidence: 0.7, basis: 'observed' as const };
 
+// Each test gets its own disk: modules are loaded fresh so none keeps a handle to an earlier test's file system.
+beforeEach(() => jest.resetModules());
+
 describe('knowledge cycles', () => {
   it('keeps a single-source finding as provisional instead of discarding it, and reports attempted apart from retained', async () => {
     const { cycles } = load();

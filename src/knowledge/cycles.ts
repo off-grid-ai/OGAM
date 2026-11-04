@@ -226,6 +226,14 @@ export function effectiveReview(finding: Pick<Finding, 'recordId' | 'revision' |
   return last && last.findingRevision === finding.revision && last.evidenceHash === hash ? last.decision : 'pending';
 }
 
+/** A reviewer's most recent review of a finding, whatever version it was about (null if none). */
+export async function latestReview(recordId: string, role: ReviewerRole): Promise<ReviewRecord | null> {
+  const state = await stateIndex.get(recordId);
+  if (!state) return null;
+  const mine = (await readJsonl<ReviewRecord>(cycleFile(state.cycleDir, 'reviews.jsonl'))).filter((r) => r.recordId === recordId && r.role === role);
+  return mine.sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1)).pop() ?? null;
+}
+
 /** What status the two reviews add up to. Approval needs BOTH; either rejecting rejects; any doubt keeps it open. */
 export function statusFromReviews(judge: ReviewState, manager: ReviewState, current: FindingStatus): FindingStatus {
   if (current === 'superseded' || current === 'conflicted') return current;
@@ -303,6 +311,54 @@ export async function supersede(oldId: string, newId: string, note: string, by =
   if (!state) throw new Error('No such finding.');
   await writeRevision({ recordId: oldId, kind: 'supersession', status: 'superseded', supersededBy: newId, note, by });
   await stateIndex.put({ ...state, status: 'superseded', supersededBy: newId, updatedAt: nowIso() });
+}
+
+// ------------------------------------------------------------------ erasing
+/**
+ * Permanently removes findings (the person deleted the source they came from). This is the one thing allowed to change a finished
+ * cycle's files, because deleting must really delete: the findings and their reviews are taken out of the cycle's files and the
+ * index, and only an id-and-reason tombstone remains, so the same knowledge does not come back through a later import.
+ */
+export async function eraseFindings(recordIds: string[], reason: string): Promise<number> {
+  const byDir = new Map<string, Set<string>>();
+  for (const id of recordIds) {
+    const state = await stateIndex.get(id);
+    if (!state) continue;
+    (byDir.get(state.cycleDir) ?? byDir.set(state.cycleDir, new Set()).get(state.cycleDir)!).add(id);
+  }
+  let erased = 0;
+  const tombstones: unknown[] = [];
+  for (const [dir, ids] of byDir) {
+    await withLock(`erase:${dir}`, async () => {
+      for (const [file, key] of [['findings.jsonl', 'recordId'], ['reviews.jsonl', 'recordId']] as const) {
+        const rows = await readJsonl<Record<string, unknown>>(cycleFile(dir, file));
+        const kept = rows.filter((r) => !ids.has(String(r[key])));
+        if (kept.length !== rows.length) await atomicWriteText(cycleFile(dir, file), kept.map((r) => JSON.stringify(r)).join('\n') + (kept.length ? '\n' : ''));
+      }
+    });
+    for (const id of ids) {
+      const state = (await stateIndex.get(id))!;
+      await hashIndex.remove(state.agentId, state.contentHash);
+      await stateIndex.remove(id);
+      tombstones.push({ schemaVersion: SCHEMA_VERSION, tombstoneId: uuid(), kind: 'finding', targetId: id, targetHash: state.contentHash, reason, createdAt: nowIso() });
+      erased++;
+    }
+  }
+  await appendJsonl(P.tombstones(), tombstones);
+  return erased;
+}
+
+/** Every finding whose evidence cites the document with this hash (a scan of the cycles: for the rare delete, not for browsing). */
+export async function findingsCiting(sourceHash: string): Promise<Finding[]> {
+  const out: Finding[] = [];
+  for (const c of await listCycles()) {
+    for (const f of await readJsonl<Finding>(cycleFile(c.dir, 'findings.jsonl'))) {
+      if (!(await stateIndex.get(f.recordId))) continue;
+      const current = (await getFinding(f.recordId)) ?? f;
+      if (current.evidence.some((e) => e.sourceHash === sourceHash)) out.push(current);
+    }
+  }
+  return out;
 }
 
 // ------------------------------------------------------------------ listing and search

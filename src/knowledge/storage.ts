@@ -191,6 +191,7 @@ export const stateIndex = {
     return (await readJson<Record<string, RecordState>>(P.stateShard(recordId), {}))[recordId] ?? null;
   },
   async put(state: RecordState): Promise<void> { await updateShard<RecordState>(P.stateShard(state.recordId), (m) => { m[state.recordId] = state; }); },
+  async remove(recordId: string): Promise<void> { await updateShard<RecordState>(P.stateShard(recordId), (m) => { delete m[recordId]; }); },
 };
 
 /** contentHash (+ agent) -> recordId: how the same finding is recognised when it turns up again. */
