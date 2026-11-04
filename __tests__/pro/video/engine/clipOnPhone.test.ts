@@ -12,6 +12,8 @@
  */
 import { bootPhoneVideo, closePhoneVideo, until, type PhoneVideo } from '../../../harness/phoneVideoServices';
 
+const GB = 1024 ** 3;
+
 afterEach(() => closePhoneVideo());
 
 async function ready(): Promise<{ phone: PhoneVideo; chat: string }> {
@@ -132,4 +134,20 @@ describe.each([
     expect(phone.messages(chat).some(message => message.attachments?.some(item => item.id === clip.id))).toBe(true);
     expect(phone.failure()).toBeUndefined();
   });
+});
+
+it('a Wan 2.1 clip renders at its trained size on a phone that can hold it, and smaller on one that cannot', async () => {
+  // SPEC (2026-11-04): Wan 2.1 at its trained 832x480 failed to allocate on a 12 GB Nord's first step;
+  // 320x192 finished. Its pack lists 16 GB for the trained size. A 16 GB+ phone renders 832x480 at
+  // 480P's shift 8; a 12 GB phone keeps 320x192 at the smaller shift that size takes (3).
+  const sizeOn = async (totalBytes: number) => {
+    const phone = await bootPhoneVideo({ ram: { platform: 'android', totalBytes, availBytes: totalBytes - 4 * GB } });
+    await phone.installPack();
+    await phone.seam.generate({ prompt: 'a lighthouse at night', conversationId: phone.newChat() });
+    const asked = phone.engine.generations[0];
+    await closePhoneVideo();
+    return [asked.width, asked.height, asked.flowShift];
+  };
+  expect(await sizeOn(16 * GB)).toEqual([832, 480, 8]);
+  expect(await sizeOn(12 * GB)).toEqual([320, 192, 3]);
 });

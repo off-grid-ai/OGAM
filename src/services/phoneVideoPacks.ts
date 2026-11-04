@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { CATALOG, isVideoWeightAvailableOn, videoPackError, videoTakesStartImage, type ModelEntry } from '@offgrid/models';
+import { CATALOG, isVideoWeightAvailableOn, videoArchitecture, videoPackError, videoTakesStartImage, type ModelEntry } from '@offgrid/models';
 
 /** Light and Turbo builds: offered on 11 GB+ phones, below the packs' desktop minimum. */
 const LIGHT_BUILDS_ON_11GB = new Set([
@@ -49,3 +49,18 @@ export function bestInstalledVideoModel<T extends Pick<ModelEntry, 'id' | 'files
   };
   return [...installed].sort((a, b) => rank(a) - rank(b))[0];
 }
+
+/**
+ * The clip size a phone with `ramGB` renders a model at, when it cannot hold the model's trained size.
+ * Wan 2.1 and LingBot list 16 GB for their trained 832x480; a phone with that much renders it in full.
+ * Below it (the 11 GB+ phones the Light build is offered to), 832x480 ran out of memory on a 12 GB
+ * OnePlus Nord's first step (2026-11-04) while 320x192 finished in 12m 49s. A paired computer renders
+ * the full size.
+ */
+export function phoneVideoSize(weight: string, ramGB: number): { width: number; height: number } | undefined {
+  const architecture = videoArchitecture(weight);
+  if (architecture !== 'wan21' && architecture !== 'lingbot') return undefined;
+  return ramGB >= TRAINED_SIZE_MIN_RAM_GB ? undefined : { width: 320, height: 192 };
+}
+
+const TRAINED_SIZE_MIN_RAM_GB = 16;
