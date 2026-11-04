@@ -1,6 +1,7 @@
 import { videoSeam } from '../../bootstrap/videoSeam';
 import { mediaStyle } from '@offgrid/models';
-import { chatStyleId } from '../../stores/mediaStyleStore';
+import { adoptDraftStyles, chatStyleId } from '../../stores/mediaStyleStore';
+import type { MediaStyleIds } from '../../services/generationService';
 /* eslint-disable max-lines -- cohesive generation-action orchestrator (send/regenerate/dispatch/route share the same GenerationDeps + session state); splitting it would scatter tightly-coupled turn logic. */
 import { Dispatch, SetStateAction } from 'react';
 import { AlertState, showAlert, hideAlert } from '../../components';
@@ -1066,6 +1067,8 @@ export type DispatchCall = {
   conversationId: string;
   imageMode?: 'auto' | 'force' | 'disabled' | 'video';
   assistantEnabled?: boolean;
+  /** Fixed when a queued turn was sent; absent for a send that goes at once, which reads the chat's style now. */
+  styleIds?: MediaStyleIds;
 };
 /**
  * THE routing layer: the single place a message is classified and dispatched to
@@ -1102,7 +1105,7 @@ export async function dispatchGenerationFn(
     attachments,
     conversationId,
     imageSkipsUserMessage: false,
-    styleId: kind === 'text' ? undefined : chatStyleId(conversationId, kind),
+    styleId: kind === 'text' ? undefined : call.styleIds ? call.styleIds[kind] : chatStyleId(conversationId, kind),
     onTextModelUnavailable: () => {
       deps.setPendingMessage?.(text, attachments);
     },
@@ -1163,6 +1166,7 @@ export async function handleSendFn(
       undefined,
       deps.pendingProjectId,
     );
+    adoptDraftStyles(targetConversationId);
     deps.setActiveConversation(targetConversationId);
   }
   reportMessageSent(attachments);
@@ -1184,6 +1188,10 @@ export async function handleSendFn(
       messageText,
       imageMode,
       assistantEnabled,
+      styleIds: {
+        image: chatStyleId(targetConversationId, 'image'),
+        video: chatStyleId(targetConversationId, 'video'),
+      },
     });
     if (call.sendNow) await sendQueuedNowFn(deps, queuedId);
     return;

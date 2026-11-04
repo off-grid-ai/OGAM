@@ -111,3 +111,30 @@ it('a style picked in the image settings is the chat\'s style, and an auto-detec
   const userMessage = (await view.findAllByTestId('user-message'))[0];
   expect(h.rtl.within(userMessage).getByTestId('message-style').props.children).toBe('Sketch');
 }, 90_000);
+
+it('a picture queued behind a running reply is drawn in the style it was sent with, not a later pick', async () => {
+  const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
+  h.render();
+  await h.placeImageModel({ backend: 'coreml' });
+  const view = h.view!;
+  // A text reply holds, so the picture ask queues behind it.
+  h.boundary.llama!.scriptCompletion({ text: 'Sure.', holdBeforeStream: true });
+  await h.tapSend('what is the weather like');
+  await h.rtl.waitFor(() => expect(view.queryByTestId('stop-button')).not.toBeNull(), { timeout: 4000 });
+  await h.cycleImageMode();
+  h.rtl.fireEvent.press(await view.findByTestId('style-row-watercolor'));
+  await h.tapSend('a mountain cabin at dawn');
+  await h.settle(50);
+  // While it waits I pick another style for what comes next, in the image settings.
+  const { ImageGenerationSection } = require('../../../src/components/GenerationSettingsModal/ImageGenerationSection');
+  const s = h.renderAside(h.React.createElement(ImageGenerationSection, {}));
+  h.rtl.fireEvent.press(s.getByTestId('image-settings-style-sketch'));
+  expect(s.getByTestId('image-settings-style-sketch').props.accessibilityState).toMatchObject({ selected: true });
+  s.unmount();
+  expect(h.boundary.diffusion.calls.generateImage.length).toBe(0);
+  h.boundary.llama!.releaseStream();
+  await h.rtl.waitFor(() => expect(h.boundary.diffusion.calls.generateImage.length).toBe(1), { timeout: 8000 });
+  const prompt = String(h.boundary.diffusion.calls.generateImage[0].prompt);
+  expect(prompt).toContain(WATERCOLOR);
+  expect(prompt).not.toContain(SKETCH);
+}, 90_000);
