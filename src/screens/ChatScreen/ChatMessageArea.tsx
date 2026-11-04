@@ -23,6 +23,7 @@ import {
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { generationService } from '../../services';
 import type { QueueActions } from '../../components/ChatInput/Toolbar';
+import { RestyleSheet } from '../../components/MediaStyles/RestyleSheet';
 import { EmptyChat, ImageProgressIndicator } from './ChatScreenComponents';
 import { getPlaceholderText, useChatScreen } from './useChatScreen';
 import { createStyles } from './styles';
@@ -421,6 +422,9 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           paddingBottom: footerPaddingBottom,
         }}
       >
+        <RestyleSheet
+          onSend={(prompt, kind) => chat.handleSend(prompt, undefined, kind === 'video' ? 'video' : 'force')}
+        />
         <ChatInput
           assistantSelected={assistantSelected}
           onAssistantSelectedChange={onAssistantSelectedChange}

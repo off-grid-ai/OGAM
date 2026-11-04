@@ -25,6 +25,9 @@ import { GenerationMeta } from './components/GenerationMeta';
 import { MessageOverlays } from './components/MessageOverlays';
 import { MarkdownText } from '../MarkdownText';
 import { formatTime, formatDuration, buildMessageData } from './utils';
+import { RestyleButton } from '../MediaStyles/RestyleButton';
+import { mediaStyle } from '@offgrid/models';
+import { useChatStore } from '../../stores/chatStore';
 import { ThinkingBlock } from './components/ThinkingBlock';
 import {
   ToolResultMessage,
@@ -48,6 +51,27 @@ type MetaRowProps = {
   metaExtra?: React.ReactNode;
 };
 
+/** A picture this chat made, as opposed to one the person attached. */
+function isChatGeneratedImage(message: Message): boolean {
+  return (
+    message.role === 'assistant' &&
+    !!message.attachments?.some(attachment => attachment.type === 'image') &&
+    /^Generated image for:/i.test(message.content.trim())
+  );
+}
+
+/** The style a picture or clip turn was made with, by its shared name. */
+function turnStyleName(message: Message): string | undefined {
+  if (!message.mediaStyleId || (message.turnKind !== 'image' && message.turnKind !== 'video')) return undefined;
+  return mediaStyle(message.turnKind, message.mediaStyleId)?.name;
+}
+
+const ImageRestyle: React.FC<{ show: boolean; conversationId: string | null; messageId: string }> = ({
+  show,
+  conversationId,
+  messageId,
+}) => (show && conversationId ? <RestyleButton kind="image" conversationId={conversationId} messageId={messageId} /> : null);
+
 const MessageMetaRow: React.FC<MetaRowProps> = ({
   message,
   styles,
@@ -58,6 +82,9 @@ const MessageMetaRow: React.FC<MetaRowProps> = ({
 }) => (
   <View testID="message-meta-row" style={styles.metaRow}>
     <Text style={styles.timestamp}>{formatTime(message.timestamp)}</Text>
+    {turnStyleName(message) ? (
+      <Text testID="message-style" style={styles.timestamp}>{turnStyleName(message)}</Text>
+    ) : null}
     {message.generationTimeMs != null && message.role === 'assistant' && (
       <Text style={styles.generationTime}>
         {formatDuration(message.generationTimeMs)}
@@ -260,6 +287,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       message.attachments?.length &&
       message.attachments.every(attachment => attachment.type === 'video'),
   );
+  // A picture this chat made (not one the person attached): Restyle remakes it in another style.
+  const isGeneratedImage = isChatGeneratedImage(message);
+  const conversationId = useChatStore(state => state.activeConversationId);
   // Video is Pro: Continue / New shot / Make it a story, and film cards, fill this slot.
   const VideoActions = useSlot(SLOTS.messageVideoActions);
   const showVideoActions = Boolean(
@@ -389,6 +419,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       )}
 
       {showVideoActions && VideoActions && <VideoActions message={message} />}
+      <ImageRestyle show={isGeneratedImage && !isStreaming} conversationId={conversationId} messageId={message.id} />
 
       {!message.isThinking && !isStreaming && !hideProse && hasVisibleAnswer && (
         <MessageMetaRow
