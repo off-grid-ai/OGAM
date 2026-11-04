@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { MediaStyleKind } from '@offgrid/models';
 import { useChatStore } from './chatStore';
+import { shownMessages } from '../utils/chatThread';
 
 /** A finished picture or clip someone wants again in another style. */
 export interface RestyleRequest {
@@ -31,7 +32,8 @@ export function restyleRequestFor(
   resultMessageId: string,
   kind: MediaStyleKind,
 ): RestyleRequest | null {
-  const messages = useChatStore.getState().conversations.find(c => c.id === conversationId)?.messages ?? [];
+  // The thread as shown: a retried answer is stored after later turns, so storage order can name the wrong prompt.
+  const messages = shownMessages(useChatStore.getState().conversations.find(c => c.id === conversationId)?.messages ?? []);
   const at = messages.findIndex(message => message.id === resultMessageId);
   for (let i = at - 1; i >= 0; i--) {
     const message = messages[i];
