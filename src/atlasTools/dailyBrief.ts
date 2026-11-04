@@ -245,7 +245,14 @@ async function wantedInterests(all: string[], avoid: string[]): Promise<string[]
   return wanted.length ? wanted : ['world news'];
 }
 
-const NO_WELCOME = 'Do not say "welcome to the daily briefing" or name the show. Open with one short greeting and today\'s date, then go straight into the first story, and move between stories with a few words.';
+const NO_WELCOME = 'Do not greet listeners, welcome them, name the show or say the date: the opening greeting is added for you. Start straight into the first story, never repeat a line, and move between stories with a few words.';
+
+/** The opening line, made here so the date is always said first (the model was leaving it out or putting it mid-show). */
+export function greetingLine(now = new Date()): string {
+  const part = now.getHours() < 12 ? 'morning' : now.getHours() < 18 ? 'afternoon' : 'evening';
+  const date = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  return `Good ${part}. Today is ${date}, and this is your briefing.`;
+}
 /** Rules every part of the briefing must follow. */
 const briefingRules = (avoid: string[], gotNews: boolean): string | undefined =>
   [avoid.length ? `Never bring up: ${avoid.join(', ')}.` : '', gotNews ? NO_WELCOME : ''].filter(Boolean).join(' ') || undefined;
@@ -285,6 +292,7 @@ export async function makeBriefing(onStep: (m: string) => void, voicesAvailable:
     minutes: p.minutes,
     hosts: withExperts ? 3 : voicesAvailable >= 2 ? p.hosts : 1,
     rules,
+    noWelcome: gotNews,
     castFor: withExperts ? (i) => (stories[i] ? expertCast(interests[stories[i].interest], stories[i].interest) : undefined) : undefined,
     style: 'news',
     research: false,
@@ -295,6 +303,7 @@ export async function makeBriefing(onStep: (m: string) => void, voicesAvailable:
     targetWords: p.minutes * WORDS_PER_MINUTE,
     onItemsUsed: (count) => { usedStories = count; },
   }, onStep);
+  if (gotNews && r.podcast) r.podcast = [{ host: 'A', text: greetingLine() }, ...r.podcast];
   r.minutes = Math.max(1, Math.round(spokenMinutes((r.podcast ?? []).map((l) => l.text))));
   r.headlines = stories.slice(0, usedStories).map(({ interest, headline: h }, i) => ({
     title: h.title, source: h.source, date: h.date, interest: interests[interest], url: outline[i]?.sources[0]?.url || h.url,

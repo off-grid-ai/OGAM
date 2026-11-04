@@ -21,7 +21,7 @@ const KEEP_EPISODES = 6;
 const root = () => `${RNFS.CachesDirectoryPath}/podcast-audio`;
 const dir = (key: string) => `${root()}/${key.replace(/[^\w-]/g, '_')}`;
 const pathFor = (key: string, i: number, line: CastLine) =>
-  `${dir(key)}/${i}-${sha256(`${line.voice ?? ''}|${useAtlasVoiceStore.getState().rate}|${line.text}`).slice(0, 12)}.wav`;
+  `${dir(key)}/${i}-${sha256(`${line.voice ?? ''}|${line.voice ? 1 : line.pitch}|${useAtlasVoiceStore.getState().rate}|${line.text}`).slice(0, 12)}.wav`;
 
 /** The voice and pitch for each host: chosen or automatic voices, or pitch alone with one voice. */
 export function castLine(host: string, hosts: number, voices: { name: string }[]): { voice: string; pitch: number } {
@@ -30,8 +30,8 @@ export function castLine(host: string, hosts: number, voices: { name: string }[]
   return { voice: '', pitch: hosts === 1 ? 1 : [1.12, 0.86, 1.0][i] };
 }
 
-/** Files carry one voice each, not pitch: a cast told apart only by pitch is spoken live. */
-const renderable = (items: CastLine[]) => canPreRender() && items.every((x) => x.pitch === 1 || !!x.voice);
+/** Every line is saved ahead (a cast told apart only by pitch is saved with each host's pitch), so nothing is spoken live and no line waits. */
+const renderable = (_items: CastLine[]) => canPreRender();
 
 let queue: Promise<unknown> = Promise.resolve();
 const pending = new Map<string, Promise<string | null>>();
@@ -44,7 +44,7 @@ function render(key: string, items: CastLine[], i: number): Promise<string | nul
   const job = queue.then(async () => {
     if (await RNFS.exists(path)) return path;
     await RNFS.mkdir(dir(key));
-    try { return await synthesizeLineToFile(items[i].text, items[i].voice ?? '', path); } catch (e: any) {
+    try { return await synthesizeLineToFile(items[i].text, items[i].voice ?? '', path, items[i].voice ? 1 : items[i].pitch); } catch (e: any) {
       logger.warn(`[POD] could not render line ${i}: ${e?.message ?? e}`);
       return null;
     }

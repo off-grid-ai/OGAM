@@ -569,6 +569,13 @@ What changed:
   model. A second, short-prompt check decides whether to use the first-word workaround: prompts under about 192 tokens run
   once first so the first word comes from the engine's single-token step; it is switched on only if the same check passes with
   it, and never for long prompts. The remembered verdict records the batch size and CPU-kernel setting.
+- 0.0.135: learning knowledge system (Knowledge screen, opened from Learning). Per-cycle immutable reports, findings with evidence,
+  judge and manager reviews tied to evidence hashes, persistent expert agents (route, promote, merge, split, evaluate), PDF study
+  with citations and resume, and a ZIP interchange export/import (docs/ATLAS_LEARNING_INTERCHANGE.md). Street Advisory import is NOT
+  verified. Native page-by-page PDF reading (Kotlin and Swift) is compiled by CI only. News briefing: the length now counts the
+  words actually written (a 15 minute briefing no longer stops near 10), repeated lines are dropped, the dated greeting is always
+  the first line, every line is rendered as audio ahead of playback (also when the hosts differ only by pitch), and the briefing can
+  be exported as a transcript or a story summary. Not verified on a phone.
 - 0.0.134: sampling defaults per model. The HauhauCS Gemma 4 files use the author's recommendation (temperature 0.6, top-k 64,
   top-p 0.9, min-p 0.05, repeat penalty 1.1). Order: the active agent's value, then a value changed in Settings (anything
   other than the app default), then the model's recommendation, then the app default. Other models behave as before.

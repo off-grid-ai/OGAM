@@ -336,6 +336,8 @@ export interface PodcastOptions {
    * over are simply not used; `onItemsUsed` says how many were.
    */
   targetWords?: number;
+  /** The caller adds the opening greeting itself: the first part must not welcome listeners. */
+  noWelcome?: boolean;
   onItemsUsed?: (count: number) => void;
   /** Outline mode: a rule every part must follow (e.g. topics never to bring up). */
   rules?: string;
@@ -450,6 +452,26 @@ const parseLines = (t: string, hosts: number): PodcastLine[] => t.split('\n').ma
 export const outlineLines = (sources: Source[]) =>
   Math.max(3, Math.min(8, Math.round(sources.reduce((n, x) => n + x.text.length, 0) / 180)));
 
+const normal = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+const words = (t: string) => new Set(normal(t).split(' ').filter((w) => w.length > 3));
+/** Drops lines that say again what an earlier line already said (same words, or nearly): the model sometimes pads. */
+export function withoutRepeats(fresh: PodcastLine[], before: PodcastLine[]): PodcastLine[] {
+  const seen = before.map((l) => ({ n: normal(l.text), w: words(l.text) }));
+  const out: PodcastLine[] = [];
+  for (const l of fresh) {
+    const n = normal(l.text), w = words(l.text);
+    const same = seen.some((s) => {
+      if (s.n === n) return true;
+      if (w.size < 5 || s.w.size < 5) return false;
+      let shared = 0; w.forEach((x) => { if (s.w.has(x)) shared++; });
+      return shared / Math.min(w.size, s.w.size) >= 0.8;
+    });
+    if (same) continue;
+    seen.push({ n, w }); out.push(l);
+  }
+  return out;
+}
+
 async function writeOutlinedEpisode(
   outline: { topic: string; sources: Source[]; always?: boolean }[], opts: PodcastOptions,
   cfg: { cast: string; fmt: string; style: string; hosts: number }, onStep: (m: string) => void,
@@ -470,24 +492,24 @@ async function writeOutlinedEpisode(
     // Never more lines than the source can fill (no padding), but as many as the chosen length needs.
     const n = opts.linesPerItem ? Math.min(opts.linesPerItem, Math.max(4, Math.round(part.sources.reduce((k, x) => k + x.text.length, 0) / 80))) : outlineLines(part.sources);
     // With a word target, this is the last item once it should bring the script to the target (or when none are left).
-    const reaches = !!opts.targetWords && wordCount() + n * 18 >= opts.targetWords;
+    const reaches = !!opts.targetWords && wordCount() + n * 12 >= opts.targetWords;
     const alwaysAfter = outline.slice(i + 1).some((o) => o.always);
     const last = i === outline.length - 1 || ((reaches || finished) && !alwaysAfter);
-    const where = last && i === 0 ? 'This is the WHOLE episode: welcome listeners, cover it, then say goodbye.'
-      : i === 0 ? 'This is the START: A welcomes listeners and names the episode, then covers this item.'
+    const where = last && i === 0 ? `This is the WHOLE episode: ${opts.noWelcome ? 'cover it' : 'welcome listeners, cover it'}, then say goodbye.`
+      : i === 0 ? (opts.noWelcome ? 'This is the FIRST item: a greeting was already said, so start straight into it.' : 'This is the START: A welcomes listeners and names the episode, then covers this item.')
         : last ? 'This is the LAST item: cover it, then a one-line wrap-up and goodbye.'
           : 'Move on to this item with a short natural transition.';
     const recap = lines.slice(-3).map((l) => `${l.host}: ${l.text}`).join('\n');
     const covered = outline.slice(0, i).map((o) => `- ${o.topic.slice(0, 90)}`).join('\n');
     // With a length to reach, ask for about n lines (the hosts may explain why the story
     // matters, from the source); otherwise at most n.
-    const howMany = opts.linesPerItem ? `Write about ${n} lines (no fewer than ${Math.max(3, n - 2)}), each 1-2 sentences` : `Write at most ${n} lines (each 1-2 sentences)`;
+    const howMany = opts.linesPerItem ? `Write about ${n} lines (no fewer than ${Math.max(3, n - 2)}), each 1-2 sentences; never repeat a line already said` : `Write at most ${n} lines (each 1-2 sentences)`;
     const cast = opts.castFor?.(i) ?? cfg.cast;
     const t = await ask(
       'You write natural spoken scripts from sources. Say ONLY what the sources say: never add names, numbers, dates, places or quotes that are not in them. If the source gives few details, the hosts may say why it matters, using only what the source says. Never mention source numbers.',
       `SOURCES:\n${sourceBlock(part.sources)}\n\nEpisode: "${title}". Style: ${cfg.style}. Cast: ${cast}.\nThis item: ${part.topic}\n${where}\n${recap ? `Last lines so far:\n${recap}\n` : ''}${covered ? `Already covered (do not repeat or retell these):\n${covered}\n` : ''}${opts.rules ? `${opts.rules}\n` : ''}${howMany}, exactly in this format:\n${cfg.fmt}`,
     );
-    lines.push(...parseLines(t, cfg.hosts).slice(0, n + 2));
+    lines.push(...withoutRepeats(parseLines(t, cfg.hosts).slice(0, n + 2), lines));
     if (!part.always) used++;
     if (reaches) finished = true;
     if (last) break;

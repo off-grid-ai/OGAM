@@ -200,10 +200,14 @@ export async function synthesizeToFile(text: string, outPath: string, lang = 'en
  * Save one podcast line in a given host voice as a WAV file, without playing it. The voice
  * is set only for this file and put back afterwards. Resolves the file path.
  */
-export async function synthesizeLineToFile(text: string, voice: string, outPath: string): Promise<string> {
+export async function synthesizeLineToFile(text: string, voice: string, outPath: string, pitch = 1): Promise<string> {
   if (!ttsAvailable() || !Native.synthesizeToFile) throw new Error('Saving speech is not available on this phone.');
   await Native.setVoice?.(voice).catch(() => undefined);
-  try { return await synthesizeToFile(text, outPath); } finally { await Native.setVoice?.('').catch(() => undefined); }
+  if (pitch !== 1) await Native.setPitch?.(pitch).catch(() => undefined);
+  try { return await synthesizeToFile(text, outPath); } finally {
+    await Native.setVoice?.('').catch(() => undefined);
+    if (pitch !== 1) await Native.setPitch?.(1).catch(() => undefined);
+  }
 }
 
 /** True when lines can be saved as audio files ahead of playback. */

@@ -9,7 +9,7 @@ import { MarkdownText } from '../components/MarkdownText';
 import { PodcastVoicePicker } from '../components/PodcastVoicePicker';
 import { castLine, playLine, stopPodcastAudio } from '../atlasVoice/podcastAudio';
 import { generate, generatePodcast, podcastContextWarning, useStudyStore, StudyResult, Source, PodcastStyle } from '../study/engine';
-import { safeFileName, saveMarkdown, studyMarkdown } from '../study/exportFiles';
+import { briefingSummary, briefingTranscript, safeFileName, saveMarkdown, studyMarkdown } from '../study/exportFiles';
 import { deckSlides, savePptx } from '../study/pptx';
 import { ProjectLearningGame } from '../components/ProjectLearningGame';
 import { ProjectGame } from '../components/games/ProjectGame';
@@ -218,6 +218,13 @@ export const StudyScreen: React.FC = () => {
       if (name) Alert.alert('Saved', name);
     } catch (e: any) { Alert.alert('Could not save the file', String(e?.message || e)); }
   };
+  const saveBriefing = async (r: StudyResult, what: 'transcript' | 'summary') => {
+    try {
+      const h = textHeading(r);
+      const name = await saveMarkdown(safeFileName(what === 'summary' ? `${h} summary` : h, 'md'), what === 'summary' ? briefingSummary(r, h) : briefingTranscript(r, h));
+      if (name) Alert.alert('Saved', name);
+    } catch (e: any) { Alert.alert('Could not save the file', String(e?.message || e)); }
+  };
   const savePowerPoint = async (r: StudyResult) => {
     try {
       const title = r.title || r.topic || 'Atlas slides';
@@ -326,6 +333,18 @@ export const StudyScreen: React.FC = () => {
                   <Text style={{ color: colors.text, fontSize: 16 }}>{l.text}</Text>
                 </TouchableOpacity>
               ))}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 }}>
+                <TouchableOpacity accessibilityRole="button" testID="export-briefing" onPress={() => { void saveBriefing(v, 'transcript'); }} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 18, paddingVertical: 6 }}>
+                  <Icon name="download" size={18} color={colors.primary} />
+                  <Text style={{ color: colors.primary, fontSize: 15, marginLeft: 8 }}>Export transcript</Text>
+                </TouchableOpacity>
+                {!!v.headlines?.length && (
+                  <TouchableOpacity accessibilityRole="button" testID="export-briefing-summary" onPress={() => { void saveBriefing(v, 'summary'); }} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6 }}>
+                    <Icon name="file-text" size={18} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontSize: 15, marginLeft: 8 }}>Export news summary</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               <SourceChips nums={v.sources.map((s) => s.n)} sources={v.sources} onOpen={openSource} colors={colors} />
             </View>
           )}

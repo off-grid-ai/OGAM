@@ -28,6 +28,29 @@ export function studyMarkdown(r: StudyResult, heading: string): string {
   return `# ${heading}${topic}\n\n${body}${sources}\n`;
 }
 
+/** The spoken script of a podcast or briefing, line by line in the order it is played, under a dated heading. */
+export function briefingTranscript(r: StudyResult, heading: string): string {
+  const single = (r.hosts ?? 2) === 1;
+  const lines = (r.podcast ?? []).map((l) => (single ? l.text : `**Host ${l.host}:** ${l.text}`));
+  const mins = r.minutes ? ` (about ${r.minutes} min)` : '';
+  return `# ${heading}${mins}\n\n${lines.join('\n\n')}\n`;
+}
+
+/** A short written summary of a briefing: the stories it covered, grouped by interest, with outlet, date and link. No model needed. */
+export function briefingSummary(r: StudyResult, heading: string): string {
+  const items = r.headlines ?? [];
+  if (!items.length) return `# ${heading}\n\nThis briefing has no story list to summarise.\n`;
+  const groups = new Map<string, typeof items>();
+  for (const h of items) groups.set(h.interest || 'Other', [...(groups.get(h.interest || 'Other') ?? []), h]);
+  const out = [`# ${heading} - summary`, ''];
+  groups.forEach((list, topic) => {
+    out.push(`## ${topic}`, '');
+    for (const h of list) out.push(`- ${h.title}${h.source ? ` (${h.source}${h.date ? `, ${new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''})` : ''}${h.url ? ` ${h.url}` : ''}`);
+    out.push('');
+  });
+  return out.join('\n');
+}
+
 /**
  * Writes a file into the app cache, lets the person pick where to save it, then removes the
  * cache copy. Resolves the saved name, or null if they closed the picker.
