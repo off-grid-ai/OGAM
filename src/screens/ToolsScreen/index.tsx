@@ -206,7 +206,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginTop: 2,
   },
   hint: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,
     marginTop: SPACING.lg,
     textAlign: 'center' as const,

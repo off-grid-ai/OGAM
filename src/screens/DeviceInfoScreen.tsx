@@ -224,7 +224,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.primary,
   },
   tierDesc: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,
     marginBottom: SPACING.xs,
   },

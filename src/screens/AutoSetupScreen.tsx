@@ -530,9 +530,9 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   consentText: { flex: 1, gap: SPACING.xs },
   consentLabel: { ...TYPOGRAPHY.body, color: colors.text },
-  consentHint: { ...TYPOGRAPHY.meta, color: colors.textSecondary },
+  consentHint: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
   consentLink: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.primary,
     marginLeft: 20 + SPACING.sm,
   },

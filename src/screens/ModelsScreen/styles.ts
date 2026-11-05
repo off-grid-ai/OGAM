@@ -185,7 +185,7 @@ const createTextModelsStyles = (colors: ThemeColors, _shadows: ThemeShadows) => 
   credibilityText: { ...TYPOGRAPHY.meta },
   modelDescription: { ...TYPOGRAPHY.bodySmall, color: colors.text, marginBottom: SPACING.xs },
   modelStats: { flexDirection: 'row' as const, gap: 16 },
-  statText: { ...TYPOGRAPHY.meta, color: colors.textMuted },
+  statText: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
   sectionTitle: { ...TYPOGRAPHY.h3, color: colors.text, paddingHorizontal: SPACING.xl, marginBottom: 4 },
   sectionSubtitle: {
     ...TYPOGRAPHY.body,

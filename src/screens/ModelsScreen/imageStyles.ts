@@ -18,7 +18,7 @@ const createImageModelsStylesPart1 = (colors: ThemeColors, _shadows: ThemeShadow
     marginBottom: 8,
   },
   recHintText: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
     flex: 1,
   },
@@ -56,7 +56,7 @@ const createImageModelsStylesPart1 = (colors: ThemeColors, _shadows: ThemeShadow
   imageModelInfo: { flex: 1 },
   imageModelName: { ...TYPOGRAPHY.h2, color: colors.text, marginBottom: 4 },
   imageModelDesc: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, marginBottom: 4 },
-  imageModelSize: { ...TYPOGRAPHY.meta, color: colors.textMuted },
+  imageModelSize: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
   activeBadge: {
     backgroundColor: `${colors.info}25`,
     paddingHorizontal: 10,

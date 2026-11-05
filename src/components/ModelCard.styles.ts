@@ -217,7 +217,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderRadius: 8,
   },
   warningText: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.warning,
   },
   visionBadge: {
@@ -338,7 +338,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginBottom: 10,
   },
   failedMessageText: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.error,
     flex: 1,
   },

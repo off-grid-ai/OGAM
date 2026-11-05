@@ -212,7 +212,7 @@ const createStyles = (colors: ThemeColors) => ({
   rowInfo: { flex: 1, gap: 2 as number },
   name: { ...TYPOGRAPHY.body, color: colors.text },
   desc: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
-  meta: { ...TYPOGRAPHY.meta, color: colors.textMuted },
+  meta: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
   sectionLabel: {
     ...TYPOGRAPHY.label,
     color: colors.textMuted,

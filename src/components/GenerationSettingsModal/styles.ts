@@ -243,7 +243,7 @@ const createModelPickerStyles = (colors: ThemeColors, shadows: ThemeShadows) => 
     color: colors.text,
   },
   modelPickerItemDesc: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,
     marginTop: 2,
   },
@@ -254,7 +254,7 @@ const createModelPickerStyles = (colors: ThemeColors, shadows: ThemeShadows) => 
     textAlign: 'center' as const,
   },
   classifierNote: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,
     fontStyle: 'italic' as const,
     marginTop: SPACING.sm,

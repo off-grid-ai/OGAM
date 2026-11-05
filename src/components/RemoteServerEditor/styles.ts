@@ -66,17 +66,17 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
       marginTop: 1,
     },
     warningText: {
-      ...TYPOGRAPHY.meta,
+      ...TYPOGRAPHY.bodySmall,
       color: colors.error,
       flex: 1,
-      lineHeight: 16,
+      lineHeight: 18,
     },
 
     helperText: {
-      ...TYPOGRAPHY.meta,
+      ...TYPOGRAPHY.bodySmall,
       color: colors.textMuted,
       marginTop: SPACING.xs,
-      lineHeight: 15,
+      lineHeight: 18,
     },
 
     buttonRow: {

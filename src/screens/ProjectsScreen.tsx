@@ -297,7 +297,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     flexShrink: 1,
   },
   projectDescription: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
     marginTop: 1,
   },

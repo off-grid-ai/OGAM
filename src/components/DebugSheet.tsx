@@ -226,7 +226,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     lineHeight: 16,
   },
   debugHint: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,
     fontStyle: 'italic' as const,
     marginBottom: SPACING.sm,
@@ -265,6 +265,6 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   debugMessageContent: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
-    lineHeight: 16,
+    lineHeight: 18,
   },
 });
