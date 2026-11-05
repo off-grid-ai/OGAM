@@ -438,7 +438,9 @@ describe('Pro mobile state sync journey', () => {
       expect(ui!.getByText('The field notes are ready.')).toBeTruthy(),
     );
     fireEvent.press(ui.getByTestId('assistant-work-toggle'));
-    expect(ui.getByText('contacts_search')).toBeTruthy();
+    // A synced step from a tool this phone does not know reads in plain words, never its raw name.
+    expect(ui.getByText('Looked that up')).toBeTruthy();
+    expect(ui.queryByText('contacts_search')).toBeNull();
     expect(
       ui
         .getAllByText(/^(Thought process|Searched the web)$/)
