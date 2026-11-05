@@ -13,7 +13,7 @@ import { huggingFaceService } from './huggingface';
 import { startModelDownload } from './startModelDownload';
 
 /** SmolLM2-135M-Instruct GGUF — ~100-145MB, runs on llama.rn. */
-const CLASSIFIER_REPO = 'bartowski/SmolLM2-135M-Instruct-GGUF';
+import { CLASSIFIER_REPO } from './classifierModel';
 
 let provisioning = false;
 

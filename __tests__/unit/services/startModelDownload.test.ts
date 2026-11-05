@@ -59,6 +59,21 @@ describe('startModelDownload', () => {
     expect(useAppStore.getState().activeModelId).toBe(KEY);
   });
 
+  it('never makes the intent classifier the chat model, even through an auto-select path', async () => {
+    // A queued classifier download restored after a restart comes back through reissue, which asks
+    // for auto-select; on a fresh install that made SmolLM2 the chat model.
+    const { useAppStore } = require('../../../src/stores');
+    useAppStore.setState({ activeModelId: null, lastTextModelId: null });
+    const repo = 'bartowski/SmolLM2-135M-Instruct-GGUF';
+
+    await startModelDownload(repo, createModelFile({ name: 'smol.gguf', size: SIZE }), { autoSelectIfEmpty: true });
+    await device.settle();
+    await device.finishDownload(device.nativeRows()[0].downloadId, SIZE);
+
+    expect(registered().map(m => m.id)).toContain(`${repo}/smol.gguf`);
+    expect(useAppStore.getState().activeModelId).toBeNull();
+  });
+
   it('is a no-op when a download is already active (duplicate guard)', async () => {
     await startModelDownload(MODEL_ID, file(), {});
     await device.settle();
