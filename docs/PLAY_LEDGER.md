@@ -207,3 +207,8 @@ Did not work on the phone: "In use" (the Text list uses the compact card, which 
 1. Search step from a tolerant reader (cut results), one "Searched the web" line, a test with a cut result.
 2. "In use" in the compact card and on Documents.
 3. Storage: never call an in-use projector orphaned; a loading state, not 0 B; plain copy. Then Pro's licence section.
+
+## Hand test 6 and the phone (19:41)
+- The retry attached WDA without a bundleId and drove an older Off Grid app on the phone (six were installed), so its findings ("Work done", no field, slab New Chat) were from that app, not the dev build. It sent one [test] chat there and pressed Cancel on a memory sheet; nothing deleted. Mac asked to remove the others: only Off Grid AI Debug (ai.offgridmobile.dev) and WDA remain. The loop's supervisor is now pinned to ai.offgridmobile.dev and waits out the start.
+- Slow start: the debug build waits 2 s for Metro, then about 10 s to load its bundle; the rest looks like Sync catching up at boot (Recent showed Oct 29 chats and 1150 for about 70 s). Not proven; needs one start with Sync paused (Mac's setting).
+- Fixed since: Pro licence on the card surface (`30b5ba557`); voice bubble plain titles, email tool "Writing the email", nine stale tests (`2555affba`).
