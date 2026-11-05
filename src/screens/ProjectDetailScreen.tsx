@@ -249,7 +249,9 @@ export const ProjectDetailScreen: React.FC = () => {
           <Icon
             name="plus"
             size={20}
-            color={tab === 'chats' && !hasModels ? colors.textDisabled : colors.primary}
+            // Ink, not emerald: the page's own call to act is the empty state's button, and two
+            // "new chat" controls in two colours read as two different things (hand test 48).
+            color={tab === 'chats' && !hasModels ? colors.textDisabled : colors.text}
           />
         </TouchableOpacity>
       </View>
