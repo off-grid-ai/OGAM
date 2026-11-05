@@ -88,7 +88,7 @@ const PickCard: React.FC<{ item: PickItem }> = ({ item }) => {
 const IconAction: React.FC<{ icon: string; label: string; onPress: () => void; testID: string }> = ({ icon, label, onPress, testID }) => {
   const { colors } = useTheme();
   return (
-    <AnimatedPressable onPress={onPress} accessibilityLabel={label} accessibilityRole="button" hitSlop={10} testID={testID}>
+    <AnimatedPressable onPress={onPress} accessibilityLabel={label} accessibilityRole="button" hitSlop={14} testID={testID}>
       <Icon name={icon} size={16} color={colors.textSecondary} />
     </AnimatedPressable>
   );
