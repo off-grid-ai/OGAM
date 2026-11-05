@@ -19,14 +19,19 @@ export async function getOrphanedTextFiles(
   const files = await RNFS.readDir(modelsDir);
   const models = await modelsGetter();
 
-  const trackedPaths = new Set<string>();
+  // Tracked by file NAME, not full path: the app's container path changes across installs, so a
+  // stored path can differ from the one on disk for the same file. A model's vision projector is
+  // tracked whatever its engine field says (older entries have none): calling it orphaned offered
+  // a delete that would break image reading.
+  const fileName = (path: string) => path.split('/').pop() ?? path;
+  const trackedNames = new Set<string>();
   for (const model of models) {
-    trackedPaths.add(model.filePath);
-    if (model.engine === 'llama' && model.mmProjPath) trackedPaths.add(model.mmProjPath);
+    trackedNames.add(fileName(model.filePath));
+    if (model.mmProjPath) trackedNames.add(fileName(model.mmProjPath));
   }
 
   for (const file of files) {
-    if (file.isFile() && !trackedPaths.has(file.path)) {
+    if (file.isFile() && !trackedNames.has(file.name)) {
       orphaned.push({
         name: file.name,
         path: file.path,

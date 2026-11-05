@@ -131,6 +131,25 @@ describe('getOrphanedTextFiles', () => {
     expect(result).toHaveLength(0);
   });
 
+  it('never calls an in-use vision projector orphaned when its stored path or engine field is stale', async () => {
+    // On device: a reinstall moves the app container, so the stored mmProjPath names an old path,
+    // and older entries carry no engine field. The projector is still the model's: deleting it
+    // would break image reading.
+    mockedRNFS.exists.mockResolvedValue(true);
+    mockedRNFS.readDir.mockResolvedValue([
+      makeRNFSFile('qwen3.5-0.8b.gguf', `${MODELS_DIR}/qwen3.5-0.8b.gguf`),
+      makeRNFSFile('qwen3.5-0.8b-mmproj.gguf', `${MODELS_DIR}/qwen3.5-0.8b-mmproj.gguf`),
+    ]);
+    const stale = '/var/mobile/Containers/Data/Application/OLD-UUID/Documents/models';
+    const result = await getOrphanedTextFiles(MODELS_DIR, async () => [{
+      id: 'qwen', name: 'Qwen 3.5 0.8B', author: 'qwen', fileName: 'qwen3.5-0.8b.gguf',
+      filePath: `${stale}/qwen3.5-0.8b.gguf`, mmProjPath: `${stale}/qwen3.5-0.8b-mmproj.gguf`,
+      fileSize: 1, quantization: 'Q4', downloadedAt: '',
+    } as never]);
+
+    expect(result).toEqual([]);
+  });
+
   it('correctly identifies mix of tracked and untracked files', async () => {
     mockedRNFS.exists.mockResolvedValue(true);
     mockedRNFS.readDir.mockResolvedValue([
