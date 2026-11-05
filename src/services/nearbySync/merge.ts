@@ -75,7 +75,11 @@ function preserveConflict<T extends RecordItem>(items: T[], candidate: T, suffix
  * it is the same chat and the longer one is kept, not both. Returns the index of the local twin, or -1.
  */
 function chatTwin(output: Conversation[], incoming: Conversation): number {
+  // A shared title or two empty transcripts does not establish common identity.
+  if (!incoming.messages.length) return -1;
   return output.findIndex(v => !isProtected(v) && v.id !== incoming.id && v.title === incoming.title &&
+    v.createdAt === incoming.createdAt && v.messages.length > 0 &&
+    v.messages[0].id === incoming.messages[0].id &&
     (messagesArePrefix(v, incoming) || messagesArePrefix(incoming, v)));
 }
 /** Same name and the same content apart from id and times: one thing that was created on both phones. */

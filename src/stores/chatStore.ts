@@ -25,18 +25,29 @@ type PersistedChats = { conversations: Conversation[]; activeConversationId: str
  */
 export function skipUnchangedChatWrites(inner: PersistStorage<PersistedChats>): PersistStorage<PersistedChats> {
   let last: { conversations: Conversation[]; activeConversationId: string | null } | null = null;
+  let writes: Promise<void> = Promise.resolve();
+  const enqueue = (write: () => Promise<void>): Promise<void> => {
+    const next = writes.then(write);
+    // A rejected write must reach the caller, but it must not block future saves.
+    writes = next.catch(() => undefined);
+    return next;
+  };
   const same = (value: StorageValue<PersistedChats>) => !!last &&
     last.activeConversationId === value.state.activeConversationId &&
     last.conversations.length === value.state.conversations.length &&
     last.conversations.every((c, i) => c === value.state.conversations[i]);
   return {
-    getItem: (name) => inner.getItem(name),
-    setItem: (name, value) => {
+    getItem: (name) => writes.then(() => inner.getItem(name)),
+    setItem: (name, value) => enqueue(async () => {
       if (same(value)) return;
+      await inner.setItem(name, value);
+      // Never mark a failed or still-pending write as safely persisted.
       last = { conversations: value.state.conversations, activeConversationId: value.state.activeConversationId };
-      return inner.setItem(name, value);
-    },
-    removeItem: (name) => { last = null; return inner.removeItem(name); },
+    }),
+    removeItem: (name) => enqueue(async () => {
+      await inner.removeItem(name);
+      last = null;
+    }),
   };
 }
 

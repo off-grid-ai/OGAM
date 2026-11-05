@@ -20,8 +20,11 @@ const AHEAD = 3;
 const KEEP_EPISODES = 6;
 const root = () => `${RNFS.CachesDirectoryPath}/podcast-audio`;
 const dir = (key: string) => `${root()}/${key.replace(/[^\w-]/g, '_')}`;
-const pathFor = (key: string, i: number, line: CastLine) =>
-  `${dir(key)}/${i}-${sha256(`${line.voice ?? ''}|${line.voice ? 1 : line.pitch}|${useAtlasVoiceStore.getState().rate}|${line.text}`).slice(0, 12)}.wav`;
+const pathFor = (key: string, i: number, line: CastLine) => {
+  const { neuralVoice, rate } = useAtlasVoiceStore.getState();
+  // A different downloaded TTS model can use identical speaker names with different audio.
+  return `${dir(key)}/${i}-${sha256(`${neuralVoice || 'system'}|${line.voice ?? ''}|${line.voice ? 1 : line.pitch}|${rate}|${line.text}`).slice(0, 12)}.wav`;
+};
 
 /** The voice and pitch for each host: chosen or automatic voices, or pitch alone with one voice. */
 export function castLine(host: string, hosts: number, voices: { name: string }[]): { voice: string; pitch: number } {
@@ -33,32 +36,65 @@ export function castLine(host: string, hosts: number, voices: { name: string }[]
 /** Every line is saved ahead (a cast told apart only by pitch is saved with each host's pitch), so nothing is spoken live and no line waits. */
 const renderable = (_items: CastLine[]) => canPreRender();
 
-let queue: Promise<unknown> = Promise.resolve();
+/** A single voice engine is shared by all episodes. Playback takes priority over background rendering. */
+type RenderJob = { path: string; run: () => Promise<string | null>; resolve: (path: string | null) => void };
+const queued: RenderJob[] = [];
 const pending = new Map<string, Promise<string | null>>();
+let rendering = false;
 
-/** The file for line i, rendering it (in order, one at a time) if it is not saved yet. */
-function render(key: string, items: CastLine[], i: number): Promise<string | null> {
+function pump(): void {
+  if (rendering) return;
+  const next = queued.shift();
+  if (!next) return;
+  rendering = true;
+  void next.run().then(next.resolve, () => next.resolve(null)).finally(() => {
+    pending.delete(next.path);
+    rendering = false;
+    pump();
+  });
+}
+
+function prioritize(path: string): void {
+  const index = queued.findIndex((job) => job.path === path);
+  if (index > 0) queued.unshift(...queued.splice(index, 1));
+}
+
+/** Render once per file, moving requested playback ahead of queued background work. */
+function render(key: string, items: CastLine[], i: number, urgent = false): Promise<string | null> {
   const path = pathFor(key, i, items[i]);
   const known = pending.get(path);
-  if (known) return known;
-  const job = queue.then(async () => {
-    if (await RNFS.exists(path)) return path;
-    await RNFS.mkdir(dir(key));
-    try { return await synthesizeLineToFile(items[i].text, items[i].voice ?? '', path, items[i].voice ? 1 : items[i].pitch); } catch (e: any) {
-      logger.warn(`[POD] could not render line ${i}: ${e?.message ?? e}`);
-      return null;
-    }
-  });
-  queue = job.catch(() => null);
-  pending.set(path, job);
-  job.then((p) => { if (!p) pending.delete(path); }).catch(() => pending.delete(path));
-  return job;
+  if (known) {
+    if (urgent) prioritize(path);
+    return known;
+  }
+  let finish!: (result: string | null) => void;
+  const result = new Promise<string | null>((resolve) => { finish = resolve; });
+  pending.set(path, result);
+  const job: RenderJob = {
+    path,
+    resolve: finish,
+    run: async () => {
+      try {
+        if (await RNFS.exists(path)) return path;
+        await RNFS.mkdir(dir(key));
+        return await synthesizeLineToFile(items[i].text, items[i].voice ?? '', path, items[i].voice ? 1 : items[i].pitch);
+      } catch (e: any) {
+        logger.warn(`[POD] could not render line ${i}: ${e?.message ?? e}`);
+        return null;
+      }
+    },
+  };
+  if (urgent) queued.unshift(job); else queued.push(job);
+  pump();
+  return result;
 }
 
 /** Deletes the audio of all but the newest episodes, so the cache does not grow forever. */
 export async function pruneEpisodes(keepKey: string): Promise<void> {
   try {
-    const dirs = (await RNFS.readDir(root())).filter((d) => d.isDirectory() && d.path !== dir(keepKey));
+    const dirs = (await RNFS.readDir(root())).filter((d) =>
+      d.isDirectory() && d.path !== dir(keepKey) &&
+      ![...pending.keys()].some((path) => path.startsWith(`${d.path}/`)));
     const newest = dirs.sort((a, b) => (b.mtime?.getTime() ?? 0) - (a.mtime?.getTime() ?? 0));
     for (const d of newest.slice(KEEP_EPISODES - 1)) {
       for (const p of [...pending.keys()]) if (p.startsWith(`${d.path}/`)) pending.delete(p);
@@ -74,10 +110,11 @@ export function preRenderEpisode(key: string, items: CastLine[]): void {
   items.forEach((_, i) => { render(key, items, i).catch(() => undefined); });
 }
 
-let sessionReadyAt = 0;
+let sessionReady = false;
 let ctx: any = null;
 let source: any = null;
 let stopToken = 0;
+let settleCurrent: ((result: PlayResult) => void) | null = null;
 /** Decoded audio by file, so the next line is ready to start the moment the current one ends. */
 const decoded = new Map<string, Promise<any>>();
 
@@ -120,21 +157,29 @@ type PlayResult = 'ended' | 'stopped' | 'failed';
 function playFile(path: string): Promise<PlayResult> {
   const token = stopToken;
   return new Promise((resolve) => {
+    let finished = false;
+    const finish = (result: PlayResult) => {
+      if (finished) return;
+      finished = true;
+      if (settleCurrent === finish) settleCurrent = null;
+      resolve(result);
+    };
     (async () => {
-      // The session is set up once and kept for the lines that follow: asking again before every line added a pause each time.
-      if (Date.now() - sessionReadyAt > 20000) { await audioSessionManager.ensurePlayback(); sessionReadyAt = Date.now(); }
+      // Playback-session setup happens once per listening session, not every 20 seconds.
+      if (!sessionReady) { await audioSessionManager.ensurePlayback(); sessionReady = true; }
       const buffer = await decode(path);
       decoded.delete(path);
-      if (token !== stopToken) { resolve('stopped'); return; }
+      if (token !== stopToken) { finish('stopped'); return; }
       const node = audioContext().createBufferSource();
       node.buffer = buffer;
       node.connect(audioContext().destination);
-      node.onEnded = () => { if (source === node) source = null; resolve(token === stopToken ? 'ended' : 'stopped'); };
+      node.onEnded = () => { if (source === node) source = null; finish(token === stopToken ? 'ended' : 'stopped'); };
       source = node;
+      settleCurrent = finish;
       let span = { offset: 0, duration: buffer.duration as number };
       try { span = speechSpan(buffer.getChannelData(0), buffer.sampleRate); } catch { /* play the whole file */ }
       node.start(0, span.offset, span.duration);
-    })().catch((e) => { logger.warn(`[POD] playback failed: ${e?.message ?? e}`); resolve('failed'); });
+    })().catch((e) => { logger.warn(`[POD] playback failed: ${e?.message ?? e}`); finish(token === stopToken ? 'failed' : 'stopped'); });
   });
 }
 
@@ -147,8 +192,9 @@ export async function playLine(key: string, items: CastLine[], i: number): Promi
   if (!renderable(items)) return speakAndWait(line.text, line.pitch, 'podcast', line.voice || '');
   const token = stopToken;
   // This line first, then the next few behind it, so it never waits for the others.
-  const current = render(key, items, i);
-  for (let k = i + 1; k <= Math.min(items.length - 1, i + AHEAD); k++) render(key, items, k).catch(() => undefined);
+  // Queue the next lines in reverse priority order, then put this line first.
+  for (let k = Math.min(items.length - 1, i + AHEAD); k > i; k--) render(key, items, k, true).catch(() => undefined);
+  const current = render(key, items, i, true);
   // And the next line is decoded now, while this one plays, so the gap between lines is not a decode.
   if (i + 1 < items.length) render(key, items, i + 1).then((next) => { if (next) decode(next).catch(() => undefined); }).catch(() => undefined);
   const path = await current;
@@ -168,7 +214,10 @@ export async function playLine(key: string, items: CastLine[], i: number): Promi
 /** Stops whatever podcast line is playing from a file. */
 export function stopPodcastAudio(): void {
   stopToken++;
-  sessionReadyAt = 0; // something else may take the audio session before the next play
+  sessionReady = false; // restore the session on the next play after an interruption
+  const settle = settleCurrent;
+  settleCurrent = null;
   try { source?.stop(); } catch { /* already stopped */ }
   source = null;
+  settle?.('stopped'); // some audio backends never fire onEnded after stop
 }
