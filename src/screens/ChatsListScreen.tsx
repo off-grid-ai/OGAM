@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, FlatList } from 'react-native';
+import { View, Text, SectionList } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,6 +13,7 @@ import { ModelSelectorModal } from '../components';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
 import { AnimatedEntry } from '../components/AnimatedEntry';
 import { ListGroupSeparator, listGroupRowEnds, listRowStyle } from '../components/ListGroup';
+import { groupByRecency } from '@offgrid/ui';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ListSearchBar } from '../components/ListSearchBar';
@@ -30,7 +31,6 @@ import { Conversation } from '../types';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { byRecentActivity } from '../utils/conversationOrdering';
 import { formatWhen } from '../utils/localTime';
-import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
 import { useIsFocused } from '@react-navigation/native';
 import { LivingField } from '../components/LivingField';
@@ -42,7 +42,6 @@ type NavigationProp = CompositeNavigationProp<
 const SEARCH_BAR = { placeholder: 'Search chats', clearLabel: 'Clear chat search', testID: 'chat-search-input' };
 
 export const ChatsListScreen: React.FC = () => {
-  const previewLine = useConversationPreviewLine();
   const navigation = useNavigation<NavigationProp>();
   const focusTrigger = useFocusTrigger();
   const { colors } = useTheme();
@@ -159,8 +158,6 @@ export const ChatsListScreen: React.FC = () => {
     ));
   };
 
-  const formatDate = (dateString: string): string => formatWhen(dateString);
-
   const renderRightActions = (conversation: Conversation) => (
     <TouchableOpacity
       style={styles.deleteAction}
@@ -172,11 +169,14 @@ export const ChatsListScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
-  const renderChat = ({ item, index }: { item: Conversation; index: number }) => {
+  // One line per chat: a quiet icon for an image or video chat, its title, its project when it has
+  // one, and when it was last active, so chats with the same title can still be told apart. Each
+  // date group is one surface divided by hairlines (brand: lists in one surface).
+  const renderChat = ({ item, index: rowIndex, section }: { item: Conversation; index: number; section: { data: readonly Conversation[] } }) => {
     const project = item.projectId ? getProject(item.projectId) : null;
     const selected = selectedIds.has(item.id);
-    // The preview line comes from the shared rule, so this list and the Mac's read the same.
-    const preview = previewLine(item.messages);
+    const index = listIndex.get(item.id) ?? 0;
+    const kind = item.messages[item.messages.length - 1]?.turnKind ?? 'text';
 
     return (
       <Swipeable
@@ -188,7 +188,7 @@ export const ChatsListScreen: React.FC = () => {
         <AnimatedListItem
           index={index}
           trigger={focusTrigger}
-          style={[styles.chatItem, listGroupRowEnds(index, visibleConversations.length)]}
+          style={[styles.chatItem, listGroupRowEnds(rowIndex, section.data.length)]}
           onPress={() => {
             if (!selecting) {
               handleChatPress(item);
@@ -203,30 +203,25 @@ export const ChatsListScreen: React.FC = () => {
           }}
           testID={`conversation-item-${index}`}
         >
-          <View style={styles.chatContent}>
-            <View style={styles.chatHeader}>
-              <Text style={styles.chatTitle} numberOfLines={1}>
-                {item.title}
-              </Text>
-              <Text style={styles.chatDate}>{formatDate(item.updatedAt)}</Text>
-            </View>
-            {preview ? (
-              <Text style={styles.chatPreview} numberOfLines={1}>
-                {preview}
-              </Text>
-            ) : null}
-            {project && (
-              <View style={styles.projectBadge}>
-                <Text style={styles.projectBadgeText}>{project.name}</Text>
-              </View>
-            )}
-          </View>
-          <Icon
-            name={selecting ? (selected ? 'check-square' : 'square') : 'chevron-right'}
-            size={20}
-            color={selected ? colors.primary : colors.textMuted}
-            style={selecting ? styles.selectionIcon : undefined}
-          />
+          {selecting ? (
+            <Icon
+              name={selected ? 'check-square' : 'square'}
+              size={18}
+              color={selected ? colors.primary : colors.textMuted}
+            />
+          ) : null}
+          {kind !== 'text' ? (
+            <Icon name={kind === 'video' ? 'video' : 'image'} size={14} color={colors.textMuted} />
+          ) : null}
+          <Text style={styles.chatTitle} numberOfLines={1}>
+            {item.title}
+          </Text>
+          {project ? (
+            <Text style={styles.projectName} numberOfLines={1}>
+              {project.name}
+            </Text>
+          ) : null}
+          <Text style={styles.chatTime}>{formatWhen(item.updatedAt)}</Text>
         </AnimatedListItem>
       </Swipeable>
     );
@@ -241,6 +236,18 @@ export const ChatsListScreen: React.FC = () => {
       conversation.messages.some(message => message.content.toLowerCase().includes(query)),
     );
   }, [searchQuery, sortedConversations]);
+  const sections = useMemo(
+    () =>
+      groupByRecency(visibleConversations, conversation => Date.parse(conversation.updatedAt)).map(group => ({
+        title: group.label,
+        data: group.items,
+      })),
+    [visibleConversations],
+  );
+  const listIndex = useMemo(
+    () => new Map(visibleConversations.map((conversation, index) => [conversation.id, index])),
+    [visibleConversations],
+  );
   const computerResults = selecting ? null : (
     <PairedComputerSearchFooter
       query={searchQuery}
@@ -356,10 +363,16 @@ export const ChatsListScreen: React.FC = () => {
               />
             </View>
           ) : null}
-          <FlatList
+          <SectionList
             {...SCROLL_DEPTH_PROPS}
-            data={visibleConversations}
+            sections={sections}
             renderItem={renderChat}
+            renderSectionHeader={({ section }) => (
+              <Text style={styles.sectionLabel} accessibilityRole="header">
+                {section.title}
+              </Text>
+            )}
+            stickySectionHeadersEnabled={false}
             ItemSeparatorComponent={ListGroupSeparator}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.list}
@@ -414,8 +427,9 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   swipeableContainer: {
     overflow: 'visible' as const,
   },
+  // brand Mobile profile: standard screen padding is 24px.
   list: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.lg,
   },
@@ -435,55 +449,45 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.textSecondary,
     flex: 1,
   },
-  selectionIcon: {
-    marginLeft: SPACING.sm,
-  },
   noMatches: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
     textAlign: 'center' as const,
     paddingVertical: SPACING.xxl,
   },
-  // A row of the chats group: one surface with hairlines between rows (ListGroupSeparator).
+  // One line per chat, flat on the page (no box, no hairlines), about 48 px tall.
   chatItem: {
     ...listRowStyle,
-    paddingVertical: SPACING.sm + 2,
-    backgroundColor: colors.surface,
+    gap: SPACING.sm,
+    paddingVertical: SPACING.md,
+    backgroundColor: colors.surfaceGlass,
   },
-  chatContent: {
-    flex: 1,
-  },
-  chatHeader: {
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    alignItems: 'center' as const,
+  chatTime: {
+    ...TYPOGRAPHY.meta,
+    fontSize: 11,
+    color: colors.textMuted,
   },
   chatTitle: {
-    ...TYPOGRAPHY.bodySmall,
+    ...TYPOGRAPHY.body,
+    fontSize: 15,
     color: colors.text,
     flex: 1,
-    marginRight: SPACING.sm,
   },
-  chatDate: {
-    ...TYPOGRAPHY.metaSmall,
-    color: colors.textMuted,
-  },
-  chatPreview: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.textSecondary,
-    marginTop: 1,
-  },
-  projectBadge: {
-    alignSelf: 'flex-start' as const,
-    backgroundColor: colors.surfaceLight,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs / 2,
-    borderRadius: 4,
-    marginTop: SPACING.sm - 2,
-  },
-  projectBadgeText: {
+  projectName: {
     ...TYPOGRAPHY.meta,
+    fontSize: 11,
     color: colors.textMuted,
+    maxWidth: 120,
+  },
+  // Desktop's group label: Today, Yesterday, This week, Older.
+  sectionLabel: {
+    ...TYPOGRAPHY.label,
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase' as const,
+    color: colors.textMuted,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.xs,
   },
   emptyState: {
     flex: 1,

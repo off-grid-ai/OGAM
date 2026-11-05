@@ -1,6 +1,6 @@
 /**
- * A chat's preview line is reading text, so it is set in Geist, not in the Mono face kept for labels,
- * numbers and timestamps (brand/DESIGN_PHILOSOPHY.md).
+ * A chat row reads as one line: its title in Geist (reading text) and when it was last active in Geist
+ * Mono (brand/DESIGN_PHILOSOPHY.md: Mono for timestamps), under its date heading.
  *
  * Real ChatsListScreen and the real chat store, rehydrated from storage.
  */
@@ -11,7 +11,7 @@ import { FONTS } from '../../../src/constants';
 // Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
 jest.unmock('@react-navigation/native');
 
-it('sets the preview and the title in Geist', async () => {
+it('sets the title in Geist and the time in Geist Mono', async () => {
   installNativeBoundary({ fs: true });
   const AsyncStorage = require('@react-native-async-storage/async-storage');
   await AsyncStorage.clear();
@@ -42,7 +42,9 @@ it('sets the preview and the title in Geist', async () => {
   const { ChatsListScreen } = require('../../../src/screens/ChatsListScreen');
   const chats = rtl.render(withNavigator(React.createElement(ChatsListScreen)));
 
-  const preview = await rtl.waitFor(() => chats.getByText(/A cabin by the lake/));
-  expect(StyleSheet.flatten(preview.props.style).fontFamily).toBe(FONTS.sans);
-  expect(StyleSheet.flatten(chats.getByText('Weekend trip').props.style).fontFamily).toBe(FONTS.sans);
+  const title = await rtl.waitFor(() => chats.getByText('Weekend trip'));
+  expect(StyleSheet.flatten(title.props.style).fontFamily).toBe(FONTS.sans);
+  // The time stays on the row, so chats with the same title can be told apart.
+  const time = chats.getByText(/\d|Yesterday|Mon|Tue|Wed|Thu|Fri|Sat|Sun|Oct|Nov/, { exact: false });
+  expect(StyleSheet.flatten(time.props.style).fontFamily).toBe(FONTS.mono);
 });
