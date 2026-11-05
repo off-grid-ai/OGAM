@@ -111,7 +111,6 @@ const createEmptyChatStyles = (colors: ThemeColors) => ({
   // Starter prompts: one quiet grouped surface, a hairline between them (ListGroup look).
   starterList: {
     alignSelf: 'stretch' as const,
-    marginHorizontal: SPACING.lg,
     marginBottom: SPACING.lg,
     backgroundColor: colors.surface,
     borderRadius: 12,
@@ -125,6 +124,7 @@ const createEmptyChatStyles = (colors: ThemeColors) => ({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderLight,
   },
+  starterChipLast: { borderBottomWidth: 0 },
   starterText: { ...TYPOGRAPHY.body, color: colors.text },
   projectHint: {
     flexDirection: 'row' as const,

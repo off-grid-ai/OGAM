@@ -130,6 +130,8 @@ describe('batch2 send — new chat, long message, interrupt/queue', () => {
 
     await h.rtl.waitFor(() => expect(h.view!.getByText('No Model Selected')).toBeTruthy());
     expect(h.view!.queryByTestId('chat-input')).toBeNull();
+    // No starter prompts either: with no model they would only lead to the same dead end.
+    expect(h.view!.queryByTestId('chat-starters')).toBeNull();
     expect(chatState().conversations).toHaveLength(before);
     expect(completions(h)).toBe(0);
   });

@@ -272,7 +272,8 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
               activeProject={chat.activeProject}
               setShowProjectSelector={chat.setShowProjectSelector}
               isRemote={chat.activeModelInfo?.isRemote}
-              onStarter={prompt => chat.handleSend(prompt)}
+              // Offered only once a model can answer: a tap while none is ready had no next step.
+              onStarter={chat.hasActiveModel && !chat.isModelLoading ? prompt => chat.handleSend(prompt) : undefined}
             />
           );
         })()

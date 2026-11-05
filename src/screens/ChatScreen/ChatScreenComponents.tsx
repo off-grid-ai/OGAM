@@ -184,10 +184,10 @@ export const EmptyChat: React.FC<{
       <AnimatedEntry index={3} staggerMs={60}>
         {/* A new person sees what they can ask: one tap sends it. */}
         <View style={styles.starterList} testID="chat-starters">
-          {STARTER_PROMPTS.map(prompt => (
+          {STARTER_PROMPTS.map((prompt, index) => (
             <TouchableOpacity
               key={prompt}
-              style={styles.starterChip}
+              style={[styles.starterChip, index === STARTER_PROMPTS.length - 1 && styles.starterChipLast]}
               onPress={() => onStarter(prompt)}
               accessibilityRole="button"
               accessibilityLabel={prompt}
