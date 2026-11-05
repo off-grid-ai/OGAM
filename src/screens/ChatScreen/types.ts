@@ -197,10 +197,21 @@ function groupAssistantTurnWork(
         }
         continue;
       }
-      const matchingIndex = message.toolCallId
+      // A result pairs with its call by id; with no id match (small models reuse or drop ids),
+      // with the oldest call of the same tool still waiting, so one search is one row.
+      const byId = message.toolCallId
         ? artifactByCallId.get(message.toolCallId)
         : undefined;
-      if (matchingIndex !== undefined) {
+      const openById = byId !== undefined && !artifacts[byId]!.result ? byId : undefined;
+      const matchingIndex =
+        openById ??
+        artifacts.findIndex(
+          artifact =>
+            artifact.name === message.toolName &&
+            !artifact.result &&
+            artifact.arguments !== undefined,
+        );
+      if (matchingIndex !== -1) {
         artifacts[matchingIndex] = {
           ...artifacts[matchingIndex]!,
           result: message.content,
