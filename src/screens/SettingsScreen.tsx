@@ -300,10 +300,8 @@ export const SettingsScreen: React.FC = () => {
             </View>
             <View style={styles.proCardText}>
               <View style={styles.proTitleRow}>
-                <Text style={styles.proNavTitle}>Off Grid AI PRO</Text>
-                <View style={styles.proBadge}>
-                  <Text style={styles.proBadgeText}>PRO</Text>
-                </View>
+                {/* Named once: "Off Grid AI PRO" beside a second PRO badge said it twice (hand test 36). */}
+                <Text style={styles.proNavTitle}>Off Grid AI Pro</Text>
               </View>
               <Text style={styles.proDesc}>{proStatusLabel}</Text>
             </View>

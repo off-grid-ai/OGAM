@@ -106,7 +106,7 @@ export const SettingsCommunitySections: React.FC<
             <Icon name="mail" size={16} color={colors.textSecondary} />
           </View>
           <View style={styles.navItemContent}>
-            <Text style={styles.navItemTitle}>Send Feedback</Text>
+            <Text style={styles.navItemTitle}>Send feedback</Text>
             <Text style={styles.navItemDesc}>
               Report a bug or share a suggestion
             </Text>
