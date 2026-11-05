@@ -57,7 +57,7 @@ function getToolLabel(toolName?: string, content?: string): string {
     }
     case 'search_knowledge_base': {
       const passages = content ? parseSearchBlock(content) : [];
-      if (!passages.length) return 'Searched documents (no passages)';
+      if (!passages.length) return 'Searched your documents: nothing matched';
       const documents = new Set(passages.map(passage => passage.document)).size;
       return `Found ${passages.length} passage${passages.length === 1 ? '' : 's'} in ${documents} document${documents === 1 ? '' : 's'}`;
     }
