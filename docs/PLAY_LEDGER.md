@@ -285,3 +285,9 @@ Pass: Projects and Chats headers on the field at 24px, the new Chats/Projects se
 1. Late Stop: a longer grace (2 s).
 2. One search field for Chats, Projects and Models.
 3. Choose models: one emerald mark; picks' download targets 44px.
+
+## Supervisor 01:55 — hand test 19 (build 20, head about a5bf4770f)
+Pass: Gallery header and scroll, Storage and Model settings headers, Models search (magnifier, hairline, emerald focus), Downloads plain counts. Fail: a late Stop tap still started recording within the 2 s grace (cause: the guard kept the end time in the composer, which remounts as a reply ends; now read from the generation session, `d3d49149a`); About, Project chats, Knowledge base and Edit project off the field (letter badge, shadowed cards, red Delete bar, grey inputs); Image model search "sd" spins over 30 s with no message; "Use fastest settings" slab.
+1. Late Stop (fixed at the seam, verify on device).
+2. Project screens and About on the field, one surface, 24px.
+3. Image search: results or a clear line, never an endless spinner.
