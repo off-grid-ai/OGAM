@@ -793,6 +793,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     /** Start a real chat-mode mic gesture. Tests can release it as a hold or keep it pressed. */
     async tapMic() {
       const view = this.view!;
+      await this.settle(require('../../src/components/ChatInput/useStopTapGuard').STOP_TAP_GRACE_MS); // past the late-Stop grace
       const btn = await rtl.waitFor(() =>
         view.getByTestId('voice-record-button'),
       );
@@ -821,6 +822,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     /** One short tap: start recording and lock it until the next tap. */
     async tapMicOnce() {
       const view = this.view!;
+      await this.settle(require('../../src/components/ChatInput/useStopTapGuard').STOP_TAP_GRACE_MS); // past the late-Stop grace
       const btn = await rtl.waitFor(() =>
         view.getByTestId('voice-record-button'),
       );
@@ -951,6 +953,10 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       // BOUNDARY: the whisper model transcribes the recorded audio file to this text.
       boundary.whisper!.setFileTranscript(transcript);
       const btn = () => view.getByTestId('voice-record-button-audio');
+      // A person reaching for the mic after a reply takes longer than the late-Stop grace
+      // (useStopTapGuard); a tap inside it is a late Stop tap and starts nothing.
+      const { STOP_TAP_GRACE_MS } = require('../../src/components/ChatInput/useStopTapGuard');
+      await this.settle(STOP_TAP_GRACE_MS);
       rtl.fireEvent.press(await rtl.waitFor(btn)); // tap: start recording
       await this.settle(50);
       rtl.fireEvent.press(await rtl.waitFor(btn)); // tap: stop & send → transcribeFile → onTranscript → send

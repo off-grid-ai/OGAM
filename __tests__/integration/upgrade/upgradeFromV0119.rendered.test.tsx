@@ -541,6 +541,10 @@ describe('an install upgraded from v0.0.119', () => {
     const mic = await waitFor(() => view.getByTestId('voice-record-button'), WAIT);
     expect(mic.props.accessibilityLabel).toBe('Start voice recording');
     boundary.whisper!.setFileTranscript(SPOKEN);
+    // A mic tap right as a reply ends is taken as a late Stop tap and ignored (useStopTapGuard);
+    // a person reaching for the mic takes longer than that grace.
+    const { STOP_TAP_GRACE_MS } = require('../../../src/components/ChatInput/useStopTapGuard');
+    await new Promise(resolve => setTimeout(resolve, STOP_TAP_GRACE_MS));
     fireEvent(mic, 'responderGrant', MIC_GRANT);
     await waitFor(() => expect(boundary.whisper!.hasRealtimeSubscriber()).toBe(true), WAIT);
     await waitFor(
