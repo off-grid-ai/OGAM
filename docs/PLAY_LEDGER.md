@@ -144,3 +144,15 @@ Each round: expected / found / root cause / change / commit / screenshots.
 2. Clipboard and Sync into the row group; rows 44–52 px with smaller type.
 3. LivingField pauses when Home is out of focus or the app is in the background, sized to the screen; hero slimmer with an emerald halo so it is the brightest thing.
 - Risks: surfaceGlass on sheets that sit on `surface` reads faint; "Write to us" wraps to three lines.
+
+## r08b desktop page header (17:10)
+- **Mac:** "New Chat is such a large button, an eye sore." Desktop's live window: a Mono kicker, a large regular title, a grey line, and the main action as a compact pill ("+ New entry"). Home now does the same; New chat is a pill beside the title (`47c60f774`). The Models row's active types are bright text, not emerald (`2671ef5e3`).
+- **Checklist:** `docs/play/DESIGN_CHECKLIST.md` (12 items); every screenshot is scored against it from now on.
+- **Tokens (Mac: "the same design tokens on desktop and mobile"):** `@offgrid/design` in shared is now the one source (shared `d89c85e`, `fbd0b1e`): mobile's palette, Geist, the hero and glass tokens, the living-field values, CSS matching TS. Mobile reads it (palette, fonts, type, spacing, radius, living field). Desktop still reads its own fork in `desktop/packages/design`; switching it waits, because desktop's checkout holds another session's uncommitted work.
+- **Error red:** shared's CSS had an unshipped muted brick (#b06a6a / #8a4a4a); both apps ship #C75050 / #DC2626, so the one source keeps the shipped red. Mac to decide if the brick should ship.
+
+## Supervisor 17:10 — home-after-3 scored
+Pass: 1 alive, 2 depth, 4 main action, 7 lists, 9 icons, 10 tokens. Fail: 3 (emerald Clipboard/Sync icons, bell dots), 5 (bell circled), 6 (Mono sentences in Clipboard/Sync), 8 (Models, Clipboard, Sync, Gallery as four boxes), 11 (inactive "Text" caption contrast). 12 partial.
+1. Clipboard and Sync as rows in the Gallery/feedback group, grey icons, Geist meta (Pro's SyncHomeCard).
+2. No model: "Get a model" in the header pill slot; the setup card as a row.
+3. Bell without its circle; inactive caption contrast. Retake shots without the Metro banner.
