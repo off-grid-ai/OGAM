@@ -87,7 +87,7 @@ export async function openKnowledgeBase(
       picker.pick.mockResolvedValue(
         files.map(file => ({ uri: `file://${file.path}`, name: file.name, size: file.size ?? 0 })),
       );
-      const empty = view.queryByText('Add Document');
+      const empty = view.queryByTestId('kb-add-first');
       rtl.fireEvent.press(empty ?? view.getByLabelText('Add documents'));
       // Each file is either listed or named on the error card, and the add button works again.
       await rtl.waitFor(() =>
