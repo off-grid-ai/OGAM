@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
-import { View, Text, FlatList, TextInput, RefreshControl, Platform } from 'react-native';
+import { View, Text, FlatList, TextInput, RefreshControl, Platform, type StyleProp, type ViewStyle } from 'react-native';
+import { ListGroupSeparator, listGroupRowEnds } from '../../components/ListGroup';
 import { TouchableOpacity } from '../../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import { LoadingDots } from '../../components/LoadingDots';
@@ -330,8 +331,12 @@ interface ModelListItemProps {
   item: ModelInfo; index: number; focusTrigger: number;
   isDownloaded: boolean; isTrending: boolean; onPress: () => void;
   onDownload?: () => void;
+  /** The row's place in the grouped list: flat, with the group's corners on the end rows. */
+  rowStyle?: StyleProp<ViewStyle>;
 }
-const ModelListItem: React.FC<ModelListItemProps> = ({ item, index, focusTrigger, isDownloaded, isTrending, onPress, onDownload }) => {
+/** A model card as a row of the grouped list: no box of its own (the group draws the surface). */
+const GROUPED_MODEL_ROW: ViewStyle = { borderRadius: 0, marginTop: 0, marginBottom: 0, borderWidth: 0, shadowOpacity: 0, elevation: 0 };
+const ModelListItem: React.FC<ModelListItemProps> = ({ item, index, focusTrigger, isDownloaded, isTrending, onPress, onDownload, rowStyle }) => {
   const { isCompatible, incompatibleReason } = getTextModelCompatibility(item);
   const isLiteRTParent = item.id === LITERT_PARENT_ID;
   const recommended = isLiteRTParent ? LITERT_PARENT_RECOMMENDED : undefined;
@@ -348,7 +353,7 @@ const ModelListItem: React.FC<ModelListItemProps> = ({ item, index, focusTrigger
     predicted: true,
     ...modelSpeedBadges(item),
   };
-  return <AnimatedEntry index={index} staggerMs={30} trigger={focusTrigger}><ModelCard model={cardModel} isDownloaded={isDownloaded} isDownloading={agg.downloading} isQueued={agg.queued} downloadProgress={agg.progress} downloadBytes={agg.bytes} downloadCount={agg.count} isCompatible={isCompatible} incompatibleReason={incompatibleReason} onPress={isCompatible ? onPress : undefined} onDownload={isCompatible ? onDownload : undefined} testID={`model-card-${index}`} compact facts={modelFactChips(item)} isTrending={isTrending} recommended={recommended} supportsAcceleration={!isLiteRTParent && modelSupportsNpuGpu(item)} capabilities={capabilities} /></AnimatedEntry>;
+  return <AnimatedEntry index={index} staggerMs={30} trigger={focusTrigger}><ModelCard model={cardModel} isDownloaded={isDownloaded} isDownloading={agg.downloading} isQueued={agg.queued} downloadProgress={agg.progress} downloadBytes={agg.bytes} downloadCount={agg.count} isCompatible={isCompatible} incompatibleReason={incompatibleReason} onPress={isCompatible ? onPress : undefined} onDownload={isCompatible ? onDownload : undefined} testID={`model-card-${index}`} compact facts={modelFactChips(item)} isTrending={isTrending} recommended={recommended} supportsAcceleration={!isLiteRTParent && modelSupportsNpuGpu(item)} capabilities={capabilities} style={rowStyle} /></AnimatedEntry>;
 };
 
 function applyBackNavigation(setSelectedModel: (m: ModelInfo | null) => void, setModelFiles: (f: ModelFile[]) => void): void {
@@ -416,6 +421,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
     await handleDownload(item, file);
   };
 
+  const listData = hasSearched ? filteredResults : [...(!onboarding && Platform.OS === 'android' ? [liteRTModel] : []), ...moreModels];
   const renderModelItem = ({ item, index }: { item: ModelInfo; index: number }) => {
     const directDownload = onboarding
       ? () => { downloadRecommendedFile(item).catch(() => undefined); }
@@ -427,7 +433,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
       item.files.some(file => file.name === model.fileName),
     );
     return (
-      <ModelListItem item={item} index={index} focusTrigger={focusTrigger} isDownloaded={isDownloaded} isTrending={trendingAsModelInfo.some(t => t.id === item.id)} onPress={directDownload ?? (() => handleSelectModel(item))} onDownload={directDownload} />
+      <ModelListItem item={item} index={index} focusTrigger={focusTrigger} isDownloaded={isDownloaded} isTrending={trendingAsModelInfo.some(t => t.id === item.id)} onPress={directDownload ?? (() => handleSelectModel(item))} onDownload={directDownload} rowStyle={[GROUPED_MODEL_ROW, listGroupRowEnds(index, listData.length)]} />
     );
   };
 
@@ -552,8 +558,9 @@ export const TextModelsTab: React.FC<Props> = (props) => {
       ) : (
         <FlatList
           {...LIST_CLIPPING_PROPS}
-          data={hasSearched ? filteredResults : [...(!onboarding && Platform.OS === 'android' ? [liteRTModel] : []), ...moreModels]}
+          data={listData}
           renderItem={renderModelItem}
+          ItemSeparatorComponent={ListGroupSeparator}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
           testID="models-list"

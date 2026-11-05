@@ -1,3 +1,4 @@
+import type { StyleProp, ViewStyle } from 'react-native';
 import React from 'react';
 import { View, Text } from 'react-native';
 import { TouchableOpacity } from './Touchable';
@@ -55,6 +56,8 @@ interface ModelCardProps {
   /** A size in words ("Smaller", "Recommended", "Best") shown instead of the quantization name. */
   sizeLabel?: string;
   testID?: string;
+  /** Extra container style: a list that groups its rows (ListGroup look) flattens the card into a row. */
+  style?: StyleProp<ViewStyle>;
   onPress?: () => void;
   onDownload?: () => void;
   onDelete?: () => void;
@@ -294,6 +297,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   incompatibleReason,
   sizeLabel,
   testID,
+  style,
   onPress,
   onDownload,
   onDelete,
@@ -372,6 +376,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
         useDenseLayout && styles.cardDense,
         isActive && styles.cardActive,
         !isCompatible && styles.cardIncompatible,
+        style,
       ]}
       onPress={onPress}
       activeOpacity={0.7}
