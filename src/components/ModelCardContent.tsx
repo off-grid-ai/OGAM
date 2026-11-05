@@ -430,8 +430,8 @@ function ActionButton({ icon, color, haptic, onPress, disabled, testID, accessib
   );
 }
 
-function DownloadedActions({ isActive, testID, colors, styles, onSelect, onDelete, onRepairVision, isRepairingVision }: Readonly<{
-  isActive?: boolean; testID?: string; colors: ThemeColors; styles: any;
+function DownloadedActions({ modelName, isActive, testID, colors, styles, onSelect, onDelete, onRepairVision, isRepairingVision }: Readonly<{
+  modelName?: string; isActive?: boolean; testID?: string; colors: ThemeColors; styles: any;
   onSelect?: () => void; onDelete?: () => void; onRepairVision?: () => void; isRepairingVision?: boolean;
 }>) {
   const tid = (s: string) => testID ? `${testID}-${s}` : undefined;
@@ -444,12 +444,12 @@ function DownloadedActions({ isActive, testID, colors, styles, onSelect, onDelet
           <LoadingDots color={colors.warning} />
         </View>
       ) : (
-        onRepairVision && <ActionButton icon="tool" color={colors.warning} haptic="impactLight" onPress={onRepairVision} testID={tid('repair-vision')} styles={styles} />
+        onRepairVision && <ActionButton icon="tool" color={colors.warning} haptic="impactLight" onPress={onRepairVision} testID={tid('repair-vision')} accessibilityLabel={modelName ? `Repair image support for ${modelName}` : 'Repair image support'} styles={styles} />
       )}
       {/* A radio: the model in use shows a check; any other shows an empty circle that picks it. */}
       {isActive && onSelect && <View style={styles.iconButton} accessibilityLabel="In use" testID={tid('in-use')}><Icon name="check-circle" size={16} color={colors.primary} /></View>}
-      {!isActive && onSelect && <ActionButton icon="circle" color={colors.textMuted} haptic="selection" onPress={onSelect} testID={tid('select')} accessibilityLabel="Use this model" styles={styles} />}
-      {onDelete && <ActionButton icon="trash-2" color={colors.textMuted} haptic="notificationWarning" onPress={onDelete} testID={tid('delete') ?? 'delete-model-button'} accessibilityLabel="Delete model" styles={styles} />}
+      {!isActive && onSelect && <ActionButton icon="circle" color={colors.textMuted} haptic="selection" onPress={onSelect} testID={tid('select')} accessibilityLabel={modelName ? `Use ${modelName}` : 'Use this model'} styles={styles} />}
+      {onDelete && <ActionButton icon="trash-2" color={colors.textMuted} haptic="notificationWarning" onPress={onDelete} testID={tid('delete') ?? 'delete-model-button'} accessibilityLabel={modelName ? `Delete ${modelName}` : 'Delete model'} styles={styles} />}
     </>
   );
 }
@@ -473,7 +473,7 @@ export const ModelCardActions: React.FC<ModelCardActionsProps> = ({
     return <ActionButton icon="download" color={colors.textSecondary} haptic="impactLight" onPress={onDownload} disabled={!isCompatible} testID={tid('download')} accessibilityLabel={modelName ? `Download ${modelName}` : 'Download model'} styles={styles} />;
   }
   if (isDownloaded) {
-    return <DownloadedActions isActive={isActive} testID={testID} colors={colors} styles={styles} onSelect={onSelect} onDelete={onDelete} onRepairVision={onRepairVision} isRepairingVision={isRepairingVision} />;
+    return <DownloadedActions modelName={modelName} isActive={isActive} testID={testID} colors={colors} styles={styles} onSelect={onSelect} onDelete={onDelete} onRepairVision={onRepairVision} isRepairingVision={isRepairingVision} />;
   }
   return null;
 };
