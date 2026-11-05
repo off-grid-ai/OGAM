@@ -255,6 +255,15 @@ describe('runToolLoop — LiteRT', () => {
     expect(answer).toBe('recovered answer');
   });
 
+  it('leaves a full context (also Status Code 3) to compaction instead of asking again without tools', async () => {
+    d.boundary.litert.scriptError('Status Code: 3. Message: Prefill length (128) plus current step (3990) exceeds max sequence length (4096).');
+
+    await expect(runTurn({ messages: [msg({ role: 'user', content: 'hi' })], enabledToolIds: ['calculator'] }))
+      .rejects.toThrow(/exceeds max sequence length/);
+
+    expect(liteRTToolNames(d)).toEqual(['calculator']); // never reset with no tools
+  });
+
   it('raises any other native error without asking again', async () => {
     d.boundary.litert.scriptError('out of memory');
     const before = sends();

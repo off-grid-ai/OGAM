@@ -135,6 +135,27 @@ describe('LiteRT — backends', () => {
     expect(d.boundary.litert.calls.sendMessage).toHaveLength(1); // no second warmup
   });
 
+  it('caps the context at a curated build\'s own limit (the Tensor TPU build is compiled for 4096 tokens)', async () => {
+    d = await launchGeneration({ engine: 'litert', load: false });
+    const fileName = 'gemma-4-E2B-it_Google_Tensor_G5.litertlm';
+    const filePath = `${d.boundary.fs!.DocumentDirectoryPath}/models/${fileName}`;
+    d.boundary.fs!.seedFile(filePath, 3113545589);
+    d.useAppStore.getState().addDownloadedModel({
+      ...modelById('m'),
+      id: `offgrid/litert-recommended/${fileName}`,
+      name: 'Gemma 4 E2B (Tensor TPU)',
+      fileName,
+      filePath,
+      fileSize: 3113545589,
+    });
+    d.useAppStore.getState().updateSettings({ liteRTBackend: 'gpu', liteRTMaxTokens: 8192 });
+
+    await d.activeModelService.loadTextModel(`offgrid/litert-recommended/${fileName}`);
+
+    const [, , , , maxNumTokens] = d.boundary.litert.calls.loadModel[0];
+    expect(maxNumTokens).toBe(4096);
+  });
+
   it('hands native the vision flag of a model that carries vision', async () => {
     d = await launchGeneration({ engine: 'litert', load: false, liteRTVision: true });
 
