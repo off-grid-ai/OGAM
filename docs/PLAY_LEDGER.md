@@ -218,3 +218,10 @@ Pass: "In use" on Models, Storage "Measuring…", no vision projector orphaned, 
 1. Storage orphans: every file a model owns → done.
 2. Kind icon on Chats rows; the same-title rule on Home; a retry for an unanswered question.
 3. One "Searched the web" line; plain tools line; grey sources.
+
+## Fixes after hand test 8 (20:40)
+- Storage: the image model in use is never orphaned (`b5a0a9ba2`).
+- A question with no answer shows "Try again" under it (`81752a5db`).
+- One search, one row: a result pairs with its call when the model gave no id (`14a3f5d3a`, tests fail on old code).
+- Links in answers are text-coloured with an underline, as on desktop (`a05aadb47`).
+Next: Model settings plain words, Models Image tab on one surface, Storage polish.
