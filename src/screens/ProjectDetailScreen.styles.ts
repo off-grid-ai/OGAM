@@ -240,7 +240,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   kbDocRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -250,7 +250,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginRight: SPACING.sm,
   },
   kbDocDelete: {
-    padding: SPACING.sm,
+    padding: 13,
     marginLeft: SPACING.sm,
   },
   kbTransferIcon: {
