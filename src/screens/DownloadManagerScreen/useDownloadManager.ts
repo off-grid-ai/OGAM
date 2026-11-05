@@ -1,4 +1,3 @@
-import { videoModelDisplayName } from '../../utils/modelHelpers';
 import { useState } from 'react';
 import {
   AlertState,
@@ -21,12 +20,14 @@ import {
   entryToActiveItem,
   modelStoreCompletedItems,
   queuedToActiveItem,
+  videoCompletedItems,
 } from './downloadItemMapping';
 import logger from '../../utils/logger';
 import { cancelSyntheticImageDownload } from '../../services/imageDownloadActions';
 import { retryImageDownload } from './retryHandlers';
 import { modelDownloadService } from '../../services/modelDownloadService';
 import { useSearchDownloadItems } from './useSearchDownloadItems';
+import { downloadItemId, outstandingDownloadItems } from './outstandingDownloads';
 import { uniformDownloadId } from '../../services/modelDownloadService/uniformId';
 import { setImageDownloadOps } from '../../services/modelDownloadService/providers/imageProvider';
 import { useEffect } from 'react';
@@ -143,8 +144,7 @@ export function useDownloadManager(): UseDownloadManagerResult {
    * the store keys whisper rows `whisper-<id>` but the provider lists them as the bare
    * `stt:<id>`, so the raw id missed and the service REFUSED it as not-found.
    */
-  const idOf = (item: DownloadItem): string =>
-    uniformDownloadId(item.modelType, item.modelId);
+  const idOf = (item: DownloadItem): string => downloadItemId(item);
 
   // voiceItems (TTS/STT) carries BOTH finished and in-flight rows: a completed model
   // is type:'completed', while a downloading or failed one is type:'active'. Route by
@@ -153,60 +153,23 @@ export function useDownloadManager(): UseDownloadManagerResult {
   // download render as a finished 82MB model via CompletedDownloadCard, regardless of
   // its real progress — the "shows downloaded while downloading/queued" bug.)
   const voiceCompleted = voiceItems.filter(i => i.type === 'completed');
-  const voiceActive = voiceItems.filter(i => i.type === 'active');
 
   const completedItems: DownloadItem[] = [
     ...modelStoreCompletedItems(downloadedModels, downloadedImageModels),
     ...voiceCompleted,
     ...searchItems.filter(item => item.type === 'completed'),
-    ...downloadedVideoModels.map(model => ({
-      type: 'completed' as const,
-      modelType: 'video' as const,
-      modelId: model.id,
-      fileName: videoModelDisplayName(model.id, model.name),
-      name: videoModelDisplayName(model.id, model.name),
-      author: model.org ?? '',
-      quantization: model.quant ?? '',
-      fileSize: model.files.reduce(
-        (sum, file) => sum + (file.sizeBytes ?? 0),
-        0,
-      ),
-      bytesDownloaded: 0,
-      progress: 1,
-      status: 'completed',
-      downloadedAt: model.downloadedAt,
-    })),
+    ...videoCompletedItems(downloadedVideoModels),
   ];
 
-  // One entry per model. A downloaded (registered, on-disk) model is authoritative, so
-  // a leftover in-flight/failed row for the SAME model is stale — drop it. Otherwise a
-  // model that completed and was then re-started (a stale restore, a re-download)
-  // shows as both a failed "Active" download and a "Downloaded" model — two guys doing
-  // the same thing (e.g. SDXL Core ML appearing in both sections). Keyed by the shared
-  // uniformDownloadId so text/image/stt all dedup the same way.
-  const completedIds = new Set(completedItems.map(idOf));
-  const startedItems = Object.values(downloads)
-    .filter(e => e.status !== 'completed' && e.status !== 'cancelled')
-    .map(entryToActiveItem)
-    .filter(item => !completedIds.has(idOf(item)));
-  // Append queued (not-yet-started) downloads, skipping any already started or already
-  // downloaded — one entry per model, no duplicates across started/queued/completed.
-  const startedKeys = new Set(startedItems.map(i => i.modelKey));
-  const queuedActive = queuedItems.filter(
-    q => !startedKeys.has(q.modelKey) && !completedIds.has(idOf(q)),
-  );
-  // Include the in-flight/failed voice rows here so they render in Active Downloads
-  // (ActiveDownloadCard shows their live progress bar / Retry). Dedup against
-  // completedIds so a voice model that also has a completed row can't double-list.
-  const voiceActiveDeduped = voiceActive.filter(
-    item => !completedIds.has(idOf(item)),
-  );
-  const activeItems: DownloadItem[] = [
-    ...startedItems,
-    ...queuedActive,
-    ...voiceActiveDeduped,
-    ...searchItems.filter(item => item.type === 'active'),
-  ];
+  // One rule, shared with the Models tab badge: one row per model that still needs the
+  // user, minus any model already downloaded (see outstandingDownloadItems).
+  const activeItems: DownloadItem[] = outstandingDownloadItems({
+    downloads,
+    completed: completedItems,
+    queued: queuedItems,
+    voice: voiceItems,
+    search: searchItems,
+  });
 
   const totalStorageUsed = completedItems.reduce(
     (sum, item) => sum + item.fileSize,

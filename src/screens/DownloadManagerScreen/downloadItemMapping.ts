@@ -2,6 +2,8 @@ import { DownloadEntry } from '../../stores/downloadStore';
 import { jobBytesDownloaded } from '../../utils/downloadStatus';
 import { hardwareService } from '../../services';
 import { DownloadedModel, ONNXImageModel } from '../../types';
+import type { VideoModel } from '../../services/videoModelFiles';
+import { videoModelDisplayName } from '../../utils/modelHelpers';
 import { DownloadItem } from './items';
 import { parseEntryMetadata } from './retryHandlers';
 import { imageBackendLabel } from '../../utils/imageBackend';
@@ -169,4 +171,22 @@ export function modelStoreCompletedItems(
       }),
     ),
   ];
+}
+
+/** Map the downloaded video models into completed Download Manager items. */
+export function videoCompletedItems(downloadedVideoModels: VideoModel[]): DownloadItem[] {
+  return downloadedVideoModels.map(model => ({
+    type: 'completed' as const,
+    modelType: 'video' as const,
+    modelId: model.id,
+    fileName: videoModelDisplayName(model.id, model.name),
+    name: videoModelDisplayName(model.id, model.name),
+    author: model.org ?? '',
+    quantization: model.quant ?? '',
+    fileSize: model.files.reduce((sum, file) => sum + (file.sizeBytes ?? 0), 0),
+    bytesDownloaded: 0,
+    progress: 1,
+    status: 'completed',
+    downloadedAt: model.downloadedAt,
+  }));
 }
