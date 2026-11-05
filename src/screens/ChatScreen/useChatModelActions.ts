@@ -228,6 +228,12 @@ export async function ensureTextModelForChatFn(deps: {
         if (retrying) deps.resumePendingMessage();
         else loadedNow = true;
       },
+      // The way forward from a refusal: pick a model that fits. The waiting turn goes out after the pick.
+      onChooseModel: () => {
+        deps.setAlertState(hideAlert());
+        activeModelService.keepLoadedTextModelSelected();
+        deps.setShowModelSelector(true);
+      },
     },
   );
   retrying = true;
