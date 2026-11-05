@@ -12,7 +12,7 @@ import { mountProjectsApp, type ProjectsApp } from '../../harness/projectsApp';
 
 async function makeProject(app: ProjectsApp, name: string, description = '') {
   app.rtl.fireEvent.press(app.view.getByTestId(app.view.queryByTestId('new-project-empty-button') ? 'new-project-empty-button' : 'new-project-button'));
-  await app.rtl.waitFor(() => expect(app.view.getByText('New Project')).toBeTruthy());
+  await app.rtl.waitFor(() => expect(app.route()?.name).toBe('ProjectEdit'));
   await app.fillAndSave({ name, description, systemPrompt: 'Be helpful' });
   await app.rtl.waitFor(() => expect(app.route()?.name).toBe('ProjectsTab'));
   return app.useProjectStore.getState().projects.find(p => p.name === name)!.id;
@@ -101,7 +101,7 @@ describe('ProjectsScreen', () => {
       app.rtl.fireEvent.press(app.view.getByText('New'));
 
       await app.rtl.waitFor(() => expect(app.route()).toEqual(expect.objectContaining({ name: 'ProjectEdit', params: {} })));
-      expect(app.view.getByText('New Project')).toBeTruthy();
+      expect(app.view.getByText('New project')).toBeTruthy();
     });
   });
 });

@@ -13,7 +13,7 @@ import { mountProjectsApp, PROJECT_FIELDS, type ProjectsApp } from '../../harnes
 /** Projects → New: the editor opens empty. */
 async function openNew(app: ProjectsApp) {
   app.rtl.fireEvent.press(app.view.getByTestId('new-project-button'));
-  await app.rtl.waitFor(() => expect(app.view.getByText('New Project')).toBeTruthy());
+  await app.rtl.waitFor(() => expect(app.view.getByText('New project')).toBeTruthy());
 }
 
 /** Make a project through the editor and return its id. */
@@ -26,7 +26,7 @@ async function makeProject(app: ProjectsApp, fields: { name: string; description
 
 describe('ProjectEditScreen', () => {
   describe('a new project', () => {
-    it('opens empty under "New Project", with the labels, hint and tip', async () => {
+    it('opens empty under "New project", with the labels, hint and tip', async () => {
       const app = await mountProjectsApp();
       await openNew(app);
       const { view } = app;
@@ -93,13 +93,13 @@ describe('ProjectEditScreen', () => {
   });
 
   describe('editing a project', () => {
-    it('opens under "Edit Project" with the project\'s fields filled in', async () => {
+    it('opens under "Edit project" with the project\'s fields filled in', async () => {
       const app = await mountProjectsApp();
       const id = await makeProject(app, { name: 'Test Project', description: 'Test desc', systemPrompt: 'Be helpful' });
 
       app.open('ProjectEdit', { projectId: id });
 
-      await app.rtl.waitFor(() => expect(app.view.getByText('Edit Project')).toBeTruthy());
+      await app.rtl.waitFor(() => expect(app.view.getByText('Edit project')).toBeTruthy());
       expect(app.view.getByDisplayValue('Test Project')).toBeTruthy();
       expect(app.view.getByDisplayValue('Test desc')).toBeTruthy();
       expect(app.view.getByDisplayValue('Be helpful')).toBeTruthy();

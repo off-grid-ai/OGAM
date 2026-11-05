@@ -257,10 +257,10 @@ describe('Load demo data in a developer build (rendered, real App)', () => {
     await rtl.waitFor(() => expect(titleColour('Pilot email draft ready')).toBe(getTheme('dark').colors.text));
     expect(titleColour('Pilot seat-days result')).toBe(getTheme('dark').colors.text);
     expect(getTheme('dark').colors.text).not.toBe(getTheme('light').colors.text);
-    // So does the New Project header.
+    // So does the New project header.
     back();
     rtl.fireEvent.press(await view.findByTestId('new-project-button'));
-    await rtl.waitFor(() => expect(titleColour('New Project')).toBe(getTheme('dark').colors.text));
+    await rtl.waitFor(() => expect(titleColour('New project')).toBe(getTheme('dark').colors.text));
     rtl.fireEvent.press(view.getByTestId('project-edit-cancel'));
 
     // Two Desktop transfers, listed under the paired Mac.
