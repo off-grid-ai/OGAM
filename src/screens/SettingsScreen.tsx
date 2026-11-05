@@ -271,6 +271,10 @@ export const SettingsScreen: React.FC = () => {
                     : navigation.navigate(item.screen)
                 }
                 testID={'testID' in item ? item.testID : undefined}
+                // Said in words. A grouped row builds its label from its children, and on iOS an icon
+                // child gives its glyph ("\uf193, Security", hand test 40) whatever label it carries.
+                accessibilityRole="button"
+                accessibilityLabel={`${item.title}. ${item.desc}`}
               >
                 <View style={styles.navItemIcon}>
                   <Icon
@@ -324,6 +328,8 @@ export const SettingsScreen: React.FC = () => {
             <TouchableOpacity
               style={[styles.navItem, styles.navItemLast]}
               onPress={() => navigation.navigate('About')}
+              accessibilityRole="button"
+              accessibilityLabel="About"
             >
               <View style={styles.navItemIcon}>
                 <Icon name="info" size={16} color={colors.textSecondary} />

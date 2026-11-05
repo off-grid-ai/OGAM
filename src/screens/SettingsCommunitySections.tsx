@@ -45,6 +45,8 @@ export const SettingsCommunitySections: React.FC<
           style={styles.navItem}
           testID="follow-on-x"
           onPress={() => Linking.openURL(FOLLOW_X_URL)}
+          accessibilityRole="button"
+          accessibilityLabel="Follow @alichherawalla on X"
         >
           <View style={styles.followItemIcon}>
             <Icon name="at-sign" size={16} color={colors.textSecondary} />
@@ -63,6 +65,8 @@ export const SettingsCommunitySections: React.FC<
           style={[styles.navItem, styles.navItemLast]}
           testID="join-slack"
           onPress={() => Linking.openURL(SLACK_INVITE_URL)}
+          accessibilityRole="button"
+          accessibilityLabel="Join the Slack community"
         >
           <View style={styles.followItemIcon}>
             <IconMC name="slack" size={16} color={colors.textSecondary} />
@@ -86,6 +90,8 @@ export const SettingsCommunitySections: React.FC<
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => Linking.openURL(GITHUB_URL)}
+          accessibilityRole="button"
+          accessibilityLabel="Star on GitHub"
         >
           <View style={styles.navItemIcon}>
             <Icon name="star" size={16} color={colors.textSecondary} />
@@ -101,6 +107,8 @@ export const SettingsCommunitySections: React.FC<
         <TouchableOpacity
           style={styles.navItem}
           onPress={onSendFeedback}
+          accessibilityRole="button"
+          accessibilityLabel="Send feedback"
         >
           <View style={styles.navItemIcon}>
             <Icon name="mail" size={16} color={colors.textSecondary} />
@@ -116,6 +124,8 @@ export const SettingsCommunitySections: React.FC<
         <TouchableOpacity
           style={[styles.navItem, styles.navItemLast]}
           onPress={() => rateOnStore()}
+          accessibilityRole="button"
+          accessibilityLabel={Platform.OS === 'ios' ? 'Rate on the App Store' : 'Rate on Google Play'}
         >
           <View style={styles.navItemIcon}>
             <Icon name="star" size={16} color={colors.textSecondary} />
