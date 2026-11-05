@@ -106,15 +106,17 @@ describe('KnowledgeBaseScreen', () => {
     const kb = await openKnowledgeBase();
     kb.engine.seedText('/docs/Downloads/notes.txt', 'Field notes.');
     await kb.addFiles([{ path: '/docs/Downloads/notes.txt', name: 'notes.txt' }]);
-    const toggle = kb.view.getByLabelText('Use notes.txt, ON');
+    // One switch named for what it does; its on/off is its own checked state.
+    const toggle = () => kb.view.getByRole('switch', { name: 'Use in answers: notes.txt' });
+    expect(toggle()).toBeChecked();
 
-    kb.rtl.fireEvent(toggle, 'valueChange', false);
+    kb.rtl.fireEvent(toggle(), 'valueChange', false);
 
-    await kb.rtl.waitFor(() => expect(kb.view.getByLabelText('Use notes.txt, OFF')).toBeTruthy());
+    await kb.rtl.waitFor(() => expect(toggle()).not.toBeChecked());
 
-    kb.rtl.fireEvent(kb.view.getByLabelText('Use notes.txt, OFF'), 'valueChange', true);
+    kb.rtl.fireEvent(toggle(), 'valueChange', true);
 
-    await kb.rtl.waitFor(() => expect(kb.view.getByLabelText('Use notes.txt, ON')).toBeTruthy());
+    await kb.rtl.waitFor(() => expect(toggle()).toBeChecked());
   });
 
   it('removes a file after the person confirms, and keeps it when they cancel', async () => {

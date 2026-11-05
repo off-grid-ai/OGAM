@@ -458,7 +458,7 @@ describe('Pro mobile knowledge document sync journey', () => {
       rtl.fireEvent.press(await view.findByTestId('project-tab-knowledge'));
       await rtl.waitFor(() => {
         expect(view!.queryByText('launch-brief.txt')).not.toBeNull();
-        expect(view!.queryByLabelText('Use launch-brief.txt, ON')).not.toBeNull();
+        expect(view!.getByRole('switch', { name: 'Use in answers: launch-brief.txt' })).toBeChecked();
         expect(
           view!.queryByLabelText('Remove launch-brief.txt'),
         ).not.toBeNull();
@@ -483,7 +483,7 @@ describe('Pro mobile knowledge document sync journey', () => {
       await rtl.waitFor(
         () => {
           expect(view!.queryByText('phone-notes.txt')).not.toBeNull();
-          expect(view!.queryByLabelText('Use phone-notes.txt, ON')).not.toBeNull();
+          expect(view!.getByRole('switch', { name: 'Use in answers: phone-notes.txt' })).toBeChecked();
           expect(
             view!.queryByLabelText('Remove phone-notes.txt'),
           ).not.toBeNull();
