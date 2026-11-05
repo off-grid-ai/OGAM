@@ -11,6 +11,7 @@ const TRIGGERS: Record<string, RegExp> = {
   read_url: /\b(http|www\.|\.com|\.org|link|url|article|page|website|site)\b/i,
   calculator: /\d|\b(calculate|compute|sum|total|percent|percentage|average|divide|multiply|plus|minus|times|tip|convert|squared|root)\b/i,
   study_math: /\b(mean|median|standard deviation|variance|t-?test|p-?value|regression|correlation|sample size|margin of error|convert|present value|future value|annuity|amortiz\w*|interest rate|compound|days (between|until)|how many days|npv|irr)\b/i,
+  study_helpers: /\b(study plan|exam|rubric|apa|mla|reference list|references|citation|cite|literature (review|matrix)|dissertation|syllabus|schedule my studying)\b/i,
   get_current_datetime: /\b(time|date|day|today|tomorrow|yesterday|week|month|year|now|when|o'clock|am|pm|deadline|age|old)\b/i,
   get_device_info: /\b(battery|storage|memory|ram|device|phone|space|charging|free)\b/i,
   search_knowledge_base: /./, // handled below: kept whenever the project has documents

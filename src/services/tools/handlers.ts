@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { studyHelpers } from '../../study/helperTool';
 import { studyMath, type StudyMathArgs } from '../../study/mathTools';
 import DeviceInfo from 'react-native-device-info';
 import { ToolCall, ToolResult } from './types';
@@ -42,6 +43,8 @@ async function dispatchTool(call: ToolCall): Promise<string> {
     }
     case 'calculator':
       return handleCalculator(call.arguments.expression);
+    case 'study_helpers':
+      return studyHelpers(call.arguments as Record<string, unknown>);
     case 'study_math':
       return studyMath(call.arguments as StudyMathArgs);
     case 'get_current_datetime':

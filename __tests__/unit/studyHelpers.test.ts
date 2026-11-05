@@ -62,3 +62,15 @@ describe('literature', () => {
     expect(gaps(p[0] as any)).toEqual(['question', 'sample', 'limitations']);
   });
 });
+
+import { studyHelpers } from '../../src/study/helperTool';
+describe('study helper tool', () => {
+  it('runs each action and refuses bad input clearly', () => {
+    const plan = JSON.parse(studyHelpers({ action: 'plan', today: '2026-11-05', exams: JSON.stringify([{ name: 'REG', date: '2026-12-20', topics: ['Basis', 'Gains'] }]) }));
+    expect(plan.today).toMatch(/REG/);
+    expect(studyHelpers({ action: 'rubric', rubric: '1. Explains the research design and sampling approach', draft: 'We used a survey design.' })).toMatch(/unaddressed|mentioned/);
+    expect(JSON.parse(studyHelpers({ action: 'apa', source: '{"author":"Lee, K.","year":"2022","title":"Audit quality"}' })).reference).toBe('Lee, K. (2022). Audit quality.');
+    expect(() => studyHelpers({ action: 'apa', source: '{nope' })).toThrow(/valid JSON/);
+    expect(() => studyHelpers({ action: 'x' })).toThrow(/action must be/);
+  });
+});

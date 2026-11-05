@@ -56,6 +56,23 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
     },
   },
   {
+    id: 'study_helpers',
+    name: 'study_helpers',
+    displayName: 'Study helpers',
+    description: 'Planner, rubric check and references, computed in code from what the person gives. action: plan (exams = JSON [{name,date YYYY-MM-DD,topics[],done[]}] in the order taken, today, done_topics), rubric (rubric text one criterion per line, draft text: lists criteria the draft does not address), apa (source = JSON {author,year,title,publisher,url,page}), matrix (papers = JSON list of {title,author,year,question,method,sample,findings,limitations}). Never invent author, year or title: leave a field out if unknown.',
+    icon: 'book-open',
+    parameters: {
+      action: { type: 'string', description: 'plan, rubric, apa or matrix', required: true },
+      exams: { type: 'string', description: 'JSON list of exams for plan' },
+      today: { type: 'string', description: 'Today as YYYY-MM-DD for plan' },
+      done_topics: { type: 'string', description: 'Topics already finished (JSON list)' },
+      rubric: { type: 'string', description: 'Rubric text, one criterion per line' },
+      draft: { type: 'string', description: 'The draft text to check' },
+      source: { type: 'string', description: 'JSON source for apa' },
+      papers: { type: 'string', description: 'JSON list of papers for matrix' },
+    },
+  },
+  {
     id: 'get_current_datetime',
     name: 'get_current_datetime',
     displayName: 'Date & Time',
