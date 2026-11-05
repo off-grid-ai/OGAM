@@ -12,6 +12,7 @@ import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import { modelDownloadService } from '../../services/modelDownloadService';
 import { isModelDownloadInProgress } from '../../services/modelDownloadService/storeStatus';
 import { DownloadItem, formatBytes } from './items';
+import { transcriptionModelName } from '../../services/whisperModels';
 
 async function loadItems(): Promise<DownloadItem[]> {
   const items: DownloadItem[] = [];
@@ -23,7 +24,7 @@ async function loadItems(): Promise<DownloadItem[]> {
         type: 'completed', modelType: 'stt', modelId: m.modelId, fileName: m.fileName,
         author: 'Transcription', quantization: '', fileSize: m.sizeBytes,
         bytesDownloaded: m.sizeBytes, progress: 1, status: 'completed',
-        filePath: m.filePath, name: m.modelId,
+        filePath: m.filePath, name: transcriptionModelName(m.modelId),
       });
     }
   } catch {

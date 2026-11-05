@@ -23,11 +23,11 @@ describe('V2 (rendered) — truncated whisper file shows as a downloaded card', 
     const view = render(React.createElement(DownloadManagerScreen, {}));
 
     // The valid model renders — this also flushes the async list load.
-    await waitFor(() => { expect(view.queryByText(/tiny\.en/)).not.toBeNull(); });
+    await waitFor(() => { expect(view.queryByText(/Whisper Tiny/)).not.toBeNull(); });
 
     // Correct: the truncated file is NOT surfaced as a downloaded model. Today the DM renders it too
     // (whisperService.listDownloadedModels has no size floor) → the user sees a corrupt "downloaded"
     // card that then fails to load → RED.
-    expect(view.queryByText(/base\.en/)).toBeNull();
+    expect(view.queryByText(/Whisper Base/)).toBeNull();
   });
 });

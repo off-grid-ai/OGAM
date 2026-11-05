@@ -38,6 +38,15 @@ export function findTranscriptionModel(
   return whisperModels.find(model => model.id === modelId) ?? qwenAsrCardFor(modelId);
 }
 
+/** The name a person knows a transcription model by: "Whisper Tiny (English)", "Qwen3 ASR 0.6B". */
+export function transcriptionModelName(modelId: string): string {
+  const asr = qwenAsrCardFor(modelId);
+  if (asr) return asr.name;
+  const whisper = withRemoteCatalog('transcription', WHISPER_MODELS).find(model => model.id === modelId);
+  if (!whisper) return modelId;
+  return `Whisper ${whisper.name}${whisper.lang === 'en' ? ' (English)' : ''}`;
+}
+
 /** Qwen3-ASR's KV cache and compute buffers beside its weights (4096-token context). */
 const QWEN_ASR_RUNTIME_MB = 512;
 
