@@ -79,7 +79,8 @@ const createBubbleStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   messageFooterHeader: {
     paddingVertical: 0,
     minHeight: 28,
-    marginVertical: -4,
+    // -3, not -4: at -4 the two frames met to the half point and rounded into a 1 pt overlap.
+    marginVertical: -3,
   },
   /**
    * The head of a call/result pair: the "Using X" row, which is always followed by the row carrying
