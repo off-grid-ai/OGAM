@@ -248,6 +248,8 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
                 )}
               </View>
             </View>
+            {/* Nothing received: no bytes line and no percent, so no empty line above the error. */}
+            {item.status === 'failed' && percentage === 0 ? null : (
             <View style={styles.transferCaptionRow}>
               <Text
                 style={styles.progressText}
@@ -255,13 +257,11 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
               >
                 {presented.detailText}
               </Text>
-              {/* No bar, no percent: "0%" beside a failure that never started meant nothing. */}
-              {item.status === 'failed' && percentage === 0 ? null : (
-                <Text style={styles.progressText}>
-                  {presented.percentageText}
-                </Text>
-              )}
+              <Text style={styles.progressText}>
+                {presented.percentageText}
+              </Text>
             </View>
+            )}
           </View>
           <View style={styles.downloadMeta}>
             {(!!getStatusLabel(item) || !!getStatusIcon()) && (
