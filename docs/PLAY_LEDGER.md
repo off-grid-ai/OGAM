@@ -50,3 +50,18 @@ Each round: expected / found / root cause / change / commit / screenshots.
 1. Finish M2: the refusal sheet stacks vertically with one filled main choice; plain copy ("Gemma 4 needs 7 GB; 4 GB is free"); Load Anyway gets a one-line risk note; Stop in dark mode is a white circle, the brightest thing on screen — make it quieter.
 2. Paired light/dark shots for new chat, streaming, answer, sheet and picker. Check whether the speaker icon under answers is gone (`r00/11` has it, `r02/02` does not).
 3. M3: Geist and Geist Mono, then ListGroup/ListRow and the copy pass.
+
+## r03 type and lists — M3
+- **Geist:** bundled on iOS (OffgridFonts pod and UIAppFonts) and Android (res/font families and ReactFontManager). Reading roles use Geist; labels, meta and large numbers use Geist Mono. Commits `8a8b0cf98`, `b12434285`.
+- **Lists:** `ListGroup`, plus `ListGroupSeparator` and `listGroupRowEnds` for virtualized lists. Home Recent, Chats and Projects are now one surface with hairlines. Commits `e98c70816`, `c7e7b8d08`.
+- **Home:** New Chat uses the new `hero` Button variant (filled emerald). Commit `311f8ace3`.
+- **Models:** capability badges name themselves (Sees images / Tools / Thinks), in one tone. Commit `d2622c852`.
+- **Offline:** the Mac and the phone no longer share a network. The app runs from the bundle each build embeds; WDA runs over USB (iproxy). Every check is a rebuild.
+- **Screen:** `r03-type-lists/01-home-dark.jpg`.
+
+## Supervisor 13:45
+1. Weights: 600, 700 and bold are used in about 38 places, but only 200–500 are bundled (the brand allows 300–500). Move them all to 500, and remove the last Menlo (`DocumentPreviewScreen`) and `monospace` (DebugLogs). The hero button's white text on light emerald is about 3.8:1 → use near-black on emerald.
+2. Models list into ListGroup rows; plain copy on the memory sheet ("needs 7 GB; 4 GB is free").
+3. M4: Home with one hero, Clipboard and Sync after Recent; a fresh-install audit; then the alive layer. Check: "Text 16" is greyed on Home; the swipe action may show past the round corners of the end rows.
+- **13:48 device blocked:** the phone has no internet (the hotspot left; office Wi-Fi needs a password I may not enter). iOS cannot verify the developer certificate for a new install ("Unable to Verify App"), so new builds do not open. The Mac is online (10.86.x). Device checks are queued until the phone is online: Home light/dark (hero, order, weights), Chats, Models badges, the memory sheet (plain copy, stacked buttons, contrast).
+- **Commits since 13:45:** weights capped at 500 and the onPrimary token (`d23a8f644`), Home order (`5fe3c9d02`), plain GB memory copy (`a9845b11d`). Each was checked with touched-file tests; full suites run in the hygiene thread.
