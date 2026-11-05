@@ -78,8 +78,9 @@ export function createElevation(colors: ThemeColors) {
       borderWidth: 1,
       borderColor: colors.borderLight,
     },
+    // Sheets are solid: a see-through sheet let the page behind read through its rows.
     level3: {
-      backgroundColor: `${colors.surface}F2`,
+      backgroundColor: colors.surface,
       borderTopWidth: 1,
       borderColor: colors.borderLight,
       borderRadius: 16,
@@ -89,9 +90,9 @@ export function createElevation(colors: ThemeColors) {
       },
     },
     level4: {
-      backgroundColor: `${colors.surface}FA`,
+      backgroundColor: colors.surface,
       borderTopWidth: 1,
-      borderColor: colors.primary,
+      borderColor: colors.borderLight,
       borderRadius: 16,
       blur: {
         ios: { blurAmount: 15, blurType: colors.background === '#0A0A0A' ? 'dark' : 'light' },
