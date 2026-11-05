@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TextInput, ScrollView } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
 import { LoadingDots } from '../../components/LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
@@ -7,6 +7,7 @@ import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 import { determineCredibility } from '@offgrid/models';
 import { ModelCard } from '../../components';
 import { GROUPED_CARD_ROW, ListGroup } from '../../components/ListGroup';
+import { SearchField } from '../../components/SearchField';
 import { useTheme, useThemedStyles } from '../../theme';
 import { HFImageModel, getVariantLabel } from '../../services/huggingFaceModelBrowser';
 import { ImageModelRecommendation } from '../../types';
@@ -304,13 +305,11 @@ export const ImageModelsTab: React.FC<Props> = ({
     <View style={styles.imageTabContent}>
       <View style={styles.imageModelsSection}>
         <View style={[styles.searchContainer, styles.searchContainerNoPadding]}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search models..."
-            placeholderTextColor={colors.textMuted}
+          <SearchField
+            style={styles.searchField}
+            placeholder="Search models"
             value={imageSearchQuery}
             onChangeText={setImageSearchQuery}
-            returnKeyType="search"
           />
           <TouchableOpacity
             style={[styles.recToggle, showRecommendedOnly && styles.recToggleActive]}

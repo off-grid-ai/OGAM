@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
-import { View, Text, FlatList, TextInput, RefreshControl, Platform, type StyleProp, type ViewStyle } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Platform, type StyleProp, type ViewStyle } from 'react-native';
 import { GROUPED_CARD_ROW, ListGroupSeparator, listGroupRowEnds } from '../../components/ListGroup';
+import { SearchField } from '../../components/SearchField';
 import { TouchableOpacity } from '../../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import { LoadingDots } from '../../components/LoadingDots';
@@ -494,14 +495,12 @@ export const TextModelsTab: React.FC<Props> = (props) => {
   return (
     <>
       <View style={[styles.searchContainer, styles.searchContainerRaised]} testID="text-model-search-row">
-        <TextInput
-          style={styles.searchInput}
+        <SearchField
+          style={styles.searchField}
           placeholder="Search models"
-          placeholderTextColor={colors.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
           onSubmitEditing={handleSearch}
-          returnKeyType="search"
           testID="search-input"
         />
         <TouchableOpacity

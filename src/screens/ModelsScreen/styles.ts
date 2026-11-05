@@ -38,7 +38,7 @@ const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   searchContainerRaised: {
     zIndex: 1,
   },
-  // The same field as Chats and Projects search (ListSearchBar): rounded, a hairline edge.
+  searchField: { flex: 1 },
   searchInput: {
     ...TYPOGRAPHY.body,
     flex: 1,
