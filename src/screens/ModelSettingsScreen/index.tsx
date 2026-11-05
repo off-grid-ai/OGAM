@@ -27,6 +27,7 @@ import {
   useTranscriptionModelSetting,
 } from '../../hooks/useTranscriptionModelSetting';
 import { AliveScreen } from '../../components/AliveScreen';
+import { ScreenHeader } from '../../components/ScreenHeader';
 
 export const ModelSettingsScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -71,17 +72,21 @@ export const ModelSettingsScreen: React.FC = () => {
 
   return (
     <AliveScreen style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Model settings</Text>
-      </View>
+      <ScreenHeader
+        title="Model settings"
+        onBack={() => navigation.goBack()}
+        right={
+          // In the header, away from the foot of the page where a tab bar sits on other screens.
+          <Button
+            title="Reset"
+            variant="ghost"
+            size="small"
+            onPress={handleReset}
+            testID="reset-settings-button"
+            accessibilityLabel="Reset to defaults"
+          />
+        }
+      />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
@@ -209,14 +214,6 @@ export const ModelSettingsScreen: React.FC = () => {
           </>
         )}
 
-        <Button
-          title="Reset to defaults"
-          variant="ghost"
-          size="small"
-          onPress={handleReset}
-          testID="reset-settings-button"
-          style={styles.resetButton}
-        />
       </ScrollView>
       {whisperOpen ? (
         <WhisperPickerSheet visible onClose={() => setWhisperOpen(false)} />
