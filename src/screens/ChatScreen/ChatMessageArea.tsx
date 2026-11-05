@@ -173,6 +173,9 @@ const CompactingNote: React.FC = () => {
   );
 };
 
+/** The chat list's position rule: keep the first visible row in place; never auto-scroll to the start. */
+export const CHAT_LIST_KEEP_POSITION = { minIndexForVisible: 0 } as const;
+
 export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   assistantSelected,
   onAssistantSelectedChange,
@@ -342,10 +345,13 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           scrollEventThrottle={16}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
-          maintainVisibleContentPosition={{
-            minIndexForVisible: 0,
-            autoscrollToTopThreshold: 100,
-          }}
+          // Keep the reader's place when rows above them change, and nothing more. No
+          // autoscrollToTopThreshold: that option is for inverted lists, where the top is the
+          // newest message. In this list the top is the OLDEST message, so whenever the offset sat
+          // within 100 pt of the start (a short chat, or any chat once the keyboard shrinks the
+          // list) iOS jumped to the first message on each content change, against scrollToEnd,
+          // and a streaming reply stayed out of view (hand test, iPhone, keyboard up).
+          maintainVisibleContentPosition={CHAT_LIST_KEEP_POSITION}
           {...LIST_CLIPPING_PROPS}
         />
       )}
