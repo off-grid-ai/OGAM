@@ -208,7 +208,7 @@ describe('happy — a tool runs and its result renders (heavy entry point)', () 
     expect(h.view!.queryByTestId('generation-meta')).toBeNull();
 
     h.rtl.fireEvent.press(h.view!.getByText('Generation details'));
-    expect(h.view!.queryByText(/Test Model/)).not.toBeNull();
+    expect(h.rtl.within(h.view!.getAllByTestId('generation-meta').at(-1)!).queryByText(/Test Model/)).not.toBeNull();
     h.rtl.fireEvent.press(h.view!.getByText('Generation details'));
     expect(h.view!.queryByTestId('generation-meta')).toBeNull();
   });

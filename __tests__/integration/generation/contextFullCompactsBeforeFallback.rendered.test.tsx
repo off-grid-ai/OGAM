@@ -27,7 +27,7 @@ describe('context full in a tool-enabled chat', () => {
     );
     expect(answerMessage).toBeDefined();
     h.rtl.fireEvent.press(h.rtl.within(answerMessage!).getByText('Generation details'));
-    expect(h.view!.queryByText('Test Model')).not.toBeNull();
+    expect(h.rtl.within(h.view!.getAllByTestId('generation-meta').at(-1)!).queryByText('Test Model')).not.toBeNull();
   });
 
   it('keeps reasoning already shown when a full context starts a retry', async () => {

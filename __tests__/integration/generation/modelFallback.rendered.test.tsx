@@ -64,7 +64,8 @@ describe('remote model fallback in chat', () => {
       action.props.onPress();
     });
     await h.rtl.waitFor(() => expect(h.view!.queryByTestId('generation-meta')).not.toBeNull());
-    expect(h.view!.queryByText(/backup-model/)).not.toBeNull();
+    // The header names the model too; the answer's own details are what this checks.
+    expect(h.rtl.within(h.view!.getAllByTestId('generation-meta').at(-1)!).queryByText(/backup-model/)).not.toBeNull();
     expect(h.view!.queryByText(/Failed route partial/)).toBeNull();
   });
 
@@ -114,7 +115,7 @@ describe('remote model fallback in chat', () => {
       expect(action).not.toBeNull();
       action.props.onPress();
     });
-    expect(h.view!.queryByText('Test Model')).not.toBeNull();
+    expect(h.rtl.within(h.view!.getAllByTestId('generation-meta').at(-1)!).queryByText('Test Model')).not.toBeNull();
     expect(h.view!.queryByText(/Failed route partial/)).toBeNull();
     expect(useRemoteServerStore.getState().activeRemoteTextModelId).toBeNull();
   });
