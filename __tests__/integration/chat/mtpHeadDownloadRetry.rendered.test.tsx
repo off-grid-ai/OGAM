@@ -3,7 +3,7 @@
  * person sees it failed, retries with one tap, and the retry gets MTP ready.
  *
  * Product-correct outcome (the person's view): Gemma 4 E4B is on the phone. In a chat, the person opens
- * the settings sheet, expands Advanced under Text Generation and turns Speculative Decoding (MTP) on.
+ * the settings sheet, expands Advanced under Text Generation and turns Speculative decoding (MTP) on.
  * The app fetches the model's published MTP head by itself and shows its progress under the switch.
  * The network drops and the download fails: the progress goes away and a single retry icon appears in
  * its place. One tap on it starts the download again with progress; this time it finishes, the retry
@@ -92,7 +92,7 @@ describe('MTP head download that fails', () => {
     fireEvent.press(await waitFor(() => ui.getByTestId('home-tab'), RENDER_WAIT));
     fireEvent.press(await waitFor(() => ui.getByTestId('new-chat-button'), RENDER_WAIT));
     fireEvent.press(await waitFor(() => ui.getByTestId('chat-settings-icon'), RENDER_WAIT));
-    fireEvent.press(await waitFor(() => ui.getByText('TEXT GENERATION'), RENDER_WAIT));
+    fireEvent.press(await waitFor(() => ui.getByText('Text generation'), RENDER_WAIT));
     fireEvent.press(await waitFor(() => ui.getByTestId('modal-text-advanced-toggle'), RENDER_WAIT));
 
     // BEFORE: MTP off, no Draft Tokens, no download status, no retry, nothing downloading.

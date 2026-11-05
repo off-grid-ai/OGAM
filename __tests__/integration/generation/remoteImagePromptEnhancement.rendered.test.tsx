@@ -39,7 +39,7 @@ describe('Remote image prompt enhancement in Chat', () => {
 
     h.render();
     h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByTestId('chat-settings-icon')));
-    h.rtl.fireEvent.press(h.view!.getByText('IMAGE GENERATION'));
+    h.rtl.fireEvent.press(h.view!.getByText('Image generation'));
     h.rtl.fireEvent.press(h.view!.getByTestId('image-enhance-on'));
     h.rtl.fireEvent.press(h.view!.getByText('Done'));
 
@@ -91,7 +91,7 @@ describe('Remote image prompt enhancement in Chat', () => {
 
     h.render();
     h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByTestId('chat-settings-icon')));
-    h.rtl.fireEvent.press(h.view!.getByText('IMAGE GENERATION'));
+    h.rtl.fireEvent.press(h.view!.getByText('Image generation'));
     h.rtl.fireEvent.press(h.view!.getByTestId('image-enhance-on'));
     h.rtl.fireEvent.press(h.view!.getByText('Done'));
     await h.cycleImageMode();

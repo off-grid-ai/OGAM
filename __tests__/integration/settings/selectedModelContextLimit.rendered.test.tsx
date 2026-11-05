@@ -53,7 +53,7 @@ it('uses the selected GGUF header for context before loading and updates on sele
   await waitFor(() => expect(useAppStore.getState().activeModelId).toBe('ling'));
 
   const settings = render(withNavigator(React.createElement(GenerationSettingsModal, { visible: true, onClose: () => {} })));
-  fireEvent.press(settings.getByText('TEXT GENERATION'));
+  fireEvent.press(settings.getByText('Text generation'));
   await waitFor(() => expect(settings.getByTestId('setting-contextLength-slider').props.maximumValue).toBe(131072));
   expect(useAppStore.getState().loadedTextModelId).toBeNull();
   settings.unmount();
@@ -64,7 +64,7 @@ it('uses the selected GGUF header for context before loading and updates on sele
   fireEvent.press(await waitFor(() => nextHome.getByTestId('models-row-text')));
   fireEvent.press(await waitFor(() => nextHome.getByTestId('text-model-row-small')));
   const nextSettings = render(withNavigator(React.createElement(GenerationSettingsModal, { visible: true, onClose: () => {} })));
-  fireEvent.press(nextSettings.getByText('TEXT GENERATION'));
+  fireEvent.press(nextSettings.getByText('Text generation'));
   await waitFor(() => expect(nextSettings.getByTestId('setting-contextLength-slider').props.maximumValue).toBe(4096));
   expect(useAppStore.getState().loadedTextModelId).toBeNull();
   nextSettings.unmount();

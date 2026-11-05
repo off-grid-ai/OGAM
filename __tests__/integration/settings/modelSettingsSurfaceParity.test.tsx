@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, within } from '@testing-library/react-native';
 import { GenerationSettingsModal } from '../../../src/components/GenerationSettingsModal';
 import { ModelSettingsScreen } from '../../../src/screens/ModelSettingsScreen';
 import { useAppStore } from '../../../src/stores/appStore';
@@ -46,20 +46,20 @@ describe('model settings surface parity', () => {
       showGenerationDetails: true,
     });
     const chatSettings = render(<GenerationSettingsModal visible onClose={() => {}} />);
-    fireEvent.press(chatSettings.getByText('TEXT GENERATION'));
-    expect(chatSettings.queryByText('Model Loading')).toBeNull();
-    expect(chatSettings.queryByText('Show Generation Details')).toBeNull();
+    fireEvent.press(chatSettings.getByText('Text generation'));
+    expect(chatSettings.queryByText('Model loading')).toBeNull();
+    expect(chatSettings.queryByText('Show generation details')).toBeNull();
     fireEvent.press(chatSettings.getByTestId('modal-general-accordion'));
-    expect(chatSettings.getByText('Text Model Backend')).toBeTruthy();
+    expect(chatSettings.getByText('Text model hardware')).toBeTruthy();
     expect(chatSettings.getByTestId('model-loading-mode-aggressive-button')).toBeTruthy();
     expect(chatSettings.getByTestId('show-gen-details-on-button')).toBeTruthy();
     chatSettings.unmount();
 
     const modelSettings = renderModelSettings();
     fireEvent.press(modelSettings.getByTestId('text-generation-accordion'));
-    expect(modelSettings.queryByText('Model Loading')).toBeNull();
+    expect(modelSettings.queryByText('Model loading')).toBeNull();
     fireEvent.press(modelSettings.getByTestId('general-generation-accordion'));
-    expect(modelSettings.getByText('Text Model Backend')).toBeTruthy();
+    expect(modelSettings.getByText('Text model hardware')).toBeTruthy();
     expect(modelSettings.getByTestId('model-loading-mode-aggressive-button')).toBeTruthy();
     expect(modelSettings.getByTestId('show-gen-details-on-button')).toBeTruthy();
   });
@@ -67,7 +67,7 @@ describe('model settings surface parity', () => {
   it('shows and edits the saved default system prompt in chat Text settings', () => {
     useAppStore.getState().updateSettings({ systemPrompt: 'Saved instructions' });
     const chatSettings = render(<GenerationSettingsModal visible onClose={() => {}} />);
-    fireEvent.press(chatSettings.getByText('TEXT GENERATION'));
+    fireEvent.press(chatSettings.getByText('Text generation'));
     const input = chatSettings.getByTestId('default-system-prompt-input');
     expect(input.props.value).toBe('Saved instructions');
     fireEvent.changeText(input, 'New instructions');
@@ -83,7 +83,7 @@ describe('model settings surface parity', () => {
       <GenerationSettingsModal visible onClose={() => {}} />,
     );
 
-    fireEvent.press(chatSettings.getByText('TEXT GENERATION'));
+    fireEvent.press(chatSettings.getByText('Text generation'));
 
     expect(
       chatSettings.getByTestId('setting-maxTokens-slider').props.maximumValue,
@@ -121,7 +121,7 @@ describe('model settings surface parity', () => {
     const chatSettings = render(
       <GenerationSettingsModal visible onClose={() => {}} />,
     );
-    fireEvent.press(chatSettings.getByText('TEXT GENERATION'));
+    fireEvent.press(chatSettings.getByText('Text generation'));
     fireEvent.press(chatSettings.getByTestId('modal-text-advanced-toggle'));
 
     const chatSlider = chatSettings.getByTestId('setting-maxToolCalls-slider');
@@ -143,7 +143,7 @@ describe('model settings surface parity', () => {
     const chatSettings = render(
       <GenerationSettingsModal visible onClose={() => {}} />,
     );
-    fireEvent.press(chatSettings.getByText('TEXT GENERATION'));
+    fireEvent.press(chatSettings.getByText('Text generation'));
     expect(chatSettings.getByText('Auto (up to max tokens)')).toBeTruthy();
     fireEvent(chatSettings.getByTestId('setting-maxTokens-slider'), 'slidingComplete', 4096);
     fireEvent(chatSettings.getByTestId('thinking-budget-slider'), 'slidingComplete', 4);
@@ -159,7 +159,7 @@ describe('model settings surface parity', () => {
 
   it('limits Thinking Budget to Max Tokens when the output limit is lowered', () => {
     const chatSettings = render(<GenerationSettingsModal visible onClose={() => {}} />);
-    fireEvent.press(chatSettings.getByText('TEXT GENERATION'));
+    fireEvent.press(chatSettings.getByText('Text generation'));
     fireEvent(chatSettings.getByTestId('setting-maxTokens-slider'), 'slidingComplete', 3000);
 
     const budgetSlider = chatSettings.getByTestId('thinking-budget-slider');
@@ -174,7 +174,7 @@ describe('model settings surface parity', () => {
 
   it('shows Context Length, Max Tokens, then Thinking Budget on both surfaces', () => {
     const chatSettings = render(<GenerationSettingsModal visible onClose={() => {}} />);
-    fireEvent.press(chatSettings.getByText('TEXT GENERATION'));
+    fireEvent.press(chatSettings.getByText('Text generation'));
     const chatOrder = JSON.stringify(chatSettings.toJSON());
     expect(chatOrder.indexOf('Context length')).toBeLessThan(chatOrder.indexOf('Max tokens'));
     expect(chatOrder.indexOf('Max tokens')).toBeLessThan(chatOrder.indexOf('Thinking budget'));
@@ -194,12 +194,14 @@ describe('model settings surface parity', () => {
     );
 
     fireEvent.press(chatSettings.getByTestId('modal-transcription-accordion'));
-    expect(chatSettings.queryByText('Base')).toBeNull();
+    // Chat settings names the model in its header but has no row to pick one.
+    expect(chatSettings.queryByTestId('modal-stt-open-picker')).toBeNull();
+    expect(within(chatSettings.getByTestId('modal-transcription-accordion')).getByText('Base')).toBeTruthy();
     chatSettings.unmount();
 
     const modelSettings = renderModelSettings();
     fireEvent.press(modelSettings.getByTestId('transcription-accordion'));
-    expect(modelSettings.getByText('Base')).toBeTruthy();
+    expect(within(modelSettings.getByTestId('stt-open-picker')).getByText('Base')).toBeTruthy();
   });
 
   it('keeps the selected STT language in chat settings', () => {
@@ -224,7 +226,7 @@ describe('model settings surface parity', () => {
       <GenerationSettingsModal visible onClose={() => {}} />,
     );
 
-    fireEvent.press(chatSettings.getByText('TEXT TO SPEECH'));
+    fireEvent.press(chatSettings.getByText('Text to speech'));
     expect(chatSettings.getByTestId('shared-tts-settings')).toBeTruthy();
     chatSettings.unmount();
 

@@ -4,7 +4,7 @@
  * Tests for the model settings screen including:
  * - Section titles rendering
  * - System prompt editing
- * - Show Generation Details toggle
+ * - Show generation details toggle
  * - Image generation settings (auto detection, steps, guidance, threads, size)
  * - Text generation settings (temperature, max tokens, top P, repeat penalty)
  * - Performance settings (threads, batch size, GPU, model loading strategy) — now in Text Generation
@@ -16,6 +16,7 @@
 
 import React from 'react';
 import { render, fireEvent, within } from '@testing-library/react-native';
+import { APP_CONFIG } from '../../../src/constants';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAppStore } from '../../../src/stores/appStore';
 import { resetStores } from '../../utils/testHelpers';
@@ -87,22 +88,22 @@ describe('ModelSettingsScreen', () => {
 
     it('shows all section titles as accordion headers', () => {
       const { getByText } = renderScreen();
-      expect(getByText('Default System Prompt')).toBeTruthy();
-      expect(getByText('Image Generation')).toBeTruthy();
-      expect(getByText('Text Generation')).toBeTruthy();
+      expect(getByText('Default system prompt')).toBeTruthy();
+      expect(getByText('Image generation')).toBeTruthy();
+      expect(getByText('Text generation')).toBeTruthy();
     });
 
     it('shows section help text for system prompt when expanded', () => {
       const { getByText } = renderWithSections('prompt');
-      expect(getByText(/Instructions given to the model/)).toBeTruthy();
+      expect(getByText(/What the model is told before every chat/)).toBeTruthy();
     });
 
     it('sections are collapsed by default', () => {
       const { queryByText } = renderScreen();
       // Content inside collapsed sections should not be visible
       expect(queryByText('Temperature')).toBeNull();
-      expect(queryByText('CPU Threads')).toBeNull();
-      expect(queryByText(/Instructions given to the model/)).toBeNull();
+      expect(queryByText('CPU threads')).toBeNull();
+      expect(queryByText(/What the model is told before every chat/)).toBeNull();
     });
 
     it('shows section help text for image generation when expanded', () => {
@@ -148,7 +149,7 @@ describe('ModelSettingsScreen', () => {
 
     it('shows CPU Threads inside text generation section', () => {
       const { queryByText } = renderWithSections('text');
-      expect(queryByText('CPU Threads')).toBeTruthy();
+      expect(queryByText('CPU threads')).toBeTruthy();
     });
   });
 
@@ -174,12 +175,12 @@ describe('ModelSettingsScreen', () => {
   });
 
   // ============================================================================
-  // Show Generation Details Toggle
+  // Show generation details Toggle
   // ============================================================================
   describe('show generation details toggle', () => {
     it('renders the toggle with label and description', () => {
       const { getByText } = renderWithSections('text');
-      expect(getByText('Show Generation Details')).toBeTruthy();
+      expect(getByText('Show generation details')).toBeTruthy();
       expect(
         getByText(
           'Applies to all chats. Show context use, model, speed, and image settings below each reply.',
@@ -215,7 +216,7 @@ describe('ModelSettingsScreen', () => {
       useAppStore.getState().updateSettings({ showGenerationDetails: true });
 
       const { getByText } = renderWithSections('text');
-      expect(getByText('Show Generation Details')).toBeTruthy();
+      expect(getByText('Show generation details')).toBeTruthy();
       expect(useAppStore.getState().settings.showGenerationDetails).toBe(true);
     });
   });
@@ -226,7 +227,7 @@ describe('ModelSettingsScreen', () => {
   describe('flash attention toggle', () => {
     it('renders Flash Attention label', () => {
       const { getByText } = renderWithSections('text');
-      expect(getByText('Flash Attention')).toBeTruthy();
+      expect(getByText('Flash attention')).toBeTruthy();
     });
 
     it('updates store to true when Flash Attention is turned on', () => {
@@ -252,7 +253,7 @@ describe('ModelSettingsScreen', () => {
   describe('model loading mode selector', () => {
     it('renders the Model Loading label', () => {
       const { getByText } = renderWithSections('text');
-      expect(getByText('Model Loading')).toBeTruthy();
+      expect(getByText('Model loading')).toBeTruthy();
     });
 
     it('selects aggressive', () => {
@@ -462,13 +463,13 @@ describe('ModelSettingsScreen', () => {
       // "Auto (N)" label) to a NumericStepper that shows the resolved numeric
       // value. With the auto sentinel (nThreads: 0) the stepper value is 1.
       const { getByText, queryByText } = renderWithSections('text');
-      expect(getByText('CPU Threads')).toBeTruthy();
+      expect(getByText('CPU threads')).toBeTruthy();
       expect(queryByText(/^Auto \(\d+\)$/)).toBeNull();
     });
 
     it('shows Batch Size slider label and default value', () => {
       const { getByText, getAllByText } = renderWithSections('text');
-      expect(getByText('Batch Size')).toBeTruthy();
+      expect(getByText('Batch size')).toBeTruthy();
       // Same ambiguity as Context Length: another control also renders 512 by default.
       expect(getAllByText('512').length).toBeGreaterThan(0);
     });
@@ -621,9 +622,9 @@ describe('ModelSettingsScreen', () => {
   // ============================================================================
   describe('GPU settings', () => {
     // Platform.OS is 'ios' in the test environment; Metal is the default backend, GPU Layers hidden when cpu
-    it('shows Text Model Backend section on iOS', () => {
+    it('shows Text model hardware section on iOS', () => {
       const { getByText } = renderWithSections('text');
-      expect(getByText('Text Model Backend')).toBeTruthy();
+      expect(getByText('Text model hardware')).toBeTruthy();
     });
 
     it('does not show GPU Layers on iOS when backend is cpu', () => {
@@ -652,12 +653,12 @@ describe('ModelSettingsScreen', () => {
         });
       });
 
-      it('shows Text Model Backend section and GPU Layers slider when backend is OpenCL', () => {
+      it('shows Text model hardware section and GPU Layers slider when backend is OpenCL', () => {
         useAppStore
           .getState()
           .updateSettings({ inferenceBackend: 'opencl', gpuLayers: 6 });
         const { getByText, getByTestId } = renderWithSections('text');
-        expect(getByText('Text Model Backend')).toBeTruthy();
+        expect(getByText('Text model hardware')).toBeTruthy();
         // Label now names the backend: "GPU Layers (OpenCL)". Assert the slider by its
         // SliderSetting child testID (SliderSetting suffixes testID with -slider/-value).
         expect(getByTestId('gpu-layers-stepper-slider')).toBeTruthy();
@@ -974,8 +975,11 @@ describe('ModelSettingsScreen', () => {
         },
       });
 
-      const { getByDisplayValue } = renderWithSections('prompt');
-      expect(getByDisplayValue(/helpful AI assistant/)).toBeTruthy();
+      // Unset means the built-in prompt: the box is empty and shows that prompt as its placeholder.
+      const { getByTestId } = renderWithSections('prompt');
+      const input = getByTestId('default-system-prompt-input');
+      expect(input.props.value).toBe('');
+      expect(input.props.placeholder).toBe(APP_CONFIG.defaultSystemPrompt);
     });
 
     it('shows manual mode text when imageGenerationMode is not auto', () => {
@@ -988,12 +992,12 @@ describe('ModelSettingsScreen', () => {
   });
 
   // ============================================================================
-  // KV Cache Type Buttons
+  // KV cache type Buttons
   // ============================================================================
   describe('KV cache type buttons', () => {
-    it('renders KV Cache Type label', () => {
+    it('renders KV cache type label', () => {
       const { getByText } = renderWithSections('text');
-      expect(getByText('KV Cache Type')).toBeTruthy();
+      expect(getByText('KV cache type')).toBeTruthy();
     });
 
     it('renders all three cache type buttons', () => {
@@ -1138,7 +1142,7 @@ describe('Speech sections — Transcription (STT) + Text to Speech (TTS)', () =>
     fireEvent.press(view.getByTestId('transcription-accordion'));
     // the row appears and shows the "no model yet" state (whisper store empty in a fresh app)
     expect(view.getByTestId('stt-open-picker')).toBeTruthy();
-    expect(view.getByText('No model selected. Tap to choose.')).toBeTruthy();
+    expect(within(view.getByTestId('stt-open-picker')).getByText('No model selected. Tap to choose.')).toBeTruthy();
   });
 
   it('does NOT show Text to Speech without the pro TTS slot (free build)', () => {

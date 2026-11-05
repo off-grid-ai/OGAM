@@ -25,7 +25,7 @@ it.each([
   const screen = render(chat
     ? React.createElement(GenerationSettingsModal, { visible: true, onClose: () => {} })
     : React.createElement(TextGenerationSection));
-  if (chat) fireEvent.press(screen.getByText('TEXT GENERATION'));
+  if (chat) fireEvent.press(screen.getByText('Text generation'));
   await waitFor(() => expect(screen.getByText(/Model limit: 32000 tokens/)).toBeTruthy());
   const control = chat ? 'setting-liteRTMaxTokens' : 'litert-max-tokens';
   fireEvent.press(screen.getByTestId(`${control}-value-button`));

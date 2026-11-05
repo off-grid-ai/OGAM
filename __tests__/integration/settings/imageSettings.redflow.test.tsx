@@ -23,7 +23,7 @@ import { useAppStore } from '../../../src/stores';
 
 /** Open Image section + its advanced controls so the Image Size slider is on screen. */
 function openImageSettings(view: ReturnType<typeof render>) {
-  fireEvent.press(view.getByText('IMAGE GENERATION'));
+  fireEvent.press(view.getByText('Image generation'));
   fireEvent.press(view.getByTestId('modal-image-advanced-toggle'));
 }
 

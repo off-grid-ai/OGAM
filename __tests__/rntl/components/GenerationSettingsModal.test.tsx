@@ -133,19 +133,19 @@ describe('GenerationSettingsModal', () => {
     expect(queryByText('Last reply')).toBeNull();
   });
 
-  it('opens image settings section when tapping "IMAGE GENERATION"', () => {
+  it('opens image settings section when tapping "Image generation"', () => {
     const { getByText, queryByText } = render(
       <GenerationSettingsModal {...defaultProps} />,
     );
 
     expect(queryByText('Auto-detect image requests')).toBeNull();
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
 
     expect(getByText('Auto-detect image requests')).toBeTruthy();
   });
 
-  it('opens text settings section when tapping "TEXT GENERATION"', () => {
+  it('opens text settings section when tapping "Text generation"', () => {
     const { getByText, queryByText } = render(
       <GenerationSettingsModal {...defaultProps} />,
     );
@@ -153,7 +153,7 @@ describe('GenerationSettingsModal', () => {
     // Text settings should be collapsed initially
     expect(queryByText('Temperature')).toBeNull();
 
-    fireEvent.press(getByText('TEXT GENERATION'));
+    fireEvent.press(getByText('Text generation'));
 
     expect(getByText('Temperature')).toBeTruthy();
     expect(getByText('Max tokens')).toBeTruthy();
@@ -165,7 +165,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('TEXT GENERATION'));
+    fireEvent.press(getByText('Text generation'));
 
     // Output cannot exceed the context that has to hold it, so this surface stops the max-tokens
     // slider at the chosen context while context itself may reach the model's trained ceiling.
@@ -181,12 +181,12 @@ describe('GenerationSettingsModal', () => {
     );
 
     // Performance settings should be collapsed initially
-    expect(queryByText('CPU Threads')).toBeNull();
+    expect(queryByText('CPU threads')).toBeNull();
 
-    fireEvent.press(getByText('TEXT GENERATION'));
+    fireEvent.press(getByText('Text generation'));
     fireEvent.press(getByTestId('modal-text-advanced-toggle'));
 
-    expect(getByText('CPU Threads')).toBeTruthy();
+    expect(getByText('CPU threads')).toBeTruthy();
   });
 
   it('calls the shared reset action when Reset to defaults is pressed', () => {
@@ -206,7 +206,7 @@ describe('GenerationSettingsModal', () => {
   });
 
   it('keeps transcription model selection out of chat settings', () => {
-    const { getByTestId, queryByText } = render(
+    const { getByTestId, queryByText, queryByTestId } = render(
       <GenerationSettingsModal {...defaultProps} />,
     );
 
@@ -214,7 +214,8 @@ describe('GenerationSettingsModal', () => {
     fireEvent.press(getByTestId('modal-transcription-accordion'));
 
     expect(queryByText('Transcription model')).toBeNull();
-    expect(queryByText('No model selected. Tap to choose.')).toBeNull();
+    // The header names the model (a summary); the row that picks one stays in Models.
+    expect(queryByTestId('modal-stt-open-picker')).toBeNull();
   });
 
   it('calls updateSettings when image gen mode Auto/Manual is pressed', () => {
@@ -223,7 +224,7 @@ describe('GenerationSettingsModal', () => {
     );
 
     // Open image settings first
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
 
     // Press Manual button
     fireEvent.press(getByText('Manual'));
@@ -285,7 +286,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
 
     expect(getByText('Detection method')).toBeTruthy();
@@ -298,7 +299,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
     fireEvent.press(getByText('LLM'));
 
@@ -314,7 +315,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
     fireEvent.press(getByText('Pattern'));
 
@@ -330,7 +331,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
 
     expect(queryByText('Detection method')).toBeNull();
   });
@@ -345,7 +346,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
 
     expect(getByText('Classifier model')).toBeTruthy();
@@ -357,7 +358,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
 
     expect(queryByText('Classifier model')).toBeNull();
   });
@@ -369,7 +370,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
 
     expect(getByText(/Tip: Use a small model/)).toBeTruthy();
@@ -385,7 +386,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
     // Press Classifier Model button to open picker
     fireEvent.press(getByText('Classifier model'));
@@ -405,7 +406,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
     fireEvent.press(getByText('Classifier model'));
     fireEvent.press(getByText('SmolLM'));
@@ -420,7 +421,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
     fireEvent.press(getByText('Classifier model'));
 
@@ -439,7 +440,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
     expect(queryByText('Image Model')).toBeNull();
     expect(queryByText('SD Model')).toBeNull();
   });
@@ -452,7 +453,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
 
     expect(getByText('Enhance Image Prompts')).toBeTruthy();
@@ -465,7 +466,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
 
     // Find the "On" button for enhance prompts
@@ -484,7 +485,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('TEXT GENERATION'));
+    fireEvent.press(getByText('Text generation'));
     fireEvent.press(getByTestId('modal-text-advanced-toggle'));
 
     expect(getByText('Temperature')).toBeTruthy();
@@ -499,7 +500,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('TEXT GENERATION'));
+    fireEvent.press(getByText('Text generation'));
     fireEvent.press(getByTestId('modal-text-advanced-toggle'));
 
     expect(getByText('0.70')).toBeTruthy(); // temperature
@@ -515,7 +516,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('TEXT GENERATION'));
+    fireEvent.press(getByText('Text generation'));
 
     expect(getByText('Higher gives more varied replies. Lower keeps them focused.')).toBeTruthy();
     expect(getByText('How long one reply can get.')).toBeTruthy();
@@ -530,9 +531,9 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('GENERAL'));
+    fireEvent.press(getByText('General'));
 
-    expect(getByText('Show Generation Details')).toBeTruthy();
+    expect(getByText('Show generation details')).toBeTruthy();
     expect(getByText('Applies to all chats. Show context use, model, speed, and image settings below each reply.')).toBeTruthy();
   });
 
@@ -541,7 +542,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('GENERAL'));
+    fireEvent.press(getByText('General'));
 
     // Find the "On" buttons in the General section
     const onButtons = getAllByText('On');
@@ -559,7 +560,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
 
     expect(getByText('Image Steps')).toBeTruthy();
@@ -573,7 +574,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
 
     expect(getAllByText('20').length).toBeGreaterThanOrEqual(1); // imageSteps
@@ -652,11 +653,11 @@ describe('GenerationSettingsModal', () => {
     );
 
     // Open
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
     expect(getByText('Auto-detect image requests')).toBeTruthy();
 
     // Close
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
     expect(queryByText('Auto-detect image requests')).toBeNull();
   });
 
@@ -665,10 +666,10 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('TEXT GENERATION'));
+    fireEvent.press(getByText('Text generation'));
     expect(getByText('Temperature')).toBeTruthy();
 
-    fireEvent.press(getByText('TEXT GENERATION'));
+    fireEvent.press(getByText('Text generation'));
     expect(queryByText('Temperature')).toBeNull();
   });
 
@@ -677,12 +678,12 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('TEXT GENERATION'));
+    fireEvent.press(getByText('Text generation'));
     fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-    expect(getByText('CPU Threads')).toBeTruthy();
+    expect(getByText('CPU threads')).toBeTruthy();
 
-    fireEvent.press(getByText('TEXT GENERATION'));
-    expect(queryByText('CPU Threads')).toBeNull();
+    fireEvent.press(getByText('Text generation'));
+    expect(queryByText('CPU threads')).toBeNull();
   });
 
   // ============================================================================
@@ -706,7 +707,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('IMAGE GENERATION'));
+    fireEvent.press(getByText('Image generation'));
 
     // Find slider elements (mocked as View with testID='slider')
     const { View } = require('react-native');
@@ -725,7 +726,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('TEXT GENERATION'));
+    fireEvent.press(getByText('Text generation'));
 
     const sliders = queryAllByTestId('slider');
     // onSlidingComplete is a no-op but should not throw
@@ -739,7 +740,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('TEXT GENERATION'));
+    fireEvent.press(getByText('Text generation'));
 
     const sliders = queryAllByTestId('slider');
     if (sliders.length > 0 && sliders[0].props.onValueChange) {
@@ -762,9 +763,9 @@ describe('GenerationSettingsModal', () => {
         <GenerationSettingsModal {...defaultProps} />,
       );
 
-      fireEvent.press(getByText('TEXT GENERATION'));
+      fireEvent.press(getByText('Text generation'));
       fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-      expect(getByText('Flash Attention')).toBeTruthy();
+      expect(getByText('Flash attention')).toBeTruthy();
     });
 
     it('calls updateSettings with flashAttn: false when Off is pressed', () => {
@@ -774,7 +775,7 @@ describe('GenerationSettingsModal', () => {
         <GenerationSettingsModal {...defaultProps} />,
       );
 
-      fireEvent.press(getByText('TEXT GENERATION'));
+      fireEvent.press(getByText('Text generation'));
       fireEvent.press(getByTestId('modal-text-advanced-toggle'));
 
       fireEvent.press(getByTestId('flash-attn-off-button'));
@@ -789,7 +790,7 @@ describe('GenerationSettingsModal', () => {
         <GenerationSettingsModal {...defaultProps} />,
       );
 
-      fireEvent.press(getByText('TEXT GENERATION'));
+      fireEvent.press(getByText('Text generation'));
       fireEvent.press(getByTestId('modal-text-advanced-toggle'));
 
       fireEvent.press(getByTestId('flash-attn-on-button'));
@@ -802,7 +803,7 @@ describe('GenerationSettingsModal', () => {
       useAppStore.getState().updateSettings({ ...defaultSettings, flashAttn: undefined as any } as any);
 
       const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-      fireEvent.press(getByText('TEXT GENERATION'));
+      fireEvent.press(getByText('Text generation'));
       fireEvent.press(getByTestId('modal-text-advanced-toggle'));
 
       // The Off button should be pressable (flash attn is currently ON via fallback)
@@ -827,7 +828,7 @@ describe('GenerationSettingsModal', () => {
       it('renders GPU layers slider with gpuLayersEffective when backend is OpenCL', () => {
         useAppStore.getState().updateSettings({ ...defaultSettings, inferenceBackend: 'opencl' as const, gpuLayers: 8, flashAttn: false } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('GENERAL'));
+        fireEvent.press(getByText('General'));
         expect(getByTestId('gpu-layers-stepper-value').props.children).toBe('8');
       });
 
@@ -835,7 +836,7 @@ describe('GenerationSettingsModal', () => {
         // Flash attention no longer caps GPU layers — gpuLayersMax is always 99
         useAppStore.getState().updateSettings({ ...defaultSettings, inferenceBackend: 'opencl' as const, gpuLayers: 8, flashAttn: true } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('GENERAL'));
+        fireEvent.press(getByText('General'));
         // gpuLayersEffective = Math.min(8, 99) = 8
         expect(getByTestId('gpu-layers-stepper-value').props.children).toBe('8');
       });
@@ -848,7 +849,7 @@ describe('GenerationSettingsModal', () => {
           flashAttn: false,
         } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('GENERAL'));
+        fireEvent.press(getByText('General'));
         // gpuLayersEffective = Math.min(undefined ?? 1, 99) = 1
         expect(getByTestId('gpu-layers-stepper-value').props.children).toBe('1');
       });
@@ -856,7 +857,7 @@ describe('GenerationSettingsModal', () => {
       it('does not clamp gpuLayers when turning flash attn On with undefined layers', () => {
         useAppStore.getState().updateSettings({ ...defaultSettings, flashAttn: false, gpuLayers: undefined as any } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
+        fireEvent.press(getByText('Text generation'));
         fireEvent.press(getByTestId('modal-text-advanced-toggle'));
           const gpuLayersBefore = settingsNow().gpuLayers;
         fireEvent.press(getByTestId('flash-attn-on-button'));
@@ -868,7 +869,7 @@ describe('GenerationSettingsModal', () => {
       it('does not clamp gpuLayers when turning flash attn On with layers > 1', () => {
         useAppStore.getState().updateSettings({ ...defaultSettings, flashAttn: false, gpuLayers: 8 } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
+        fireEvent.press(getByText('Text generation'));
         fireEvent.press(getByTestId('modal-text-advanced-toggle'));
           const gpuLayersBefore = settingsNow().gpuLayers;
         fireEvent.press(getByTestId('flash-attn-on-button'));
@@ -880,7 +881,7 @@ describe('GenerationSettingsModal', () => {
       it('does not clamp gpuLayers when turning flash attn On with layers = 1', () => {
         useAppStore.getState().updateSettings({ ...defaultSettings, flashAttn: false, gpuLayers: 1 } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
+        fireEvent.press(getByText('Text generation'));
         fireEvent.press(getByTestId('modal-text-advanced-toggle'));
           const gpuLayersBefore = settingsNow().gpuLayers;
         fireEvent.press(getByTestId('flash-attn-on-button'));
@@ -892,7 +893,7 @@ describe('GenerationSettingsModal', () => {
       it('calls updateSettings with inferenceBackend: cpu when CPU button pressed', () => {
         useAppStore.getState().updateSettings({ ...defaultSettings, inferenceBackend: 'opencl' as const } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('GENERAL'));
+        fireEvent.press(getByText('General'));
   
         fireEvent.press(getByTestId('backend-cpu-button'));
 
@@ -902,7 +903,7 @@ describe('GenerationSettingsModal', () => {
       it('calls updateSettings with inferenceBackend: opencl when OpenCL button pressed on Android', () => {
         useAppStore.getState().updateSettings({ ...defaultSettings, inferenceBackend: 'cpu' as const } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('GENERAL'));
+        fireEvent.press(getByText('General'));
   
         fireEvent.press(getByTestId('backend-opencl-button'));
 
@@ -912,7 +913,7 @@ describe('GenerationSettingsModal', () => {
       it('calls updateSettings with gpuLayers value from GPU layers slider', () => {
         useAppStore.getState().updateSettings({ ...defaultSettings, inferenceBackend: 'opencl' as const, gpuLayers: 6, flashAttn: false } as any);
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('GENERAL'));
+        fireEvent.press(getByText('General'));
   
         fireEvent(getByTestId('gpu-layers-stepper-slider'), 'slidingComplete', 7);
 
@@ -939,7 +940,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('GENERAL'));
+    fireEvent.press(getByText('General'));
 
     // Find and press the Off button that sets showGenerationDetails
     const offButtons = getAllByText('Off');
