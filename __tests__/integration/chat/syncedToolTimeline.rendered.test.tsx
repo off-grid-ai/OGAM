@@ -497,7 +497,7 @@ describe('synced assistant tool timeline', () => {
 
     fireEvent.press(view.getAllByText('Searched the web')[0]);
     expect(view.getByText('First source.')).toBeTruthy();
-    fireEvent.press(view.getByText('Tools sent in request (1)'));
+    fireEvent.press(view.getByText('Tools it could use (1)'));
     expect(view.getByText('• web_search')).toBeTruthy();
     fireEvent.press(view.getByText('Generation details'));
     expect(view.getByTestId('generation-meta')).toBeTruthy();

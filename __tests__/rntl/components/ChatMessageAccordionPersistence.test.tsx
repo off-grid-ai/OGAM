@@ -110,7 +110,7 @@ describe('Tool accordion — expand-state persistence across remount', () => {
       const first = render(
         <ToolsSentCollapsible names={names} stableKey="assistant-real-7" styles={styles} colors={colors} />,
       );
-      fireEvent.press(first.getByText(/Tools sent in request/));
+      fireEvent.press(first.getByText(/Tools it could use/));
       expect(first.getByText('• web_search')).toBeTruthy();
 
       // Remount with the SAME stable key (survives the finalize).
@@ -127,9 +127,9 @@ describe('Tool accordion — expand-state persistence across remount', () => {
         <ToolsSentCollapsible names={names} stableKey="k1" styles={styles} colors={colors} />,
       );
       expect(queryByText('• web_search')).toBeNull();
-      fireEvent.press(getByText(/Tools sent in request/));
+      fireEvent.press(getByText(/Tools it could use/));
       expect(getByText('• web_search')).toBeTruthy();
-      fireEvent.press(getByText(/Tools sent in request/));
+      fireEvent.press(getByText(/Tools it could use/));
       expect(queryByText('• web_search')).toBeNull();
     });
 
@@ -141,7 +141,7 @@ describe('Tool accordion — expand-state persistence across remount', () => {
         </>,
       );
       // Expand only the first collapsible.
-      fireEvent.press(getAllByText(/Tools sent in request/)[0]);
+      fireEvent.press(getAllByText(/Tools it could use/)[0]);
       expect(getByText('• web_search')).toBeTruthy();
       expect(queryByText('• calculator')).toBeNull();
     });

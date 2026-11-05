@@ -36,7 +36,7 @@ const ToolsSentCollapsibleInner: React.FC<ToolsSentCollapsibleProps> = ({ names,
       <TouchableOpacity style={[styles.toolStatusRow, styles.messageFooterHeader]} onPress={toggle} activeOpacity={0.6}>
         <Icon name="tool" size={13} color={colors.textMuted} />
         <Text style={[styles.toolStatusText, styles.toolStatusTextCompact]} numberOfLines={1}>
-          Tools sent in request ({names.length})
+          Tools it could use ({names.length})
         </Text>
         <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={12} color={colors.textMuted} />
       </TouchableOpacity>
