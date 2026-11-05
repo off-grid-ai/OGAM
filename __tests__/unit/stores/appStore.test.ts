@@ -1370,6 +1370,42 @@ describe('appStore', () => {
         c: any,
       ) => any;
 
+    describe('a chat selection that is the intent classifier', () => {
+      const models = [{ id: 'gemma' }, { id: 'smol' }];
+      const persisted = (over: Record<string, unknown>) => ({
+        settings: { classifierModelId: 'smol' },
+        downloadedModels: models,
+        activeModelId: 'smol',
+        lastTextModelId: 'gemma',
+        ...over,
+      });
+
+      it('goes back to the person’s last pick', () => {
+        const result = getMergeFn()(persisted({}), useAppStore.getState());
+        expect(result.activeModelId).toBe('gemma');
+      });
+
+      it('stays when the person picked the classifier themselves', () => {
+        const result = getMergeFn()(persisted({ lastTextModelId: 'smol' }), useAppStore.getState());
+        expect(result.activeModelId).toBe('smol');
+      });
+
+      it('stays when the last pick is no longer on the phone', () => {
+        const result = getMergeFn()(persisted({ downloadedModels: [{ id: 'smol' }] }), useAppStore.getState());
+        expect(result.activeModelId).toBe('smol');
+      });
+
+      it('is left alone when there is no last pick', () => {
+        const result = getMergeFn()(persisted({ lastTextModelId: null }), useAppStore.getState());
+        expect(result.activeModelId).toBe('smol');
+      });
+
+      it('leaves any other selection alone', () => {
+        const result = getMergeFn()(persisted({ activeModelId: 'gemma', lastTextModelId: 'smol' }), useAppStore.getState());
+        expect(result.activeModelId).toBe('gemma');
+      });
+    });
+
     it('migrates missing cacheType with flashAttn=true to q8_0', () => {
       const merge = getMergeFn();
       const result = merge(

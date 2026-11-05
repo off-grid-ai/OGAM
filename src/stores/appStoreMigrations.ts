@@ -117,7 +117,27 @@ export function migratePersistedState<TState>(
   migrateGeneratedImageTimestamps(merged);
   migrateGeneratedImagePaths(merged, documentsPath);
   migrateGeneratedVideoPrompts(merged);
+  migrateUtilityModelSelection(merged);
   return merged as TState;
+}
+
+/**
+ * A chat selection that is the intent classifier, put back to the person's own pick.
+ *
+ * The classifier borrows the text engine, and the loader used to record every successful load as the
+ * chat selection. A classify that overlapped another, or whose chat-model reload was refused, left the
+ * classifier (SmolLM2-135M) selected, and every later turn was answered by it (device, 2026-11-05:
+ * Gemma 4 picked, SmolLM2 answering). Loads for side tasks no longer record a selection; this repairs a
+ * phone that already holds the bad one. `lastTextModelId` is written only by a real pick, so a person
+ * who chose the classifier themselves keeps it.
+ */
+function migrateUtilityModelSelection(merged: any): void {
+  const classifierId = merged.settings?.classifierModelId;
+  if (!classifierId || merged.activeModelId !== classifierId) return;
+  const lastPick = merged.lastTextModelId;
+  if (!lastPick || lastPick === classifierId) return;
+  if (!Array.isArray(merged.downloadedModels) || !merged.downloadedModels.some((m: any) => m?.id === lastPick)) return;
+  merged.activeModelId = lastPick;
 }
 
 /** Keep generated-image paths valid when iOS gives the app a new container UUID on install. */
