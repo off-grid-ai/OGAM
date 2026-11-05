@@ -5,7 +5,7 @@
  * or an Ollama / LM Studio server on the same network.
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { AppSwitch } from '../components/AppSwitch';
 import {
   View,
@@ -96,7 +96,14 @@ export const RemoteServersScreen: React.FC = () => {
     }
   }, []);
 
+  const scanAbort = useRef<AbortController | null>(null);
+  const handleStopScan = useCallback(() => scanAbort.current?.abort(), []);
+  // Leaving the screen stops the sweep rather than probing the network in the background.
+  useEffect(() => () => scanAbort.current?.abort(), []);
+
   const handleScanNetwork = useCallback(async () => {
+    const abort = new AbortController();
+    scanAbort.current = abort;
     setIsScanning(true);
     setScanNote(null);
     setScanProgress({ completed: 0, total: 0 });
@@ -106,6 +113,7 @@ export const RemoteServersScreen: React.FC = () => {
       let keyServerId: string | null = null;
       const { found: newServers } = await remoteServerManager.scanAndReconcile({
         kinds: scanKinds,
+        signal: abort.signal,
         onProgress: (completed, total) => setScanProgress({ completed, total }),
         onFound: server => {
           setScanFound(count => count + 1);
@@ -129,6 +137,14 @@ export const RemoteServersScreen: React.FC = () => {
       if (keyServerId) {
         navigation.navigate('RemoteServerEditor', { serverId: keyServerId, needsKey: true });
       }
+      if (abort.signal.aborted) {
+        setScanNote(
+          newServers.length === 0
+            ? 'Scan stopped. Nothing found yet.'
+            : `Scan stopped. Added ${newServers.length} server${newServers.length > 1 ? 's' : ''}.`,
+        );
+        return;
+      }
       if (newServers.length === 0) {
         setScanNote(
           `No new servers answered. Check ${SCAN_KINDS.filter(item => scanKinds.includes(item.kind)).map(item => `${item.label} on port ${item.port}`).join(', ')}.`,
@@ -143,6 +159,7 @@ export const RemoteServersScreen: React.FC = () => {
         error instanceof Error ? error.message : 'The scan could not finish.',
       );
     } finally {
+      scanAbort.current = null;
       setIsScanning(false);
     }
   }, [scanKinds, navigation]);
@@ -256,14 +273,25 @@ export const RemoteServersScreen: React.FC = () => {
           {/* No `loading` prop: it swaps the label for the platform spinner, and on Android that
               glyph reads as a retry arrow - the same thing that made the chat loading bar look
               like a failure. The dots below carry the waiting instead. */}
-          <Button
-            title={isScanning ? 'Scanning' : 'Scan network'}
-            onPress={handleScanNetwork}
-            disabled={isScanning}
-            size="small"
-            testID="scan-network"
-            icon={<Icon name="wifi" size={14} color={theme.colors.textSecondary} />}
-          />
+          {/* While it scans, the same place stops it: a full sweep takes a while, and you may
+              already see the server you came for. */}
+          {isScanning ? (
+            <Button
+              title="Stop scan"
+              onPress={handleStopScan}
+              size="small"
+              testID="stop-scan"
+              icon={<Icon name="square" size={12} color={theme.colors.textSecondary} />}
+            />
+          ) : (
+            <Button
+              title="Scan network"
+              onPress={handleScanNetwork}
+              size="small"
+              testID="scan-network"
+              icon={<Icon name="wifi" size={14} color={theme.colors.textSecondary} />}
+            />
+          )}
           <Button
             title="Add manually"
             variant="ghost"
@@ -280,7 +308,7 @@ export const RemoteServersScreen: React.FC = () => {
               textStyle={styles.scanNote}
             />
             <Text style={styles.scanNote} accessibilityRole="text" testID="scan-progress">
-              {scanProgress.completed} / {scanProgress.total} checked. {scanFound} found.
+              {scanFound === 0 ? 'None found yet' : `${scanFound} found`} · {scanProgress.total > 0 ? Math.round((scanProgress.completed / scanProgress.total) * 100) : 0}% checked
             </Text>
           </View>
         ) : null}
