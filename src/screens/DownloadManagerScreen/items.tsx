@@ -139,6 +139,11 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
     return colors.textMuted;
   };
 
+  // Failed or paused before a byte arrived: there is no progress to draw, so no bar and no "0 B" line
+  // (hand test 47: a paused row said 6.28 GB, then 0 B / 6.3 GB 0%, then Paused).
+  const nothingReceived =
+    (item.status === 'failed' || item.status === 'paused') && percentage === 0;
+
   // On the title line, as on a downloaded row, so a failed or paused row has no line of its own
   // for two icons (hand test 46).
   const transferActions = (
@@ -232,7 +237,7 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
           <View style={styles.progressContainer}>
             {/* A failed download that never started has no progress to show: no bar row at all
                 (hand test 34: an empty bar read as stuck). It keeps the bar once some bytes arrived. */}
-            {item.status === 'failed' && percentage === 0 ? null : (
+            {nothingReceived ? null : (
             <View style={styles.transferRow}>
                 <View
                   style={[
@@ -253,7 +258,7 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
             </View>
             )}
             {/* Nothing received: no bytes line and no percent, so no empty line above the error. */}
-            {item.status === 'failed' && percentage === 0 ? null : (
+            {nothingReceived ? null : (
             <View style={styles.transferCaptionRow}>
               <Text
                 style={styles.progressText}
