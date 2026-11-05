@@ -457,3 +457,10 @@ Home header no overlap, meta row clears the footer, Appearance monochrome, no gl
 1. Small model answers "Name one tree" with tool talk (5 tools always attached). Mac's call, already asked.
 2. Appearance row sits in its own 68 pt card, label at x 36 vs rows at x 77: merge into the list as a normal row.
 3. Footer toggles 29 pt, overlap 1 pt; Home bell 36; search field has no label and is 32 tall; Gallery card label carries empty glyph parts.
+
+## Supervisor 09:30 (hand test 44, build at 72700f8ac)
+
+Appearance in the list, Home bell and Gallery row, Gallery Back/Select/tabs, search names after typing: pass. Top 3:
+1. Tab underline floats 6 pt above the line on Models but sits on it in Gallery: indicator bottom 0, scroller flexShrink 0.
+2. Short targets: Your videos Back 28, search clear 17, Chats Select and New 38.
+3. Settings: Appearance's leading sun repeats the Light choice; choices end short of the chevron column; Pro row label says "Pro · active" while the screen says "Lifetime · active".
