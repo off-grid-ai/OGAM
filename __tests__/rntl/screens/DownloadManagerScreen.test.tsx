@@ -199,7 +199,9 @@ describe('DownloadManagerScreen', () => {
     expect(view.getByText(useAppStore.getState().downloadedModels[0].name)).toBeTruthy();
     expect(view.queryByText('test-model-q4.gguf')).toBeNull();
     // Cards say only what helps a choice: size and quant, no publisher name, no type label.
-    expect(view.getByText('4.00 GB · Q4_K_M')).toBeTruthy();
+    // The download date joins size and quant on the one facts line ("Jan 15"), not a line of its own.
+    expect(view.getByText(/^4\.00 GB · Q4_K_M · [A-Z][a-z]{2} \d{1,2}$/)).toBeTruthy();
+    expect(view.queryByText(/\d{1,2}\/\d{1,2}\/\d{2,4}/)).toBeNull();
     expect(view.queryByText('test-author')).toBeNull();
     expect(view.queryByText(/· Text/)).toBeNull();
     expect(view.queryByText('No models downloaded yet')).toBeNull();
@@ -213,6 +215,31 @@ describe('DownloadManagerScreen', () => {
     expect(view.getByText('2.00 GB')).toBeTruthy();
     // No type label repeated on every card.
     expect(view.queryByText('Image Generation')).toBeNull();
+  });
+
+  it('filters by the Models tab names: Video holds video models, Voice text to speech, Speech transcription', async () => {
+    const { view, rtl } = await openManager(ctx =>
+      nativeDownloads(ctx, [
+        runningText({ downloadId: 'dl-text' }),
+        runningText({ downloadId: 'dl-video', modelKey: 'v/wan/wan-video.bin', modelId: 'v/wan', fileName: 'wan-video.bin', modelType: 'video' as never }),
+        runningText({ downloadId: 'dl-tts', modelKey: 't/kokoro/kokoro-voice.pte', modelId: 't/kokoro', fileName: 'kokoro-voice.pte', modelType: 'tts' as never }),
+        runningText({ downloadId: 'dl-stt', modelKey: 'w/whisper/ggml-base.en.bin', modelId: 'w/whisper', fileName: 'ggml-base.en.bin', modelType: 'stt' as never }),
+      ]),
+    );
+    const names = { 'dl-text': 'model-file', 'dl-video': 'wan-video', 'dl-tts': 'kokoro-voice.pte', 'dl-stt': 'Whisper Base (English)' };
+    const shown = () => Object.entries(names).filter(([, name]) => view.queryByText(name)).map(([id]) => id);
+    expect(['All', 'Text', 'Vision', 'Image', 'Video', 'Voice', 'Speech'].every(label => view.queryByText(label))).toBe(true);
+    expect(view.queryByText('Voice Models')).toBeNull();
+    expect(view.queryByText('Image Gen')).toBeNull();
+
+    rtl.fireEvent.press(view.getByText('Video'));
+    expect(shown()).toEqual(['dl-video']);
+    rtl.fireEvent.press(view.getByText('Voice'));
+    expect(shown()).toEqual(['dl-tts']);
+    rtl.fireEvent.press(view.getByText('Speech'));
+    expect(shown()).toEqual(['dl-stt']);
+    rtl.fireEvent.press(view.getByText('All'));
+    expect(shown()).toEqual(['dl-text', 'dl-video', 'dl-tts', 'dl-stt']);
   });
 
   it('renders active download with progress info', async () => {
