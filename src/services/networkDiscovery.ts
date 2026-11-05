@@ -26,6 +26,8 @@ export interface DiscoveryOptions {
   kinds?: readonly DiscoverableServerKind[];
   onFound?: (server: DiscoveredServer) => void;
   onProgress?: (completed: number, total: number) => void;
+  /** Stops the sweep: probes not yet sent are skipped, and what was found so far is returned. */
+  signal?: AbortSignal;
 }
 
 // Probe paths match exactly where the app later reads models from
@@ -302,6 +304,7 @@ export async function discoverLANServers(
         Array.from({ length: 254 }, (_, i) => {
           const target = `${base}.${i + 1}`;
           return async () => {
+            if (options.signal?.aborted) return;
             try {
               recordIfFound(target, provider)(await probe(target, provider));
             } finally {
