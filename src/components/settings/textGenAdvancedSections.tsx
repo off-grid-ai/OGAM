@@ -153,7 +153,7 @@ export const KvCacheTypeToggle: React.FC = () => {
   const { isFlashAttnOn, cacheDisabled, displayCacheType, handleCacheTypeChange } = useTextGenerationAdvanced();
   return (
     <SegmentedRow<CacheType>
-      label="KV Cache Type"
+      label="KV cache type"
       description={CACHE_TYPE_DESCRIPTIONS[displayCacheType]}
       options={CACHE_TYPE_OPTIONS.map((ct: CacheType) => ({ id: ct, label: ct }))}
       current={displayCacheType}
@@ -271,7 +271,7 @@ export const CpuThreadsSlider: React.FC = () => {
     <View style={styles.container}>
       <SliderSetting
         testID="cpu-threads-stepper"
-        label="CPU Threads"
+        label="CPU threads"
         description="Parallel threads for inference"
         value={cpuThreadsSliderValue}
         // Unset means AUTO, and the slider's own minimum is 1 — so the screen read "1" while the

@@ -19,7 +19,7 @@ export const SpeculativeDecodingToggle: React.FC = () => {
   return (
     <>
       <SegmentedRow<'off' | 'on'>
-        label="Speculative Decoding (MTP)"
+        label="Speculative decoding (MTP)"
         description="Drafts several tokens per step and checks them together. Faster on models built with MTP layers; no effect on others. Requires model reload."
         options={BOOL_OPTIONS}
         current={settings.speculativeDecoding ? 'on' : 'off'}
@@ -29,7 +29,7 @@ export const SpeculativeDecodingToggle: React.FC = () => {
       {settings.speculativeDecoding ? (
         <SliderSetting
           testID="speculative-draft-stepper"
-          label="Draft Tokens"
+          label="Draft tokens"
           value={settings.speculativeDraftMax || MOBILE_MTP_DRAFT_TOKENS}
           min={1} max={8} step={1}
           onChange={(v) => updateSettings({ speculativeDraftMax: v })}
