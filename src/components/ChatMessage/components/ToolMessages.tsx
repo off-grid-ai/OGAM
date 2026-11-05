@@ -118,6 +118,38 @@ function getRunningLabel(toolName?: string): string {
   }
 }
 
+type SearchHit = { title?: unknown; url?: unknown; excerpts?: unknown; snippet?: unknown; description?: unknown };
+
+/**
+ * A tool result as a person reads it. A search result some tools return as JSON (results with a
+ * title, a link and excerpts) becomes a short list of sources; other JSON is laid out with its
+ * line breaks; plain text is shown as it came.
+ */
+export function readableToolResult(content: string): string {
+  const trimmed = content.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return content;
+  let data: unknown;
+  try {
+    data = JSON.parse(trimmed);
+  } catch {
+    return content;
+  }
+  const hits = Array.isArray(data) ? data : (data as { results?: unknown }).results;
+  if (Array.isArray(hits) && hits.length > 0 && hits.every(hit => hit && typeof hit === 'object')) {
+    return (hits as SearchHit[])
+      .slice(0, 5)
+      .map((hit, i) => {
+        const title = typeof hit.title === 'string' && hit.title ? hit.title : 'Source';
+        const heading = typeof hit.url === 'string' ? `[${title}](${hit.url})` : title;
+        const raw = Array.isArray(hit.excerpts) ? hit.excerpts[0] : hit.snippet ?? hit.description;
+        const excerpt = typeof raw === 'string' ? raw.replace(/\s+/g, ' ').trim().slice(0, 180) : '';
+        return `${i + 1}. ${heading}${excerpt ? `\n   ${excerpt}${excerpt.length === 180 ? '…' : ''}` : ''}`;
+      })
+      .join('\n\n');
+  }
+  return JSON.stringify(data, null, 2);
+}
+
 function isTaskToolName(toolName?: string): boolean {
   return (
     toolName === 'web_use' ||
@@ -212,7 +244,7 @@ const ToolResultBubbleInner: React.FC<ToolResultBubbleProps> = ({
       </TouchableOpacity>
       {expanded && hasDetails && (
         <View style={styles.toolDetailContainer}>
-          {detail ?? <MarkdownText dimmed>{content}</MarkdownText>}
+          {detail ?? <MarkdownText dimmed>{readableToolResult(content)}</MarkdownText>}
         </View>
       )}
     </View>
