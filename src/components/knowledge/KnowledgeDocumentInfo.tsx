@@ -134,9 +134,10 @@ export const KnowledgeDocumentInfo: React.FC<{
   const status = readingStatus(live, stored, !!documentId);
   // The file's own reading speaks first; a transfer only once the file is ready here.
   const shownTransfer = status.failed || status.fraction !== null ? undefined : transfer;
-  const label = shownTransfer
-    ? knowledgeDocumentTransferLabel(shownTransfer)
-    : `${formatFileSize(size)} · ${status.label}`;
+  // The file's own facts always show; a transfer adds its own line under the name instead of
+  // replacing them (hand test 49: a failed row lost its size).
+  const fileLabel = `${formatFileSize(size)} · ${status.label}`;
+  const label = shownTransfer ? knowledgeDocumentTransferLabel(shownTransfer) : fileLabel;
   const failed = shownTransfer ? shownTransfer.status === 'failed' : status.failed;
   const fraction = shownTransfer
     ? shownTransfer.status === 'active'
@@ -162,7 +163,13 @@ export const KnowledgeDocumentInfo: React.FC<{
         <Text style={styles.name} numberOfLines={1}>
           {name}
         </Text>
-        {shownTransfer ? null : statusText}
+        {shownTransfer ? (
+          <Text style={styles.meta} numberOfLines={1}>
+            {fileLabel}
+          </Text>
+        ) : (
+          statusText
+        )}
       </View>
       {shownTransfer ? statusText : null}
       <ProgressLine fraction={fraction} />
