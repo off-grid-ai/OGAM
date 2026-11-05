@@ -92,7 +92,12 @@ const MessageMetaRow: React.FC<MetaRowProps> = ({
     )}
     {metaExtra}
     {showActions && !isStreaming && (
-      <TouchableOpacity style={styles.actionHint} onPress={onMenuOpen}>
+      <TouchableOpacity
+        style={styles.actionHint}
+        onPress={onMenuOpen}
+        accessibilityRole="button"
+        accessibilityLabel="Message actions"
+      >
         <Text style={styles.actionHintText}>•••</Text>
       </TouchableOpacity>
     )}
