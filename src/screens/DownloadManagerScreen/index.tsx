@@ -14,15 +14,17 @@ import { useDownloadManager } from './useDownloadManager';
 import { isQueuedStatus, isDownloadingStatus, isFailedStatus, type DownloadStatus } from '../../stores/downloadStore';
 import { AliveScreen } from '../../components/AliveScreen';
 
-type FilterType = 'all' | 'text' | 'vision' | 'image' | 'voice';
+type FilterType = 'all' | 'text' | 'vision' | 'image' | 'video' | 'voice' | 'transcription';
 
+// The Models tab's own names, so a model is called the same thing in both places.
 const FILTERS: { id: FilterType; label: string }[] = [
-  { id: 'all',    label: 'All' },
-  { id: 'text',   label: 'Text' },
-  { id: 'vision', label: 'Vision' },
-  { id: 'image',  label: 'Image Gen' },
-  // Voice covers both text-to-speech and speech-to-text models.
-  { id: 'voice',  label: 'Voice Models' },
+  { id: 'all',           label: 'All' },
+  { id: 'text',          label: 'Text' },
+  { id: 'vision',        label: 'Vision' },
+  { id: 'image',         label: 'Image' },
+  { id: 'video',         label: 'Video' },
+  { id: 'voice',         label: 'Voice' },
+  { id: 'transcription', label: 'Speech' },
 ];
 
 function matchesFilter(item: DownloadItem, filter: FilterType): boolean {
@@ -30,7 +32,9 @@ function matchesFilter(item: DownloadItem, filter: FilterType): boolean {
   if (filter === 'vision') return item.modelType === 'text' && !!item.isVisionModel;
   if (filter === 'text')   return item.modelType === 'text' && !item.isVisionModel;
   if (filter === 'image')  return item.modelType === 'image';
-  if (filter === 'voice')  return item.modelType === 'tts' || item.modelType === 'stt';
+  if (filter === 'video')  return item.modelType === 'video';
+  if (filter === 'voice')  return item.modelType === 'tts';
+  if (filter === 'transcription') return item.modelType === 'stt';
   return true;
 }
 
