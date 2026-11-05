@@ -35,6 +35,7 @@ import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
 import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
 import { useIsFocused } from '@react-navigation/native';
 import { LivingField } from '../components/LivingField';
+import { chatKind, rowPreview } from '../utils/chatRow';
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'ChatsTab'>,
   NativeStackNavigationProp<RootStackParamList>
@@ -187,9 +188,9 @@ export const ChatsListScreen: React.FC = () => {
     const project = item.projectId ? getProject(item.projectId) : null;
     const selected = selectedIds.has(item.id);
     const index = listIndex.get(item.id) ?? 0;
-    const kind = item.messages[item.messages.length - 1]?.turnKind ?? 'text';
+    const kind = chatKind(item.messages);
     // The last reply (or your own last message after "You:"), unless it only repeats the title.
-    const preview = repeatsTitle(previewLine(item.messages), item.title) ? '' : previewLine(item.messages);
+    const preview = rowPreview(previewLine(item.messages), item.title);
 
     return (
       <Swipeable
@@ -586,12 +587,3 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginLeft: SPACING.sm,
   },
 });
-
-/** A preview that only says the title again (e.g. "You: <the same words>") adds nothing to the row. */
-function repeatsTitle(preview: string | null | undefined, title: string): boolean {
-  if (!preview) return true;
-  const plain = (text: string) => text.replace(/^You:\s*/, '').replace(/[.…\s]+$/, '').trim().toLowerCase();
-  const p = plain(preview);
-  const t = plain(title);
-  return p.length > 0 && t.length > 0 && (p.startsWith(t) || t.startsWith(p));
-}

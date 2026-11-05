@@ -10,6 +10,7 @@ import { createStyles } from '../styles';
 import { Conversation } from '../../../types';
 import { formatWhen } from '../../../utils/localTime';
 import { useConversationPreviewLine } from '../../../hooks/useConversationPreviewLine';
+import { rowPreview } from '../../../utils/chatRow';
 
 const formatDate = (dateStr: string): string => formatWhen(dateStr);
 
@@ -81,7 +82,8 @@ export const RecentConversations: React.FC<Props> = ({
                 </Text>
               </View>
               {(() => {
-                const preview = previewLine(conv.messages);
+                // Same rule as Chats: no preview that only repeats the title.
+                const preview = rowPreview(previewLine(conv.messages), conv.title);
                 return preview ? (
                   <Text style={styles.conversationPreview} numberOfLines={1}>
                     {preview}
