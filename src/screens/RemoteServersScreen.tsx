@@ -13,6 +13,7 @@ import {
   ScrollView,
   Linking,
 } from 'react-native';
+import { ListGroup } from '../components/ListGroup';
 import { TouchableOpacity } from '../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -309,6 +310,7 @@ export const RemoteServersScreen: React.FC = () => {
         ) : (
           <>
             <Text style={styles.sectionLabel}>Servers</Text>
+            <ListGroup testID="server-list">
             {servers.map(server => {
               const isTesting = testingId === server.id;
               const isActive = activeServerId === server.id;
@@ -329,10 +331,7 @@ export const RemoteServersScreen: React.FC = () => {
               return (
                 <View
                   key={server.id}
-                  style={[
-                    styles.serverCard,
-                    isActive && styles.serverCardActive,
-                  ]}
+                  style={styles.serverCard}
                   testID={`server-${server.id}`}
                 >
                   {/* Tapping the server chooses it. The store has always had an active server
@@ -403,6 +402,7 @@ export const RemoteServersScreen: React.FC = () => {
                 </View>
               );
             })}
+            </ListGroup>
           </>
         )}
       </ScrollView>

@@ -1,3 +1,4 @@
+import { listRowStyle } from '../components/ListGroup';
 import type { ThemeColors, ThemeShadows } from '../theme/palettes';
 import { SPACING, TYPOGRAPHY } from '../constants';
 
@@ -117,15 +118,10 @@ export function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
       color: colors.primary,
     },
 
+    // A row of the servers group; the one in use says "In use" in emerald, so no border is needed.
     serverCard: {
-      ...card,
-      flexDirection: 'row' as const,
-      alignItems: 'center' as const,
+      ...listRowStyle,
       gap: SPACING.sm,
-    },
-    /* The one in use is marked by its border, so the list reads at a glance. */
-    serverCardActive: {
-      borderColor: colors.primary,
     },
     serverIdentity: {
       flex: 1,
