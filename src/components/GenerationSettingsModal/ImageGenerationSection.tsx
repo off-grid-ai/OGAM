@@ -20,7 +20,7 @@ const AutoDetectMethodToggle: React.FC = () => {
   return (
     <View style={styles.modeToggleContainer}>
       <View style={styles.modeToggleInfo}>
-        <Text style={styles.modeToggleLabel}>Detection Method</Text>
+        <Text style={styles.modeToggleLabel}>Detection method</Text>
         <Text style={styles.modeToggleDesc}>
           {settings.autoDetectMethod === 'pattern'
             ? 'Fast keyword matching ("draw", "create image", etc.)'
@@ -88,7 +88,7 @@ const ClassifierModelPicker: React.FC = () => {
         onPress={() => setShowPicker(!showPicker)}
       >
         <View style={styles.modelPickerContent}>
-          <Text style={styles.modelPickerLabel}>Classifier Model</Text>
+          <Text style={styles.modelPickerLabel}>Classifier model</Text>
           <Text style={styles.modelPickerValue}>
             {classifierModel?.name || 'Use current model'}
           </Text>

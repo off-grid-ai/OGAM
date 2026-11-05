@@ -70,7 +70,7 @@ export const GenerationSettingsModal: React.FC<
       visible={visible}
       onClose={onClose}
       snapPoints={['50%', '90%']}
-      title="Chat Settings"
+      title="Chat settings"
     >
       {performanceStats.lastTokensPerSecond > 0 && (
         <View style={styles.statsBar}>

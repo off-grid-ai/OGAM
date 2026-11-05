@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 
@@ -34,7 +35,7 @@ const createStatsStyles = (colors: ThemeColors) => ({
   },
   statsValue: {
     ...TYPOGRAPHY.meta,
-    color: colors.primary,
+    color: colors.textSecondary,
     fontWeight: '500' as const,
   },
   statsSeparator: {
@@ -96,7 +97,7 @@ const createSliderStyles = (colors: ThemeColors) => ({
   },
   settingValue: {
     ...TYPOGRAPHY.body,
-    color: colors.primary,
+    color: colors.text,
     fontWeight: '400' as const,
   },
   settingDescription: {
@@ -146,13 +147,13 @@ const createSliderStyles = (colors: ThemeColors) => ({
 });
 
 const createActionStyles = (colors: ThemeColors) => ({
+  // The sheet's actions are rows with a hairline between them, not separate boxes.
   actionRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    backgroundColor: colors.background,
-    padding: SPACING.md,
-    borderRadius: 8,
-    marginBottom: SPACING.sm,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
     gap: SPACING.md,
   },
   actionText: {
@@ -160,9 +161,10 @@ const createActionStyles = (colors: ThemeColors) => ({
     color: colors.text,
     flex: 1,
   },
+  // Deleting is a quiet action here; the confirm that follows is where it is weighed.
   actionTextError: {
     ...TYPOGRAPHY.body,
-    color: colors.error,
+    color: colors.textSecondary,
     flex: 1,
   },
   resetButton: {
@@ -193,9 +195,8 @@ const createActionStyles = (colors: ThemeColors) => ({
   },
 });
 
-const createModelPickerStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createModelPickerStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   modelPickerButton: {
-    ...shadows.small,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
@@ -236,7 +237,7 @@ const createModelPickerStyles = (colors: ThemeColors, shadows: ThemeShadows) => 
     borderBottomColor: colors.border,
   },
   modelPickerItemActive: {
-    backgroundColor: `${colors.primary}25`,
+    backgroundColor: colors.selectedFill,
   },
   modelPickerItemText: {
     ...TYPOGRAPHY.bodySmall,
