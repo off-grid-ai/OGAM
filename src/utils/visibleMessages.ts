@@ -60,5 +60,24 @@ export function conversationPreviewLine(
   localDeviceId: string | null | undefined,
 ): string {
   const last = lastVisibleMessage(messages, localDeviceId);
-  return chatListPreviewLine(last?.role, last?.content);
+  return plainMath(chatListPreviewLine(last?.role, last?.content));
+}
+
+/**
+ * A one-line preview reads maths as text: "$37 \times 43$" becomes "37 × 43" (hand test 19 saw the
+ * raw LaTeX in a project's chat list). Only the common inline forms; the chat itself still renders it.
+ */
+export function plainMath(text: string): string {
+  // Only text that holds LaTeX: a price like "$5" keeps its dollar sign.
+  if (!/\\[a-zA-Z()[\]]/.test(text)) return text;
+  return text
+    .replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, '$1/$2')
+    .replace(/\\times/g, '×')
+    .replace(/\\div/g, '÷')
+    .replace(/\\cdot/g, '·')
+    .replace(/\\(left|right)/g, '')
+    .replace(/\\[()[\]]/g, '')
+    .replace(/\$+/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
