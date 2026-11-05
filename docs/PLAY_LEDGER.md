@@ -45,3 +45,8 @@ Each round: expected / found / root cause / change / commit / screenshots.
 ## Time review 13:00 (asked by Mac)
 - 45% environment (builds, pods, certificate trust, Metro address, network change), 15% audit, 20% shipped fixes, 20% detours and the push gate.
 - Changes: time-box any investigation to 10 min; work only on what shows on the phone; one push per milestone from a clean tree; the supervisor runs every 10 min.
+
+## Supervisor 13:08
+1. Finish M2: the refusal sheet stacks vertically with one filled main choice; plain copy ("Gemma 4 needs 7 GB; 4 GB is free"); Load Anyway gets a one-line risk note; Stop in dark mode is a white circle, the brightest thing on screen — make it quieter.
+2. Paired light/dark shots for new chat, streaming, answer, sheet and picker. Check whether the speaker icon under answers is gone (`r00/11` has it, `r02/02` does not).
+3. M3: Geist and Geist Mono, then ListGroup/ListRow and the copy pass.
