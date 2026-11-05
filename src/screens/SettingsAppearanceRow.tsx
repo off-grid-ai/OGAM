@@ -26,8 +26,13 @@ export const SettingsAppearanceRow: React.FC<SettingsAppearanceRowProps> = ({
   onSelect
 }) => (
         <AnimatedEntry index={0} staggerMs={40} trigger={focusTrigger}>
-          <View style={styles.themeToggleRow}>
-            <Text style={styles.themeToggleLabel}>Appearance</Text>
+          <View style={styles.navItem}>
+            <View style={styles.navItemIcon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <Icon name="sun" size={16} color={colors.textSecondary} />
+            </View>
+            <View style={styles.navItemContent}>
+              <Text style={styles.navItemTitle}>Appearance</Text>
+            </View>
             <View style={styles.themeSelector}>
               {[
                 { mode: 'system' as const, icon: 'monitor', label: 'System' },

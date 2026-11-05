@@ -15,20 +15,13 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.xxl,
   },
-  themeToggleRow: {
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    alignItems: 'center' as const,
-    ...cardSurface(colors),
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
-  },
-  themeToggleLabel: { ...TYPOGRAPHY.body, color: colors.text },
   // No track: three glyphs on the row, the chosen one marked in grey (hand test 42: a grey track
   // with an emerald cell read as a second main action).
+  // Pulled back so the 44 pt choices sit in a normal-height row.
   themeSelector: {
     flexDirection: 'row' as const,
     gap: 2,
+    marginVertical: -8,
   },
   // 44 pt choices (they were 34 x 30): each is a target on its own.
   themeSelectorOption: {

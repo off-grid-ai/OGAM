@@ -184,16 +184,16 @@ export const SettingsScreen: React.FC = () => {
           onGetPro={() => navigation.navigate('ProDetail')}
         />
 
-        <SettingsAppearanceRow
-          focusTrigger={focusTrigger}
-          styles={styles}
-          colors={colors}
-          themeMode={themeMode}
-          onSelect={setThemeMode}
-        />
-
-        {/* Navigation Items */}
+        {/* Navigation Items. Appearance is the first row of the same list, not a card of its own
+            (hand test 43: its own 68 pt card, label out of line with the rows). */}
           <View style={styles.navSection}>
+            <SettingsAppearanceRow
+              focusTrigger={focusTrigger}
+              styles={styles}
+              colors={colors}
+              themeMode={themeMode}
+              onSelect={setThemeMode}
+            />
             {[
               {
                 icon: 'sliders',
