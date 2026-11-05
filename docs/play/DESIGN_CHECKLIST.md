@@ -1,7 +1,7 @@
 # Design checklist (every screenshot)
 
 Each device screenshot is scored against these, item by item, before it goes in the ledger. Source:
-`ui-library/docs/direction/DESIGN_PHILOSOPHY.md`, plus desktop's live page pattern. A screenshot passes
+`../brand/DESIGN_PHILOSOPHY.md` (the canonical one desktop syncs from; its Mobile profile owns mobile mechanics), plus desktop's live page pattern. A screenshot passes
 only when every item is a pass or a stated, accepted exception.
 
 Every screenshot is ALSO validated against `/oga-ux` (`~/.claude/skills/oga-ux/SKILL.md`, the product bar)
