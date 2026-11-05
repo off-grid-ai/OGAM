@@ -305,8 +305,13 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.textMuted,
     flexShrink: 1,
   },
+  // A 44 pt frame (it was 36), pulled back 4 pt each side so the row keeps its height.
   iconButton: {
-    padding: 10,
+    width: 44,
+    height: 44,
+    margin: -4,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
     flexShrink: 0,
   },
   failedSection: {
