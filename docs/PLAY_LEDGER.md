@@ -309,3 +309,9 @@ Pass: Speech models (quiet line, shared search, one surface per group), Text/Ima
 1. Show the reply while it streams (investigating).
 2. Maths in the answer bubble.
 3. Project Knowledge base tab: the same empty state; slider knob and labels.
+
+## Supervisor 05:10 — hand test 23 (build 24, head f8ba07e2e)
+Pass: the answer stays visible while it streams, through a web search and a mid-turn "Compacting…" (fix `f8ba07e2e` holds on device); maths reads "37 × 43 = 1591"; Model settings header Reset, white knob, bare values, "Thinking budget"; Knowledge base empty state; About one surface; bare Image star. Fail: compaction waits about 90 s on dots with no sense of progress; the Knowledge base empty line and document rows lack the 24px gutter; "Finding your answer" sat behind the composer for 10 s; Text tab rows still look like boxed cards.
+1. Compaction: progress or speed.
+2. Knowledge base gutter; one pill style.
+3. Keep the live turn's first line in view above the composer.
