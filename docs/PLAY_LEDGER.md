@@ -134,3 +134,13 @@ Each round: expected / found / root cause / change / commit / screenshots.
 2. Alive Surface, ListGroup and Pressable; LivingField (dot lattice, as desktop) and the candy primary pill.
 3. Move Home first (the first thing a new user sees), then Chats, New chat, Models; re-check dense Models rows on both phones.
 - Geist change confirmed on screen in both places; risk low (each changed style has one caller). Header clipping in the shots is the dev "Connect to Metro" banner, not the diff.
+
+## r08 alive Home (17:00)
+- **On the phone (`r08-alive-home/home-after-1.png`, before `r06-device-pass/01-home-dark.png`):** desktop's dot lattice with a breathing emerald light and echo behind Home (`LivingField`), the hero is desktop's candy pill, Gallery and feedback are one group, and groups let the field show through. Sent to Mac.
+- **Seam (Mac: "a few reused components"):** one `cardSurface` style now backs Card, ListGroup and the Models card; Pro's Sync card uses Card, so it follows with no Pro commit.
+
+## Supervisor 17:00
+1. Header and tab bar: drop the boxed icon and circle buttons; a translucent tab bar over the field.
+2. Clipboard and Sync into the row group; rows 44–52 px with smaller type.
+3. LivingField pauses when Home is out of focus or the app is in the background, sized to the screen; hero slimmer with an emerald halo so it is the brightest thing.
+- Risks: surfaceGlass on sheets that sit on `surface` reads faint; "Write to us" wraps to three lines.
