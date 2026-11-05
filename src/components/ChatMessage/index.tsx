@@ -317,6 +317,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   return (
     <TouchableOpacity
       testID={isUser ? 'user-message' : 'assistant-message'}
+      // Not one accessible block: that folded "Message actions" into the message's label, so a
+      // screen reader could not reach it as a button (hand test 39). The parts are read in order.
+      accessible={false}
       style={[
         styles.container,
         isUser ? styles.userContainer : styles.assistantContainer,

@@ -357,8 +357,13 @@ const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     // Quiet metadata, not emerald: colour never carries information (brand).
     color: colors.textMuted,
   },
+  // A 44 pt frame around the ••• glyph, pulled back so the meta row keeps its height.
   actionHint: {
-    padding: 4,
+    minWidth: 44,
+    minHeight: 44,
+    margin: -10,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   actionHintText: {
     ...TYPOGRAPHY.bodySmall,
