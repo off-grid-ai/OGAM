@@ -1,4 +1,5 @@
 import { listRowStyle } from '../components/ListGroup';
+import { cardSurface } from '../theme/surface';
 import type { ThemeColors, ThemeShadows } from '../theme/palettes';
 import { SPACING, TYPOGRAPHY } from '../constants';
 
@@ -6,19 +7,15 @@ import { SPACING, TYPOGRAPHY } from '../constants';
  * Remote Servers, on the same tokens as the rest of the app.
  *
  * Every text style here used to carry a hardcoded fontSize and no fontFamily, so all of it
- * rendered in the platform sans while the app around it is Menlo - which is why the screen read
- * as belonging to a different product. TYPOGRAPHY tokens carry the family, so using them fixes
- * the typeface and the size at once. Cards use the shared surface, border, and subtle
- * elevation so this screen has the same depth as the other settings screens.
+ * rendered in the platform sans while the rest of the app used its brand face. TYPOGRAPHY tokens
+ * carry the family, so using them fixes the typeface and the size at once. Cards use the shared
+ * card surface, so this screen has the same depth as the other settings screens.
  */
-export function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
+export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
+  // The one card surface (brand: translucent, hairline edge), not a shadowed box of its own.
   const card = {
+    ...cardSurface(colors),
     padding: SPACING.md,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    ...shadows.small,
   };
 
   return {
@@ -30,7 +27,7 @@ export function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
       flex: 1,
     },
     content: {
-      padding: SPACING.lg,
+      padding: SPACING.xl,
       paddingBottom: SPACING.xxl,
       gap: SPACING.md,
     },
