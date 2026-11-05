@@ -8,7 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../components/AliveScreen';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
@@ -77,7 +77,7 @@ export const ProjectEditScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']} testID="project-edit-screen">
+    <AliveScreen style={styles.container} testID="project-edit-screen">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoid}
@@ -146,7 +146,7 @@ export const ProjectEditScreen: React.FC = () => {
         </ScrollView>
       </KeyboardAvoidingView>
       <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 

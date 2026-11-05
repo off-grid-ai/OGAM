@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Linking, ScrollView, Image, StyleSheet } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../components/AliveScreen';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -24,7 +24,7 @@ export const AboutScreen: React.FC = () => {
   const focusTrigger = useFocusTrigger();
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <AliveScreen style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Icon name="arrow-left" size={20} color={colors.text} />
@@ -125,7 +125,7 @@ export const AboutScreen: React.FC = () => {
 
       {/* Pinned footer */}
       <MadeWithLove />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 

@@ -10,7 +10,7 @@ import {
 import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { LoadingDots } from '../components/LoadingDots';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../components/AliveScreen';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
@@ -254,7 +254,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']} testID="knowledge-base-screen">
+    <AliveScreen style={styles.container} testID="knowledge-base-screen">
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -331,6 +331,6 @@ export const KnowledgeBaseScreen: React.FC = () => {
           showsVerticalScrollIndicator={false}
         />
       )}
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
