@@ -436,7 +436,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   title: { ...TYPOGRAPHY.h2, color: colors.text, textAlign: 'left' as const },
   secondary: { ...TYPOGRAPHY.body, color: colors.textSecondary, textAlign: 'left' as const },
-  planGrid: { gap: SPACING.xs },
+  planGrid: { gap: SPACING.sm },
   planCard: {
     ...cardSurface(colors),
     gap: SPACING.xs,
