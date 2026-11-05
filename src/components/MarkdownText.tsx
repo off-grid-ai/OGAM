@@ -14,7 +14,18 @@ const chatMarkdownParser = MarkdownIt({ typographer: true, linkify: true });
  * Lookahead handles chains like 5*5*5*5 in a single pass.
  */
 export function preprocessMarkdown(text: string): string {
-  return preprocessChatMarkdown(text);
+  return dropDanglingBold(preprocessChatMarkdown(text));
+}
+
+/**
+ * A reply cut off mid-bold (Stop, or still streaming) ends with an unclosed `**`, which markdown
+ * shows as raw asterisks ("**Yamuna"). An odd count means the last marker never closes: drop it.
+ */
+export function dropDanglingBold(text: string): string {
+  const markers = text.match(/(?<!\\)\*\*/g);
+  if (!markers || markers.length % 2 === 0) return text;
+  const at = text.lastIndexOf('**');
+  return text.slice(0, at) + text.slice(at + 2);
 }
 
 /** Custom link rule — renders as inline Text so it wraps correctly inside list items */

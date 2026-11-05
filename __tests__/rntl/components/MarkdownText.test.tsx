@@ -165,3 +165,24 @@ describe('preprocessMarkdown', () => {
     );
   });
 });
+
+describe('dropDanglingBold (a reply cut off mid-bold)', () => {
+  const { dropDanglingBold } = require('../../../src/components/MarkdownText');
+  it('drops an unclosed bold marker', () => {
+    expect(dropDanglingBold('1. **Ganges**\n2. **Yamuna')).toBe('1. **Ganges**\n2. Yamuna');
+  });
+  it('keeps closed bold as it is', () => {
+    expect(dropDanglingBold('**Ganges** and **Yamuna**')).toBe('**Ganges** and **Yamuna**');
+  });
+  it('keeps text with no bold', () => {
+    expect(dropDanglingBold('No markers here.')).toBe('No markers here.');
+  });
+  it('renders without raw asterisks', () => {
+    const { render } = require('@testing-library/react-native');
+    const React = require('react');
+    const { MarkdownText } = require('../../../src/components/MarkdownText');
+    const view = render(React.createElement(MarkdownText, null, '2. **Yamuna'));
+    expect(view.queryByText(/\*\*/)).toBeNull();
+    expect(view.getByText(/Yamuna/)).toBeTruthy();
+  });
+});
