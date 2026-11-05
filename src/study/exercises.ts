@@ -108,6 +108,24 @@ function hash(s: string): number { let h = 0; for (let i = 0; i < s.length; i++)
 export interface Progress { box: number; due: number; attempts: number; correct: number; last?: boolean; saved?: unknown; /** The person's own note on why they got it wrong. */ note?: string }
 const DAYS = [0, 1, 2, 4, 8, 16];
 
+const MAX_BANK = 600;
+/**
+ * Keeps the saved questions from growing without limit (every drill press adds some, and they are all saved on the phone).
+ * Over the limit, the oldest questions you already know (last answer right, no note) go first, then the oldest of the rest.
+ * The questions just added are never dropped.
+ */
+export function pruneBank(bank: Record<string, Exercise>, progress: Record<string, Progress>, keep: string[]): { exercises: Record<string, Exercise>; progress?: Record<string, Progress> } {
+  const ids = Object.keys(bank);
+  if (ids.length <= MAX_BANK) return { exercises: bank };
+  const protectedIds = new Set(keep);
+  const known = (id: string) => progress[id]?.last === true && !progress[id]?.note;
+  const order = ids.filter((id) => !protectedIds.has(id)).sort((a, b) => Number(known(b)) - Number(known(a))); // stable: known first, then insertion order
+  const drop = new Set(order.slice(0, ids.length - MAX_BANK));
+  const exercises = Object.fromEntries(ids.filter((id) => !drop.has(id)).map((id) => [id, bank[id]]));
+  const kept = Object.fromEntries(Object.entries(progress).filter(([id]) => !drop.has(id)));
+  return { exercises, progress: kept };
+}
+
 interface ExerciseState {
   progress: Record<string, Progress>;
   /** Questions answered per day (YYYY-MM-DD), for the optional streak and daily goal. */
@@ -126,7 +144,7 @@ export const useExerciseStore = create<ExerciseState>()(persist((set) => ({
   progress: {}, exercises: {}, daily: {}, goal: { on: false, perDay: 10 },
   setGoal: (g) => set((st) => ({ goal: { ...st.goal, ...g } })),
   setNote: (id, note) => set((st) => ({ progress: { ...st.progress, [id]: { ...(st.progress[id] ?? { box: 0, due: 0, attempts: 0, correct: 0 }), note: note.slice(0, 400) } } })),
-  addSet: (s) => set((st) => ({ exercises: { ...st.exercises, ...Object.fromEntries(s.map((e) => [e.id, e])) } })),
+  addSet: (s) => set((st) => pruneBank({ ...st.exercises, ...Object.fromEntries(s.map((e) => [e.id, e])) }, st.progress, s.map((e) => e.id))),
   record: (id, correct, now = Date.now()) => set((st) => {
     const p = st.progress[id] ?? { box: 0, due: 0, attempts: 0, correct: 0 };
     const box = correct ? Math.min(DAYS.length - 1, p.box + 1) : 0;

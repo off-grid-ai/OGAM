@@ -24,8 +24,16 @@ export async function listBackups(): Promise<Backup[]> {
   return out;
 }
 
+let inflight: Promise<Backup | null> | null = null;
+
 /** Makes today's backup unless one was made in the last day (or `force`). Returns it, or null when nothing needed doing or there is nothing learned yet. */
-export async function autoBackup(opts: { force?: boolean; now?: string } = {}): Promise<Backup | null> {
+export function autoBackup(opts: { force?: boolean; now?: string } = {}): Promise<Backup | null> {
+  // Two study runs finishing close together must not both build a full export at once.
+  if (!inflight) inflight = makeBackup(opts).finally(() => { inflight = null; });
+  return inflight;
+}
+
+async function makeBackup(opts: { force?: boolean; now?: string }): Promise<Backup | null> {
   const now = opts.now ?? nowIso();
   const existing = await listBackups();
   if (!opts.force && existing[0] && Date.parse(now) - Date.parse(`${existing[0].day}T00:00:00Z`) < DAY) return null;

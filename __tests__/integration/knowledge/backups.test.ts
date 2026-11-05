@@ -67,3 +67,11 @@ it('puts every cycle report in one readable file, newest first', async () => {
   expect(text.match(/# Learning cycle /g)).toHaveLength(2);
   expect(text).toMatch(/Findings generated/);
 });
+
+it('builds one backup when two are asked for at once', async () => {
+  const a = device();
+  await learn(a);
+  const [x, y] = await Promise.all([a.backups.autoBackup({ now: '2026-11-05T10:00:00Z' }), a.backups.autoBackup({ now: '2026-11-05T10:00:01Z' })]);
+  expect(x).toEqual(y);
+  expect(await a.backups.listBackups()).toHaveLength(1);
+});

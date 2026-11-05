@@ -84,10 +84,11 @@ export interface RunOptions { shouldStop?: () => boolean; onProgress?: (doc: Sou
 
 /** Reads the PDF's text a few pages at a time and stores it page by page. Resumes where an earlier run stopped. */
 /** Replaces the text of pages with no text by what the vision model reads from their picture (when one is loaded). Returns the pages it filled. */
-async function readPagesByOcr(pdfPath: string, rows: PageRow[]): Promise<number[]> {
+async function readPagesByOcr(pdfPath: string, rows: PageRow[], shouldStop?: () => boolean): Promise<number[]> {
   if (!ocrAvailable()) return [];
   const done: number[] = [];
   for (const row of rows) {
+    if (shouldStop?.()) break; // Pause stops between pages; pages not read yet stay flagged and are picked up on a later run
     if (row.text.replace(/\s/g, '').length >= MIN_PAGE_CHARS) continue;
     try { const text = (await ocrPage(pdfPath, row.page - 1)).trim(); if (text.replace(/\s/g, '').length >= MIN_PAGE_CHARS) { row.text = text; done.push(row.page); } } catch { /* the page stays flagged */ }
   }
@@ -107,7 +108,7 @@ export async function extractDocument(sourceId: string, opts: RunOptions = {}): 
     if (!texts.length) throw new Error(`The PDF returned no pages at page ${start + 1}.`);
     const rows: PageRow[] = texts.map((text, i) => ({ page: start + i + 1, text }));
     await atomicWriteText(pagesFile(doc.hash, Math.floor(start / PAGES_PER_FILE) + 1), `${rows.map((r) => JSON.stringify(r)).join('\n')  }\n`);
-    const ocrDone = await readPagesByOcr(P.original(doc.hash), rows);
+    const ocrDone = await readPagesByOcr(P.original(doc.hash), rows, opts.shouldStop);
     const unreadable = rows.filter((r) => r.text.replace(/\s/g, '').length < MIN_PAGE_CHARS).map((r) => r.page);
     doc = await patchDocument(sourceId, (d) => {
       d.progress.pagesExtracted = start + texts.length;

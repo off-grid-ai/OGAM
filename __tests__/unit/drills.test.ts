@@ -108,3 +108,20 @@ describe('timed exam, flashcards, notes and streaks', () => {
     expect(useExerciseStore.getState().goal).toEqual({ on: false, perDay: 10 });
   });
 });
+
+import { pruneBank } from '../../src/study/exercises';
+describe('question bank size', () => {
+  it('stays under the limit, dropping known questions first and never the ones just added', () => {
+    const bank: Record<string, any> = {}; const progress: Record<string, any> = {};
+    for (let i = 0; i < 650; i++) { bank[`q${i}`] = { id: `q${i}`, kind: 'calc', prompt: 'p', answer: 1 }; if (i % 2 === 0) progress[`q${i}`] = { box: 3, due: 0, attempts: 3, correct: 3, last: true }; }
+    progress.q1 = { box: 0, due: 0, attempts: 1, correct: 0, last: false }; // a miss: kept
+    progress.q0 = { box: 3, due: 0, attempts: 3, correct: 3, last: true, note: 'my note' }; // a note: kept
+    const out = pruneBank(bank, progress, ['q2']);
+    expect(Object.keys(out.exercises)).toHaveLength(600);
+    expect(out.exercises.q1).toBeDefined();
+    expect(out.exercises.q0).toBeDefined();
+    expect(out.exercises.q2).toBeDefined(); // just added
+    expect(Object.keys(out.progress ?? {}).every((id) => out.exercises[id])).toBe(true);
+    expect(pruneBank({ a: bank.q0 }, {}, []).exercises).toEqual({ a: bank.q0 });
+  });
+});

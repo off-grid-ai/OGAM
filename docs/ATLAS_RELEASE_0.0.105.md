@@ -569,6 +569,9 @@ What changed:
   model. A second, short-prompt check decides whether to use the first-word workaround: prompts under about 192 tokens run
   once first so the first word comes from the engine's single-token step; it is switched on only if the same check passes with
   it, and never for long prompts. The remembered verdict records the batch size and CPU-kernel setting.
+- 0.0.143: review fixes. The saved practice questions are capped at 600 (known questions go first; misses, questions with a note and the
+  ones just added stay), because every drill press added questions that were saved on the phone for good. Two automatic backups
+  asked for at once now build one. Pausing a scanned PDF now stops between pages instead of finishing every page first.
 - 0.0.142: Practice gets: bond price, lease liability and bond interest drills (checked against an independent recalculation); pick
   one drill type on its own; a timed exam (20 questions, 30 minutes, no feedback until the end, then a score by topic and a button to
   review the misses; blanks count as wrong); flashcards from missed questions (tap for the answer, "Got it" or "Again"); a note on why
