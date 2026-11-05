@@ -19,11 +19,11 @@ afterEach(() => {
   restoreBuildFlavor();
 });
 
-it('a model on this phone: the empty chat says it is all processed on the device', async () => {
+it('a model on this phone: the empty chat says nothing you type leaves this phone', async () => {
   app = await launchApp({ release: false });
   await passOnboarding(app, false);
   await openNewChat(app);
-  await app.view.findByText(/All processing happens on your device/);
+  await app.view.findByText(/Nothing you type leaves this phone/);
 }, 60_000);
 
 it('a model on a paired computer: the empty chat says it runs on a remote server, never "on your device"', async () => {
@@ -42,5 +42,5 @@ it('a model on a paired computer: the empty chat says it runs on a remote server
   rtl.fireEvent.press(await view.findByTestId('new-chat-button', {}, { timeout: 5000 }));
   await view.findByTestId('chat-input');
   await view.findByText(/runs on a remote server/);
-  expect(view.queryByText(/All processing happens on your device/)).toBeNull();
+  expect(view.queryByText(/Nothing you type leaves this phone/)).toBeNull();
 }, 60_000);
