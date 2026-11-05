@@ -105,7 +105,7 @@ export function groundExercises(raw: unknown[], chunks: SourceChunk[], topic?: s
 function hash(s: string): number { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }
 
 // ---------------------------------------------------------------- progress, review and difficulty
-export interface Progress { box: number; due: number; attempts: number; correct: number; last?: boolean; saved?: unknown; /** The person's own note on why they got it wrong. */ note?: string }
+export interface Progress { box: number; due: number; attempts: number; correct: number; last?: boolean; saved?: unknown; /** Marked in the current round; the typed answer stays on screen until the question is asked again. */ answered?: boolean; /** The person's own note on why they got it wrong. */ note?: string }
 const DAYS = [0, 1, 2, 4, 8, 16];
 
 const MAX_BANK = 600;
@@ -133,6 +133,8 @@ interface ExerciseState {
   goal: { on: boolean; perDay: number };
   setGoal: (g: Partial<{ on: boolean; perDay: number }>) => void;
   setNote: (id: string, note: string) => void;
+  /** Starts these questions afresh: wipes the typed answer and the "marked" flag (scores and review dates stay). */
+  freshen: (ids: string[]) => void;
   exercises: Record<string, Exercise>;
   addSet: (set: Exercise[]) => void;
   record: (id: string, correct: boolean, now?: number) => void;
@@ -142,6 +144,7 @@ interface ExerciseState {
 }
 export const useExerciseStore = create<ExerciseState>()(persist((set) => ({
   progress: {}, exercises: {}, daily: {}, goal: { on: false, perDay: 10 },
+  freshen: (ids) => set((st) => ({ progress: Object.fromEntries(Object.entries(st.progress).map(([id, p]) => [id, ids.includes(id) ? { ...p, saved: undefined, answered: false } : p])) })),
   setGoal: (g) => set((st) => ({ goal: { ...st.goal, ...g } })),
   setNote: (id, note) => set((st) => ({ progress: { ...st.progress, [id]: { ...(st.progress[id] ?? { box: 0, due: 0, attempts: 0, correct: 0 }), note: note.slice(0, 400) } } })),
   addSet: (s) => set((st) => pruneBank({ ...st.exercises, ...Object.fromEntries(s.map((e) => [e.id, e])) }, st.progress, s.map((e) => e.id))),
@@ -149,7 +152,7 @@ export const useExerciseStore = create<ExerciseState>()(persist((set) => ({
     const p = st.progress[id] ?? { box: 0, due: 0, attempts: 0, correct: 0 };
     const box = correct ? Math.min(DAYS.length - 1, p.box + 1) : 0;
     const day = new Date(now).toISOString().slice(0, 10);
-    return { progress: { ...st.progress, [id]: { ...p, box, due: now + DAYS[box] * 86400000, attempts: p.attempts + 1, correct: p.correct + (correct ? 1 : 0), last: correct, saved: undefined } }, daily: { ...st.daily, [day]: (st.daily[day] ?? 0) + 1 } };
+    return { progress: { ...st.progress, [id]: { ...p, box, due: now + DAYS[box] * 86400000, attempts: p.attempts + 1, correct: p.correct + (correct ? 1 : 0), last: correct, answered: true } }, daily: { ...st.daily, [day]: (st.daily[day] ?? 0) + 1 } };
   }),
   saveDraft: (id, draft) => set((st) => ({ progress: { ...st.progress, [id]: { ...(st.progress[id] ?? { box: 0, due: 0, attempts: 0, correct: 0 }), saved: draft } } })),
   clearSet: (topic) => set((st) => {

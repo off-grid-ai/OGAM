@@ -74,7 +74,7 @@ type AppSettings = {
    *  'conservative' = one model at a time; 'balanced' = co-reside within budget;
    *  'aggressive' = co-reside with a larger RAM commitment. */
   modelLoadingMode?: 'conservative' | 'balanced' | 'aggressive';
-  cacheType: CacheType; showGenerationDetails: boolean; enabledTools: string[];
+  cacheType: CacheType; showGenerationDetails: boolean; enabledTools: string[]; studyToolsAdded?: boolean;
   thinkingEnabled: boolean;
   /** Atlas: how much to think when thinking is on. */
   thinkingLevel?: 'low' | 'medium' | 'high';
@@ -234,6 +234,9 @@ interface AppState {
   setLoadedSettings: (settings: Partial<AppSettings> | null) => void;
 }
 
+/** Tools that help teach: exact maths, science look-ups, planner/rubric/references, and pictures. They are only sent to the model when the message needs them. */
+export const STUDY_TOOL_IDS = ['study_math', 'science_data', 'study_helpers', 'find_image'];
+
 const DEFAULT_CHECKLIST: OnboardingChecklist = {
   downloadedModel: false, loadedModel: false, sentMessage: false,
   triedImageGen: false, exploredSettings: false, createdProject: false,
@@ -271,7 +274,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   modelLoadingMode: 'balanced',
   cacheType: 'q8_0' as CacheType,
   showGenerationDetails: false,
-  enabledTools: ['web_search', 'read_url', 'search_knowledge_base'],
+  enabledTools: ['web_search', 'read_url', 'search_knowledge_base', ...STUDY_TOOL_IDS],
   thinkingEnabled: false,
   liteRTBackend: 'gpu',
   liteRTTemperature: 0.7,
@@ -280,6 +283,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
 };
 
 function migrateEnabledTools(merged: any): void {
+  // Once: older installs get the study tools too, so no subject needs choosing for the tutor to calculate and look things up exactly.
+  if (merged.settings?.enabledTools && !merged.settings.studyToolsAdded) {
+    const have: string[] = merged.settings.enabledTools;
+    merged.settings = { ...merged.settings, enabledTools: [...have, ...STUDY_TOOL_IDS.filter((t) => !have.includes(t))], studyToolsAdded: true };
+  }
   if (merged.settings?.enabledTools && !merged.settings.enabledTools.includes('search_knowledge_base')) {
     merged.settings = { ...merged.settings, enabledTools: [...merged.settings.enabledTools, 'search_knowledge_base'] };
   }

@@ -86,9 +86,9 @@ android {
         // overrides the library minimum and AtlasVulkanModule refuses to load it below API 29.
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1784144548
+        versionCode 1784144549
         // CI passes -PatlasBuild=<run number>, so the version shown in the app says which build it is.
-        versionName "0.0.143" + (project.hasProperty('atlasBuild') ? " (build ${project.property('atlasBuild')})" : "")
+        versionName "0.0.144" + (project.hasProperty('atlasBuild') ? " (build ${project.property('atlasBuild')})" : "")
     }
     signingConfigs {
         debug {

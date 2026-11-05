@@ -3,23 +3,32 @@
  * construction, so no model and no documents are needed and the key can never be wrong. Same seed, same drill.
  */
 import type { Exercise, TableRow } from './exercises';
-import { describe as describeNumbers, regression, sampleSize, tvm } from './mathTools';
+import { convertUnits, describe as describeNumbers, regression, sampleSize, tvm } from './mathTools';
+import { molarMass } from './science';
 
 export type DrillKind =
   | 'balance-sheet' | 'journal-entry' | 'net-income' | 'depreciation' | 'current-ratio'
   | 'compound-solve' | 'loan-payment' | 'effective-rate' | 'inventory-cost' | 'double-declining' | 'ratio' | 'break-even' | 'npv'
   | 'income-statement' | 'cash-flow' | 'trial-balance'
   | 'bond-price' | 'lease-liability' | 'bond-interest'
-  | 'std-dev' | 'confidence-interval' | 't-statistic' | 'sample-size' | 'regression-slope';
+  | 'std-dev' | 'confidence-interval' | 't-statistic' | 'sample-size' | 'regression-slope'
+  | 'linear-equation' | 'quadratic-roots' | 'system-equations' | 'fraction-sum' | 'percent-change' | 'percent-of' | 'circle-area' | 'rectangle-area' | 'pythagoras'
+  | 'gcd-lcm' | 'line-slope' | 'mean-of-list' | 'unit-conversion' | 'combinations'
+  | 'speed' | 'force' | 'kinetic-energy' | 'ohms-law' | 'density' | 'ideal-gas' | 'molar-mass' | 'moles-from-grams' | 'ph-of-acid';
 export const DRILL_KINDS: DrillKind[] = [
   'balance-sheet', 'journal-entry', 'net-income', 'depreciation', 'current-ratio',
   'compound-solve', 'loan-payment', 'effective-rate', 'inventory-cost', 'double-declining', 'ratio', 'break-even', 'npv',
   'income-statement', 'cash-flow', 'trial-balance', 'bond-price', 'lease-liability', 'bond-interest',
   'std-dev', 'confidence-interval', 't-statistic', 'sample-size', 'regression-slope',
+  'linear-equation', 'quadratic-roots', 'system-equations', 'fraction-sum', 'percent-change', 'percent-of', 'circle-area', 'rectangle-area', 'pythagoras',
+  'gcd-lcm', 'line-slope', 'mean-of-list', 'unit-conversion', 'combinations',
+  'speed', 'force', 'kinetic-energy', 'ohms-law', 'density', 'ideal-gas', 'molar-mass', 'moles-from-grams', 'ph-of-acid',
 ];
 /** Drills for the doctoral research courses, and for the accounting courses. */
 export const STATS_DRILLS: DrillKind[] = ['std-dev', 'confidence-interval', 't-statistic', 'sample-size', 'regression-slope'];
-export const ACCOUNTING_DRILLS: DrillKind[] = DRILL_KINDS.filter((k) => !STATS_DRILLS.includes(k));
+export const MATH_DRILLS: DrillKind[] = ['linear-equation', 'quadratic-roots', 'system-equations', 'fraction-sum', 'percent-change', 'percent-of', 'circle-area', 'rectangle-area', 'pythagoras', 'gcd-lcm', 'line-slope', 'mean-of-list', 'unit-conversion', 'combinations'];
+export const SCIENCE_DRILLS: DrillKind[] = ['speed', 'force', 'kinetic-energy', 'ohms-law', 'density', 'ideal-gas', 'molar-mass', 'moles-from-grams', 'ph-of-acid'];
+export const ACCOUNTING_DRILLS: DrillKind[] = DRILL_KINDS.filter((k) => !STATS_DRILLS.includes(k) && !MATH_DRILLS.includes(k) && !SCIENCE_DRILLS.includes(k));
 
 /** Small deterministic generator (mulberry32). */
 function rng(seed: number) {
@@ -293,6 +302,115 @@ function bondInterest(r: () => number, id: string): Exercise {
   return calc(id, BONDS, `A bond is issued with a carrying amount of ${fmt(carrying)} and a market rate of ${pct(market)}. Using the effective interest method, what is interest expense for the first year?`, r2(carrying * market), `${fmt(carrying)} x ${pct(market)}.`, 0.5, '$');
 }
 
+const MATH = 'Maths';
+const SCI = 'Science';
+const pick = <T,>(r: () => number, xs: T[]): T => xs[Math.floor(r() * xs.length)];
+const int = (r: () => number, lo: number, hi: number) => lo + Math.floor(r() * (hi - lo + 1));
+
+function linearEquation(r: () => number, id: string): Exercise {
+  const x = int(r, -9, 12); const a = pick(r, [2, 3, 4, 5, 6, 7]); const b = int(r, -15, 15);
+  return calc(id, MATH, `Solve for x: ${a}x ${b < 0 ? '-' : '+'} ${Math.abs(b)} = ${a * x + b}`, x, `Subtract ${b} from both sides, then divide by ${a}: x = ${x}.`, 0.001);
+}
+function quadraticRoots(r: () => number, id: string): Exercise {
+  const p = int(r, -6, 8); let q = int(r, -6, 8); if (q === p) q += 1;
+  const sum = p + q; const prod = p * q;
+  return calc(id, MATH, `Find the larger root of x^2 ${sum === 0 ? '' : `${-sum < 0 ? '-' : '+'} ${Math.abs(sum)}x `}${prod < 0 ? '-' : '+'} ${Math.abs(prod)} = 0`, Math.max(p, q), `It factors as (x - ${p})(x - ${q}) = 0, so the roots are ${p} and ${q}.`, 0.001);
+}
+function systemEquations(r: () => number, id: string): Exercise {
+  const x = int(r, -5, 8); const y = int(r, -5, 8); const a1 = int(r, 1, 4); const b1 = int(r, 1, 4); const a2 = int(r, 1, 4); let b2 = -int(r, 1, 4);
+  if (a1 * b2 - a2 * b1 === 0) b2 -= 1;
+  return calc(id, MATH, `Solve the system: ${a1}x + ${b1}y = ${a1 * x + b1 * y} and ${a2}x - ${Math.abs(b2)}y = ${a2 * x + b2 * y}. What is x?`, x, `Eliminate y or substitute; x = ${x}, y = ${y}.`, 0.001);
+}
+function fractionSum(r: () => number, id: string): Exercise {
+  const a = int(r, 1, 5); const b = pick(r, [2, 3, 4, 5, 6, 8]); const c = int(r, 1, 5); const d = pick(r, [2, 3, 4, 5, 6, 8]);
+  return calc(id, MATH, `What is ${a}/${b} + ${c}/${d}? Give a decimal to 3 places.`, Math.round(((a / b) + (c / d)) * 1000) / 1000, `Common denominator ${b * d}: (${a * d} + ${c * b}) / ${b * d}.`, 0.002);
+}
+function percentChange(r: () => number, id: string): Exercise {
+  const from = int(r, 20, 400); const to = Math.max(1, Math.round(from * (0.5 + r())));
+  return calc(id, MATH, `A price goes from ${from} to ${to}. What is the percent change (2 decimals; a fall is negative)?`, r2(((to - from) / from) * 100), `(${to} - ${from}) / ${from} x 100.`, 0.01, '%');
+}
+function percentOf(r: () => number, id: string): Exercise {
+  const pc = pick(r, [5, 8, 12, 15, 20, 25, 35, 45, 60, 75]); const v = int(r, 40, 900);
+  return calc(id, MATH, `What is ${pc}% of ${v}?`, r2((pc / 100) * v), `${pc}/100 x ${v}.`, 0.01);
+}
+function circleArea(r: () => number, id: string): Exercise {
+  const rad = int(r, 2, 15);
+  return calc(id, MATH, `A circle has radius ${rad}. What is its area? (2 decimals)`, r2(Math.PI * rad * rad), `pi x ${rad}^2.`, 0.02);
+}
+function rectangleArea(r: () => number, id: string): Exercise {
+  const w = int(r, 3, 25); const h = int(r, 3, 25); const asked = pick(r, ['area', 'perimeter']);
+  return calc(id, MATH, `A rectangle is ${w} by ${h}. What is its ${asked}?`, asked === 'area' ? w * h : 2 * (w + h), asked === 'area' ? `${w} x ${h}.` : `2 x (${w} + ${h}).`, 0.001);
+}
+function pythagoras(r: () => number, id: string): Exercise {
+  const [a, b, c] = pick(r, [[3, 4, 5], [5, 12, 13], [8, 15, 17], [7, 24, 25], [20, 21, 29]]);
+  return calc(id, MATH, `A right triangle has legs ${a} and ${b}. How long is the hypotenuse?`, c, `sqrt(${a}^2 + ${b}^2) = ${c}.`, 0.001);
+}
+const gcdOf = (x: number, y: number): number => (y === 0 ? x : gcdOf(y, x % y));
+function gcdLcm(r: () => number, id: string): Exercise {
+  const g = int(r, 2, 9); const a = g * int(r, 2, 9); let b = g * int(r, 2, 9); if (a === b) b += g;
+  const gg = gcdOf(a, b);
+  const asked = pick(r, ['greatest common divisor', 'least common multiple']);
+  return calc(id, MATH, `What is the ${asked} of ${a} and ${b}?`, asked.startsWith('greatest') ? gg : (a * b) / gg, `Their greatest common divisor is ${gg}; the least common multiple is ${(a * b) / gg}.`, 0.001);
+}
+function lineSlope(r: () => number, id: string): Exercise {
+  const x1 = int(r, -5, 5); const y1 = int(r, -5, 5); const dx = int(r, 1, 6); const m = pick(r, [-3, -2, -1, 1, 2, 3, 4]);
+  return calc(id, MATH, `What is the slope of the line through (${x1}, ${y1}) and (${x1 + dx}, ${y1 + m * dx})?`, m, `(${y1 + m * dx} - ${y1}) / (${x1 + dx} - ${x1}).`, 0.001);
+}
+function meanOfList(r: () => number, id: string): Exercise {
+  const xs = Array.from({ length: 6 }, () => int(r, 4, 60)); const d = describeNumbers(xs); const asked = pick(r, ['mean', 'median']);
+  return calc(id, MATH, `What is the ${asked} of ${xs.join(', ')}? (2 decimals)`, asked === 'mean' ? r2(d.mean as number) : r2(d.median as number), `Mean ${d.mean}, median ${d.median}.`, 0.02);
+}
+function unitConversion(r: () => number, id: string): Exercise {
+  const pairs: Array<[string, string, string, string]> = [['km', 'mi', 'kilometres', 'miles'], ['kg', 'lb', 'kilograms', 'pounds'], ['l', 'gal', 'litres', 'US gallons'], ['ft', 'm', 'feet', 'metres'], ['in', 'cm', 'inches', 'centimetres']];
+  const [from, to, fromName, toName] = pick(r, pairs); const v = int(r, 5, 200);
+  return calc(id, MATH, `Convert ${v} ${fromName} to ${toName} (2 decimals).`, r2(convertUnits(v, from, to)), `Multiply by the conversion factor for ${fromName} to ${toName}.`, 0.05);
+}
+function combinationsDrill(r: () => number, id: string): Exercise {
+  const n = int(r, 5, 12); const k = int(r, 2, 4); let c = 1; for (let i = 1; i <= k; i++) c = (c * (n - i + 1)) / i;
+  return calc(id, MATH, `How many ways can you choose ${k} items from ${n}, order not mattering?`, Math.round(c), `${n}! / (${k}! x ${n - k}!) = ${Math.round(c)}.`, 0.001);
+}
+
+function speedDrill(r: () => number, id: string): Exercise {
+  const v = int(r, 4, 30); const t = int(r, 5, 90);
+  return calc(id, SCI, `A cyclist rides at ${v} m/s for ${t} seconds. How far does she go, in metres?`, v * t, `distance = speed x time = ${v} x ${t}.`, 0.01, 'm');
+}
+function forceDrill(r: () => number, id: string): Exercise {
+  const m = int(r, 2, 80); const a = r2(1 + r() * 8);
+  return calc(id, SCI, `What force is needed to give a ${m} kg object an acceleration of ${a} m/s^2?`, r2(m * a), 'F = m x a.', 0.02, 'N');
+}
+function kineticEnergy(r: () => number, id: string): Exercise {
+  const m = int(r, 2, 60); const v = int(r, 2, 25);
+  return calc(id, SCI, `What is the kinetic energy of a ${m} kg mass moving at ${v} m/s?`, r2(0.5 * m * v * v), `KE = 1/2 x ${m} x ${v}^2.`, 0.05, 'J');
+}
+function ohmsLaw(r: () => number, id: string): Exercise {
+  const i = int(r, 1, 9); const rr = int(r, 2, 60); const asked = pick(r, ['voltage', 'current']);
+  return asked === 'voltage'
+    ? calc(id, SCI, `A ${rr} ohm resistor carries ${i} A. What is the voltage across it?`, rr * i, 'V = I x R.', 0.01, 'V')
+    : calc(id, SCI, `${rr * i} V is applied across a ${rr} ohm resistor. What current flows?`, i, 'I = V / R.', 0.01, 'A');
+}
+function densityDrill(r: () => number, id: string): Exercise {
+  const vol = int(r, 5, 80); const dens = r2(0.5 + r() * 12);
+  return calc(id, SCI, `A sample has volume ${vol} cm^3 and mass ${r2(vol * dens)} g. What is its density?`, dens, 'density = mass / volume.', 0.02, 'g/cm^3');
+}
+function idealGas(r: () => number, id: string): Exercise {
+  const n = r2(0.5 + r() * 3); const t = int(r, 250, 400); const v = r2(5 + r() * 40);
+  const p = (n * 8.314462618 * t) / (v / 1000) / 1000;
+  return calc(id, SCI, `${n} mol of an ideal gas is at ${t} K in ${v} litres. What is its pressure in kPa? (R = 8.314 J/mol/K)`, r2(p), 'P = nRT / V, with V in cubic metres.', Math.max(0.5, p * 0.005), 'kPa');
+}
+const FORMULAS = ['H2O', 'CO2', 'NaCl', 'CaCO3', 'C6H12O6', 'H2SO4', 'Ca(OH)2', 'NH3', 'Mg(NO3)2', 'Al2O3', 'C2H5OH', 'KMnO4'];
+function molarMassDrill(r: () => number, id: string): Exercise {
+  const f = pick(r, FORMULAS); const m = molarMass(f);
+  return calc(id, SCI, `What is the molar mass of ${f}? (g/mol, 1 decimal; use the periodic table)`, r2(m.mass), `Add the atomic masses of each atom: ${Object.entries(m.counts).map(([e, c]) => `${c} x ${e}`).join(', ')}.`, 0.15, 'g/mol');
+}
+function molesFromGrams(r: () => number, id: string): Exercise {
+  const f = pick(r, FORMULAS); const g = int(r, 5, 200); const m = molarMass(f).mass;
+  return calc(id, SCI, `How many moles are in ${g} g of ${f}? (2 decimals)`, r2(g / m), `moles = mass / molar mass = ${g} / ${m}.`, 0.02, 'mol');
+}
+function phOfAcid(r: () => number, id: string): Exercise {
+  const exp = int(r, 1, 6); const mant = pick(r, [1, 2, 5]); const c = mant * 10 ** -exp;
+  return calc(id, SCI, `What is the pH of a ${c} mol/L solution of a strong monoprotic acid? (2 decimals)`, r2(-Math.log10(c)), 'pH = -log10[H+].', 0.02);
+}
+
 const sample = (r: () => number, n: number, lo: number, hi: number) => Array.from({ length: n }, () => Math.round(lo + r() * (hi - lo)));
 const RS = 'Research statistics';
 
@@ -336,6 +454,9 @@ const MAKERS: Record<DrillKind, (r: () => number, id: string) => Exercise> = {
   'compound-solve': compoundSolve, 'loan-payment': loanPayment, 'effective-rate': effectiveRate, 'inventory-cost': inventoryCost, 'double-declining': doubleDeclining,
   'bond-price': bondPrice, 'lease-liability': leaseLiability, 'bond-interest': bondInterest,
   ratio: ratioDrill, 'break-even': breakEven, npv, 'income-statement': incomeStatement, 'cash-flow': cashFlow, 'trial-balance': trialBalance,
+  'linear-equation': linearEquation, 'quadratic-roots': quadraticRoots, 'system-equations': systemEquations, 'fraction-sum': fractionSum, 'percent-change': percentChange, 'percent-of': percentOf,
+  'circle-area': circleArea, 'rectangle-area': rectangleArea, pythagoras, 'gcd-lcm': gcdLcm, 'line-slope': lineSlope, 'mean-of-list': meanOfList, 'unit-conversion': unitConversion, combinations: combinationsDrill,
+  speed: speedDrill, force: forceDrill, 'kinetic-energy': kineticEnergy, 'ohms-law': ohmsLaw, density: densityDrill, 'ideal-gas': idealGas, 'molar-mass': molarMassDrill, 'moles-from-grams': molesFromGrams, 'ph-of-acid': phOfAcid,
   'std-dev': stdDev, 'confidence-interval': confidenceInterval, 't-statistic': tStatistic, 'sample-size': sampleSizeDrill, 'regression-slope': regressionSlope,
 };
 
@@ -357,9 +478,37 @@ export const DRILL_LABELS: Record<DrillKind, string> = {
   ratio: 'Financial ratios', 'break-even': 'Break-even', npv: 'Net present value', 'income-statement': 'Income statement', 'cash-flow': 'Cash flow statement', 'trial-balance': 'Trial balance',
   'bond-price': 'Bond price', 'lease-liability': 'Lease liability', 'bond-interest': 'Bond interest expense',
   'std-dev': 'Standard deviation', 'confidence-interval': 'Margin of error', 't-statistic': 't statistic', 'sample-size': 'Sample size', 'regression-slope': 'Regression slope',
+  'linear-equation': 'Linear equations', 'quadratic-roots': 'Quadratic equations', 'system-equations': 'Pairs of equations', 'fraction-sum': 'Adding fractions', 'percent-change': 'Percent change', 'percent-of': 'Percent of a number',
+  'circle-area': 'Area of a circle', 'rectangle-area': 'Area and perimeter', pythagoras: 'Pythagoras', 'gcd-lcm': 'Common divisors and multiples', 'line-slope': 'Slope of a line', 'mean-of-list': 'Mean and median',
+  'unit-conversion': 'Unit conversion', combinations: 'Combinations',
+  speed: 'Speed and distance', force: 'Force and acceleration', 'kinetic-energy': 'Kinetic energy', 'ohms-law': 'Ohm\'s law', density: 'Density', 'ideal-gas': 'Ideal gas law',
+  'molar-mass': 'Molar mass', 'moles-from-grams': 'Moles from grams', 'ph-of-acid': 'pH of an acid',
 };
 
 const KEYWORDS: Array<[DrillKind, RegExp]> = [
+  ['linear-equation', /linear equation|one.step|two.step|solve for x|algebra basics/],
+  ['quadratic-roots', /quadratic|factoring|polynomial/],
+  ['system-equations', /system of equations|simultaneous|pairs of equations/],
+  ['fraction-sum', /fraction/],
+  ['percent-change', /percent change|percentage change|increase and decrease/],
+  ['percent-of', /percent(age)? of|percentages?/],
+  ['circle-area', /circle|circumference/],
+  ['rectangle-area', /perimeter|area of|rectangle/],
+  ['pythagoras', /pythag|right triangle|hypotenuse/],
+  ['gcd-lcm', /greatest common|least common|gcd|lcm|divisib|multiples/],
+  ['line-slope', /slope|gradient|linear graph|coordinate/],
+  ['mean-of-list', /mean|median|average|data set/],
+  ['unit-conversion', /unit conversion|convert|metric|imperial/],
+  ['combinations', /combination|permutation|counting|choose/],
+  ['speed', /speed|velocity|distance|motion|kinematic/],
+  ['force', /force|newton|acceleration/],
+  ['kinetic-energy', /kinetic|energy|work and power/],
+  ['ohms-law', /ohm|circuit|voltage|current|resistance|electric/],
+  ['density', /density/],
+  ['ideal-gas', /ideal gas|gas law|pressure/],
+  ['molar-mass', /molar mass|molecular (weight|mass)|formula mass/],
+  ['moles-from-grams', /mole|stoichiometr/],
+  ['ph-of-acid', /\bph\b|acid|base|logarithm/],
   ['balance-sheet', /balance sheet|accounting equation|assets.*liabilities/],
   ['journal-entry', /journal|debit|credit|double.entry/],
   ['net-income', /net income|profit and loss|p&l/],

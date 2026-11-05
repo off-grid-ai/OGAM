@@ -21,7 +21,7 @@ export const PracticeScreen: React.FC = () => {
   const { projectId } = useRoute<any>().params as { projectId: string };
   const { colors } = useTheme();
   const project = useProjectStore((s) => s.projects.find((p) => p.id === projectId));
-  const { exercises, progress, daily, goal, addSet, record, saveDraft, setNote: saveNote, setGoal } = useExerciseStore();
+  const { exercises, progress, daily, goal, addSet, record, saveDraft, freshen, setNote: saveNote, setGoal } = useExerciseStore();
   const [topic, setTopic] = useState('');
   const [busy, setBusy] = useState(false);
   const [queue, setQueue] = useState<Exercise[]>([]);
@@ -37,16 +37,17 @@ export const PracticeScreen: React.FC = () => {
   const scores = topicScores(all, progress);
   const today = new Date().toISOString().slice(0, 10);
 
+  const queueUp = (list: Exercise[]) => { freshen(list.map((e) => e.id)); setQueue(list); };
   const make = async () => {
     setBusy(true); setNote('');
     try {
       const r = await generatePractice(projectId, topic);
       setNote(`${r.added} questions added${r.dropped ? `, ${r.dropped} skipped (${r.reasons.join(', ')})` : ''}.`);
-      setQueue(practiceSet(Object.values(useExerciseStore.getState().exercises), useExerciseStore.getState().progress, { topic: topic.trim() || undefined }));
+      queueUp(practiceSet(Object.values(useExerciseStore.getState().exercises), useExerciseStore.getState().progress, { topic: topic.trim() || undefined }));
     } catch (e: any) { Alert.alert('Could not make questions', String(e?.message || e)); } finally { setBusy(false); }
   };
-  const drills = (kinds: DrillKind[]) => { const set = makeDrillSet(8, Date.now() % 100000, kinds); addSet(set); setVerdict(undefined); setNote(''); setPickDrill(false); setQueue(set); };
-  const start = (t?: string) => { setVerdict(undefined); setQueue(practiceSet(all, progress, { topic: t })); if (!all.length) setNote('No questions yet. Make some from your documents.'); };
+  const drills = (kinds: DrillKind[]) => { const set = makeDrillSet(8, Date.now() % 100000, kinds); addSet(set); setVerdict(undefined); setNote(''); setPickDrill(false); queueUp(set); };
+  const start = (t?: string) => { setVerdict(undefined); queueUp(practiceSet(all, progress, { topic: t })); if (!all.length) setNote('No questions yet. Make some from your documents.'); };
   const value = current ? progress[current.id]?.saved : undefined;
   const submit = () => { if (!current) return; const v = check(current, value); setVerdict(v); record(current.id, v.correct); };
   const next = () => { setVerdict(undefined); setQueue((q) => q.slice(1)); };
@@ -64,7 +65,7 @@ export const PracticeScreen: React.FC = () => {
   }, [exam, record]);
   const answersRef = React.useRef<Record<string, unknown>>({});
   answersRef.current = answers;
-  const reviewMisses = () => { if (!result) return; setQueue(result.wrong.map((id) => exercises[id]).filter(Boolean)); setResult(null); };
+  const reviewMisses = () => { if (!result) return; queueUp(result.wrong.map((id) => exercises[id]).filter(Boolean)); setResult(null); };
   const startCards = () => { const missed = missedExercises(all, progress); if (!missed.length) { setNote('Nothing missed yet, so no flashcards.'); return; } setCards(missed); };
 
   const inRun = !!current;

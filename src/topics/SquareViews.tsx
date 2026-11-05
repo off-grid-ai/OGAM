@@ -8,7 +8,8 @@ import { editDistance, shuffle } from '../study/games/logic';
 import { gradeAnswer } from './service';
 import { starsForShare, type SquareContent } from './formats';
 import { Answer } from '../components/ExerciseAnswer';
-import { check, type Verdict } from '../study/exercises';
+import { PeriodicView } from './PeriodicView';
+import { check, useExerciseStore, type Verdict } from '../study/exercises';
 
 type Of<K extends SquareContent['kind']> = Extract<SquareContent, { kind: K }>;
 interface ViewProps<K extends SquareContent['kind']> { content: Of<K>; onDone: (stars: 1 | 2 | 3) => void }
@@ -461,28 +462,39 @@ export function DictationView({ content, onDone }: ViewProps<'dictation'>) {
   );
 }
 
-/** Exact drills: made and marked by the app, so the answer key is always right. */
+/**
+ * Exact drills: made and marked by the app, so the answer key is always right. Typed answers are kept as you go and finished questions
+ * are remembered, so leaving the square and coming back picks up where you were. Results also feed the Practice review.
+ */
 export function DrillView({ content, onDone }: ViewProps<'drill'>) {
   const t = useText();
-  const [i, setI] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, unknown>>({});
+  const { progress, saveDraft, record, addSet, freshen } = useExerciseStore();
+  const [firstOpen] = useState(() => {
+    const open = content.exercises.findIndex((e) => !useExerciseStore.getState().progress[e.id]?.answered);
+    return open < 0 ? 0 : open; // all marked before: a replay, which starts fresh
+  });
+  React.useEffect(() => {
+    addSet(content.exercises);
+    if (content.exercises.every((e) => useExerciseStore.getState().progress[e.id]?.answered)) freshen(content.exercises.map((e) => e.id));
+  }, [addSet, freshen, content.exercises]);
+  const [i, setI] = useState(firstOpen);
   const [verdict, setVerdict] = useState<Verdict | undefined>();
-  const [right, setRight] = useState(0);
   const ex = content.exercises[i];
   if (!ex) return null;
   const last = i === content.exercises.length - 1;
-  const submit = () => { const v = check(ex, answers[ex.id]); setVerdict(v); if (v.correct) setRight((r) => r + 1); };
+  const rightCount = () => content.exercises.filter((e) => progress[e.id]?.answered && progress[e.id]?.last === true).length;
+  const submit = () => { const v = check(ex, progress[ex.id]?.saved); setVerdict(v); record(ex.id, v.correct); };
   return (
     <ScrollView contentContainerStyle={styles.gap} keyboardShouldPersistTaps="handled" testID="square-drill">
       <Text style={t.meta}>{i + 1} of {content.exercises.length}</Text>
       <Text style={t.body} testID="drill-prompt">{ex.kind === 'testlet' ? 'Answer all parts' : ex.prompt}</Text>
-      <Answer ex={ex} value={answers[ex.id]} onChange={(v) => setAnswers((a) => ({ ...a, [ex.id]: v }))} verdict={verdict} colors={t.colors} />
+      <Answer ex={ex} value={progress[ex.id]?.saved} onChange={(v) => saveDraft(ex.id, v)} verdict={verdict} colors={t.colors} />
       {verdict && <Text testID="drill-result" style={{ color: verdict.correct ? GOOD : t.colors.error }}>{verdict.correct ? 'Correct' : 'Not quite'}{verdict.note ? ` - ${verdict.note}` : ''}{!verdict.correct && ex.explain ? `. ${ex.explain}` : ''}</Text>}
       <Text style={t.meta}>Checked by the app with exact arithmetic.</Text>
       {!verdict
         ? <Button title="Check" onPress={submit} testID="drill-check" />
         : <Button title={last ? 'Finish' : 'Next'} testID={last ? 'drill-done' : 'drill-next'}
-          onPress={() => { if (last) onDone(starsForShare(right / content.exercises.length)); else { setI(i + 1); setVerdict(undefined); } }} />}
+          onPress={() => { if (last) onDone(starsForShare(rightCount() / content.exercises.length)); else { setI(i + 1); setVerdict(undefined); } }} />}
     </ScrollView>
   );
 }
@@ -502,6 +514,7 @@ export function SquareView({ content, onDone }: { content: SquareContent; onDone
     case 'dictation': return <DictationView content={content} onDone={onDone} />;
     case 'order': return <OrderView content={content} onDone={onDone} />;
     case 'drill': return <DrillView content={content} onDone={onDone} />;
+    case 'periodic': return <PeriodicView content={content} onDone={onDone} />;
     default: return <PracticeView content={content} onDone={onDone} />;
   }
 }

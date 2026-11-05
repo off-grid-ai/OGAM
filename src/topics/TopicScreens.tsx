@@ -20,7 +20,7 @@ import { SquareView } from './SquareViews';
 const BOARD_KIND: Record<SquareFormat, SpaceKind> = {
   lesson: 'lesson', quiz: 'speed', cards: 'story', match: 'wordsearch', order: 'podcast', practice: 'call',
   fill: 'speed', truefalse: 'speed', scenario: 'call', numeric: 'crossword', worked: 'lesson', table: 'review',
-  recall: 'story', fix: 'wordsearch', tablefill: 'crossword', sort: 'podcast', dictation: 'story', reading: 'review', predict: 'speed', drill: 'crossword',
+  recall: 'story', fix: 'wordsearch', tablefill: 'crossword', sort: 'podcast', dictation: 'story', reading: 'review', predict: 'speed', drill: 'crossword', periodic: 'wordsearch',
 };
 const iconOf = (format: SquareFormat) => FORMATS.find((f) => f.id === format)?.icon ?? 'circle';
 

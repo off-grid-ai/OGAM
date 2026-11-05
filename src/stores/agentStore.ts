@@ -80,7 +80,7 @@ Rules:
 - When you edit a document: read it, change only what was asked, then write the whole new version.
 - Keep replies short and say what you did.`,
     temperature: 0.4,
-    enabledTools: ['list_files', 'read_file', 'write_file', 'create_web_page', 'open_file', 'calendar_events', 'add_calendar_event', 'remember', 'my_location', 'calculator', 'study_math', 'study_helpers', 'find_image', 'get_current_datetime', 'search_knowledge_base'],
+    enabledTools: ['list_files', 'read_file', 'write_file', 'create_web_page', 'open_file', 'calendar_events', 'add_calendar_event', 'remember', 'my_location', 'calculator', 'study_math', 'science_data', 'study_helpers', 'find_image', 'get_current_datetime', 'search_knowledge_base'],
     createdAt: now(),
     updatedAt: now(),
   },
@@ -229,6 +229,8 @@ export const useAgentStore = create<AgentState>()(
         // Built-in prompt updates (only if the user never edited that agent's prompt).
         const fid = DEFAULT_AGENTS.find((d) => d.id === 'field-id')!;
         for (const a of agents) {
+          // Agents that already use the calculator also get the other exact study tools (they are only sent when a message needs them).
+          if (Array.isArray(a.enabledTools) && a.enabledTools.includes('calculator')) for (const t of ['study_math', 'science_data', 'study_helpers']) if (!a.enabledTools.includes(t)) a.enabledTools = [...a.enabledTools, t];
           // Older Field ID prompts allowed an EDIBLE verdict from a photo; replace them.
           if (a.id === 'field-id' && (a.systemPrompt.includes('NEVER say a wild plant') ||
               a.systemPrompt.includes('EDIBLE, POISONOUS, or NOT SURE'))) a.systemPrompt = fid.systemPrompt;

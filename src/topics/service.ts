@@ -4,6 +4,7 @@
  */
 import { askModel } from '../study/engine';
 import { drillFor, makeDrillSet } from '../study/drills';
+import { makePeriodicQuestions } from '../study/periodicQuiz';
 import { contentMessages, gradeMessages, parseContent, parseGrade, parsePlan, planMessages, type CourseRequest, type SquareContent } from './formats';
 import { useTopics, type Course } from './store';
 import { makeSource, parsePicks, pickPrompt, relevantExcerpts, type Candidate, type CourseSource } from './sources';
@@ -52,6 +53,11 @@ export async function squareContent(course: Course, key: string): Promise<Square
       useTopics.getState().setContent(course.id, key, made);
       return made;
     }
+  }
+  if (square.format === 'periodic') {
+    const made: SquareContent = { kind: 'periodic', questions: makePeriodicQuestions(Date.now() % 100000, 8) };
+    useTopics.getState().setContent(course.id, key, made);
+    return made;
   }
   const asked = square.format === 'drill' ? { ...square, format: 'numeric' as const } : square;
   const content = await askUntil(contentMessages({

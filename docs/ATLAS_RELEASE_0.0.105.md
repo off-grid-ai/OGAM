@@ -569,6 +569,17 @@ What changed:
   model. A second, short-prompt check decides whether to use the first-word workaround: prompts under about 192 tokens run
   once first so the first word comes from the engine's single-token step; it is switched on only if the same check passes with
   it, and never for long prompts. The remembered verdict records the batch size and CPU-kernel setting.
+- 0.0.144: teaching moved onto the learning game board, with no subject to pick. The AI plans a whole subject (up to 60 squares in
+  up to 10 units) and now has these new square types: "Exact drill" (practice the app makes and marks itself with exact arithmetic,
+  with account dropdowns and amounts to type for financial statements: balance sheet, income statement, cash flow, trial balance,
+  journal entry; and compound interest, loans, bonds, leases, inventory, depreciation, ratios, break-even, NPV; algebra, fractions,
+  percents, geometry, slope, mean and median, unit conversion, combinations; speed, force, energy, Ohm's law, density, gas law, molar
+  mass, moles, pH; and research statistics) and "Periodic table" (tap the element on a real table: by symbol, number, name, group and
+  period, or family). Typed answers are kept when you leave a square and it resumes at the first question not yet marked. Calculation
+  squares written by the AI now carry a sum the app works out itself; if the AI's answer disagrees the app's number is used. The tutor
+  chat also gets exact tools for equations, number problems, percents, shapes, fractions, the periodic table, molar mass, pH and
+  constants, and text statistics for English. Fixed: pressing Check in Practice used to clear the typed answer. The quick quiz-from-chat
+  idea was dropped. Not verified on a phone.
 - 0.0.143: review fixes. The saved practice questions are capped at 600 (known questions go first; misses, questions with a note and the
   ones just added stay), because every drill press added questions that were saved on the phone for good. Two automatic backups
   asked for at once now build one. Pausing a scanned PDF now stops between pages instead of finishing every page first.

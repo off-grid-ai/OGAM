@@ -44,6 +44,7 @@ const TOOL_CHOICES: { id: string; label: string }[] = [
   { id: 'calculator', label: 'Calculator' },
   { id: 'find_image', label: 'Find pictures online (Wikimedia Commons, with credit)' },
   { id: 'study_helpers', label: 'Study helpers (planner, rubric check, APA references)' },
+  { id: 'science_data', label: 'Science look-ups (elements, molar mass, pH, constants)' },
   { id: 'study_math', label: 'Study maths (statistics, units, dates, interest)' },
   { id: 'get_current_datetime', label: 'Date and time' },
   { id: 'get_device_info', label: 'Device info' },

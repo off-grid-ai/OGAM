@@ -8,12 +8,14 @@ import { parseJsonLoose, str } from '../study/games/json';
 import { evalExpression } from '../study/mathTools';
 import { DRILL_LABELS } from '../study/drills';
 import type { Exercise } from '../study/exercises';
+import type { PeriodicQuestion } from '../study/periodicQuiz';
 
 export type SquareFormat = 'lesson' | 'quiz' | 'cards' | 'match' | 'order' | 'practice' | 'fill' | 'truefalse' | 'scenario' | 'numeric' | 'worked' | 'table'
-  | 'recall' | 'fix' | 'tablefill' | 'sort' | 'dictation' | 'reading' | 'predict' | 'drill';
+  | 'recall' | 'fix' | 'tablefill' | 'sort' | 'dictation' | 'reading' | 'predict' | 'drill' | 'periodic';
 const DRILL_TOPICS = Object.values(DRILL_LABELS).join(', ');
 export const FORMATS: { id: SquareFormat; label: string; icon: string; use: string }[] = [
   { id: 'drill', label: 'Exact drill', icon: 'cpu', use: `practice problems the app makes and marks itself with exact arithmetic, for ONLY these topics: ${DRILL_TOPICS}. Put the topic words in the title or focus. Use it for accounting, finance and statistics practice` },
+  { id: 'periodic', label: 'Periodic table', icon: 'grid', use: 'a real periodic table the learner taps to answer: find an element by symbol, number, name, group and period, or family (halogen, noble gas...). The app makes and marks it. Use it in chemistry and science courses' },
   { id: 'lesson', label: 'Lesson', icon: 'book-open', use: 'a short explanation with sections, an example and key points: for new ideas, rules, worked examples, code to read' },
   { id: 'quiz', label: 'Quiz', icon: 'help-circle', use: 'multiple choice questions with a reason for each answer: to check understanding, scenarios, case studies' },
   { id: 'cards', label: 'Flashcards', icon: 'layers', use: 'terms and definitions, formulas, syntax, vocabulary: to memorise' },
@@ -41,11 +43,11 @@ export const FORMATS: { id: SquareFormat; label: string; icon: string; use: stri
  */
 const PLAYBOOKS: { match: RegExp; name: string; advice: string }[] = [
   { match: /\b(math|maths|algebra|geometry|calculus|trigonometry|arithmetic|fractions?|statistics|probability|equations?|physics|chemistry stoichiometry)\b/i, name: 'mathematics',
-    advice: 'Teach maths by doing: a worked example first, then calculate squares with numbers, fill-the-gap and fix-the-mistake squares on steps, predict-the-result squares for graphs and formulas, and a final mixed set. Write maths in plain text with symbols like ², √, ÷, ×, π and fractions as a/b.' },
+    advice: 'For arithmetic, algebra, geometry, percents, probability, units and basic statistics use exact-drill squares (format drill) with the topic words in the title: linear equations, quadratic equations, adding fractions, percent change, area and perimeter, Pythagoras, slope, mean and median, unit conversion, combinations. Teach maths by doing: a worked example first, then calculate squares with numbers, fill-the-gap and fix-the-mistake squares on steps, predict-the-result squares for graphs and formulas, and a final mixed set. Write maths in plain text with symbols like ², √, ÷, ×, π and fractions as a/b.' },
   { match: /\b(science|biology|chemistry|physics|astronomy|geology|ecology|anatomy|physiology|earth science|environmental)\b/i, name: 'science',
-    advice: 'Teach science with a lesson that uses an everyday analogy, then sort-into-groups, put-in-order for processes and cycles, scenario squares for experiments, true-or-false for common myths, predict-the-result for what happens, and calculate squares for formulas.' },
+    advice: 'For chemistry add periodic-table squares (format periodic) and exact-drill squares (format drill) for molar mass, moles, pH, and for physics speed, force, kinetic energy, Ohm\'s law, density and the gas law. Teach science with a lesson that uses an everyday analogy, then sort-into-groups, put-in-order for processes and cycles, scenario squares for experiments, true-or-false for common myths, predict-the-result for what happens, and calculate squares for formulas.' },
   { match: /\b(accounting|bookkeeping|finance|financial|tax|audit|economics|budget|investing|payroll|ledger)\b/i, name: 'accounting and finance',
-    advice: 'Teach accounting with worked examples using real numbers, fill-the-table squares for journal entries and ledgers, calculate squares for ratios and depreciation, sort-into-groups for assets, liabilities, income and expenses, scenario squares for judgement calls, and flashcards for terms.' },
+    advice: 'Use exact-drill squares (format drill) for balance sheets, income statements, cash flow statements, trial balances, journal entries, compound interest, loans, bonds, leases, inventory, depreciation, ratios, break-even and NPV: the app makes the numbers, supplies account dropdowns with amounts to type, and marks every line. Teach accounting with worked examples using real numbers, fill-the-table squares for journal entries and ledgers, calculate squares for ratios and depreciation, sort-into-groups for assets, liabilities, income and expenses, scenario squares for judgement calls, and flashcards for terms.' },
   { match: /\b(english|grammar|writing|essay|reading|literature|vocabulary|spelling|punctuation|composition|poetry|esl|ielts|toefl)\b/i, name: 'English and writing',
     advice: 'Teach English with read-and-answer squares on short passages, fix-the-mistake for grammar and punctuation, type-the-answer for vocabulary and spelling, listen-and-type dictation, sort-into-groups for parts of speech, and practice squares where the learner writes a sentence or paragraph for the AI to mark.' },
   { match: /\b(programming|coding|code|python|javascript|java|c\+\+|html|css|sql|software|algorithm|computer science|excel|spreadsheet|data structures?)\b/i, name: 'programming',
@@ -134,6 +136,7 @@ export type SquareContent =
   | { kind: 'practice'; task: string; hint?: string; model: string; rubric: string[]; code?: boolean }
   | { kind: 'numeric'; task: string; answer: number; tolerance: number; unit: string; working: string[]; checked?: boolean }
   | { kind: 'drill'; exercises: Exercise[] }
+  | { kind: 'periodic'; questions: PeriodicQuestion[] }
   | { kind: 'worked'; problem: string; steps: { step: string; why: string }[]; takeaway: string }
   | { kind: 'table'; title: string; markdown: string }
   | { kind: 'typed'; items: { prompt: string; answer: string; alternatives: string[]; why: string }[]; mode: 'recall' | 'fix' }
@@ -145,6 +148,7 @@ export interface SquareRequest { courseTitle: string; topic: string; level: stri
 
 const SHAPES: Record<SquareFormat, string> = {
   drill: '{}  (made by the app, not written by the AI)',
+  periodic: '{}  (made by the app, not written by the AI)',
   lesson: '{"sections": [{"heading": "...", "text": "plain explanation, 2-5 sentences, may use short code or numbers", "example": "a worked example or code (optional)"}], "commonMistakes": ["a mistake learners make here and how to avoid it"], "quickCheck": {"q": "one question to test yourself", "a": "its answer"}, "keyPoints": ["..."]}  (3 to 5 sections, 2 or 3 common mistakes, 3 to 6 key points)',
   quiz: '{"questions": [{"q": "...", "options": ["A", "B", "C", "D"], "answer": 0, "why": "one sentence on why that answer is right"}]}  (5 to 8 questions, "answer" is the index of the right option, vary where it is)',
   cards: '{"cards": [{"front": "term or question", "back": "short definition or answer"}]}  (8 to 14 cards)',
