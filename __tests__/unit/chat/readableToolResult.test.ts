@@ -20,4 +20,12 @@ describe('readableToolResult', () => {
   it('lays out other JSON with line breaks', () => {
     expect(readableToolResult('{"temp":82}')).toBe('{\n  "temp": 82\n}');
   });
+
+  it('still lists the sources of a result cut to fit the model (no longer valid JSON)', () => {
+    const cut = '{"search_id":"s1","results":[{"url":"https://trails.example/sinhagad","title":"Sinhagad Fort trek","excerpts":["A 2.7 km climb'
+      + '"]},{"url":"https://trails.example/rajmachi","title":"Rajmachi","excerpts":["Monsoon fav\n[Tool \"web_search\" result truncated]';
+    expect(readableToolResult(cut)).toBe(
+      '1. [Sinhagad Fort trek](https://trails.example/sinhagad)\n2. [Rajmachi](https://trails.example/rajmachi)',
+    );
+  });
 });

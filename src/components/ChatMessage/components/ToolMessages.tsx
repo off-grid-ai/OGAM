@@ -131,7 +131,9 @@ export function readableToolResult(content: string): string {
   try {
     data = JSON.parse(trimmed);
   } catch {
-    return content;
+    // The model gets a result cut to fit its context, which is no longer valid JSON. Its sources
+    // are still there: read each title and link in order.
+    return sourcesFromCutJson(trimmed) ?? content;
   }
   const hits = Array.isArray(data) ? data : (data as { results?: unknown }).results;
   if (Array.isArray(hits) && hits.length > 0 && hits.every(hit => hit && typeof hit === 'object')) {
@@ -147,6 +149,24 @@ export function readableToolResult(content: string): string {
       .join('\n\n');
   }
   return JSON.stringify(data, null, 2);
+}
+
+function sourcesFromCutJson(text: string): string | null {
+  const field = (name: string) =>
+    [...text.matchAll(new RegExp(`"${name}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`, 'g'))].map(match => {
+      try {
+        return JSON.parse(`"${match[1]}"`) as string;
+      } catch {
+        return match[1];
+      }
+    });
+  const urls = field('url');
+  if (urls.length === 0) return null;
+  const titles = field('title');
+  return urls
+    .slice(0, 5)
+    .map((url, i) => `${i + 1}. [${titles[i] || 'Source'}](${url})`)
+    .join('\n');
 }
 
 function isTaskToolName(toolName?: string): boolean {
