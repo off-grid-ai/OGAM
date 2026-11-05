@@ -225,3 +225,9 @@ Pass: "In use" on Models, Storage "Measuring…", no vision projector orphaned, 
 - One search, one row: a result pairs with its call when the model gave no id (`14a3f5d3a`, tests fail on old code).
 - Links in answers are text-coloured with an underline, as on desktop (`a05aadb47`).
 Next: Model settings plain words, Models Image tab on one surface, Storage polish.
+
+## Supervisor 20:45 — hand test 9 (built-in bundle from 20:26)
+Pass: Home, Chats, Settings, one "Searched the web" row, text-coloured links, Try again hidden while running, Resend. Fail: Stop before the first word saves an empty reply, so Try again never shows; Gallery tiles blank and an emerald Images slab; collapsing a step jumps the chat to the end; Models/Storage/tools line (already fixed after this build: `a387e8c83`, `12100a507`, `fb52ab1d9`, `546f52edc`).
+1. An unanswered question (empty or stopped reply) shows Try again.
+2. Gallery: quiet tabs, no blank tiles, viewer actions grey.
+3. Developer lines only with the developer setting; keep the scroll place when a step collapses.
