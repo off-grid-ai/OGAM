@@ -78,3 +78,4 @@ Each round: expected / found / root cause / change / commit / screenshots.
 2. Switches: on Android a disabled switch keeps full colour; the on-state knob has low contrast on a 50% emerald track. Models list: incompatible rows fade their own surface (patchy group); the active border is hidden in the grouped list.
 3. Next: a fresh-install first run with a best-fit default; Remote Servers as grouped rows; then the alive layer.
 - Done: Settings › Search Model is a pushed route (this round).
+- **Acted on 14:10:** starters show only when a model can answer, with one hairline at the end and the full width (`c1172a7b4`; `batch2-send` asserts no starters without a model). Switches: disabled dims; on is a near-black knob on full emerald (`2890b6c47`). Open: incompatible rows fade their own surface in the grouped Models list; markdown bold at 500 is weak.
