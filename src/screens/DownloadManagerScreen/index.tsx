@@ -86,6 +86,11 @@ export const DownloadManagerScreen: React.FC = () => {
             key={f.id}
             style={[styles.filterChip, active && styles.filterChipActive]}
             onPress={() => setActiveFilter(f.id)}
+            // The chip stays small to read as a filter; its tap area is the full 44 pt.
+            hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            testID={`downloads-filter-${f.id}`}
           >
             <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{f.label}</Text>
           </TouchableOpacity>
