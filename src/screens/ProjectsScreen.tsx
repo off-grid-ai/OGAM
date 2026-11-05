@@ -22,7 +22,8 @@ import { ListSearchBar } from '../components/ListSearchBar';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
-import { TYPOGRAPHY, SPACING } from '../constants';
+import { FONTS, TYPOGRAPHY, SPACING } from '../constants';
+import { formatWhen } from '../utils/localTime';
 import { useProjectStore, useChatStore } from '../stores';
 import { Project } from '../types';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
@@ -56,14 +57,17 @@ export const ProjectsScreen: React.FC = () => {
     );
   }, [projects, searchQuery]);
 
-  const chatCounts = useMemo(() => {
+  const { chatCounts, lastUsed } = useMemo(() => {
     const counts: Record<string, number> = {};
+    const latest: Record<string, string> = {};
     for (const conversation of conversations) {
       if (conversation.projectId) {
         counts[conversation.projectId] = (counts[conversation.projectId] ?? 0) + 1;
+        const previous = latest[conversation.projectId];
+        if (!previous || conversation.updatedAt > previous) latest[conversation.projectId] = conversation.updatedAt;
       }
     }
-    return counts;
+    return { chatCounts: counts, lastUsed: latest };
   }, [conversations]);
 
   const handleProjectPress = (project: Project) => {
@@ -113,6 +117,10 @@ export const ProjectsScreen: React.FC = () => {
 
   const renderProject = ({ item, index }: { item: Project; index: number }) => {
     const chatCount = chatCounts[item.id] ?? 0;
+    const description =
+      item.description && item.description.trim().toLowerCase() !== item.name.trim().toLowerCase()
+        ? item.description
+        : null;
 
     return (
       <Swipeable
@@ -134,21 +142,19 @@ export const ProjectsScreen: React.FC = () => {
               : `${chatCount} chats`
           }
         >
-          <Icon name="folder" size={15} color={colors.textMuted} style={styles.projectIcon} />
+          {/* Name, then what it is for. The folder glyph repeated on every row said nothing, and a
+              description that only repeats the name is dropped (hand test 32). */}
           <View style={styles.projectContent}>
-            <View style={styles.projectNameRow}>
-              <Text style={styles.projectName} numberOfLines={1}>{item.name}</Text>
-              <View style={styles.chatCountTag}>
-                <Icon name="message-circle" size={8} color={colors.textMuted} />
-                <Text style={styles.chatCountText}>{chatCount}</Text>
-              </View>
-            </View>
-            {item.description ? (
+            <Text style={styles.projectName} numberOfLines={1}>{item.name}</Text>
+            {description ? (
               <Text style={styles.projectDescription} numberOfLines={1}>
-                {item.description}
+                {description}
               </Text>
             ) : null}
           </View>
+          <Text style={styles.projectMeta}>
+            {chatCount === 1 ? '1 chat' : `${chatCount} chats`} · {formatWhen(lastUsed[item.id] ?? item.updatedAt)}
+          </Text>
           <Icon name="chevron-right" size={14} color={colors.textMuted} />
         </AnimatedListItem>
       </Swipeable>
@@ -270,16 +276,11 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingVertical: SPACING.sm,
     backgroundColor: colors.surface,
   },
-  projectIcon: { marginRight: SPACING.md },
   projectContent: {
     flex: 1,
   },
-  projectNameRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-  },
   projectName: {
-    ...TYPOGRAPHY.bodySmall,
+    ...TYPOGRAPHY.body,
     color: colors.text,
     fontWeight: '400' as const,
     flexShrink: 1,
@@ -289,16 +290,11 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.textSecondary,
     marginTop: 1,
   },
-  chatCountTag: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 3,
-    marginLeft: SPACING.sm,
-    flexShrink: 0,
-  },
-  chatCountText: {
+  projectMeta: {
     ...TYPOGRAPHY.metaSmall,
+    fontFamily: FONTS.mono,
     color: colors.textMuted,
+    marginHorizontal: SPACING.sm,
   },
   emptyState: {
     flex: 1,
