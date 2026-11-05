@@ -623,7 +623,7 @@ it('a phone judged too small can still ask for the full size in settings, and th
   rtl.fireEvent.press(await view.findByTestId('new-chat-button', {}, { timeout: 5000 }));
   await view.findByTestId('chat-input');
   rtl.fireEvent.press(view.getByTestId('chat-settings-icon'));
-  rtl.fireEvent.press(await view.findByLabelText('Video generation'));
+  rtl.fireEvent.press(await view.findByText('Video generation'));
   rtl.fireEvent.press(await view.findByTestId('video-settings-try-full-size'));
   await view.findByTestId('video-settings-use-recommended');
   expect(view.queryByTestId('video-settings-try-full-size')).toBeNull();

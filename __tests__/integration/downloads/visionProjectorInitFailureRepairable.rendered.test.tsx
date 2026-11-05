@@ -107,7 +107,8 @@ describe('vision projector that fails to start', () => {
     let downloads = await openDownloads();
     await waitFor(() => expect(within(downloads).getByText('Gemma 4 E2B')).toBeTruthy(), RENDER_WAIT);
     if (arrival === 'folder scan') {
-      expect(within(downloads).getByText(/Q4_K_M$/)).toBeTruthy();
+      // The facts line ends with the download date now ("Q4_K_M · Nov 6").
+      expect(within(downloads).getByText(/Q4_K_M · [A-Z][a-z]{2} \d{1,2}$/)).toBeTruthy();
       expect(within(downloads).queryByLabelText('Vision')).toBeNull();
     } else {
       await waitFor(() => expect(within(downloads).getByLabelText('Vision')).toBeTruthy(), RENDER_WAIT);

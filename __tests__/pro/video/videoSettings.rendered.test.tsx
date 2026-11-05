@@ -27,7 +27,7 @@ async function videoSettings(): Promise<StudioApp> {
   expect(view.queryByLabelText('Video seed')).toBeNull();
   // Use fastest settings places every modality, so it leads the chat's settings, above every section.
   expect(view.getByTestId('fastest-settings-button')).toBeTruthy();
-  rtl.fireEvent.press(await view.findByLabelText('Video generation'));
+  rtl.fireEvent.press(await view.findByText('Video generation'));
   rtl.fireEvent.press(await view.findByTestId('video-settings-advanced-toggle'));
   await view.findByLabelText('Video seed');
   return app;
