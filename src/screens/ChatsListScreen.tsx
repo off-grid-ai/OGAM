@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { View, Text, SectionList } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
@@ -266,14 +266,17 @@ export const ChatsListScreen: React.FC = () => {
   };
 
   const sortedConversations = useMemo(() => byRecentActivity(conversations), [conversations]);
+  // The field shows each key at once; the scan through every message of every chat (1268 on the
+  // test phone) follows when React has time, so typing never waits on it (hand test 45).
+  const deferredQuery = useDeferredValue(searchQuery);
   const visibleConversations = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query = deferredQuery.trim().toLowerCase();
     if (!query) return sortedConversations;
     return sortedConversations.filter(conversation =>
       conversation.title.toLowerCase().includes(query) ||
       conversation.messages.some(message => message.content.toLowerCase().includes(query)),
     );
-  }, [searchQuery, sortedConversations]);
+  }, [deferredQuery, sortedConversations]);
   const sections = useMemo(
     () =>
       groupByRecency(visibleConversations, conversation => Date.parse(conversation.updatedAt)).map(group => ({
