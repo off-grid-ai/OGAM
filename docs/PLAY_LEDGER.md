@@ -255,3 +255,9 @@ Pass: new chat copy and bare icon, the field on Model settings/Storage/Security/
 1. Choose models: Back to where it came from, field, header.
 2. Models sheet: solid, one surface with hairlines.
 3. No box behind the mic and project badge; Remote servers switch and help text.
+
+## Supervisor 23:00 — hand test 14 (build 15, head 4a8cc72c3)
+Pass: Choose models header, Back and Not now return to Storage; solid model sheet; local text models one surface; "Whisper Small (English)"; Your videos field, tabs and pill. Fail: Choose models has no header while it loads (about 60 s) and its plans are bordered cards; the sheet hub and remote groups are boxed, a duplicate Selected card and a red Deselect; failed downloads keep file names and "Text"; Downloads 68.8 GB vs Storage 61.19 GB; a stopped answer ends in raw "**Yamuna"; "Searched documents (no passages)" twice.
+1. Choose models: header while loading, one quiet retry, plans on one surface.
+2. Model sheet hub and remote groups on one surface; no duplicate Selected, no red Deselect.
+3. Downloads: plain names on failed and running rows; one "used" figure.
