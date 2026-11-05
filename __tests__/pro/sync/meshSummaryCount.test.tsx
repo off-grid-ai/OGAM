@@ -22,3 +22,27 @@ describe('MeshSummary heading (hand test 28: "0 of 0 devices saved" beside 4 lis
     expect(view.getByText('4 of 5 devices saved')).toBeTruthy();
   });
 });
+
+describe('MeshSummary offline notice (hand test 29: "authoritative device roster")', () => {
+  const offline = (freshness: string, description: string) =>
+    ({ used: 1, max: 5, notice: null, registry: { stale: true, freshness, description } }) as never;
+
+  it('says what you get back when the licensed devices cannot load', () => {
+    const view = render(
+      <MeshSummary
+        mesh={offline('unavailable', 'Connect to the internet to load the authoritative device roster.')}
+        connectedCount={0}
+        savedCount={1}
+      />,
+    );
+    expect(view.getByText('Connect to the internet to see every device on your licence.')).toBeTruthy();
+    expect(view.queryByText(/authoritative/)).toBeNull();
+  });
+
+  it('keeps the projected sentence when a cached list is showing', () => {
+    const view = render(
+      <MeshSummary mesh={offline('cached', 'The device roster will refresh soon.')} connectedCount={0} savedCount={1} />,
+    );
+    expect(view.getByText('The device roster will refresh soon.')).toBeTruthy();
+  });
+});
