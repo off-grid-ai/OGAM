@@ -42,6 +42,7 @@ const TOOL_CHOICES: { id: string; label: string }[] = [
   { id: 'remember', label: 'Remember things you tell it' },
   { id: 'my_location', label: 'My location (GPS) and saved places' },
   { id: 'calculator', label: 'Calculator' },
+  { id: 'find_image', label: 'Find pictures online (Wikimedia Commons, with credit)' },
   { id: 'study_helpers', label: 'Study helpers (planner, rubric check, APA references)' },
   { id: 'study_math', label: 'Study maths (statistics, units, dates, interest)' },
   { id: 'get_current_datetime', label: 'Date and time' },

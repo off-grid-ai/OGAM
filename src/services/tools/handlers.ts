@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { findImages, imagesMarkdown } from '../../study/images';
 import { studyHelpers } from '../../study/helperTool';
 import { studyMath, type StudyMathArgs } from '../../study/mathTools';
 import DeviceInfo from 'react-native-device-info';
@@ -43,6 +44,11 @@ async function dispatchTool(call: ToolCall): Promise<string> {
     }
     case 'calculator':
       return handleCalculator(call.arguments.expression);
+    case 'find_image': {
+      const q = requireString(call, 'query');
+      if (!q) throw new Error('Missing required parameter: query');
+      return imagesMarkdown(await findImages(q));
+    }
     case 'study_helpers':
       return studyHelpers(call.arguments as Record<string, unknown>);
     case 'study_math':

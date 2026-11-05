@@ -80,7 +80,7 @@ Rules:
 - When you edit a document: read it, change only what was asked, then write the whole new version.
 - Keep replies short and say what you did.`,
     temperature: 0.4,
-    enabledTools: ['list_files', 'read_file', 'write_file', 'create_web_page', 'open_file', 'calendar_events', 'add_calendar_event', 'remember', 'my_location', 'calculator', 'study_math', 'study_helpers', 'get_current_datetime', 'search_knowledge_base'],
+    enabledTools: ['list_files', 'read_file', 'write_file', 'create_web_page', 'open_file', 'calendar_events', 'add_calendar_event', 'remember', 'my_location', 'calculator', 'study_math', 'study_helpers', 'find_image', 'get_current_datetime', 'search_knowledge_base'],
     createdAt: now(),
     updatedAt: now(),
   },

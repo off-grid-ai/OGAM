@@ -74,3 +74,22 @@ describe('study helper tool', () => {
     expect(() => studyHelpers({ action: 'x' })).toThrow(/action must be/);
   });
 });
+
+import { findImages, imagesMarkdown, parseCommons } from '../../src/study/images';
+describe('image lookup', () => {
+  const reply = { query: { pages: {
+    1: { index: 2, title: 'File:Periodic table.svg', imageinfo: [{ url: 'https://u/p.svg', thumburl: 'https://u/p-800.png', descriptionurl: 'https://c/File:Periodic', mime: 'image/svg+xml', extmetadata: { Artist: { value: '<a href="x">Jane Doe</a>' }, LicenseShortName: { value: 'CC BY-SA 4.0' }, ImageDescription: { value: 'The <b>periodic</b> table' } } }] },
+    2: { index: 1, title: 'File:Fair use logo.png', imageinfo: [{ url: 'https://u/l.png', descriptionurl: 'https://c/File:Logo', mime: 'image/png', extmetadata: { LicenseShortName: { value: 'Copyrighted free use' } } }] },
+    3: { index: 3, title: 'File:Nolicence.jpg', imageinfo: [{ url: 'https://u/n.jpg', descriptionurl: 'https://c/File:N', mime: 'image/jpeg', extmetadata: {} }] },
+  } } };
+  it('keeps only freely licensed pictures with credit, and warns that matches are unchecked', async () => {
+    const found = parseCommons(reply);
+    expect(found.map((f) => f.title)).toEqual(['Fair use logo.png', 'Periodic table.svg'].filter((t) => t !== 'Fair use logo.png'));
+    expect(found[0]).toMatchObject({ author: 'Jane Doe', license: 'CC BY-SA 4.0', description: 'The periodic table' });
+    const md = imagesMarkdown(await findImages('periodic table', (async () => ({ ok: true, json: async () => reply })) as any));
+    expect(md).toMatch(/By Jane Doe, CC BY-SA 4\.0\. https:\/\/c\/File:Periodic/);
+    expect(md).toMatch(/not checked against your question/);
+    expect(imagesMarkdown([])).toMatch(/No freely licensed/);
+    await expect(findImages('  ')).rejects.toThrow(/Say what picture/);
+  });
+});

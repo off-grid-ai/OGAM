@@ -34,7 +34,7 @@ export const useOffGrid = create<OffGridState>()(
   ),
 );
 
-export const NETWORK_TOOLS = ['web_search', 'read_url'];
+export const NETWORK_TOOLS = ['web_search', 'read_url', 'find_image'];
 export const offGridOn = (): boolean => useOffGrid.getState().on;
 
 export const NIGHT_COLORS: any = {

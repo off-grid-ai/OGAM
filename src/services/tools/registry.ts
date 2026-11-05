@@ -73,6 +73,15 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
     },
   },
   {
+    id: 'find_image',
+    name: 'find_image',
+    displayName: 'Find a picture',
+    description: 'Find freely licensed pictures (Wikimedia Commons) for a subject, such as a diagram, map, specimen or historic photo. Returns each picture with its author, licence and link. Matches are not guaranteed to be right: tell the person to check them.',
+    icon: 'image',
+    requiresNetwork: true,
+    parameters: { query: { type: 'string', description: 'What the picture should show', required: true } },
+  },
+  {
     id: 'get_current_datetime',
     name: 'get_current_datetime',
     displayName: 'Date & Time',
