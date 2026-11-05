@@ -3,6 +3,7 @@
  * own: it shows `useKnowledgeStatus` and dispatches intents here. Everything real is in the services (documents, study, cycles,
  * exchange); this only coordinates them.
  */
+import { autoBackup, listBackups, restoreBackup, allReportsMarkdown } from './backups';
 import { create } from 'zustand';
 import { closeInterruptedCycles, addReview, getFinding, searchFindings, type Query } from './cycles';
 import { importPdf, listDocuments, removeDocument, extractDocument, chunkDocument } from './documents';
@@ -57,6 +58,7 @@ export async function startStudy(sourceId: string, agentId?: string): Promise<vo
   } finally {
     patch({ running: null });
     bump();
+    autoBackup().catch(() => undefined); // a daily copy of everything learned, kept in the app's storage
   }
 }
 
@@ -75,6 +77,7 @@ export async function decide(recordId: string, decision: 'approved' | 'rejected'
   bump();
 }
 
+export { listBackups, autoBackup, restoreBackup, allReportsMarkdown };
 export async function exportKnowledge(opts: ExportOptions) { const r = await createExport(opts); bump(); return r; }
 export async function previewPackage(path: string): Promise<ImportReport> { return previewImport(path); }
 export async function importPackage(path: string): Promise<ImportReport> { const r = await applyImport(path); bump(); return r; }

@@ -46,7 +46,7 @@ const jsonl = (rows: unknown[]) => (rows.length ? `${rows.map((r) => JSON.string
 
 // ================================================================== export
 export interface ExportScope { kind: 'all' | 'agents' | 'subjects' | 'since'; agentIds?: string[]; topicIds?: string[]; since?: string }
-export interface ExportOptions { scope: ExportScope; includeOriginals?: boolean; appVersion?: string }
+export interface ExportOptions { scope: ExportScope; includeOriginals?: boolean; appVersion?: string; /** An automatic backup: not recorded as an export, so "changes since the last export" keeps meaning what you last saved yourself. */ quiet?: boolean }
 export interface ExportResult { path: string; manifest: ExportManifest }
 export interface TransferEntry { kind: 'export' | 'import'; id: string; at: string; path?: string; counts: Record<string, number>; note?: string }
 
@@ -164,7 +164,7 @@ export async function createExport(opts: ExportOptions): Promise<ExportResult> {
   const out = `${P.exportsDir()}/atlas-learning-export-${manifest.createdAt.slice(0, 10)}-${exportId.slice(0, 8)}.zip`;
   await zip(staging, out);
   await removeTree(staging);
-  await appendJsonl(P.transfers(), [{ kind: 'export', id: exportId, at: manifest.createdAt, path: out, counts: manifest.counts, note: scope.kind } satisfies TransferEntry]);
+  if (!opts.quiet) await appendJsonl(P.transfers(), [{ kind: 'export', id: exportId, at: manifest.createdAt, path: out, counts: manifest.counts, note: scope.kind } satisfies TransferEntry]);
   return { path: out, manifest };
 }
 

@@ -7,12 +7,13 @@ import { pick, types } from '@react-native-documents/picker';
 import { useTheme } from '../theme';
 import { SPACING, TYPOGRAPHY } from '../constants';
 import { Button } from '../components/Button';
-import { saveExistingFile } from '../study/exportFiles';
+import { saveExistingFile, saveMarkdown } from '../study/exportFiles';
 import { resolvePickedFileUri } from '../utils/resolvePickedFileUri';
 import type { AgentProfile, Finding, SourceDocument } from './schema';
 import type { ImportReport, TransferEntry } from './exchange';
+import type { Backup } from './backups';
 import {
-  addPdfs, decide, deleteDocument, evaluateAgent, exportKnowledge, importPackage, listDocuments, listProfiles, pauseStudy,
+  addPdfs, allReportsMarkdown, autoBackup, listBackups, restoreBackup, decide, deleteDocument, evaluateAgent, exportKnowledge, importPackage, listDocuments, listProfiles, pauseStudy,
   previewPackage, snapshotFor, startStudy, transferHistory, useKnowledgeStatus,
 } from './controller';
 
@@ -41,9 +42,10 @@ export const KnowledgeScreen: React.FC = () => {
   const [includePdfs, setIncludePdfs] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ path: string; report: ImportReport } | null>(null);
+  const [backups, setBackups] = useState<Backup[]>([]);
 
   const reload = useCallback(async () => {
-    setExperts(await listProfiles()); setDocs(await listDocuments()); setHistory(await transferHistory());
+    setExperts(await listProfiles()); setDocs(await listDocuments()); setHistory(await transferHistory()); setBackups(await listBackups());
     setFindings(await snapshotFor({ text: query || undefined, status: conflictsOnly ? 'conflicted' : undefined, limit: 40 }));
   }, [query, conflictsOnly]);
   useEffect(() => { void reload(); }, [reload, status.version]);
@@ -64,6 +66,23 @@ export const KnowledgeScreen: React.FC = () => {
       const saved = await saveExistingFile(path, path.split('/').pop() as string, 'application/zip');
       setNotice(saved ? `Saved ${saved}: ${manifest.counts.findings} findings, ${manifest.counts.agents} experts.` : 'Export made. You closed the save dialog, so it was not copied anywhere.');
     } catch (e: any) { setNotice(String(e?.message || e)); }
+  };
+  const saveReports = async () => {
+    try {
+      const { text, cycles } = await allReportsMarkdown();
+      if (!cycles) { setNotice('No learning cycles yet, so there are no reports to save.'); return; }
+      const saved = await saveMarkdown(`atlas-learning-reports-${new Date().toISOString().slice(0, 10)}.md`, text);
+      setNotice(saved ? `Saved ${cycles} report${cycles === 1 ? '' : 's'} to ${saved}.` : 'You closed the save dialog, so nothing was saved.');
+    } catch (e: any) { setNotice(String(e?.message || e)); }
+  };
+  const backUpNow = async () => {
+    try { const b = await autoBackup({ force: true }); setNotice(b ? `Backed up (${Math.round(b.bytes / 1024)} KB).` : 'Nothing learned yet, so there is nothing to back up.'); await reload(); } catch (e: any) { setNotice(String(e?.message || e)); }
+  };
+  const restore = async (b: Backup) => {
+    try { const r = await restoreBackup(b.path); setNotice(`Restored from ${b.day}: ${r.imported.findings} findings added, ${r.duplicates} already here.`); await reload(); } catch (e: any) { setNotice(String(e?.message || e)); }
+  };
+  const copyOut = async (b: Backup) => {
+    try { const saved = await saveExistingFile(b.path, b.name, 'application/zip'); setNotice(saved ? `Saved ${saved}.` : 'You closed the save dialog, so it was not copied anywhere.'); } catch (e: any) { setNotice(String(e?.message || e)); }
   };
   const chooseImport = async () => {
     try {
@@ -178,7 +197,20 @@ export const KnowledgeScreen: React.FC = () => {
               <Button title="Export everything" onPress={() => doExport({ kind: 'all' })} testID="knowledge-export-all" />
               <Button title="Export changes since the last export" variant="outline" onPress={() => doExport({ kind: 'since' })} />
               <Button title="Import a package" variant="outline" onPress={chooseImport} testID="knowledge-import" />
+              <Button title="Save all learning reports as one file (.md)" variant="outline" onPress={saveReports} testID="knowledge-save-reports" />
             </View>
+            <Text style={s.text}>Automatic backups</Text>
+            <Text style={s.meta}>A copy of everything learned is made once a day after studying and the last seven are kept in the app. They are lost if the app is uninstalled, so copy one to your Files now and then.</Text>
+            <View style={{ gap: SPACING.sm, marginVertical: SPACING.sm }}>
+              <Button title="Back up now" variant="outline" onPress={backUpNow} testID="knowledge-backup-now" />
+            </View>
+            {backups.map((b) => (
+              <View key={b.name} style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.xs }} testID={`backup-${b.day}`}>
+                <Text style={[s.meta, { flex: 1 }]}>{b.day} · {Math.round(b.bytes / 1024)} KB</Text>
+                <Button title="Restore" size="small" variant="outline" onPress={() => restore(b)} testID={`backup-restore-${b.day}`} />
+                <Button title="Save to Files" size="small" variant="ghost" onPress={() => copyOut(b)} />
+              </View>
+            ))}
             <Text style={s.meta}>Exports use the Atlas learning interchange format. Street Advisory needs an adapter to read it; that adapter is not part of Atlas.</Text>
             {preview && (
               <View style={[s.card, { marginTop: SPACING.sm }]} testID="knowledge-import-preview">

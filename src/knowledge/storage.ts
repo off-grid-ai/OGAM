@@ -50,6 +50,7 @@ export const P = {
   openCycles: () => `${knowledgeRoot()}/checkpoints/open-cycles.json`,
   lock: () => `${knowledgeRoot()}/checkpoints/job.lock`,
   exportsDir: () => `${knowledgeRoot()}/exports`,
+  backupsDir: () => `${knowledgeRoot()}/backups`,
   importsDir: () => `${knowledgeRoot()}/imports`,
   transfers: () => `${knowledgeRoot()}/exports/history.jsonl`,
 };
