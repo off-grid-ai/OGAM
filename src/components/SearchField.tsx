@@ -27,7 +27,10 @@ export const SearchField: React.FC<SearchFieldProps> = ({ value, onChangeText, p
   const [focused, setFocused] = useState(false);
   return (
     <View style={[styles.row, focused && styles.rowFocused, style]}>
-      <Icon name="search" size={16} color={colors.textMuted} />
+      {/* Decoration: the field's own label says it searches, so the glyph is hidden. */}
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <Icon name="search" size={16} color={colors.textMuted} />
+      </View>
       <TextInput
         value={value}
         onChangeText={onChangeText}
