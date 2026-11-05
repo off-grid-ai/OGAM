@@ -37,7 +37,7 @@ const createBaseStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   tabItem: { paddingVertical: 10, alignItems: 'center' as const },
   tabText: { ...TYPOGRAPHY.body, color: colors.textMuted },
-  tabTextActive: { color: colors.text, fontWeight: '700' as const },
+  tabTextActive: { color: colors.text, fontWeight: '500' as const },
   tabIndicator: {
     height: 2,
     backgroundColor: colors.primary,
@@ -143,7 +143,7 @@ const createFilterStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     justifyContent: 'center' as const,
     paddingHorizontal: 4,
   },
-  filterCountText: { ...TYPOGRAPHY.labelSmall, color: colors.background, fontWeight: '700' as const },
+  filterCountText: { ...TYPOGRAPHY.labelSmall, color: colors.background, fontWeight: '500' as const },
   clearFiltersButton: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
   clearFiltersText: { ...TYPOGRAPHY.bodySmall, color: colors.error },
   filterExpandedContent: { paddingHorizontal: SPACING.md, paddingTop: 8, paddingBottom: 4 },

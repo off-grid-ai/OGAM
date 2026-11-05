@@ -35,7 +35,7 @@ const createStyles = (colors: ThemeColors) => ({
     borderWidth: 1,
     alignItems: 'center' as const,
   },
-  text: { fontSize: 10, fontFamily: FONTS.mono, fontWeight: '600' as const, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  text: { fontSize: 10, fontFamily: FONTS.mono, fontWeight: '500' as const, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
   on: { borderColor: colors.primary, backgroundColor: `${colors.primary}1F` },
   onText: { color: colors.primary },
   off: { borderColor: colors.border },

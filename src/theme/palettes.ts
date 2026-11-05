@@ -21,6 +21,8 @@ export const COLORS_LIGHT = {
   primary: '#059669',
   primaryDark: '#047857',
   primaryLight: '#34D399',
+  /** Text and icons on a filled emerald surface: near-black keeps AA contrast in both themes. */
+  onPrimary: '#0A0A0A',
 
   // Backgrounds
   background: '#FFFFFF',
@@ -58,6 +60,7 @@ export const COLORS_DARK = {
   primary: '#34D399',
   primaryDark: '#10B981',
   primaryLight: '#6EE7B7',
+  onPrimary: '#0A0A0A',
 
   // Backgrounds
   background: '#0A0A0A',

@@ -164,7 +164,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderColor: colors.primary,
   },
   primaryButtonText: {
-    color: colors.background,
+    color: colors.onPrimary,
   },
   destructiveButton: {
     borderColor: colors.error,

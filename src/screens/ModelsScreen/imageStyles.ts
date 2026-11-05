@@ -47,7 +47,7 @@ const createImageModelsStylesPart1 = (colors: ThemeColors, _shadows: ThemeShadow
   recommendedBadgeText: {
     ...TYPOGRAPHY.meta,
     color: colors.background,
-    fontWeight: '700' as const,
+    fontWeight: '500' as const,
     fontSize: 10,
     letterSpacing: 0.5,
   },
@@ -96,7 +96,7 @@ const createImageModelsStylesPart1 = (colors: ThemeColors, _shadows: ThemeShadow
     gap: 8,
   },
   imageModelCompactInfo: { flex: 1, gap: 2 },
-  imageModelCompactName: { ...TYPOGRAPHY.bodySmall, color: colors.text, fontWeight: '600' as const },
+  imageModelCompactName: { ...TYPOGRAPHY.bodySmall, color: colors.text, fontWeight: '500' as const },
   imageModelCompactMeta: { ...TYPOGRAPHY.metaSmall, color: colors.textMuted },
   activeBadgeCompact: {
     backgroundColor: `${colors.info}25`,
@@ -104,14 +104,14 @@ const createImageModelsStylesPart1 = (colors: ThemeColors, _shadows: ThemeShadow
     paddingVertical: 3,
     borderRadius: 10,
   },
-  activeBadgeCompactText: { ...TYPOGRAPHY.metaSmall, color: colors.info, fontWeight: '600' as const },
+  activeBadgeCompactText: { ...TYPOGRAPHY.metaSmall, color: colors.info, fontWeight: '500' as const },
   setActiveButtonCompact: {
     backgroundColor: `${colors.primary}20`,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  setActiveButtonCompactText: { ...TYPOGRAPHY.metaSmall, color: colors.primary, fontWeight: '600' as const },
+  setActiveButtonCompactText: { ...TYPOGRAPHY.metaSmall, color: colors.primary, fontWeight: '500' as const },
   deleteImageButtonCompact: { padding: 4 },
   availableTitle: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, marginBottom: 8 },
 });

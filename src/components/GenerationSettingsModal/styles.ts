@@ -35,7 +35,7 @@ const createStatsStyles = (colors: ThemeColors) => ({
   statsValue: {
     ...TYPOGRAPHY.meta,
     color: colors.primary,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
   },
   statsSeparator: {
     ...TYPOGRAPHY.meta,
@@ -216,7 +216,7 @@ const createModelPickerStyles = (colors: ThemeColors, shadows: ThemeShadows) => 
   },
   modelPickerValue: {
     ...TYPOGRAPHY.bodySmall,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
     color: colors.text,
   },
   modelPickerList: {

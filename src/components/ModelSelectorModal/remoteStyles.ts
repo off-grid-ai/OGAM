@@ -17,7 +17,7 @@ export const createRemoteStyles = (colors: ThemeColors, _shadows: ThemeShadows) 
   addButtonText: {
     ...TYPOGRAPHY.body,
     color: colors.background,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
   },
   addServerButton: {
     flexDirection: 'row' as const,
@@ -31,7 +31,7 @@ export const createRemoteStyles = (colors: ThemeColors, _shadows: ThemeShadows) 
   addServerButtonText: {
     ...TYPOGRAPHY.body,
     color: colors.primary,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
   },
   remoteModelsContainer: {
     marginTop: 8,

@@ -298,7 +298,7 @@ const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   thinkingHeaderIconText: {
     ...TYPOGRAPHY.label,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
     color: colors.primary,
   },
   thinkingHeaderTextContainer: {
@@ -446,7 +446,7 @@ const createActionStyles = (colors: ThemeColors) => ({
   },
   editButtonTextSave: {
     color: colors.primary,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
   },
 });
 

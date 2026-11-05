@@ -142,7 +142,7 @@ const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   galleryCardTitle: {
     ...TYPOGRAPHY.body,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
     color: colors.text,
   },
   galleryCardMeta: {
@@ -167,7 +167,7 @@ const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   desktopCardTitle: {
     ...TYPOGRAPHY.body,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
     color: colors.text,
     flex: 1,
   },
@@ -200,7 +200,7 @@ const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   desktopCardCtaText: {
     ...TYPOGRAPHY.bodySmall,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
     color: colors.primary,
   },
   desktopCardCopy: {

@@ -125,14 +125,14 @@ const createEmptyChatStyles = (colors: ThemeColors) => ({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
-  projectHintIconText: { ...TYPOGRAPHY.bodySmall, fontWeight: '600' as const, color: colors.primary },
+  projectHintIconText: { ...TYPOGRAPHY.bodySmall, fontWeight: '500' as const, color: colors.primary },
   projectHintText: { ...TYPOGRAPHY.h3, color: colors.primary, fontWeight: '500' as const },
   privacyText: { ...TYPOGRAPHY.h3, color: colors.textMuted, textAlign: 'center' as const, maxWidth: 300 },
 });
 
 const createStateScreenStyles = (colors: ThemeColors) => ({
   loadingContainer: { flex: 1, justifyContent: 'center' as const, alignItems: 'center' as const, gap: 16, paddingHorizontal: 24 },
-  loadingText: { ...TYPOGRAPHY.h1, fontSize: 18, fontWeight: '600' as const, textAlign: 'center' as const, color: colors.text },
+  loadingText: { ...TYPOGRAPHY.h1, fontSize: 18, fontWeight: '500' as const, textAlign: 'center' as const, color: colors.text },
   loadingSubtext: { ...TYPOGRAPHY.body, color: colors.textSecondary },
   loadingHint: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, marginTop: SPACING.lg, textAlign: 'center' as const, paddingHorizontal: 32 },
   noModelContainer: { flex: 1, justifyContent: 'center' as const, alignItems: 'center' as const, paddingHorizontal: SPACING.xxl },
@@ -212,12 +212,12 @@ const createIndicatorStyles = (colors: ThemeColors) => ({
     marginRight: 20,
   },
   imageProgressInfo: { flex: 1 },
-  imageProgressTitle: { ...TYPOGRAPHY.body, fontWeight: '600' as const, color: colors.text },
+  imageProgressTitle: { ...TYPOGRAPHY.body, fontWeight: '500' as const, color: colors.text },
   imageProgressStatus: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, fontStyle: 'normal' as const },
   imageProgressBarContainer: { marginTop: 10 },
   imageProgressBar: { height: 4, backgroundColor: colors.surfaceLight, borderRadius: 2, overflow: 'hidden' as const },
   imageProgressFill: { height: '100%' as const, backgroundColor: colors.primary, borderRadius: 2 },
-  imageProgressSteps: { ...TYPOGRAPHY.bodySmall, fontWeight: '600' as const, color: colors.primary, marginRight: SPACING.sm },
+  imageProgressSteps: { ...TYPOGRAPHY.bodySmall, fontWeight: '500' as const, color: colors.primary, marginRight: SPACING.sm },
   imagePreview: { width: 100, height: 100, borderRadius: 8, marginRight: 12, backgroundColor: colors.surfaceLight },
   imageStopButton: {
     width: 28,

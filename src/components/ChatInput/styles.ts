@@ -67,7 +67,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   removeAttachmentText: {
     color: colors.text,
     fontSize: 14,
-    fontWeight: 'bold' as const,
+    fontWeight: '500' as const,
     marginTop: -2,
   },
   // Queued messages (above input)
@@ -281,7 +281,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   iconBadgeText: {
     fontSize: 7,
     fontFamily: FONTS.mono,
-    fontWeight: '700' as const,
+    fontWeight: '500' as const,
     color: colors.background,
     lineHeight: 10,
   },

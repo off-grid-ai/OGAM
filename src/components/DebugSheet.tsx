@@ -158,7 +158,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   debugSectionTitle: {
     ...TYPOGRAPHY.body,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
     color: colors.primary,
     marginBottom: SPACING.sm,
     textTransform: 'uppercase' as const,
@@ -174,7 +174,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   debugStatValue: {
     ...TYPOGRAPHY.h1,
-    fontWeight: '700' as const,
+    fontWeight: '500' as const,
     color: colors.text,
   },
   debugStatLabel: {
@@ -245,7 +245,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   debugMessageRole: {
     ...TYPOGRAPHY.meta,
-    fontWeight: '700' as const,
+    fontWeight: '500' as const,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,

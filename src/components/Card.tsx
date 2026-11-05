@@ -69,7 +69,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   title: {
     fontSize: 18,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
     color: colors.text,
   },
   subtitle: {

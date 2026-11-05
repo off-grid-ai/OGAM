@@ -150,6 +150,6 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   clearCacheText: {
     color: colors.primary,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
   },
 });

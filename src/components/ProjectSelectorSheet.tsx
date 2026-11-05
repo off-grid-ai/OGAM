@@ -134,7 +134,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   projectOptionIconText: {
     ...TYPOGRAPHY.h2,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
     color: colors.primary,
   },
   projectOptionInfo: {
@@ -142,7 +142,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   projectOptionName: {
     ...TYPOGRAPHY.h2,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
     color: colors.text,
   },
   projectOptionDesc: {
@@ -154,7 +154,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.h1,
     fontSize: 18,
     color: colors.primary,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
     marginLeft: SPACING.sm,
   },
 });

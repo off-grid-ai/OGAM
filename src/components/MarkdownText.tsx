@@ -133,7 +133,7 @@ function createMarkdownStyles(
     },
     heading1: {
       ...TYPOGRAPHY.h2,
-      fontWeight: '600' as const,
+      fontWeight: '500' as const,
       color: textColor,
       marginTop: SPACING.sm,
       marginBottom: SPACING.xs,
@@ -146,7 +146,7 @@ function createMarkdownStyles(
     },
     heading3: {
       ...TYPOGRAPHY.h3,
-      fontWeight: '600' as const,
+      fontWeight: '500' as const,
       color: textColor,
       marginTop: SPACING.xs,
       marginBottom: 2,
@@ -158,7 +158,7 @@ function createMarkdownStyles(
       marginBottom: 2,
     },
     strong: {
-      fontWeight: '700' as const,
+      fontWeight: '500' as const,
     },
     em: {
       fontStyle: 'italic' as const,
@@ -230,7 +230,7 @@ function createMarkdownStyles(
       padding: SPACING.sm,
       borderWidth: 0.5,
       borderColor: colors.border,
-      fontWeight: '600' as const,
+      fontWeight: '500' as const,
     },
     td: {
       padding: SPACING.sm,
