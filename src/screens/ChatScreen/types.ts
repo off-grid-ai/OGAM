@@ -133,6 +133,8 @@ function groupAssistantTurnWork(
         .find(
           message =>
             message.role === 'assistant' &&
+            // A notice (the compaction line) is never the answer: it would own a live turn and hide it.
+            !message.isSystemInfo &&
             !isSupportingContextMessage(message) &&
             !message.toolCalls?.length &&
             Boolean(message.content.trim() || message.attachments?.length),
