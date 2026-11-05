@@ -659,6 +659,7 @@ export const TEMPLATE_ACTION_IDS: ReadonlyArray<readonly [string, string]> = [
   ["^attachment-image-.+$", "attachment-image"],
   ["^clipboard-delete-.+$", "clipboard-delete"],
   ["^document-preview-.+$", "document-preview"],
+  ["^downloads-filter-.+$", "downloads-filter"],
   ["^feature-showcase-.+$", "feature-showcase"],
   ["^image-model-card-.+$", "image-model-card"],
   ["^models-row-.+-eject$", "models-row-eject"],
