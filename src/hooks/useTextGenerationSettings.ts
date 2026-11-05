@@ -129,7 +129,7 @@ export function useTextGenerationSettings() {
 
   const toolCalls = {
     key: 'maxToolCalls',
-    label: 'Maximum Tool Calls',
+    label: 'Maximum tool calls',
     description: 'The most tools one reply can use.',
     value: maxToolCalls,
     min: MIN_MAX_TOOL_CALLS,
@@ -154,7 +154,7 @@ export function useTextGenerationSettings() {
     },
     maxTokens: {
       key: 'maxTokens',
-      label: 'Max Tokens',
+      label: 'Max tokens',
       description: 'How long one reply can get.',
       // Clamped for DISPLAY too: a value stored by an older build (or before the context came
       // down) must not render past the end of its own slider.
@@ -172,7 +172,7 @@ export function useTextGenerationSettings() {
     },
     contextLength: {
       key: 'contextLength',
-      label: 'Context Length',
+      label: 'Context length',
       description: 'How much of the chat it remembers. More uses more memory and reloads the model.',
       value: Math.min(contextLength, llamaModelLimit),
       min: 512,
@@ -206,7 +206,7 @@ export function useTextGenerationSettings() {
     },
     repeatPenalty: {
       key: 'repeatPenalty',
-      label: 'Repeat Penalty',
+      label: 'Repeat penalty',
       description: 'Higher stops it repeating itself.',
       value: repeatPenalty,
       min: 1,
@@ -231,7 +231,7 @@ export function useTextGenerationSettings() {
     },
     maxTokens: {
       key: 'liteRTMaxTokens',
-      label: 'Max Tokens',
+      label: 'Max tokens',
       description:
         `How much it reads and writes in one chat. Changing it reloads the model. ${liteRTLimitDescription}${liteRTLoadedDescription}`,
       value: Math.min(liteRTMaxTokens, liteRTModelLimit),
