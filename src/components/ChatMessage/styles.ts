@@ -73,11 +73,12 @@ const createBubbleStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     width: MESSAGE_MAX_WIDTH,
     alignSelf: 'flex-start' as const,
   },
-  // A footer toggle is a 44 pt target. Two of them stack (tools, details), so the frame cannot be
-  // pulled back over its neighbour; it absorbs only the row's own 4 pt padding and the footer grows.
+  // The footer's two toggles stack, 8 pt apart. 44 pt frames there made a 123 pt footer under an
+  // 81 pt reply (hand test 41), so each is a 28 pt frame pulled back 4 pt: the frames meet, the
+  // footer stays quiet, and the target clears the 24 pt minimum. Their labels name them in words.
   messageFooterHeader: {
     paddingVertical: 0,
-    minHeight: 44,
+    minHeight: 28,
     marginVertical: -4,
   },
   /**
