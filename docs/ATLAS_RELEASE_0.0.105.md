@@ -569,6 +569,14 @@ What changed:
   model. A second, short-prompt check decides whether to use the first-word workaround: prompts under about 192 tokens run
   once first so the first word comes from the engine's single-token step; it is switched on only if the same check passes with
   it, and never for long prompts. The remembered verdict records the batch size and CPU-kernel setting.
+- 0.0.136: study tools. (1) Tutor tool "study_math": statistics, t tests, regression, sample size, unit conversion, date arithmetic and
+  time-value of money computed in code, on by default for the default agent. (2) Practice questions: Study > Practice questions
+  makes exercises from a project's documents in one shared format (multiple choice, true/false, fill in, calculation, order, match,
+  dropdown tables that must balance, testlets, short answers). Answers are checked in code. A question is kept only if its quote
+  appears in the material; others are skipped and counted. Missed questions return first, scores are shown per topic, and unfinished
+  answers are saved. (3) Appearance: import a theme from JSON (colours checked), corner roundness, one-tap Easy mode. Not done yet:
+  custom font files and background images (React Native cannot load a font file at runtime without a native font library), the shared
+  citation chips, charts in chat, online images, study planner, rubric checker, OCR through the vision model. Not verified on a phone.
 - 0.0.135: learning knowledge system (Knowledge screen, opened from Learning). Per-cycle immutable reports, findings with evidence,
   judge and manager reviews tied to evidence hashes, persistent expert agents (route, promote, merge, split, evaluate), PDF study
   with citations and resume, and a ZIP interchange export/import (docs/ATLAS_LEARNING_INTERCHANGE.md). Street Advisory import is NOT
