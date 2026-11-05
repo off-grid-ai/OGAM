@@ -18,7 +18,11 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     gap: SPACING.sm,
   },
   backButton: {
-    padding: SPACING.xs,
+    width: 44,
+    height: 44,
+    margin: -8,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   title: {
     ...TYPOGRAPHY.h2,
@@ -257,9 +261,11 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     gap: SPACING.sm,
     marginLeft: SPACING.sm,
   },
+  // 44 pt frames pulled back 6 pt each side, so the transfer row keeps its size.
   transferIconButton: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
+    margin: -6,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
