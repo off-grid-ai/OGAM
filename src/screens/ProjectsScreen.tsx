@@ -134,11 +134,7 @@ export const ProjectsScreen: React.FC = () => {
               : `${chatCount} chats`
           }
         >
-          <View style={styles.projectIcon}>
-            <Text style={styles.projectIconText}>
-              {item.name.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+          <Icon name="folder" size={15} color={colors.textMuted} style={styles.projectIcon} />
           <View style={styles.projectContent}>
             <View style={styles.projectNameRow}>
               <Text style={styles.projectName} numberOfLines={1}>{item.name}</Text>
@@ -246,12 +242,12 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   subtitle: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.xs,
   },
   list: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.sm,
   },
   // The subtitle sits above the search bar, so the bar needs less space on top than on Chats.
@@ -270,19 +266,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingVertical: SPACING.sm,
     backgroundColor: colors.surface,
   },
-  projectIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 4,
-    backgroundColor: colors.surfaceLight,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    marginRight: SPACING.sm,
-  },
-  projectIconText: {
-    ...TYPOGRAPHY.meta,
-    color: colors.textMuted,
-  },
+  projectIcon: { marginRight: SPACING.md },
   projectContent: {
     flex: 1,
   },

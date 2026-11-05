@@ -53,16 +53,16 @@ describe('ProjectsScreen', () => {
   });
 
   describe('the list', () => {
-    it('lists each project with its initial, and its description only when it has one', async () => {
+    it('lists each project with a folder glyph (no letter badge), and its description only when it has one', async () => {
       const app = await mountProjectsApp({ noStarterProjects: true });
       const alpha = await makeProject(app, 'Project Alpha', 'A detailed project description');
       const beta = await makeProject(app, 'Sample Beta');
 
       expect(rowOf(app, alpha).getByText('Project Alpha')).toBeTruthy();
       expect(rowOf(app, alpha).getByText('A detailed project description')).toBeTruthy();
-      expect(rowOf(app, alpha).getByText('P')).toBeTruthy();
+      expect(rowOf(app, alpha).queryByText('P')).toBeNull();
       expect(rowOf(app, beta).getByText('Sample Beta')).toBeTruthy();
-      expect(rowOf(app, beta).getByText('S')).toBeTruthy();
+      expect(rowOf(app, beta).queryByText('S')).toBeNull();
       expect(rowOf(app, beta).queryByText('A detailed project description')).toBeNull();
     });
 
