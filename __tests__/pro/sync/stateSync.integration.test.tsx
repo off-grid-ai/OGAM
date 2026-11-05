@@ -637,7 +637,7 @@ describe('Pro mobile state sync journey', () => {
     );
 
     fireEvent.press(ui.getByText('Desktop Research'));
-    fireEvent.press(await waitFor(() => ui!.getByText('Delete Project')));
+    fireEvent.press(await waitFor(() => ui!.getByText('Delete project')));
     fireEvent.press(await waitFor(() => ui!.getByText('Delete')));
     await waitFor(() =>
       expect(

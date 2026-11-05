@@ -31,9 +31,9 @@ describe('Q9 — deleting a project orphans its chats (red-flow, real delete ges
     expect(list.getByText('My filed chat')).toBeTruthy();
     list.unmount();
 
-    // User opens the project and deletes it the real way: tap "Delete Project" → confirm "Delete".
+    // User opens the project and deletes it the real way: tap "Delete project" → confirm "Delete".
     const detail = render(withNavigator(<ProjectDetailScreen />, { projectId: routeProjectId }));
-    fireEvent.press(detail.getByText('Delete Project'));
+    fireEvent.press(detail.getByText('Delete project'));
     fireEvent.press(await waitFor(() => detail.getByText('Delete')));
 
     // The project is gone.
