@@ -21,6 +21,7 @@ import { useHasRegisteredScreen } from '../../navigation/screenRegistry';
 import { createStyles, COLUMN_COUNT } from './styles';
 import { useGalleryActions } from './useGalleryActions';
 import { GalleryGridItem } from './GridItem';
+import { UnderlineTabs } from '../../components/UnderlineTabs';
 import { FullscreenViewer } from './FullscreenViewer';
 import { SCROLL_DEPTH_PROPS } from '../../constants/scrollDepth';
 
@@ -187,17 +188,19 @@ export const GalleryScreen: React.FC = () => {
         )}
       </View>
 
-      <View style={styles.mediaTabs}>
-        {(['images', 'videos'] as const).map(tab => <TouchableOpacity key={tab} onPress={() => {
+      <UnderlineTabs
+        tabs={[
+          { key: 'images' as const, label: `Images (${displayImages.length})`, testID: 'gallery-tab-images' },
+          { key: 'videos' as const, label: `Videos (${displayVideos.length})`, testID: 'gallery-tab-videos' },
+        ]}
+        active={kind}
+        onChange={tab => {
           // Leaving Images ends image select mode: the Videos list cannot show what is selected.
           if (tab === 'videos' && isSelectMode) toggleSelectMode();
           if (tab === 'videos' && hasVideoLibrary) navigation.navigate('VideoLibrary' as never);
           else setKind(tab);
-        }} accessibilityRole="button" testID={`gallery-tab-${tab}`}
-          style={[styles.mediaTab, kind === tab && styles.mediaTabActive]}>
-          <Text style={kind === tab ? styles.mediaTabTextActive : styles.mediaTabText}>{tab === 'images' ? `Images (${displayImages.length})` : `Videos (${displayVideos.length})`}</Text>
-        </TouchableOpacity>)}
-      </View>
+        }}
+      />
 
       {kind === 'videos' && VideoStatus && (
         <VideoStatus conversationId={conversationId} />
@@ -306,6 +309,9 @@ export const GalleryScreen: React.FC = () => {
           columnWrapperStyle={styles.gridRow}
           showsVerticalScrollIndicator={false}
           {...LIST_CLIPPING_PROPS}
+          // Each tile fades and slides in. iOS clipping detaches tiles mid-move and some never
+          // draw again, which left blank holes in the grid; the list still unmounts far rows.
+          removeClippedSubviews={false}
         />
       )}
 

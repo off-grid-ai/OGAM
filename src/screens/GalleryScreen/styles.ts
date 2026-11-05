@@ -219,16 +219,6 @@ const createViewerStyles = (colors: ThemeColors) => ({
 });
 
 const createVideoStyles = (colors: ThemeColors) => ({
-  mediaTabs: { flexDirection: 'row' as const, padding: SPACING.sm, gap: SPACING.sm },
-  mediaTab: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 6,
-    backgroundColor: colors.surface,
-  },
-  mediaTabActive: { backgroundColor: colors.primary },
-  mediaTabText: { color: colors.text },
-  mediaTabTextActive: { color: colors.background },
   videoList: { padding: SPACING.md },
   videoRow: {
     flexDirection: 'row' as const,
