@@ -27,8 +27,9 @@ export function memoryRefusalAlert(
   detail: string,
   actions: { onTryAnyway: () => void; onCancel?: () => void; onChooseModel?: () => void },
 ): AlertState {
-  return showAlert('Insufficient Memory', detail, [
-    ...(actions.onChooseModel ? [{ text: 'Choose another model', onPress: actions.onChooseModel }] : []),
+  // Load Anyway can still run the phone out of memory; the sheet says so in one line.
+  return showAlert('Insufficient Memory', `${detail}\n\nLoad Anyway may close the app if memory runs out.`, [
+    ...(actions.onChooseModel ? [{ text: 'Choose another model', style: 'primary' as const, onPress: actions.onChooseModel }] : []),
     { text: 'Load Anyway', onPress: actions.onTryAnyway },
     { text: 'Cancel', style: 'cancel' as const, onPress: actions.onCancel },
   ]);

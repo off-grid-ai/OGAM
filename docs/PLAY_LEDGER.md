@@ -38,3 +38,10 @@ Each round: expected / found / root cause / change / commit / screenshots.
 - **Stop:** a red circle with no label → neutral (text colour) with the label "Stop reply". Commit `903e8721a`.
 - **Device check:** blocked at 12:28. The Mac moved to another network (10.86.x) and the phone is on the OnePlus hotspot, so Metro cannot reach the phone. WDA is back over USB (iproxy 8100).
 - **Push:** the pre-push hook failed with no failing test shown. The related-tests run is being checked.
+- **Memory refusal:** Gemma 4 E4B needs ~7.0 GB at 8k context and 4–5 GB is free. The chat showed Cancel and a red Load Anyway, with no way forward. One shared sheet (`memoryRefusalAlert`) now leads with **Choose another model** on both chat load paths, keeps the selection on the loaded model, and shows Load Anyway as a normal choice. Commits `2263740df`, `a76561cc1`. Screen: `r02-chat-surface/05-memory-sheet.jpg`. Polish pending: three buttons in a row are cramped (M3).
+- **Reverted:** reading the remembered pick in the selection resolver broke "No Model Selected" after a deliberate unload (`batch2-send`). That is existing behaviour, so it is kept.
+- **Push gate:** it failed 3 times: once on a half-edited tree, and twice on load timeouts while the Mac also ran device work. Rule from now on: push only from a clean, committed tree, with the Mac idle.
+
+## Time review 13:00 (asked by Mac)
+- 45% environment (builds, pods, certificate trust, Metro address, network change), 15% audit, 20% shipped fixes, 20% detours and the push gate.
+- Changes: time-box any investigation to 10 min; work only on what shows on the phone; one push per milestone from a clean tree; the supervisor runs every 10 min.
