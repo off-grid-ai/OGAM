@@ -128,16 +128,6 @@ const createEmptyChatStyles = (colors: ThemeColors) => ({
     marginBottom: SPACING.lg,
     gap: SPACING.sm,
   },
-  projectHintIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  projectHintIconText: { ...TYPOGRAPHY.bodySmall, fontWeight: '500' as const, color: colors.textSecondary },
   projectHintText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
   privacyText: { ...TYPOGRAPHY.h3, color: colors.textMuted, textAlign: 'center' as const, maxWidth: 300 },
 });

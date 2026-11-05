@@ -200,11 +200,7 @@ export const EmptyChat: React.FC<{
     )}
     <AnimatedEntry index={4} staggerMs={60}>
       <TouchableOpacity style={styles.projectHint} onPress={() => setShowProjectSelector(true)}>
-        <View style={styles.projectHintIcon}>
-          <Text style={styles.projectHintIconText}>
-            {activeProject?.name?.charAt(0).toUpperCase() || 'D'}
-          </Text>
-        </View>
+        <Icon name="folder" size={13} color={colors.textMuted} />
         <Text style={styles.projectHintText}>
           Project: {activeProject?.name || 'Default'} · Change
         </Text>
