@@ -65,23 +65,23 @@ export const DeviceInfoScreen: React.FC = () => {
             </Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Total RAM</Text>
+            <Text style={styles.infoLabel}>Memory</Text>
             <Text style={styles.infoValue}>{totalRamGB.toFixed(1)} GB</Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Available Now</Text>
+            <Text style={styles.infoLabel}>Free now</Text>
             <Text style={styles.infoValue}>{proc ? gb(proc.availableMB) : '…'}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>App Footprint</Text>
+            <Text style={styles.infoLabel}>Used by Off Grid AI</Text>
             <Text style={styles.infoValue}>{proc ? gb(proc.footprintMB) : '…'}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Process Limit</Text>
+            <Text style={styles.infoLabel}>Most the app can use</Text>
             <Text style={styles.infoValue}>{proc ? gb(proc.limitMB) : '…'}</Text>
           </View>
           <View style={[styles.infoRow, styles.lastRow]}>
-            <Text style={styles.infoLabel}>Device Tier</Text>
+            <Text style={styles.infoLabel}>Phone class</Text>
             <Text style={[styles.infoValue, styles.tierBadge]}>
               {deviceTier.charAt(0).toUpperCase() + deviceTier.slice(1)}
             </Text>

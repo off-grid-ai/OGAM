@@ -63,10 +63,10 @@ describe('DeviceInfoScreen', () => {
     expect(view.getByText('Device Information')).toBeTruthy();
     expect(row(rtl, view, 'Model').getByText('Pixel 7')).toBeTruthy();
     expect(row(rtl, view, 'System').getByText('Android 14')).toBeTruthy();
-    expect(row(rtl, view, 'Total RAM').getByText('8.0 GB')).toBeTruthy();
-    await rtl.waitFor(() => expect(row(rtl, view, 'Available Now').getByText('5.0 GB')).toBeTruthy());
-    expect(row(rtl, view, 'App Footprint').getByText('3.0 GB')).toBeTruthy();
-    expect(row(rtl, view, 'Process Limit').getByText('8.0 GB')).toBeTruthy();
+    expect(row(rtl, view, 'Memory').getByText('8.0 GB')).toBeTruthy();
+    await rtl.waitFor(() => expect(row(rtl, view, 'Free now').getByText('5.0 GB')).toBeTruthy());
+    expect(row(rtl, view, 'Used by Off Grid AI').getByText('3.0 GB')).toBeTruthy();
+    expect(row(rtl, view, 'Most the app can use').getByText('8.0 GB')).toBeTruthy();
     expect(view.queryByText('…')).toBeNull();
   });
 
@@ -78,7 +78,7 @@ describe('DeviceInfoScreen', () => {
   ])('a %i GB phone is in the %s tier', async (totalGB, tier) => {
     const { rtl, view } = await mount({ totalGB, availGB: 1 });
 
-    expect(row(rtl, view, 'Device Tier').getByText(tier)).toBeTruthy();
+    expect(row(rtl, view, 'Phone class').getByText(tier)).toBeTruthy();
     // The compatibility list names every tier; this phone's row names just one.
     for (const name of ['Low', 'Medium', 'High', 'Flagship']) expect(view.getAllByText(name).length).toBeGreaterThanOrEqual(1);
   });
