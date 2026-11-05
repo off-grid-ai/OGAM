@@ -4,6 +4,7 @@ import { TouchableOpacity } from '../../../components/Touchable';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedListItem } from '../../../components/AnimatedListItem';
+import { ListGroup } from '../../../components/ListGroup';
 import { useTheme, useThemedStyles } from '../../../theme';
 import { createStyles } from '../styles';
 import { Conversation } from '../../../types';
@@ -54,6 +55,7 @@ export const RecentConversations: React.FC<Props> = ({
           </Text>
         </TouchableOpacity>
       </View>
+      <ListGroup testID="recent-conversations">
       {conversations.map((conv, index) => (
         <Swipeable
           key={conv.id}
@@ -91,6 +93,7 @@ export const RecentConversations: React.FC<Props> = ({
           </AnimatedListItem>
         </Swipeable>
       ))}
+      </ListGroup>
     </View>
   );
 };

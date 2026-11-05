@@ -4,6 +4,7 @@ import {
   Text,
   FlatList,
 } from 'react-native';
+import { ListGroupSeparator, listGroupRowEnds, listRowStyle } from '../components/ListGroup';
 import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -119,7 +120,7 @@ export const ProjectsScreen: React.FC = () => {
         <AnimatedListItem
           index={index}
           trigger={focusTrigger}
-          style={styles.projectItem}
+          style={[styles.projectItem, listGroupRowEnds(index, visibleProjects.length)]}
           onPress={() => handleProjectPress(item)}
           testID={`project-row-${item.id}`}
           accessibilityRole="button"
@@ -212,6 +213,7 @@ export const ProjectsScreen: React.FC = () => {
             {...SCROLL_DEPTH_PROPS}
             data={visibleProjects}
             renderItem={renderProject}
+            ItemSeparatorComponent={ListGroupSeparator}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
@@ -228,7 +230,7 @@ export const ProjectsScreen: React.FC = () => {
   );
 };
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -257,15 +259,11 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     textAlign: 'center' as const,
     paddingVertical: SPACING.xxl,
   },
+  // A row of the projects group: one surface with hairlines between rows (ListGroupSeparator).
   projectItem: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    backgroundColor: colors.surface,
-    paddingHorizontal: SPACING.md,
+    ...listRowStyle,
     paddingVertical: SPACING.sm,
-    borderRadius: 10,
-    marginBottom: SPACING.sm,
-    ...shadows.small,
+    backgroundColor: colors.surface,
   },
   projectIcon: {
     width: 24,

@@ -1,3 +1,4 @@
+import { listRowStyle } from '../../components/ListGroup';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 const createLayoutStyles = (colors: ThemeColors) => ({
@@ -262,15 +263,11 @@ const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.meta,
     color: colors.textMuted,
   },
+  // A row in the Recent ListGroup: flat, the group draws the surface and the hairlines.
   conversationItem: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    paddingHorizontal: SPACING.md,
+    ...listRowStyle,
     paddingVertical: SPACING.sm + 2,
-    marginBottom: SPACING.sm + SPACING.xs,
-    ...shadows.small,
+    backgroundColor: colors.surface,
   },
   conversationInfo: {
     flex: 1,

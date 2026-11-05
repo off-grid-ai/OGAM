@@ -12,6 +12,7 @@ import { Button } from '../components/Button';
 import { ModelSelectorModal } from '../components';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
 import { AnimatedEntry } from '../components/AnimatedEntry';
+import { ListGroupSeparator, listGroupRowEnds, listRowStyle } from '../components/ListGroup';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ListSearchBar } from '../components/ListSearchBar';
@@ -184,7 +185,7 @@ export const ChatsListScreen: React.FC = () => {
         <AnimatedListItem
           index={index}
           trigger={focusTrigger}
-          style={styles.chatItem}
+          style={[styles.chatItem, listGroupRowEnds(index, visibleConversations.length)]}
           onPress={() => {
             if (!selecting) {
               handleChatPress(item);
@@ -354,6 +355,7 @@ export const ChatsListScreen: React.FC = () => {
             {...SCROLL_DEPTH_PROPS}
             data={visibleConversations}
             renderItem={renderChat}
+            ItemSeparatorComponent={ListGroupSeparator}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
@@ -399,7 +401,7 @@ export const ChatsListScreen: React.FC = () => {
   );
 };
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -437,15 +439,11 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     textAlign: 'center' as const,
     paddingVertical: SPACING.xxl,
   },
+  // A row of the chats group: one surface with hairlines between rows (ListGroupSeparator).
   chatItem: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    backgroundColor: colors.surface,
-    paddingHorizontal: SPACING.md,
+    ...listRowStyle,
     paddingVertical: SPACING.sm + 2,
-    borderRadius: 10,
-    marginBottom: SPACING.md,
-    ...shadows.small,
+    backgroundColor: colors.surface,
   },
   chatContent: {
     flex: 1,
