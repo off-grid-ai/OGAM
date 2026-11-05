@@ -429,3 +429,10 @@ Every item in this build passes: header targets 44 and named, reply at 24, Done 
 1. "Message actions" is folded into the message's label, not its own button; "•••" ~24 pt. Voice mode overlaps Chat settings by 9 pt.
 2. Downloads: Retry/Remove 33 pt, Back 28; Resume and the wrench not in the a11y tree.
 3. Models tab: Check for new models and Downloads 28, Sort/Filter/Import 38, picks Download 17. Pro row has no button role.
+
+## Supervisor 07:15 (hand test 40, build at 14cd7cf66)
+
+Message actions its own button, header no overlap, Models tab 44s, Resume and Repair in the a11y tree, Pro row a button: pass. Top 3:
+1. Regressions: Speak overlaps Message actions by 13 pt (meta row); Retry/Resume overlap Remove by 13 pt (transferActions has no gap).
+2. Icon glyphs leak into a11y labels (Settings rows, Tools it could use); Tools row not a button.
+3. Small targets: generation-details-toggle and Tools row 15 pt; Voice tab 37 wide; Home bell and Pro 36.
