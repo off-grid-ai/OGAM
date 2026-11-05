@@ -1097,7 +1097,7 @@ describe('ModelSettingsScreen', () => {
     it('shows confirmation alert when pressed', () => {
       const { getByTestId, getByText } = renderScreen();
       fireEvent.press(getByTestId('reset-settings-button'));
-      expect(getByText('Reset All Settings')).toBeTruthy();
+      expect(getByText('Reset all settings')).toBeTruthy();
     });
 
     it('resets all settings to defaults when confirmed', () => {

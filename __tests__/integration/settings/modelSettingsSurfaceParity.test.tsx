@@ -144,7 +144,7 @@ describe('model settings surface parity', () => {
       <GenerationSettingsModal visible onClose={() => {}} />,
     );
     fireEvent.press(chatSettings.getByText('TEXT GENERATION'));
-    expect(chatSettings.getByText('Auto (up to Max Tokens)')).toBeTruthy();
+    expect(chatSettings.getByText('Auto (up to max tokens)')).toBeTruthy();
     fireEvent(chatSettings.getByTestId('setting-maxTokens-slider'), 'slidingComplete', 4096);
     fireEvent(chatSettings.getByTestId('thinking-budget-slider'), 'slidingComplete', 4);
     expect(chatSettings.getByText('4K tokens')).toBeTruthy();
@@ -154,7 +154,7 @@ describe('model settings surface parity', () => {
     fireEvent.press(modelSettings.getByTestId('text-generation-accordion'));
     expect(modelSettings.getByText('4K tokens')).toBeTruthy();
     fireEvent(modelSettings.getByTestId('thinking-budget-slider'), 'slidingComplete', 0);
-    expect(modelSettings.getByText('Auto (up to Max Tokens)')).toBeTruthy();
+    expect(modelSettings.getByText('Auto (up to max tokens)')).toBeTruthy();
   });
 
   it('limits Thinking Budget to Max Tokens when the output limit is lowered', () => {
@@ -177,14 +177,14 @@ describe('model settings surface parity', () => {
     fireEvent.press(chatSettings.getByText('TEXT GENERATION'));
     const chatOrder = JSON.stringify(chatSettings.toJSON());
     expect(chatOrder.indexOf('Context length')).toBeLessThan(chatOrder.indexOf('Max tokens'));
-    expect(chatOrder.indexOf('Max tokens')).toBeLessThan(chatOrder.indexOf('Thinking Budget'));
+    expect(chatOrder.indexOf('Max tokens')).toBeLessThan(chatOrder.indexOf('Thinking budget'));
     chatSettings.unmount();
 
     const modelSettings = renderModelSettings();
     fireEvent.press(modelSettings.getByTestId('text-generation-accordion'));
     const modelOrder = JSON.stringify(modelSettings.toJSON());
     expect(modelOrder.indexOf('Context length')).toBeLessThan(modelOrder.indexOf('Max tokens'));
-    expect(modelOrder.indexOf('Max tokens')).toBeLessThan(modelOrder.indexOf('Thinking Budget'));
+    expect(modelOrder.indexOf('Max tokens')).toBeLessThan(modelOrder.indexOf('Thinking budget'));
   });
 
   it('shows the selected STT model in Models, outside chat settings', () => {
