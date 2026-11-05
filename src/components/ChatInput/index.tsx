@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useStopTapGuard } from './useStopTapGuard';
 import { View, Text, TextInput, Animated, Platform, ActionSheetIOS } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
@@ -294,7 +295,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     onTranscript: voiceHandlers.onTranscript,
     onAudioAttachment: voiceHandlers.onAudioAttachment,
     onAutoSend: voiceHandlers.onAutoSend,
-  });
+  });  // The mic takes Stop's place when a reply ends; a late Stop tap must not start recording.
+  const startRecordingAfterStop = useStopTapGuard(isGenerating, startRecording);
+
   const voiceProcessingState = deriveVoiceProcessingState({
     isRecording,
     isModelLoading,
@@ -555,7 +558,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         isTranscribing={isTranscribing}
         partialResult={partialResult}
         error={error}
-        onStartRecording={startRecording}
+        onStartRecording={startRecordingAfterStop}
         onStopRecording={stopRecording}
         onCancelRecording={cancelRecording}
         onStop={onStop}
@@ -632,7 +635,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       partialResult={partialResult}
       error={error}
       disabled={disabled}
-      onStartRecording={startRecording}
+      onStartRecording={startRecordingAfterStop}
       onStopRecording={stopRecording}
       onCancelRecording={cancelRecording}
       onInteractionModeChange={setVoiceInteractionMode}
