@@ -114,3 +114,5 @@ Each round: expected / found / root cause / change / commit / screenshots.
 2. New chat: header names the active model; starters full width; one project mention, not two; the boxed empty icon becomes a soft emerald glow. Reshoot light and dark (the 15:44 shot predates `7533d507f`).
 3. DEVICE_QUEUE 3–13 on the phone, fresh install (13) first.
 - **Mockup risk, acted on:** the Home mockup had dropped the Models collapse chevron, the "Write to us" button, the "Discoverable" sync state and the real latest clipboard item. All four are back in the mockup; the live dot now carries the word "Live".
+- **16:02 device, queue 7 and 9:** Chats is one grouped surface with hairlines (pass). Models › More models is one group with labelled, one-tone badges (pass). Both still set reading text (chat previews, model descriptions) in Geist Mono; it belongs in Geist. "For this phone" is still three boxed cards. Swipe-to-delete not yet checked.
+- **Open question to Mac:** reuse shared first (`@offgrid/design` tokens in place of mobile's copy in `palettes.ts`, alive motion values moved into `@offgrid/design`, Home headlines from `@offgrid/features`), or build Home first.
