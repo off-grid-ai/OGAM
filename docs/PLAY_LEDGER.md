@@ -273,3 +273,9 @@ Pass: Pro Active is a plain status; the model sheet hub is one surface; a stoppe
 1. A late Stop tap never starts the mic.
 2. Plain names in "Tools it could use".
 3. No gap between the hub and the Text sheet; full quant labels; plain speech name.
+
+## Supervisor 00:40 — hand test 17 (build 18, head c6171e279; the phone cannot reach Metro yet)
+Pass: Projects folder glyphs and 24px list gutter, bare voice-mode glyph, Downloads Geist sentences and no "0", Device tiers without boxes, "Whisper Base (English)". Fail: a Stop tap about 1 s after the reply ended still started recording (the 0.7 s grace was too short); Projects header still a slab at 12px (the new search bar was not in this build); Device information without the field, 16px gutter, a border on the chosen tier, overlapping tier ranges; Downloads "Rate unavailable" in Mono, a boxed count, cut "Q1_".
+1. A late Stop tap never starts the mic (grace to 1.2 s).
+2. Projects header: 24px gutter, no slab.
+3. Device information on the field, 24px, ranges that do not overlap.
