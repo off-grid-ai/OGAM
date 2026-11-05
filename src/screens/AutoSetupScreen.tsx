@@ -422,10 +422,10 @@ function outcomeLabel(
 const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   container: { flex: 1, backgroundColor: colors.background },
   content: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.xl,
     paddingBottom: SPACING.xxl,
-    gap: SPACING.sm,
+    gap: SPACING.md,
   },
   center: {
     flex: 1,
