@@ -8,10 +8,10 @@ import Animated, {
   useReducedMotion,
   useSharedValue,
 } from 'react-native-reanimated';
-import Svg, { Circle, Defs, Mask, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { useTheme } from '../theme';
 import { ALIVE, LIVING_FIELD } from '../constants';
-import { useAlive } from './AliveProvider';
+import { useAlive, type AliveSignals } from './AliveProvider';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -57,11 +57,10 @@ export const LivingField: React.FC<{
 
   const driftStyle = useAnimatedStyle(() => ({ transform: [{ translateY: drift.value }] }));
   // The light under the finger, and the ring a press sends out (desktop: 1.1 px/ms to 520 px).
-  const lightProps = useAnimatedProps(() => ({
-    cx: alive ? alive.touchX.value - originX.value : -1000,
-    cy: alive ? alive.touchY.value - originY.value - drift.value : -1000,
-    opacity: alive ? alive.touch.value : 0,
-  }));
+  // Three widening, fainter discs of lit dots make the light's soft falloff.
+  const lightOuter = useAnimatedProps(() => lightDisc(alive, originX.value, originY.value, drift.value, 1, 0.35));
+  const lightMid = useAnimatedProps(() => lightDisc(alive, originX.value, originY.value, drift.value, 0.6, 0.45));
+  const lightCore = useAnimatedProps(() => lightDisc(alive, originX.value, originY.value, drift.value, 0.3, 0.6));
   const ringProps = useAnimatedProps(() => {
     const radius = alive ? alive.ringRadius.value : ALIVE.ringReach;
     return {
@@ -96,17 +95,15 @@ export const LivingField: React.FC<{
             <Pattern id="field-dots-lit" width={spacing} height={spacing} patternUnits="userSpaceOnUse">
               <Circle cx={spacing / 2} cy={spacing / 2} r={dotRadius * 1.15} fill={colors.primary} fillOpacity={litAlpha} />
             </Pattern>
-            <RadialGradient id="field-light" cx="50%" cy="50%" r="50%">
-              <Stop offset="0" stopColor="#FFFFFF" stopOpacity={1} />
-              <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
-            </RadialGradient>
-            <Mask id="field-lit" maskUnits="userSpaceOnUse" x={0} y={0} width={width} height={latticeHeight}>
-              <AnimatedCircle animatedProps={lightProps} r={ALIVE.lightRadius} fill="url(#field-light)" />
-              <AnimatedCircle animatedProps={ringProps} fill="none" stroke="#FFFFFF" strokeWidth={ALIVE.ringBand} />
-            </Mask>
           </Defs>
           <Rect width={width} height={latticeHeight} fill="url(#field-dots)" />
-          <Rect width={width} height={latticeHeight} fill="url(#field-dots-lit)" mask="url(#field-lit)" />
+          {/* The light under a finger: lit dots in three widening, fainter rings of the pattern (a
+              soft falloff without a mask, which react-native-svg does not redraw as it animates). */}
+          <AnimatedCircle animatedProps={lightOuter} fill="url(#field-dots-lit)" />
+          <AnimatedCircle animatedProps={lightMid} fill="url(#field-dots-lit)" />
+          <AnimatedCircle animatedProps={lightCore} fill="url(#field-dots-lit)" />
+          {/* The ring a press sends out, stroked with the same lit dots. */}
+          <AnimatedCircle animatedProps={ringProps} fill="none" stroke="url(#field-dots-lit)" strokeWidth={ALIVE.ringBand} />
         </Svg>
        </Animated.View>
       </Animated.View>
@@ -139,6 +136,24 @@ const breath = css.create({
   ),
   lattice: breathe(css.keyframes({ from: { opacity: 0.82 }, to: { opacity: 1 } })),
 });
+
+/** One disc of the finger's light, in the field's own coordinates. */
+function lightDisc(
+  alive: AliveSignals | null,
+  originX: number,
+  originY: number,
+  drift: number,
+  scale: number,
+  strength: number,
+) {
+  'worklet';
+  return {
+    cx: alive ? alive.touchX.value - originX : -1000,
+    cy: alive ? alive.touchY.value - originY - drift : -1000,
+    r: ALIVE.lightRadius * scale,
+    opacity: alive ? alive.touch.value * strength : 0,
+  };
+}
 
 /** One soft round light: full at the centre, fading out by 72% of its radius. */
 const Light: React.FC<{ id: string; size: number; color: string; stops: [number, number] }> = ({
