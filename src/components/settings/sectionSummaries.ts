@@ -7,6 +7,7 @@ import {
   NO_TRANSCRIPTION_MODEL_LABEL,
   useTranscriptionModelSetting,
 } from '../../hooks/useTranscriptionModelSetting';
+import { isBuiltInPrompt } from '../../utils/systemPrompt';
 
 type Numeric = { value: number; decimals?: number; formatValue?: (value: number) => string };
 
@@ -40,8 +41,8 @@ export const useSectionSummaries = () => {
 
   return {
     general: `${backend} · ${LOADING[loading]} loading`,
-    // Chat sends the built-in prompt when this is empty (`||`, not `??`), so an empty one is not "None".
-    prompt: settings.systemPrompt?.trim().split('\n')[0] || 'Built-in prompt',
+    // The same rule chat sends by: blank or untouched is the built-in prompt.
+    prompt: isBuiltInPrompt(settings.systemPrompt) ? 'Built-in prompt' : settings.systemPrompt.trim().split('\n')[0],
     text,
     transcription: transcriptionModel ?? NO_TRANSCRIPTION_MODEL_LABEL,
     image: `${parameters.steps} steps · guidance ${parameters.guidanceScale} · ${parameters.size}px`,

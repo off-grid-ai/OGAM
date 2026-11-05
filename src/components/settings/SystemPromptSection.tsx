@@ -34,7 +34,7 @@ export const SystemPromptSection: React.FC = () => {
   const { settings, updateSettings } = useAppStore();
   // Empty means chat uses the built-in prompt, so show that one as the placeholder rather than a
   // shorter stand-in that is never sent (hand test 31).
-  const systemPrompt = settings?.systemPrompt ?? '';
+  const systemPrompt = settings?.systemPrompt?.trim() ? settings.systemPrompt : '';
 
   return (
     <View style={styles.systemPromptContainer}>
@@ -46,10 +46,10 @@ export const SystemPromptSection: React.FC = () => {
         accessibilityLabel="Default system prompt"
         style={styles.textArea}
         value={systemPrompt}
-        onChangeText={(text) => updateSettings({ systemPrompt: text })}
+        onChangeText={(text) => updateSettings({ systemPrompt: text.trim() ? text : '' })}
         multiline
         numberOfLines={4}
-                placeholder={APP_CONFIG.defaultSystemPrompt}
+        placeholder={APP_CONFIG.defaultSystemPrompt}
         placeholderTextColor={colors.textMuted}
       />
     </View>
