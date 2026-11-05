@@ -18,7 +18,8 @@ import { setupChatScreen, renderedThread } from '../../harness/chatHarness';
 jest.unmock('@react-navigation/native');
 
 const SUMMARY = 'The user asked for a long story about Paris.';
-const COMPACTING = 'Compacting your conversation...';
+/** The compaction bar ("… · N s" once it has run 5 s). */
+const COMPACTING = /^Making room for your answer by summarising earlier messages/;
 
 type Turn = { role: string; content: string };
 const historyOf = (resetArgs: unknown[]): Turn[] => JSON.parse(String(resetArgs[5] || '[]'));
