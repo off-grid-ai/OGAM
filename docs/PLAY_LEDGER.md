@@ -338,3 +338,10 @@ Pass: For this phone as rows (Text, Speech), one label style, flat search fields
 
 ## Swapped answers in old [test] chats (investigation, 08:30)
 Not reproducible on the current code: every save path carries the turn's own conversation, and 80 fuzzed runs (three chats, sends, queue, send-now, Stop, Resend, late tokens, tools on/off) found none. The chats are days old, so an older build or Sync is the likely source; they cannot be repaired (no record of which question made which reply). Hardened: a late turn can no longer end the next turn's session (`generationSession.end(reason, turn)`).
+
+## Supervisor 08:55 — hand test 27 (build 28, head 62bd80db3)
+Pass: three-line model rows; project Back/Edit 44pt and named; "New chat" on the empty project; quiet Reset; two new chats back to back each keep their own answer; streaming visible; Stop then send at once streams normally (4.4 s). Fail: Clipboard (bordered boxes, boxed actions, emerald source, red Clear, "Clipboard Sync"); Sync (shadowed cards, four trailing actions with a red trash, mono body text); Device information (boxed cards, tier grid); Storage boxed cards; sheet gutter 16px.
+Least desktop-like now: Clipboard, Sync, Device information.
+1. Sync: one hairline surface, one trailing action per device, Geist body text.
+2. Clipboard: hairline rows, one copy action, grey source, quiet Clear.
+3. Device information: facts as rows; the tier as one row.
