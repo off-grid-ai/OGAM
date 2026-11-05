@@ -18,6 +18,9 @@ type Props = {
   onPressType?: (type: ModelRowType) => void;
 };
 
+/** Chips are 34 px tall to sit like desktop's; the slop makes each a 44 px touch target. */
+const CHIP_SLOP = { top: 5, bottom: 5, left: 2, right: 2 };
+
 const TYPE_ICONS: { type: ModelRowType; icon: string; caption: string }[] = [
   { type: 'text', icon: 'message-square', caption: 'Text' },
   { type: 'image', icon: 'image', caption: 'Image' },
@@ -50,19 +53,35 @@ export const ModelsSummaryRow: React.FC<Props> = ({
       contentContainerStyle={styles.chips}
       testID="models-chips"
     >
+      <AnimatedPressable
+        testID="models-summary"
+        hapticType="selection"
+        accessibilityRole="button"
+        accessibilityLabel="All models"
+        onPress={onPress}
+        hitSlop={CHIP_SLOP}
+      >
+        <View style={styles.chip}>
+          <Icon name="sliders" size={14} color={colors.textSecondary} />
+          <Text style={styles.chipText}>Models</Text>
+        </View>
+      </AnimatedPressable>
       {TYPE_ICONS.map(({ type, icon, caption }) => {
         const active = !!labels[type] && labels[type] !== '—';
         const count = counts?.[type];
         const isText = type === 'text';
         const inUse = isText && active;
+        // With no text model there is nothing to chat with: the first chip asks for one.
+        const needsText = isText && !active;
         return (
           <AnimatedPressable
             key={type}
             testID={`model-summary-${type}-open`}
             hapticType="selection"
             accessibilityRole="button"
-            accessibilityLabel={inUse ? `Text model: ${labels.text}` : `${caption} models`}
+            accessibilityLabel={inUse ? `Text model: ${labels.text}` : needsText ? 'Pick a text model' : `${caption} models`}
             onPress={() => (onPressType ?? onPress)(type)}
+            hitSlop={CHIP_SLOP}
           >
             <View
               testID={`model-summary-${type}`}
@@ -73,16 +92,16 @@ export const ModelsSummaryRow: React.FC<Props> = ({
               {inUse ? (
                 <View style={styles.liveDot} />
               ) : (
-                <Icon name={icon} size={14} color={active ? colors.text : colors.textMuted} />
+                <Icon name={icon} size={14} color={active || needsText ? colors.text : colors.textMuted} />
               )}
               <Text
                 numberOfLines={1}
-                style={[styles.chipText, active && styles.chipTextActive, inUse && styles.chipTextInUse]}
+                style={[styles.chipText, (active || needsText) && styles.chipTextActive, inUse && styles.chipTextInUse]}
               >
-                {inUse ? labels.text : caption}
+                {inUse ? labels.text : needsText ? 'Pick a text model' : caption}
               </Text>
               {isText && isLoading ? <LoadingDots size={4} color={colors.primary} /> : null}
-              {!inUse && typeof count === 'number' && count > 0 && (
+              {!inUse && !needsText && typeof count === 'number' && (
                 <Text testID={`model-summary-count-${type}`} style={styles.count}>
                   {count}
                 </Text>
@@ -91,18 +110,6 @@ export const ModelsSummaryRow: React.FC<Props> = ({
           </AnimatedPressable>
         );
       })}
-      <AnimatedPressable
-        testID="models-summary"
-        hapticType="selection"
-        accessibilityRole="button"
-        accessibilityLabel="All models"
-        onPress={onPress}
-      >
-        <View style={styles.chip}>
-          <Icon name="sliders" size={14} color={colors.textSecondary} />
-          <Text style={styles.chipText}>Models</Text>
-        </View>
-      </AnimatedPressable>
     </ScrollView>
   );
 };
@@ -133,8 +140,7 @@ const createStyles = (colors: ThemeColors) => ({
   // In use: desktop's selected chip, an emerald outline and text on a faint emerald fill.
   chipInUse: {
     borderColor: colors.heroBorder,
-    backgroundColor: colors.surfaceGlass,
-    boxShadow: `inset 0px 0px 0px 100px ${colors.primary}1A`,
+    backgroundColor: colors.selectedFill,
   },
   liveDot: {
     width: 6,
