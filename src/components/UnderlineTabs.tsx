@@ -48,8 +48,10 @@ export function UnderlineTabs<K extends string>({ tabs, active, onChange }: Read
 }
 
 const createStyles = (colors: ThemeColors) => ({
+  // Never squeezed by its screen, so the line under the tabs is the row's own bottom edge.
   scroller: {
     flexGrow: 0,
+    flexShrink: 0,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     marginBottom: 12,
@@ -69,7 +71,8 @@ const createStyles = (colors: ThemeColors) => ({
     position: 'absolute' as const,
     left: 0,
     right: 0,
-    bottom: 6,
+    // On the line under the tabs, the same on every screen (hand test 44: 6 pt above it on Models).
+    bottom: 0,
     height: 2,
     backgroundColor: colors.primary,
     borderRadius: 1,
