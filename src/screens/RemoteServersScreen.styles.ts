@@ -137,8 +137,10 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
     statusDotActive: {
       backgroundColor: colors.success,
     },
+    // A server that is not answering is a fact, not an alarm: a dim dot; the status line says why.
     statusDotInactive: {
-      backgroundColor: colors.error,
+      backgroundColor: colors.textMuted,
+      opacity: 0.5,
     },
     statusDotUnknown: {
       backgroundColor: colors.textMuted,

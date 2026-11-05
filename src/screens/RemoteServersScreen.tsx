@@ -350,11 +350,12 @@ export const RemoteServersScreen: React.FC = () => {
                     testID={`server-use-${server.id}`}
                   >
                     <View style={styles.serverTopRow}>
-                      <View style={[styles.statusDot, statusColor]} />
+                      {/* A radio, as on Models: tap a row to use that server. */}
+                      <Icon name={isActive ? 'check-circle' : 'circle'} size={16} color={isActive ? theme.colors.primary : theme.colors.textMuted} />
                       <Text style={styles.serverName} numberOfLines={1}>
                         {server.name}
                       </Text>
-                      {isActive && <Icon name="check" size={14} color={theme.colors.primary} />}
+                      <View style={[styles.statusDot, statusColor]} />
                       {/* Only the chosen server is marked; tapping any row chooses it (its label says so). */}
                       {isActive && <Text style={styles.activeBadge}>In use</Text>}
                     </View>
