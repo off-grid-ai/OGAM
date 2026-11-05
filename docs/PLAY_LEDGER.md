@@ -322,3 +322,10 @@ Least desktop-like: Chat settings sheet, Models Text tab, Home.
 1. Chat settings sheet: one surface, quiet Delete, sentence case, no emerald numbers.
 2. Models Text tab: picks as rows, no tinted row.
 3. Composer buttons without shadows; Generation details scrolls into view.
+
+## Supervisor 07:10 — hand test 25 (build 26, head f81ca2ff9)
+Pass: flat Send and Stop; replies visible while streaming (first words about 21 s, above the composer); the mic rests after Stop; the Chat settings sheet mostly (quiet Delete, grey stats, sentence-case title). Fail: search fields still shadowed; the big voice mic and voice answer card shadowed; Title Case left ("New Chat", "Image Gallery", "Last Generation:", "Reset to Defaults"); the sheet's "Use fastest settings" and Reset slabs; Models Text picks boxed and rows about 96px; Settings a stack of bordered cards; Home chips boxed.
+Least desktop-like now: Models Text tab, Home, Settings.
+1. Models Text tab: picks as rows, shorter rows, one kicker style.
+2. The last shadows (search fields, voice mic, voice answer card).
+3. Home and Settings on one hairline surface; sentence case everywhere.
