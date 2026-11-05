@@ -309,9 +309,6 @@ export const GalleryScreen: React.FC = () => {
           columnWrapperStyle={styles.gridRow}
           showsVerticalScrollIndicator={false}
           {...LIST_CLIPPING_PROPS}
-          // Each tile fades and slides in. iOS clipping detaches tiles mid-move and some never
-          // draw again, which left blank holes in the grid; the list still unmounts far rows.
-          removeClippedSubviews={false}
         />
       )}
 
