@@ -11,7 +11,7 @@ function portableCrypto() {
 import RNFS from 'react-native-fs';
 import { pick, saveDocuments, types } from '@react-native-documents/picker';
 import { resolvePickedFileUri } from '../utils/resolvePickedFileUri';
-import { collectProjectFiles, restoreProjectFiles } from './projectBackupFiles';
+import { collectProjectFiles, restoreProjectFiles, validateProjectFiles } from './projectBackupFiles';
 import type { ProjectBackupFile } from './projectBackupFiles';
 import { rehydrateStores } from './storeRegistry';
 import { keepThisDevice } from './deviceSettings';
@@ -227,28 +227,59 @@ export async function importBackup(password?: string): Promise<number | null> {
   if (data.version === 2 && !projectPair && data.projectFiles?.length) throw new Error('Project file backup is missing the project records.');
   const projectIds: string[] = projectPair
     ? JSON.parse(projectPair[1]).state.projects.map((p: { id: string }) => p.id) : [];
-  // Do not claim restoration succeeded if a document is missing or damaged.
-  // Older v1 backups are supported without replacing existing knowledge-base data.
-  const restoredDocs = data.version === 2
-    ? await restoreProjectFiles(data.projectFiles as ProjectBackupFile[], projectIds) : 0;
-  // Restoring must never delete protected data that exists only on this phone (its keys and
-  // encrypted files are here): keep this phone's protected projects and locked chats that the
-  // backup does not contain.
+  // Validate all documents, IDs, sizes and duplicate names before changing anything.
+  // Version 1 backups intentionally leave the current knowledge base alone.
+  const projectFiles: ProjectBackupFile[] = data.version === 2 ? data.projectFiles : [];
+  if (data.version === 2) validateProjectFiles(projectFiles, projectIds);
+
+  // Keep local protected items, which an older portable archive may not contain.
   const merged = await Promise.all(pairs.map(async ([key, value]) => [key, await keepDeviceProtected(key, value)] as [string, string]));
   const chatPair = merged.find(([key]) => key === 'local-llm-chat-storage');
   const settingsPairs = merged.filter(([key]) => key !== 'local-llm-chat-storage');
   if (chatPair && !encrypted) throw new Error('Chat restoration requires an encrypted backup.');
-  // Restore via the selected-chat storage adapter. Ordinary chats are readable
-  // on disk by design; protected chats must never enter a portable backup.
-  if (chatPair) {
-    const { encryptedChatStorage } = require('../stores/encryptedChatStorage');
-    await encryptedChatStorage.setItem('local-llm-chat-storage', chatPair[1]);
-  }
-  if (settingsPairs.length) await AsyncStorage.multiSet(settingsPairs);
-  // Load the restored data into the running app right away, so nothing writes old data back over it.
-  // Items that drop out of the stores because the backup is older are not deliberate deletions: offline
-  // sync must not tell the other phone to delete them.
+
+  // Snapshot precisely the keys that might change. Android's AsyncStorage multiSet
+  // is not a transaction; recover partial writes rather than leaving half a backup.
+  const oldSettings = await AsyncStorage.multiGet(settingsPairs.map(([key]) => key));
+  const { encryptedChatStorage } = require('../stores/encryptedChatStorage');
+  const oldChat: string | null = chatPair ? await encryptedChatStorage.getItem('local-llm-chat-storage') : null;
   const reload = () => rehydrateStores(merged.map(([key]) => key));
-  await require('../services/nearbySync').nearbySync.suppressRemovals(reload);
-  return pairs.length + restoredDocs;
+  const { nearbySync } = require('../services/nearbySync');
+
+  // Commit the SQLite document index LAST: its own restore is transactional and
+  // rolls back staged file writes on failure. No fallible operations follow it.
+  return nearbySync.suppressRemovals(async () => {
+    let chatTouched = false;
+    let settingsTouched = false;
+    try {
+      if (chatPair) {
+        chatTouched = true;
+        await encryptedChatStorage.setItem('local-llm-chat-storage', chatPair[1]);
+      }
+      if (settingsPairs.length) {
+        settingsTouched = true;
+        await AsyncStorage.multiSet(settingsPairs);
+      }
+      await reload();
+      const docs = data.version === 2 ? await restoreProjectFiles(projectFiles, projectIds) : 0;
+      return pairs.length + docs;
+    } catch (error) {
+      try {
+        if (settingsTouched) {
+          const previouslySet = oldSettings.filter((entry): entry is [string, string] => entry[1] !== null);
+          const previouslyAbsent = oldSettings.filter(([, value]) => value === null).map(([key]) => key);
+          if (previouslySet.length) await AsyncStorage.multiSet(previouslySet);
+          if (previouslyAbsent.length) await AsyncStorage.multiRemove(previouslyAbsent);
+        }
+        if (chatTouched) {
+          if (oldChat === null) await encryptedChatStorage.removeItem('local-llm-chat-storage');
+          else await encryptedChatStorage.setItem('local-llm-chat-storage', oldChat);
+        }
+        await reload();
+      } catch (rollback) {
+        throw new Error(`Backup restore failed and rollback also failed: ${String(error)}; ${String(rollback)}`);
+      }
+      throw error;
+    }
+  });
 }

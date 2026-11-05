@@ -84,15 +84,23 @@ export function NearbySyncSettings() {
         <View style={styles.titleGroup}>
           <Text style={[styles.title, { color: colors.text }]}>Offline device sync</Text>
           <Text style={[styles.description, { color: colors.textSecondary }]}>
-            Encrypted, optional, no Internet, no password. Syncs everything: chats, agents, projects and their files, settings and API keys, the language course, study, maps, notes, checklists and recordings with their audio.
+            Encrypted, optional, no Internet, no password. Syncs chats, agents, projects, files, settings, learning, maps, notes and recordings. Credential sharing is separate and off by default.
           </Text>
         </View>
         <Switch testID="nearby-sync-toggle" disabled={working} value={status.enabled} onValueChange={onEnable} />
       </View>
       {status.enabled && <>
         <Text style={[styles.note, { color: colors.textSecondary }]}>
-          Both devices must have Atlas open and share Wi-Fi or a hotspot. Wi-Fi Direct works if Android has already connected them. Locked chats and projects go across still locked with their own PIN once you have opened them since starting Atlas. API keys go across inside the encrypted connection and into the other device's secure storage. Temporary private chats and lock PINs never go across. AI models and voices are downloaded on each device.
+          Both devices must have Atlas open and share Wi-Fi or a hotspot. Locked chats and projects transfer only when available as PIN-sealed data. Temporary private chats and lock PINs never transfer. Credential sharing is optional; downloaded models and voices stay device-specific.
         </Text>
+        <View style={styles.header}>
+          <View style={styles.titleGroup}>
+            <Text style={[styles.subtitle, { color: colors.text }]}>Share API credentials</Text>
+            <Text style={[styles.description, { color: colors.textSecondary }]}>Off by default. Enable on both trusted devices to synchronize API keys securely.</Text>
+          </View>
+          <Switch testID="nearby-secrets-toggle" disabled={working} value={status.shareSecrets}
+            onValueChange={(enabled) => { void nearbySync.setShareSecrets(enabled).catch(e => Alert.alert('Could not change credential sharing', String(e))); }} />
+        </View>
         <Pressable testID="nearby-pair-button" style={[styles.button, { backgroundColor: colors.primary }]} disabled={working} onPress={onInvite}>
           <Text style={styles.buttonText}>Show pairing QR code</Text>
         </Pressable>

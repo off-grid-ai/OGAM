@@ -15,6 +15,7 @@ import { audioOnPhone, receiveAudio, sendMissingAudio, type AudioChunk } from '.
 import { useRecordings } from '../../atlasRecorder/store';
 
 const PREF = 'atlas-sync-enabled-v1';
+const SHARE_SECRETS_PREF = 'atlas-sync-share-credentials-v1';
 const DELETED_PREF = 'atlas-sync-deletions-v1';
 /** How long after the last local change the paired phones are synced. */
 const PUSH_DELAY_MS = 5000;
@@ -34,6 +35,7 @@ type NativeNearby = {
 };
 export interface NearbyStatus {
   enabled: boolean;
+  shareSecrets: boolean;
   deviceId: string;
   peers: Peer[];
   lastSync?: string;
@@ -54,6 +56,7 @@ const native = (): NativeNearby => {
 class NearbySyncService {
   private deviceId = '';
   private enabled = false;
+  private shareSecrets = false;
   private active = AppState.currentState !== 'background' && AppState.currentState !== 'inactive';
   private running = false;
   private polling: ReturnType<typeof setInterval> | null = null;
@@ -65,7 +68,7 @@ class NearbySyncService {
   private applyingRemote = false;
   private trackingStarted = false;
   private listeners = new Set<(s: NearbyStatus) => void>();
-  private status: NearbyStatus = { enabled: false, deviceId: '', peers: [], syncing: false };
+  private status: NearbyStatus = { enabled: false, shareSecrets: false, deviceId: '', peers: [], syncing: false };
   getStatus() { return this.status; }
   subscribe(fn: (s: NearbyStatus) => void) { this.listeners.add(fn); fn(this.status); return () => { this.listeners.delete(fn); }; }
   private publish(patch: Partial<NearbyStatus>) {
@@ -176,7 +179,8 @@ class NearbySyncService {
       version: 1, sourceId: this.deviceId, projects: [...projects, ...lockedProjects],
       conversations: [...conversations, ...lockedChats], agents, files, deleted: this.deleted,
       stores: await localStores(), audio: await audioOnPhone(recordings.map(r => r.id)),
-      secrets: await localSecrets(),
+      // Credentials never leave this device without an explicit opt-in.
+      ...(this.shareSecrets ? { secrets: await localSecrets() } : {}),
     };
   }
   /** After an exchange, send the other phone the recording audio it does not have yet. */
@@ -232,7 +236,7 @@ class NearbySyncService {
     this.applyingRemote = true;
     try { await applyStores(remote.stores, this.deleted.recordings); } finally { this.applyingRemote = false; }
     // API keys last, once the remote servers they belong to are here.
-    await applySecrets(remote.secrets);
+    if (this.shareSecrets) await applySecrets(remote.secrets);
     this.publish({ lastSync: new Date().toISOString(), lastError: this.fileNote });
   }
   private async incoming(message: Incoming) {
@@ -274,7 +278,8 @@ class NearbySyncService {
     this.deleted = savedDeletions ? validateTombstones(JSON.parse(savedDeletions)) : emptyTombstones();
     this.watchStores();
     this.enabled = await AsyncStorage.getItem(PREF) === 'true';
-    this.publish({ enabled: this.enabled });
+    this.shareSecrets = await AsyncStorage.getItem(SHARE_SECRETS_PREF) === 'true';
+    this.publish({ enabled: this.enabled, shareSecrets: this.shareSecrets });
     if (this.enabled && this.active) await this.run();
   }
   private async run() {
@@ -295,6 +300,12 @@ class NearbySyncService {
     this.listener?.remove(); this.listener = null;
     this.running = false;
     if (nearbyAvailable) await native().stop();
+  }
+  async setShareSecrets(enabled: boolean): Promise<void> {
+    await AsyncStorage.setItem(SHARE_SECRETS_PREF, enabled ? 'true' : 'false');
+    this.shareSecrets = enabled;
+    this.publish({ shareSecrets: enabled });
+    if (enabled) this.schedulePush();
   }
   async setEnabled(enabled: boolean) {
     if (!nearbyAvailable) throw new Error('Offline sync requires Android.');

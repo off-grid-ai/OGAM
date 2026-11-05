@@ -269,3 +269,42 @@ describe('lists you add to on either phone', () => {
     expect(Object.keys(await localStores(1000))).not.toContain('atlas-offline-library');
   });
 });
+
+it('rejects tampered recording chunks without replacing an existing recording', async () => {
+  const id = 'tamper-test';
+  const target = `/docs/atlas-recordings/${id}.wav`;
+  const original = Buffer.from('original recording');
+  mockFiles.set(target, original);
+  const raw = Buffer.alloc(CHUNK_BYTES + 16, 7);
+  mockFiles.set('/test-source.wav', raw);
+  const chunks: any[] = [];
+  await sendMissingAudio([{ id, audioPath: '/test-source.wav' }], [], async chunk => { chunks.push(chunk); });
+  await receiveAudio(chunks[0]);
+  const corrupt = Buffer.from(chunks[1].data, 'base64');
+  corrupt[0] ^= 1;
+  await expect(receiveAudio({ ...chunks[1], data: corrupt.toString('base64') })).rejects.toThrow(/checksum/i);
+  expect(mockFiles.get(target)).toEqual(original);
+  expect(mockFiles.has(`${target}.part`)).toBe(false);
+});
+
+it('restores the previous recording when the final file move fails', async () => {
+  const id = 'failed-move-test';
+  const path = `/docs/atlas-recordings/${id}.wav`;
+  const original = Buffer.from('original recording');
+  mockFiles.set(path, original);
+  const RNFS = require('react-native-fs');
+  const move = RNFS.moveFile as jest.Mock;
+  const implementation = move.getMockImplementation();
+  move.mockImplementation(async (from: string, to: string) => {
+    if (from.endsWith('.part')) throw new Error('simulated move error');
+    return implementation!(from, to);
+  });
+  try {
+    await expect(receiveAudio({ kind: 'audio', id, index: 0, total: 1,
+      data: Buffer.from('RIFF replacement').toString('base64') })).rejects.toThrow(/move error/);
+    expect(mockFiles.get(path)).toEqual(original);
+    expect(mockFiles.has(`${path}.sync-backup`)).toBe(false);
+  } finally {
+    move.mockImplementation(implementation);
+  }
+});
