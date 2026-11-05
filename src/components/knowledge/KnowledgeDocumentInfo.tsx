@@ -89,6 +89,16 @@ export const KnowledgeTransferInfo: React.FC<{
 }> = ({ transfer, testID }) => {
   const styles = useThemedStyles(createStyles);
   const failed = transfer.status === 'failed';
+  const statusText = (
+    <Text
+      style={[styles.meta, shownTransfer && styles.metaTransfer, failed && styles.metaFailed]}
+      numberOfLines={1}
+      testID={documentId ? `knowledge-document-status-${documentId}` : undefined}
+    >
+      {label}
+    </Text>
+  );
+
   return (
     <View testID={testID}>
       <View style={styles.line}>
@@ -146,18 +156,15 @@ export const KnowledgeDocumentInfo: React.FC<{
 
   return (
     <View testID={testID}>
+      {/* A transfer line ("Couldn't sync to Mac") is a sentence: it gets its own line under the
+          name, so it never cuts the file's name short (hand test 48: "deskto…"). */}
       <View style={styles.line}>
         <Text style={styles.name} numberOfLines={1}>
           {name}
         </Text>
-        <Text
-          style={[styles.meta, shownTransfer && styles.metaTransfer, failed && styles.metaFailed]}
-          numberOfLines={1}
-          testID={documentId ? `knowledge-document-status-${documentId}` : undefined}
-        >
-          {label}
-        </Text>
+        {shownTransfer ? null : statusText}
       </View>
+      {shownTransfer ? statusText : null}
       <ProgressLine fraction={fraction} />
     </View>
   );
@@ -181,7 +188,8 @@ const createStyles = (colors: ThemeColors) => ({
   },
   /** A transfer line can be long ("Couldn't sync to iPhone: file too large"); it shares the row. */
   metaTransfer: {
-    flexShrink: 1,
+    marginLeft: 0,
+    marginTop: 2,
   },
   metaFailed: {
     color: colors.error,
