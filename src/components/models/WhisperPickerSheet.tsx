@@ -193,7 +193,7 @@ const createStyles = (colors: ThemeColors) => ({
     flexShrink: 1,
   },
   content: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.xl,
     // No gap: each card brings its own bottom margin, the same spacing as the text and image pickers.

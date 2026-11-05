@@ -169,7 +169,7 @@ export const PasteNoteSheet: React.FC<PasteNoteSheetProps> = ({
 
 const createStyles = (colors: ThemeColors) => ({
   content: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingBottom: SPACING.lg,
     gap: SPACING.md,
   },
