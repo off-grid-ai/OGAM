@@ -5,6 +5,10 @@ import { DownloadedModel, ONNXImageModel } from '../../types';
 import { DownloadItem } from './items';
 import { parseEntryMetadata } from './retryHandlers';
 import { imageBackendLabel } from '../../utils/imageBackend';
+import { transcriptionModelName } from '../../services/whisperModels';
+
+/** whisper.cpp's file contract: `ggml-<model id>.bin` (ggml-tiny.en.bin is Whisper tiny.en). */
+const WHISPER_FILE = /^ggml-([\w.-]+)\.bin$/;
 
 /**
  * How a download store row, a queued start, or a finished model becomes one Download Manager row.
@@ -92,9 +96,13 @@ export function entryToActiveItem(entry: DownloadEntry): DownloadItem {
   const metadata = parseEntryMetadata(entry);
   const isImage = entry.modelType === 'image';
 
+  // A Whisper file is a speech model whatever kind an older record gave it, and goes by its name.
+  const whisperId = WHISPER_FILE.exec(entry.fileName)?.[1];
+
   return {
     type: 'active',
-    modelType: entry.modelType,
+    modelType: whisperId ? 'stt' : entry.modelType,
+    ...(whisperId ? { name: transcriptionModelName(whisperId) } : {}),
     downloadId: entry.downloadId,
     modelKey: entry.modelKey,
     modelId: getActiveItemModelId(entry, isImage),
