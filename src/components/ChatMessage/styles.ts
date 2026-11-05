@@ -358,10 +358,13 @@ const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textMuted,
   },
   // A 44 pt frame around the ••• glyph, pulled back so the meta row keeps its height.
+  // Pulled back vertically only (sideways 4 pt): its neighbour Speak is a 44 pt frame too, and
+  // side-by-side negative margins made the two overlap (hand test 40).
   actionHint: {
     minWidth: 44,
     minHeight: 44,
-    margin: -10,
+    marginVertical: -10,
+    marginHorizontal: -4,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },

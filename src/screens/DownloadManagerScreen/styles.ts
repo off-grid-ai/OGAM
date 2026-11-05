@@ -126,9 +126,11 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     flex: 1,
     marginBottom: 0,
   },
+  // Covers the buttons' -6 pt side margins, so their 44 pt frames meet but never overlap.
   transferActions: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
+    gap: SPACING.md,
   },
   transferCaptionRow: {
     flexDirection: 'row' as const,
