@@ -8,8 +8,13 @@ const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   backButton: { padding: 4, marginRight: 8 },
   searchContainerNoPadding: { paddingHorizontal: 0 },
   container: { flex: 1, backgroundColor: colors.background },
+  // 44 pt frames (they were 28), pulled back so the header keeps its height.
   downloadManagerButton: {
-    padding: SPACING.xs,
+    width: 44,
+    height: 44,
+    margin: -8,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
     position: 'relative' as const,
   },
   downloadBadge: {
@@ -141,7 +146,7 @@ const createFilterStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   filterChipText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
   filterChipTextActive: { color: colors.primary },
   // Toolbar actions are bare glyphs with a 44px target; the chosen one shows by its emerald glyph.
-  filterToggle: { padding: 12 },
+  filterToggle: { width: 44, height: 44, margin: -3, alignItems: 'center' as const, justifyContent: 'center' as const },
   filterToggleActive: {},
   filterDot: {
     position: 'absolute' as const,
