@@ -116,3 +116,9 @@ Each round: expected / found / root cause / change / commit / screenshots.
 - **Mockup risk, acted on:** the Home mockup had dropped the Models collapse chevron, the "Write to us" button, the "Discoverable" sync state and the real latest clipboard item. All four are back in the mockup; the live dot now carries the word "Live".
 - **16:02 device, queue 7 and 9:** Chats is one grouped surface with hairlines (pass). Models › More models is one group with labelled, one-tone badges (pass). Both still set reading text (chat previews, model descriptions) in Geist Mono; it belongs in Geist. "For this phone" is still three boxed cards. Swipe-to-delete not yet checked.
 - **Open question to Mac:** reuse shared first (`@offgrid/design` tokens in place of mobile's copy in `palettes.ts`, alive motion values moved into `@offgrid/design`, Home headlines from `@offgrid/features`), or build Home first.
+
+## Supervisor 16:13
+1. Reading text in Geist, not Mono: chat previews and model descriptions (small, visible).
+2. `@offgrid/design` is not a drop-in for `palettes.ts`: it lacks onPrimary, shadows and createElevation, types with `as const`, still names Menlo, and dark error differs (#C75050 vs #b06a6a in tokens.css). Make it a superset before any re-export.
+3. "For this phone" as a hairline group; then check swipe-to-delete and the incompatible-row fade on the phone.
+- **Folded in (Mac 16:2x, "smaller lift"):** the token merge moves after the look. The alive pass is about a day: theme values in mobile's palette, three new components (LivingField, Halo, press glow), then Home, New chat, Chats and Models.
