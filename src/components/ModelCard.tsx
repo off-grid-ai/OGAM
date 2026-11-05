@@ -381,6 +381,9 @@ export const ModelCard: React.FC<ModelCardProps> = ({
       onPress={onPress}
       activeOpacity={0.7}
       disabled={disabled || !onPress}
+      // A row with nothing to tap on its own is not one block: grouping it hid its own buttons
+      // (Resume, Repair) from a screen reader (hand test 39).
+      accessible={!!onPress}
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={model.name}
       accessibilityHint={speedHint(capabilities)}
