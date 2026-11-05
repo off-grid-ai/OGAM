@@ -148,7 +148,8 @@ export const GenerationSettingsModal: React.FC<
         )}
 
         <SettingsSectionHeader
-          title="Speech to text"
+          title="Transcription"
+          summary={summaries.transcription}
           open={sttSettingsOpen}
           onToggle={() => setSttSettingsOpen(!sttSettingsOpen)}
           testID="modal-transcription-accordion"

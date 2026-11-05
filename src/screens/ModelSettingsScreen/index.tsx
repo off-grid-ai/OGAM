@@ -136,7 +136,7 @@ export const ModelSettingsScreen: React.FC = () => {
             whisper store as its single source, so the active model shown here is always consistent. */}
         <SettingsSectionHeader
           title="Transcription"
-          summary={sttModelName ?? NO_TRANSCRIPTION_MODEL_LABEL}
+          summary={summaries.transcription}
           open={sttOpen}
           onToggle={() => setSttOpen(!sttOpen)}
           testID="transcription-accordion"

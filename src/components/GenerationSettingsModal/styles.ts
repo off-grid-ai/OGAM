@@ -10,7 +10,8 @@ const createLayoutStyles = (_colors: ThemeColors) => ({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: SPACING.lg,
+    // The 24 pt gutter Model settings uses, so the sheet and the screen read as one surface.
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.lg,
   },
   bottomPadding: {
