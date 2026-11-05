@@ -73,24 +73,25 @@ Each round: expected / found / root cause / change / commit / screenshots.
 - **Still queued for the device (phone offline):** every visual change since `311f8ace3`.
 - **Chat:** an empty chat offers three starter prompts; a tap sends one (`61dffeb30`). Rendered test `starterPrompts.rendered.test.tsx`.
 
-## Supervisor 14:10
+## Supervisor 13:50
 1. Starters: show them only when a model is ready (a tap while loading hits "No Model Selected"). They send without the composer's mode. The last row has a double hairline, and the list is narrow, so prompts wrap.
 2. Switches: on Android a disabled switch keeps full colour; the on-state knob has low contrast on a 50% emerald track. Models list: incompatible rows fade their own surface (patchy group); the active border is hidden in the grouped list.
 3. Next: a fresh-install first run with a best-fit default; Remote Servers as grouped rows; then the alive layer.
 - Done: Settings › Search Model is a pushed route (this round).
-- **Acted on 14:10:** starters show only when a model can answer, with one hairline at the end and the full width (`c1172a7b4`; `batch2-send` asserts no starters without a model). Switches: disabled dims; on is a near-black knob on full emerald (`2890b6c47`). Open: incompatible rows fade their own surface in the grouped Models list; markdown bold at 500 is weak.
+- **Acted on 13:50:** starters show only when a model can answer, with one hairline at the end and the full width (`c1172a7b4`; `batch2-send` asserts no starters without a model). Switches: disabled dims; on is a near-black knob on full emerald (`2890b6c47`). Open: incompatible rows fade their own surface in the grouped Models list; markdown bold at 500 is weak.
 
-## r05 offline polish (14:40) — M3/M4
+## r05 offline polish (14:00) — M3/M4
 - **Models:** an incompatible model fades its content, not its surface, so the grouped list stays solid (`372ea268e`).
 - **Remote Servers:** Test / Edit / Remove became three quiet icon buttons on the row's right edge, with their words as accessible names. Tests now find them by label (`bb983d320`).
 - **Kept:** markdown bold at 500, inside the brand's 300–500 range.
 - **Push gate:** it blocked 4 lint errors from the switch change. Cause: `eslint $F` in zsh linted no files. Fixed in `3ddf7e2f8`, which also locks the OffgridFonts pod. All 78 changed files lint clean.
 - **Device:** still offline; every visual change since `311f8ace3` is queued.
 
-## Supervisor 14:50
+## Supervisor 14:08
 1. A fresh-install first run that picks a best-fit default model (open since 12:22).
 2. Remote Servers and Models as one grouped surface, with the active row marked by an "In use" label or a check, not a border. Server action targets overlapped (fixed `37085e27d`). Faded incompatible text may fail contrast.
 3. The alive layer: composer focus glow done (`720784899`); press, entrance and the living background are next.
 - **Download auto-select:** with nothing selected, a finished download now selects that model, not `downloadedModels[0]`, which could be the classifier. The test fails on the old code (`8dd6aff94`).
 - **Remote Servers:** one grouped list; the active row is marked by its emerald "In use" label, not a border (`b97e1ff18`).
 - **Copy:** Storage and Device Information use plain, sentence-case names (`58f55446f`, `6f3919e65`).
+- **Correction 14:30:** two Supervisor headings and one round heading carried invented times (14:10, 14:50, 14:40). They now show the real times from the commit log (13:50, 14:08, 14:00). From now on every time comes from `date`.
