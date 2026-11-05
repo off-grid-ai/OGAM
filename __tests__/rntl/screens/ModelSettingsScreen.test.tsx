@@ -15,7 +15,7 @@
  */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, within } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAppStore } from '../../../src/stores/appStore';
 import { resetStores } from '../../utils/testHelpers';
@@ -1112,9 +1112,10 @@ describe('ModelSettingsScreen', () => {
         gpuLayers: 20,
       });
 
-      const { getByTestId, getByText } = renderScreen();
+      const { getByTestId } = renderScreen();
       fireEvent.press(getByTestId('reset-settings-button'));
-      fireEvent.press(getByText('Reset'));
+      // The alert's own Reset (the header button reads "Reset" too).
+      fireEvent.press(within(getByTestId('app-alert')).getByText('Reset'));
 
       const s = useAppStore.getState().settings;
       expect(s.temperature).toBe(0.7);
