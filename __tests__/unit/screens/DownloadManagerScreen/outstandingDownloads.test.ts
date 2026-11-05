@@ -75,4 +75,21 @@ describe('outstandingDownloadItems', () => {
     });
     expect(items).toEqual([]);
   });
+
+  it('holds back voice and transcription store rows until the models on disk are read (hand test 48)', () => {
+    const downloads = {
+      'o/run/a.gguf': entry('o/run/a.gguf', 'running'),
+      'w/whisper/ggml-base.en.bin': entry('w/whisper/ggml-base.en.bin', 'failed', { modelType: 'stt' as never }),
+      't/kokoro/voice.pte': entry('t/kokoro/voice.pte', 'failed', { modelType: 'tts' as never }),
+    };
+    const unread = outstandingDownloadItems({ downloads, completed: [], voiceKnown: false });
+    expect(unread.map(i => i.modelType)).toEqual(['text']);
+
+    const read = outstandingDownloadItems({ downloads, completed: [], voiceKnown: true });
+    expect(read.map(i => i.modelType).sort()).toEqual(['stt', 'text', 'tts']);
+
+    // Not told (an older caller): rows show, as before.
+    expect(outstandingDownloadItems({ downloads, completed: [] })).toHaveLength(3);
+  });
 });
+
