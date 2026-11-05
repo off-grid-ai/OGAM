@@ -75,7 +75,7 @@ export const StorageSettingsScreen: React.FC = () => {
         return facts?.isFile ? facts.size : 0;
       }),
     ));
-    const videoStorageUsed = videoSizes.reduce((total, size) => total + size, 0);
+    const videoStorageUsed = videoSizes.reduce((total, bytes) => total + bytes, 0);
     const used = await modelManager.getStorageUsed();
     const available = await modelManager.getAvailableStorage();
     const [videos, search, index] = await Promise.all([generatedVideoBytes(), searchModelBytes(), documentIndexBytes()]);

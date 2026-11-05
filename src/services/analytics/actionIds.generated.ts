@@ -257,6 +257,7 @@ export const FIXED_ACTION_IDS: readonly string[] = [
   "model-download-loading",
   "model-download-screen",
   "model-download-skip",
+  "model-in-use",
   "model-loaded-indicator",
   "model-row-loading",
   "model-selector",
