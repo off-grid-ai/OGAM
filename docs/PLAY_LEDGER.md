@@ -93,3 +93,4 @@ Each round: expected / found / root cause / change / commit / screenshots.
 3. The alive layer: composer focus glow done (`720784899`); press, entrance and the living background are next.
 - **Download auto-select:** with nothing selected, a finished download now selects that model, not `downloadedModels[0]`, which could be the classifier. The test fails on the old code (`8dd6aff94`).
 - **Remote Servers:** one grouped list; the active row is marked by its emerald "In use" label, not a border (`b97e1ff18`).
+- **Copy:** Storage and Device Information use plain, sentence-case names (`58f55446f`, `6f3919e65`).
