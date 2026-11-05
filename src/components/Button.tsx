@@ -13,7 +13,7 @@ const LOADER_LINE_BOX = 1.4;
 interface ButtonProps {
   title: string;
   onPress: () => void;
-  /** `hero`: the one main action on a screen, filled emerald so it is the brightest thing there. */
+  /** `hero`: the one main action on a screen, desktop's emerald pill. */
   variant?: 'primary' | 'hero' | 'secondary' | 'outline' | 'ghost' | 'danger';
   size?: 'small' | 'medium' | 'large';
   /** Highlighted state for toggle buttons */
@@ -81,7 +81,7 @@ export const Button: React.FC<ButtonProps> = ({
         // The dots, not a ring spinner: a rotating ring on a button reads as a retry glyph, so
         // "Pair" and "Share" both looked like they had failed the moment they started working.
         <LoadingDots
-          color={variant === 'hero' ? colors.onPrimary : variant === 'primary' ? colors.primary : colors.textSecondary}
+          color={variant === 'hero' ? colors.onHero : variant === 'primary' ? colors.primary : colors.textSecondary}
           style={styles[`loader_${size}`]}
         />
       ) : (
@@ -110,11 +110,14 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     borderColor: colors.border,
     ...shadows.glow,
   },
+  // As desktop's candy accent button: a pill of emerald blended into the page, a light top edge and a
+  // faint glow, not a bright block.
   button_hero: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.heroFill,
     borderWidth: 1,
-    borderColor: colors.primary,
-    ...shadows.glow,
+    borderColor: colors.heroBorder,
+    borderRadius: 999,
+    boxShadow: 'inset 0px 1px 0px rgba(255,255,255,0.22), 0px 0px 22px rgba(52,211,153,0.14)',
   },
   button_secondary: {
     backgroundColor: 'transparent',
@@ -160,7 +163,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.primary,
   },
   text_hero: {
-    color: colors.onPrimary,
+    color: colors.onHero,
     fontWeight: '500' as const,
   },
   text_secondary: {

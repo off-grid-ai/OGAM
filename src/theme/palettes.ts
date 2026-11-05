@@ -23,6 +23,10 @@ export const COLORS_LIGHT = {
   primaryLight: '#34D399',
   /** Text and icons on a filled emerald surface: near-black keeps AA contrast in both themes. */
   onPrimary: '#0A0A0A',
+  // The main action: a deeper emerald, so white text passes 4.5:1.
+  heroFill: '#047857',
+  heroBorder: '#065F46',
+  onHero: '#FFFFFF',
 
   // Backgrounds
   background: '#FFFFFF',
@@ -61,6 +65,10 @@ export const COLORS_DARK = {
   primaryDark: '#10B981',
   primaryLight: '#6EE7B7',
   onPrimary: '#0A0A0A',
+  // The main action, as desktop's candy accent button: emerald blended into the page, light text.
+  heroFill: '#217B5A',
+  heroBorder: 'rgba(52,211,153,0.55)',
+  onHero: '#F2FFF8',
 
   // Backgrounds
   background: '#0A0A0A',
