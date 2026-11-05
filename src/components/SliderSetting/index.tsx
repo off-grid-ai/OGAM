@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, TextInput, StyleSheet } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Platform } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
 import Slider from '@react-native-community/slider';
 import Icon from 'react-native-vector-icons/Feather';
@@ -128,7 +128,7 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
           >
             <Text
               testID={testID ? `${testID}-value` : undefined}
-              style={[styles.value, { color: colors.text, borderColor: colors.borderLight, backgroundColor: colors.surface }]}
+              style={[styles.value, styles.valueBare, { color: colors.text }]}
             >
               {display}
             </Text>
@@ -136,7 +136,7 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
         ) : (
           <Text
             testID={testID ? `${testID}-value` : undefined}
-            style={[styles.value, { color: colors.text, borderColor: colors.borderLight, backgroundColor: colors.surface }]}
+            style={[styles.value, styles.valueBare, { color: colors.text }]}
           >
             {display}
           </Text>
@@ -174,7 +174,8 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
         // one main action and what is in use.
         minimumTrackTintColor={colors.textSecondary}
         maximumTrackTintColor={colors.surfaceLight}
-        thumbTintColor={colors.text}
+        // The platform's own knob (white, softly shadowed on iOS): calm, not a dark capsule.
+        thumbTintColor={Platform.OS === 'ios' ? undefined : colors.textSecondary}
       />
     </View>
   );
@@ -218,6 +219,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
+  // The value as a figure on its own (no box) until you tap to type one.
+  valueBare: { borderWidth: 0 },
   description: {
     ...TYPOGRAPHY.bodySmall,
     marginBottom: SPACING.md,

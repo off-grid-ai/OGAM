@@ -52,7 +52,7 @@ export const ModelSettingsScreen: React.FC = () => {
   const handleReset = () => {
     setAlertState(
       showAlert(
-        'Reset All Settings',
+        'Reset all settings',
         'This will restore all model settings to their defaults. You may need to reload the model for changes to take effect.',
         [
           { text: 'Cancel', style: 'cancel' },

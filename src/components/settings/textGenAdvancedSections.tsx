@@ -228,12 +228,12 @@ export const ThinkingBudgetSelector: React.FC<{ compact?: boolean }> = ({ compac
       <SliderSetting
         testID="thinking-budget"
         compact={compact}
-        label="Thinking Budget"
-        description="Auto uses up to Max Tokens. A cap ends thinking earlier so the answer arrives sooner. Applies when Thinking is on."
+        label="Thinking budget"
+        description="Auto thinks up to the max tokens. A cap ends thinking sooner, so the answer comes sooner. Applies when thinking is on."
         value={Math.max(0, selectedStep)}
         min={0} max={steps.length - 1} step={1}
         formatValue={(step) => steps[Math.round(step)] === REASONING_BUDGET_AUTO
-          ? 'Auto (up to Max Tokens)'
+          ? 'Auto (up to max tokens)'
           : steps[Math.round(step)] % 1024 !== 0 && steps[Math.round(step)] >= 1024
             ? `${steps[Math.round(step)]} tokens`
             : reasoningBudgetLabel(steps[Math.round(step)] ?? REASONING_BUDGET_AUTO)}
