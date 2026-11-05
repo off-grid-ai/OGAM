@@ -30,3 +30,17 @@ describe('useStopTapGuard (a late Stop tap lands on the mic)', () => {
     expect(start).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('useStopTapGuard across a composer remount (hand test 19)', () => {
+  const { generationSession } = require('../../../src/services/generationSession');
+  afterEach(() => generationSession._reset());
+
+  it('a freshly mounted composer still ignores a tap just after the turn ended', () => {
+    generationSession.begin('c1');
+    generationSession.end('done');
+    const start = jest.fn();
+    const hook = renderHook(() => useStopTapGuard(false, start));
+    hook.result.current();
+    expect(start).not.toHaveBeenCalled();
+  });
+});

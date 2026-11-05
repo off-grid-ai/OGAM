@@ -21,6 +21,8 @@ class GenerationSessionService {
   private conversationId: string | null = null;
   /** Counts turns, so a caller that awaited (a model load) can tell whether Stop ended its turn. */
   private turn = 0;
+  /** When the last turn ended (ms epoch), for the composer's late-Stop grace; survives any remount. */
+  private endedAt: number | null = null;
   private readonly listeners = new Set<Listener>();
 
   /** The conversation a turn is currently generating for, or null. */
@@ -56,7 +58,13 @@ class GenerationSessionService {
     if (this.conversationId == null) return;
     logger.log(`[GEN-SM] session end conv=${this.conversationId} reason=${reason}`);
     this.conversationId = null;
+    this.endedAt = Date.now();
     this.notify();
+  }
+
+  /** When the last turn ended (ms epoch), or null if none has ended yet. */
+  lastEndedAt(): number | null {
+    return this.endedAt;
   }
 
   /** Subscribe to session changes (for the View projection). Returns unsubscribe. */
@@ -72,6 +80,7 @@ class GenerationSessionService {
   /** Test helper. */
   _reset(): void {
     this.conversationId = null;
+    this.endedAt = null;
     this.listeners.clear();
   }
 }
