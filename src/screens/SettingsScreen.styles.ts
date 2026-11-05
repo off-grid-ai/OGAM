@@ -154,13 +154,8 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     gap: SPACING.sm,
     marginBottom: 2,
   },
-  proBadge: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-    borderRadius: 8,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 2,
-  },
+  // "PRO" is a label beside the row's name, not a pill.
+  proBadge: {},
   proBadgeText: {
     ...TYPOGRAPHY.labelSmall,
     color: colors.textSecondary,
