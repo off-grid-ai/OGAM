@@ -345,3 +345,10 @@ Least desktop-like now: Clipboard, Sync, Device information.
 1. Sync: one hairline surface, one trailing action per device, Geist body text.
 2. Clipboard: hairline rows, one copy action, grey source, quiet Clear.
 3. Device information: facts as rows; the tier as one row.
+
+## Supervisor 09:40 — hand test 28 (build 29, head f5416fd77)
+Pass: Clipboard rows, grey source, quiet Clear, "Clipboard sync"; Sync flat cards, grey actions, Geist text; Home, Chats, Models, Projects, Settings, Device information, Gallery; a new answer lands in its own chat. Fail: Sync says "0 of 0 devices saved" while it lists 4 (Home says 5) — a real count bug; three to four trailing actions per device and per server; Remote servers two boxed buttons; Storage "Document search" twice and an emerald bar; a plain question ran a web search (tool choice, as DeepWiki).
+Least desktop-like now: Remote servers, Sync, Storage.
+1. Sync device count true.
+2. Remote servers one main action.
+3. Storage: one "Document search" row, a grey bar.
