@@ -231,3 +231,9 @@ Pass: Home, Chats, Settings, one "Searched the web" row, text-coloured links, Tr
 1. An unanswered question (empty or stopped reply) shows Try again.
 2. Gallery: quiet tabs, no blank tiles, viewer actions grey.
 3. Developer lines only with the developer setting; keep the scroll place when a step collapses.
+
+## Supervisor 21:05 — hand test 10 (build 11, head 66f47727a)
+Pass: Home, Try again after Stop (model loaded), Try again asks again, "Tools it could use", Image tab one surface, Storage file names and "Leftover files", plain Model settings sliders, Downloads sections. Fail: one SIGABRT opening the Image tab (RCTViewComponentView unmountChildComponentView; not repeated in two tries); Stop while the model loads lets the reply run; New chat boxed icons; red/emerald row icons on Storage video rows and Downloads; Model settings emerald slab and no field; Downloads shows raw .gguf names and "Text" for a speech model.
+1. The Image tab crash.
+2. Stop during a model load cancels the waiting reply.
+3. Grey row actions everywhere; plain names in Downloads.
