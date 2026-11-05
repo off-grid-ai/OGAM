@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, ScrollView } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { Card } from '../../components';
@@ -13,6 +12,7 @@ import { createStyles } from './styles';
 import { ActiveDownloadCard, CompletedDownloadCard, formatBytes, type DownloadItem } from './items';
 import { useDownloadManager } from './useDownloadManager';
 import { isQueuedStatus, isDownloadingStatus, isFailedStatus, type DownloadStatus } from '../../stores/downloadStore';
+import { AliveScreen } from '../../components/AliveScreen';
 
 type FilterType = 'all' | 'text' | 'vision' | 'image' | 'voice';
 
@@ -91,7 +91,7 @@ export const DownloadManagerScreen: React.FC = () => {
   ), [activeFilter, styles]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']} testID="downloaded-models-screen">
+    <AliveScreen style={styles.container} testID="downloaded-models-screen">
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} testID="back-button">
           <Icon name="arrow-left" size={20} color={colors.text} />
@@ -185,6 +185,6 @@ export const DownloadManagerScreen: React.FC = () => {
         buttons={alertState.buttons}
         onClose={() => setAlertState(hideAlert())}
       />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };

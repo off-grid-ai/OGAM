@@ -2,7 +2,6 @@ import { FastestSettingsButton } from '../../components/settings/FastestSettings
 import React, { useState } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '../../components';
@@ -27,6 +26,7 @@ import {
   NO_TRANSCRIPTION_MODEL_LABEL,
   useTranscriptionModelSetting,
 } from '../../hooks/useTranscriptionModelSetting';
+import { AliveScreen } from '../../components/AliveScreen';
 
 export const ModelSettingsScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -70,7 +70,7 @@ export const ModelSettingsScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <AliveScreen style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -228,6 +228,6 @@ export const ModelSettingsScreen: React.FC = () => {
         buttons={alertState.buttons}
         onClose={() => setAlertState(hideAlert())}
       />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };

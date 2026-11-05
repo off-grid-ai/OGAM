@@ -8,7 +8,6 @@ import {
 import { TouchableOpacity } from '../../components/Touchable';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../../components';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -31,6 +30,7 @@ import { ProIncludedSection } from './ProIncludedSection';
 import { ProUnlockModal } from './ProUnlockModal';
 import type { RootStackParamList } from '../../navigation/types';
 import { proPaywallViewed, proPurchased } from '../../services/analytics/analytics';
+import { AliveScreen } from '../../components/AliveScreen';
 
 // Off Grid AI Pro is the ambient intelligence layer across desktop + phone, not a
 // mobile feature list. These pillars mirror the early-access page framing.
@@ -109,7 +109,7 @@ export const ProDetailScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <AliveScreen style={styles.container} edges={['top', 'bottom']}>
       {/* The app's one header, like every other screen: a back arrow, the title, and this device's
           entitlement state where a screen's actions go. */}
       <ScreenHeader
@@ -258,7 +258,7 @@ export const ProDetailScreen: React.FC = () => {
         onClose={() => setVerifyModalVisible(false)}
         onUnlocked={handleUnlocked}
       />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 

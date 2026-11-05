@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import { ListGroup } from '../components/ListGroup';
 import { TouchableOpacity } from '../components/Touchable';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -36,6 +35,7 @@ import {
 import { OFF_GRID_DESKTOP_URL } from '../constants';
 import { withUtm } from '../utils/utm';
 import { createStyles } from './RemoteServersScreen.styles';
+import { AliveScreen } from '../components/AliveScreen';
 
 const DESKTOP_URL = withUtm(OFF_GRID_DESKTOP_URL, 'remote-servers');
 const SCAN_KINDS: Array<{ kind: DiscoverableServerKind; label: string; port: number }> = [
@@ -197,7 +197,7 @@ export const RemoteServersScreen: React.FC = () => {
   }, []);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <AliveScreen style={styles.container}>
       <ScreenHeader title="Remote servers" onBack={() => navigation.goBack()} />
 
       <ScrollView
@@ -413,6 +413,6 @@ export const RemoteServersScreen: React.FC = () => {
         {...alertState}
         onClose={() => setAlertState(initialAlertState)}
       />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };

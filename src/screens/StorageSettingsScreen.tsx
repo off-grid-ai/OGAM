@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import { isClassifierModel } from '../services/classifierModel';
 import { TouchableOpacity } from '../components/Touchable';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -31,6 +30,7 @@ import { createStyles } from './StorageSettingsScreen.styles';
 import { useWhisperStore } from '../stores/whisperStore';
 import { useModelDownloads } from '../services/modelDownloadService/useModelDownloads';
 import type { RootStackParamList } from '../navigation/types';
+import { AliveScreen } from '../components/AliveScreen';
 
 export const StorageSettingsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -139,7 +139,7 @@ export const StorageSettingsScreen: React.FC = () => {
   const usedPercentage = totalStorage > 0 ? (storageUsed / totalStorage) * 100 : 0;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <AliveScreen style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -331,6 +331,6 @@ export const StorageSettingsScreen: React.FC = () => {
         buttons={alertState.buttons}
         onClose={() => setAlertState(hideAlert())}
       />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };

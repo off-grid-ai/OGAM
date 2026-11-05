@@ -6,7 +6,6 @@ import {
   ScrollView,
   Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../components/Button';
 import { useNavigation } from '@react-navigation/native';
@@ -19,6 +18,7 @@ import { TYPOGRAPHY, SPACING } from '../constants';
 import { useAuthStore } from '../stores';
 import { authService } from '../services';
 import { PassphraseSetupScreen } from './PassphraseSetupScreen';
+import { AliveScreen } from '../components/AliveScreen';
 
 export const SecuritySettingsScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -64,7 +64,7 @@ export const SecuritySettingsScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <AliveScreen style={styles.container}>
       <ScreenHeader title="Security" onBack={() => navigation.goBack()} />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
@@ -119,7 +119,7 @@ export const SecuritySettingsScreen: React.FC = () => {
         buttons={alertState.buttons}
         onClose={() => setAlertState(hideAlert())}
       />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 
