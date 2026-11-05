@@ -41,6 +41,13 @@ type RenderJob = { path: string; run: () => Promise<string | null>; resolve: (pa
 const queued: RenderJob[] = [];
 const pending = new Map<string, Promise<string | null>>();
 let rendering = false;
+let pumpScheduled = false;
+/** Starts the queue on the next tick, so lines asked for together are all queued, in order, before the first one starts. */
+function schedulePump(): void {
+  if (pumpScheduled) return;
+  pumpScheduled = true;
+  void Promise.resolve().then(() => { pumpScheduled = false; pump(); });
+}
 
 function pump(): void {
   if (rendering) return;
@@ -85,7 +92,7 @@ function render(key: string, items: CastLine[], i: number, urgent = false): Prom
     },
   };
   if (urgent) queued.unshift(job); else queued.push(job);
-  pump();
+  schedulePump();
   return result;
 }
 
