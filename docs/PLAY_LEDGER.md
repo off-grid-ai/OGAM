@@ -124,3 +124,6 @@ Each round: expected / found / root cause / change / commit / screenshots.
 - **Folded in (Mac 16:2x, "smaller lift"):** the token merge moves after the look. The alive pass is about a day: theme values in mobile's palette, three new components (LivingField, Halo, press glow), then Home, New chat, Chats and Models.
 - **16:22 supervisor item 1 acted on:** chat previews (Chats, Home Recent) and model descriptions used the `meta` role (Geist Mono 10) for reading text; they now use `bodySmall` (Geist 13) (`b59449bd9`; the new test fails on the old code). Device shot waits for the next build.
 - **Canvas (Mac 16:1x, "look at the desktop"):** the mockup now copies desktop's LivingField exactly (dot lattice 26 px / 1.25 px, glow and echo at 3.5 s, lit dots near touch, press ring through the dots), desktop's #0a0a0a / #141414 values, the candy primary pill and outlined selected chips.
+
+## r07 Geist reading text (16:33)
+- **On the phone:** chat previews on Chats and Home Recent now read in Geist (`r07-geist-reading/chats-after.png`, `home-after.png`; before: `r06-device-pass/07-chats-dark.png`, `01-home-dark.png`). Model descriptions not yet shot.
