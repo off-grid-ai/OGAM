@@ -89,16 +89,6 @@ export const KnowledgeTransferInfo: React.FC<{
 }> = ({ transfer, testID }) => {
   const styles = useThemedStyles(createStyles);
   const failed = transfer.status === 'failed';
-  const statusText = (
-    <Text
-      style={[styles.meta, shownTransfer && styles.metaTransfer, failed && styles.metaFailed]}
-      numberOfLines={1}
-      testID={documentId ? `knowledge-document-status-${documentId}` : undefined}
-    >
-      {label}
-    </Text>
-  );
-
   return (
     <View testID={testID}>
       <View style={styles.line}>
@@ -153,6 +143,16 @@ export const KnowledgeDocumentInfo: React.FC<{
       ? knowledgeDocumentTransferFraction(shownTransfer)
       : null
     : status.fraction;
+
+  const statusText = (
+    <Text
+      style={[styles.meta, shownTransfer && styles.metaTransfer, failed && styles.metaFailed]}
+      numberOfLines={1}
+      testID={documentId ? `knowledge-document-status-${documentId}` : undefined}
+    >
+      {label}
+    </Text>
+  );
 
   return (
     <View testID={testID}>
