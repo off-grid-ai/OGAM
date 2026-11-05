@@ -296,7 +296,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     onAudioAttachment: voiceHandlers.onAudioAttachment,
     onAutoSend: voiceHandlers.onAutoSend,
   });  // The mic takes Stop's place when a reply ends; a late Stop tap must not start recording.
-  const startRecordingAfterStop = useStopTapGuard(isGenerating, startRecording);
+  const { start: startRecordingAfterStop, resting: micResting } = useStopTapGuard(isGenerating, startRecording);
 
   const voiceProcessingState = deriveVoiceProcessingState({
     isRecording,
@@ -634,7 +634,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       asSendButton
       partialResult={partialResult}
       error={error}
-      disabled={disabled}
+      disabled={disabled || micResting}
       onStartRecording={startRecordingAfterStop}
       onStopRecording={stopRecording}
       onCancelRecording={cancelRecording}

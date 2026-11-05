@@ -1,46 +1,48 @@
-import { renderHook } from '@testing-library/react-native';
+import { act, renderHook } from '@testing-library/react-native';
 import { STOP_TAP_GRACE_MS, useStopTapGuard } from '../../../src/components/ChatInput/useStopTapGuard';
 
-describe('useStopTapGuard (a late Stop tap lands on the mic)', () => {
-  let clock = 1000;
-  const now = () => clock;
+const { generationSession } = require('../../../src/services/generationSession');
 
-  it('ignores a mic tap just after the reply ended', () => {
+type Props = { generating: boolean };
+
+describe('useStopTapGuard (a late Stop tap lands on the mic)', () => {
+  beforeEach(() => { jest.useFakeTimers(); generationSession._reset(); });
+  afterEach(() => jest.useRealTimers());
+
+  it('the mic rests and ignores a tap just after the reply ended', () => {
     const start = jest.fn();
-    const hook = renderHook(({ generating }) => useStopTapGuard(generating, start, now), { initialProps: { generating: true } });
+    const hook = renderHook<ReturnType<typeof useStopTapGuard>, Props>(({ generating }) => useStopTapGuard(generating, start), { initialProps: { generating: true } });
     hook.rerender({ generating: false });
-    clock += STOP_TAP_GRACE_MS - 100;
-    hook.result.current();
+    expect(hook.result.current.resting).toBe(true);
+    hook.result.current.start();
     expect(start).not.toHaveBeenCalled();
   });
 
-  it('starts recording once the grace has passed', () => {
+  it('the mic wakes once the grace has passed', () => {
     const start = jest.fn();
-    const hook = renderHook(({ generating }) => useStopTapGuard(generating, start, now), { initialProps: { generating: true } });
+    const hook = renderHook<ReturnType<typeof useStopTapGuard>, Props>(({ generating }) => useStopTapGuard(generating, start), { initialProps: { generating: true } });
     hook.rerender({ generating: false });
-    clock += STOP_TAP_GRACE_MS + 1;
-    hook.result.current();
+    act(() => { jest.advanceTimersByTime(STOP_TAP_GRACE_MS + 1); });
+    expect(hook.result.current.resting).toBe(false);
+    hook.result.current.start();
     expect(start).toHaveBeenCalledTimes(1);
   });
 
-  it('starts recording at once when no reply just ended', () => {
+  it('a mic with no reply just ended is awake', () => {
     const start = jest.fn();
-    const hook = renderHook(() => useStopTapGuard(false, start, now));
-    hook.result.current();
+    const hook = renderHook(() => useStopTapGuard(false, start));
+    expect(hook.result.current.resting).toBe(false);
+    hook.result.current.start();
     expect(start).toHaveBeenCalledTimes(1);
   });
-});
 
-describe('useStopTapGuard across a composer remount (hand test 19)', () => {
-  const { generationSession } = require('../../../src/services/generationSession');
-  afterEach(() => generationSession._reset());
-
-  it('a freshly mounted composer still ignores a tap just after the turn ended', () => {
+  it('a composer mounted just after the turn ended still rests (hand test 19)', () => {
     generationSession.begin('c1');
     generationSession.end('done');
     const start = jest.fn();
     const hook = renderHook(() => useStopTapGuard(false, start));
-    hook.result.current();
+    expect(hook.result.current.resting).toBe(true);
+    hook.result.current.start();
     expect(start).not.toHaveBeenCalled();
   });
 });
