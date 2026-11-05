@@ -29,6 +29,7 @@ const KINDS: { kind: StudyResult['kind']; label: string; icon: string; desc: str
   { kind: 'wordsearch', label: 'Word search', icon: 'search', desc: 'Find words from your documents' },
   { kind: 'match', label: 'Matching game', icon: 'link', desc: 'Connect terms to definitions' },
   { kind: 'outline', label: 'Mind map', icon: 'share-2', desc: 'Outline of the topic' },
+  { kind: 'rubric' as any, label: 'Rubric check', icon: 'check-circle', desc: 'Paste a rubric and your draft: see which criteria you have not addressed' },
   { kind: 'plan' as any, label: 'Study plan', icon: 'calendar', desc: 'Exams in the order you sit them, daily targets, what is behind' },
   { kind: 'practice' as any, label: 'Practice questions', icon: 'edit-3', desc: 'Exam-style questions from your documents, checked in code, with review' },
   { kind: 'podcast', label: 'Podcast', icon: 'headphones', desc: 'An episode read aloud, with a time bar' },
@@ -146,6 +147,7 @@ export const StudyScreen: React.FC = () => {
 
   const run = async (kind: StudyResult['kind']) => {
     if (blockedByProtection()) return;
+    if ((kind as string) === 'rubric') { navigation.navigate('Rubric'); return; }
     if ((kind as string) === 'plan') { navigation.navigate('Planner'); return; }
     if ((kind as string) === 'practice') { navigation.navigate('Practice', { projectId }); return; }
     if (kind === 'podcast') { setPod((p) => ({ ...p, prompt: p.prompt || topic })); setPodOpen(true); return; }
@@ -432,7 +434,7 @@ export const StudyScreen: React.FC = () => {
           <Text style={{ color: '#fff', fontWeight: '600' }}>{busy === 'Answering' ? 'Answering...' : 'Ask with sources'}</Text>
         </TouchableOpacity>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5, marginTop: 10 }}>
-          {KINDS.filter(k => learningEnabled || !['quiz','podcast','crossword','wordsearch','match','practice','plan'].includes(k.kind)).map((k) => (
+          {KINDS.filter(k => learningEnabled || !['quiz','podcast','crossword','wordsearch','match','practice','plan','rubric'].includes(k.kind)).map((k) => (
             <View key={k.kind} style={{ width: width >= 700 ? '33.3%' : '50%', padding: 5 }}>
               <TouchableOpacity disabled={!!busy} onPress={() => run(k.kind)} style={[card, { marginBottom: 0, minHeight: 84 }]}>
                 <Icon name={k.icon} size={20} color={colors.primary} />

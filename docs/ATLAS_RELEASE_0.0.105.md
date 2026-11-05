@@ -569,6 +569,11 @@ What changed:
   model. A second, short-prompt check decides whether to use the first-word workaround: prompts under about 192 tokens run
   once first so the first word comes from the engine's single-token step; it is switched on only if the same check passes with
   it, and never for long prompts. The remembered verdict records the batch size and CPU-kernel setting.
+- 0.0.138: screens for the study tools. Study > Study plan: exams in the order you sit them, a target for today, topics to tick off
+  and what is behind. Study > Rubric check: paste a rubric and a draft and see the criteria the draft never mentions (wording only,
+  not quality). Appearance > Background picture: a picture behind every screen, dimmed to your choice; screens become see-through and
+  boxes keep their colour, so some pop-ups may look different. Not done: custom font files (React Native cannot load one at runtime
+  without a native font library), citation chips in chat, per-subject packs. Not verified on a phone.
 - 0.0.137: more study tools for the CPA and a doctorate. Tutor tools: "study_helpers" (exam planner in the order you sit them, rubric
   check that lists criteria a draft never mentions, APA 7 references and in-text citations, literature matrix; nothing is invented, a
   missing author or year is shown as n.d. or left blank), "find_image" (Wikimedia Commons pictures with author, licence and link,

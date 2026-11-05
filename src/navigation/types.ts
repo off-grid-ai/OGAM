@@ -19,6 +19,7 @@ export type RootStackParamList = {
   Study: { projectId: string; openAt?: number };
   Practice: { projectId: string };
   Planner: undefined;
+  Rubric: undefined;
   DailyBrief: undefined;
   Compass: undefined;
   Maps: undefined;

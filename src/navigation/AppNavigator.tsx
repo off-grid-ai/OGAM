@@ -35,6 +35,7 @@ import {
   StudyScreen,
   PracticeScreen,
   PlannerScreen,
+  RubricScreen,
   CompassScreen,
   MapsScreen,
   AtlasHubScreen,
@@ -315,6 +316,7 @@ export const AppNavigator: React.FC = () => {
         <RootStack.Screen name="Study" component={StudyScreen} />
         <RootStack.Screen name="Practice" component={PracticeScreen} />
         <RootStack.Screen name="Planner" component={PlannerScreen} />
+        <RootStack.Screen name="Rubric" component={RubricScreen} />
         <RootStack.Screen name="Compass" component={CompassScreen} />
         <RootStack.Screen name="Maps" component={MapsScreen} />
         <RootStack.Screen name="AtlasHub" component={AtlasHubScreen} />
