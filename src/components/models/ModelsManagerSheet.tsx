@@ -215,7 +215,7 @@ export const ModelsManagerSheet: React.FC<Props> = ({
             disabled={isRefreshing || isEjecting}
             onPress={refreshModels}
             accessibilityRole="button"
-            accessibilityLabel="Refresh remote models"
+            accessibilityLabel="Refresh models"
             testID="models-refresh-remote"
           >
             {isRefreshing
