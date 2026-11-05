@@ -120,7 +120,6 @@ export function migratePersistedState<TState>(
   return merged as TState;
 }
 
-
 /** Keep generated-image paths valid when iOS gives the app a new container UUID on install. */
 function migrateGeneratedImagePaths(merged: any, documentsPath?: string): void {
   if (!documentsPath || !Array.isArray(merged.generatedImages)) return;

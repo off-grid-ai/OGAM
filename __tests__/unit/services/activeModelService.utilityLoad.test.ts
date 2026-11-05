@@ -61,6 +61,17 @@ describe('a utility load of the classifier', () => {
     expect(selection()).toBe('m');
   });
 
+  it('a cancelled switch keeps a loaded classifier that the person picked for chat', async () => {
+    await launchWithClassifier();
+    d.activeModelService.selectTextModel('c');
+    await d.activeModelService.loadTextModel('c');
+    d.useAppStore.setState({ activeModelId: 'm' }); // a switch to m was started, then cancelled
+
+    d.activeModelService.keepLoadedTextModelSelected();
+
+    expect(selection()).toBe('c');
+  });
+
   it('a chat load of the same model still records it as the selection', async () => {
     // The flag only changes side-task loads: picking a model for chat is unchanged.
     await launchWithClassifier();

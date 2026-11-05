@@ -122,8 +122,9 @@ class ActiveModelService {
   keepLoadedTextModelSelected(): void {
     const loaded = this.loadedTextModelId;
     const store = useAppStore.getState();
-    // The classifier can still be resident after a side task; it is never kept as the chat pick.
-    if (loaded === store.settings.classifierModelId) return;
+    // The classifier can still be resident after a side task; it is kept as the chat pick only when the
+    // person picked it (lastTextModelId is written by real picks only).
+    if (loaded === store.settings.classifierModelId && store.lastTextModelId !== loaded) return;
     if (loaded && store.activeModelId !== loaded) this.markSelected(loaded);
   }
   /**
