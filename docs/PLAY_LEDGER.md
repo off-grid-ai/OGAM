@@ -249,3 +249,9 @@ Pass: Try again after Stop during a model load (with "Model loaded" after it), T
 1. Gallery: why five images saved pure white; mark or hide failed images.
 2. Speech model names and kind in Downloads; one "used" figure.
 3. No boxes on the chat header, empty state, Models sheet, Your videos; plain tool words.
+
+## Supervisor 22:40 — hand test 13 (build 14, head b8e394299)
+Pass: new chat copy and bare icon, the field on Model settings/Storage/Security/Pro/Downloads, Video models one surface, Security, Gallery viewer. Fail: Choose models (from Storage) has no Back and "Skip for Now" lands on Home; the text-model sheet is see-through and its rows boxed; boxed voice-mode mic and "D" badge; Remote servers black switch knob, mono help, slab buttons; Storage boxes; "Use fastest settings" slab; "Pro Active" looks like a button. One unexplained jump to Home on tapping Model settings (not repeated, no crash).
+1. Choose models: Back to where it came from, field, header.
+2. Models sheet: solid, one surface with hairlines.
+3. No box behind the mic and project badge; Remote servers switch and help text.
