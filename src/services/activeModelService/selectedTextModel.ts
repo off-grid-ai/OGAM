@@ -50,3 +50,25 @@ export function selectedTextModelIdOf(state: {
 }): string | null {
   return state.activeModelId ?? state.lastTextModelId;
 }
+
+/**
+ * The chat selection to keep once the downloaded list is known: a selection that is the intent
+ * classifier goes back to the person's last pick. PURE.
+ *
+ * The classifier borrows the text engine, and the loader used to record every successful load as the
+ * chat selection, so a phone can hold the classifier (SmolLM2-135M) as its chat model (device,
+ * 2026-11-05: Gemma 4 picked, SmolLM2 answering). It runs where the list arrives, because the list is
+ * not persisted: on launch it is empty until the scan fills it. `lastTextModelId` is written only by a
+ * real pick, so a person who chose the classifier themselves keeps it.
+ */
+export function repairedTextSelection(state: {
+  activeModelId: string | null;
+  lastTextModelId: string | null;
+  classifierModelId: string | null | undefined;
+  models: readonly { id: string }[];
+}): string | null {
+  const { activeModelId, lastTextModelId, classifierModelId, models } = state;
+  if (!classifierModelId || activeModelId !== classifierModelId) return activeModelId;
+  if (!lastTextModelId || lastTextModelId === classifierModelId) return activeModelId;
+  return models.some(m => m.id === lastTextModelId) ? lastTextModelId : activeModelId;
+}

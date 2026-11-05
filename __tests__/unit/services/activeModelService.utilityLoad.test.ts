@@ -70,3 +70,43 @@ describe('a utility load of the classifier', () => {
     expect(selection()).toBe('c');
   });
 });
+
+describe('a phone that already holds the classifier as its chat model', () => {
+  // The selection is persisted but the downloaded list is not: the repair runs when the scan delivers
+  // the list, through the same store action every scan uses.
+  const holdBadSelection = async (lastPick: string | null) => {
+    await launchWithClassifier();
+    d.useAppStore.setState({ activeModelId: 'c', lastTextModelId: lastPick });
+    d.useAppStore.getState().setDownloadedModels([...models()]);
+  };
+  const models = () => d.useAppStore.getState().downloadedModels as any[];
+
+  it('goes back to the person’s last pick when the scan delivers the list', async () => {
+    await holdBadSelection('m');
+    expect(selection()).toBe('m');
+  });
+
+  it('keeps the classifier when the person picked it themselves', async () => {
+    await holdBadSelection('c');
+    expect(selection()).toBe('c');
+  });
+
+  it('keeps the selection when the last pick is no longer on the phone', async () => {
+    await launchWithClassifier();
+    d.useAppStore.setState({ activeModelId: 'c', lastTextModelId: 'gone' });
+    d.useAppStore.getState().setDownloadedModels([...models()]);
+    expect(selection()).toBe('c');
+  });
+
+  it('keeps the selection when there is no last pick', async () => {
+    await holdBadSelection(null);
+    expect(selection()).toBe('c');
+  });
+
+  it('leaves a selection that is not the classifier alone', async () => {
+    await launchWithClassifier();
+    d.useAppStore.setState({ lastTextModelId: 'c' });
+    d.useAppStore.getState().setDownloadedModels([...models()]);
+    expect(selection()).toBe('m');
+  });
+});

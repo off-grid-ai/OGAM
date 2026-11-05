@@ -44,6 +44,7 @@ import {
   isSuspiciousRecoveredImageModel,
 } from '../utils/modelSelectorFilters';
 import { migratePersistedState } from './appStoreMigrations';
+import { repairedTextSelection } from '../services/activeModelService/selectedTextModel';
 import { defaultImageSteps } from '../utils/imageGenAdvice';
 
 type OnboardingChecklist = {
@@ -375,7 +376,18 @@ export const useAppStore = create<AppState>()(
       setModelRecommendation: rec => set({ modelRecommendation: rec }),
       downloadedModels: [],
       setDownloadedModels: models =>
-        set({ downloadedModels: models.filter(m => !isExcludedTextModel(m)) }),
+        set(state => {
+          const downloadedModels = models.filter(m => !isExcludedTextModel(m));
+          return {
+            downloadedModels,
+            activeModelId: repairedTextSelection({
+              activeModelId: state.activeModelId,
+              lastTextModelId: state.lastTextModelId,
+              classifierModelId: state.settings.classifierModelId,
+              models: downloadedModels,
+            }),
+          };
+        }),
       addDownloadedModel: model =>
         set(state => {
           if (isExcludedTextModel(model)) return state;
