@@ -54,8 +54,14 @@ class GenerationSessionService {
   }
 
   /** Clear the generating session (turn finished / failed / aborted / switched). */
-  end(reason = 'done'): void {
+  end(reason = 'done', turn?: number): void {
     if (this.conversationId == null) return;
+    // A turn that finishes late (its reply was stopped and a new turn began) must not end the newer
+    // turn's session: when the ending turn is named, only that turn can end.
+    if (turn !== undefined && turn !== this.turn) {
+      logger.log(`[GEN-SM] session end ignored: turn ${turn} is not current (${this.turn})`);
+      return;
+    }
     logger.log(`[GEN-SM] session end conv=${this.conversationId} reason=${reason}`);
     this.conversationId = null;
     this.endedAt = Date.now();

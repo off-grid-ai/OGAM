@@ -932,7 +932,7 @@ export async function startGenerationFn(
         ),
       );
     }
-    generationSession.end('error');
+    generationSession.end('error', turn);
     return;
   }
   // The model produced NO output (0 tokens) — finalizeStreamingMessage only appends an
@@ -960,7 +960,7 @@ export async function startGenerationFn(
       },
     });
   }
-  generationSession.end();
+  generationSession.end('done', turn);
 }
 let _msgIdSeq = 0;
 const nextMsgId = () => `${Date.now()}-${(++_msgIdSeq).toString(36)}`;
@@ -1501,7 +1501,7 @@ export async function regenerateResponseFn(
       deps.setAlertState(showAlert('Generation Error', msg));
     }
   }
-  generationSession.end();
+  generationSession.end('done', resendTurn);
 }
 export type SelectProjectDeps = {
   activeConversationId: string | null | undefined;
