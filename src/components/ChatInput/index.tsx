@@ -613,6 +613,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   ) : isGenerating && onStop ? (
     <TouchableOpacity
       testID="stop-button"
+      accessibilityRole="button"
+      accessibilityLabel="Stop reply"
       style={[styles.circleButton, styles.circleButtonStop]}
       onPress={handleStop}
     >

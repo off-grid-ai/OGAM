@@ -295,8 +295,9 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     backgroundColor: colors.primary,
     ...shadows.small,
   },
+  // Stop is a neutral control: red is kept for errors and destructive actions.
   circleButtonStop: {
-    backgroundColor: `${colors.error}`,
+    backgroundColor: colors.text,
   },
   // Stop control sized to match the audio-mode mic (AUDIO_MIC_SIZE), so the
   // center slot keeps one footprint across mic / loading / stop — no layout jump
@@ -307,7 +308,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     borderRadius: 28,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    backgroundColor: colors.error,
+    backgroundColor: colors.text,
   },
   circleButtonIdle: {
     backgroundColor: colors.surface,
