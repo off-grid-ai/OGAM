@@ -125,7 +125,7 @@ export const ModelsManagerSheet: React.FC<Props> = ({
       visible={visible}
       onClose={onClose}
       onClosed={onClosed}
-      title="MODELS"
+      title="Models"
       enableDynamicSizing
     >
       <View style={styles.content}>
@@ -154,8 +154,9 @@ export const ModelsManagerSheet: React.FC<Props> = ({
                   ) : (
                     <TouchableOpacity
                       testID={`models-row-${row.type}-eject`}
+                      accessibilityRole="button"
                       accessibilityLabel={`Eject ${row.label} model from memory`}
-                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      style={styles.ejectButton}
                       onPress={() => ejectRow(row.type)}
                     >
                       <Icon name="power" size={14} color={colors.textSecondary} style={styles.ejectGlyph} />
@@ -204,7 +205,7 @@ export const ModelsManagerSheet: React.FC<Props> = ({
               {isEjecting
                 ? <LoadingDots color={colors.textMuted} />
                 : <Icon name="power" size={14} color={colors.textSecondary} />}
-              <Text style={styles.ejectText}>Eject All Models</Text>
+              <Text style={styles.ejectText}>Eject all models</Text>
             </AnimatedPressable>
           )}
           {!hasActiveModel && <View style={styles.actionButton} />}
@@ -220,7 +221,7 @@ export const ModelsManagerSheet: React.FC<Props> = ({
             {isRefreshing
               ? <LoadingDots color={colors.textMuted} />
               : <Icon name="refresh-cw" size={14} color={colors.textSecondary} />}
-            <Text style={styles.refreshText}>Refresh Models</Text>
+            <Text style={styles.refreshText}>Refresh models</Text>
           </AnimatedPressable>
         </View>
         {refreshError && <Text style={styles.refreshError}>{refreshError}</Text>}
@@ -251,6 +252,8 @@ const createStyles = (colors: ThemeColors) => ({
     width: 64,
   },
   // Fixed-width control column right of the label — all four rows align whether or not resident.
+  // A 44 pt frame in the fixed column, pulled back so the rows keep their height.
+  ejectButton: { width: 44, height: 44, marginHorizontal: -11, marginVertical: -15, alignItems: 'center' as const, justifyContent: 'center' as const },
   ejectSlot: {
     width: 22,
     alignItems: 'center' as const,

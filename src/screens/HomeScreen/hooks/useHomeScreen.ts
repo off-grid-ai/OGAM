@@ -297,7 +297,7 @@ export const useHomeScreen = (navigation: HomeScreenNavigationProp) => {
     };
     setAlertState(
       showAlert(
-      'Eject All Models',
+      'Eject all models',
       'Unload all active models to free up memory?',
       [
         { text: 'Cancel', style: 'cancel' },

@@ -120,7 +120,7 @@ export const ChatScreen: React.FC = () => {
   const confirmEjectAll = () => {
     chat.setAlertState(
       showAlert(
-        'Eject All Models',
+        'Eject all models',
         'Unload all active models to free up memory?',
         [
           { text: 'Cancel', style: 'cancel' },
