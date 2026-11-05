@@ -72,6 +72,13 @@ export const NoModelScreen: React.FC<{
   </SafeAreaView>
 );
 
+/** What a new person can ask straight away: everyday, answered well by a small on-device model. */
+export const STARTER_PROMPTS = [
+  'Plan a relaxed weekend near the mountains',
+  'Explain how compound interest works',
+  'Write a short, kind thank-you note',
+] as const;
+
 export const ChatHeader: React.FC<{
   styles: StylesType;
   colors: ColorsType;
@@ -153,7 +160,9 @@ export const EmptyChat: React.FC<{
   activeProject: any;
   setShowProjectSelector: (v: boolean) => void;
   isRemote?: boolean;
-}> = ({ styles, colors, activeModel, activeModelName, activeProject, setShowProjectSelector, isRemote }) => (
+  /** Sends a starter prompt through the same path as the composer. */
+  onStarter?: (prompt: string) => void;
+}> = ({ styles, colors, activeModel, activeModelName, activeProject, setShowProjectSelector, isRemote, onStarter }) => (
   <View style={styles.emptyChat}>
     <AnimatedEntry index={0} staggerMs={60}>
       <View style={styles.emptyChatIconContainer}>
@@ -171,7 +180,25 @@ export const EmptyChat: React.FC<{
           : 'Type a message below to begin.'}
       </Text>
     </AnimatedEntry>
-    <AnimatedEntry index={3} staggerMs={60}>
+    {onStarter && (
+      <AnimatedEntry index={3} staggerMs={60}>
+        {/* A new person sees what they can ask: one tap sends it. */}
+        <View style={styles.starterList} testID="chat-starters">
+          {STARTER_PROMPTS.map(prompt => (
+            <TouchableOpacity
+              key={prompt}
+              style={styles.starterChip}
+              onPress={() => onStarter(prompt)}
+              accessibilityRole="button"
+              accessibilityLabel={prompt}
+            >
+              <Text style={styles.starterText}>{prompt}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </AnimatedEntry>
+    )}
+    <AnimatedEntry index={4} staggerMs={60}>
       <TouchableOpacity style={styles.projectHint} onPress={() => setShowProjectSelector(true)}>
         <View style={styles.projectHintIcon}>
           <Text style={styles.projectHintIconText}>
@@ -183,7 +210,7 @@ export const EmptyChat: React.FC<{
         </Text>
       </TouchableOpacity>
     </AnimatedEntry>
-    <AnimatedEntry index={4} staggerMs={60}>
+    <AnimatedEntry index={5} staggerMs={60}>
       <Text style={styles.privacyText}>
         {isRemote
           ? 'This chat runs on a remote server, not on this phone.'

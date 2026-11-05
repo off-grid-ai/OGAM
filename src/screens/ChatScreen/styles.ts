@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { createImageStyles } from './stylesImage';
@@ -107,6 +108,24 @@ const createEmptyChatStyles = (colors: ThemeColors) => ({
   },
   emptyChatTitle: { ...TYPOGRAPHY.h2, color: colors.text, marginBottom: SPACING.sm },
   emptyChatText: { ...TYPOGRAPHY.body, color: colors.textSecondary, textAlign: 'center' as const, marginBottom: SPACING.xl },
+  // Starter prompts: one quiet grouped surface, a hairline between them (ListGroup look).
+  starterList: {
+    alignSelf: 'stretch' as const,
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.lg,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    overflow: 'hidden' as const,
+  },
+  starterChip: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
+  },
+  starterText: { ...TYPOGRAPHY.body, color: colors.text },
   projectHint: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,

@@ -272,6 +272,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
               activeProject={chat.activeProject}
               setShowProjectSelector={chat.setShowProjectSelector}
               isRemote={chat.activeModelInfo?.isRemote}
+              onStarter={prompt => chat.handleSend(prompt)}
             />
           );
         })()
