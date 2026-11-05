@@ -355,11 +355,8 @@ export const RemoteServersScreen: React.FC = () => {
                         {server.name}
                       </Text>
                       {isActive && <Icon name="check" size={14} color={theme.colors.primary} />}
-                      <Text
-                        style={isActive ? styles.activeBadge : styles.useHint}
-                      >
-                        {isActive ? 'In use' : 'Use'}
-                      </Text>
+                      {/* Only the chosen server is marked; tapping any row chooses it (its label says so). */}
+                      {isActive && <Text style={styles.activeBadge}>In use</Text>}
                     </View>
                     <Text style={styles.serverEndpoint} numberOfLines={1}>
                       {server.endpoint}
