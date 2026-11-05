@@ -194,3 +194,10 @@ Pass: 2, 3, 4, 6, 9, 10. Partial: 1 (light gone while held), 7 (Sync row 3 lines
 2. Models and Settings: 24 px padding, one hairline list, emerald only on the one main action; Model Settings copy in plain words. Next.
 3. Chat: speed was emerald and the hint dot orange; system lines showed raw underscores → fixed (`f1ef0210f`). Answers say what they did in plain words (`5be36c15a`).
 - Hygiene caught my test mistakes (import depth, a missed label, two sources for one setting); the tools-sent row now rides ChatMessage's generation-details prop (`7b74ed44f`).
+
+## Supervisor 18:59 — hand test 4
+Pass: Home, Settings top level, Chats clock times. Fail: Settings sub-pages (Model settings, Remote servers, Security, Engine, Storage, Pro, Download manager) still the old boxed look; Models has no clear "In use" mark and unexplained emerald ticks; the weather answer said it could not see live weather although its search found it, and the search step opens to raw JSON; 15 s of running with no progress.
+1. Answers use their search results or say none were found; sources in plain words, not raw JSON; progress while tools run.
+2. Every Settings sub-page and the Download manager on the one surface with the emerald rules.
+3. Models: one clear "In use" mark, one quiet tick for downloaded, "Document search" everywhere.
+- Also: a swiped Chats row closes on a tap or a scroll (`7eca8a4da`).
