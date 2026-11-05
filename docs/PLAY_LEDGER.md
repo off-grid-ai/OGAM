@@ -86,3 +86,9 @@ Each round: expected / found / root cause / change / commit / screenshots.
 - **Kept:** markdown bold at 500, inside the brand's 300–500 range.
 - **Push gate:** it blocked 4 lint errors from the switch change. Cause: `eslint $F` in zsh linted no files. Fixed in `3ddf7e2f8`, which also locks the OffgridFonts pod. All 78 changed files lint clean.
 - **Device:** still offline; every visual change since `311f8ace3` is queued.
+
+## Supervisor 14:50
+1. A fresh-install first run that picks a best-fit default model (open since 12:22).
+2. Remote Servers and Models as one grouped surface, with the active row marked by an "In use" label or a check, not a border. Server action targets overlapped (fixed `37085e27d`). Faded incompatible text may fail contrast.
+3. The alive layer: composer focus glow done (`720784899`); press, entrance and the living background are next.
+- **Download auto-select:** with nothing selected, a finished download now selects that model, not `downloadedModels[0]`, which could be the classifier. The test fails on the old code (`8dd6aff94`).
