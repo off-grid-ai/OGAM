@@ -156,3 +156,9 @@ Pass: 1 alive, 2 depth, 4 main action, 7 lists, 9 icons, 10 tokens. Fail: 3 (eme
 1. Clipboard and Sync as rows in the Gallery/feedback group, grey icons, Geist meta (Pro's SyncHomeCard).
 2. No model: "Get a model" in the header pill slot; the setup card as a row.
 3. Bell without its circle; inactive caption contrast. Retake shots without the Metro banner.
+
+## r09 the field answers touch (17:40)
+- **Mac:** "alive" means every interaction gets an answer (touch, press, drag, scroll, load), as desktop's does; and no animation work on the JS thread.
+- **Built:** `AliveProvider` (listen-only gesture, UI-thread worklets) and `LivingField` answering it: lit dots under a finger, a press ring, scroll drift; breathing as native CSS keyframes. Values in `@offgrid/design` `ALIVE` (shared `d1eb0c1`). Commits `43a05e10c`, `73c396abb` (mask dropped: react-native-svg did not redraw it).
+- **On the phone (`r09-alive-touch/`):** 0.25 s after a touch the dots around it light emerald (`home-touch-ring.png`); by 1.15 s with the finger still down the light has gone (`home-touch-held.png`): a held finger should keep it lit. Open.
+- **Checklist (home-touch-ring):** 1 alive pass (touch now answered); 8 pass (Clipboard, Sync, Gallery, feedback are one group); 3 pass in this shot (emerald only on New chat, Home tab, lit dots); open: the Models card (Mac: "ugly") → three options on the canvas.
