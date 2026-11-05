@@ -29,6 +29,7 @@ const KINDS: { kind: StudyResult['kind']; label: string; icon: string; desc: str
   { kind: 'wordsearch', label: 'Word search', icon: 'search', desc: 'Find words from your documents' },
   { kind: 'match', label: 'Matching game', icon: 'link', desc: 'Connect terms to definitions' },
   { kind: 'outline', label: 'Mind map', icon: 'share-2', desc: 'Outline of the topic' },
+  { kind: 'practice' as any, label: 'Practice questions', icon: 'edit-3', desc: 'Exam-style questions from your documents, checked in code, with review' },
   { kind: 'podcast', label: 'Podcast', icon: 'headphones', desc: 'An episode read aloud, with a time bar' },
   { kind: 'slides', label: 'Slides', icon: 'film', desc: 'Present them, save as PowerPoint, or save as a narrated video' },
 ];
@@ -144,6 +145,7 @@ export const StudyScreen: React.FC = () => {
 
   const run = async (kind: StudyResult['kind']) => {
     if (blockedByProtection()) return;
+    if ((kind as string) === 'practice') { navigation.navigate('Practice', { projectId }); return; }
     if (kind === 'podcast') { setPod((p) => ({ ...p, prompt: p.prompt || topic })); setPodOpen(true); return; }
     if (kind === 'answer' && !topic.trim()) { Alert.alert('Type a question first'); return; }
     setBusy(kind === 'answer' ? 'Answering' : KINDS.find((k) => k.kind === kind)?.label || kind);
@@ -428,7 +430,7 @@ export const StudyScreen: React.FC = () => {
           <Text style={{ color: '#fff', fontWeight: '600' }}>{busy === 'Answering' ? 'Answering...' : 'Ask with sources'}</Text>
         </TouchableOpacity>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5, marginTop: 10 }}>
-          {KINDS.filter(k => learningEnabled || !['quiz','podcast','crossword','wordsearch','match'].includes(k.kind)).map((k) => (
+          {KINDS.filter(k => learningEnabled || !['quiz','podcast','crossword','wordsearch','match','practice'].includes(k.kind)).map((k) => (
             <View key={k.kind} style={{ width: width >= 700 ? '33.3%' : '50%', padding: 5 }}>
               <TouchableOpacity disabled={!!busy} onPress={() => run(k.kind)} style={[card, { marginBottom: 0, minHeight: 84 }]}>
                 <Icon name={k.icon} size={20} color={colors.primary} />

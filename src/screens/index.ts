@@ -16,6 +16,7 @@ export { OfflineLibraryScreen } from './OfflineLibraryScreen';
 export { SurvivalManualScreen } from './SurvivalManualScreen';
 export { PhrasesScreen } from './PhrasesScreen';
 export { StudyScreen } from './StudyScreen';
+export { PracticeScreen } from './PracticeScreen';
 export { CompassScreen } from './CompassScreen';
 export { MapsScreen } from './MapsScreen';
 export { AtlasHubScreen } from './AtlasHubScreen';
