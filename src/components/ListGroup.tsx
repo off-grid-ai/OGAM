@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useThemedStyles } from '../theme';
+import { cardSurface } from '../theme/surface';
 import type { ThemeColors } from '../theme';
 import { SPACING } from '../constants';
 
@@ -40,13 +41,8 @@ export const listRowStyle = {
 };
 
 const createStyles = (colors: ThemeColors) => ({
-  // As desktop's surfaces: the field shows through, with a hairline edge and a faint top highlight.
   group: {
-    backgroundColor: colors.surfaceGlass,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-    boxShadow: 'inset 0px 1px 0px rgba(255,255,255,0.06)',
+    ...cardSurface(colors),
     overflow: 'hidden' as const,
   },
   divider: {

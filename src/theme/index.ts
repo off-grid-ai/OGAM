@@ -4,3 +4,4 @@ export { useThemedStyles } from './useThemedStyles';
 // concretely without cycling through this barrel. The barrel only re-exports.
 ;
 export { getTheme, useTheme } from './useTheme';
+export { cardSurface } from './surface';

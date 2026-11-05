@@ -4,7 +4,8 @@ import { LoadingDots } from '../LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { useTheme, useThemedStyles } from '../../theme';
-import type { ThemeColors, ThemeShadows } from '../../theme';
+import { cardSurface } from '../../theme/surface';
+import type { ThemeColors } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import type { ModelRowLabels, ModelRowType } from './ModelsManagerSheet';
 
@@ -108,16 +109,14 @@ export const ModelsSummaryRow: React.FC<Props> = ({
   );
 };
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors) => ({
   container: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
+    ...cardSurface(colors),
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     gap: SPACING.sm,
     marginTop: SPACING.sm,
     marginBottom: SPACING.md,
-    ...shadows.small,
   },
   header: {
     flexDirection: 'row' as const,

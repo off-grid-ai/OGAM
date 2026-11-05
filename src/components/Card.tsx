@@ -6,7 +6,8 @@ import {
 } from 'react-native';
 import { TouchableOpacity } from './Touchable';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import type { ThemeColors, ThemeShadows } from '../theme';
+import { cardSurface } from '../theme/surface';
+import type { ThemeColors } from '../theme';
 
 interface CardProps {
   children: React.ReactNode;
@@ -51,12 +52,10 @@ export const Card: React.FC<CardProps> = ({
   );
 };
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors) => ({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
+    ...cardSurface(colors),
     padding: 16,
-    ...shadows.small,
   },
   header: {
     flexDirection: 'row' as const,
