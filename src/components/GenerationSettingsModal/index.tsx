@@ -109,6 +109,7 @@ export const GenerationSettingsModal: React.FC<
         <FastestSettingsButton />
         <SettingsSectionHeader
           title="General"
+          summary={summaries.general}
           open={generalSettingsOpen}
           onToggle={() => setGeneralSettingsOpen(!generalSettingsOpen)}
           testID="modal-general-accordion"

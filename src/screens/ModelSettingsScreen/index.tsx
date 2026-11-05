@@ -98,6 +98,7 @@ export const ModelSettingsScreen: React.FC = () => {
         <FastestSettingsButton />
         <SettingsSectionHeader
           title="General"
+          summary={summaries.general}
           open={generalOpen}
           onToggle={() => setGeneralOpen(!generalOpen)}
           testID="general-generation-accordion"
