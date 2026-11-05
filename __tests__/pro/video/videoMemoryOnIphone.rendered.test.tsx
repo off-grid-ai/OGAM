@@ -49,7 +49,7 @@ it('an iPhone with 5.9 GB free makes a clip without asking to run anyway', async
     finished += await downloads.finishRunning();
     expect(finished).toBe(MODEL.files);
   }, { timeout: 15_000 });
-  await rtl.waitFor(() => expect(view.getAllByLabelText('Delete model').length).toBeGreaterThan(0), { timeout: 10_000 });
+  await rtl.waitFor(() => expect(view.getAllByLabelText(/^Delete /).length).toBeGreaterThan(0), { timeout: 10_000 });
 
   // Home › the video model, a new chat in video mode, Send.
   rtl.fireEvent.press(await view.findByTestId('home-tab'));

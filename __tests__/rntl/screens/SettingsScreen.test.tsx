@@ -166,7 +166,7 @@ describe('SettingsScreen', () => {
     const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
     const { getByText } = renderSettings();
 
-    fireEvent.press(getByText('Send Feedback'));
+    fireEvent.press(getByText('Send feedback'));
 
     await waitFor(() => {
       expect(openURL.mock.calls[0]?.[0]).toContain(`mailto:${SUPPORT_EMAIL}?`);

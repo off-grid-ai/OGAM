@@ -36,8 +36,8 @@ describe('ModelsManagerSheet', () => {
 
   it('shows Eject All only when a model is active', () => {
     const { queryByText, rerender } = render(<ModelsManagerSheet {...baseProps} hasActiveModel />);
-    expect(queryByText('Eject All Models')).toBeTruthy();
+    expect(queryByText('Eject all models')).toBeTruthy();
     rerender(<ModelsManagerSheet {...baseProps} hasActiveModel={false} />);
-    expect(queryByText('Eject All Models')).toBeNull();
+    expect(queryByText('Eject all models')).toBeNull();
   });
 });

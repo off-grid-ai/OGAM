@@ -90,7 +90,7 @@ describe('Models manager sheet — remote TEXT selection carries the cloud marke
     rtl.fireEvent.press(home.getByTestId('models-row-text'));
     await rtl.waitFor(() => { expect(home.queryByText('TEXT MODEL')).not.toBeNull(); }, { timeout: 4000 });
     rtl.fireEvent.press(home.getByTestId('app-sheet-back'));
-    await rtl.waitFor(() => { expect(home.queryByText('MODELS')).not.toBeNull(); }, { timeout: 4000 });
+    await rtl.waitFor(() => { expect(home.getByTestId('app-sheet-title').props.children).toBe('Models'); }, { timeout: 4000 });
     expect(home.queryByTestId('models-row-image')).not.toBeNull();
     expect(home.queryByTestId('models-row-voice')).not.toBeNull();
     expect(home.queryByTestId('models-row-speech')).not.toBeNull();

@@ -36,7 +36,7 @@ it('the model in use shows a check, another an empty circle, and a tap on the ro
   rtl.fireEvent.press(await view.findByTestId('model-summary-video-open'));
   expect(await view.findByTestId(`video-model-row-${LIGHT21}-in-use`)).toBeTruthy();
   expect(view.queryByTestId(`video-model-row-${LIGHT21}-select`)).toBeNull();
-  expect(view.getByTestId(`video-model-row-${TURBO}-select`).props.accessibilityLabel).toBe('Use this model');
+  expect(view.getByTestId(`video-model-row-${TURBO}-select`).props.accessibilityLabel).toBe('Use Wan 2.2 (5B), Turbo');
   rtl.fireEvent.press(view.getByTestId(`video-model-row-${TURBO}`));
   expect(store.getState().activeVideoModelId).toBe(TURBO);
 }, 60_000);

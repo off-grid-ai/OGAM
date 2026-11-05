@@ -310,7 +310,7 @@ it('M15: the Pro purchase action opens the canonical payment page', async () => 
   Linking.openURL = async (url: string) => { browserAddress = url; };
   try {
     app.rtl.fireEvent.press(app.view.getByTestId('settings-tab'));
-    app.rtl.fireEvent.press(await app.view.findByText('Off Grid AI PRO'));
+    app.rtl.fireEvent.press(await app.view.findByLabelText(/^Off Grid AI Pro\. /));
     app.rtl.fireEvent.press(await app.view.findByRole('button', { name: 'Get Pro' }));
     await app.rtl.waitFor(() => expect(browserAddress).toMatch(/^https:\/\/getoffgridai\.co\/pro\/\?utm_source=off-grid-mobile-app.*#buy$/));
   } finally {
