@@ -436,3 +436,10 @@ Message actions its own button, header no overlap, Models tab 44s, Resume and Re
 1. Regressions: Speak overlaps Message actions by 13 pt (meta row); Retry/Resume overlap Remove by 13 pt (transferActions has no gap).
 2. Icon glyphs leak into a11y labels (Settings rows, Tools it could use); Tools row not a button.
 3. Small targets: generation-details-toggle and Tools row 15 pt; Voice tab 37 wide; Home bell and Pro 36.
+
+## Supervisor 07:45 (hand test 41, build at d9654db6f)
+
+Overlaps fixed (meta row, Downloads), picks Download 44. Top 3:
+1. The icon a11y default (335ee9931) does nothing on Fabric: RCTParagraphComponentView reads its own text when its label is empty. Revert; label grouped rows explicitly (Settings, Home, Gallery).
+2. Reply footer now 123 pt under an 81 pt reply: not calm. One compact row, 44 pt frames pulled back.
+3. Appearance buttons glyph-named, 35x31; Home "New chat" 39 pt; Downloads badge vs list.
