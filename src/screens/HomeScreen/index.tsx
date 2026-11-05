@@ -4,6 +4,7 @@ import React from 'react';
 import { View, Text, ScrollView, Image } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import {
   Button,
   Card,
@@ -70,6 +71,7 @@ function homeModelLabels(input: {
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const focusTrigger = useFocusTrigger();
+  const isFocused = useIsFocused();
   const { colors, isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
   const SyncHomeCard = useSlot(SLOTS.homeSyncCard);
@@ -190,7 +192,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View testID="home-screen" style={styles.scrollView}>
-        <LivingField />
+        <LivingField active={isFocused} />
         <ScrollView
           {...SCROLL_DEPTH_PROPS}
           style={styles.scrollView}

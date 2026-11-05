@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { AppState, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, {
+  cancelAnimation,
   Easing,
   useAnimatedStyle,
   useReducedMotion,
@@ -20,19 +21,29 @@ const ECHO_SIZE = 440;
  * its echo breathing against each other, the lattice breathing with them. It sits behind a screen's
  * content and never takes a touch. With reduced motion it holds still.
  */
-export const LivingField: React.FC = () => {
+export const LivingField: React.FC<{
+  /** False while the screen is out of focus: the field stops breathing, so a hidden screen costs nothing. */
+  active?: boolean;
+}> = ({ active = true }) => {
   const { colors, isDark } = useTheme();
+  const { width, height } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
+  const appActive = useAppActive();
   const phase = useSharedValue(0);
+  const breathing = active && appActive && !reducedMotion;
 
   useEffect(() => {
-    if (reducedMotion) return;
+    if (!breathing) {
+      cancelAnimation(phase);
+      return;
+    }
     phase.value = withRepeat(
       withTiming(1, { duration: LIVING_FIELD.breathMs, easing: Easing.inOut(Easing.ease) }),
       -1,
       true,
     );
-  }, [phase, reducedMotion]);
+    return () => cancelAnimation(phase);
+  }, [phase, breathing]);
 
   const glowStyle = useAnimatedStyle(() => ({
     opacity: 0.6 + 0.32 * phase.value,
@@ -51,10 +62,10 @@ export const LivingField: React.FC = () => {
 
   return (
     <View style={styles.fill} pointerEvents="none" testID="living-field">
-      <Animated.View style={[styles.glow, glowStyle]}>
+      <Animated.View style={[styles.light, { left: -0.66 * width, top: -0.07 * height }, glowStyle]}>
         <Light id="field-glow" size={GLOW_SIZE} color={colors.primary} stops={[0.26, 0.09]} />
       </Animated.View>
-      <Animated.View style={[styles.echo, echoStyle]}>
+      <Animated.View style={[styles.light, { left: 0.41 * width, top: 0.6 * height }, echoStyle]}>
         <Light id="field-echo" size={ECHO_SIZE} color={colors.primaryDark} stops={[0.13, 0]} />
       </Animated.View>
       <Animated.View style={[styles.fill, latticeStyle]}>
@@ -92,7 +103,16 @@ const Light: React.FC<{ id: string; size: number; color: string; stops: [number,
 
 const styles = StyleSheet.create({
   fill: { ...StyleSheet.absoluteFillObject },
-  // Desktop lights the left side of the page; the echo answers lower down.
-  glow: { position: 'absolute', left: -260, top: -60, width: GLOW_SIZE, height: GLOW_SIZE },
-  echo: { position: 'absolute', left: 160, top: 520, width: ECHO_SIZE, height: ECHO_SIZE },
+  // Desktop lights the left side of the page; the echo answers lower down (placed per screen size).
+  light: { position: 'absolute' },
 });
+
+/** Whether the app is in the foreground: the field rests while it is in the background. */
+function useAppActive(): boolean {
+  const [active, setActive] = useState(AppState.currentState !== 'background');
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => setActive(state === 'active'));
+    return () => sub.remove();
+  }, []);
+  return active;
+}

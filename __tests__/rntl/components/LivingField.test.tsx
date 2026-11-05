@@ -31,4 +31,15 @@ describe('LivingField', () => {
     expect(pattern.props.width).toBe(LIVING_FIELD.spacing);
     expect(pattern.findAll(n => n.props.r === LIVING_FIELD.dotRadius).length).toBeGreaterThan(0);
   });
+
+  it('lets go of the app-state listener when the screen goes away, so a closed Home costs nothing', () => {
+    const { AppState } = require('react-native');
+    const remove = jest.fn();
+    const spy = jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove });
+    const { unmount } = render(<LivingField active={false} />);
+    expect(spy).toHaveBeenCalledWith('change', expect.any(Function));
+    unmount();
+    expect(remove).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
 });
