@@ -335,3 +335,6 @@ Pass: For this phone as rows (Text, Speech), one label style, flat search fields
 1. Swapped answers in older chats.
 2. More models rows 40–52px.
 3. Top-bar icons 44pt and named; one empty-state label.
+
+## Swapped answers in old [test] chats (investigation, 08:30)
+Not reproducible on the current code: every save path carries the turn's own conversation, and 80 fuzzed runs (three chats, sends, queue, send-now, Stop, Resend, late tokens, tools on/off) found none. The chats are days old, so an older build or Sync is the likely source; they cannot be repaired (no record of which question made which reply). Hardened: a late turn can no longer end the next turn's session (`generationSession.end(reason, turn)`).
