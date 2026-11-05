@@ -27,7 +27,7 @@ import {
   useTranscriptionModelSetting,
 } from '../../hooks/useTranscriptionModelSetting';
 import { SettingsSectionHeader } from '../../components/settings/SettingsSectionHeader';
-import { useSectionSummaries } from './sectionSummaries';
+import { useSectionSummaries } from '../../components/settings/sectionSummaries';
 import { AliveScreen } from '../../components/AliveScreen';
 import { ScreenHeader } from '../../components/ScreenHeader';
 

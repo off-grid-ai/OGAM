@@ -15,6 +15,8 @@ import { ImageGenerationSection } from './ImageGenerationSection';
 import { TextGenerationSection } from './TextGenerationSection';
 import { TranscriptionLanguageSelect } from '../TranscriptionLanguageSelect';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import { SettingsSectionHeader } from '../settings/SettingsSectionHeader';
+import { useSectionSummaries } from '../settings/sectionSummaries';
 
 interface GenerationSettingsModalProps {
   visible: boolean;
@@ -42,6 +44,7 @@ export const GenerationSettingsModal: React.FC<
   isRemote,
 }) => {
   const { colors } = useTheme();
+  const summaries = useSectionSummaries();
   const styles = useThemedStyles(createStyles);
   const resetSettings = useAppStore((state) => state.resetSettings);
 
@@ -62,7 +65,6 @@ export const GenerationSettingsModal: React.FC<
     }
   }, [visible]);
 
-  const hasConversationActions = !!(onOpenProject || onOpenGallery || onDeleteConversation);
 
   return (
     <AppSheet
@@ -105,49 +107,30 @@ export const GenerationSettingsModal: React.FC<
 
         {/* It places every modality (text, image, video, speech, voice, search), so it leads the settings. */}
         <FastestSettingsButton />
-        <TouchableOpacity
-          style={[styles.accordionHeader, !hasConversationActions && styles.accordionHeaderNoMargin]}
-          onPress={() => setGeneralSettingsOpen(!generalSettingsOpen)}
-          activeOpacity={0.7}
+        <SettingsSectionHeader
+          title="General"
+          open={generalSettingsOpen}
+          onToggle={() => setGeneralSettingsOpen(!generalSettingsOpen)}
           testID="modal-general-accordion"
-          accessibilityRole="button"
-          accessibilityState={{ expanded: generalSettingsOpen }}
-        >
-          <Text style={styles.accordionTitle}>GENERAL</Text>
-          <Icon name={generalSettingsOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
-        </TouchableOpacity>
+        />
         {generalSettingsOpen && <View style={styles.sectionCard}><GeneralGenerationControls /></View>}
 
-        {/* IMAGE GENERATION SETTINGS */}
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setImageSettingsOpen(!imageSettingsOpen)}
-          activeOpacity={0.7}
+        <SettingsSectionHeader
+          title="Image generation"
+          summary={summaries.image}
+          open={imageSettingsOpen}
+          onToggle={() => setImageSettingsOpen(!imageSettingsOpen)}
           testID="modal-image-accordion"
-        >
-          <Text style={styles.accordionTitle}>IMAGE GENERATION</Text>
-          <Icon
-            name={imageSettingsOpen ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={colors.textMuted}
-          />
-        </TouchableOpacity>
+        />
         {imageSettingsOpen && <ImageGenerationSection />}
         {VideoSettings && <VideoSettings />}
 
-        {/* TEXT GENERATION SETTINGS */}
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setTextSettingsOpen(!textSettingsOpen)}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.accordionTitle}>TEXT GENERATION</Text>
-          <Icon
-            name={textSettingsOpen ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={colors.textMuted}
-          />
-        </TouchableOpacity>
+        <SettingsSectionHeader
+          title="Text generation"
+          summary={summaries.text}
+          open={textSettingsOpen}
+          onToggle={() => setTextSettingsOpen(!textSettingsOpen)}
+        />
         {textSettingsOpen && (
           <>
             {isRemote && (
@@ -163,20 +146,12 @@ export const GenerationSettingsModal: React.FC<
           </>
         )}
 
-        {/* SPEECH TO TEXT SETTINGS */}
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setSttSettingsOpen(!sttSettingsOpen)}
-          activeOpacity={0.7}
+        <SettingsSectionHeader
+          title="Speech to text"
+          open={sttSettingsOpen}
+          onToggle={() => setSttSettingsOpen(!sttSettingsOpen)}
           testID="modal-transcription-accordion"
-        >
-          <Text style={styles.accordionTitle}>SPEECH TO TEXT</Text>
-          <Icon
-            name={sttSettingsOpen ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={colors.textMuted}
-          />
-        </TouchableOpacity>
+        />
         {sttSettingsOpen && (
           <View style={styles.sectionCard}>
             <TranscriptionLanguageSelect testID="chat-transcription-language" />
@@ -188,18 +163,11 @@ export const GenerationSettingsModal: React.FC<
         {/* TTS SETTINGS (pro audio feature) */}
         {TtsSection && (
           <>
-            <TouchableOpacity
-              style={styles.accordionHeader}
-              onPress={() => setTtsSettingsOpen(!ttsSettingsOpen)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.accordionTitle}>TEXT TO SPEECH</Text>
-              <Icon
-                name={ttsSettingsOpen ? 'chevron-up' : 'chevron-down'}
-                size={16}
-                color={colors.textMuted}
-              />
-            </TouchableOpacity>
+            <SettingsSectionHeader
+              title="Text to speech"
+              open={ttsSettingsOpen}
+              onToggle={() => setTtsSettingsOpen(!ttsSettingsOpen)}
+            />
             {ttsSettingsOpen && (
               <TtsSection onNavigateToTTSSettings={onOpenTTSSettings} />
             )}
