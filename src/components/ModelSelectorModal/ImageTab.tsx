@@ -7,6 +7,7 @@ import { useTheme, useThemedStyles } from '../../theme';
 import { ONNXImageModel, RemoteModel } from '../../types';
 import { hardwareService } from '../../services';
 import { ModelCard } from '../ModelCard';
+import { GROUPED_CARD_ROW, ListGroup } from '../ListGroup';
 import { RemoteModelServerGroup } from '../models/RemoteModelServerGroup';
 import { fileExceedsBudget } from '../../services/memoryBudget';
 import { createAllStyles } from './styles';
@@ -139,6 +140,7 @@ export const ImageTab: React.FC<ImageTabProps> = ({
             <Icon name="hard-drive" size={14} color={colors.textMuted} />
             <Text style={styles.sectionSubTitle}>Local Models</Text>
           </View>
+          <ListGroup>
           {downloadedImageModels.map(model => {
             const estimatedMemory = hardwareService.estimateImageModelRam(model);
             const memoryFits = !fileExceedsBudget(model.size, hardwareService.getTotalMemoryGB());
@@ -147,6 +149,7 @@ export const ImageTab: React.FC<ImageTabProps> = ({
               <ModelCard
                 key={model.id}
                 compact
+                style={GROUPED_CARD_ROW}
                 testID={`image-model-row-${model.id}`}
                 model={{ id: model.id, name: model.name, author: 'On device', modelType: 'vision' }}
                 file={{ name: model.name, size: model.size, quantization: '', downloadUrl: '' }}
@@ -163,6 +166,7 @@ export const ImageTab: React.FC<ImageTabProps> = ({
               />
             );
           })}
+          </ListGroup>
         </>
       )}
 
