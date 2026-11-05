@@ -156,6 +156,23 @@ const ModelStatusBar: React.FC<{
   return null;
 };
 
+/**
+ * Compacting can take a minute on a phone (the model summarises the older turns). Say what it is for
+ * and how long it has run, so the wait never looks stuck (hand test 23: 90 s of bare dots).
+ */
+export const CompactingNote: React.FC = () => {
+  const [seconds, setSeconds] = React.useState(0);
+  React.useEffect(() => {
+    const timer = setInterval(() => setSeconds(s => s + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <ThinkingIndicator
+      text={`Making room for your answer by summarising earlier messages${seconds >= 5 ? ` · ${seconds} s` : '…'}`}
+    />
+  );
+};
+
 export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   assistantSelected,
   onAssistantSelectedChange,
@@ -369,7 +386,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           entering={FadeIn.duration(200)}
           style={styles.classifyingBar}
         >
-          <ThinkingIndicator text="Compacting your conversation..." />
+          <CompactingNote />
         </Animated.View>
       )}
       {/* Everything between the list and the composer is one stack, ordered by SHAPE, not by
