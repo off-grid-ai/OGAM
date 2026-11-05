@@ -49,8 +49,12 @@ describe('ChatMessage — Tool message rendering', () => {
       ['calculator', '42', /42/],
       ['get_current_datetime', '2026-02-24T10:30:00Z', /Retrieved date\/time/],
       ['get_device_info', '{"model":"iPhone 15"}', /Retrieved device info/],
-      ['custom_tool', 'result data', /custom_tool/],
-      [undefined, 'some result', /Tool result/],
+      // A tool the app does not know (an MCP server's own) reads as plain words, never its raw name.
+      ['custom_tool', 'result data', /Looked that up/],
+      ['ask_wiki_question', 'answer', /Looked that up/],
+      ['web_use', 'done', /Worked on your task/],
+      ['read_url', 'page text', /Read the page/],
+      [undefined, 'some result', /Looked that up/],
     ] as const)('shows correct label for toolName="%s"', (toolName, content, expectedLabel) => {
       const { getByText } = renderToolResult(toolName as string | undefined, content);
       expect(getByText(expectedLabel)).toBeTruthy();

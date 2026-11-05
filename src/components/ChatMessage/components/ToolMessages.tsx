@@ -68,9 +68,12 @@ function getToolLabel(toolName?: string, content?: string): string {
     case 'get_device_info':
       return 'Retrieved device info';
     case 'web_use':
-      return 'Web Use';
     case 'computer_use':
-      return 'Computer Use';
+      return 'Worked on your task';
+    case 'read_url':
+    case 'web_fetch':
+    case 'read_wiki_contents':
+      return 'Read the page';
     case 'model_fallback':
       return 'Model changed';
     case 'generate_image':
@@ -80,7 +83,9 @@ function getToolLabel(toolName?: string, content?: string): string {
     case 'make_film':
       return 'Film started';
     default:
-      return toolName || 'Tool result';
+      // A tool this list does not know (an MCP server's own, e.g. ask_wiki_question) reads as plain
+      // words, never its raw name; the name stays in the step's details.
+      return 'Looked that up';
   }
 }
 
