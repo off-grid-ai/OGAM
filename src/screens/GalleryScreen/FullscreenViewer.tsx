@@ -11,7 +11,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
 import { GeneratedImage } from '../../types';
 import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
-import { createStyles } from './styles';
+import { createStyles, VIEWER_INK } from './styles';
 import { formatDate } from './useGalleryActions';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 
@@ -106,7 +106,7 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({
                 style={[styles.viewerButton, showDetails && styles.viewerButtonActive]}
                 onPress={onToggleDetails}
               >
-                <Icon name="info" size={22} color={showDetails ? colors.primary : colors.text} />
+                <Icon name="info" size={22} color={showDetails ? colors.primary : VIEWER_INK} />
                 <Text style={showDetails ? styles.viewerButtonTextPrimary : styles.viewerButtonText}>
                   Info
                 </Text>
@@ -118,19 +118,19 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({
                   onStarted={onClose}
                   buttonStyle={styles.viewerButton}
                   textStyle={styles.viewerButtonText}
-                  iconColor={colors.text}
+                  iconColor={VIEWER_INK}
                 />
               )}
               <TouchableOpacity style={styles.viewerButton} onPress={() => onSave(image)}>
-                <Icon name="download" size={22} color={colors.text} />
+                <Icon name="download" size={22} color={VIEWER_INK} />
                 <Text style={styles.viewerButtonText}>Save</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.viewerButton} onPress={() => onDelete(image)}>
-                <Icon name="trash-2" size={22} color={colors.error} />
-                <Text style={styles.viewerButtonTextError}>Delete</Text>
+                <Icon name="trash-2" size={22} color={VIEWER_INK} />
+                <Text style={styles.viewerButtonText}>Delete</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.viewerButton} onPress={onClose}>
-                <Icon name="x" size={22} color={colors.text} />
+                <Icon name="x" size={22} color={VIEWER_INK} />
                 <Text style={styles.viewerButtonText}>Close</Text>
               </TouchableOpacity>
             </View>

@@ -2,6 +2,9 @@ import { StyleSheet, Dimensions } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 
+/** Light ink for controls over the black image viewer, in either theme. */
+export const VIEWER_INK = 'rgba(255,255,255,0.88)';
+
 const { width: screenWidth } = Dimensions.get('window');
 export const COLUMN_COUNT = 3;
 const GRID_SPACING = 4;
@@ -164,19 +167,17 @@ const createViewerStyles = (colors: ThemeColors) => ({
     justifyContent: 'center' as const,
     gap: SPACING.sm,
   },
+  // The viewer sits on black in both themes, so its controls use light ink, bare, with no boxes.
   viewerButton: {
     flex: 1,
-    maxWidth: 88,
+    maxWidth: 72,
     alignItems: 'center' as const,
-    paddingVertical: SPACING.md + 2,
+    paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.xs,
-    backgroundColor: colors.surface,
-    borderRadius: SPACING.md + 2,
   },
-  viewerButtonActive: { borderWidth: 1, borderColor: colors.primary },
-  viewerButtonText: { ...TYPOGRAPHY.meta, color: colors.text, marginTop: SPACING.xs },
+  viewerButtonActive: {},
+  viewerButtonText: { ...TYPOGRAPHY.meta, color: VIEWER_INK, marginTop: SPACING.xs },
   viewerButtonTextPrimary: { ...TYPOGRAPHY.meta, color: colors.primary, marginTop: SPACING.xs },
-  viewerButtonTextError: { ...TYPOGRAPHY.meta, color: colors.error, marginTop: SPACING.xs },
   detailsSheet: {
     flex: 1,
     width: '100%' as const,
