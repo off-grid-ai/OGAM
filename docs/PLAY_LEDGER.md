@@ -95,3 +95,9 @@ Each round: expected / found / root cause / change / commit / screenshots.
 - **Remote Servers:** one grouped list; the active row is marked by its emerald "In use" label, not a border (`b97e1ff18`).
 - **Copy:** Storage and Device Information use plain, sentence-case names (`58f55446f`, `6f3919e65`).
 - **Correction 14:30:** two Supervisor headings and one round heading carried invented times (14:10, 14:50, 14:40). They now show the real times from the commit log (13:50, 14:08, 14:00). From now on every time comes from `date`.
+
+## Supervisor 14:31
+1. Classifier, third path: a queued classifier download restored after a restart (`textProvider.reissue`) always auto-selects, so on a fresh install SmolLM2 can still become the chat model. Storage "Chat models" counts the classifier. One seam: an isClassifierModel check.
+2. Copy: "All models" leaves out speech-to-text and voices; "Most the app can use" is ungrammatical. Servers: "In use" and "Use" differ only by colour; mark the active row with a check and the selected state.
+3. Fresh-install audit once the phone is online; then the alive layer.
+- **Acted on 14:34:** classifier never auto-selected (third path, restored queued download); Storage counts only chat models; two labels fixed; the active server has a check and the selected state.
