@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react
 import { ScrollView, Text, View } from 'react-native';
 import { Pressable, TouchableOpacity } from '../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button, Card } from '../components';
 import { LoadingDots } from '../components/LoadingDots';
+import { AliveScreen } from '../components/AliveScreen';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { SLOTS, useSlot } from '../bootstrap/slotRegistry';
 import { SPACING, TYPOGRAPHY } from '../constants';
 import type { RootStackParamList } from '../navigation/types';
@@ -50,6 +51,9 @@ export const AutoSetupScreen: React.FC<Props> = ({
   sessionFactory = productionSessionFactory,
 }) => {
   const session = useMemo(() => sessionFactory(), [sessionFactory]);
+  // Opened from the app (Storage), not first launch: Back and Not now return there, never to Home.
+  const [openedFromApp] = useState(() => navigation.canGoBack());
+  const leave = () => (openedFromApp ? navigation.goBack() : navigation.replace('Main'));
   const snapshot = useSyncExternalStore(
     session.subscribe,
     session.snapshot,
@@ -114,18 +118,19 @@ export const AutoSetupScreen: React.FC<Props> = ({
 
   if (snapshot.phase === 'loading_catalog')
     return (
-      <SafeAreaView style={styles.container}>
+      <AliveScreen style={styles.container}>
         <View style={styles.center}>
           <LoadingDots color={colors.primary} />
           <Text style={styles.secondary}>
             Finding model choices...
           </Text>
         </View>
-      </SafeAreaView>
+      </AliveScreen>
     );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <AliveScreen style={styles.container}>
+      {openedFromApp && <ScreenHeader title="Choose models" onBack={navigation.goBack} />}
       <ScrollView
         contentContainerStyle={styles.content}
         testID="auto-setup-screen"
@@ -313,7 +318,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
                       title="Continue"
                       onPress={() => {
                         session.complete();
-                        navigation.replace('Main');
+                        leave();
                       }}
                       testID="auto-setup-continue"
                     />
@@ -377,18 +382,18 @@ export const AutoSetupScreen: React.FC<Props> = ({
           testID="auto-setup-advanced"
         />
         <Button
-          title="Skip for Now"
+          title={openedFromApp ? 'Not now' : 'Skip for Now'}
           variant="ghost"
           style={styles.textAction}
           onPress={() => {
             markConsentAsked();
-            flowFinished('onboarding', 'cancelled');
-            navigation.replace('Main');
+            if (!openedFromApp) flowFinished('onboarding', 'cancelled');
+            leave();
           }}
           testID="auto-setup-skip"
         />
       </ScrollView>
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 

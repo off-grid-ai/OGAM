@@ -166,7 +166,7 @@ const catalogBoundaries: AutoSetupCatalogBoundaries = {
 };
 
 describe('Auto Setup release journey', () => {
-  const navigation = { navigate: jest.fn(), push: jest.fn(), replace: jest.fn() } as any;
+  const navigation = { navigate: jest.fn(), push: jest.fn(), replace: jest.fn(), goBack: jest.fn(), canGoBack: () => false } as any;
   const textDownloads = new NativeDownloadBoundary('text');
   const imageDownloads = new NativeDownloadBoundary('image');
   const speechDownloads = new NativeDownloadBoundary('stt');
