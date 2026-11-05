@@ -136,7 +136,7 @@ export const FlashAttentionToggle: React.FC = () => {
   const { isFlashAttnOn, handleFlashAttnToggle } = useTextGenerationAdvanced();
   return (
     <SegmentedRow<'off' | 'on'>
-      label="Flash Attention"
+      label="Flash attention"
       description="Faster inference and lower memory. Required for quantized KV cache (q8_0/q4_0). Requires model reload."
       options={BOOL_OPTIONS}
       current={isFlashAttnOn ? 'on' : 'off'}
@@ -194,7 +194,7 @@ export const ModelLoadingModeSelector: React.FC = () => {
   return (
     <SegmentedRow<ModelLoadingMode>
       label="Model loading"
-      description="Applies to all chats. Lean keeps ONE model in memory at a time. Balanced keeps models loaded together when they fit and swaps when they do not. Aggressive commits a larger share of RAM so bigger models load. You can always Load Anyway if a model is refused."
+      description="Applies to all chats. Lean keeps one model in memory at a time. Balanced keeps models loaded together when they fit and swaps when they do not. Aggressive commits a larger share of RAM so bigger models load. If a model is refused, you can still load it anyway."
       options={MODE_OPTIONS}
       current={current}
       onSelect={(id) => updateSettings({ modelLoadingMode: id })}
@@ -251,7 +251,7 @@ export const ShowGenerationDetailsToggle: React.FC = () => {
   const on = !!settings.showGenerationDetails;
   return (
     <SegmentedRow<'off' | 'on'>
-      label="Show Generation Details"
+      label="Show generation details"
       description="Applies to all chats. Show context use, model, speed, and image settings below each reply."
       options={BOOL_OPTIONS}
       current={on ? 'on' : 'off'}
@@ -293,7 +293,7 @@ export const BatchSizeSlider: React.FC = () => {
     <View style={styles.container}>
       <SliderSetting
         testID="batch-size-stepper"
-        label="Batch Size"
+        label="Batch size"
         description="Tokens processed per batch"
         value={batchForBackend(settings.nBatch, settings.inferenceBackend)}
         // 0 means auto: show the batch the engine will actually use.
