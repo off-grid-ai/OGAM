@@ -169,3 +169,9 @@ Pass: 2, 3, 4, 6, 9, 10. Partial: 1 (light gone while held), 7 (Sync row 3 lines
 2. Models card redesign → three options on the canvas, waiting for Mac.
 3. Bell without its circle; "Text" caption contrast; shots without the Metro banner.
 - Also: the field now sits behind Chats, Projects, Models and Settings.
+
+## r10 desktop's chips (17:54)
+- **Mac chose option A.** Home's Models box is now desktop's composer chips (`804a512f0`): the text model named first (emerald when in use), a chip per kind with its count that opens its picker, a trailing "Models" chip for the manager (keeps the `models-summary` testID). On the phone: `r10-models-chips/home-chips.png` (no text model selected on this phone, so "Text 16"). Sent to Mac.
+- **Bell:** plain header chrome, no circle (pro `57b3eaa8`).
+- **Contrast:** light muted text `#8A8A8A` was 3.4:1 on white; the one token is now `#737373` (4.7:1) for both apps (shared `f6d8776`).
+- **Held finger:** the light still fades in WDA's simulated hold; asked Mac to try a real finger.
