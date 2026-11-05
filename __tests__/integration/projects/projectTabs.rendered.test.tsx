@@ -36,7 +36,8 @@ describe('project screen tabs', () => {
     // A hidden tab is left out of the queries, as it is out of the person's sight.
     expect(view.getByTestId('project-start-chat')).toBeVisible();
     // One + in the tab row, for the open tab.
-    expect(view.getByLabelText('New chat')).toBeVisible();
+    expect(view.getByTestId('project-new-chat')).toHaveProp('accessibilityLabel', 'New chat');
+    expect(view.getByTestId('project-new-chat')).toBeVisible();
     expect(view.queryByTestId('kb-add')).toBeNull();
 
     // Knowledge base tab: only the knowledge base shows.
