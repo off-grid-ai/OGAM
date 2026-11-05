@@ -103,4 +103,40 @@ describe('Insufficient Memory → Cancel keeps the chat on the loaded model', ()
     expect(view().queryByText(/chatting with Unknown/)).toBeNull();
     expect(view().queryByText(/chatting with Model B/)).toBeNull();
   }, 45000);
+
+  it('offers another model as the way forward: the picker opens and the chat stays on Model A', async () => {
+    // Device, 2026-11-05: the sheet offered only Cancel and a red Load Anyway, so the next step was
+    // to risk the load. It now offers the picker first, and Load Anyway is not a destructive action.
+    const h = await setupChatScreen({ navigation: 'real',
+      engine: 'llama',
+      platform: 'android',
+      deferInitialLoad: true,
+      modelName: 'Model A',
+      extraModels: [{ id: 'big', name: 'Model B', fileName: 'big.litertlm', fileSizeBytes: 20 * GB, engine: 'litert' }],
+    });
+    const { rtl } = h;
+    h.boundary.fs!.seedFile('/docs/models/big.litertlm', 20 * GB);
+    h.render();
+    const view = () => h.view!;
+
+    await h.send('Hi', { text: 'Hello from A.' });
+    await rtl.waitFor(() => expect(view().queryByText('Hello from A.')).not.toBeNull(), { timeout: 8000 });
+    rtl.fireEvent.press(view().getByTestId('model-selector'));
+    rtl.fireEvent.press(await rtl.waitFor(() => view().getByTestId('models-row-text')));
+    rtl.fireEvent.press(await rtl.waitFor(() => view().getByTestId('text-model-row-big')));
+    await rtl.waitFor(() => expect(h.useAppStore.getState().activeModelId).toBe('big'));
+
+    await h.tapSend('Use the big one');
+    await rtl.waitFor(() => expect(view().queryByText('Choose another model')).not.toBeNull(), { timeout: 10000 });
+
+    await rtl.act(async () => {
+      let n: Node | null = view().getByText('Choose another model') as unknown as Node;
+      while (n && typeof n.props.onPress !== 'function') n = n.parent;
+      (n!.props.onPress as () => void)();
+    });
+
+    await rtl.waitFor(() => expect(view().queryByText('Insufficient Memory')).toBeNull());
+    await rtl.waitFor(() => expect(view().queryByTestId('text-model-row-big')).not.toBeNull());
+    expect(h.useAppStore.getState().activeModelId).toBe('m');
+  }, 45000);
 });

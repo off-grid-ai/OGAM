@@ -17,6 +17,23 @@ import { isOverridableMemoryError } from '../utils/modelLoadErrors';
  *  `(error as Error).message` renders "undefined" for a string/other throw. */
 const errorMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
+/**
+ * The one sheet for a load the memory gate refused. It says why, then offers the next step: another
+ * model (when the screen can open its picker), Load Anyway (neutral, not red: it is a choice, not a
+ * deletion), or cancel. Both load paths used to build their own copy with "Load Anyway" in red and no
+ * way forward except risking the load (device, 2026-11-05: Gemma 4 E4B refused, nothing offered).
+ */
+export function memoryRefusalAlert(
+  detail: string,
+  actions: { onTryAnyway: () => void; onCancel?: () => void; onChooseModel?: () => void },
+): AlertState {
+  return showAlert('Insufficient Memory', detail, [
+    ...(actions.onChooseModel ? [{ text: 'Choose another model', onPress: actions.onChooseModel }] : []),
+    { text: 'Load Anyway', onPress: actions.onTryAnyway },
+    { text: 'Cancel', style: 'cancel' as const, onPress: actions.onCancel },
+  ]);
+}
+
 export interface LoadWithOverrideDeps {
   setAlertState: (a: AlertState) => void;
   /** Ran on a successful load (initial OR after Load Anyway). e.g. navigate/close sheet. */
@@ -27,6 +44,8 @@ export interface LoadWithOverrideDeps {
   onAttemptStart?: () => void;
   /** Ran after each attempt settles. e.g. setLoading(false). */
   onAttemptEnd?: () => void;
+  /** Opens the screen's model picker; offered as the way forward when memory refuses the load. */
+  onChooseModel?: () => void;
 }
 
 /**
@@ -46,21 +65,13 @@ export async function loadModelWithOverride(
       // user already chose Load Anyway and it still failed — that's a real hard limit).
       if (!override && isOverridableMemoryError(error)) {
         deps.setAlertState(
-          showAlert(
-            'Insufficient Memory',
-            `${errorMessage(error)}\n\nWould you like to override these safeguards and load it anyway?`,
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Load Anyway',
-                style: 'destructive',
-                onPress: () => {
-                  deps.setAlertState(hideAlert());
-                  void attempt(true);
-                },
-              },
-            ],
-          ),
+          memoryRefusalAlert(errorMessage(error), {
+            onTryAnyway: () => {
+              deps.setAlertState(hideAlert());
+              void attempt(true);
+            },
+            onChooseModel: deps.onChooseModel,
+          }),
         );
         return;
       }
