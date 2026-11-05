@@ -133,4 +133,30 @@ describe('remote server scan progress', () => {
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(probed.length).toBe(probedAtLeave);
   }, 30_000);
+
+  it('with every server type off, Scan network waits, says why, and probes nothing', async () => {
+    await remoteServerManager.clearAllServers();
+    const probed: string[] = [];
+    global.fetch = (async (input: RequestInfo | URL) => {
+      probed.push(String(input));
+      return { status: 404, ok: false } as Response;
+    }) as typeof fetch;
+
+    const view = render(withNavigator(<RemoteServersScreen />));
+    fireEvent(view.getByTestId('scan-kind-gateway'), 'valueChange', false);
+    fireEvent(view.getByTestId('scan-kind-ollama'), 'valueChange', false);
+    fireEvent(view.getByTestId('scan-kind-lmstudio'), 'valueChange', false);
+
+    expect(view.getByText('Turn on one server type to scan for it.')).toBeTruthy();
+    fireEvent.press(view.getByTestId('scan-network'));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(probed).toEqual([]);
+    expect(view.queryByTestId('stop-scan')).toBeNull();
+
+    // Turning one back on lets the scan run again.
+    fireEvent(view.getByTestId('scan-kind-gateway'), 'valueChange', true);
+    expect(view.queryByText('Turn on one server type to scan for it.')).toBeNull();
+    view.unmount();
+  });
 });
+
