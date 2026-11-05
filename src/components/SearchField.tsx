@@ -51,7 +51,7 @@ export const SearchField: React.FC<SearchFieldProps> = ({ value, onChangeText, p
   );
 };
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   row: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -62,7 +62,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
     backgroundColor: colors.surface,
-    ...shadows.small,
   },
   // Focus draws light to the field: an emerald edge and a soft ring (the composer's focus).
   rowFocused: {
