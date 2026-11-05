@@ -375,7 +375,6 @@ export const ModelCard: React.FC<ModelCardProps> = ({
         styles.card,
         useDenseLayout && styles.cardDense,
         isActive && styles.cardActive,
-        !isCompatible && styles.cardIncompatible,
         style,
       ]}
       onPress={onPress}
@@ -387,7 +386,9 @@ export const ModelCard: React.FC<ModelCardProps> = ({
       accessibilityState={{ selected: !!isActive, disabled: !!disabled }}
       testID={testID}
     >
-      <View style={[styles.cardRow, useDenseLayout && styles.cardRowDense]}>
+      {/* An incompatible model fades its content, not its surface: in a grouped list a faded row
+          surface left a patchy strip in the group. */}
+      <View style={[styles.cardRow, useDenseLayout && styles.cardRowDense, !isCompatible && styles.cardIncompatible]}>
         <View style={styles.cardContent}>
           <ModelCardHeading
             dense={!!useDenseLayout}
