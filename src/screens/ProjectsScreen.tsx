@@ -186,18 +186,22 @@ export const ProjectsScreen: React.FC = () => {
             </View>
           </AnimatedEntry>
           <AnimatedEntry index={1} staggerMs={60} trigger={focusTrigger}>
-            <Text style={styles.emptyTitle}>No Projects Yet</Text>
+            <Text style={styles.emptyTitle}>No projects yet</Text>
           </AnimatedEntry>
           <AnimatedEntry index={2} staggerMs={60} trigger={focusTrigger}>
             <Text style={styles.emptyText}>
-              Create a project to organize your chats by topic, like "Spanish Learning" or "Code Review".
+              Keep related chats together, with notes and instructions they all share.
             </Text>
           </AnimatedEntry>
           <AnimatedEntry index={3} staggerMs={60} trigger={focusTrigger}>
-            <TouchableOpacity style={styles.emptyButton} onPress={handleNewProject} testID="new-project-empty-button">
-              <Icon name="plus" size={14} color={colors.primary} />
-              <Text style={styles.emptyButtonText}>Create Project</Text>
-            </TouchableOpacity>
+            <Button
+              title="New project"
+              variant="hero"
+              size="small"
+              icon={<Icon name="plus" size={16} color={colors.onHero} />}
+              onPress={handleNewProject}
+              testID="new-project-empty-button"
+            />
           </AnimatedEntry>
         </View>
       ) : (
@@ -303,11 +307,6 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingHorizontal: SPACING.md,
   },
   emptyIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     marginBottom: SPACING.lg,
