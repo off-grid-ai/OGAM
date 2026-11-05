@@ -3,7 +3,6 @@ import { View, Text, Image } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
 import { Button } from '../../components/Button';
 import Icon from 'react-native-vector-icons/Feather';
-import { AnimatedEntry } from '../../components/AnimatedEntry';
 import { useThemedStyles } from '../../theme';
 import { GeneratedImage } from '../../types';
 import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
@@ -21,7 +20,7 @@ interface GalleryGridItemProps {
 
 export const GalleryGridItem: React.FC<GalleryGridItemProps> = ({
   item,
-  index,
+  index: _index,
   isSelectMode,
   isSelected,
   onPress,
@@ -39,38 +38,52 @@ export const GalleryGridItem: React.FC<GalleryGridItemProps> = ({
     setFailed(false);
   }, [imageUri]);
 
+  // No staggered entry: on device some tiles' fade never ran and they stayed invisible (blank holes,
+  // hand tests 9 and 11). The grid shows each picture as it decodes, on the tile's own grey.
   return (
-    <AnimatedEntry index={index} staggerMs={40} maxItems={15}>
-      <TouchableOpacity
-        style={styles.gridItem}
-        onPress={failed && !isSelectMode ? onRemove : onPress}
-        onLongPress={onLongPress}
-        activeOpacity={0.8}
-        accessibilityRole="button"
-        accessibilityLabel={`Generated image ${imageState}: ${item.prompt}`}
-        testID={`gallery-image-${item.id}`}
-      >
-        {failed ? (
-          <View style={styles.unavailableImage}>
-            <Text style={styles.unavailableText}>Image is not on this device</Text>
-            <Button title="Remove" variant="ghost" size="small" onPress={onRemove} />
-          </View>
-        ) : (
-          <Image
-            source={{ uri: imageUri }}
-            style={styles.gridImage}
-            onLoad={() => setLoaded(true)}
-            onError={() => setFailed(true)}
+    <TouchableOpacity
+      style={styles.gridItem}
+      onPress={failed && !isSelectMode ? onRemove : onPress}
+      onLongPress={onLongPress}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel={`Generated image ${imageState}: ${item.prompt}`}
+      testID={`gallery-image-${item.id}`}
+    >
+      {failed ? (
+        <View style={styles.unavailableImage}>
+          <Text style={styles.unavailableText}>
+            Image is not on this device
+          </Text>
+          <Button
+            title="Remove"
+            variant="ghost"
+            size="small"
+            onPress={onRemove}
           />
-        )}
-        {isSelectMode && (
-          <View style={[styles.selectionOverlay, isSelected && styles.selectionOverlaySelected]}>
-            <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-              {isSelected && <Icon name="check" size={14} color="#fff" />}
-            </View>
+        </View>
+      ) : (
+        <Image
+          source={{ uri: imageUri }}
+          style={styles.gridImage}
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
+        />
+      )}
+      {isSelectMode && (
+        <View
+          style={[
+            styles.selectionOverlay,
+            isSelected && styles.selectionOverlaySelected,
+          ]}
+        >
+          <View
+            style={[styles.checkbox, isSelected && styles.checkboxSelected]}
+          >
+            {isSelected && <Icon name="check" size={14} color="#fff" />}
           </View>
-        )}
-      </TouchableOpacity>
-    </AnimatedEntry>
+        </View>
+      )}
+    </TouchableOpacity>
   );
 };
