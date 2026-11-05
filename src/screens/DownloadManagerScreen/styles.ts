@@ -1,7 +1,8 @@
+import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 
-export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -9,12 +10,10 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-    ...shadows.small,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
     zIndex: 1,
     gap: SPACING.sm,
   },
@@ -37,18 +36,20 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     marginBottom: SPACING.sm,
   },
   downloadCardInset: {
-    marginHorizontal: SPACING.md,
+    marginHorizontal: SPACING.xl,
   },
   sectionHeader: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.md,
-    marginBottom: SPACING.xs,
+    paddingHorizontal: SPACING.xl,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.sm,
     gap: SPACING.sm,
   },
   sectionTitle: {
-    ...TYPOGRAPHY.h3,
-    color: colors.text,
+    ...TYPOGRAPHY.label,
+    textTransform: 'uppercase' as const,
+    color: colors.textMuted,
     flex: 1,
   },
   countBadge: {
@@ -156,14 +157,14 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     gap: SPACING.sm,
   },
   quantBadge: {
-    backgroundColor: `${colors.primary}25`,
+    backgroundColor: colors.surfaceLight,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
     borderRadius: 6,
   },
   quantText: {
     ...TYPOGRAPHY.meta,
-    color: colors.primary,
+    color: colors.textSecondary,
   },
   imageBadge: {
     backgroundColor: `${colors.info}25`,
@@ -215,7 +216,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   filterBarContent: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.xs,
     gap: SPACING.xs,
   },
@@ -241,15 +242,13 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.primary,
   },
   storageSection: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
   },
   storageRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: SPACING.sm,
-    backgroundColor: colors.surface,
-    padding: SPACING.md,
-    borderRadius: SPACING.sm,
+    paddingVertical: SPACING.md,
   },
   storageText: {
     ...TYPOGRAPHY.bodySmall,

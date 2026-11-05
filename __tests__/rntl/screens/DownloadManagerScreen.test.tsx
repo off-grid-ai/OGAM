@@ -137,13 +137,13 @@ const runningText = (overrides: Partial<DownloadRow> = {}): DownloadRow => ({
 describe('DownloadManagerScreen', () => {
   it('renders screen title', async () => {
     const { view } = await openManager();
-    expect(view.getByText('Download Manager')).toBeTruthy();
+    expect(view.getByText('Downloads')).toBeTruthy();
   });
 
   it('shows empty state when no downloads', async () => {
     const { view } = await openManager();
     // Active Downloads section is hidden when there are no active items
-    expect(view.queryByText('Active Downloads')).toBeNull();
+    expect(view.queryByText('Downloading')).toBeNull();
     expect(view.getByText('No models downloaded yet')).toBeTruthy();
   });
 
@@ -184,8 +184,8 @@ describe('DownloadManagerScreen', () => {
 
   it('shows section headers for active and completed', async () => {
     const { view } = await openManager();
-    expect(view.queryByText('Active Downloads')).toBeNull();
-    expect(view.getByText('Downloaded Models')).toBeTruthy();
+    expect(view.queryByText('Downloading')).toBeNull();
+    expect(view.getByText('On this phone')).toBeTruthy();
   });
 
   it('renders completed text model with details', async () => {
@@ -215,7 +215,7 @@ describe('DownloadManagerScreen', () => {
       nativeDownloads(ctx, [runningText({ bytesDownloaded: 2 * GB, totalBytes: 4 * GB, combinedTotalBytes: 4 * GB })]),
     );
     expect(view.getByText('model-file.gguf')).toBeTruthy();
-    expect(view.getByText('Active Downloads')).toBeTruthy();
+    expect(view.getByText('Downloading')).toBeTruthy();
     expect(view.getByText('50%')).toBeTruthy();
   });
 
@@ -223,7 +223,7 @@ describe('DownloadManagerScreen', () => {
     const { view } = await openManager(async ctx => {
       await placeTextModel(ctx, { fileName: 'model.gguf', bytes: GB });
     });
-    expect(view.getByText('Total storage used: 1.0 GB')).toBeTruthy();
+    expect(view.getByText('1.0 GB used on this phone')).toBeTruthy();
   });
 
   it('shows count badge for completed section', async () => {

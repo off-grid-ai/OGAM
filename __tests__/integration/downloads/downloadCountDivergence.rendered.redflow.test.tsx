@@ -52,7 +52,7 @@ describe('T001 (rendered) — download badge vs Download Manager active count', 
 
     // ACTIVE COUNT — the number a user sees on the real Download Manager, reading the SAME store.
     const dm = render(React.createElement(DownloadManagerScreen, {}));
-    await waitFor(() => { expect(dm.queryByText('Download Manager')).not.toBeNull(); });
+    await waitFor(() => { expect(dm.queryByText('Downloads')).not.toBeNull(); });
     const downloading = Number(dm.getByTestId('dm-active-downloading-count').props.children);
     const queuedEl = dm.queryByTestId('dm-active-queued-count');
     const queued = queuedEl ? Number(String(queuedEl.props.children).match(/\d+/)?.[0] ?? '0') : 0;

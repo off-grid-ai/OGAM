@@ -43,7 +43,7 @@ describe('orphaned projector sidecar (rendered) — no phantom model on hydrate'
 
     const view = render(React.createElement(DownloadManagerScreen, {}));
     // Re-render proof: the screen mounted (its title is on screen) before we assert an absence.
-    await waitFor(() => { expect(view.queryByText('Download Manager')).not.toBeNull(); });
+    await waitFor(() => { expect(view.queryByText('Downloads')).not.toBeNull(); });
 
     // Correct: the projector is classified as a projector, not a model, so NO card shows its filename.
     // Before the fix (isMmProjFileName matched only 'mmproj') the sidecar leaked in as a phantom card → RED.

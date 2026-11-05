@@ -178,7 +178,7 @@ function blockedImageForNonVisionModel(
     showAlert(
       repair ? 'Vision File Missing' : 'Vision Not Supported',
       repair
-        ? 'This model supports vision, but its vision file has not been installed.\n\nOpen Download Manager and tap the wrench next to the model to download it.'
+        ? 'This model supports vision, but its vision file has not been installed.\n\nOpen Downloads and tap the wrench next to the model to download it.'
         : 'This model does not support image input.\n\nSwitch to a vision-capable model to send images.',
     ),
   );

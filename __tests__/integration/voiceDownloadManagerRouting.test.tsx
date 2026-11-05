@@ -12,7 +12,7 @@ it('a mid-download Kokoro appears in Active Downloads at 50%, not as a completed
     await app.view.findByText(/50%/);
     app.rtl.fireEvent.press(app.view.getByTestId('downloads-icon'));
     expect(await app.view.findByText('50%')).toBeTruthy();
-    expect(app.view.getByText('Active Downloads')).toBeTruthy();
+    expect(app.view.getByText('Downloading')).toBeTruthy();
     expect(app.view.getByTestId('dm-active-downloading-count')).toHaveTextContent('1');
     expect(app.view.getByLabelText('Remove Kokoro TTS')).toBeTruthy();
     expect(app.rtl.within(app.view.getByLabelText('Kokoro TTS')).queryByLabelText('Delete model')).toBeNull();
@@ -27,7 +27,7 @@ it('a genuinely completed Kokoro appears under Downloaded Models', async () => {
     await app.downloadVoice();
     app.rtl.fireEvent.press(app.view.getByTestId('downloads-icon'));
     expect(app.rtl.within(await app.view.findByLabelText('Kokoro TTS')).getByLabelText('Delete model')).toBeTruthy();
-    expect(app.view.getByText('Downloaded Models')).toBeTruthy();
-    expect(app.view.queryByText('Active Downloads')).toBeNull();
+    expect(app.view.getByText('On this phone')).toBeTruthy();
+    expect(app.view.queryByText('Downloading')).toBeNull();
   } finally { await app.close(); }
 });

@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { Card } from '../../components';
+import { ListGroup } from '../../components/ListGroup';
 import { CustomAlert, hideAlert } from '../../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
@@ -95,7 +96,7 @@ export const DownloadManagerScreen: React.FC = () => {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} testID="back-button">
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Download Manager</Text>
+        <Text style={styles.title}>Downloads</Text>
       </View>
 
       <FlatList
@@ -108,8 +109,7 @@ export const DownloadManagerScreen: React.FC = () => {
             {filteredActive.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Icon name="download" size={16} color={colors.primary} />
-                  <Text style={styles.sectionTitle}>Active Downloads</Text>
+                  <Text style={styles.sectionTitle}>Downloading</Text>
                   <View style={styles.countBadge}>
                     <Text testID="dm-active-downloading-count" style={styles.countText}>{activeDownloadingCount}</Text>
                   </View>
@@ -129,29 +129,28 @@ export const DownloadManagerScreen: React.FC = () => {
                     </Text>
                   )}
                 </View>
-                {filteredActive.map(item => (
-                  <View key={`active-${item.modelId}-${item.fileName}`} style={styles.downloadCardInset}>
-                    <ActiveDownloadCard item={item} onRemove={handleRemoveDownload} onRetry={handleRetryDownload} onPause={handlePauseDownload} onResume={handleResumeDownload} />
-                  </View>
-                ))}
+                <ListGroup style={styles.downloadCardInset}>
+                  {filteredActive.map(item => (
+                    <ActiveDownloadCard key={`active-${item.modelId}-${item.fileName}`} item={item} onRemove={handleRemoveDownload} onRetry={handleRetryDownload} onPause={handlePauseDownload} onResume={handleResumeDownload} />
+                  ))}
+                </ListGroup>
               </View>
             )}
 
             {/* Downloaded Models */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Icon name="check-circle" size={16} color={colors.success} />
-                <Text style={styles.sectionTitle}>Downloaded Models</Text>
+                <Text style={styles.sectionTitle}>On this phone</Text>
                 <View style={styles.countBadge}>
                   <Text style={styles.countText}>{filteredCompleted.length}</Text>
                 </View>
               </View>
               {filteredCompleted.length > 0 ? (
-                filteredCompleted.map(item => (
-                  <View key={`completed-${item.modelId}-${item.fileName}`}>
-                    <CompletedDownloadCard item={item} onDelete={handleDeleteItem} onRepairVision={handleRepairVision} onPauseRepair={handlePauseDownload} onResumeRepair={handleResumeDownload} onCancelRepair={handleRemoveDownload} isRepairingVision={isRepairingVision(item.modelId)} />
-                  </View>
-                ))
+                <ListGroup style={styles.downloadCardInset}>
+                  {filteredCompleted.map(item => (
+                    <CompletedDownloadCard key={`completed-${item.modelId}-${item.fileName}`} item={item} onDelete={handleDeleteItem} onRepairVision={handleRepairVision} onPauseRepair={handlePauseDownload} onResumeRepair={handleResumeDownload} onCancelRepair={handleRemoveDownload} isRepairingVision={isRepairingVision(item.modelId)} />
+                  ))}
+                </ListGroup>
               ) : (
                 <Card style={styles.emptyCard}>
                   <Icon name="package" size={24} color={colors.textMuted} />
@@ -168,7 +167,7 @@ export const DownloadManagerScreen: React.FC = () => {
                 <View style={styles.storageRow}>
                   <Icon name="hard-drive" size={16} color={colors.textMuted} />
                   <Text style={styles.storageText}>
-                    Total storage used: {formatBytes(totalStorageUsed)}
+                    {formatBytes(totalStorageUsed)} used on this phone
                   </Text>
                 </View>
               </View>

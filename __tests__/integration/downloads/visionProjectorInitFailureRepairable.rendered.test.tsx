@@ -9,7 +9,7 @@
  * Photo action says the vision file is missing and leads to Downloads, and the wrench repairs it.
  *
  * Entry point: the REAL App (boot, NavigationContainer, AppNavigator). Every step is a gesture: open
- * Models → Downloads, go back, New Chat, type and send, Photo, "Go to Download Manager", the wrench.
+ * Models → Downloads, go back, New Chat, type and send, Photo, "Open Downloads", the wrench.
  *
  * Fakes (device boundary only): the in-memory filesystem (the weights and, after launch, the projector
  * file), AsyncStorage (what an earlier run saved), the RAM sensor, and llama.rn. The llama.rn fake's
@@ -131,7 +131,7 @@ describe('vision projector that fails to start', () => {
     fireEvent.press(await waitFor(() => ui.getByTestId('attach-photo'), RENDER_WAIT));
     await waitFor(() => expect(ui.getByText('Vision File Missing')).toBeTruthy(), RENDER_WAIT);
     expect(ui.queryByText('Vision Not Supported')).toBeNull();
-    fireEvent.press(ui.getByText('Go to Download Manager'));
+    fireEvent.press(ui.getByText('Open Downloads'));
 
     // AFTER: Downloads shows it as a vision model, with the repair wrench.
     downloads = await waitFor(() => ui.getByTestId('downloaded-models-screen'), RENDER_WAIT);

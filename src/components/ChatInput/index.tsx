@@ -132,13 +132,13 @@ const buildNoVisionAlert = (opts: {
   if (opts.needsRepair) {
     return showAlert(
       'Vision File Missing',
-      'This model supports vision, but its vision file has not been installed.\n\nOpen Download Manager and tap the wrench next to the model to download it.',
+      'This model supports vision, but its vision file has not been installed.\n\nOpen Downloads and tap the wrench next to the model to download it.',
       [
         { text: 'Cancel', onPress: opts.dismiss },
         ...(opts.onRepairVision
           ? [
               {
-                text: 'Go to Download Manager',
+                text: 'Open Downloads',
                 onPress: () => {
                   opts.dismiss();
                   opts.onRepairVision!();

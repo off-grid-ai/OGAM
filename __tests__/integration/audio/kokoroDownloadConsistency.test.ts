@@ -19,7 +19,7 @@ it('mid-download: all prior files present must not make either screen report com
     expect(app.view.queryByTestId('voice-model-kokoro-delete')).toBeNull();
     await downloads(app);
     expect(await app.view.findByText('61%')).toBeTruthy();
-    expect(app.view.getByText('Active Downloads')).toBeTruthy();
+    expect(app.view.getByText('Downloading')).toBeTruthy();
     expect(app.view.getByTestId('dm-active-downloading-count')).toHaveTextContent('1');
     expect(app.view.getByLabelText('Remove Kokoro TTS')).toBeTruthy();
     expect(app.rtl.within(app.view.getByLabelText('Kokoro TTS')).queryByLabelText('Delete model')).toBeNull();
@@ -37,8 +37,8 @@ it('genuinely complete: a resolved transfer reads as completed in both screens',
     await app.downloadVoice();
     await downloads(app);
     expect(app.rtl.within(await app.view.findByLabelText('Kokoro TTS')).getByLabelText('Delete model')).toBeTruthy();
-    expect(app.view.getByText('Downloaded Models')).toBeTruthy();
-    expect(app.view.queryByText('Active Downloads')).toBeNull();
+    expect(app.view.getByText('On this phone')).toBeTruthy();
+    expect(app.view.queryByText('Downloading')).toBeNull();
   } finally { await app.close(); }
 });
 

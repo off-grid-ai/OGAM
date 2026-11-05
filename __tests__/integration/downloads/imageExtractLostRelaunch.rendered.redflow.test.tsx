@@ -33,7 +33,7 @@ describe('D1 (rendered) — failed image extraction lost on relaunch', () => {
     await hydrateDownloadStore();
 
     const after = render(React.createElement(DownloadManagerScreen, {}));
-    await waitFor(() => { expect(after.queryByText('Download Manager')).not.toBeNull(); }); // re-render proof
+    await waitFor(() => { expect(after.queryByText('Downloads')).not.toBeNull(); }); // re-render proof
 
     // Correct: the incomplete image model is still surfaced (retriable). Today it vanishes → RED.
     expect(after.queryByText(/anythingv5/)).not.toBeNull();

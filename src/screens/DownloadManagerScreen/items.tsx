@@ -3,6 +3,7 @@ import { View, Text } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { ModelCard } from '../../components/ModelCard';
+import { GROUPED_CARD_ROW } from '../../components/ListGroup';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { BackgroundDownloadReasonCode } from '../../types';
@@ -133,6 +134,7 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
   return (
     <ModelCard
       compact
+      style={GROUPED_CARD_ROW}
       model={{ id: item.modelId, name: splitGgufModelName(item.fileName), author: item.author,
         modelType: item.isVisionModel ? 'vision' : item.modelType === 'text' ? 'text' : undefined }}
       file={{ name: splitGgufModelName(item.fileName), size: item.fileSize, quantization: item.quantization, downloadUrl: '' }}
@@ -304,9 +306,10 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({
   const repairActive = isRepairingVision || !!repairEntry && isMMProjFile(repairEntry.fileName);
   const showRepairProgress = repairActive && !!repairEntry;
   return (
-    <View style={{ marginHorizontal: SPACING.md }}>
+    <View>
       <ModelCard
         compact
+        style={GROUPED_CARD_ROW}
         model={{
           id: item.modelId,
           name: splitGgufModelName(item.fileName),

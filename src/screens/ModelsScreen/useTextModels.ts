@@ -279,7 +279,7 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
         if (file.mmProjFile && !(dm.engine === 'llama' && dm.isVisionModel)) {
           setAlertState(showAlert(
             'Model Downloaded',
-            `${model.name} downloaded but the vision projection file could not be saved. Go to Download Manager and use "Repair Vision" to fix it.`,
+            `${model.name} downloaded but the vision projection file could not be saved. Open Downloads and tap the wrench next to the model.`,
           ));
         } else {
           // A finished download is the model you use next: make it active and offer the chat.

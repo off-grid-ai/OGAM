@@ -41,7 +41,7 @@ describe('V1 (rendered) — deleting a whisper model aborts an unrelated downloa
     await t.hydrateDownloadStore(); // foreground re-hydrate reflects native state
 
     const after = t.rtl.render(t.React.createElement(t.DownloadManagerScreen, {}));
-    await t.rtl.waitFor(() => { expect(after.queryByText('Download Manager')).not.toBeNull(); });
+    await t.rtl.waitFor(() => { expect(after.queryByText('Downloads')).not.toBeNull(); });
 
     // Correct: deleting small.en does not touch base.en — its download card is still there.
     // Today deleteModel cancels the single activeDownloadId (base.en's) → its card vanishes → RED.
