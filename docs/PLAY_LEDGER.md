@@ -315,3 +315,10 @@ Pass: the answer stays visible while it streams, through a web search and a mid-
 1. Compaction: progress or speed.
 2. Knowledge base gutter; one pill style.
 3. Keep the live turn's first line in view above the composer.
+
+## Supervisor 06:35 — hand test 24 (build 25, head 0e78ddf09)
+Pass: a reply's first line stays above the composer (dots under 1 s, first words 6–12 s); the answer stays visible while streaming, also after leaving and returning; quiet mic; project gutters. Not triggered: compaction (59% of 8K after 8 turns). Fail: the chat settings sheet (red "Delete Conversation" box, boxed cards, emerald stat numbers, Title Case); Models Text tab picks and the In-use tint; Home "New chat" slab; Stop, + and settings with shadows; Generation details opens behind the composer.
+Least desktop-like: Chat settings sheet, Models Text tab, Home.
+1. Chat settings sheet: one surface, quiet Delete, sentence case, no emerald numbers.
+2. Models Text tab: picks as rows, no tinted row.
+3. Composer buttons without shadows; Generation details scrolls into view.
