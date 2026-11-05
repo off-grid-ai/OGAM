@@ -283,7 +283,7 @@ export const ProjectDetailScreen: React.FC = () => {
                 <Text style={styles.emptyStateText}>No chats yet</Text>
                 {hasModels && (
                   <Button
-                    title="Start a Chat"
+                    title="Start a chat"
                     variant="primary"
                     size="small"
                     onPress={handleNewChat}

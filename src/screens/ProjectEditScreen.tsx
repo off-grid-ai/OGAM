@@ -114,13 +114,13 @@ export const ProjectEditScreen: React.FC = () => {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton} testID="project-edit-cancel">
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton} testID="project-edit-cancel" accessibilityRole="button">
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>
             {existingProject ? 'Edit project' : 'New project'}
           </Text>
-          <TouchableOpacity onPress={handleSave} style={styles.headerButton} testID="project-edit-save">
+          <TouchableOpacity onPress={handleSave} style={styles.headerButton} testID="project-edit-save" accessibilityRole="button">
             <Text style={styles.saveText}>Save</Text>
           </TouchableOpacity>
         </View>
@@ -213,8 +213,12 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderBottomColor: colors.borderLight,
     zIndex: 1,
   },
+  // Cancel and Save are 44pt targets.
   headerButton: {
-    padding: SPACING.xs,
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center' as const,
+    paddingHorizontal: SPACING.xs,
   },
   cancelText: {
     ...TYPOGRAPHY.body,
