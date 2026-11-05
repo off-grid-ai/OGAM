@@ -317,9 +317,20 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
 
       {kbDocs.length === 0 && !addingFile ? (
         arriving.length > 0 ? null : (
+          // The same empty state as the Knowledge base screen: what you get, and the one way in.
           <View style={styles.emptyState}>
             <Icon name="file-text" size={24} color={colors.textMuted} />
-            <Text style={styles.emptyStateText}>No documents added</Text>
+            <Text style={styles.emptyStateText}>No documents yet</Text>
+            <Text style={styles.emptyStateText}>Add a PDF or notes, and every chat in this project can answer from them.</Text>
+            <Button
+              title="Add a document"
+              variant="hero"
+              size="small"
+              icon={<Icon name="plus" size={16} color={colors.onHero} />}
+              onPress={() => handleAddRef.current()}
+              style={styles.emptyStateButton}
+              testID="project-kb-add-first"
+            />
           </View>
         )
       ) : (
@@ -361,7 +372,7 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
                 accessibilityRole="button"
                 accessibilityLabel={`Remove ${doc.name}`}
               >
-                <Icon name="trash-2" size={14} color={colors.error} />
+                <Icon name="trash-2" size={14} color={colors.textMuted} />
               </TouchableOpacity>
             </TouchableOpacity>
           )}
