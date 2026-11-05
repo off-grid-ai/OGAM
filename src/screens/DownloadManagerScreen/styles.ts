@@ -172,8 +172,9 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   imageQuantText: {
     color: colors.info,
   },
+  // A status can be a sentence ("Something went wrong while downloading."): Geist, not Mono.
   statusText: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
   },
   sizeText: {

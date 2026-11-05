@@ -110,9 +110,12 @@ export const DownloadManagerScreen: React.FC = () => {
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Downloading</Text>
-                  <View style={styles.countBadge}>
-                    <Text testID="dm-active-downloading-count" style={styles.countText}>{activeDownloadingCount}</Text>
-                  </View>
+                  {/* The count is what is moving; with nothing moving, the words beside it say why. */}
+                  {activeDownloadingCount > 0 && (
+                    <View style={styles.countBadge}>
+                      <Text testID="dm-active-downloading-count" style={styles.countText}>{activeDownloadingCount}</Text>
+                    </View>
+                  )}
                   {activeQueuedCount > 0 && (
                     <Text testID="dm-active-queued-count" style={[styles.countText, { color: colors.textSecondary }]}>
                       {activeQueuedCount} queued

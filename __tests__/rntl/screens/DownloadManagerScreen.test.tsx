@@ -163,6 +163,9 @@ describe('DownloadManagerScreen', () => {
     expect(view.getByText('model')).toBeTruthy();
     expect(view.getByText('The server could not resume this download. Please retry it.')).toBeTruthy();
     expect(view.queryByText('No active downloads')).toBeNull();
+    // Nothing is moving: no "0" beside Downloading (hand test 15), the words say why.
+    expect(view.queryByTestId('dm-active-downloading-count')).toBeNull();
+    expect(view.getByTestId('dm-active-failed-count')).toBeTruthy();
   });
 
   it('surfaces a start held behind the three-download cap as queued (clock icon, no "Queued" word)', async () => {
