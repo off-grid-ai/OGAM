@@ -9,6 +9,7 @@ import { useDownloadStore } from '../../stores/downloadStore';
 import { BackgroundDownloadReasonCode } from '../../types';
 import { needsVisionRepair as checkNeedsVisionRepair } from '../../utils/visionRepair';
 import { getDownloadStatusLabel, isRetryable } from '../../utils/downloadErrors';
+import { formatShortDate } from '../../utils/localTime';
 import { downloadStatusIcon } from '../../utils/downloadStatusIcon';
 import { createStyles } from './styles';
 import { presentProgress } from '../../utils/progressPresentation';
@@ -326,11 +327,10 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({
             : item.modelType === 'text'
               ? 'text'
               : undefined,
-          description: item.downloadedAt
-            ? new Date(item.downloadedAt).toLocaleDateString()
-            : undefined,
         }}
         file={{ name: splitGgufModelName(item.fileName), size: item.fileSize, quantization: item.quantization, downloadUrl: '' }}
+        // The date joins size and quant on the one Mono line, not a sentence line of its own.
+        facts={item.downloadedAt ? [formatShortDate(item.downloadedAt)] : undefined}
         capabilities={textCapabilities(item)}
         isDownloaded
         isDownloading={showRepairProgress && repairEntry.status !== 'paused'}
