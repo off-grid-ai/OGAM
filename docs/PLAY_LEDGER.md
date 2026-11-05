@@ -408,3 +408,10 @@ Gallery field, gutter, hairlines, one count; Attach name; chat 24 pt gutter; fai
 1. Downloads: stray "0%" on the failed row; Retry named by file; badge "4 in progress" over 1 paused + 1 failed.
 2. Names and targets: viewer Info unnamed; model selector and project chip leak glyphs; Speak unnamed; Attach and Chat options 32 pt.
 3. White images still read as holes; composer on 12 pt, assistant meta row at 32 pt. Also Settings root Title Case and "PRO" twice; About: Twitter bird, red heart, "Built by Wednesday" twice.
+
+## Supervisor 05:45 (hand test 37, build at d201ba882)
+
+Names, composer gutter, white tiles, failed-row copy, Pro named once pass. No lost behaviour. Top 3:
+1. Settings X row still the bird (SettingsCommunitySections); About "Open Source" Title Case; heart footer and Wednesday twice (Mac's call).
+2. Real 44 pt boxes, not hitSlop: Attach, Chat options, Speak, chat header Back / Voice mode / Chat settings; message text 4 pt off the gutter.
+3. Downloads badge "4 in progress" over 1 paused + 1 failed; wrench named ""; "Delete model" without the name. Settings and Home still stack boxed cards.
