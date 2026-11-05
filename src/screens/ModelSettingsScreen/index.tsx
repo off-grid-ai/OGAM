@@ -26,6 +26,8 @@ import {
   NO_TRANSCRIPTION_MODEL_LABEL,
   useTranscriptionModelSetting,
 } from '../../hooks/useTranscriptionModelSetting';
+import { SettingsSectionHeader } from '../../components/settings/SettingsSectionHeader';
+import { useSectionSummaries } from './sectionSummaries';
 import { AliveScreen } from '../../components/AliveScreen';
 import { ScreenHeader } from '../../components/ScreenHeader';
 
@@ -49,6 +51,7 @@ export const ModelSettingsScreen: React.FC = () => {
   const VideoSettings = getSlot(SLOTS.generationSettingsVideo);
   const { modelName: sttModelName, isRemote: isRemoteTranscription } =
     useTranscriptionModelSetting();
+  const summaries = useSectionSummaries();
 
   const handleReset = () => {
     setAlertState(
@@ -93,81 +96,50 @@ export const ModelSettingsScreen: React.FC = () => {
       >
         {/* It places every modality (text, image, video, speech, voice, search), so it leads the screen. */}
         <FastestSettingsButton />
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setGeneralOpen(!generalOpen)}
-          activeOpacity={0.7}
+        <SettingsSectionHeader
+          title="General"
+          open={generalOpen}
+          onToggle={() => setGeneralOpen(!generalOpen)}
           testID="general-generation-accordion"
-          accessibilityRole="button"
-          accessibilityState={{ expanded: generalOpen }}
-        >
-          <Text style={styles.accordionTitle}>General</Text>
-          <Icon name={generalOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
-        </TouchableOpacity>
+        />
         {generalOpen && <View style={styles.settingSection}><GeneralGenerationControls /></View>}
-          <TouchableOpacity
-            style={styles.accordionHeader}
-            onPress={() => setPromptOpen(!promptOpen)}
-            activeOpacity={0.7}
+          <SettingsSectionHeader
+            title="Default system prompt"
+            summary={summaries.prompt}
+            open={promptOpen}
+            onToggle={() => setPromptOpen(!promptOpen)}
             testID="system-prompt-accordion"
-          >
-            <Text style={styles.accordionTitle}>Default System Prompt</Text>
-            <Icon
-              name={promptOpen ? 'chevron-up' : 'chevron-down'}
-              size={16}
-              color={colors.textMuted}
-            />
-          </TouchableOpacity>
+          />
         {promptOpen && <SystemPromptSection />}
 
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setImageOpen(!imageOpen)}
-          activeOpacity={0.7}
+        <SettingsSectionHeader
+          title="Image generation"
+          summary={summaries.image}
+          open={imageOpen}
+          onToggle={() => setImageOpen(!imageOpen)}
           testID="image-generation-accordion"
-        >
-          <Text style={styles.accordionTitle}>Image Generation</Text>
-          <Icon
-            name={imageOpen ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={colors.textMuted}
-          />
-        </TouchableOpacity>
+        />
         {imageOpen && <ImageGenerationSection />}
         {VideoSettings && <VideoSettings />}
 
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setTextOpen(!textOpen)}
-          activeOpacity={0.7}
+        <SettingsSectionHeader
+          title="Text generation"
+          summary={summaries.text}
+          open={textOpen}
+          onToggle={() => setTextOpen(!textOpen)}
           testID="text-generation-accordion"
-        >
-          <Text style={styles.accordionTitle}>Text Generation</Text>
-          <Icon
-            name={textOpen ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={colors.textMuted}
-          />
-        </TouchableOpacity>
+        />
         {textOpen && <TextGenerationSection />}
 
         {/* Transcription (STT/whisper) — core. Reuses the same picker sheet Home/Chat open, and the same
             whisper store as its single source, so the active model shown here is always consistent. */}
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setSttOpen(!sttOpen)}
-          activeOpacity={0.7}
+        <SettingsSectionHeader
+          title="Transcription"
+          summary={sttModelName ?? NO_TRANSCRIPTION_MODEL_LABEL}
+          open={sttOpen}
+          onToggle={() => setSttOpen(!sttOpen)}
           testID="transcription-accordion"
-        >
-          <Text style={styles.accordionTitle}>
-            Transcription (Speech to Text)
-          </Text>
-          <Icon
-            name={sttOpen ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={colors.textMuted}
-          />
-        </TouchableOpacity>
+        />
         {sttOpen && (
           <View style={styles.settingSection}>
             <Text style={styles.settingDesc}>
@@ -197,19 +169,12 @@ export const ModelSettingsScreen: React.FC = () => {
         {/* Text to Speech — pro feature via slot; free builds render nothing (no accordion). */}
         {TtsSection && (
           <>
-            <TouchableOpacity
-              style={styles.accordionHeader}
-              onPress={() => setTtsOpen(!ttsOpen)}
-              activeOpacity={0.7}
+            <SettingsSectionHeader
+              title="Text to speech"
+              open={ttsOpen}
+              onToggle={() => setTtsOpen(!ttsOpen)}
               testID="tts-accordion"
-            >
-              <Text style={styles.accordionTitle}>Text to Speech</Text>
-              <Icon
-                name={ttsOpen ? 'chevron-up' : 'chevron-down'}
-                size={16}
-                color={colors.textMuted}
-              />
-            </TouchableOpacity>
+            />
             {ttsOpen && <TtsSection />}
           </>
         )}
