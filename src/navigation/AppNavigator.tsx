@@ -32,6 +32,7 @@ import {
   ModelSettingsScreen,
   DeviceInfoScreen,
   StorageSettingsScreen,
+  SearchModelScreen,
   SecuritySettingsScreen,
   EngineUpdatesScreen,
   GalleryScreen,
@@ -232,6 +233,7 @@ export const AppNavigator: React.FC = () => {
         <RootStack.Screen name="RemoteServerEditor" component={RemoteServerEditorScreen} />
         <RootStack.Screen name="DeviceInfo" component={DeviceInfoScreen} />
         <RootStack.Screen name="StorageSettings" component={StorageSettingsScreen} />
+        <RootStack.Screen name="SearchModel" component={SearchModelScreen} />
         <RootStack.Screen name="SecuritySettings" component={SecuritySettingsScreen} />
         <RootStack.Screen name="EngineUpdates" component={EngineUpdatesScreen} />
         <RootStack.Screen

@@ -198,7 +198,7 @@ export const SettingsScreen: React.FC = () => {
                 testID: 'open-model-settings',
               },
               {
-                // The search model is chosen in one place, Models → Search; this row only goes there.
+                // Its own page (Back returns here), showing the same picker as Models → Search.
                 icon: 'search',
                 title: 'Search Model',
                 desc: searchLabel,
@@ -263,12 +263,7 @@ export const SettingsScreen: React.FC = () => {
                 onPress={() =>
                   item.screen === 'Sync'
                     ? openSync()
-                    : item.screen === 'SearchModel'
-                      ? (navigation as unknown as { navigate: (name: string, params: object) => void }).navigate(
-                          'ModelsTab',
-                          { initialTab: 'embedding' },
-                        )
-                      : navigation.navigate(item.screen)
+                    : navigation.navigate(item.screen)
                 }
                 testID={'testID' in item ? item.testID : undefined}
               >

@@ -19,6 +19,7 @@ export { DownloadManagerScreen } from './DownloadManagerScreen';
 export { ModelSettingsScreen } from './ModelSettingsScreen';
 export { DeviceInfoScreen } from './DeviceInfoScreen';
 export { StorageSettingsScreen } from './StorageSettingsScreen';
+export { SearchModelScreen } from './SearchModelScreen';
 export { SecuritySettingsScreen } from './SecuritySettingsScreen';
 export { EngineUpdatesScreen } from './EngineUpdatesScreen';
 export { RemoteServersScreen } from './RemoteServersScreen';

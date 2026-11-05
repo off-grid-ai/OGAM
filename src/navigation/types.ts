@@ -28,6 +28,7 @@ export type RootStackParamList = {
   RemoteServerEditor: { serverId?: string; needsKey?: boolean } | undefined;
   DeviceInfo: undefined;
   StorageSettings: undefined;
+  SearchModel: undefined;
   SecuritySettings: undefined;
   EngineUpdates: undefined;
   Sync: undefined;
