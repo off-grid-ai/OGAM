@@ -175,3 +175,16 @@ Pass: 2, 3, 4, 6, 9, 10. Partial: 1 (light gone while held), 7 (Sync row 3 lines
 - **Bell:** plain header chrome, no circle (pro `57b3eaa8`).
 - **Contrast:** light muted text `#8A8A8A` was 3.4:1 on white; the one token is now `#737373` (4.7:1) for both apps (shared `f6d8776`).
 - **Held finger:** the light still fades in WDA's simulated hold; asked Mac to try a real finger.
+
+## Design source and r11 (18:38)
+- **Mac:** the one design philosophy is `brand/DESIGN_PHILOSOPHY.md` (approved); everything points there and the other copies go. Mobile's old design docs removed and pointers fixed (`a9d1678e3`); skills oga-ux and hygiene point at brand; desktop and ui-library copies sent to the desktop session (its branch from main). Brand's Mobile profile applied: h2 screen title, 8 px buttons and chips, 24 px screen padding.
+- **Supervisor now tests by hand** (drives the phone via WDA as a new user) and judges every screenshot against brand, oga-ux, oga-cpto and the checklist. The loop's prompt is updated to say so.
+- **Fixed from hand test 1:** a new chat searched an empty knowledge base and answered "no passages" (`c956c9911`: knowledge search only when the chat or project has a document; the quick-settings count follows the same rule). Confirmed answered in hand test 2.
+- **Home:** "Off Grid AI", the promise "Nothing you type leaves this phone." on its own line (/mac-voice), the not-tried showcase (each a tap; hidden once all are tried), chips (`5bed503e0`, `338859012`).
+- **Chat:** the living field, desktop's floating composer with an emerald focus glow, Geist input (`9d40f35e7`). Tools-sent list only with generation details on (`f8d2dddcc`).
+- **Chats:** one line per chat under Today / Yesterday / This week / Older, with its time and a quiet icon for image or video chats; each day one hairline surface (`464b7233e`). Preview line dropped: waiting on Mac.
+
+## Supervisor 18:38 — hand test 2
+1. Chats rows need a quiet detail so same-title chats can be told apart → done (time, kind).
+2. Developer text (tool names, "Generation details", "WORKING") behind a developer setting → tools-sent done; "WORKING" and "Using Web search result…" next.
+3. Home promise on its own line → done; Models and Settings to 24 px padding and plain hairline lists next.
