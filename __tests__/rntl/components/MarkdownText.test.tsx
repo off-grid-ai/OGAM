@@ -12,7 +12,7 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 import { Linking } from 'react-native';
-import { MarkdownText, preprocessMarkdown } from '../../../src/components/MarkdownText';
+import { MarkdownText, dropDanglingBold, preprocessMarkdown } from '../../../src/components/MarkdownText';
 
 describe('MarkdownText', () => {
   afterEach(() => {
@@ -167,7 +167,6 @@ describe('preprocessMarkdown', () => {
 });
 
 describe('dropDanglingBold (a reply cut off mid-bold)', () => {
-  const { dropDanglingBold } = require('../../../src/components/MarkdownText');
   it('drops an unclosed bold marker', () => {
     expect(dropDanglingBold('1. **Ganges**\n2. **Yamuna')).toBe('1. **Ganges**\n2. Yamuna');
   });
@@ -178,10 +177,7 @@ describe('dropDanglingBold (a reply cut off mid-bold)', () => {
     expect(dropDanglingBold('No markers here.')).toBe('No markers here.');
   });
   it('renders without raw asterisks', () => {
-    const { render } = require('@testing-library/react-native');
-    const React = require('react');
-    const { MarkdownText } = require('../../../src/components/MarkdownText');
-    const view = render(React.createElement(MarkdownText, null, '2. **Yamuna'));
+    const view = render(<MarkdownText>{'2. **Yamuna'}</MarkdownText>);
     expect(view.queryByText(/\*\*/)).toBeNull();
     expect(view.getByText(/Yamuna/)).toBeTruthy();
   });
