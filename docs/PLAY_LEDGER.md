@@ -415,3 +415,10 @@ Names, composer gutter, white tiles, failed-row copy, Pro named once pass. No lo
 1. Settings X row still the bird (SettingsCommunitySections); About "Open Source" Title Case; heart footer and Wednesday twice (Mac's call).
 2. Real 44 pt boxes, not hitSlop: Attach, Chat options, Speak, chat header Back / Voice mode / Chat settings; message text 4 pt off the gutter.
 3. Downloads badge "4 in progress" over 1 paused + 1 failed; wrench named ""; "Delete model" without the name. Settings and Home still stack boxed cards.
+
+## Supervisor 06:15 (hand test 38, build at 9e6be2a6c)
+
+44 pt Back, Chat settings, Attach, Chat options, Speak; composer and meta row unchanged; sheets at 24; model-named Delete; @ glyph; "Open source" all pass. No regressions. Top 3:
+1. Header model chip 101x16, sheet Done 34x17, Voice mode (fixed 412c349ae, not yet built).
+2. "•••" unnamed; Downloads wrench and Resume not reachable; Models sheet Eject 15 pt, not a button.
+3. Reply text at x=28 (fixed dd31472f7); "MODELS", "Eject All Models", "Refresh Models" Title Case; Pro row misaligned; Downloads Delete 37 pt.
