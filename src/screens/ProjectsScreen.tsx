@@ -106,6 +106,8 @@ export const ProjectsScreen: React.FC = () => {
     <TouchableOpacity
       style={styles.deleteAction}
       onPress={() => handleDeleteProject(project)}
+      accessibilityRole="button"
+      accessibilityLabel={`Delete ${project.name}`}
     >
       <Icon name="trash-2" size={16} color={colors.error} />
     </TouchableOpacity>

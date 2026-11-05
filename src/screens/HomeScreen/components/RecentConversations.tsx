@@ -41,6 +41,8 @@ export const RecentConversations: React.FC<Props> = ({
       style={styles.deleteAction}
       onPress={() => onDeleteConversation(conversation)}
       testID="delete-conversation-button"
+      accessibilityRole="button"
+      accessibilityLabel={`Delete ${conversation.title}`}
     >
       <Icon name="trash-2" size={16} color={colors.error} />
     </TouchableOpacity>

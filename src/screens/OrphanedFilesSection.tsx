@@ -175,6 +175,8 @@ export const OrphanedFilesSection: React.FC<Props> = ({ onStorageChange }) => {
             <TouchableOpacity
               style={styles.deleteAllButton}
               onPress={handleDeleteAll}
+              accessibilityRole="button"
+              accessibilityLabel="Delete all"
             >
               <Icon name="trash-2" size={16} color={colors.error} />
               <Text style={styles.deleteAllText}>Delete all</Text>
