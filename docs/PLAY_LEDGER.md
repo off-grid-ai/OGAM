@@ -450,3 +450,10 @@ Settings labels and Appearance radios work; footer quieter (91 pt). Top 3:
 1. Regression: the meta row's 44 pt frames (Speak, Message actions) overlap Tools by 11 pt.
 2. Glyph labels left: SettingsAnalyticsSection rows, Home swipe delete (""), gallery card and feedback on Home, Models search icon.
 3. Appearance selected cell is emerald on a grey track: reads as a second main action; make it monochrome. Gallery Back, Select, tabs under 44.
+
+## Supervisor 08:55 (hand test 43, build at 3876f2f1b)
+
+Home header no overlap, meta row clears the footer, Appearance monochrome, no glyph in fields: pass. Top 3:
+1. Small model answers "Name one tree" with tool talk (5 tools always attached). Mac's call, already asked.
+2. Appearance row sits in its own 68 pt card, label at x 36 vs rows at x 77: merge into the list as a normal row.
+3. Footer toggles 29 pt, overlap 1 pt; Home bell 36; search field has no label and is 32 tall; Gallery card label carries empty glyph parts.
