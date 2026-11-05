@@ -31,6 +31,8 @@ export const COLORS_LIGHT = {
   // Backgrounds
   background: '#FFFFFF',
   surface: '#F5F5F5',
+  // A surface the living field shows through; on the white background it reads as `surface` (#F5F5F5).
+  surfaceGlass: 'rgba(0,0,0,0.04)',
   surfaceLight: '#EBEBEB',
   surfaceHover: '#E0E0E0',
 
@@ -73,6 +75,8 @@ export const COLORS_DARK = {
   // Backgrounds
   background: '#0A0A0A',
   surface: '#141414',
+  // A surface the living field shows through; on a plain background it reads as `surface`.
+  surfaceGlass: 'rgba(255,255,255,0.04)',
   surfaceLight: '#1E1E1E',
   surfaceHover: '#252525',
 

@@ -40,11 +40,13 @@ export const listRowStyle = {
 };
 
 const createStyles = (colors: ThemeColors) => ({
+  // As desktop's surfaces: the field shows through, with a hairline edge and a faint top highlight.
   group: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceGlass,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    borderColor: colors.borderLight,
+    boxShadow: 'inset 0px 1px 0px rgba(255,255,255,0.06)',
     overflow: 'hidden' as const,
   },
   divider: {
@@ -75,7 +77,7 @@ export const ListGroupSeparator: React.FC = () => {
 };
 
 const createSeparatorStyles = (colors: ThemeColors) => ({
-  track: { backgroundColor: colors.surface },
+  track: { backgroundColor: colors.surfaceGlass },
   line: {
     height: StyleSheet.hairlineWidth,
     marginLeft: SPACING.md,
