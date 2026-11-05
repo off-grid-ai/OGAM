@@ -139,6 +139,74 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
     return colors.textMuted;
   };
 
+  // On the title line, as on a downloaded row, so a failed or paused row has no line of its own
+  // for two icons (hand test 46).
+  const transferActions = (
+      <View style={styles.transferActions}>
+        {item.status === 'failed' ? (
+          <>
+            {isRetryable(item.reasonCode) &&
+              !item.modelKey?.startsWith('model-download:') && (
+                <TouchableOpacity
+                  style={styles.transferIconButton}
+                  hitSlop={SPACING.md}
+                  testID="failed-retry-button"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Retry ${downloadDisplayName(item)}`}
+                  onPress={() => onRetry(item)}
+                >
+                  <Icon
+                    name="refresh-cw"
+                    size={14}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              )}
+            <TouchableOpacity
+              style={styles.transferIconButton}
+              hitSlop={SPACING.md}
+              testID="failed-remove-button"
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${downloadDisplayName(item)}`}
+              onPress={() => onRemove(item)}
+            >
+              <Icon name="trash-2" size={14} color={colors.textMuted} />
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            {(item.canPause || item.canResume) && (
+              <TouchableOpacity
+                style={styles.transferIconButton}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.canResume ? 'Resume' : 'Pause'} ${item.fileName}`}
+                hitSlop={6}
+                onPress={() =>
+                  item.canResume ? onResume(item) : onPause(item)
+                }
+              >
+                <Icon
+                  name={item.canResume ? 'play' : 'pause'}
+                  size={14}
+                  color={colors.textSecondary}
+                />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.transferIconButton}
+              testID="remove-download-button"
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${downloadDisplayName(item)}`}
+              hitSlop={6}
+              onPress={() => onRemove(item)}
+            >
+              <Icon name="x" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+  );
+
   return (
     <ModelCard
       compact
@@ -147,6 +215,7 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
         modelType: item.isVisionModel ? 'vision' : item.modelType === 'text' ? 'text' : undefined }}
       file={{ name: splitGgufModelName(item.fileName), size: item.fileSize, quantization: item.quantization, downloadUrl: '' }}
       capabilities={textCapabilities(item)}
+      trailing={transferActions}
       facts={[
         item.modelType === 'tts'
           ? 'Voice'
@@ -161,12 +230,10 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
       footer={
         <>
           <View style={styles.progressContainer}>
+            {/* A failed download that never started has no progress to show: no bar row at all
+                (hand test 34: an empty bar read as stuck). It keeps the bar once some bytes arrived. */}
+            {item.status === 'failed' && percentage === 0 ? null : (
             <View style={styles.transferRow}>
-              {/* A failed download that never started has no progress to show; an empty bar beside
-                  Retry read as stuck (hand test 34). It keeps the bar once some bytes arrived. */}
-              {item.status === 'failed' && percentage === 0 ? (
-                <View style={styles.transferProgressBar} />
-              ) : (
                 <View
                   style={[
                     styles.progressBarBackground,
@@ -183,71 +250,8 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
                     ]}
                   />
                 </View>
-              )}
-              <View style={styles.transferActions}>
-                {item.status === 'failed' ? (
-                  <>
-                    {isRetryable(item.reasonCode) &&
-                      !item.modelKey?.startsWith('model-download:') && (
-                        <TouchableOpacity
-                          style={styles.transferIconButton}
-                          hitSlop={SPACING.md}
-                          testID="failed-retry-button"
-                          accessibilityRole="button"
-                          accessibilityLabel={`Retry ${downloadDisplayName(item)}`}
-                          onPress={() => onRetry(item)}
-                        >
-                          <Icon
-                            name="refresh-cw"
-                            size={14}
-                            color={colors.textSecondary}
-                          />
-                        </TouchableOpacity>
-                      )}
-                    <TouchableOpacity
-                      style={styles.transferIconButton}
-                      hitSlop={SPACING.md}
-                      testID="failed-remove-button"
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${downloadDisplayName(item)}`}
-                      onPress={() => onRemove(item)}
-                    >
-                      <Icon name="trash-2" size={14} color={colors.textMuted} />
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    {(item.canPause || item.canResume) && (
-                      <TouchableOpacity
-                        style={styles.transferIconButton}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${item.canResume ? 'Resume' : 'Pause'} ${item.fileName}`}
-                        hitSlop={6}
-                        onPress={() =>
-                          item.canResume ? onResume(item) : onPause(item)
-                        }
-                      >
-                        <Icon
-                          name={item.canResume ? 'play' : 'pause'}
-                          size={14}
-                          color={colors.textSecondary}
-                        />
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      style={styles.transferIconButton}
-                      testID="remove-download-button"
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${downloadDisplayName(item)}`}
-                      hitSlop={6}
-                      onPress={() => onRemove(item)}
-                    >
-                      <Icon name="x" size={16} color={colors.textMuted} />
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
             </View>
+            )}
             {/* Nothing received: no bytes line and no percent, so no empty line above the error. */}
             {item.status === 'failed' && percentage === 0 ? null : (
             <View style={styles.transferCaptionRow}>
