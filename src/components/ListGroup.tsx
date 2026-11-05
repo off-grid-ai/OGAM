@@ -6,7 +6,7 @@ import type { ThemeColors } from '../theme';
 import { SPACING } from '../constants';
 
 /**
- * A list as one surface divided by hairlines (brand: ui-library/docs/direction/DESIGN_PHILOSOPHY.md §5).
+ * A list as one surface divided by hairlines (brand/DESIGN_PHILOSOPHY.md).
  *
  * Lists used to be stacks of separate bordered, shadowed cards, one per row, which read as a pile of
  * boxes. The group owns the surface and the dividers; its rows are flat (see `listRowStyle`), so a

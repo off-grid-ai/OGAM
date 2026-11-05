@@ -2,7 +2,7 @@
 
 ## Recommendation: yes, now, at the shared source
 
-Desktop and the ui-library moved to "calm, luminous, alive" (`ui-library/docs/direction/DESIGN_PHILOSOPHY.md`). Mobile still ships the earlier "brutalist terminal" look (`docs/design/DESIGN_PHILOSOPHY_SYSTEM.md`). The audit (`AUDIT.md`) shows the same four gaps on almost every screen. Each gap has one shared source, so the migration is a small number of changes, not a rewrite of 28 screens.
+Desktop and the ui-library moved to "calm, luminous, alive" (`../brand/DESIGN_PHILOSOPHY.md`). Mobile still ships the earlier "brutalist terminal" look (its old docs are removed). The audit (`AUDIT.md`) shows the same four gaps on almost every screen. Each gap has one shared source, so the migration is a small number of changes, not a rewrite of 28 screens.
 
 Now is the right time because:
 - The pieces exist: `TYPOGRAPHY`/`FONTS` tokens (every text style uses one family), `AnimatedPressable` (scale + haptic), `AnimatedEntry`/`AnimatedListItem`, `react-native-reanimated` 4, `react-native-svg`, and theme tokens with the right emerald values.

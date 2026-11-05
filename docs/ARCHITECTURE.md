@@ -1273,7 +1273,6 @@ OffgridMobile/
 └── docs/                    # Documentation
     ├── ARCHITECTURE.md            # This file
     ├── CODEBASE_GUIDE.md         # Comprehensive architecture guide
-    ├── DESIGN_PHILOSOPHY_SYSTEM.md # Design system reference
     └── ...
 ```
 

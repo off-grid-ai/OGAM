@@ -11,7 +11,7 @@ const WARNING = '#F59E0B';
 
 /**
  * The state at the end of a quick-settings row. One shape for every row; only "on" carries the emerald
- * accent (DESIGN_PHILOSOPHY_SYSTEM.md: a single accent for the active state, no multi-colour badges).
+ * accent (brand/DESIGN_PHILOSOPHY.md: a single accent for the active state, no multi-colour badges).
  */
 export const QuickBadge: React.FC<{ tone: QuickBadgeTone; label: string | number; testID?: string }> = ({
   tone,

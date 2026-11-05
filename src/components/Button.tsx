@@ -103,7 +103,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     gap: SPACING.sm,
   },
   // The screen's main action: lifted on the surface layer with the brand's soft emerald halo
-  // (DESIGN_PHILOSOPHY: "Primary actions carry a soft emerald halo"), not a flat bright outline.
+  // (brand/DESIGN_PHILOSOPHY.md: "Primary actions carry a soft emerald halo"), not a flat bright outline.
   button_primary: {
     backgroundColor: colors.surface,
     borderWidth: 1,

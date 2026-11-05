@@ -1,6 +1,6 @@
 /**
  * A chat's preview line is reading text, so it is set in Geist, not in the Mono face kept for labels,
- * numbers and timestamps (DESIGN_PHILOSOPHY §4).
+ * numbers and timestamps (brand/DESIGN_PHILOSOPHY.md).
  *
  * Real ChatsListScreen and the real chat store, rehydrated from storage.
  */

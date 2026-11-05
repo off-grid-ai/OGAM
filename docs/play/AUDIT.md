@@ -1,7 +1,7 @@
 # OGAM screen audit — 2026-11-05
 
 iPhone 17 Pro Max, dev app (`ai.offgridmobile.dev`), branch `feature/experience-redesign` from `origin/main`.
-Judged against `oga-ux` (product bar) and `ui-library/docs/direction/DESIGN_PHILOSOPHY.md` (brand: calm, luminous, alive).
+Judged against `oga-ux` (product bar) and `../brand/DESIGN_PHILOSOPHY.md` (brand: calm, luminous, alive).
 Screenshots: `docs/play/r00-audit/`.
 
 Severity: **P0** breaks the core flow or trust · **P1** a new user is confused or the screen reads as unfinished · **P2** polish.

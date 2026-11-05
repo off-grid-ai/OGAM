@@ -187,8 +187,7 @@ This project is tested with BrowserStack.
 |----------|-------------|
 | [Architecture & Technical Reference](docs/ARCHITECTURE.md) | System architecture, design patterns, native modules, performance tuning |
 | [Codebase Guide](docs/standards/CODEBASE_GUIDE.md) | Comprehensive code walkthrough |
-| [Design System](docs/design/DESIGN_PHILOSOPHY_SYSTEM.md) | Brutalist design philosophy, theme system, tokens |
-| [Visual Hierarchy Standard](docs/design/VISUAL_HIERARCHY_STANDARD.md) | Visual hierarchy and layout standards |
+| [Design philosophy](../brand/DESIGN_PHILOSOPHY.md) | The one design philosophy for every Off Grid surface (Mobile profile included) |
 
 ---
 
