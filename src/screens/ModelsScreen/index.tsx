@@ -153,6 +153,8 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({
                   hitSlop={SPACING.md}
                   onPress={() => vm.navigation.navigate('DownloadManager')}
                   testID="downloads-icon"
+                  accessibilityRole="button"
+                  accessibilityLabel={vm.downloadBadgeCount > 0 ? `Downloads, ${vm.downloadBadgeCount} in progress` : 'Downloads'}
                 >
                   <Icon name="download" size={20} color={colors.text} />
                   {vm.downloadBadgeCount > 0 && (

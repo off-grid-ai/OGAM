@@ -53,6 +53,8 @@ export const ComposerIconsRow: React.FC<ComposerIconsRowProps> = ({
       <TouchableOpacity
         ref={quickSettingsTriggerRef}
         testID="quick-settings-button"
+        accessibilityRole="button"
+        accessibilityLabel="Chat options"
         style={styles.pillIconButton}
         onPress={onQuickSettingsPress}
         disabled={disabled}

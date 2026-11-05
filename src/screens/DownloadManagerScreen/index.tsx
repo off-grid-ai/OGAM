@@ -102,7 +102,7 @@ export const DownloadManagerScreen: React.FC = () => {
   return (
     <AliveScreen style={styles.container} testID="downloaded-models-screen">
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} testID="back-button">
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} testID="back-button" accessibilityRole="button" accessibilityLabel="Back">
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Downloads</Text>

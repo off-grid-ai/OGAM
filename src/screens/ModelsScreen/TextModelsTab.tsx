@@ -508,6 +508,8 @@ export const TextModelsTab: React.FC<Props> = (props) => {
           onPress={() => toggleFilterDimension('sort')}
           hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           testID="sort-pill"
+          accessibilityRole="button"
+          accessibilityLabel="Sort models"
         >
           <Icon name={currentSort.icon} size={14} color={sortToggleActive ? colors.primary : colors.textMuted} />
           {isSortActive && <View style={styles.filterDot} />}
@@ -517,6 +519,9 @@ export const TextModelsTab: React.FC<Props> = (props) => {
           onPress={() => setTextFiltersVisible(v => !v)}
           hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           testID="text-filter-toggle"
+          accessibilityRole="button"
+          accessibilityLabel="Filter models"
+          accessibilityState={{ expanded: filterToggleActive }}
         >
           <Icon name="sliders" size={14} color={filterToggleActive ? colors.primary : colors.textMuted} />
           {hasNonSortActiveFilters && <View style={styles.filterDot} />}
