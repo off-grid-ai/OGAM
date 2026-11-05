@@ -47,7 +47,7 @@ export const SettingsAppearanceRow: React.FC<SettingsAppearanceRowProps> = ({
                     name={icon}
                     size={16}
                     color={
-                      themeMode === mode ? colors.background : colors.textMuted
+                      themeMode === mode ? colors.primary : colors.textMuted
                     }
                   />
                 </TouchableOpacity>

@@ -47,7 +47,7 @@ export const SettingsCommunitySections: React.FC<
           onPress={() => Linking.openURL(FOLLOW_X_URL)}
         >
           <View style={styles.followItemIcon}>
-            <Icon name="twitter" size={16} color={colors.primary} />
+            <Icon name="twitter" size={16} color={colors.textSecondary} />
           </View>
           <View style={styles.navItemContent}>
             <Text style={styles.navItemTitle}>
@@ -65,7 +65,7 @@ export const SettingsCommunitySections: React.FC<
           onPress={() => Linking.openURL(SLACK_INVITE_URL)}
         >
           <View style={styles.followItemIcon}>
-            <IconMC name="slack" size={16} color={colors.primary} />
+            <IconMC name="slack" size={16} color={colors.textSecondary} />
           </View>
           <View style={styles.navItemContent}>
             <Text style={styles.navItemTitle}>

@@ -205,7 +205,7 @@ export const SettingsScreen: React.FC = () => {
               {
                 // Its own page (Back returns here), showing the same picker as Models → Search.
                 icon: 'search',
-                title: 'Search Model',
+                title: 'Document search',
                 desc: searchLabel,
                 screen: 'SearchModel' as const,
                 testID: 'open-search-model',
@@ -296,7 +296,7 @@ export const SettingsScreen: React.FC = () => {
             activeOpacity={0.75}
           >
             <View style={styles.proIconContainer}>
-              <IconMC name="crown" size={18} color={colors.primary} />
+              <IconMC name="crown" size={18} color={colors.textSecondary} />
             </View>
             <View style={styles.proCardText}>
               <View style={styles.proTitleRow}>

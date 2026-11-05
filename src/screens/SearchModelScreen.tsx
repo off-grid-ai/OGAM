@@ -16,7 +16,7 @@ export const SearchModelScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   return (
     <SafeAreaView style={styles.container} edges={['top']} testID="search-model-screen">
-      <ScreenHeader title="Search Model" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Document search" onBack={() => navigation.goBack()} />
       <EmbeddingModelsTab />
     </SafeAreaView>
   );
