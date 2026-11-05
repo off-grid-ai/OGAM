@@ -173,7 +173,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   // edge to edge. Image or video mode still adds its style row at the top, inside the box.
   composer: {
     backgroundColor: colors.surface,
-    borderRadius: 22,
+    borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
     marginHorizontal: 12,

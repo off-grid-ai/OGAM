@@ -132,7 +132,8 @@ const createStyles = (colors: ThemeColors) => ({
     gap: 6,
     height: 34,
     paddingHorizontal: SPACING.md,
-    borderRadius: 999,
+    // brand Mobile profile: controls use an 8px radius.
+    borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
     backgroundColor: colors.surfaceGlass,

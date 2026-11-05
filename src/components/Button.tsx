@@ -116,7 +116,8 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     backgroundColor: colors.heroFill,
     borderWidth: 1,
     borderColor: colors.heroBorder,
-    borderRadius: 999,
+    // brand Mobile profile: buttons use an 8px radius.
+    borderRadius: 8,
     boxShadow: 'inset 0px 1px 0px rgba(255,255,255,0.22), 0px 0px 22px rgba(52,211,153,0.14)',
   },
   button_secondary: {

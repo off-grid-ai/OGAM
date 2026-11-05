@@ -61,11 +61,9 @@ const createLayoutStyles = (colors: ThemeColors) => ({
     flex: 1,
     gap: 2,
   },
+  // brand/DESIGN_PHILOSOPHY.md Mobile profile: one screen title is TYPOGRAPHY.h2 (h1 is for rare hero text).
   title: {
-    fontFamily: TYPOGRAPHY.h1.fontFamily,
-    fontSize: 32,
-    fontWeight: '400' as const,
-    letterSpacing: -0.8,
+    ...TYPOGRAPHY.h2,
     color: colors.text,
   },
   subtitle: {
