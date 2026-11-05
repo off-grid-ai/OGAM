@@ -126,7 +126,7 @@ describe('demo email-draft handoff scenes (rendered, real App)', () => {
     // The mail tool is still running, and there is no finished answer yet.
     // It reads as the call being made, addressed to Sam with the pilot subject.
     await rtl.waitFor(() => expect(view.getByTestId('tool-call-label-send_email'))
-      .toHaveTextContent(/^Using send_email: sam@acme\.example, Acme Corp pilot — 14 November/));
+      .toHaveTextContent(/^Writing the email: sam@acme\.example, Acme Corp pilot — 14 November/));
     expect(view.queryByTestId('tool-result-label-send_email')).toBeNull();
     expect(view.queryByText(/No email has been sent/)).toBeNull();
     expect(view.queryByText(/Mail app opened with a draft/)).toBeNull();

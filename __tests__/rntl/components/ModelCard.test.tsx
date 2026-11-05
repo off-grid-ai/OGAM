@@ -761,7 +761,7 @@ describe('ModelCard', () => {
       );
       // Active models should not show the select button
       const treeStr = JSON.stringify(toJSON());
-      expect(treeStr).toContain('Active'); // Active badge is shown instead
+      expect(treeStr).toContain('In use'); // the In use badge is shown instead
     });
 
     it('shows downloaded check icon when no action handlers are provided', () => {
@@ -771,7 +771,7 @@ describe('ModelCard', () => {
           isDownloaded={true}
         />
       );
-      expect(JSON.stringify(toJSON())).toContain('check-circle');
+      expect(JSON.stringify(toJSON())).toContain('"check"');
     });
 
     it('shows repair spinner instead of repair button while repairing downloaded vision model', () => {
@@ -807,11 +807,11 @@ describe('ModelCard', () => {
   // Active State
   // ============================================================================
   describe('active state', () => {
-    it('shows Active badge when model is active', () => {
+    it('shows the In use badge when model is active', () => {
       const { getByText } = render(
         <ModelCard model={baseModel} isActive={true} />
       );
-      expect(getByText('Active')).toBeTruthy();
+      expect(getByText('In use')).toBeTruthy();
     });
 
     it('does not show Active badge when model is not active', () => {

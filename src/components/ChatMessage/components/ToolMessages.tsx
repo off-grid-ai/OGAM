@@ -98,6 +98,9 @@ function getRunningLabel(toolName?: string): string {
       return 'Reading the page';
     case 'search_knowledge_base':
       return 'Searching your documents';
+    case 'send_email':
+    case 'draft_email':
+      return 'Writing the email';
     case 'calculator':
       return 'Calculating';
     case 'get_current_datetime':

@@ -61,7 +61,7 @@ describe('SecuritySettingsScreen', () => {
     expect(view.getByText('App Lock')).toBeTruthy();
     expect(view.getByText('Passphrase lock')).toBeTruthy();
     expect(view.getByText('Ask for your passphrase when the app opens.')).toBeTruthy();
-    expect(view.getByText(/the app will lock automatically/i)).toBeTruthy();
+    expect(view.getByText(/The app locks when you leave it/)).toBeTruthy();
     expect(view.getByText(/stored securely on device and never transmitted/i)).toBeTruthy();
   });
 

@@ -411,6 +411,8 @@ export const ChatsListScreen: React.FC = () => {
               </Text>
             )}
             stickySectionHeadersEnabled={false}
+            // Day headings count as items: render enough on first paint for the first screenful of chats.
+            initialNumToRender={20}
             ItemSeparatorComponent={ListGroupSeparator}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.list}

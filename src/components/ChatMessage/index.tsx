@@ -615,10 +615,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           <Accordion
             title={
               message.turnStatus === 'cancelled'
-                ? 'Work stopped'
+                ? 'Stopped'
                 : message.turnStatus === 'failed'
-                  ? 'Work failed'
-                  : 'Work done'
+                  ? 'Could not finish'
+                  : 'How I got this'
             }
             variant="plain"
             testID="assistant-work-toggle"

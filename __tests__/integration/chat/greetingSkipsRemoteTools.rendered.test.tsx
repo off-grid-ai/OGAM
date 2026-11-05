@@ -28,8 +28,9 @@ describe('greeting with remote tools enabled', () => {
     await h.tapSend('Hi');
 
     await h.rtl.waitFor(() => expect(h.view!.queryByText('Hello!')).not.toBeNull(), { timeout: 8000 });
-    expect(h.view!.getByText('Tools sent in request (3)')).toBeTruthy();
-    h.rtl.fireEvent.press(h.view!.getByText('Tools sent in request (3)'));
+    // Knowledge search is not offered in a chat with no documents (searchableKnowledge), so 2, not 3.
+    expect(h.view!.getByText('Tools sent in request (2)')).toBeTruthy();
+    h.rtl.fireEvent.press(h.view!.getByText('Tools sent in request (2)'));
     expect(h.view!.queryByText('• remote_action_0')).toBeNull();
     expect(h.view!.queryByTestId('tool-result-label-model_fallback')).toBeNull();
     mcp.removeServer('greeting-server');

@@ -150,7 +150,7 @@ describe('ChatMessage', () => {
       const view = render(<ChatMessage message={message} isStreaming />);
       const tree = JSON.stringify(view.toJSON());
 
-      expect(view.getByText('Using Generated image...')).toBeTruthy();
+      expect(view.getByText('Making the picture…')).toBeTruthy();
       expect(tree.indexOf('tool-message')).toBeLessThan(
         tree.indexOf('message-bubble'),
       );
