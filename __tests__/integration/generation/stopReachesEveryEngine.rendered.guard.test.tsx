@@ -46,7 +46,7 @@ describe('stopping a LiteRT reply that is still streaming', () => {
 
     // Delete the conversation from the chat's own menu, confirming the alert - the real path.
     h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByTestId('chat-settings-icon')));
-    h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByText(/Delete Chat|Delete Conversation/)));
+    h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByText(/Delete chat/)));
     const confirm = await h.rtl.waitFor(() => h.view!.getByText(/^Delete$/));
     h.rtl.fireEvent.press(confirm);
 

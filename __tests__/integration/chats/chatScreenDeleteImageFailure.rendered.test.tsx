@@ -50,7 +50,7 @@ describe('deleting the open chat when an image file cannot be removed', () => {
 
     // Delete the chat from its own menu and confirm.
     h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByTestId('chat-settings-icon')));
-    h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByText(/Delete Chat|Delete Conversation/)));
+    h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByText(/Delete chat/)));
     const confirm = await h.rtl.waitFor(() => h.view!.getByText(/^Delete$/));
     await h.rtl.act(async () => { h.rtl.fireEvent.press(confirm); });
 

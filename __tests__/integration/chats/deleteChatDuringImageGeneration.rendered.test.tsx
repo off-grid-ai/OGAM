@@ -60,7 +60,7 @@ describe('deleting a chat while its image is being drawn', () => {
     const h = await startDrawing();
 
     h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByTestId('chat-settings-icon')));
-    h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByText(/Delete Chat|Delete Conversation/)));
+    h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByText(/Delete chat/)));
     const confirm = await h.rtl.waitFor(() => h.view!.getByText(/^Delete$/));
     await h.rtl.act(async () => { h.rtl.fireEvent.press(confirm); });
 

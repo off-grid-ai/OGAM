@@ -87,11 +87,11 @@ describe('GenerationSettingsModal', () => {
     expect(queryByTestId('app-sheet')).toBeNull();
   });
 
-  it('renders "Chat Settings" title when visible', () => {
+  it('renders "Chat settings" title when visible', () => {
     const { getByText } = render(
       <GenerationSettingsModal {...defaultProps} />,
     );
-    expect(getByText('Chat Settings')).toBeTruthy();
+    expect(getByText('Chat settings')).toBeTruthy();
   });
 
   it('shows conversation actions when callbacks are provided', () => {
@@ -111,7 +111,7 @@ describe('GenerationSettingsModal', () => {
 
     expect(getByText(/Project:/)).toBeTruthy();
     expect(getByText('Gallery (3)')).toBeTruthy();
-    expect(getByText('Delete Conversation')).toBeTruthy();
+    expect(getByText('Delete chat')).toBeTruthy();
   });
 
   it('hides Gallery action when conversationImageCount is 0', () => {
@@ -252,7 +252,7 @@ describe('GenerationSettingsModal', () => {
       />,
     );
 
-    fireEvent.press(getByText('Delete Conversation'));
+    fireEvent.press(getByText('Delete chat'));
 
     expect(onClose).toHaveBeenCalled();
 
@@ -288,7 +288,7 @@ describe('GenerationSettingsModal', () => {
     fireEvent.press(getByText('IMAGE GENERATION'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
 
-    expect(getByText('Detection Method')).toBeTruthy();
+    expect(getByText('Detection method')).toBeTruthy();
     expect(getByText('Pattern')).toBeTruthy();
     expect(getByText('LLM')).toBeTruthy();
   });
@@ -332,7 +332,7 @@ describe('GenerationSettingsModal', () => {
 
     fireEvent.press(getByText('IMAGE GENERATION'));
 
-    expect(queryByText('Detection Method')).toBeNull();
+    expect(queryByText('Detection method')).toBeNull();
   });
 
   // ============================================================================
@@ -348,7 +348,7 @@ describe('GenerationSettingsModal', () => {
     fireEvent.press(getByText('IMAGE GENERATION'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
 
-    expect(getByText('Classifier Model')).toBeTruthy();
+    expect(getByText('Classifier model')).toBeTruthy();
     expect(getByText('Use current model')).toBeTruthy();
   });
 
@@ -359,7 +359,7 @@ describe('GenerationSettingsModal', () => {
 
     fireEvent.press(getByText('IMAGE GENERATION'));
 
-    expect(queryByText('Classifier Model')).toBeNull();
+    expect(queryByText('Classifier model')).toBeNull();
   });
 
   it('shows classifier tip text when LLM mode is active', () => {
@@ -388,7 +388,7 @@ describe('GenerationSettingsModal', () => {
     fireEvent.press(getByText('IMAGE GENERATION'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
     // Press Classifier Model button to open picker
-    fireEvent.press(getByText('Classifier Model'));
+    fireEvent.press(getByText('Classifier model'));
 
     // Should show "Use current model" option and the downloaded model
     expect(getAllByText('Use current model').length).toBeGreaterThanOrEqual(1);
@@ -407,7 +407,7 @@ describe('GenerationSettingsModal', () => {
 
     fireEvent.press(getByText('IMAGE GENERATION'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
-    fireEvent.press(getByText('Classifier Model'));
+    fireEvent.press(getByText('Classifier model'));
     fireEvent.press(getByText('SmolLM'));
 
     expect(settingsNow()).toEqual(expect.objectContaining({ classifierModelId: 'smol-model' }));
@@ -422,7 +422,7 @@ describe('GenerationSettingsModal', () => {
 
     fireEvent.press(getByText('IMAGE GENERATION'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
-    fireEvent.press(getByText('Classifier Model'));
+    fireEvent.press(getByText('Classifier model'));
 
     const useCurrentButtons = getAllByText('Use current model');
     // Press the one inside the picker list
@@ -695,7 +695,7 @@ describe('GenerationSettingsModal', () => {
 
     expect(queryByText(/Project:/)).toBeNull();
     expect(queryByText(/Gallery/)).toBeNull();
-    expect(queryByText('Delete Conversation')).toBeNull();
+    expect(queryByText('Delete chat')).toBeNull();
   });
 
   // ============================================================================

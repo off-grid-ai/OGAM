@@ -69,7 +69,7 @@ describe('context full in a tool-enabled chat', () => {
     expect(h.view!.queryByTestId('stop-button')).toBeNull();
     h.rtl.fireEvent.press(h.view!.getByText('Settings'));
     await h.rtl.waitFor(() => {
-      expect(h.view!.queryByText('Chat Settings')).not.toBeNull();
+      expect(h.view!.queryByText('Chat settings')).not.toBeNull();
     }, { timeout: 3000 });
   });
 });
