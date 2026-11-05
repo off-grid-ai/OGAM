@@ -40,6 +40,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { SPACING } from '../../constants';
 import { proGateShown } from '../../services/analytics/analytics';
+import { toolsForTurn, useHasSearchableKnowledge } from '../../services/documents/searchableKnowledge';
 
 export type ChatMessageAreaProps = {
   assistantSelected: boolean;
@@ -193,6 +194,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   const extToolCount = useExtensionToolCount();
   // Pro tools (email/calendar) are toggled through settings.enabledTools, so count
   // how many of them are on and fold MCP in — this is the "Pro Tools" badge.
+  const searchableKnowledge = useHasSearchableKnowledge(chat.activeConversation);
   const proToolIds = getToolExtensions().flatMap(e =>
     (e.getToolDefinitions?.() ?? []).map(t => t.id),
   );
@@ -204,7 +206,8 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   // (pro email/calendar ids are surfaced under Pro Tools instead, not double-counted; the video
   // tool counts only while Pro video is on).
   const freeToolIds = new Set(offeredTools().map(t => t.id));
-  const freeToolsCount = chat.enabledTools.filter(id =>
+  // The same rule the turn sends by: knowledge search counts only when there is something to search.
+  const freeToolsCount = toolsForTurn(chat.enabledTools, searchableKnowledge).filter(id =>
     freeToolIds.has(id),
   ).length;
   const totalToolCount = freeToolsCount + proToolsCount;

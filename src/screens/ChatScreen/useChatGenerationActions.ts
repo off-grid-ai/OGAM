@@ -63,6 +63,7 @@ import {
 } from '../../services/documents/chatTurn';
 import { useDocumentTurnStatusStore } from '../../services/documents/progressStore';
 import { shownMessages } from '../../utils/chatThread';
+import { hasSearchableKnowledge, toolsForTurn } from '../../services/documents/searchableKnowledge';
 type SetState<T> = Dispatch<SetStateAction<T>>;
 const FALLBACK_RECENT_MESSAGE_COUNT = 2;
 
@@ -808,7 +809,8 @@ export async function startGenerationFn(
     callHook<string>(HOOKS.audioAugmentPrompt, basePrompt) ?? basePrompt;
 
   const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;
-  const activeTools = enabledTools;
+  // Knowledge search only when this chat or its project holds something to search.
+  const activeTools = toolsForTurn(enabledTools, await hasSearchableKnowledge(targetConversationId));
   // Text hint only when the LOCAL engine lacks native tool-calling (llama without Jinja); LiteRT
   // and remote pass tools natively, so injecting a hint would double-inject. localToolSupport is
   // the engine-registry answer — no engine === 'litert' branch here.
@@ -1385,7 +1387,8 @@ export async function regenerateResponseFn(
     messageText,
   );
   const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;
-  const activeTools = enabledTools;
+  // Knowledge search only when this chat or its project holds something to search.
+  const activeTools = toolsForTurn(enabledTools, await hasSearchableKnowledge(targetConversationId));
   const useTextHint = !isRemote && !localToolSupport && activeTools.length > 0;
   // MCP/extension hints come solely from augmentSystemPromptForTools in the tool loop
   // (see the send path above) — adding them here too would double-inject.
