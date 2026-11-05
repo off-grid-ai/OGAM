@@ -129,7 +129,7 @@ export const ChatHeader: React.FC<{
           </TouchableOpacity>
           <Text style={styles.headerSubtitleDivider}>·</Text>
           <TouchableOpacity
-            style={styles.headerProjectRow}
+            style={[styles.headerProjectRow, styles.headerProjectTarget]}
             onPress={() => setShowProjectSelector(true)}
             accessibilityRole="button"
             accessibilityLabel={`Project: ${activeProject ? activeProject.name : 'Default'}. Change project`}

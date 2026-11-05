@@ -49,7 +49,9 @@ const createHeaderStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   // is the thing that should truncate. `minWidth: 0` lets its Text actually ellipsize.
   headerProjectRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, flexShrink: 1, minWidth: 0 },
   headerSubtitle: { ...TYPOGRAPHY.h3, color: colors.textMuted, flexShrink: 1 },
-  modelSelector: { flexDirection: 'row' as const, alignItems: 'center' as const, flexShrink: 0, overflow: 'hidden' as const },
+  // A 44 pt tall frame around a 16 pt line, pulled back so the subtitle row keeps its height.
+  modelSelector: { flexDirection: 'row' as const, alignItems: 'center' as const, flexShrink: 0, overflow: 'hidden' as const, minHeight: 44, marginVertical: -14 },
+  headerProjectTarget: { minHeight: 44, marginVertical: -14, justifyContent: 'center' as const },
   remoteIcon: { marginRight: 4 },
   modelSelectorArrow: { ...TYPOGRAPHY.meta, color: colors.textMuted, marginLeft: SPACING.xs },
   headerImageBadge: {
