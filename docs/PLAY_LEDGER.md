@@ -500,3 +500,10 @@ Project sheet rows pass (third open 0.96 s; first open still ~7 s); KB names ful
 1. The project KB tab is ProjectDetailKnowledgeBaseSection, not KnowledgeBaseScreen: its switch still sits inside the row touchable with the old label. One shared row for both.
 2. Chat: a streaming reply runs behind the keyboard; the list never scrolls to it; tapping the list does not close the keyboard.
 3. Failed KB row lost its size line; long red error still cut. First project-sheet open still ~7 s (cold).
+
+## Supervisor 13:15 (hand test 50, build 51 at 8fa9293e6)
+
+Chat opens at the newest message, reply stays in view while streaming, tap closes the keyboard, KB row and switch, "New chat": pass. Top 3:
+1. Downloads: a failed "Whisper Tiny (English)" row stays though the model is on the phone (id mismatch between the store row and the downloaded list).
+2. Long press opens the actions sheet AND the native Copy callout; the sent message is out of view ~5 s with the keyboard up.
+3. KB red error still cut; status line read twice by VoiceOver; project Chats tab still shows old "New Conversation" titles.
