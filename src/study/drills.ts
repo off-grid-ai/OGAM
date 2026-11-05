@@ -172,7 +172,7 @@ function doubleDeclining(r: () => number, id: string): Exercise {
   return calc(id, 'Depreciation', `An asset costs ${fmt(cost)} with a ${life}-year life (no salvage). Using double-declining balance, what is depreciation in year ${year}?`, r2(bookStart * rate), `Rate ${r2(rate * 100)}% x book value at the start of year ${year} (${fmt(r2(bookStart))}).`, 0.5, '$');
 }
 
-function ratio(r: () => number, id: string): Exercise {
+function ratioDrill(r: () => number, id: string): Exercise {
   const kinds = ['debt-to-equity', 'return on equity', 'gross margin', 'quick ratio'] as const;
   const k = kinds[Math.floor(r() * kinds.length)];
   const a = money(r, 20000, 90000);
@@ -304,7 +304,7 @@ function regressionSlope(r: () => number, id: string): Exercise {
 const MAKERS: Record<DrillKind, (r: () => number, id: string) => Exercise> = {
   'balance-sheet': balanceSheet, 'journal-entry': journalEntry, 'net-income': netIncome, depreciation, 'current-ratio': currentRatio,
   'compound-solve': compoundSolve, 'loan-payment': loanPayment, 'effective-rate': effectiveRate, 'inventory-cost': inventoryCost, 'double-declining': doubleDeclining,
-  ratio, 'break-even': breakEven, npv, 'income-statement': incomeStatement, 'cash-flow': cashFlow, 'trial-balance': trialBalance,
+  ratio: ratioDrill, 'break-even': breakEven, npv, 'income-statement': incomeStatement, 'cash-flow': cashFlow, 'trial-balance': trialBalance,
   'std-dev': stdDev, 'confidence-interval': confidenceInterval, 't-statistic': tStatistic, 'sample-size': sampleSizeDrill, 'regression-slope': regressionSlope,
 };
 

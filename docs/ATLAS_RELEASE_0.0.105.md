@@ -569,6 +569,17 @@ What changed:
   model. A second, short-prompt check decides whether to use the first-word workaround: prompts under about 192 tokens run
   once first so the first word comes from the engine's single-token step; it is switched on only if the same check passes with
   it, and never for long prompts. The remembered verdict records the batch size and CPU-kernel setting.
+- 0.0.140: (1) The Terminal style now uses an 8-bit pixel font (Press Start 2P, SIL Open Font License; a new "8-bit" font choice too).
+  (2) Citation chips: numbered chips under practice answers and web-search results; tap one for the quote, the link and whether the
+  quote was found in the source (practice quotes are checked against your document; search snippets are the search engine's text and
+  say so). (3) Drills made in code now cover compound interest (find the future value, present value, rate or number of years), loan
+  payments, effective rate, inventory (FIFO and weighted average), double-declining depreciation, ratios, break-even, NPV, income
+  statement, cash flow statement, trial balance, and research statistics (standard deviation, margin of error, t statistic, sample size,
+  regression slope); keys are computed and checked against independent recalculation. (4) Learning reports: a daily automatic backup of
+  everything learned (last seven kept, in the app's storage), Restore from any of them (adds nothing twice), Save to Files, and all
+  cycle reports in one Markdown file (Knowledge > Transfer). Backups do not count as "the last export". (5) The picture lookup now sends
+  Wikimedia the app name it asks for; it could not be tried against the live service from the build machine (rate limited), so it is
+  tested with a faked reply only. Not verified on a phone.
 - 0.0.139: Practice > Accounting drills (no documents needed): balance sheet, journal entry, net income, depreciation and current
   ratio exercises made in code. The numbers are generated and the answer key is computed, so statements always balance and the key
   cannot be wrong; the same seed gives the same drill. Not verified on a phone.
