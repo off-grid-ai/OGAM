@@ -291,3 +291,9 @@ Pass: Gallery header and scroll, Storage and Model settings headers, Models sear
 1. Late Stop (fixed at the seam, verify on device).
 2. Project screens and About on the field, one surface, 24px.
 3. Image search: results or a clear line, never an endless spinner.
+
+## Supervisor 02:40 — hand test 20 (build 21, head about b373638a9)
+Pass: the late-Stop guard blocked real recording; the project screen on the field with a folder glyph, tabs under a hairline, chat rows, grey "Delete project"; Knowledge base on the field; Remote servers radios and dim dots; Settings "PRO" label. Fail: a late Stop tap still flipped the composer into "Tap mic to stop" (the gesture locks before start; now the mic rests disabled for 2 s, `1b1a08e1c`); About shadowed cards and coloured icons; Storage boxes and slab; Edit project grey inputs and Title Case. Incident: the supervisor pressed "Delete project" by mistake while aiming for the tab bar, then Cancel; nothing was deleted. Delete now lives in Edit project (`733a734be`).
+1. Late Stop: the mic rests (verify on device).
+2. About, Storage, Edit project on one surface, 24px, hairline inputs.
+3. Delete project out of the tab-bar zone (done).

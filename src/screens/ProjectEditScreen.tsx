@@ -118,7 +118,7 @@ export const ProjectEditScreen: React.FC = () => {
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>
-            {existingProject ? 'Edit Project' : 'New Project'}
+            {existingProject ? 'Edit project' : 'New project'}
           </Text>
           <TouchableOpacity onPress={handleSave} style={styles.headerButton} testID="project-edit-save">
             <Text style={styles.saveText}>Save</Text>
