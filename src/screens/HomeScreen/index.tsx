@@ -279,8 +279,23 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </Card>
           )}
 
-          {SyncHomeCard ? (
+          {/* Recent Conversations */}
+          {recentConversations.length > 0 && (
             <AnimatedEntry index={2} staggerMs={50} trigger={focusTrigger}>
+              <RecentConversations
+                conversations={recentConversations}
+                totalCount={conversationCount}
+                focusTrigger={focusTrigger}
+                onContinueChat={continueChat}
+                onDeleteConversation={handleDeleteConversation}
+                onSeeAll={() => navigation.navigate('ChatsTab')}
+              />
+            </AnimatedEntry>
+          )}
+
+          {/* Clipboard and Sync come after your recent work: status, not the next step. */}
+          {SyncHomeCard ? (
+            <AnimatedEntry index={3} staggerMs={50} trigger={focusTrigger}>
               <SyncHomeCard
                 isUnlocked={isSyncUnlocked}
                 onOpen={openSync}
@@ -292,20 +307,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               />
             </AnimatedEntry>
           ) : null}
-
-          {/* Recent Conversations */}
-          {recentConversations.length > 0 && (
-            <AnimatedEntry index={3} staggerMs={50} trigger={focusTrigger}>
-              <RecentConversations
-                conversations={recentConversations}
-                totalCount={conversationCount}
-                focusTrigger={focusTrigger}
-                onContinueChat={continueChat}
-                onDeleteConversation={handleDeleteConversation}
-                onSeeAll={() => navigation.navigate('ChatsTab')}
-              />
-            </AnimatedEntry>
-          )}
 
           {/* Media Gallery */}
           <AnimatedPressable
