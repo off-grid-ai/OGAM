@@ -231,7 +231,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 ) : null}
                 <TouchableOpacity
                   onPress={() => navigation.navigate('ProDetail')}
-                  hitSlop={8}
                   style={styles.crownButton}
                   accessibilityRole="button"
                   accessibilityLabel="Open Off Grid AI Pro"
@@ -245,6 +244,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                     size="small"
                     icon={<Icon name="plus" size={16} color={colors.onHero} />}
                     onPress={startNewChat}
+                    style={styles.newChatButton}
                     testID="new-chat-button"
                   />
                 ) : null}

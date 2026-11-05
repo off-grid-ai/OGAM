@@ -20,14 +20,17 @@ const createLayoutStyles = (colors: ThemeColors) => ({
     gap: SPACING.sm,
     marginBottom: SPACING.lg,
   },
+  // The gap covers the crown's -4 pt pulled-back frame, so neighbours meet but never overlap.
   headerActions: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: SPACING.xs,
+    gap: SPACING.sm,
   },
+  newChatButton: { minHeight: 44 },
   crownButton: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
+    margin: -4,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
