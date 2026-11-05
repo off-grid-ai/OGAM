@@ -6,12 +6,12 @@ import {
   ScrollView,
   Modal,
 } from 'react-native';
-import { TouchableOpacity } from '../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../components/Button';
 import { useNavigation } from '@react-navigation/native';
 import { Card } from '../components';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
@@ -65,25 +65,15 @@ export const SecuritySettingsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Security</Text>
-      </View>
+      <ScreenHeader title="Security" onBack={() => navigation.goBack()} />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <Card style={styles.section}>
           <Text style={styles.sectionTitle}>App Lock</Text>
           <View style={styles.settingRow}>
             <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Passphrase Lock</Text>
-              <Text style={styles.settingHint}>Require passphrase to open app</Text>
+              <Text style={styles.settingLabel}>Passphrase lock</Text>
+              <Text style={styles.settingHint}>Ask for your passphrase when the app opens.</Text>
             </View>
             <AppSwitch
               value={authEnabled}
@@ -93,7 +83,7 @@ export const SecuritySettingsScreen: React.FC = () => {
 
           {authEnabled && (
             <Button
-              title="Change Passphrase"
+              title="Change passphrase"
               variant="primary"
               size="medium"
               onPress={handleChangePassphrase}
@@ -106,7 +96,7 @@ export const SecuritySettingsScreen: React.FC = () => {
         <Card style={styles.infoCard}>
           <Icon name="info" size={18} color={colors.textMuted} />
           <Text style={styles.infoText}>
-            When enabled, the app will lock automatically when you switch away or close it. Your passphrase is stored securely on device and never transmitted.
+            The app locks when you leave it. Your passphrase stays on this phone.
           </Text>
         </Card>
       </ScrollView>
@@ -133,36 +123,17 @@ export const SecuritySettingsScreen: React.FC = () => {
   );
 };
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-    ...shadows.small,
-    zIndex: 1,
-    gap: SPACING.md,
-  },
-  backButton: {
-    padding: SPACING.xs,
-  },
-  title: {
-    ...TYPOGRAPHY.h2,
-    flex: 1,
-    color: colors.text,
-  },
   scrollView: {
     flex: 1,
   },
+  // brand Mobile profile: 24px screen padding; the cards are the shared Card surface.
   content: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.xxl,
   },
@@ -198,9 +169,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexDirection: 'row' as const,
     alignItems: 'flex-start' as const,
     gap: SPACING.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   infoText: {
     ...TYPOGRAPHY.bodySmall,
