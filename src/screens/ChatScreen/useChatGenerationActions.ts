@@ -1322,7 +1322,7 @@ export async function regenerateResponseFn(
   const targetConversationId = deps.activeConversationId;
   // Resend starts before memory reclaim, routing, and remote preparation. Publish that fact now so
   // the existing thinking loader covers the full wait instead of appearing only when generation starts.
-  const turn = generationSession.begin(targetConversationId);
+  const resendTurn = generationSession.begin(targetConversationId);
   await modelResidencyManager.reclaimSttForGeneration(); // free idle Whisper before the LLM reload (memory-tight)
   const messageTextForRoute = userMessage.content;
   // Same decision seam as dispatch (resolveTurnKind): a replay passes the RECORDED kind, which wins
@@ -1372,7 +1372,7 @@ export async function regenerateResponseFn(
     generationSession.end('not-ready');
     return;
   }
-  if (!generationSession.isCurrent(turn)) {
+  if (!generationSession.isCurrent(resendTurn)) {
     logger.log('[RESEND-SM] turn stopped during model load; not generating');
     return;
   }
