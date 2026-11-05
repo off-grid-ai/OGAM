@@ -19,6 +19,9 @@ import { createTextGenAdvancedStyles } from './textGenAdvancedStyles';
  * (about 30 seconds, cancellable) and writes the shared table's answer. Every setting below stays
  * editable afterwards.
  */
+/** An action sized to its words, not stretched edge to edge like a slab. */
+const SIZED_TO_TEXT = { alignSelf: 'flex-start' as const };
+
 export const FastestSettingsButton: React.FC = () => {
   const styles = useThemedStyles(createTextGenAdvancedStyles);
   const modelPath = useAppStore(s => s.downloadedModels.find(m => m.id === s.activeModelId)?.filePath);
@@ -47,9 +50,9 @@ export const FastestSettingsButton: React.FC = () => {
   return (
     <View style={styles.container}>
       {running ? (
-        <Button testID="fastest-settings-cancel" title="Measuring… Cancel" variant="outline" size="small" onPress={() => abort.current?.abort()} />
+        <Button testID="fastest-settings-cancel" title="Measuring… Cancel" variant="outline" size="small" onPress={() => abort.current?.abort()} style={SIZED_TO_TEXT} />
       ) : (
-        <Button testID="fastest-settings-button" title="Use fastest settings" variant="primary" size="small" onPress={run} />
+        <Button testID="fastest-settings-button" title="Use fastest settings" variant="primary" size="small" onPress={run} style={SIZED_TO_TEXT} />
       )}
       {summary && !running ? (
         <Text style={{ color: colors.textSecondary }} accessibilityLiveRegion="polite" testID="fastest-settings-summary">

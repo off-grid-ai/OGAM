@@ -27,8 +27,10 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   scrollView: {
     flex: 1,
   },
+  // An action sized to its words, not a slab edge to edge.
+  sizedToText: { alignSelf: 'flex-start' as const },
   content: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.xxl,
   },

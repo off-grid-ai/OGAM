@@ -277,6 +277,8 @@ export const StorageSettingsScreen: React.FC = () => {
           <Button
             title="Choose models for this phone"
             variant="outline"
+            size="small"
+            style={styles.sizedToText}
             onPress={() => navigation.navigate('AutoSetup')}
             testID="storage-auto-setup"
           />
