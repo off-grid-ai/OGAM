@@ -1,7 +1,8 @@
 /** Settings > Appearance & AI style: theme, background, accent, font, text size, bottom bar, and how the AI answers. */
 import React from 'react';
-import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Button } from '../components/Button';
+import { pick as pickDocument, keepLocalCopy, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -56,6 +57,16 @@ export const AppearanceScreen: React.FC = () => {
     if (r.error) { setThemeMsg(r.error); return; }
     setLook({ custom: r.theme, cornerRadius: undefined }); setThemeMsg(`Applied "${r.theme!.name}".`); setThemeText('');
   };
+  const pickBackground = async () => {
+    try {
+      const [file] = await pickDocument({ type: [types.images], mode: 'import', allowMultiSelection: false });
+      if (!file) return;
+      const local = await keepLocalCopy({ files: [{ uri: file.uri, fileName: file.name ?? 'background.jpg' }], destination: 'documentDirectory' });
+      const done = local[0];
+      if (done?.status !== 'success') throw new Error('Could not keep a copy of that picture.');
+      setLook({ backgroundImage: { uri: done.localUri, dim: appearance.backgroundImage?.dim ?? 0.45 } });
+    } catch (e: any) { if (!isErrorWithCode(e) || e.code !== errorCodes.OPERATION_CANCELED) Alert.alert('Could not use that picture', String(e?.message || e)); }
+  };
   const setAi = (patch: Partial<AiStyle>) => updateSettings({ aiStyle: { ...ai, ...patch } });
 
   return (
@@ -85,6 +96,15 @@ export const AppearanceScreen: React.FC = () => {
         <Chips testID="corner-radius" value={String(appearance.cornerRadius ?? appearance.custom?.cornerRadius ?? 'skin')}
           onPick={id => setLook({ cornerRadius: id === 'skin' ? undefined : Number(id) })}
           options={[{ id: 'skin', name: 'As styled' }, { id: '0', name: 'Square' }, { id: '0.5', name: 'Slight' }, { id: '1', name: 'Standard' }, { id: '1.5', name: 'Round' }, { id: '2', name: 'Very round' }]} />
+
+        <Text style={styles.label}>Background picture</Text>
+        <Button title={appearance.backgroundImage ? 'Choose a different picture' : 'Choose a picture'} variant="outline" testID="bg-pick" onPress={pickBackground} />
+        {!!appearance.backgroundImage && <>
+          <Chips testID="bg-dim" value={String(appearance.backgroundImage.dim)} onPick={id => setLook({ backgroundImage: { ...appearance.backgroundImage!, dim: Number(id) } })}
+            options={[{ id: '0.2', name: 'Light dim' }, { id: '0.45', name: 'Medium' }, { id: '0.7', name: 'Dark' }, { id: '0.85', name: 'Very dark' }]} />
+          <Button title="Remove the picture" variant="ghost" testID="bg-remove" onPress={() => setLook({ backgroundImage: undefined })} />
+        </>}
+        <Text style={styles.note}>The picture sits behind every screen and is dimmed so text stays readable. Boxes and cards keep their colour. Some pop-ups may look different over a picture.</Text>
 
         <Text style={styles.label}>Import a theme</Text>
         <Text style={styles.note}>Paste a theme file: {'{"name":"Mine","light":{"background":"#fff8f0","primary":"#c2410c"},"dark":{"background":"#1a1008"},"cornerRadius":1.5}'}. Colour names: background, surface, surfaceLight, surfaceHover, border, borderLight, divider, text, textSecondary, textMuted, primary, primaryDark, error, borderFocus.</Text>

@@ -5,7 +5,7 @@
 
 import 'react-native-gesture-handler';
 import React, { useEffect, useState, useCallback } from 'react';
-import { ActivityIndicator, AppState, View, StyleSheet, LogBox } from 'react-native';
+import { ActivityIndicator, AppState, Image, View, StyleSheet, LogBox } from 'react-native';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -110,7 +110,7 @@ function App() {
   const setDownloadedModels = useAppStore((s) => s.setDownloadedModels);
   const setDownloadedImageModels = useAppStore((s) => s.setDownloadedImageModels);
 
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, backdrop } = useTheme();
 
   const {
     isEnabled: authEnabled,
@@ -392,7 +392,8 @@ function App() {
   }
 
   return (
-    <GestureHandlerRootView style={styles.flex}>
+    <GestureHandlerRootView style={[styles.flex, backdrop ? { backgroundColor: backdrop.solid } : null]}>
+      {backdrop ? <BackdropImage uri={backdrop.uri} dim={backdrop.dim} /> : null}
       <SafeAreaProvider>
         <SystemBars style={isDark ? 'light' : 'dark'} />
         {AppRoot ? <AppRoot /> : null}
@@ -436,6 +437,13 @@ function App() {
     </GestureHandlerRootView>
   );
 }
+
+const BackdropImage: React.FC<{ uri: string; dim: number }> = ({ uri, dim }) => (
+  <>
+    <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(0,0,0,${dim})` }]} />
+  </>
+);
 
 const styles = StyleSheet.create({
   flex: {

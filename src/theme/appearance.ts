@@ -46,6 +46,8 @@ export interface Appearance {
   chatLayout?: ChatLayout;
   /** Corner roundness on top of the skin: 0 = square, 1 = as designed, 2 = very round. */
   cornerRadius?: number;
+  /** A picture behind every screen; screens become see-through and the picture is dimmed (0 to 0.9) so text stays readable. */
+  backgroundImage?: { uri: string; dim: number };
   /** A theme the person imported (see parseCustomTheme); overrides the chosen palette and accent. */
   custom?: CustomTheme;
 }

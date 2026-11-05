@@ -6,7 +6,7 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
 }));
 
-it('rejects a bad theme with a clear reason, applies a good one, and sets corner roundness', () => {
+it('rejects a bad theme with a clear reason, applies a good one, and sets corner roundness', async () => {
   const rtl = requireRTL();
   const React = require('react');
   const { AppearanceScreen } = require('../../src/screens/AppearanceScreen');
@@ -37,4 +37,26 @@ it('rejects a bad theme with a clear reason, applies a good one, and sets corner
   expect(useAppStore.getState().settings.appearance).toMatchObject({ layoutMode: 'focus', chatLayout: 'clean' });
   rtl.fireEvent.press(r.getByTestId('easy-mode'));
   expect(useAppStore.getState().settings.appearance.layoutMode).toBe('standard');
+});
+
+it('keeps a chosen background picture in app storage, makes screens see-through, dims it, and removes it', async () => {
+  const rtl = requireRTL();
+  const React = require('react');
+  const { AppearanceScreen } = require('../../src/screens/AppearanceScreen');
+  const { useAppStore } = require('../../src/stores');
+  const { getTheme } = require('../../src/theme/useTheme');
+  const r = rtl.render(React.createElement(AppearanceScreen));
+  await rtl.act(async () => { await Promise.resolve(); });
+  const picker = require('@react-native-documents/picker');
+  (picker.pick as jest.Mock).mockResolvedValue([{ uri: 'file:///pics/wall.jpg', name: 'wall.jpg' }]);
+  await rtl.act(async () => { rtl.fireEvent.press(r.getByTestId('bg-pick')); });
+  await rtl.waitFor(() => expect(useAppStore.getState().settings.appearance?.backgroundImage).toBeTruthy());
+  const t = getTheme('light', useAppStore.getState().settings.appearance);
+  expect(t.colors.background).toBe('transparent');
+  expect(t.backdrop).toMatchObject({ dim: 0.45, uri: 'file:///pics/wall.jpg' });
+  rtl.fireEvent.press(r.getByText('Very dark'));
+  expect(getTheme('light', useAppStore.getState().settings.appearance).backdrop.dim).toBe(0.85);
+  rtl.fireEvent.press(r.getByTestId('bg-remove'));
+  expect(getTheme('light', useAppStore.getState().settings.appearance).backdrop).toBeUndefined();
+  expect(getTheme('light', useAppStore.getState().settings.appearance).colors.background).not.toBe('transparent');
 });
