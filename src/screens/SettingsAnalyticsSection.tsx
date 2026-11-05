@@ -33,11 +33,12 @@ export const SettingsAnalyticsSection: React.FC<SettingsAnalyticsSectionProps> =
   // Each toggle carries an icon so its words line up with the rows below.
   const toggle = (label: string, icon: string, value: boolean, onChange: (next: boolean) => void) => (
     <View style={styles.navItem}>
-      <View style={styles.navItemIcon}>
+      {/* Decoration: hidden, or a screen reader reads its glyph. The switch carries the name. */}
+      <View style={styles.navItemIcon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <Icon name={icon} size={16} color={colors.textSecondary} />
       </View>
       <View style={styles.navItemContent}>
-        <Text style={styles.navItemTitle}>{label}</Text>
+        <Text style={styles.navItemTitle} importantForAccessibility="no" accessibilityElementsHidden>{label}</Text>
       </View>
       <AppSwitch
         accessibilityLabel={label}
@@ -57,7 +58,7 @@ export const SettingsAnalyticsSection: React.FC<SettingsAnalyticsSectionProps> =
         {toggle('Crash reports', 'activity', crashes, next => {
           setAnalyticsConsent({ crashes: next }, 'settings').catch(ignore);
         })}
-        <TouchableOpacity style={styles.navItem} onPress={onWhatWeShare} testID="settings-what-we-share">
+        <TouchableOpacity style={styles.navItem} onPress={onWhatWeShare} testID="settings-what-we-share" accessibilityRole="button" accessibilityLabel="What we share. Your chats and files never leave your device">
           <View style={styles.navItemIcon}>
             <Icon name="eye" size={16} color={colors.textSecondary} />
           </View>
@@ -71,6 +72,8 @@ export const SettingsAnalyticsSection: React.FC<SettingsAnalyticsSectionProps> =
           style={[styles.navItem, styles.navItemLast]}
           onPress={() => setShowLog(true)}
           testID="settings-report-problem"
+          accessibilityRole="button"
+          accessibilityLabel="Report a problem. Check the debug log, then send it to us"
         >
           <View style={styles.navItemIcon}>
             <Icon name="alert-circle" size={16} color={colors.textSecondary} />
