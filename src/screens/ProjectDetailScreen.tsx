@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, FlatList } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../components/AliveScreen';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
@@ -195,19 +195,19 @@ export const ProjectDetailScreen: React.FC = () => {
 
   if (!project) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <AliveScreen style={styles.container}>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Project not found</Text>
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text style={styles.errorLink}>Go back</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </AliveScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']} testID="project-detail-screen">
+    <AliveScreen style={styles.container} testID="project-detail-screen">
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -219,11 +219,7 @@ export const ProjectDetailScreen: React.FC = () => {
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <View style={styles.projectIcon}>
-            <Text style={styles.projectIconText}>
-              {project.name.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+          <Icon name="folder" size={16} color={colors.textMuted} style={styles.projectIcon} />
           <Text style={styles.headerTitle} numberOfLines={1}>
             {project.name}
           </Text>
@@ -346,15 +342,15 @@ export const ProjectDetailScreen: React.FC = () => {
       {/* Delete Project Button */}
       <View style={styles.footer}>
         <Button
-          title="Delete Project"
+          title="Delete project"
           variant="ghost"
           size="medium"
           onPress={handleDeleteProject}
-          icon={<Icon name="trash-2" size={16} color={colors.error} />}
-          textStyle={{ color: colors.error }}
+          icon={<Icon name="trash-2" size={16} color={colors.textMuted} />}
+          textStyle={{ color: colors.textSecondary }}
         />
       </View>
       <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
