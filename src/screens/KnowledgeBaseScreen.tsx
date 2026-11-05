@@ -11,6 +11,7 @@ import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { LoadingDots } from '../components/LoadingDots';
 import { AliveScreen } from '../components/AliveScreen';
+import { Button } from '../components/Button';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
@@ -313,10 +314,16 @@ export const KnowledgeBaseScreen: React.FC = () => {
         <View style={styles.centered}>
           <Icon name="file-text" size={40} color={colors.textMuted} />
           <Text style={styles.emptyText}>No documents yet</Text>
-          <Text style={styles.emptySubtext}>Add files to build your knowledge base</Text>
-          <TouchableOpacity style={styles.addFirstButton} onPress={handleAddDocument} disabled={isPicking}>
-            <Text style={styles.addFirstButtonText}>Add Document</Text>
-          </TouchableOpacity>
+          <Text style={styles.emptySubtext}>Add a PDF or notes, and every chat in this project can answer from them.</Text>
+          <Button
+            title="Add a document"
+            variant="hero"
+            size="small"
+            icon={<Icon name="plus" size={16} color={colors.onHero} />}
+            onPress={handleAddDocument}
+            disabled={isPicking}
+            testID="kb-add-first"
+          />
         </View>
       ) : (
         <FlatList
