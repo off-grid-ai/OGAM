@@ -39,7 +39,7 @@ import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { WHISPER_MODELS } from '../../services';
-import { findTranscriptionModel } from '../../services/whisperModels';
+import { transcriptionModelName } from '../../services/whisperModels';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useUiModeStore } from '../../stores/uiModeStore';
 import { SLOTS, useSlot } from '../../bootstrap/slotRegistry';
@@ -125,7 +125,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [voiceOpen, setVoiceOpen] = React.useState(false);
   const returnToModelsRef = React.useRef(false);
   const whisperModelId = useWhisperStore(s => s.downloadedModelId);
-  const whisperModels = useWithRemoteCatalog('transcription', WHISPER_MODELS);
+  // Re-render when the remote catalog renames a speech model.
+  useWithRemoteCatalog('transcription', WHISPER_MODELS);
   const whisperPresentCount = useWhisperStore(
     s => s.presentModelIds?.length ?? 0,
   );
@@ -145,7 +146,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     voice: remoteLabels.voice,
     transcription: remoteLabels.transcription,
     localVoice: voiceSummary,
-    localTranscription: findTranscriptionModel(whisperModels, whisperModelId)?.name,
+    localTranscription: whisperModelId ? transcriptionModelName(whisperModelId) : undefined,
   });
 
   // Downloaded-model counts shown in the Models card (replaces the old stats row).

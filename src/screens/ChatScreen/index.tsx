@@ -41,7 +41,7 @@ import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { WHISPER_MODELS } from '../../services';
-import { findTranscriptionModel } from '../../services/whisperModels';
+import { transcriptionModelName } from '../../services/whisperModels';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabels';
 import { useChatStore } from '../../stores';
@@ -88,7 +88,8 @@ export const ChatScreen: React.FC = () => {
   };
   const voiceSummary = useUiModeStore(s => s.voiceSummary);
   const whisperModelId = useWhisperStore(s => s.downloadedModelId);
-  const whisperModels = useWithRemoteCatalog('transcription', WHISPER_MODELS);
+  // Re-render when the remote catalog renames a speech model.
+  useWithRemoteCatalog('transcription', WHISPER_MODELS);
   const remoteLabels = useActiveRemoteModelLabels();
   const videoLabel = useAppStore(s => {
     const model = s.downloadedVideoModels.find(m => m.id === s.activeVideoModelId);
@@ -103,7 +104,7 @@ export const ChatScreen: React.FC = () => {
     voice: remoteLabels.voice ?? voiceSummary ?? '—',
     speech:
       remoteLabels.transcription ??
-      findTranscriptionModel(whisperModels, whisperModelId)?.name ??
+      (whisperModelId ? transcriptionModelName(whisperModelId) : undefined) ??
       '—',
   };
   const pendingModelRowRef = useRef<ModelRowType | null>(null);
