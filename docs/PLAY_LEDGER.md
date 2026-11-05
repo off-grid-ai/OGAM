@@ -352,3 +352,9 @@ Least desktop-like now: Remote servers, Sync, Storage.
 1. Sync device count true.
 2. Remote servers one main action.
 3. Storage: one "Document search" row, a grey bar.
+
+## Supervisor 10:20 — hand test 29 (build 30, head 1b163f05c)
+Pass: Storage two rows and grey bar; Remote servers quiet Scan and text Add manually; replies never sit behind the composer (short and long, keyboard open); Models, Chats, Projects, Settings. Fail: Sync heading and list still disagree ("5 of 5 devices saved" over 3 saved + 1 available; Home "5 saved"), "authoritative device roster" jargon; Remote servers scan cannot be stopped and "Scanning" is faint; Model settings is seven collapsed Mono headings with no values. Incident: a Back tap near the top hit a Slack notification and opened Slack; the next tap landed on Slack's Search tab; nothing typed or sent; the dev app was brought back by a WDA launch, and the tap helper now refuses to tap unless the dev app is in front.
+1. Sync: one count, what it counts said plainly.
+2. Model settings: values visible.
+3. Remote servers: stoppable, readable scan.
