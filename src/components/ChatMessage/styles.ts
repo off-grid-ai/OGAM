@@ -349,6 +349,9 @@ const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     marginTop: 6,
+    // Speak and Message actions reach 10 pt below this row (44 pt frames, pulled back); this keeps
+    // them clear of the footer toggles under it (hand test 42: 11 pt overlap).
+    marginBottom: 12,
     // On the message's own edge (the container carries the 24 pt gutter), not 8 pt inside it.
     gap: 8,
   },
