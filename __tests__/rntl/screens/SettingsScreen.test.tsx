@@ -76,10 +76,10 @@ describe('SettingsScreen', () => {
 
   it('renders navigation items', () => {
     const { getByText } = renderSettings();
-    expect(getByText('Model Settings')).toBeTruthy();
-    expect(getByText('Remote Servers')).toBeTruthy();
+    expect(getByText('Model settings')).toBeTruthy();
+    expect(getByText('Remote servers')).toBeTruthy();
     expect(getByText('Security')).toBeTruthy();
-    expect(getByText('Device Information')).toBeTruthy();
+    expect(getByText('Device information')).toBeTruthy();
     expect(getByText('Storage')).toBeTruthy();
   });
 
@@ -101,7 +101,7 @@ describe('SettingsScreen', () => {
 
   it('navigates to correct screen when nav item is pressed', async () => {
     const { getByText, findByTestId } = renderSettings();
-    fireEvent.press(getByText('Model Settings'));
+    fireEvent.press(getByText('Model settings'));
     expect(await findByTestId('route-ModelSettings')).toBeTruthy();
   });
 

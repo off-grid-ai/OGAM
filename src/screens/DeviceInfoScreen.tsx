@@ -48,7 +48,7 @@ export const DeviceInfoScreen: React.FC = () => {
         >
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Device Information</Text>
+        <Text style={styles.title}>Device information</Text>
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>

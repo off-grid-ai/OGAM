@@ -60,7 +60,7 @@ describe('DeviceInfoScreen', () => {
   it('shows the phone\'s model, system, total RAM and live process memory', async () => {
     const { rtl, view } = await mount({ totalGB: 8, availGB: 5 });
 
-    expect(view.getByText('Device Information')).toBeTruthy();
+    expect(view.getByText('Device information')).toBeTruthy();
     expect(row(rtl, view, 'Model').getByText('Pixel 7')).toBeTruthy();
     expect(row(rtl, view, 'System').getByText('Android 14')).toBeTruthy();
     expect(row(rtl, view, 'Memory').getByText('8.0 GB')).toBeTruthy();

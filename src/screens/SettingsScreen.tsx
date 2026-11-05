@@ -197,7 +197,7 @@ export const SettingsScreen: React.FC = () => {
             {[
               {
                 icon: 'sliders',
-                title: 'Model Settings',
+                title: 'Model settings',
                 desc: 'System prompt, generation, and performance',
                 screen: 'ModelSettings' as const,
                 testID: 'open-model-settings',
@@ -212,7 +212,7 @@ export const SettingsScreen: React.FC = () => {
               },
               {
                 icon: 'wifi',
-                title: 'Remote Servers',
+                title: 'Remote servers',
                 desc: 'Connect to Off Grid AI Desktop, Ollama, LM Studio, and more',
                 screen: 'RemoteServers' as const,
               },
@@ -238,7 +238,7 @@ export const SettingsScreen: React.FC = () => {
               },
               {
                 icon: 'smartphone',
-                title: 'Device Information',
+                title: 'Device information',
                 desc: 'Hardware and compatibility',
                 screen: 'DeviceInfo' as const,
               },

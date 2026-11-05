@@ -80,7 +80,7 @@ export const ModelSettingsScreen: React.FC = () => {
         >
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Model Settings</Text>
+        <Text style={styles.title}>Model settings</Text>
       </View>
       <ScrollView
         style={styles.scrollView}

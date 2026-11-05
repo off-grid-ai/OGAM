@@ -198,7 +198,7 @@ export const RemoteServersScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Remote Servers" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Remote servers" onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.scrollView}

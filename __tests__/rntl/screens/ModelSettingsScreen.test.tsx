@@ -82,7 +82,7 @@ describe('ModelSettingsScreen', () => {
   describe('basic rendering', () => {
     it('renders without crashing', () => {
       const { getByText } = renderScreen();
-      expect(getByText('Model Settings')).toBeTruthy();
+      expect(getByText('Model settings')).toBeTruthy();
     });
 
     it('shows all section titles as accordion headers', () => {

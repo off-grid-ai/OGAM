@@ -320,7 +320,7 @@ describe('Pro mobile state sync journey', () => {
       </>,
     );
     fireEvent.press(ui.getByTestId('settings-tab'));
-    fireEvent.press(ui.getByText('Model Settings'));
+    fireEvent.press(ui.getByText('Model settings'));
     fireEvent.press(ui.getByTestId('general-generation-accordion'));
     fireEvent.press(ui.getByTestId('show-gen-details-on-button'));
     fireEvent.press(ui.getByLabelText('Back'));
@@ -657,7 +657,7 @@ describe('Pro mobile state sync journey', () => {
     expect(ui.getByText('The phone checked the notes.')).toBeTruthy();
 
     fireEvent.press(ui.getByTestId('settings-tab'));
-    fireEvent.press(ui.getByText('Model Settings'));
+    fireEvent.press(ui.getByText('Model settings'));
     fireEvent.press(
       await waitFor(() => ui!.getByTestId('text-generation-accordion')),
     );
@@ -786,7 +786,7 @@ describe('Pro mobile state sync journey', () => {
       </NavigationContainer>,
     );
     fireEvent.press(ui.getByTestId('settings-tab'));
-    fireEvent.press(ui.getByText('Model Settings'));
+    fireEvent.press(ui.getByText('Model settings'));
     fireEvent.press(
       await waitFor(() => ui!.getByTestId('text-generation-accordion')),
     );

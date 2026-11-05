@@ -187,7 +187,7 @@ describe('Video Studio over Sync', () => {
     );
     // Settings › Sync, and the Mac pairs with the code on screen.
     fireEvent.press(ui.getByTestId('settings-tab'));
-    await waitFor(() => expect(ui!.getByText('Model Settings')).toBeTruthy());
+    await waitFor(() => expect(ui!.getByText('Model settings')).toBeTruthy());
     fireEvent.press(ui.getByTestId('open-sync-settings'));
     await waitFor(() => expect(ui!.getByTestId('sync-pairing-code-value')).toBeTruthy());
     const phone = useSyncStore.getState().thisDevice;
