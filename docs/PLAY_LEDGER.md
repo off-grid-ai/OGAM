@@ -366,3 +366,10 @@ Stop scan and closed-section values work. No lost behaviour. Top 3:
 2. Sync count: "5 of 5 devices saved" over 4 rows (this phone is the 5th, shown only at the top). Say who the 5 are.
 3. Model settings: summaries for General, Default system prompt, Text to speech; Video generation onto the shared header (done in 86e04b586, not yet built).
 Also: "Scan stopped. Nothing found yet." reads wrong after a stop.
+
+## Supervisor 03:05 (hand test 31, build at 3ba65149e)
+
+Closed rows show values; Stop scan and "This phone and 4 others" pass. No lost behaviour. Top 3:
+1. Prompt row says "None" while chat sends the built-in default: use `settings.systemPrompt || APP_CONFIG.defaultSystemPrompt` (chat's own fallback).
+2. Chat settings sheet matches Model settings: Transcription and Text to speech values, one name ("Transcription"), 24 pt gutter.
+3. Sync reclaim still names the connected Mac (shared, waiting on Mac); "Show Generation Details" to sentence case; Home's Sync row and Sync's count say the same thing.
