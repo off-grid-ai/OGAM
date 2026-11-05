@@ -24,11 +24,10 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginBottom: SPACING.lg,
   },
   themeToggleLabel: { ...TYPOGRAPHY.body, color: colors.text },
+  // No track: three glyphs on the row, the chosen one marked in grey (hand test 42: a grey track
+  // with an emerald cell read as a second main action).
   themeSelector: {
     flexDirection: 'row' as const,
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 8,
-    padding: 3,
     gap: 2,
   },
   // 44 pt choices (they were 34 x 30): each is a target on its own.
@@ -40,9 +39,9 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     justifyContent: 'center' as const,
   },
   themeSelectorOptionActive: {
-    backgroundColor: colors.selectedFill,
+    backgroundColor: colors.surfaceLight,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.heroBorder,
+    borderColor: colors.border,
   },
   navSection: {
     ...cardSurface(colors),
