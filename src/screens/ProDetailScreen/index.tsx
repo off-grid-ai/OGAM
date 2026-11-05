@@ -304,12 +304,8 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     justifyContent: 'center' as const,
   },
   getProButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.primary,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 8,
+    // A status, not a button: a tick and words, no outline to tap at.
+    paddingVertical: SPACING.xs,
   },
   getProButtonText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
   proActiveBadge: {
@@ -324,7 +320,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     borderRadius: 8,
   },
   proActiveBadgeText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
-  proInactiveBadge: { borderColor: colors.border },
+  proInactiveBadge: {},
   proInactiveBadgeText: { color: colors.textMuted },
 
   // Hero
