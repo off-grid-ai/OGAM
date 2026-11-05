@@ -24,6 +24,12 @@ import { useAccordionStore } from '../../../src/stores';
 import { createMessage } from '../../utils/factories';
 import type { Message } from '../../../src/types';
 
+// The tools-sent row is developer detail, shown with "Show generation details" on (ToolMessages).
+beforeEach(() => {
+  const { useAppStore } = require('../../src/stores/appStore');
+  useAppStore.setState((state: { settings: object }) => ({ settings: { ...state.settings, showGenerationDetails: true } }));
+});
+
 
 const makeToolResult = (overrides: Partial<Message>): Message =>
   createMessage({
