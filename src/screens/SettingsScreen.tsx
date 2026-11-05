@@ -1,4 +1,3 @@
-import { useSearchModelLabel } from '../hooks/useSearchModelLabel';
 import { AppSwitch } from '../components/AppSwitch';
 import React, { useEffect, useState } from 'react';
 import {
@@ -68,7 +67,6 @@ async function loadDemoData(): Promise<void> {
 
 export const SettingsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
-  const searchLabel = useSearchModelLabel();
   const focusTrigger = useFocusTrigger();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -206,7 +204,8 @@ export const SettingsScreen: React.FC = () => {
                 // Its own page (Back returns here), showing the same picker as Models → Search.
                 icon: 'search',
                 title: 'Document search',
-                desc: searchLabel,
+                // What it does for you; the model's name is one tap in, on its own screen.
+                desc: 'How chat finds the right part of your documents',
                 screen: 'SearchModel' as const,
                 testID: 'open-search-model',
               },
