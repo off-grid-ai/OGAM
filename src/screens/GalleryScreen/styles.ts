@@ -26,9 +26,14 @@ const createHeaderStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderBottomColor: colors.borderLight,
     zIndex: 1,
   },
+  // 44 pt frames pulled back, so the header keeps its height (Back was 32, Select 36).
   closeButton: {
-    padding: SPACING.xs,
-    marginRight: SPACING.md,
+    width: 44,
+    height: 44,
+    margin: -8,
+    marginRight: SPACING.md - 8,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   title: {
     ...TYPOGRAPHY.h2,
@@ -41,8 +46,12 @@ const createHeaderStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginRight: SPACING.sm,
   },
   headerButton: {
-    padding: SPACING.sm,
+    minWidth: 44,
+    minHeight: 44,
+    marginVertical: -8,
     marginLeft: SPACING.xs,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   headerButtonDisabled: {
     opacity: 0.5,
