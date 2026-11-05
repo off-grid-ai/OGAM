@@ -1,6 +1,6 @@
 /**
- * ModelsSummaryRow — collapsed home Models control: labelled strip of four type
- * icons (Text/Image/Voice/Speech) with captions; tap opens the manager sheet.
+ * ModelsSummaryRow — Home's models as desktop's composer chips: the text model named, a chip per
+ * kind that opens its picker, and a Models chip that opens the manager sheet.
  */
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
@@ -11,9 +11,28 @@ import { ModelsSummaryRow } from '../../../src/components/models/ModelsSummaryRo
 const labels = { text: 'Qwen3.5', image: '—', video: '—', voice: 'Kokoro · Warm', speech: 'Base' };
 
 describe('ModelsSummaryRow', () => {
-  it('renders the four model-type captions and the label', () => {
-    const { getByText } = render(<ModelsSummaryRow labels={labels} isLoading={false} onPress={jest.fn()} />);
-    ['Models', 'Text', 'Image', 'Voice', 'Speech'].forEach((t) => expect(getByText(t)).toBeTruthy());
+  it('names the text model in use, and offers each other kind as a chip', () => {
+    const { getByText, getByTestId } = render(<ModelsSummaryRow labels={labels} isLoading={false} onPress={jest.fn()} />);
+    expect(getByText('Qwen3.5')).toBeTruthy();
+    ['Image', 'Video', 'Voice', 'Speech', 'Models'].forEach((t) => expect(getByText(t)).toBeTruthy());
+    expect(getByTestId('model-summary-text').props.accessibilityState).toEqual({ selected: true });
+    expect(getByTestId('model-summary-image').props.accessibilityState).toEqual({ selected: false });
+  });
+
+  it('says Text when no text model is in use, so the chip still leads to one', () => {
+    const { getByText } = render(
+      <ModelsSummaryRow labels={{ ...labels, text: '—' }} isLoading={false} onPress={jest.fn()} />,
+    );
+    expect(getByText('Text')).toBeTruthy();
+  });
+
+  it('a kind\'s chip opens that kind\'s picker', () => {
+    const onPressType = jest.fn();
+    const { getByTestId } = render(
+      <ModelsSummaryRow labels={labels} isLoading={false} onPress={jest.fn()} onPressType={onPressType} />,
+    );
+    fireEvent.press(getByTestId('model-summary-image-open'));
+    expect(onPressType).toHaveBeenCalledWith('image');
   });
 
   it('opens on press', () => {
