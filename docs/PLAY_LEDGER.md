@@ -243,3 +243,9 @@ Pass: no crash over five Text/Image/Video/Text cycles; underline tabs; Stop duri
 1. Try again after Stop during a model load.
 2. Gallery tiles that draw nothing.
 3. One emerald rule on model surfaces (Video tab, Models sheet).
+
+## Supervisor 22:05 — hand test 12 (build 13, head 127370605)
+Pass: Try again after Stop during a model load (with "Model loaded" after it), Try again asks again, eject, grey icons on Downloads/Storage/picks, picks on one surface. Fail: five Gallery tiles are pure-white saved images (the viewer shows white too), so the earlier "blank tile" fixes were the wrong cause (`127370605` reverted); speech models in Downloads named "ggml-tiny.en", "tiny", repo ids, and typed "Text"; Downloads 68.8 GB vs Storage 61.19 GB; boxed chat header, empty state, Models sheet rows, "Your videos"; raw tool name "ask_wiki_question".
+1. Gallery: why five images saved pure white; mark or hide failed images.
+2. Speech model names and kind in Downloads; one "used" figure.
+3. No boxes on the chat header, empty state, Models sheet, Your videos; plain tool words.
