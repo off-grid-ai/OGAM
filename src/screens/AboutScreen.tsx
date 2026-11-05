@@ -52,7 +52,7 @@ export const AboutScreen: React.FC = () => {
               <Icon name="github" size={16} color={colors.textSecondary} />
             </View>
             <View style={styles.navItemContent}>
-              <Text style={styles.navItemTitle}>Open Source</Text>
+              <Text style={styles.navItemTitle}>Open source</Text>
               <Text style={styles.navItemDesc}>View the source on GitHub</Text>
             </View>
             <Icon name="external-link" size={14} color={colors.textMuted} />
