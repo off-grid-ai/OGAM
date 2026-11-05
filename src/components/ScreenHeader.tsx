@@ -1,5 +1,5 @@
 import React, { type ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { Text, View, StyleSheet } from 'react-native';
 import { TouchableOpacity } from './Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { SPACING, TYPOGRAPHY } from '../constants';
@@ -61,24 +61,24 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   );
 };
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+  // The header sits on the living field like the rest of the screen: no slab, no shadow, a hairline
+  // under it, and the screen's 24px gutter (brand Mobile profile).
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: SPACING.md,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
     minHeight: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-    ...shadows.small,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
     zIndex: 1,
   },
   tabHeader: {
-    paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     minHeight: 52,
+    borderBottomWidth: 0,
   },
   backButton: { padding: SPACING.xs },
   title: { ...TYPOGRAPHY.h2, color: colors.text, flex: 1 },
