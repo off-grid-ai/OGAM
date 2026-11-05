@@ -9,7 +9,7 @@ import type { ThemeColors } from './palettes';
 
 export type PaletteId = 'classic' | 'black' | 'forest' | 'ocean' | 'dusk' | 'paper' | 'mocha' | 'mint' | 'sakura' | 'graphite' | 'sunset' | 'contrast' | 'lavender' | 'peach' | 'navy' | 'terminal' | 'midnight' | 'dune' | 'rosewater' | 'aero' | 'win95' | 'ios' | 'mac' | 'xp' | 'material' | 'neon';
 export type AccentId = 'amber' | 'emerald' | 'blue' | 'violet' | 'rose' | 'teal' | 'red' | 'slate' | 'multi' | 'orange' | 'lime' | 'cyan' | 'indigo' | 'fuchsia' | 'gold' | 'aeroblue' | 'iosblue' | 'navy95' | 'xpgreen' | 'hotpink';
-export type FontId = 'atlas' | 'sans' | 'serif' | 'mono' | 'condensed' | 'light' | 'medium' | 'casual';
+export type FontId = 'atlas' | 'sans' | 'serif' | 'mono' | 'pixel' | 'condensed' | 'light' | 'medium' | 'casual';
 export type TextSizeId = 'small' | 'normal' | 'large' | 'xlarge';
 export type LayoutMode = 'standard' | 'simple' | 'compact' | 'colorful' | 'grid' | 'focus';
 export type Density = 'comfortable' | 'compact' | 'spacious';
@@ -62,7 +62,7 @@ const surfaces = (c: [string, string, string, string, string, string]): Surfaces
 export const SKINS: Skin[] = [
   { id: 'aero', name: 'Aero glass', hint: 'Glossy blue panels with soft shadows, like Windows Vista and 7', look: { palette: 'aero', accent: 'aeroblue', font: 'sans', chatLayout: 'bubbles' }, shape: { radius: 1.4, minBorder: 1, shadow: 'soft' } },
   { id: 'retro', name: 'Retro desktop', hint: 'Silver boxes, square corners and heavy borders, like Windows 95', look: { palette: 'win95', accent: 'navy95', font: 'sans', chatLayout: 'bubbles' }, shape: { radius: 0, minBorder: 2, shadow: 'none' } },
-  { id: 'terminal', name: 'Green terminal', hint: 'Black screen, green text, monospace, no rounded corners', look: { palette: 'terminal', accent: 'lime', font: 'mono', chatLayout: 'clean' }, shape: { radius: 0, minBorder: 1, shadow: 'none' } },
+  { id: 'terminal', name: 'Green terminal', hint: 'Black screen, green text, 8-bit pixel font, no rounded corners', look: { palette: 'terminal', accent: 'lime', font: 'pixel', chatLayout: 'clean' }, shape: { radius: 0, minBorder: 1, shadow: 'none' } },
   { id: 'mac', name: 'Classic Mac', hint: 'Black and white, thin black borders, a book font', look: { palette: 'mac', accent: 'slate', font: 'serif', chatLayout: 'bubbles' }, shape: { radius: 0.3, minBorder: 2, shadow: 'none' } },
   { id: 'xp', name: 'Windows XP', hint: 'Beige and blue with green accents and gently rounded boxes', look: { palette: 'xp', accent: 'xpgreen', font: 'sans', chatLayout: 'bubbles' }, shape: { radius: 1.2, minBorder: 1, shadow: 'soft' } },
   { id: 'ios', name: 'iOS', hint: 'Light grey and white cards, big corners, iOS blue, bubble chats', look: { palette: 'ios', accent: 'iosblue', font: 'sans', chatLayout: 'bubbles' }, shape: { radius: 1.5, minBorder: 0, shadow: 'none' } },
@@ -197,6 +197,7 @@ export const FONT_CHOICES: Array<{ id: FontId; name: string; heading: string; bo
   { id: 'sans', name: 'Clean', heading: bundled('AtlasClean', 'sans-serif'), body: bundled('AtlasClean', 'sans-serif') },
   { id: 'serif', name: 'Book', heading: bundled('AtlasBook', 'serif'), body: bundled('AtlasBook', 'serif') },
   { id: 'mono', name: 'Terminal', heading: bundled('AtlasMono', 'monospace'), body: bundled('AtlasMono', 'monospace') },
+  { id: 'pixel', name: '8-bit', heading: bundled('AtlasPixel', 'monospace'), body: bundled('AtlasPixel', 'monospace') },
   { id: 'condensed', name: 'Narrow', heading: bundled('AtlasNarrow', 'sans-serif-condensed'), body: bundled('AtlasNarrow', 'sans-serif-condensed') },
   { id: 'light', name: 'Light', heading: bundled('AtlasLight', 'sans-serif-light'), body: bundled('AtlasLight', 'sans-serif-light') },
   { id: 'medium', name: 'Bold', heading: bundled('AtlasBold', 'sans-serif-medium'), body: bundled('AtlasBold', 'sans-serif-medium') },

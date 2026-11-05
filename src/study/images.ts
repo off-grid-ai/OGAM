@@ -25,7 +25,8 @@ export async function findImages(query: string, fetcher: typeof fetch = fetch): 
   const q = query.trim();
   if (!q) throw new Error('Say what picture to look for.');
   const url = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=8&gsrsearch=${encodeURIComponent(q)}&prop=imageinfo&iiprop=url|extmetadata|mime&iiurlwidth=800`;
-  const res = await fetcher(url);
+  // Wikimedia asks every app to say who it is; requests without it can be refused.
+  const res = await fetcher(url, { headers: { 'Api-User-Agent': 'AtlasStudyApp/1.0 (private study app; image lookup on request)' } });
   if (!res.ok) throw new Error(`Image search failed (${res.status}).`);
   return parseCommons(await res.json());
 }
