@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Linking, ScrollView, Image, StyleSheet } from 'react-native';
-import { TouchableOpacity } from '../components/Touchable';
 import { AliveScreen } from '../components/AliveScreen';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { cardSurface } from '../theme/surface';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -26,13 +26,7 @@ export const AboutScreen: React.FC = () => {
 
   return (
     <AliveScreen style={styles.container} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>About</Text>
-        <View style={styles.backButton} />
-      </View>
+      <ScreenHeader title="About" onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content}>
         {/* App identity */}
@@ -76,7 +70,7 @@ export const AboutScreen: React.FC = () => {
             onPress={() => Linking.openURL(FOLLOW_X_URL)}
           >
             <View style={styles.navItemIcon}>
-              <Icon name="twitter" size={16} color={colors.primary} />
+              <Icon name="twitter" size={16} color={colors.textSecondary} />
             </View>
             <View style={styles.navItemContent}>
               <Text style={styles.navItemTitle}>Follow @alichherawalla on X</Text>
@@ -93,7 +87,7 @@ export const AboutScreen: React.FC = () => {
             onPress={() => Linking.openURL(SLACK_INVITE_URL)}
           >
             <View style={styles.navItemIcon}>
-              <IconMC name="slack" size={16} color={colors.primary} />
+              <IconMC name="slack" size={16} color={colors.textSecondary} />
             </View>
             <View style={styles.navItemContent}>
               <Text style={styles.navItemTitle}>Join the Slack community</Text>
