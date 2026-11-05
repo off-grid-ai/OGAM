@@ -67,8 +67,8 @@ export const OrphanedFilesSection: React.FC<Props> = ({ onStorageChange }) => {
     (file: OrphanedFile) => {
       setAlertState(
         showAlert(
-          'Delete Orphaned File',
-          `Delete "${file.name}"?\n\nThis will free up ${hardwareService.formatBytes(file.size)}.`,
+          'Delete leftover file',
+          `Delete "${file.name}"? You get ${hardwareService.formatBytes(file.size)} back.`,
           [
             { text: 'Cancel', style: 'cancel' },
             {
@@ -91,8 +91,8 @@ export const OrphanedFilesSection: React.FC<Props> = ({ onStorageChange }) => {
     const totalSize = orphanedFiles.reduce((sum, f) => sum + f.size, 0);
     setAlertState(
       showAlert(
-        'Delete All Orphaned Files',
-        `Delete ${orphanedFiles.length} orphaned file(s)?\n\nThis will free up ${hardwareService.formatBytes(totalSize)}.`,
+        'Delete all leftover files',
+        `Delete ${orphanedFiles.length} ${orphanedFiles.length === 1 ? 'file' : 'files'}? You get ${hardwareService.formatBytes(totalSize)} back.`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -125,29 +125,29 @@ export const OrphanedFilesSection: React.FC<Props> = ({ onStorageChange }) => {
     <>
       <Card style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Orphaned Files</Text>
+          <Text style={styles.sectionTitle}>Leftover files</Text>
           <TouchableOpacity
             style={styles.scanButton}
             onPress={scanForOrphanedFiles}
             disabled={isScanning}
           >
             {isScanning ? (
-              <LoadingDots color={colors.primary} />
+              <LoadingDots color={colors.textMuted} />
             ) : (
-              <Icon name="refresh-cw" size={16} color={colors.primary} />
+              <Icon name="refresh-cw" size={16} color={colors.textMuted} />
             )}
           </TouchableOpacity>
         </View>
 
         {orphanedFiles.length === 0 ? (
           <Text style={styles.emptyText}>
-            {isScanning ? 'Scanning...' : 'No orphaned files found'}
+            {isScanning ? 'Looking…' : 'No leftover files.'}
           </Text>
         ) : (
           <>
             <Text style={styles.warningText}>
-              These files/folders exist on disk but aren't tracked as models.
-              They may be from failed or cancelled downloads.
+              No model uses these. They come from downloads that stopped.
+              Deleting them is safe.
             </Text>
             {orphanedFiles.map(file => (
               <View key={file.path} style={styles.orphanedRow}>
@@ -167,7 +167,7 @@ export const OrphanedFilesSection: React.FC<Props> = ({ onStorageChange }) => {
                   {isDeleting === file.path ? (
                     <LoadingDots color={colors.error} />
                   ) : (
-                    <Icon name="trash-2" size={18} color={colors.error} />
+                    <Icon name="trash-2" size={18} color={colors.textMuted} />
                   )}
                 </TouchableOpacity>
               </View>
@@ -177,7 +177,7 @@ export const OrphanedFilesSection: React.FC<Props> = ({ onStorageChange }) => {
               onPress={handleDeleteAll}
             >
               <Icon name="trash-2" size={16} color={colors.error} />
-              <Text style={styles.deleteAllText}>Delete All Orphaned Files</Text>
+              <Text style={styles.deleteAllText}>Delete all</Text>
             </TouchableOpacity>
           </>
         )}
@@ -257,7 +257,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingVertical: SPACING.md,
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: colors.error,
+    borderColor: colors.border,
     borderRadius: 8,
   },
   deleteAllText: {

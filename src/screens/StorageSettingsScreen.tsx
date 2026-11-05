@@ -116,12 +116,12 @@ export const StorageSettingsScreen: React.FC = () => {
   const handleClearAllStaleDownloads = useCallback(() => {
     setAlertState(
       showAlert(
-        'Clear Stale Downloads',
-        `Clear ${staleDownloads.length} stale download entry(s)?`,
+        'Clear unfinished downloads',
+        `Clear ${staleDownloads.length} ${staleDownloads.length === 1 ? 'download' : 'downloads'}?`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
-            text: 'Clear All',
+            text: 'Clear all',
             style: 'destructive',
             onPress: () => {
               setAlertState(hideAlert());
@@ -275,7 +275,7 @@ export const StorageSettingsScreen: React.FC = () => {
 
         <View style={styles.section}>
           <Button
-            title="Auto Setup"
+            title="Choose models for this phone"
             variant="outline"
             onPress={() => navigation.navigate('AutoSetup')}
             testID="storage-auto-setup"
@@ -285,12 +285,12 @@ export const StorageSettingsScreen: React.FC = () => {
         {staleDownloads.length > 0 && (
           <Card style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Stale Downloads</Text>
+              <Text style={styles.sectionTitle}>Unfinished downloads</Text>
               <TouchableOpacity
                 style={styles.clearAllButton}
                 onPress={handleClearAllStaleDownloads}
               >
-                <Text style={styles.clearAllText}>Clear All</Text>
+                <Text style={styles.clearAllText}>Clear all</Text>
               </TouchableOpacity>
             </View>
             <Text
@@ -299,23 +299,18 @@ export const StorageSettingsScreen: React.FC = () => {
                 { textAlign: 'left' as const, marginBottom: SPACING.md },
               ]}
             >
-              These download entries have invalid or missing data and can be
-              safely cleared.
+              These stopped before they finished. Clearing them is safe.
             </Text>
             {staleDownloads.map(entry => (
               <View key={entry.modelKey} style={styles.orphanedRow}>
                 <View style={styles.orphanedInfo}>
-                  <Text style={styles.orphanedName}>Download #{entry.downloadId}</Text>
-                  <Text style={styles.orphanedMeta}>
-                    {entry.fileName || 'Unknown file'} •{' '}
-                    {entry.modelId || 'Unknown model'}
-                  </Text>
+                  <Text style={styles.orphanedName} numberOfLines={1}>{entry.fileName || 'Unnamed file'}</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.deleteButton}
                   onPress={() => handleClearStaleDownload(entry.modelKey)}
                 >
-                  <Icon name="x" size={18} color={colors.error} />
+                  <Icon name="x" size={18} color={colors.textMuted} />
                 </TouchableOpacity>
               </View>
             ))}
@@ -325,7 +320,7 @@ export const StorageSettingsScreen: React.FC = () => {
         <OrphanedFilesSection onStorageChange={loadStorageInfo} />
 
         <Text style={styles.hint}>
-          To free up space, you can delete models from the Models tab.
+          To get more space back, delete models you no longer use in Models.
         </Text>
       </ScrollView>
 

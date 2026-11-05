@@ -141,7 +141,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   clearAllText: {
     ...TYPOGRAPHY.body,
-    color: colors.primary,
+    color: colors.textSecondary,
   },
   orphanedRow: {
     flexDirection: 'row' as const,

@@ -48,7 +48,7 @@ const renderStorage = () =>
 
 /** Let the first orphan scan of the disk finish. */
 const scanned = async (view: ReturnType<typeof renderStorage>) => {
-  await waitFor(() => expect(view.queryByText('Scanning...')).toBeNull());
+  await waitFor(() => expect(view.queryByText('Looking…')).toBeNull());
 };
 
 describe('StorageSettingsScreen', () => {
@@ -82,7 +82,7 @@ describe('StorageSettingsScreen', () => {
 
   it('shows hint text at the bottom', () => {
     const { getByText } = renderStorage();
-    expect(getByText(/To free up space/)).toBeTruthy();
+    expect(getByText(/To get more space back/)).toBeTruthy();
   });
 
   // ---- Breakdown section tests ----
@@ -146,7 +146,7 @@ describe('StorageSettingsScreen', () => {
   it('shows "No orphaned files found" after scan completes', async () => {
     const view = renderStorage();
     await scanned(view);
-    expect(view.getByText('No orphaned files found')).toBeTruthy();
+    expect(view.getByText('No leftover files.')).toBeTruthy();
   });
 
   it('shows orphaned files when they exist', async () => {
@@ -156,7 +156,7 @@ describe('StorageSettingsScreen', () => {
     const view = renderStorage();
 
     expect(await view.findByText('stale-model.gguf')).toBeTruthy();
-    expect(view.getByText('Delete All Orphaned Files')).toBeTruthy();
+    expect(view.getByText('Delete all')).toBeTruthy();
   });
 
   it('shows warning text when orphaned files exist', async () => {
@@ -164,7 +164,7 @@ describe('StorageSettingsScreen', () => {
 
     const view = renderStorage();
 
-    expect(await view.findByText(/files\/folders exist on disk but aren't tracked/)).toBeTruthy();
+    expect(await view.findByText(/No model uses these/)).toBeTruthy();
   });
 
   // ---- Stale downloads section tests ----
@@ -173,21 +173,21 @@ describe('StorageSettingsScreen', () => {
     useDownloadStore.getState().add(staleEntry('stale-key-1', 'dl-123'));
 
     const { getByText } = renderStorage();
-    expect(getByText('Stale Downloads')).toBeTruthy();
-    expect(getByText('Clear All')).toBeTruthy();
+    expect(getByText('Unfinished downloads')).toBeTruthy();
+    expect(getByText('Clear all')).toBeTruthy();
   });
 
   it('shows stale download with missing modelId', () => {
     useDownloadStore.getState().add(staleEntry('stale-key-456', 'dl-456', 'partial.gguf'));
 
     const { getByText } = renderStorage();
-    expect(getByText('Stale Downloads')).toBeTruthy();
-    expect(getByText(/Download #dl-456/)).toBeTruthy();
+    expect(getByText('Unfinished downloads')).toBeTruthy();
+    expect(getByText('partial.gguf')).toBeTruthy();
   });
 
   it('does not show stale downloads section when none exist', () => {
     const { queryByText } = renderStorage();
-    expect(queryByText('Stale Downloads')).toBeNull();
+    expect(queryByText('Unfinished downloads')).toBeNull();
   });
 
   it('clearing a stale download removes it from the download store', async () => {
@@ -197,7 +197,7 @@ describe('StorageSettingsScreen', () => {
     fireEvent.press(view.UNSAFE_getByProps({ name: 'x' }));
 
     expect(useDownloadStore.getState().downloads['stale-key-789']).toBeUndefined();
-    await waitFor(() => expect(view.queryByText('Stale Downloads')).toBeNull());
+    await waitFor(() => expect(view.queryByText('Unfinished downloads')).toBeNull());
   });
 
   it('clear all stale downloads shows confirmation', () => {
@@ -205,10 +205,10 @@ describe('StorageSettingsScreen', () => {
     useDownloadStore.getState().add(staleEntry('stale-2', 'dl-200'));
 
     const { getByText } = renderStorage();
-    fireEvent.press(getByText('Clear All'));
+    fireEvent.press(getByText('Clear all'));
 
-    expect(getByText('Clear Stale Downloads')).toBeTruthy();
-    expect(getByText('Clear 2 stale download entry(s)?')).toBeTruthy();
+    expect(getByText('Clear unfinished downloads')).toBeTruthy();
+    expect(getByText('Clear 2 downloads?')).toBeTruthy();
   });
 
   // ---- Storage legend tests ----
@@ -221,7 +221,7 @@ describe('StorageSettingsScreen', () => {
 
   it('Orphaned Files section has scan button', () => {
     const view = renderStorage();
-    expect(view.getByText('Orphaned Files')).toBeTruthy();
+    expect(view.getByText('Leftover files')).toBeTruthy();
   });
 
   // ---- Delete orphaned file flow ----
@@ -240,7 +240,7 @@ describe('StorageSettingsScreen', () => {
 
     pressRowTrash(view);
 
-    expect(view.getByText('Delete Orphaned File')).toBeTruthy();
+    expect(view.getByText('Delete leftover file')).toBeTruthy();
     expect(view.getByText(/^Delete "orphan\.gguf"\?/)).toBeTruthy();
   });
 
@@ -286,12 +286,12 @@ describe('StorageSettingsScreen', () => {
     const view = renderStorage();
     await view.findByText('orphan1.gguf');
 
-    fireEvent.press(view.getByText('Delete All Orphaned Files'));
+    fireEvent.press(view.getByText('Delete all'));
     await act(async () => {
       fireEvent.press(view.getByRole('button', { name: 'Delete All' }));
     });
 
-    await waitFor(() => expect(view.getByText('No orphaned files found')).toBeTruthy());
+    await waitFor(() => expect(view.getByText('No leftover files.')).toBeTruthy());
     expect(await disk.exists(`${MODELS_DIR}/orphan1.gguf`)).toBe(false);
     expect(await disk.exists(`${MODELS_DIR}/orphan2.gguf`)).toBe(false);
   });
@@ -300,7 +300,7 @@ describe('StorageSettingsScreen', () => {
     // handleDeleteAllOrphaned returns early if orphanedFiles.length === 0
     // Since orphanedFiles is initially empty, the button is not shown
     const { queryByText } = renderStorage();
-    expect(queryByText('Delete All Orphaned Files')).toBeNull();
+    expect(queryByText('Delete all')).toBeNull();
   });
 
   it('handles error during scan for orphaned files', async () => {
@@ -312,7 +312,7 @@ describe('StorageSettingsScreen', () => {
     await scanned(view);
 
     // Should still render without crashing
-    expect(view.getByText('No orphaned files found')).toBeTruthy();
+    expect(view.getByText('No leftover files.')).toBeTruthy();
     disk.module.readDir.mockReset();
   });
 
@@ -321,18 +321,18 @@ describe('StorageSettingsScreen', () => {
     useDownloadStore.getState().add(staleEntry('stale-2', 'dl-200'));
 
     const view = renderStorage();
-    fireEvent.press(view.getByText('Clear All'));
-    fireEvent.press(view.getByRole('button', { name: 'Clear All' }));
+    fireEvent.press(view.getByText('Clear all'));
+    fireEvent.press(view.getByRole('button', { name: 'Clear all' }));
 
     expect(useDownloadStore.getState().downloads['stale-1']).toBeUndefined();
     expect(useDownloadStore.getState().downloads['stale-2']).toBeUndefined();
-    await waitFor(() => expect(view.queryByText('Stale Downloads')).toBeNull());
+    await waitFor(() => expect(view.queryByText('Unfinished downloads')).toBeNull());
   });
 
   it('rescans for orphaned files when scan button pressed', async () => {
     const view = renderStorage();
     await scanned(view);
-    expect(view.getByText('No orphaned files found')).toBeTruthy();
+    expect(view.getByText('No leftover files.')).toBeTruthy();
 
     // A file appears on disk after the first scan; the scan button finds it.
     disk.seedFile(`${MODELS_DIR}/late.gguf`, 1024);
@@ -353,7 +353,7 @@ describe('StorageSettingsScreen', () => {
     const view = renderStorage();
 
     // While scanning, "Scanning..." should appear
-    expect(await view.findByText(/Scanning/)).toBeTruthy();
+    expect(await view.findByText(/Looking/)).toBeTruthy();
 
     await act(async () => { answerRead?.(); });
     await scanned(view);
