@@ -21,6 +21,9 @@ export interface SearchFieldProps {
  * The app's one search field (Chats, Projects, Models): the composer's look, a rounded field with a
  * hairline edge and a magnifier, the edge turning emerald while you type.
  */
+// A 44 pt frame around the 16 pt clear glyph, pulled back so the field keeps its height.
+const CLEAR_FRAME = { width: 44, height: 44, margin: -14, alignItems: 'center' as const, justifyContent: 'center' as const };
+
 export const SearchField: React.FC<SearchFieldProps> = ({ value, onChangeText, placeholder, clearLabel = 'Clear search', onSubmitEditing, testID, style }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -48,7 +51,7 @@ export const SearchField: React.FC<SearchFieldProps> = ({ value, onChangeText, p
         testID={testID}
       />
       {value ? (
-        <TouchableOpacity onPress={() => onChangeText('')} accessibilityRole="button" accessibilityLabel={clearLabel} hitSlop={SPACING.sm}>
+        <TouchableOpacity onPress={() => onChangeText('')} accessibilityRole="button" accessibilityLabel={clearLabel} style={CLEAR_FRAME}>
           <Icon name="x" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       ) : null}
