@@ -28,6 +28,12 @@ export interface OutstandingDownloadSources {
   voice?: DownloadItem[];
   /** Search (embedding) rows; only their `active` rows count. */
   search?: DownloadItem[];
+  /**
+   * False while the voice and transcription models on disk are still unread. Until then a leftover
+   * failed row for one cannot be told from a real one, so voice rows wait (hand test 48: two stale
+   * Whisper rows showed for two seconds, then vanished).
+   */
+  voiceKnown?: boolean;
 }
 
 /**
@@ -42,7 +48,8 @@ export function outstandingDownloadItems(sources: OutstandingDownloadSources): D
   const started = Object.values(sources.downloads)
     .filter(e => e.status !== 'completed' && e.status !== 'cancelled')
     .map(entryToActiveItem)
-    .filter(notDownloaded);
+    .filter(notDownloaded)
+    .filter(item => sources.voiceKnown !== false || (item.modelType !== 'stt' && item.modelType !== 'tts'));
   // Queued starts: skip any already started or already downloaded.
   const startedKeys = new Set(started.map(i => i.modelKey));
   const queued = (sources.queued ?? []).filter(

@@ -101,6 +101,8 @@ async function deleteItem(item: DownloadItem): Promise<void> {
 
 export interface VoiceDownloadItems {
   voiceItems: DownloadItem[];
+  /** True once the voice and transcription models on disk have been read. */
+  voiceLoaded: boolean;
   refreshVoiceItems: () => Promise<void>;
   /** Build the confirm-delete alert for a tts/stt item; deletes + refreshes on confirm. */
   buildDeleteAlert: (item: DownloadItem) => AlertState;
@@ -108,6 +110,8 @@ export interface VoiceDownloadItems {
 
 export function useVoiceDownloadItems(onAlertClose: () => void): VoiceDownloadItems {
   const [voiceItems, setVoiceItems] = useState<DownloadItem[]>([]);
+  // False until the disk has been read once: before that, "no Whisper models" is unknown, not true.
+  const [voiceLoaded, setVoiceLoaded] = useState(false);
   // Re-derives a new array reference whenever a Whisper model finishes
   // downloading or is deleted (downloadModel/deleteModelById/refreshPresentModels
   // all replace it). Subscribing here keeps the Download Manager in sync within
@@ -116,6 +120,7 @@ export function useVoiceDownloadItems(onAlertClose: () => void): VoiceDownloadIt
 
   const refreshVoiceItems = useCallback(async () => {
     setVoiceItems(await loadItems());
+    setVoiceLoaded(true);
   }, []);
 
   useEffect(() => { refreshVoiceItems(); }, [refreshVoiceItems, presentModelIds]);
@@ -151,5 +156,5 @@ export function useVoiceDownloadItems(onAlertClose: () => void): VoiceDownloadIt
     );
   }, [onAlertClose, refreshVoiceItems]);
 
-  return { voiceItems, refreshVoiceItems, buildDeleteAlert };
+  return { voiceItems, voiceLoaded, refreshVoiceItems, buildDeleteAlert };
 }

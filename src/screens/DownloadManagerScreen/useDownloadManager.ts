@@ -96,7 +96,7 @@ export function useDownloadManager(): UseDownloadManagerResult {
   const searchItems = useSearchDownloadItems();
 
   // Voice (TTS) + transcription (STT) downloaded models, loaded from disk.
-  const { voiceItems, buildDeleteAlert: buildVoiceDeleteAlert } =
+  const { voiceItems, voiceLoaded, buildDeleteAlert: buildVoiceDeleteAlert } =
     useVoiceDownloadItems(() => setAlertState(hideAlert()));
 
   // Inject the UI-coupled image cancel/retry into the image provider so control ops
@@ -169,6 +169,7 @@ export function useDownloadManager(): UseDownloadManagerResult {
     queued: queuedItems,
     voice: voiceItems,
     search: searchItems,
+    voiceKnown: voiceLoaded,
   });
 
   const totalStorageUsed = completedItems.reduce(
