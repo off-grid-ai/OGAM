@@ -279,3 +279,9 @@ Pass: Projects folder glyphs and 24px list gutter, bare voice-mode glyph, Downlo
 1. A late Stop tap never starts the mic (grace to 1.2 s).
 2. Projects header: 24px gutter, no slab.
 3. Device information on the field, 24px, ranges that do not overlap.
+
+## Supervisor 01:10 — hand test 18 (build 19, head about 4bb803587)
+Pass: Projects and Chats headers on the field at 24px, the new Chats/Projects search (hairline, emerald focus, filters), bare Models toolbar and glyph + word capabilities, Remote servers without "USE", Device information. Fail: a Stop tap 1.0–1.3 s after it left still started recording; Models search keeps a grey edge and no magnifier; Storage and Gallery headers still slabs (fixed after this build, `d09bed742`); Choose models shows five emerald marks; a "32" pill; 16px download icons on the picks.
+1. Late Stop: a longer grace (2 s).
+2. One search field for Chats, Projects and Models.
+3. Choose models: one emerald mark; picks' download targets 44px.
