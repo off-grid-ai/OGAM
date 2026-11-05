@@ -64,6 +64,7 @@ import {
 import { useDocumentTurnStatusStore } from '../../services/documents/progressStore';
 import { shownMessages } from '../../utils/chatThread';
 import { hasSearchableKnowledge, toolsForTurn } from '../../services/documents/searchableKnowledge';
+import { resolveSystemPrompt } from '../../utils/systemPrompt';
 type SetState<T> = Dispatch<SetStateAction<T>>;
 const FALLBACK_RECENT_MESSAGE_COUNT = 2;
 
@@ -765,10 +766,7 @@ function resolveToolsAndPrompt(
   // The user enables KB search explicitly when they want it.
   const enabledTools = canUseTools ? deps.settings.enabledTools || [] : [];
 
-  const rawPrompt =
-    project?.systemPrompt ||
-    deps.settings.systemPrompt ||
-    APP_CONFIG.defaultSystemPrompt;
+  const rawPrompt = resolveSystemPrompt(project?.systemPrompt, deps.settings.systemPrompt);
   return { enabledTools, rawPrompt, localToolSupport };
 }
 export async function startGenerationFn(

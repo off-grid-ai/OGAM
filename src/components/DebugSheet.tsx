@@ -9,6 +9,7 @@ import { useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING, APP_CONFIG } from '../constants';
 import { DebugInfo, Project, Conversation } from '../types';
+import { resolveSystemPrompt } from '../utils/systemPrompt';
 
 interface DebugSheetProps {
   visible: boolean;
@@ -104,7 +105,7 @@ export const DebugSheet: React.FC<DebugSheetProps> = ({
           <Text style={styles.debugSectionTitle}>System Prompt</Text>
           <View style={styles.debugCodeBlock}>
             <Text style={styles.debugCode} selectable>
-              {debugInfo?.systemPrompt || settings.systemPrompt || APP_CONFIG.defaultSystemPrompt}
+              {resolveSystemPrompt(debugInfo?.systemPrompt, settings.systemPrompt)}
             </Text>
           </View>
         </View>
