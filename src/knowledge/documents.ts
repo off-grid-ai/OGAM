@@ -94,7 +94,7 @@ export async function extractDocument(sourceId: string, opts: RunOptions = {}): 
     const texts = await pdfExtractPages(P.original(doc.hash), start, PAGES_PER_FILE);
     if (!texts.length) throw new Error(`The PDF returned no pages at page ${start + 1}.`);
     const rows: PageRow[] = texts.map((text, i) => ({ page: start + i + 1, text }));
-    await atomicWriteText(pagesFile(doc.hash, Math.floor(start / PAGES_PER_FILE) + 1), rows.map((r) => JSON.stringify(r)).join('\n') + '\n');
+    await atomicWriteText(pagesFile(doc.hash, Math.floor(start / PAGES_PER_FILE) + 1), `${rows.map((r) => JSON.stringify(r)).join('\n')  }\n`);
     const unreadable = rows.filter((r) => r.text.replace(/\s/g, '').length < MIN_PAGE_CHARS).map((r) => r.page);
     doc = await patchDocument(sourceId, (d) => {
       d.progress.pagesExtracted = start + texts.length;
@@ -122,7 +122,7 @@ export async function chunkDocument(sourceId: string): Promise<SourceDocument> {
   let buffer: ChunkRecord[] = []; let part = 1; let total = 0;
   const writePart = async () => {
     if (!buffer.length) return;
-    const text = buffer.map((c) => JSON.stringify(c)).join('\n') + '\n';
+    const text = `${buffer.map((c) => JSON.stringify(c)).join('\n')  }\n`;
     const path = chunkFile(doc.hash, part);
     if (!(await RNFS.exists(path)) || (await RNFS.readFile(path, 'utf8')) !== text) await atomicWriteText(path, text);
     total += buffer.length; part++; buffer = [];

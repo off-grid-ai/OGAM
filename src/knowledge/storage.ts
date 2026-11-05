@@ -56,8 +56,7 @@ export const P = {
 
 /** Two characters of an id/hash pick the shard. Ids made here start with hex, so shards spread evenly. */
 export const shardOf = (id: string): string => {
-  const hex = (id.replace(/[^0-9a-f]/gi, '') + '00').slice(0, 2).toLowerCase();
-  return hex;
+  return (`${id.replace(/[^0-9a-f]/gi, '')  }00`).slice(0, 2).toLowerCase();
 };
 
 export const nowIso = (): string => new Date().toISOString().replace(/\.\d{3}Z$/, (m) => m); // keeps milliseconds: still valid ISO 8601 UTC
