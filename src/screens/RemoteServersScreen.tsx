@@ -59,9 +59,8 @@ export const RemoteServersScreen: React.FC = () => {
   );
   const updateSettings = useAppStore(s => s.updateSettings);
   const savedScanKinds = useAppStore(s => s.settings.remoteScanKinds);
-  const scanKinds = savedScanKinds?.length
-    ? savedScanKinds
-    : SCAN_KINDS.map(item => item.kind);
+  // Unset means every kind; an empty list is a choice (all off), so it stays empty.
+  const scanKinds = savedScanKinds ?? SCAN_KINDS.map(item => item.kind);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanNote, setScanNote] = useState<string | null>(null);
@@ -102,6 +101,8 @@ export const RemoteServersScreen: React.FC = () => {
   useEffect(() => () => scanAbort.current?.abort(), []);
 
   const handleScanNetwork = useCallback(async () => {
+    // Discovery treats no kinds as every kind, so nothing chosen must mean no scan (auto-discover too).
+    if (scanKinds.length === 0) return;
     const abort = new AbortController();
     scanAbort.current = abort;
     setIsScanning(true);
@@ -257,12 +258,14 @@ export const RemoteServersScreen: React.FC = () => {
                 testID={`scan-kind-${item.kind}`}
                 accessibilityLabel={`Scan for ${item.label}`}
                 value={scanKinds.includes(item.kind)}
-                disabled={isScanning || (scanKinds.length === 1 && scanKinds.includes(item.kind))}
+                // The last one on is not greyed out (it read as broken, hand test 31): turning it off
+                // leaves nothing to scan for, and Scan network says so instead.
+                disabled={isScanning}
                 onValueChange={enabled => {
                   const next = enabled
                     ? [...scanKinds, item.kind]
                     : scanKinds.filter(kind => kind !== item.kind);
-                  if (next.length > 0) updateSettings({ remoteScanKinds: next });
+                  updateSettings({ remoteScanKinds: next });
                 }}
               />
             </View>
@@ -287,6 +290,7 @@ export const RemoteServersScreen: React.FC = () => {
             <Button
               title="Scan network"
               onPress={handleScanNetwork}
+              disabled={scanKinds.length === 0}
               size="small"
               testID="scan-network"
               icon={<Icon name="wifi" size={14} color={theme.colors.textSecondary} />}
@@ -311,6 +315,9 @@ export const RemoteServersScreen: React.FC = () => {
               {scanFound === 0 ? 'None found yet' : `${scanFound} found`} · {scanProgress.total > 0 ? Math.round((scanProgress.completed / scanProgress.total) * 100) : 0}% checked
             </Text>
           </View>
+        ) : null}
+        {!isScanning && scanKinds.length === 0 ? (
+          <Text style={styles.scanNote}>Turn on one server type to scan for it.</Text>
         ) : null}
         {!isScanning && scanNote ? (
           <Text style={styles.scanNote}>{scanNote}</Text>
