@@ -68,20 +68,21 @@ export function readExercises(text: string): unknown[] {
   try { const v = JSON.parse(m[0]); return Array.isArray(v) ? v : []; } catch { return []; }
 }
 
+const isStrs = (v: unknown, min = 1) => Array.isArray(v) && v.length >= min;
+const FORMS: Record<string, (x: any) => boolean> = {
+  mcq: (x) => isStrs(x.choices, 2) && Number.isInteger(x.answer) && x.answer >= 0 && x.answer < x.choices.length,
+  truefalse: (x) => typeof x.answer === 'boolean',
+  fill: (x) => isStrs(x.answers),
+  calc: (x) => typeof x.answer === 'number' && Number.isFinite(x.answer),
+  order: (x) => isStrs(x.items, 2),
+  match: (x) => isStrs(x.pairs, 2) && x.pairs.every((p: unknown) => Array.isArray(p) && p.length === 2),
+  table: (x) => isStrs(x.rows) && x.rows.every((r: any) => typeof r?.label === 'string'),
+  short: (x) => isStrs(x.keyTerms),
+  testlet: (x) => typeof x.stem === 'string' && isStrs(x.items) && x.items.every(wellFormed),
+};
 function wellFormed(x: any): x is Exercise {
   if (!x || typeof x !== 'object' || typeof x.prompt !== 'string' || !x.prompt.trim()) return false;
-  switch (x.kind) {
-    case 'mcq': return Array.isArray(x.choices) && x.choices.length >= 2 && Number.isInteger(x.answer) && x.answer >= 0 && x.answer < x.choices.length;
-    case 'truefalse': return typeof x.answer === 'boolean';
-    case 'fill': return Array.isArray(x.answers) && x.answers.length > 0;
-    case 'calc': return typeof x.answer === 'number' && Number.isFinite(x.answer);
-    case 'order': return Array.isArray(x.items) && x.items.length >= 2;
-    case 'match': return Array.isArray(x.pairs) && x.pairs.length >= 2 && x.pairs.every((p: unknown) => Array.isArray(p) && p.length === 2);
-    case 'table': return Array.isArray(x.rows) && x.rows.length >= 1 && x.rows.every((r: any) => typeof r?.label === 'string');
-    case 'short': return Array.isArray(x.keyTerms) && x.keyTerms.length > 0;
-    case 'testlet': return typeof x.stem === 'string' && Array.isArray(x.items) && x.items.length > 0 && x.items.every(wellFormed);
-    default: return false;
-  }
+  return !!FORMS[x.kind]?.(x);
 }
 
 /**

@@ -6,7 +6,7 @@ describe('study maths', () => {
     expect(d.mean).toBe(5); expect(d.median).toBe(4.5); expect(d.populationStdev).toBe(2);
   });
   it('runs t tests and a regression with known answers', () => {
-    const t = tTest([5.1, 4.9, 5.6, 5.8, 6.0, 5.2], undefined, 5);
+    const t = tTest([5.1, 4.9, 5.6, 5.8, 6.0, 5.2], undefined, { mu0: 5 });
     expect(t.df).toBe(5); expect(t.p).toBeGreaterThan(0.02); expect(t.p).toBeLessThan(0.1);
     const r = regression([1, 2, 3, 4, 5], [2, 4, 5, 4, 5]);
     expect(r.slope).toBe(0.6); expect(r.intercept).toBe(2.2);

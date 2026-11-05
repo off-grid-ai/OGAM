@@ -50,8 +50,9 @@ export function describe(x: number[]) {
     sampleVariance: x.length > 1 ? round(variance(x)) : null, sampleStdev: x.length > 1 ? round(stdev(x)) : null, populationStdev: round(stdev(x, false)) };
 }
 
-export function tTest(a: number[], b?: number[], mu0 = 0, paired = false) {
-  if (b && paired) { if (a.length !== b.length) throw new Error('Paired samples need equal lengths.'); return tTest(a.map((v, i) => v - b[i]), undefined, 0); }
+export function tTest(a: number[], b?: number[], opts: { mu0?: number; paired?: boolean } = {}) {
+  const mu0 = opts.mu0 ?? 0;
+  if (b && opts.paired) { if (a.length !== b.length) throw new Error('Paired samples need equal lengths.'); return tTest(a.map((v, i) => v - b[i])); }
   if (!b) { const df = a.length - 1; if (df < 1) throw new Error('Need at least 2 values.'); const t = (mean(a) - mu0) / (stdev(a) / Math.sqrt(a.length)); return { kind: 'one-sample', t: round(t), df, p: round(tPValue(t, df)) }; }
   const v1 = variance(a), v2 = variance(b), n1 = a.length, n2 = b.length;
   const se = Math.sqrt(v1 / n1 + v2 / n2);
@@ -102,21 +103,29 @@ export function dateMath(a: { from?: string; to?: string; add_days?: number }) {
   return { weekday: from.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }) };
 }
 
-/** Time value of money: give every input but one (fv, pv, pmt, rate, nper) and it solves the missing value. Rate is per period, pmt at period end. */
-export function tvm(a: { pv?: number; fv?: number; pmt?: number; rate?: number; nper?: number }) {
-  const { pv, fv, pmt, rate, nper } = a;
-  const missing = (['pv', 'fv', 'pmt', 'rate', 'nper'] as const).filter((k) => a[k] === undefined);
-  if (missing.length !== 1) throw new Error('Leave exactly one of pv, fv, pmt, rate, nper out.');
-  const r = rate ?? 0, n = nper ?? 0, P = pmt ?? 0;
-  const fa = r === 0 ? n : ((1 + r) ** n - 1) / r;
-  if (missing[0] === 'fv') return { fv: round(-((pv ?? 0) * (1 + r) ** n + P * fa), 4) };
-  if (missing[0] === 'pv') return { pv: round(-((fv ?? 0) + P * fa) / (1 + r) ** n, 4) };
-  if (missing[0] === 'pmt') return { pmt: round(r === 0 ? -((pv ?? 0) + (fv ?? 0)) / n : -(((pv ?? 0) * (1 + r) ** n + (fv ?? 0)) * r) / ((1 + r) ** n - 1), 4) };
-  if (missing[0] === 'nper') { if (r === 0) return { nper: round(-((pv ?? 0) + (fv ?? 0)) / P, 4) }; return { nper: round(Math.log((P - (fv ?? 0) * r) / (P + (pv ?? 0) * r)) / Math.log(1 + r), 4) }; }
-  let lo = -0.99, hi = 10; const f = (x: number) => (pv ?? 0) * (1 + x) ** n + P * (x === 0 ? n : ((1 + x) ** n - 1) / x) + (fv ?? 0);
+type Tvm = { pv?: number; fv?: number; pmt?: number; rate?: number; nper?: number };
+const annuity = (r: number, n: number) => (r === 0 ? n : ((1 + r) ** n - 1) / r);
+const solveRate = (a: Tvm): number => {
+  const f = (x: number) => (a.pv ?? 0) * (1 + x) ** (a.nper ?? 0) + (a.pmt ?? 0) * annuity(x, a.nper ?? 0) + (a.fv ?? 0);
+  let lo = -0.99, hi = 10;
   if (f(lo) * f(hi) > 0) throw new Error('No rate found for these values.');
   for (let i = 0; i < 200; i++) { const mid = (lo + hi) / 2; if (f(lo) * f(mid) <= 0) hi = mid; else lo = mid; }
-  return { rate: round((lo + hi) / 2, 8) };
+  return (lo + hi) / 2;
+};
+const SOLVERS: Record<string, (a: Required<Pick<Tvm, 'pv' | 'fv' | 'pmt' | 'rate' | 'nper'>>) => number> = {
+  fv: ({ pv, rate: r, nper: n, pmt }) => -(pv * (1 + r) ** n + pmt * annuity(r, n)),
+  pv: ({ fv, rate: r, nper: n, pmt }) => -(fv + pmt * annuity(r, n)) / (1 + r) ** n,
+  pmt: ({ pv, fv, rate: r, nper: n }) => (r === 0 ? -(pv + fv) / n : -((pv * (1 + r) ** n + fv) * r) / ((1 + r) ** n - 1)),
+  nper: ({ pv, fv, rate: r, pmt }) => (r === 0 ? -(pv + fv) / pmt : Math.log((pmt - fv * r) / (pmt + pv * r)) / Math.log(1 + r)),
+};
+/** Time value of money: give every input but one (fv, pv, pmt, rate, nper) and it solves the missing value. Rate is per period, pmt at period end. */
+export function tvm(a: Tvm): Record<string, number> {
+  const missing = (['pv', 'fv', 'pmt', 'rate', 'nper'] as const).filter((k) => a[k] === undefined);
+  if (missing.length !== 1) throw new Error('Leave exactly one of pv, fv, pmt, rate, nper out.');
+  const key = missing[0];
+  if (key === 'rate') return { rate: round(solveRate(a), 8) };
+  const full = { pv: a.pv ?? 0, fv: a.fv ?? 0, pmt: a.pmt ?? 0, rate: a.rate ?? 0, nper: a.nper ?? 0 };
+  return { [key]: round(SOLVERS[key](full), 4) };
 }
 
 export type StudyMathArgs = { action?: string; values?: unknown; x?: unknown; y?: unknown; second?: unknown; mu0?: unknown; paired?: unknown; margin?: unknown; confidence?: unknown;
@@ -127,7 +136,7 @@ export function studyMath(a: StudyMathArgs): string {
   const opt = (v: unknown) => (v === undefined || v === null || v === '' ? undefined : num(v));
   switch (a.action) {
     case 'describe': return JSON.stringify(describe(list(a.values)));
-    case 't_test': return JSON.stringify(tTest(list(a.values), a.second !== undefined && a.second !== '' ? list(a.second) : undefined, opt(a.mu0) ?? 0, a.paired === true || a.paired === 'true'));
+    case 't_test': return JSON.stringify(tTest(list(a.values), a.second !== undefined && a.second !== '' ? list(a.second) : undefined, { mu0: opt(a.mu0) ?? 0, paired: a.paired === true || a.paired === 'true' }));
     case 'regression': return JSON.stringify(regression(list(a.x), list(a.y)));
     case 'sample_size': return JSON.stringify({ n: sampleSize(num(a.margin), opt(a.confidence) ?? 0.95) });
     case 'convert': return JSON.stringify({ value: convertUnits(num(a.value), String(a.from), String(a.to)), unit: a.to });

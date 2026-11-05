@@ -5,7 +5,8 @@ import { exercisePrompt, groundExercises, readExercises, useExerciseStore, type 
 export interface PracticeResult { added: number; dropped: number; reasons: string[] }
 export const ALL_KINDS: Exercise['kind'][] = ['mcq', 'truefalse', 'fill', 'calc', 'order', 'match', 'table', 'short', 'testlet'];
 
-export async function generatePractice(projectId: string, topic: string, kinds: Exercise['kind'][] = ALL_KINDS, count = 8): Promise<PracticeResult> {
+export async function generatePractice(projectId: string, topic: string, opts: { kinds?: Exercise['kind'][]; count?: number } = {}): Promise<PracticeResult> {
+  const kinds = opts.kinds ?? ALL_KINDS; const count = opts.count ?? 8;
   const sources = await gatherSources(projectId, topic);
   if (!sources.length) throw new Error('No material found. Add documents to this project first.');
   const chunks: SourceChunk[] = sources.map((s) => ({ doc: s.doc, section: `part ${s.part}`, text: s.text }));
