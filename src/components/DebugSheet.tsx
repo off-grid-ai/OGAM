@@ -8,7 +8,7 @@ import { AppSheet } from './AppSheet';
 import { useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING, APP_CONFIG } from '../constants';
-import { DebugInfo, Project, Conversation } from '../types';
+import { DebugInfo, Project, Conversation, Message } from '../types';
 import { resolveSystemPrompt } from '../utils/systemPrompt';
 
 interface DebugSheetProps {
@@ -128,27 +128,42 @@ export const DebugSheet: React.FC<DebugSheetProps> = ({
           <Text style={styles.debugSectionTitle}>
             Conversation Messages ({activeConversation?.messages.length || 0})
           </Text>
-          {(activeConversation?.messages || []).map((msg, index) => (
-            <View key={msg.id} style={styles.debugMessage}>
-              <View style={styles.debugMessageHeader}>
-                <Text style={[
-                  styles.debugMessageRole,
-                  msg.role === 'user' ? styles.debugRoleUser : styles.debugRoleAssistant
-                ]}>
-                  {msg.role.toUpperCase()}
-                </Text>
-                <Text style={styles.debugMessageIndex}>#{index + 1}</Text>
-              </View>
-              <Text style={styles.debugMessageContent} numberOfLines={3}>
-                {msg.content}
-              </Text>
-            </View>
-          ))}
+          <ConversationMessages messages={activeConversation?.messages ?? []} styles={styles} />
         </View>
       </ScrollView>
     </AppSheet>
   );
 };
+
+/**
+ * One row per message of the open chat. A component, not an inline map: the chat screen re-renders
+ * DebugSheet on every change (opening the project sheet, each streamed token) while the sheet is
+ * closed, and an inline map built a row for every message each time. AppSheet mounts its children only
+ * while open, so these rows are built only when someone is reading them.
+ */
+const ConversationMessages: React.FC<{
+  messages: Message[];
+  styles: ReturnType<typeof createStyles>;
+}> = ({ messages, styles }) => (
+  <>
+    {messages.map((msg, index) => (
+      <View key={msg.id} style={styles.debugMessage}>
+        <View style={styles.debugMessageHeader}>
+          <Text style={[
+            styles.debugMessageRole,
+            msg.role === 'user' ? styles.debugRoleUser : styles.debugRoleAssistant
+          ]}>
+            {msg.role.toUpperCase()}
+          </Text>
+          <Text style={styles.debugMessageIndex}>#{index + 1}</Text>
+        </View>
+        <Text style={styles.debugMessageContent} numberOfLines={3}>
+          {msg.content}
+        </Text>
+      </View>
+    ))}
+  </>
+);
 
 const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   debugContent: {
