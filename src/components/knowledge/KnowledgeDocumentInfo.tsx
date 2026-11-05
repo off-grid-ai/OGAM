@@ -195,7 +195,9 @@ const createStyles = (colors: ThemeColors) => ({
     marginLeft: 'auto' as const,
   },
   /** A transfer line can be long ("Couldn't sync to iPhone: file too large"); it shares the row. */
+  // A sentence, so Geist, not the Mono of a size label.
   metaTransfer: {
+    ...TYPOGRAPHY.bodySmall,
     marginLeft: 0,
     marginTop: 2,
   },
