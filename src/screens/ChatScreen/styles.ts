@@ -63,11 +63,13 @@ const createHeaderStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     justifyContent: 'center' as const,
     marginLeft: 6,
   },
+  // The glyphs' 44 pt frames are pulled back 7 pt each side, so the gap must cover 14 pt or the
+  // frames overlap (hand test 39: Voice mode over Chat settings by 9 pt).
   headerActions: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    gap: SPACING.xs,
+    gap: 14,
   },
   // Header actions are bare glyphs, as on desktop: no box behind them.
   iconButton: {
