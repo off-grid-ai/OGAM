@@ -42,7 +42,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexShrink: 1,
   },
   denseDescription: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
     marginTop: SPACING.xs,
   },

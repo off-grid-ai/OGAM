@@ -288,7 +288,7 @@ const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textMuted,
   },
   conversationPreview: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
     marginTop: 1,
   },
