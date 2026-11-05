@@ -238,6 +238,16 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   const generationWasActiveRef = useRef(false);
   const userScrolledDuringGenerationRef = useRef(false);
 
+  // Your own message comes into view the moment you send it: a sent message is the one thing you
+  // always want to see, whatever the list was doing (hand test 50: out of view ~5 s, keyboard up).
+  const lastMessage = chat.displayMessages[chat.displayMessages.length - 1];
+  const lastSentId = lastMessage?.role === 'user' ? lastMessage.id : undefined;
+  useEffect(() => {
+    if (!lastSentId) return;
+    userScrolledDuringGenerationRef.current = false;
+    requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: true }));
+  }, [lastSentId, flatListRef]);
+
   // Bottom safe-area for the input footer. We own it here (rather than on the
   // screen's SafeAreaView) so the inset replaces — not stacks on top of — the
   // input's own bottom padding, and collapses while the keyboard is open (the
