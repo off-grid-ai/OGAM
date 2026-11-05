@@ -35,8 +35,8 @@ describe('downloadErrors', () => {
   });
 
   it('falls through to toUserMessage for unhandled statuses like processing', () => {
-    expect(getDownloadStatusLabel('processing')).toBe('Something went wrong while downloading.');
-    expect(getDownloadStatusLabel('completed')).toBe('Something went wrong while downloading.');
+    expect(getDownloadStatusLabel('processing')).toBe('The download stopped before it finished. Try again.');
+    expect(getDownloadStatusLabel('completed')).toBe('The download stopped before it finished. Try again.');
   });
 
   describe('getUserFacingDownloadMessage', () => {
@@ -52,7 +52,7 @@ describe('downloadErrors', () => {
     it('truncates excessively long error strings', () => {
       const longError = 'a'.repeat(200);
       expect(getUserFacingDownloadMessage(longError)).toBe(
-        'Something went wrong while downloading.',
+        'The download stopped before it finished. Try again.',
       );
     });
 
@@ -63,7 +63,7 @@ describe('downloadErrors', () => {
 
     it('returns unknown error when reason and code are empty', () => {
       expect(getUserFacingDownloadMessage(undefined, undefined)).toBe(
-        'Something went wrong while downloading.',
+        'The download stopped before it finished. Try again.',
       );
     });
   });

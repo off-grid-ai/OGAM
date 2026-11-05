@@ -17,7 +17,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   http_416:             'The server could not resume this download. Please retry it.',
   http_429:             'Server is rate-limiting. Please try again later.',
   client_error:         'A client error occurred. Please retry.',
-  unknown_error:        'Something went wrong while downloading.',
+  unknown_error:        'The download stopped before it finished. Try again.',
 };
 
 const MAX_USER_MESSAGE_LEN = 160;
