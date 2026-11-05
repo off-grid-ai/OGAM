@@ -42,6 +42,23 @@ describe('startModelDownload', () => {
     expect(onRegistered).toHaveBeenCalledWith(expect.objectContaining({ id: KEY }));
   });
 
+  it('with nothing selected, selects the model you just downloaded, not an older file first in the list', async () => {
+    // Device, 2026-11-05: the fallback picked downloadedModels[0], which can be the intent classifier.
+    const { useAppStore } = require('../../../src/stores');
+    useAppStore.getState().addDownloadedModel({
+      id: 'bartowski/SmolLM2-135M-Instruct-GGUF/smol.gguf', name: 'SmolLM2', author: 'bartowski',
+      filePath: '/docs/models/smol.gguf', fileName: 'smol.gguf', fileSize: 140_000_000, quantization: 'Q8_0',
+      downloadedAt: new Date().toISOString(),
+    });
+    useAppStore.setState({ activeModelId: null, lastTextModelId: null });
+
+    await startModelDownload(MODEL_ID, file(), { autoSelectIfEmpty: true });
+    await device.settle();
+    await device.finishDownload(device.nativeRows()[0].downloadId, SIZE);
+
+    expect(useAppStore.getState().activeModelId).toBe(KEY);
+  });
+
   it('is a no-op when a download is already active (duplicate guard)', async () => {
     await startModelDownload(MODEL_ID, file(), {});
     await device.settle();

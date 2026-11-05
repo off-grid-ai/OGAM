@@ -170,9 +170,11 @@ export async function startModelDownload(
       useAppStore.getState().addDownloadedModel(model);
       const app = useAppStore.getState();
       if (mayAutoSelect && app.activeModelId === null) {
+        // Your last pick if it is still here, else the model you just downloaded. The first entry
+        // of the list could be any older file, the intent classifier included.
         const selected =
           app.downloadedModels.find(item => item.id === app.lastTextModelId) ??
-          app.downloadedModels[0];
+          app.downloadedModels.find(item => item.id === model.id);
         if (selected) activeModelService.selectTextModel(selected.id);
       }
       useDownloadStore.getState().remove(modelKey);
