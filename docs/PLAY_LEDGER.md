@@ -267,3 +267,9 @@ Pass: Choose models header while loading, card plans with the chosen fill, Back 
 1. Pro outline on the right button (done).
 2. Remaining Mono sentences (Downloads error, Device tiers); Downloading count matches rows.
 3. No boxes: Projects badges, Remote server rows, Models toolbar, header mic; one 24 px gutter.
+
+## Supervisor 00:05 — hand test 16 (build 17, head 57d3dfd05)
+Pass: Pro Active is a plain status; the model sheet hub is one surface; a stopped answer shows "Yamuna" with no raw "**"; Downloads has no "0" count and a Geist error line; Choose models Back returns to Storage. Fail: a late Stop tap lands on the mic that replaces Stop when a reply ends and starts recording (lost behaviour); "Tools it could use" lists raw names (read_wiki_contents, ask_wiki_question); a 2 s bare pause between the hub and the Text sheet; cut quant "Q1_"; Speech reads "Base"; two identical "Bonsai-27B" rows.
+1. A late Stop tap never starts the mic.
+2. Plain names in "Tools it could use".
+3. No gap between the hub and the Text sheet; full quant labels; plain speech name.
