@@ -7,8 +7,10 @@ export const VIEWER_INK = 'rgba(255,255,255,0.88)';
 
 const { width: screenWidth } = Dimensions.get('window');
 export const COLUMN_COUNT = 3;
-const GRID_SPACING = 4;
-const CELL_SIZE = (screenWidth - GRID_SPACING * (COLUMN_COUNT + 1)) / COLUMN_COUNT;
+// The 24 pt screen gutter at the sides, a small gap between tiles.
+const GRID_GUTTER = SPACING.xl;
+const GRID_SPACING = SPACING.sm;
+const CELL_SIZE = (screenWidth - GRID_GUTTER * 2 - GRID_SPACING * (COLUMN_COUNT - 1)) / COLUMN_COUNT;
 
 const createHeaderStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
@@ -83,14 +85,17 @@ const createGridStyles = (colors: ThemeColors) => ({
   genProgressFill: { height: '100%' as const, backgroundColor: colors.primary, borderRadius: 2 },
   genSteps: { ...TYPOGRAPHY.meta, color: colors.textMuted },
   genCancelButton: { padding: SPACING.sm - 2 },
-  gridContainer: { padding: GRID_SPACING },
+  gridContainer: { paddingHorizontal: GRID_GUTTER, paddingTop: SPACING.md, paddingBottom: GRID_GUTTER },
   gridRow: { gap: GRID_SPACING, marginBottom: GRID_SPACING },
   gridItem: {
     width: CELL_SIZE,
     height: CELL_SIZE,
     borderRadius: SPACING.sm,
     overflow: 'hidden' as const,
-    backgroundColor: colors.surfaceLight,
+    // A hairline edge, so a white image is a tile and not a hole in the page (hand test 35).
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
   gridImage: { width: '100%' as const, height: '100%' as const },
   unavailableImage: {
@@ -110,7 +115,8 @@ const createGridStyles = (colors: ThemeColors) => ({
     alignItems: 'flex-end' as const,
     padding: SPACING.sm - 2,
   },
-  selectionOverlaySelected: { backgroundColor: 'rgba(99, 102, 241, 0.25)' },
+  // Chosen is emerald, the one in-use colour, as an edge rather than a tint over the picture.
+  selectionOverlaySelected: { borderWidth: 2, borderColor: colors.primary, borderRadius: SPACING.sm },
   checkbox: {
     width: 22,
     height: 22,

@@ -12,6 +12,7 @@ import { TouchableOpacity } from '../../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import Icon from 'react-native-vector-icons/Feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../../components/AliveScreen';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { CustomAlert, hideAlert, showAlert, type AlertState } from '../../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -125,11 +126,7 @@ export const GalleryScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView
-      testID="gallery-screen"
-      style={styles.container}
-      edges={['top']}
-    >
+    <AliveScreen testID="gallery-screen" style={styles.container}>
       <View style={styles.header}>
         {isSelectMode ? (
           <>
@@ -171,7 +168,6 @@ export const GalleryScreen: React.FC = () => {
               <Icon name="arrow-left" size={24} color={colors.text} />
             </TouchableOpacity>
             <Text style={styles.title}>{screenTitle}</Text>
-            <Text style={styles.countBadge}>{kind === 'images' ? displayImages.length : displayVideos.length}</Text>
             {/* Select mode picks images only, so it is offered on the Images tab alone. */}
             {kind === 'images' && displayImages.length > 0 && (
               <TouchableOpacity
@@ -387,6 +383,6 @@ export const GalleryScreen: React.FC = () => {
         onDelete={handleDelete}
       />
       <CustomAlert {...shownWhere(alertState, !selectedVideo)} onClose={() => setAlertState(hideAlert())} />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
