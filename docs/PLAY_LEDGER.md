@@ -212,3 +212,9 @@ Did not work on the phone: "In use" (the Text list uses the compact card, which 
 - The retry attached WDA without a bundleId and drove an older Off Grid app on the phone (six were installed), so its findings ("Work done", no field, slab New Chat) were from that app, not the dev build. It sent one [test] chat there and pressed Cancel on a memory sheet; nothing deleted. Mac asked to remove the others: only Off Grid AI Debug (ai.offgridmobile.dev) and WDA remain. The loop's supervisor is now pinned to ai.offgridmobile.dev and waits out the start.
 - Slow start: the debug build waits 2 s for Metro, then about 10 s to load its bundle; the rest looks like Sync catching up at boot (Recent showed Oct 29 chats and 1150 for about 70 s). Not proven; needs one start with Sync paused (Mac's setting).
 - Fixed since: Pro licence on the card surface (`30b5ba557`); voice bubble plain titles, email tool "Writing the email", nine stale tests (`2555affba`).
+
+## Supervisor 20:13 — hand test 7 (dev app, start about 30 s)
+Pass: "In use" on Models, Storage "Measuring…", no vision projector orphaned, readable sources, Security copy. Found: Storage listed a Gemma MTP head and a split model's second part as orphaned (fixed `cf4f4364a`, test fails on old code); Chats rows show no kind icon; Home Recent repeats titles ("You: [test] Find…"); a question with no answer offers no retry; "Searched the web" twice; five emerald source links.
+1. Storage orphans: every file a model owns → done.
+2. Kind icon on Chats rows; the same-title rule on Home; a retry for an unanswered question.
+3. One "Searched the web" line; plain tools line; grey sources.
