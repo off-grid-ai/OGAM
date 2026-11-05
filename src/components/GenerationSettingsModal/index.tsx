@@ -74,7 +74,7 @@ export const GenerationSettingsModal: React.FC<
     >
       {performanceStats.lastTokensPerSecond > 0 && (
         <View style={styles.statsBar}>
-          <Text style={styles.statsLabel}>Last Generation:</Text>
+          <Text style={styles.statsLabel}>Last reply</Text>
           <Text style={styles.statsValue}>
             {performanceStats.lastTokensPerSecond.toFixed(1)} tok/s
           </Text>
@@ -207,7 +207,7 @@ export const GenerationSettingsModal: React.FC<
         )}
 
         <TouchableOpacity style={styles.resetButton} onPress={resetSettings}>
-          <Text style={styles.resetButtonText}>Reset to Defaults</Text>
+          <Text style={styles.resetButtonText}>Reset to defaults</Text>
         </TouchableOpacity>
 
         <View style={styles.bottomPadding} />

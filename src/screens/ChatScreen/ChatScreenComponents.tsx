@@ -41,7 +41,7 @@ export const NoModelScreen: React.FC<{
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerLeft}>
-          <Text style={styles.headerTitle}>New Chat</Text>
+          <Text style={styles.headerTitle}>New chat</Text>
         </View>
         <View style={styles.headerActions} />
       </View>
@@ -108,7 +108,7 @@ export const ChatHeader: React.FC<{
       </TouchableOpacity>
       <View style={styles.headerLeft}>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          {activeConversation?.title || 'New Chat'}
+          {activeConversation?.title || 'New chat'}
         </Text>
         <View style={styles.headerSubtitleRow}>
           <TouchableOpacity style={styles.modelSelector} onPress={onOpenModels} testID="model-selector">

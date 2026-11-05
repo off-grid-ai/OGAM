@@ -340,7 +340,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               >
                 <Icon name="grid" size={18} color={colors.textSecondary} />
                 <View style={styles.galleryCardInfo}>
-                  <Text style={styles.galleryCardTitle}>Image Gallery</Text>
+                  <Text style={styles.galleryCardTitle}>Gallery</Text>
                   <Text style={styles.galleryCardMeta}>
                     {generatedImages.length} images · {generatedVideos.length}{' '}
                     videos

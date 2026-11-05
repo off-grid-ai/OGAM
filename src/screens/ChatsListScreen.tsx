@@ -368,7 +368,7 @@ export const ChatsListScreen: React.FC = () => {
           {hasModels && (
             <AnimatedListItem index={3} staggerMs={60} trigger={focusTrigger} hapticType="impactLight" style={styles.emptyButton} onPress={handleNewChat}>
               <Icon name="plus" size={18} color={colors.primary} />
-              <Text style={styles.emptyButtonText}>New Chat</Text>
+              <Text style={styles.emptyButtonText}>New chat</Text>
             </AnimatedListItem>
           )}
         </View>
