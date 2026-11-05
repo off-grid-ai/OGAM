@@ -25,7 +25,6 @@ import { KnowledgeBaseSection } from './ProjectDetailKnowledgeBaseSection';
 import { openDocumentPage } from '../components/ChatDocumentsSheet';
 import { formatWhen } from '../utils/localTime';
 import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
-import { PROJECT_DELETE_FALLBACK_REASON } from '../stores/projectDeleteOutcome';
 import { byRecentActivity } from '../utils/conversationOrdering';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
 
@@ -46,7 +45,6 @@ export const ProjectDetailScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
 
   const project = useProjectStore(state => state.projects.find(p => p.id === projectId));
-  const deleteProject = useProjectStore(state => state.deleteProject);
   const conversations = useChatStore(state => state.conversations);
   const deleteConversation = useChatStore(state => state.deleteConversation);
   const setActiveConversation = useChatStore(state => state.setActiveConversation);
@@ -96,35 +94,6 @@ export const ProjectDetailScreen: React.FC = () => {
         projectId,
       });
     }
-  };
-
-  const handleDeleteProject = () => {
-    setAlertState(
-      showAlert(
-        'Delete Project',
-        `Delete "${project?.name}"? This will not delete the chats associated with this project.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: async () => {
-              const outcome = await deleteProject(projectId);
-              if (outcome.ok) {
-                navigation.goBack();
-                return;
-              }
-              setAlertState(
-                showAlert(
-                  'Project Not Deleted',
-                  outcome.reason || PROJECT_DELETE_FALLBACK_REASON,
-                ),
-              );
-            },
-          },
-        ],
-      ),
-    );
   };
 
   const handleDeleteChat = (conversation: Conversation) => {
@@ -339,17 +308,6 @@ export const ProjectDetailScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Delete Project Button */}
-      <View style={styles.footer}>
-        <Button
-          title="Delete project"
-          variant="ghost"
-          size="medium"
-          onPress={handleDeleteProject}
-          icon={<Icon name="trash-2" size={16} color={colors.textMuted} />}
-          textStyle={{ color: colors.textSecondary }}
-        />
-      </View>
       <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
     </AliveScreen>
   );

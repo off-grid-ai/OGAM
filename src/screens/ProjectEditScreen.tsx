@@ -6,6 +6,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
 } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
 import { AliveScreen } from '../components/AliveScreen';
@@ -16,6 +17,9 @@ import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useProjectStore } from '../stores';
+import { PROJECT_DELETE_FALLBACK_REASON } from '../stores/projectDeleteOutcome';
+import { Button } from '../components/Button';
+import Icon from 'react-native-vector-icons/Feather';
 import { RootStackParamList } from '../navigation/types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'ProjectEdit'>;
@@ -31,6 +35,32 @@ export const ProjectEditScreen: React.FC = () => {
 
   const { getProject, createProject, updateProject } = useProjectStore();
   const existingProject = projectId ? getProject(projectId) : null;
+  const deleteProject = useProjectStore(state => state.deleteProject);
+  const confirmDelete = () => {
+    if (!projectId) return;
+    setAlertState(
+      showAlert(
+        'Delete Project',
+        `Delete "${existingProject?.name}"? This will not delete the chats associated with this project.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              const outcome = await deleteProject(projectId);
+              if (outcome.ok) {
+                // Back past the deleted project's own screen to the list.
+                navigation.pop(2);
+                return;
+              }
+              setAlertState(showAlert('Project Not Deleted', outcome.reason || PROJECT_DELETE_FALLBACK_REASON));
+            },
+          },
+        ],
+      ),
+    );
+  };
 
 
   const [formData, setFormData] = useState({
@@ -142,6 +172,21 @@ export const ProjectEditScreen: React.FC = () => {
             Tip: Be specific about what you want the AI to do, how it should respond, and any context it needs.
           </Text>
 
+          {existingProject && (
+            // Deleting lives here, behind Edit, not at the foot of the project where the tab bar sits
+            // on every other screen (a tap meant for the tabs landed on it, hand test 20). It still asks.
+            <Button
+              title="Delete project"
+              variant="ghost"
+              size="small"
+              onPress={confirmDelete}
+              icon={<Icon name="trash-2" size={16} color={colors.textMuted} />}
+              textStyle={{ color: colors.textSecondary }}
+              style={styles.deleteButton}
+              testID="project-edit-delete"
+            />
+          )}
+
           <View style={styles.bottomPadding} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -189,7 +234,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     flex: 1,
   },
   contentContainer: {
-    padding: SPACING.lg,
+    padding: SPACING.xl,
     paddingBottom: 100,
   },
   label: {
@@ -204,10 +249,13 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.textSecondary,
     marginBottom: SPACING.sm,
   },
+  // Fields like the app's search and composer: the card surface with a hairline edge.
   input: {
     ...TYPOGRAPHY.body,
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
     padding: SPACING.md,
     color: colors.text,
   },
@@ -222,6 +270,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginTop: SPACING.md,
     lineHeight: 18,
   },
+  deleteButton: { alignSelf: 'flex-start' as const, marginTop: SPACING.xl },
   bottomPadding: {
     height: SPACING.xxl,
   },
