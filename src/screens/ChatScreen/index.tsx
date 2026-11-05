@@ -270,6 +270,7 @@ export const ChatScreen: React.FC = () => {
       imageModelLoaded={chat.imageModelLoaded}
       isStreaming={chat.isStreaming}
       isGeneratingImage={chat.isGeneratingImage}
+      isBusy={chat.isThinking || chat.isCompacting || chat.isGeneratingForThisConversation}
       showGenerationDetails={chat.settings.showGenerationDetails}
       onCopy={chat.handleCopyMessage}
       onRetry={message => {

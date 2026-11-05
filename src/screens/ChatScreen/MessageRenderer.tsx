@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { ChatMessage } from '../../components';
+import { Button, ChatMessage } from '../../components';
 import { ThinkingIndicator } from '../../components/ThinkingIndicator';
 import { SPACING } from '../../constants';
 import { parseModelOutput, prepareMessageForSpeech } from '../../utils/messageContent';
@@ -17,6 +17,8 @@ type MessageRendererProps = {
   imageModelLoaded: boolean;
   isStreaming: boolean;
   isGeneratingImage: boolean;
+  /** Any reply is being made for this chat (loading, thinking, streaming, compacting). */
+  isBusy?: boolean;
   showGenerationDetails: boolean;
   onCopy: (content: string) => void;
   onRetry: (message: Message) => void;
@@ -40,6 +42,7 @@ const MessageRendererInner: React.FC<MessageRendererProps> = props => {
     imageModelLoaded,
     isStreaming,
     isGeneratingImage,
+    isBusy,
     showGenerationDetails,
     onCopy,
     onRetry,
@@ -53,6 +56,30 @@ const MessageRendererInner: React.FC<MessageRendererProps> = props => {
 
   const interfaceMode = useUiModeStore(s => s.interfaceMode);
   const msg = item as Message;
+  // A question left with no answer (the reply failed or was cut off) gets a visible
+  // way to ask again, not only "Resend" behind the message menu.
+  const unanswered =
+    msg.role === 'user' &&
+    index === displayMessagesLength - 1 &&
+    !isStreaming &&
+    !isBusy &&
+    !isGeneratingImage;
+  const withRetry = (node: React.ReactElement) =>
+    unanswered ? (
+      <View>
+        {node}
+        <Button
+          title="Try again"
+          variant="ghost"
+          size="small"
+          onPress={() => onRetry(msg)}
+          style={styles.retry}
+          testID="unanswered-retry"
+        />
+      </View>
+    ) : (
+      node
+    );
   const animateEntry =
     animateLastN > 0 && index >= displayMessagesLength - animateLastN;
   const isStreamingThis =
@@ -93,7 +120,7 @@ const MessageRendererInner: React.FC<MessageRendererProps> = props => {
         </View>
       </View>
     ) : (
-      audioMessage
+      withRetry(audioMessage)
     );
   }
 
@@ -137,7 +164,7 @@ const MessageRendererInner: React.FC<MessageRendererProps> = props => {
       </View>
     </View>
   ) : (
-    message
+    withRetry(message)
   );
 };
 
@@ -145,6 +172,10 @@ const styles = StyleSheet.create({
   remoteStatus: {
     marginLeft: SPACING.xl,
     marginTop: SPACING.md,
+  },
+  retry: {
+    alignSelf: 'flex-end',
+    marginRight: SPACING.lg,
   },
 });
 
@@ -174,6 +205,7 @@ export function messageRendererPropsEqual(
     prev.imageModelLoaded === next.imageModelLoaded &&
     prev.isStreaming === next.isStreaming &&
     prev.isGeneratingImage === next.isGeneratingImage &&
+    prev.isBusy === next.isBusy &&
     prev.showGenerationDetails === next.showGenerationDetails
   );
 }
