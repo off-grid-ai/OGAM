@@ -57,6 +57,7 @@ export const GenerationSettingsModal: React.FC<
   // TTS settings come from the pro audio feature via a slot. Free builds have
   // no TTS section.
   const TtsSection = getSlot(SLOTS.generationSettingsTts);
+  const TtsSummary = getSlot(SLOTS.generationSettingsTtsSummary);
   const VideoSettings = getSlot(SLOTS.generationSettingsVideo);
 
   useEffect(() => {
@@ -167,6 +168,7 @@ export const GenerationSettingsModal: React.FC<
           <>
             <SettingsSectionHeader
               title="Text to speech"
+              summary={TtsSummary ? <TtsSummary /> : null}
               open={ttsSettingsOpen}
               onToggle={() => setTtsSettingsOpen(!ttsSettingsOpen)}
             />

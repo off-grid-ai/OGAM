@@ -89,6 +89,8 @@ export const SLOTS = {
   chatInputModeToggle: 'chatInput.modeToggle',
   /** The "Text to Speech" body in the Chat Settings modal (TTS section). */
   generationSettingsTts: 'generationSettings.tts',
+  /** The closed Text to speech row's value line (Pro owns the voice store). */
+  generationSettingsTtsSummary: 'generationSettings.ttsSummary',
   /** Body of the "Voice" tab on the Models screen (TTS engine model
    *  download/management). The tab itself only appears when this is
    *  registered, so free builds show just Text/Image. */

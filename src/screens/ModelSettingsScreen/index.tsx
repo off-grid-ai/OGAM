@@ -48,6 +48,7 @@ export const ModelSettingsScreen: React.FC = () => {
   // TTS is a pro feature injected via a slot (same as the in-chat generation settings). Free builds have no
   // slot → the section is not shown at all.
   const TtsSection = getSlot(SLOTS.generationSettingsTts);
+  const TtsSummary = getSlot(SLOTS.generationSettingsTtsSummary);
   const VideoSettings = getSlot(SLOTS.generationSettingsVideo);
   const { modelName: sttModelName, isRemote: isRemoteTranscription } =
     useTranscriptionModelSetting();
@@ -172,6 +173,7 @@ export const ModelSettingsScreen: React.FC = () => {
           <>
             <SettingsSectionHeader
               title="Text to speech"
+              summary={TtsSummary ? <TtsSummary /> : null}
               open={ttsOpen}
               onToggle={() => setTtsOpen(!ttsOpen)}
               testID="tts-accordion"

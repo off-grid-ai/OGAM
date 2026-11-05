@@ -8,7 +8,7 @@ import { FONTS, SPACING, TYPOGRAPHY } from '../../constants';
 type Props = {
   title: string;
   /** What the section is set to now, so a closed section still tells you something. */
-  summary?: string | null;
+  summary?: React.ReactNode;
   open: boolean;
   onToggle: () => void;
   testID?: string;
