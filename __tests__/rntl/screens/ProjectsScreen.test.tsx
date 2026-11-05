@@ -97,7 +97,7 @@ describe('ProjectsScreen', () => {
         chats.createConversation('model-1', 'Newer', id);
         const at = { Old: '2026-01-15T10:00:00.000Z', Newer: '2026-02-03T10:00:00.000Z' } as Record<string, string>;
         app.useChatStore.setState({
-          conversations: app.useChatStore.getState().conversations.map((c: { title: string }) => ({ ...c, updatedAt: at[c.title] ?? (c as never as { updatedAt: string }).updatedAt })),
+          conversations: app.useChatStore.getState().conversations.map(c => ({ ...c, updatedAt: at[c.title] ?? c.updatedAt })),
         });
       });
 
