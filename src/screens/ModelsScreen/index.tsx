@@ -330,7 +330,8 @@ const collapsedStyle = StyleSheet.create({
 });
 
 const headerStyles = StyleSheet.create({
-  actions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.lg } // covers the two 44 pt frames' -8 margins, so they never overlap,
+  // Covers the two 44 pt frames' -8 margins, so they never overlap.
+  actions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.lg },
 });
 
 const embeddedStyles = StyleSheet.create({
