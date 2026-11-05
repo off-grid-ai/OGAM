@@ -261,3 +261,9 @@ Pass: Choose models header, Back and Not now return to Storage; solid model shee
 1. Choose models: header while loading, one quiet retry, plans on one surface.
 2. Model sheet hub and remote groups on one surface; no duplicate Selected, no red Deselect.
 3. Downloads: plain names on failed and running rows; one "used" figure.
+
+## Supervisor 23:35 — hand test 15 (build 16, head fda6465d4)
+Pass: Choose models header while loading, card plans with the chosen fill, Back to Storage; "Whisper Tiny (English)" typed Transcription; folder glyph on New chat; Geist sentences on Home, Settings, Models, Remote servers help. Fail: `e759faf53` took the outline off the real Get Pro button, not the Pro Active status (fixed `a7b269f3b`, tests fail on the broken code); Device information tier text cramped Mono in nested boxes; Downloads error line red Mono, "Downloading 0" with 2 rows; Projects letter badges; Remote servers rows boxed; Models toolbar icons and chips boxed; header mic tinted box; 12 px gutters on Choose models and Projects.
+1. Pro outline on the right button (done).
+2. Remaining Mono sentences (Downloads error, Device tiers); Downloading count matches rows.
+3. No boxes: Projects badges, Remote server rows, Models toolbar, header mic; one 24 px gutter.
