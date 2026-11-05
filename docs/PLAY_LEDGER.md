@@ -108,3 +108,9 @@ Each round: expected / found / root cause / change / commit / screenshots.
 - **Home (queue 1):** passes: Geist, filled New Chat, Recent right after it in one surface. Still open: "Text 16" greyed.
 - **New chat (queue 2):** this phone has only an image model selected, so the composer reads "Describe an image…" and the text starters showed; a tap would draw a picture. Fixed at the gate: starters need a text model (`7533d507f`; the new test fails on the old code).
 - **Mac 15:44:** "it doesn't feel like the alive desktop design." Checked against DESIGN_PHILOSOPHY: no living background, no emerald halo, no press/settle motion, boxed cards. Next is the React Native alive layer, Home first. Mockup for Mac: https://claude.ai/artifact/TS748CG4JNdaWPiRmpEAqu (waits for his go).
+
+## Supervisor 15:52
+1. Alive provider on Home: living background, halo on New Chat, press wave, staged entry; Models/Clipboard/Sync/Gallery/feedback into hairline groups that keep every control. Recent subtitles are reading text → Geist, not Mono.
+2. New chat: header names the active model; starters full width; one project mention, not two; the boxed empty icon becomes a soft emerald glow. Reshoot light and dark (the 15:44 shot predates `7533d507f`).
+3. DEVICE_QUEUE 3–13 on the phone, fresh install (13) first.
+- **Mockup risk, acted on:** the Home mockup had dropped the Models collapse chevron, the "Write to us" button, the "Discoverable" sync state and the real latest clipboard item. All four are back in the mockup; the live dot now carries the word "Live".
