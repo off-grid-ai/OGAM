@@ -9,11 +9,10 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.borderLight,
   },
   backButton: {
     padding: SPACING.xs,

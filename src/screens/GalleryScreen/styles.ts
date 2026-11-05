@@ -10,7 +10,7 @@ export const COLUMN_COUNT = 3;
 const GRID_SPACING = 4;
 const CELL_SIZE = (screenWidth - GRID_SPACING * (COLUMN_COUNT + 1)) / COLUMN_COUNT;
 
-const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createHeaderStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -18,12 +18,10 @@ const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-    ...shadows.small,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
     zIndex: 1,
   },
   closeButton: {
@@ -245,7 +243,7 @@ const createVideoStyles = (colors: ThemeColors) => ({
   videoDeleteText: { color: colors.error },
 });
 
-export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   ...createHeaderStyles(colors, shadows),
   ...createGridStyles(colors),
   ...createViewerStyles(colors),

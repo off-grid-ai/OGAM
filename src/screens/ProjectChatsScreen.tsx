@@ -40,12 +40,10 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-    ...shadows.small,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.borderLight,
     zIndex: 1,
   },
   backButton: {

@@ -2,7 +2,7 @@ import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { createAccordionStyles } from '../../components/GenerationSettingsModal/styles';
 
-export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   flex1: { flex: 1 },
   container: {
     flex: 1,
@@ -11,12 +11,10 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-    ...shadows.small,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.borderLight,
     zIndex: 1,
     gap: SPACING.md,
   },
