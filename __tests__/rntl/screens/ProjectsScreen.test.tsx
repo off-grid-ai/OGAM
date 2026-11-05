@@ -31,24 +31,24 @@ describe('ProjectsScreen', () => {
   });
 
   describe('with no projects', () => {
-    it('says there are none yet and offers Create Project', async () => {
+    it('says there are none yet and offers New project', async () => {
       const app = await mountProjectsApp({ noStarterProjects: true });
 
-      expect(app.view.getByText('No Projects Yet')).toBeTruthy();
-      expect(app.view.getByText(/Create a project to organize your chats by topic/)).toBeTruthy();
-      expect(app.view.getByText('Create Project')).toBeTruthy();
+      expect(app.view.getByText('No projects yet')).toBeTruthy();
+      expect(app.view.getByText(/Keep related chats together/)).toBeTruthy();
+      expect(app.view.getByText('New project')).toBeTruthy();
     });
 
-    it('Create Project opens an empty editor, and the saved project replaces the empty state', async () => {
+    it('New project opens an empty editor, and the saved project replaces the empty state', async () => {
       const app = await mountProjectsApp({ noStarterProjects: true });
 
-      app.rtl.fireEvent.press(app.view.getByText('Create Project'));
+      app.rtl.fireEvent.press(app.view.getByText('New project'));
       await app.rtl.waitFor(() => expect(app.route()).toEqual(expect.objectContaining({ name: 'ProjectEdit', params: {} })));
       await app.fillAndSave({ name: 'Code Review', systemPrompt: 'Review code' });
 
       await app.rtl.waitFor(() => expect(app.route()?.name).toBe('ProjectsTab'));
       expect(app.view.getByText('Code Review')).toBeTruthy();
-      expect(app.view.queryByText('No Projects Yet')).toBeNull();
+      expect(app.view.queryByText('No projects yet')).toBeNull();
     });
   });
 
