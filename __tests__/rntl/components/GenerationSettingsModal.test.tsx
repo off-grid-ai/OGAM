@@ -130,7 +130,7 @@ describe('GenerationSettingsModal', () => {
 
   it('shows no performance stats before anything was generated', () => {
     const { queryByText } = render(<GenerationSettingsModal {...defaultProps} />);
-    expect(queryByText('Last Generation:')).toBeNull();
+    expect(queryByText('Last reply')).toBeNull();
   });
 
   it('opens image settings section when tapping "IMAGE GENERATION"', () => {
@@ -189,7 +189,7 @@ describe('GenerationSettingsModal', () => {
     expect(getByText('CPU Threads')).toBeTruthy();
   });
 
-  it('calls the shared reset action when Reset to Defaults is pressed', () => {
+  it('calls the shared reset action when Reset to defaults is pressed', () => {
     const { getByText } = render(
       <GenerationSettingsModal {...defaultProps} />,
     );
@@ -199,7 +199,7 @@ describe('GenerationSettingsModal', () => {
     const defaults = { ...settingsNow() };
     useAppStore.getState().updateSettings({ temperature: 1.6 });
 
-    fireEvent.press(getByText('Reset to Defaults'));
+    fireEvent.press(getByText('Reset to defaults'));
 
     // The shared reset action put every setting back to the app's defaults.
     expect(settingsNow()).toEqual(defaults);
@@ -971,7 +971,7 @@ describe('GenerationSettingsModal performance stats', () => {
     const { GenerationSettingsModal: Modal } = require('../../../src/components/GenerationSettingsModal');
     const { getByText } = rtl.render(FreshReact.createElement(Modal, defaultProps));
 
-    expect(getByText('Last Generation:')).toBeTruthy();
+    expect(getByText('Last reply')).toBeTruthy();
     expect(getByText(`${stats.lastTokenCount} tokens`)).toBeTruthy();
     expect(getByText(/tok\/s$/)).toBeTruthy();
   });

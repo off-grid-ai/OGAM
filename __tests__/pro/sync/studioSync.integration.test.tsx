@@ -198,7 +198,7 @@ describe('Video Studio over Sync', () => {
     // Home › Image Gallery › Videos: Your videos.
     fireEvent.press(ui.getAllByLabelText('Back').pop()!);
     fireEvent.press(await waitFor(() => ui!.getByTestId('home-tab')));
-    fireEvent.press(await waitFor(() => ui!.getByText('Image Gallery')));
+    fireEvent.press(await waitFor(() => ui!.getByText('Gallery')));
     fireEvent.press(await waitFor(() => ui!.getByText(/^Videos \(/)));
     await waitFor(() => expect(ui!.getByTestId('library-grid')).toBeTruthy());
     const film = await waitFor(() => ui!.getByText('Fox in the snow'), { timeout: 15_000 });

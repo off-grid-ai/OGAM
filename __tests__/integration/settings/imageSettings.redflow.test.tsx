@@ -3,7 +3,7 @@
  * GenerationSettingsModal over the REAL appStore (no native leaf, so no harness needed) and asserts
  * what the user sees on the sliders. Deleting/altering the real store logic changes the result.
  *
- * Q12 — "Reset to Defaults" resets only the 7 text params (index.tsx DEFAULT_SETTINGS), never the image
+ * Q12 — "Reset to defaults" resets only the 7 text params (index.tsx DEFAULT_SETTINGS), never the image
  *       ones, so after a reset the Image Size the user sees is unchanged.
  * Q13 (T067) — the two Image-Size surfaces must AGREE on the floor. Device ground truth
  *       (DEVICE_TEST_FINDINGS "Image size — Q1 GUARDED at input", confirmed with the product owner:
@@ -28,7 +28,7 @@ function openImageSettings(view: ReturnType<typeof render>) {
 }
 
 describe('image settings — UI red-flow (assert what the user sees)', () => {
-  it('Q12: "Reset to Defaults" also resets the Image Size the user sees', () => {
+  it('Q12: "Reset to defaults" also resets the Image Size the user sees', () => {
     // Preserve an explicit smaller size until the user resets it.
     useAppStore.getState().updateSettings({ imageWidth: 256, imageHeight: 256 });
 
@@ -36,7 +36,7 @@ describe('image settings — UI red-flow (assert what the user sees)', () => {
     openImageSettings(view);
     expect(view.getByText('256x256')).toBeTruthy();
 
-    fireEvent.press(view.getByText('Reset to Defaults'));
+    fireEvent.press(view.getByText('Reset to defaults'));
 
     expect(view.queryByText('256x256')).toBeNull();
     expect(view.queryByText('512x512')).not.toBeNull();

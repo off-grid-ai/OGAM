@@ -102,7 +102,7 @@ describe('ChatsListScreen', () => {
       expect(view.getByText('New')).toBeTruthy();
       expect(view.getByText('No Chats Yet')).toBeTruthy();
       expect(view.getByText('Download a model from the Models tab to start chatting.')).toBeTruthy();
-      expect(view.queryByText('New Chat')).toBeNull();
+      expect(view.queryByText('New chat')).toBeNull();
     });
 
     it('New with no model opens the model sheet instead of a chat', async () => {
@@ -136,13 +136,13 @@ describe('ChatsListScreen', () => {
       await app.rtl.waitFor(() => expect(view.getByText('TEXT MODEL')).toBeTruthy());
     });
 
-    it('with a chosen model, invites a new chat, and New Chat opens an empty chat', async () => {
+    it('with a chosen model, invites a new chat, and New chat opens an empty chat', async () => {
       const app = boot();
       app.model(true);
       const { view, route, params } = app.render();
 
       expect(view.getByText('Start a new conversation to begin chatting with your local AI.')).toBeTruthy();
-      app.rtl.fireEvent.press(view.getByText('New Chat'));
+      app.rtl.fireEvent.press(view.getByText('New chat'));
       await app.rtl.waitFor(() => expect(route()).toBe('Chat'));
       expect(params()).toEqual({});
     });

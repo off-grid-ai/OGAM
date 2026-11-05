@@ -141,7 +141,7 @@ async function send(app: App, prompt: string, answer: string) {
 }
 
 async function openGallery(app: App) {
-  app.rtl.fireEvent.press(app.view.getByText('Image Gallery'));
+  app.rtl.fireEvent.press(app.view.getByText('Gallery'));
   await app.view.findByTestId('gallery-screen');
 }
 

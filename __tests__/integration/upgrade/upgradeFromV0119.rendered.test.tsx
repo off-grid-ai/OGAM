@@ -440,7 +440,7 @@ describe('an install upgraded from v0.0.119', () => {
     noCrash();
 
     // ── Gallery: the image v0.0.119 drew is there, and it loads from its file.
-    fireEvent.press(view.getByText('Image Gallery'));
+    fireEvent.press(view.getByText('Gallery'));
     await view.findByTestId('gallery-screen', {}, WAIT);
     const tile = await view.findByTestId(`gallery-image-${IMAGE_ID}`, {}, WAIT);
     expect(tile.props.accessibilityLabel).toBe(`Generated image loading: ${IMAGE_PROMPT}`);
