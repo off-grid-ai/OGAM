@@ -3,7 +3,8 @@ import type { ThemeColors, ThemeShadows } from '../../theme';
 import { FONTS, TYPOGRAPHY, SPACING } from '../../constants';
 import { Platform } from 'react-native';
 
-export const PILL_ICON_SIZE = 32;
+// 44 pt: the frame is what a screen reader and a thumb measure, not hitSlop (hand test 37).
+export const PILL_ICON_SIZE = 44;
 export const ANIM_DURATION_IN = 180;
 export const ANIM_DURATION_OUT = 200;
 
