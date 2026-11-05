@@ -168,7 +168,7 @@ describe('DownloadManagerScreen', () => {
     expect(view.getByTestId('dm-active-failed-count')).toBeTruthy();
   });
 
-  it('a failed download that received nothing shows no empty bar; one that got halfway keeps its bar', async () => {
+  it('a failed download that received nothing shows no empty bar or byte count; one that got halfway keeps both', async () => {
     const { StyleSheet } = require('react-native');
     const bars = (view: Manager['view']) =>
       view.UNSAFE_root.findAll((node: any) => typeof node.type === 'string' && /%$/.test(String(StyleSheet.flatten(node.props.style)?.width ?? '')))
@@ -179,12 +179,15 @@ describe('DownloadManagerScreen', () => {
     );
     expect(none.view.getByText('model-file')).toBeTruthy();
     expect(bars(none.view)).toEqual([]);
+    // Nor an empty "0 B / 4 KB" line: nothing arrived, so there is nothing to count.
+    expect(none.view.queryByText(/ \/ 4 KB$/)).toBeNull();
     none.view.unmount();
 
     const half = await openManager(ctx =>
       nativeDownloads(ctx, [runningText({ status: 'failed', reason: 'unknown_error', bytesDownloaded: 2048, totalBytes: 4096, combinedTotalBytes: 4096 })]),
     );
     expect(bars(half.view)).toEqual(['50%']);
+    expect(half.view.getByText(/ \/ 4 KB$/)).toBeTruthy();
   });
 
   it('surfaces a start held behind the three-download cap as queued (clock icon, no "Queued" word)', async () => {
