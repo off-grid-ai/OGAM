@@ -464,3 +464,11 @@ Appearance in the list, Home bell and Gallery row, Gallery Back/Select/tabs, sea
 1. Tab underline floats 6 pt above the line on Models but sits on it in Gallery: indicator bottom 0, scroller flexShrink 0.
 2. Short targets: Your videos Back 28, search clear 17, Chats Select and New 38.
 3. Settings: Appearance's leading sun repeats the Light choice; choices end short of the chevron column; Pro row label says "Pro · active" while the screen says "Lifetime · active".
+
+## Supervisor 10:05 (hand test 45, build at 6d7b280b1) — milestone r12
+
+Badge equals the list (2), tab underline on the line, Your videos Back 44, Appearance icon and alignment, search Clear 44, footer no overlap: pass. Top 3:
+1. Regression: app-wide small-button minHeight 44 drew Chats "New" as a 44 pt slab. Reverted; small buttons need an invisible 44 pt frame around an unchanged pill.
+2. Downloads failed row puts Retry/Delete on their own line with 40 pt of air; footer toggles 29 pt; new-film-go 40.
+3. Dark choice box may overhang the card by 2 pt; Chats search filter lags on 1268 chats.
+Milestone shots: docs/play/r12-milestone/{settings,downloads,chat}-after.png.
