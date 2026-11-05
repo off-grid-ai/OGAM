@@ -60,9 +60,9 @@ describe('ChatMessage — Tool message rendering', () => {
       expect(getByText(expectedLabel)).toBeTruthy();
     });
 
-    it('shows "Searched: query (no results)" for empty web_search', () => {
+    it('says plainly that an empty web_search found nothing', () => {
       const { getByText } = renderToolResult('web_search', 'No results found for "quantum computing"');
-      expect(getByText(/Searched: "quantum computing" \(no results\)/)).toBeTruthy();
+      expect(getByText('Searched the web for "quantum computing": nothing found')).toBeTruthy();
     });
 
     it('shows "Calculated" label when calculator has no content', () => {

@@ -52,7 +52,7 @@ function getToolLabel(toolName?: string, content?: string): string {
       const queryMatch = content
         ? /^No results found for "([^"]+)"/.exec(content)
         : null;
-      if (queryMatch) return `Searched: "${queryMatch[1]}" (no results)`;
+      if (queryMatch) return `Searched the web for "${queryMatch[1]}": nothing found`;
       return 'Searched the web';
     }
     case 'search_knowledge_base': {
