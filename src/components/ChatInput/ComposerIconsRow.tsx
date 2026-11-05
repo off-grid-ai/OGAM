@@ -43,6 +43,8 @@ export const ComposerIconsRow: React.FC<ComposerIconsRowProps> = ({
       <TouchableOpacity
         ref={attachTriggerRef}
         testID="attach-button"
+        accessibilityRole="button"
+        accessibilityLabel="Attach"
         style={styles.pillIconButton}
         onPress={onAttachPress}
         disabled={disabled}

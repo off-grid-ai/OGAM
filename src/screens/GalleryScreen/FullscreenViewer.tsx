@@ -47,9 +47,11 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.viewerContainer}>
+      {/* Modal to a screen reader too, so the grid behind it is not read out (hand test 35). */}
+      <View style={styles.viewerContainer} accessibilityViewIsModal>
         <TouchableOpacity
           style={styles.viewerBackdrop}
+          accessible={false}
           activeOpacity={1}
           onPress={onClose}
         />
@@ -121,15 +123,15 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({
                   iconColor={VIEWER_INK}
                 />
               )}
-              <TouchableOpacity style={styles.viewerButton} onPress={() => onSave(image)}>
+              <TouchableOpacity style={styles.viewerButton} onPress={() => onSave(image)} accessibilityRole="button" accessibilityLabel="Save">
                 <Icon name="download" size={22} color={VIEWER_INK} />
                 <Text style={styles.viewerButtonText}>Save</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.viewerButton} onPress={() => onDelete(image)}>
+              <TouchableOpacity style={styles.viewerButton} onPress={() => onDelete(image)} accessibilityRole="button" accessibilityLabel="Delete">
                 <Icon name="trash-2" size={22} color={VIEWER_INK} />
                 <Text style={styles.viewerButtonText}>Delete</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.viewerButton} onPress={onClose}>
+              <TouchableOpacity style={styles.viewerButton} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close">
                 <Icon name="x" size={22} color={VIEWER_INK} />
                 <Text style={styles.viewerButtonText}>Close</Text>
               </TouchableOpacity>
