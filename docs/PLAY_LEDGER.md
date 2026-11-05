@@ -443,3 +443,10 @@ Overlaps fixed (meta row, Downloads), picks Download 44. Top 3:
 1. The icon a11y default (335ee9931) does nothing on Fabric: RCTParagraphComponentView reads its own text when its label is empty. Revert; label grouped rows explicitly (Settings, Home, Gallery).
 2. Reply footer now 123 pt under an 81 pt reply: not calm. One compact row, 44 pt frames pulled back.
 3. Appearance buttons glyph-named, 35x31; Home "New chat" 39 pt; Downloads badge vs list.
+
+## Supervisor 08:20 (hand test 42, build at 303353a97)
+
+Settings labels and Appearance radios work; footer quieter (91 pt). Top 3:
+1. Regression: the meta row's 44 pt frames (Speak, Message actions) overlap Tools by 11 pt.
+2. Glyph labels left: SettingsAnalyticsSection rows, Home swipe delete (""), gallery card and feedback on Home, Models search icon.
+3. Appearance selected cell is emerald on a grey track: reads as a second main action; make it monochrome. Gallery Back, Select, tabs under 44.
