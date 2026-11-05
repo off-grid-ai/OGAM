@@ -92,3 +92,4 @@ Each round: expected / found / root cause / change / commit / screenshots.
 2. Remote Servers and Models as one grouped surface, with the active row marked by an "In use" label or a check, not a border. Server action targets overlapped (fixed `37085e27d`). Faded incompatible text may fail contrast.
 3. The alive layer: composer focus glow done (`720784899`); press, entrance and the living background are next.
 - **Download auto-select:** with nothing selected, a finished download now selects that model, not `downloadedModels[0]`, which could be the classifier. The test fails on the old code (`8dd6aff94`).
+- **Remote Servers:** one grouped list; the active row is marked by its emerald "In use" label, not a border (`b97e1ff18`).
