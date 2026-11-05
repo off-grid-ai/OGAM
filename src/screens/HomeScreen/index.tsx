@@ -1,7 +1,8 @@
 import { videoModelDisplayName } from '../../utils/modelHelpers';
 import { useAppStore } from '../../stores/appStore';
 import React from 'react';
-import { View, Text, ScrollView, Image } from 'react-native';
+import { View, Text, Image } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { TouchableOpacity } from '../../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
@@ -15,6 +16,7 @@ import {
 import { AnimatedEntry } from '../../components/AnimatedEntry';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { LivingField } from '../../components/LivingField';
+import { useAliveScrollRef } from '../../components/AliveProvider';
 import { ListGroup } from '../../components/ListGroup';
 import { useFocusTrigger } from '../../hooks/useFocusTrigger';
 import Icon from 'react-native-vector-icons/Feather';
@@ -72,6 +74,7 @@ function homeModelLabels(input: {
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const focusTrigger = useFocusTrigger();
   const isFocused = useIsFocused();
+  const scrollRef = useAliveScrollRef();
   const { colors, isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
   const SyncHomeCard = useSlot(SLOTS.homeSyncCard);
@@ -193,7 +196,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View testID="home-screen" style={styles.scrollView}>
         <LivingField active={isFocused} />
-        <ScrollView
+        <Animated.ScrollView
+          ref={scrollRef}
           {...SCROLL_DEPTH_PROPS}
           style={styles.scrollView}
           contentContainerStyle={styles.content}
@@ -310,24 +314,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </AnimatedEntry>
           )}
 
-          {/* Clipboard and Sync come after your recent work: status, not the next step. */}
-          {SyncHomeCard ? (
-            <AnimatedEntry index={3} staggerMs={50} trigger={focusTrigger}>
-              <SyncHomeCard
-                isUnlocked={isSyncUnlocked}
-                onOpen={openSync}
-                onOpenClipboard={() =>
-                  isSyncUnlocked
-                    ? navigation.navigate('Clipboard' as never)
-                    : navigation.navigate('ProDetail')
-                }
-              />
-            </AnimatedEntry>
-          ) : null}
-
-          {/* Gallery and feedback: one surface with a hairline, not two boxes. */}
+          {/* After your recent work: Clipboard, Sync, Gallery and feedback in one surface with hairlines
+              (desktop's one surface), not a stack of boxes. Pro's Sync slot renders bare rows. */}
           <AnimatedEntry index={5} staggerMs={50} trigger={focusTrigger}>
             <ListGroup style={styles.linksGroup}>
+              {SyncHomeCard ? (
+                <SyncHomeCard
+                  isUnlocked={isSyncUnlocked}
+                  onOpen={openSync}
+                  onOpenClipboard={() =>
+                    isSyncUnlocked
+                      ? navigation.navigate('Clipboard' as never)
+                      : navigation.navigate('ProDetail')
+                  }
+                />
+              ) : null}
               <AnimatedPressable
                 style={styles.galleryCard}
                 onPress={() => navigation.navigate('Gallery')}
@@ -373,7 +374,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
           {/* Model Stats row removed — the per-type counts now live in the Models
               card above, and the chat count sits next to "See all". */}
-        </ScrollView>
+        </Animated.ScrollView>
       </View>
 
       <ModelSelectorModal
