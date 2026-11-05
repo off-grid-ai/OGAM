@@ -162,10 +162,11 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     letterSpacing: 0.5,
   },
   proDesc: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
+  // The same 28 pt icon column and 12 pt gap as every other Settings row, so the Pro row lines up.
   proIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 28,
+    height: 28,
+    borderRadius: 6,
     backgroundColor: 'transparent',
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
@@ -177,6 +178,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     padding: SPACING.md,
     gap: SPACING.md,
     marginBottom: SPACING.lg,
+    minHeight: 44,
   },
   proNavTitle: {
     ...TYPOGRAPHY.body,
