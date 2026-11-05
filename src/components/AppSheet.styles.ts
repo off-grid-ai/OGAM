@@ -34,7 +34,8 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     justifyContent: 'space-between' as const,
     alignItems: 'center' as const,
     paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
+    // The 24 pt gutter every screen uses, so a sheet's title lines up with its rows.
+    paddingHorizontal: SPACING.xl,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },

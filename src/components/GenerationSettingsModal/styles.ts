@@ -173,7 +173,6 @@ const createActionStyles = (colors: ThemeColors) => ({
     alignSelf: 'flex-start' as const,
     minHeight: 44,
     justifyContent: 'center' as const,
-    paddingHorizontal: SPACING.xs,
   },
   resetButtonText: {
     ...TYPOGRAPHY.body,
