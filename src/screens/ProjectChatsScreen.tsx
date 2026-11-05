@@ -25,6 +25,7 @@ import { Conversation } from '../types';
 import { RootStackParamList } from '../navigation/types';
 import { byRecentActivity } from '../utils/conversationOrdering';
 import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
+import { chatTitle } from '../utils/chatTitle';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProjectChats'>;
@@ -238,7 +239,7 @@ export const ProjectChatsScreen: React.FC = () => {
           <View style={styles.chatContent}>
             <View style={styles.chatHeader}>
               <Text style={styles.chatTitle} numberOfLines={1}>
-                {item.title}
+                {chatTitle(item.title)}
               </Text>
               <Text style={styles.chatDate}>{formatDate(item.updatedAt)}</Text>
             </View>

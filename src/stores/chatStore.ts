@@ -33,6 +33,7 @@ import {
 } from '../services/sync/mutation';
 import { appendPlaceFor, neighbourMessage, versionParent } from '../utils/chatThread';
 import { itemDeleted, track } from '../services/analytics/analytics';
+import { NEW_CHAT_TITLE, isUntitledChat } from '../utils/chatTitle';
 
 /**
  * The portion of the in-progress stream that is safe to SPEAK in voice mode —
@@ -59,18 +60,13 @@ function speakableStreamingAnswer(
     ? ''
     : streamingMessage;
 }
-/** An untitled chat's name, in sentence case like every other label. */
-const NEW_CHAT_TITLE = 'New chat';
-/** Earlier builds (and other devices on Sync) named it this; it still means "untitled". */
-const UNTITLED = new Set([NEW_CHAT_TITLE, 'New Conversation']);
-
 /** Derive conversation title from the first user message. */
 function deriveTitle(
   currentTitle: string,
   role: string,
   content: string,
 ): string {
-  if (!UNTITLED.has(currentTitle) || role !== 'user')
+  if (!isUntitledChat(currentTitle) || role !== 'user')
     return currentTitle;
   const truncated = content.slice(0, 50);
   return content.length > 50 ? `${truncated}...` : truncated;

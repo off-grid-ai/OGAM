@@ -27,6 +27,7 @@ import { formatWhen } from '../utils/localTime';
 import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
 import { byRecentActivity } from '../utils/conversationOrdering';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
+import { chatTitle } from '../utils/chatTitle';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProjectDetail'>;
@@ -145,7 +146,7 @@ export const ProjectDetailScreen: React.FC = () => {
           <View style={styles.chatContent}>
             <View style={styles.chatHeader}>
               <Text style={styles.chatTitle} numberOfLines={1}>
-                {item.title}
+                {chatTitle(item.title)}
               </Text>
               <Text style={styles.chatDate}>{formatDate(item.updatedAt)}</Text>
             </View>

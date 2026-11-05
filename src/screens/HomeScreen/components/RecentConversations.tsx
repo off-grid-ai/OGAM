@@ -11,6 +11,7 @@ import { Conversation } from '../../../types';
 import { formatWhen } from '../../../utils/localTime';
 import { useConversationPreviewLine } from '../../../hooks/useConversationPreviewLine';
 import { rowPreview } from '../../../utils/chatRow';
+import { chatTitle } from '../../../utils/chatTitle';
 
 const formatDate = (dateStr: string): string => formatWhen(dateStr);
 
@@ -75,12 +76,12 @@ export const RecentConversations: React.FC<Props> = ({
             testID={`conversation-item-${index}`}
             // In words: grouped, the row also read its chevron glyph aloud (hand test 41).
             accessibilityRole="button"
-            accessibilityLabel={`${conv.title}, ${formatDate(conv.updatedAt)}`}
+            accessibilityLabel={`${chatTitle(conv.title)}, ${formatDate(conv.updatedAt)}`}
           >
             <View style={styles.conversationInfo}>
               <View style={styles.conversationHeader}>
                 <Text style={styles.conversationTitle} numberOfLines={1}>
-                  {conv.title}
+                  {chatTitle(conv.title)}
                 </Text>
                 <Text style={styles.conversationMeta}>
                   {formatDate(conv.updatedAt)}

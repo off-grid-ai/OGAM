@@ -36,6 +36,7 @@ import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine'
 import { useIsFocused } from '@react-navigation/native';
 import { LivingField } from '../components/LivingField';
 import { chatKind, rowPreview } from '../utils/chatRow';
+import { chatTitle } from '../utils/chatTitle';
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'ChatsTab'>,
   NativeStackNavigationProp<RootStackParamList>
@@ -241,7 +242,7 @@ export const ChatsListScreen: React.FC = () => {
           ) : null}
           <View style={styles.chatText}>
             <Text style={styles.chatTitle} numberOfLines={1}>
-              {item.title}
+              {chatTitle(item.title)}
             </Text>
             {preview ? (
               <Text style={styles.chatPreview} numberOfLines={1}>

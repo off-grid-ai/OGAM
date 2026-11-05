@@ -14,6 +14,7 @@ import { AnimatedEntry } from '../../components/AnimatedEntry';
 import { createStyles } from './styles';
 import { useTheme } from '../../theme';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import { chatTitle, NEW_CHAT_TITLE } from '../../utils/chatTitle';
 
 type StylesType = ReturnType<typeof createStyles>;
 type ColorsType = ReturnType<typeof useTheme>['colors'];
@@ -108,7 +109,7 @@ export const ChatHeader: React.FC<{
       </TouchableOpacity>
       <View style={styles.headerLeft}>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          {activeConversation?.title || 'New chat'}
+          {chatTitle(activeConversation?.title || NEW_CHAT_TITLE)}
         </Text>
         <View style={styles.headerSubtitleRow}>
           <TouchableOpacity
