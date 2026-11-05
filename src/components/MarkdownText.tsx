@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from 'react';
 import { Linking, Text } from 'react-native';
 import Markdown, { MarkdownIt } from '@ronradtke/react-native-markdown-display';
 import { preprocessChatMarkdown, safeChatExternalUrl } from '@offgrid/sync';
+import { plainMath } from '../utils/visibleMessages';
 import { useTheme } from '../theme';
 import type { ThemeColors } from '../theme';
 import { TYPOGRAPHY, SPACING, FONTS } from '../constants';
@@ -14,7 +15,20 @@ const chatMarkdownParser = MarkdownIt({ typographer: true, linkify: true });
  * Lookahead handles chains like 5*5*5*5 in a single pass.
  */
 export function preprocessMarkdown(text: string): string {
-  return dropDanglingBold(preprocessChatMarkdown(text));
+  return dropDanglingBold(plainMathSpans(preprocessChatMarkdown(text)));
+}
+
+/**
+ * Maths a small model writes as LaTeX ("$$37 \\times 43$$") reads as text ("37 × 43"): only spans
+ * between $ signs that hold a LaTeX command are touched, so a price like "$5" stays as it is.
+ */
+export function plainMathSpans(text: string): string {
+  const spanHasLatex = (inner: string) => /\\[a-zA-Z]/.test(inner);
+  return text
+    .replace(/\$\$([^$]+)\$\$/g, (whole, inner: string) => (spanHasLatex(inner) ? plainMath(inner) : whole))
+    .replace(/\$([^$\n]+)\$/g, (whole, inner: string) => (spanHasLatex(inner) ? plainMath(inner) : whole))
+    .replace(/\\\((.+?)\\\)/g, (_whole, inner: string) => plainMath(inner))
+    .replace(/\\\[([\s\S]+?)\\\]/g, (_whole, inner: string) => plainMath(inner));
 }
 
 /**
