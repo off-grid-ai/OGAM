@@ -112,7 +112,7 @@ describe('ModelSettingsScreen', () => {
 
     it('shows section help text for text generation when expanded', () => {
       const { getByText } = renderWithSections('text');
-      expect(getByText(/Configure LLM behavior/)).toBeTruthy();
+      expect(getByText(/How replies sound/)).toBeTruthy();
     });
   });
 
@@ -418,7 +418,7 @@ describe('ModelSettingsScreen', () => {
 
     it('shows Temperature description', () => {
       const { getByText } = renderWithSections('text');
-      expect(getByText(/Higher = more creative/)).toBeTruthy();
+      expect(getByText(/Higher gives more varied replies/)).toBeTruthy();
     });
 
     it('shows Max Tokens slider label and default value', () => {
@@ -449,7 +449,7 @@ describe('ModelSettingsScreen', () => {
 
     it('shows context length description', () => {
       const { getByText } = renderWithSections('text');
-      expect(getByText(/KV cache size/)).toBeTruthy();
+      expect(getByText(/How much of the chat it remembers/)).toBeTruthy();
     });
   });
 

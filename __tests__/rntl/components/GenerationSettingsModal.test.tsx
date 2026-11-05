@@ -517,8 +517,8 @@ describe('GenerationSettingsModal', () => {
 
     fireEvent.press(getByText('TEXT GENERATION'));
 
-    expect(getByText('Higher = more creative, Lower = more focused')).toBeTruthy();
-    expect(getByText('Maximum length of generated response')).toBeTruthy();
+    expect(getByText('Higher gives more varied replies. Lower keeps them focused.')).toBeTruthy();
+    expect(getByText('How long one reply can get.')).toBeTruthy();
   });
 
   // ============================================================================

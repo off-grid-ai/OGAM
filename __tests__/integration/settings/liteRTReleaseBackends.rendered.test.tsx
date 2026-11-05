@@ -26,7 +26,7 @@ it('offers only CPU and GPU in Chat and Model Settings even with a saved NPU pre
   // Acceleration is a General control on both surfaces.
   fireEvent.press(chat.getByTestId('modal-general-accordion'));
   expect(chat.queryByText('NPU (Beta)')).toBeNull();
-  expect(chat.getByText(/Run on GPU via OpenCL/)).toBeTruthy();
+  expect(chat.getByText(/Faster answers on most phones/)).toBeTruthy();
   fireEvent.press(chat.getByText('CPU'));
   expect(useAppStore.getState().settings.liteRTBackend).toBe('cpu');
   chat.unmount();

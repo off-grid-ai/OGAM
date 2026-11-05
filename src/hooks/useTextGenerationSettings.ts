@@ -130,7 +130,7 @@ export function useTextGenerationSettings() {
   const toolCalls = {
     key: 'maxToolCalls',
     label: 'Maximum Tool Calls',
-    description: 'Emergency limit for tool calls in one response',
+    description: 'The most tools one reply can use.',
     value: maxToolCalls,
     min: MIN_MAX_TOOL_CALLS,
     max: MAX_MAX_TOOL_CALLS,
@@ -144,7 +144,7 @@ export function useTextGenerationSettings() {
     temperature: {
       key: 'temperature',
       label: 'Temperature',
-      description: 'Higher = more creative, Lower = more focused',
+      description: 'Higher gives more varied replies. Lower keeps them focused.',
       value: temperature,
       min: 0,
       max: 2,
@@ -155,7 +155,7 @@ export function useTextGenerationSettings() {
     maxTokens: {
       key: 'maxTokens',
       label: 'Max Tokens',
-      description: 'Maximum length of generated response',
+      description: 'How long one reply can get.',
       // Clamped for DISPLAY too: a value stored by an older build (or before the context came
       // down) must not render past the end of its own slider.
       value: Math.min(maxTokens, maxTokensCeiling(contextLength)),
@@ -173,7 +173,7 @@ export function useTextGenerationSettings() {
     contextLength: {
       key: 'contextLength',
       label: 'Context Length',
-      description: 'KV cache size - larger uses more RAM (requires reload)',
+      description: 'How much of the chat it remembers. More uses more memory and reloads the model.',
       value: Math.min(contextLength, llamaModelLimit),
       min: 512,
       max: llamaModelLimit,
@@ -196,7 +196,7 @@ export function useTextGenerationSettings() {
     topP: {
       key: 'topP',
       label: 'Top P',
-      description: 'Nucleus sampling threshold',
+      description: 'Lower keeps word choice safe. Higher allows rarer words.',
       value: topP,
       min: 0.1,
       max: 1,
@@ -207,7 +207,7 @@ export function useTextGenerationSettings() {
     repeatPenalty: {
       key: 'repeatPenalty',
       label: 'Repeat Penalty',
-      description: 'Penalize repeated tokens',
+      description: 'Higher stops it repeating itself.',
       value: repeatPenalty,
       min: 1,
       max: 2,
@@ -221,7 +221,7 @@ export function useTextGenerationSettings() {
     temperature: {
       key: 'liteRTTemperature',
       label: 'Temperature',
-      description: 'Higher = more creative, Lower = more focused',
+      description: 'Higher gives more varied replies. Lower keeps them focused.',
       value: liteRTTemperature,
       min: 0,
       max: 2,
@@ -233,7 +233,7 @@ export function useTextGenerationSettings() {
       key: 'liteRTMaxTokens',
       label: 'Max Tokens',
       description:
-        `Total token budget - input, history, and output combined (requires reload). ${liteRTLimitDescription}${liteRTLoadedDescription}`,
+        `How much it reads and writes in one chat. Changing it reloads the model. ${liteRTLimitDescription}${liteRTLoadedDescription}`,
       value: Math.min(liteRTMaxTokens, liteRTModelLimit),
       min: Math.min(512, liteRTModelLimit),
       max: liteRTModelLimit,
@@ -248,7 +248,7 @@ export function useTextGenerationSettings() {
     topP: {
       key: 'liteRTTopP',
       label: 'Top P',
-      description: 'Nucleus sampling threshold',
+      description: 'Lower keeps word choice safe. Higher allows rarer words.',
       value: liteRTTopP,
       min: 0.1,
       max: 1,

@@ -75,8 +75,8 @@ export const BackendSelector: React.FC = () => {
   const current = settings.inferenceBackend ?? defaultBackend;
   const showLayers = current !== INFERENCE_BACKENDS.CPU;
   const layersLabel = current === INFERENCE_BACKENDS.HTP
-    ? 'Text NPU Layers'
-    : current === INFERENCE_BACKENDS.METAL ? 'Text GPU Layers (Metal)' : 'Text GPU Layers (OpenCL)';
+    ? 'NPU layers'
+    : 'GPU layers';
 
   return (
     <SegmentedRow<InferenceBackend>
@@ -106,8 +106,8 @@ export const BackendSelector: React.FC = () => {
 // ─── LiteRT Acceleration ─────────────────────────────────────────────────────
 
 const LITERT_BACKENDS: { id: LiteRTBackend; label: string; desc: string }[] = [
-  { id: 'gpu', label: 'GPU', desc: 'Run on GPU via OpenCL. Best performance on most devices.' },
-  { id: 'cpu', label: 'CPU', desc: 'Always available. Use for battery savings or thermal relief.' },
+  { id: 'gpu', label: 'GPU', desc: 'Faster answers on most phones.' },
+  { id: 'cpu', label: 'CPU', desc: 'Always works. Easier on battery and heat.' },
 ];
 
 export const LiteRTBackendSelector: React.FC = () => {

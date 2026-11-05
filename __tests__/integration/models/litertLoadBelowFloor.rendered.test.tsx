@@ -23,7 +23,7 @@ const assistantLines = (h: Harness) => renderedThread(h.view!).filter(line => li
 function loadedContextShown(h: Harness): string | null {
   const { TextGenerationSection } = require('../../../src/components/GenerationSettingsModal/TextGenerationSection');
   const s = h.renderAside(h.React.createElement(TextGenerationSection, {}));
-  if (!s.queryByText(/Total token budget/)) h.rtl.fireEvent.press(s.getByTestId('modal-text-advanced-toggle'));
+  if (!s.queryByText(/How much it reads and writes/)) h.rtl.fireEvent.press(s.getByTestId('modal-text-advanced-toggle'));
   const match = s.queryByText(/Loaded context: \d+ tokens/);
   const text = match ? String(([] as unknown[]).concat(match.props.children).join('')) : null;
   s.unmount();
