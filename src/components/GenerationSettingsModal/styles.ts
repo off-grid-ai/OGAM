@@ -167,13 +167,12 @@ const createActionStyles = (colors: ThemeColors) => ({
     color: colors.textSecondary,
     flex: 1,
   },
+  // A quiet text action sized to its words, not a full-width slab.
   resetButton: {
-    backgroundColor: colors.surface,
-    padding: SPACING.md,
-    borderRadius: 8,
-    alignItems: 'center' as const,
-    borderWidth: 1,
-    borderColor: colors.border,
+    alignSelf: 'flex-start' as const,
+    minHeight: 44,
+    justifyContent: 'center' as const,
+    paddingHorizontal: SPACING.xs,
   },
   resetButtonText: {
     ...TYPOGRAPHY.body,

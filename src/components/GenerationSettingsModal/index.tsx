@@ -206,7 +206,7 @@ export const GenerationSettingsModal: React.FC<
           </>
         )}
 
-        <TouchableOpacity style={styles.resetButton} onPress={resetSettings}>
+        <TouchableOpacity style={styles.resetButton} onPress={resetSettings} accessibilityRole="button">
           <Text style={styles.resetButtonText}>Reset to defaults</Text>
         </TouchableOpacity>
 
