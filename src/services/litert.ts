@@ -27,6 +27,12 @@ const EVENT_COMPLETE  = 'litert_complete';
 const EVENT_ERROR     = 'litert_error';
 const EVENT_TOOL_CALL = 'litert_tool_call';
 
+/** Context a summary session keeps free of transcript: the instruction and the summary it writes. */
+const SUMMARY_SESSION_RESERVE_TOKENS = 260;
+
+/** The smallest context native gives a load it can afford (LiteRTModule's MIN_TOKEN_FLOOR). */
+const MIN_USABLE_CONTEXT_TOKENS = 1024;
+
 type LiteRTBackend = 'cpu' | 'gpu' | 'npu';
 
 /**
@@ -147,6 +153,15 @@ class LiteRTService {
         if (res.maxNumTokens !== this.configuredMaxTokens) {
           logger.log(TAG, `loadModel — native clamped context ${this.configuredMaxTokens} → ${res.maxNumTokens}`);
         }
+        // Native clamps below its own floor only when free RAM cannot hold even the weights; it leaves
+        // refusing to the caller, and a Load Anyway has no other guard. A context that small cannot fit
+        // the system prompt, so every turn would fail as "context full".
+        if (res.maxNumTokens < maxNumTokens && res.maxNumTokens < MIN_USABLE_CONTEXT_TOKENS) {
+          await LiteRTModule.unloadModel().catch(() => {});
+          throw new Error(
+            'Not enough free memory to run this model right now. Close other apps or choose a smaller model.',
+          );
+        }
         this.configuredMaxTokens = res.maxNumTokens;
       }
       this.activeBackend = actualBackend as LiteRTBackend;
@@ -251,11 +266,9 @@ class LiteRTService {
         history,
         systemPrompt,
         maxTokens,
-        cumulativeTokens: this.cumulativeTokens,
         conversationId,
-        activeConversationId: this.activeConversationId,
         opts: { samplerConfig: opts?.samplerConfig, tools: opts?.tools },
-        summarize: (fullHistory) => this.summarizeCurrentSession(systemPrompt, fullHistory, opts?.tools),
+        summarize: (droppedTurns) => this.summarizeTurns(droppedTurns, maxTokens),
         resetFn: (p, o) => this.resetConversation(p, o),
       });
       this.activeConversationId = conversationId;
@@ -283,19 +296,24 @@ class LiteRTService {
     }
   }
 
-  private async summarizeCurrentSession(
-    systemPrompt: string,
-    fullHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
-    tools?: any[],
+  /**
+   * Summarizes the turns compaction drops, as a transcript sent to an empty session. Those turns are
+   * what overflowed the context, so they are never replayed as history; the oldest text is cut first
+   * when even the transcript would not fit beside the instruction and the summary.
+   */
+  private async summarizeTurns(
+    droppedTurns: Array<{ role: 'user' | 'assistant'; content: string }>,
+    maxTokens: number,
   ): Promise<string | null> {
-    // Strip <|think|> prefix so the summary call doesn't burn context on reasoning
-    const noThinkPrompt = systemPrompt.replace(/^<\|think\|>\n?/, '');
-    await this.resetConversation(noThinkPrompt, { tools, history: fullHistory });
+    const transcriptChars = Math.max(0, maxTokens - SUMMARY_SESSION_RESERVE_TOKENS) * 4;
+    const transcript = droppedTurns.map(turn => `${turn.role}: ${turn.content}`).join('\n').slice(-transcriptChars);
+    await this.resetConversation('', { history: [] });
     return summarizeSession(
       (text, cbs) => this.sendMessage(text, cbs),
       this.isAvailable() && this.loaded,
       (h) => { const p = this.currentToolCallHandler; this.currentToolCallHandler = h; return () => { this.currentToolCallHandler = p; }; },
       () => this.stopGeneration(),
+      transcript,
     );
   }
 

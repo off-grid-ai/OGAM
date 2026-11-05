@@ -9,6 +9,7 @@ import { hardwareService } from '../../services';
 import { isRemoteTextModelActive } from '../../services/engines';
 import { createStyles } from './styles';
 import { ImageQualityBasicSliders, ImageQualityAdvancedSliders } from './ImageQualitySliders';
+import { ChatStyleSetting } from '../MediaStyles/ChatStyleSetting';
 
 // ─── Auto-Detect Method Toggle ────────────────────────────────────────────────
 
@@ -177,6 +178,7 @@ export const ImageGenerationSection: React.FC = () => {
 
   return (
     <View style={styles.sectionCard}>
+      <ChatStyleSetting kind="image" />
       {/* Image Generation Mode Toggle */}
       <View style={styles.modeToggleContainer}>
         <View style={styles.modeToggleInfo}>

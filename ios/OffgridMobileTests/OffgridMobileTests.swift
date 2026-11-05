@@ -744,6 +744,23 @@ final class DownloadManagerModuleTests: XCTestCase {
 
   override func setUp() {
     super.setUp()
+    // Every module shares one URLSession, so a download an earlier test started is still in it, and
+    // a new module restores it in the background: "initially empty" then saw 1 now and then.
+    // A cancelled task stays listed until it winds down, so wait until the session holds none.
+    if let session = DownloadManagerModule.sharedSession {
+      let deadline = Date().addingTimeInterval(5)
+      var remaining = 1
+      while remaining > 0 && Date() < deadline {
+        let listed = expectation(description: "session tasks listed")
+        session.getAllTasks { tasks in
+          tasks.forEach { $0.cancel() }
+          remaining = tasks.count
+          listed.fulfill()
+        }
+        wait(for: [listed], timeout: 2)
+        if remaining > 0 { Thread.sleep(forTimeInterval: 0.1) }
+      }
+    }
     // Clear persisted download state keys so tests start clean.
     UserDefaults.standard.removeObject(forKey: "ai.offgridmobile.activeDownloads")
     UserDefaults.standard.removeObject(forKey: "ai.offgridmobile.downloadmanager.state.v1")

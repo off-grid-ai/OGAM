@@ -6,16 +6,24 @@ import RNFS from 'react-native-fs';
 import logger from '../../utils/logger';
 import { activeEmbeddingModel, type EmbeddingModelSelection } from '../documents/store';
 import { modelResidencyManager } from '../modelResidency';
+import { ensureNativeLogCapture, resetNativeLogCapture, recentNativeLog, loadFailure } from '../llmNativeLog';
 
 const EMBEDDING_MODEL_FILENAME = 'all-MiniLM-L6-v2-Q8_0.gguf';
 const EMBEDDING_DIMENSION = 384;
 const EMBEDDING_CTX_SIZE = 512;
+/**
+ * The shortest model context that holds a document chunk (@offgrid/rag CHUNK_CHARS: ~220 tokens, sized for
+ * MiniLM's 256). XLM-R encoders such as Multilingual MiniLM declare 511 (514 positions less the padding
+ * offset), so a 512 floor refused them.
+ */
+const EMBEDDING_MIN_CTX = 256;
 /** Residency key for the embedding model so it's accounted for in the RAM budget. */
 const EMBEDDING_RESIDENT_KEY = 'embedding';
 /** Approx resident footprint: ~25MB Q8 weights + working set + 512-ctx KV. */
 const EMBEDDING_RESIDENT_MB = 90;
 /** Bound the native init so a stalled load can't hold the global load lock. */
 const EMBEDDING_LOAD_TIMEOUT_MS = 30000;
+const LOAD_TIMEOUT_MESSAGE = 'Embedding model load timed out';
 
 /**
  * Race `promise` against a timeout. On timeout the returned promise rejects so the
@@ -65,7 +73,7 @@ class EmbeddingService {
 
   /** Caller holds the operation lock; failure leaves the stored model and index intact. */
   async withRebuildModel<T>(model: EmbeddingModelSelection | null, rebuild: () => Promise<T>): Promise<T> {
-    if (this.loading) await this.loading;
+    if (this.loading !== null) await this.loading;
     await this.unload();
     this.pendingModel = model;
     try {
@@ -195,6 +203,7 @@ class EmbeddingService {
       ? `${RNFS.DocumentDirectoryPath}/embedding-${sha256(selected.id)}.gguf`
       : await this.ensureModelCopied();
     this.dimension = EMBEDDING_DIMENSION;
+    let contextSize = EMBEDDING_CTX_SIZE;
     if (selected) {
       const info = await loadLlamaModelInfo(modelPath) as Record<string, unknown>;
       // Only bidirectional BERT encoders with sentence pooling fit this runtime contract.
@@ -202,14 +211,15 @@ class EmbeddingService {
       const contextLength = Number(info['bert.context_length']);
       if (info['general.architecture'] !== 'bert' ||
           ![1, 2].includes(Number(info['bert.pooling_type'])) ||
-          !Number.isInteger(contextLength) || contextLength < EMBEDDING_CTX_SIZE) {
-        throw new Error('Unsupported embedding model. Use a BERT GGUF text encoder with mean or CLS pooling and at least 512 tokens.');
+          !Number.isInteger(contextLength) || contextLength < EMBEDDING_MIN_CTX) {
+        throw new Error(`Unsupported embedding model. Use a BERT GGUF text encoder with mean or CLS pooling and at least ${EMBEDDING_MIN_CTX} tokens.`);
       }
       const dimension = Number(info['bert.embedding_length']);
       if (!Number.isInteger(dimension) || dimension < 1) {
         throw new Error('This model has an unsupported embedding size.');
       }
       this.dimension = dimension;
+      contextSize = Math.min(EMBEDDING_CTX_SIZE, contextLength);
     }
     logger.log('[Embedding] Loading embedding model...');
     // Load through the residency manager's global lock so this small RAG model
@@ -226,21 +236,24 @@ class EmbeddingService {
       if (selected && !(await modelResidencyManager.makeRoomFor(spec)).fits) {
         throw new Error('Not enough memory for this embedding model. Choose a smaller model.');
       }
+      // rnllama reports every refused file as "Failed to load model"; llama.cpp's log says why.
+      ensureNativeLogCapture();
+      resetNativeLogCapture();
       // The GPU when Fastest settings found it correct here; the CPU otherwise, and as the fallback.
       const open = (gpuLayers: number) => withTimeout(
         initLlama({
           model: modelPath,
           embedding: true,
           n_gpu_layers: gpuLayers,
-          n_ctx: EMBEDDING_CTX_SIZE,
-          n_batch: EMBEDDING_CTX_SIZE,
+          n_ctx: contextSize,
+          n_batch: contextSize,
           n_threads: 2,
           use_mlock: false,
           use_mmap: true,
         } as any),
         {
           ms: EMBEDDING_LOAD_TIMEOUT_MS,
-          message: 'Embedding model load timed out',
+          message: LOAD_TIMEOUT_MESSAGE,
           onOrphan: (orphan) => { (orphan as LlamaContext)?.release?.().catch(() => {}); },
         },
       );
@@ -249,6 +262,12 @@ class EmbeddingService {
         if (!onGpu) throw error;
         logger.warn('[Embedding] GPU load failed; using the CPU', error);
         return open(0);
+      }).catch(error => {
+        const message = error instanceof Error ? error.message : String(error);
+        // A stalled load says nothing about the file.
+        if (message === LOAD_TIMEOUT_MESSAGE) throw error;
+        const nativeReason = recentNativeLog();
+        throw loadFailure(contextSize, nativeReason ? `${message}\n\nllama.cpp: ${nativeReason}` : message);
       });
       // Register WHILE still holding the global load lock, so the embedding model's
       // footprint counts against the RAM budget atomically with the load. Registering

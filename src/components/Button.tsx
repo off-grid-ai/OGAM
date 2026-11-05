@@ -93,7 +93,7 @@ export const Button: React.FC<ButtonProps> = ({
   );
 };
 
-const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   button: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -101,10 +101,13 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderRadius: 8,
     gap: SPACING.sm,
   },
+  // The screen's main action: lifted on the surface layer with the brand's soft emerald halo
+  // (DESIGN_PHILOSOPHY: "Primary actions carry a soft emerald halo"), not a flat bright outline.
   button_primary: {
-    backgroundColor: 'transparent',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.border,
+    ...shadows.glow,
   },
   button_secondary: {
     backgroundColor: 'transparent',

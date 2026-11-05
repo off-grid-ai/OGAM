@@ -284,18 +284,110 @@ jobs:
         with:
           lookup-only: 'true'
 
-  # One check to require, and the name the single job had: green only when every job above is.
+  # Whether the pull request changes an input of the video runtime builds: stable-diffusion.cpp's
+  # pinned revision, its patches, or the scripts that build it. The same paths as videoRuntimeMoved
+  # in scripts/lib/engines.js. Read from the API, so no checkout is needed.
+  changes:
+    name: video runtime inputs
+    runs-on: ubuntu-latest
+    outputs:
+      video: ${{ steps.files.outputs.video }}
+    steps:
+      - name: List the changed files
+        id: files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          video=false
+          if [ -n "$PR" ]; then
+            gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/files.txt"
+            if grep -Eq '^(scripts/video/|scripts/prepare-video-runtime\.sh$|scripts/build-video-ios\.sh$)' "$RUNNER_TEMP/files.txt"; then video=true; fi
+          fi
+          echo "video=$video" | tee -a "$GITHUB_OUTPUT"
+
+  # The video runtimes built from source, with no cache, on a pull request that changes their inputs:
+  # chiefly the engine bot's stable-diffusion.cpp bump (scripts/merge-engine-pr.js merges it only
+  # when both succeeded). A patch can still apply to a new revision and then fail to compile; the
+  # tests above never build the runtime, and the UAT build found it too late. Other pull requests
+  # skip both jobs and keep using the cache.
+  #
+  # Android: the patched source, shaderc and the Hexagon DSP libraries (in linux/amd64 Docker), then
+  # the app's native libraries for arm64, which compile stable-diffusion.cpp with Vulkan, OpenCL and
+  # Hexagon and link the JNI bridge. Release, as a store build compiles it.
+  video-android:
+    name: video runtime (Android)
+    needs: changes
+    if: ${{ needs.changes.outputs.video == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up the workspace
+        uses: ./.github/actions/setup-mobile
+        with:
+          private-token: ${{ secrets.PRO_SUBMODULE_PAT }}
+
+      - name: Set up the Android build
+        uses: ./.github/actions/setup-android
+        with:
+          video: 'false'
+
+      - name: Prepare the video runtime from source
+        run: bash scripts/prepare-video-runtime.sh --android
+
+      # Space for the native build: the SDK archive, the DSP build tree and the Docker image are only
+      # needed above. The extracted SDK stays: the app's Hexagon stub compiles against its headers.
+      # sudo: the Hexagon build ran as root in Docker and owns its build tree.
+      - name: Free the Hexagon build space
+        run: |
+          sudo rm -rf .video-build/hexagon-sdk.tar.xz .video-build/hexagon-build
+          docker image prune -af
+          df -h .
+
+      - name: Build the native libraries (arm64, release)
+        run: cd android && ./gradlew :app:externalNativeBuildRelease -PreactNativeArchitectures=arm64-v8a
+
+  # iOS: the patched source built into the xcframework for device and simulator, as pod install does.
+  video-ios:
+    name: video runtime (iOS)
+    needs: changes
+    if: ${{ needs.changes.outputs.video == 'true' }}
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build the video runtime from source
+        run: bash scripts/build-video-ios.sh
+
+      - name: Check the framework for each platform
+        run: |
+          for platform in ios-arm64 ios-arm64-simulator; do
+            test -s "native/video/OffgridVideoRuntime.xcframework/$platform/OffgridVideoRuntime.framework/OffgridVideoRuntime"
+          done
+
+  # One check to require, and the name the single job had: green only when every job above is. The
+  # video runtime jobs may be skipped only when the pull request leaves their inputs alone.
   ci:
-    needs: [gates, jest, coverage, android, ios]
+    needs: [gates, jest, coverage, android, ios, changes, video-android, video-ios]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
       - name: Every job passed
         env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
+          RESULTS: ${{ needs.gates.result }} ${{ needs.jest.result }} ${{ needs.coverage.result }} ${{ needs.android.result }} ${{ needs.ios.result }} ${{ needs.changes.result }}
+          VIDEO: ${{ needs.changes.outputs.video }}
+          VIDEO_RESULTS: ${{ needs.video-android.result }} ${{ needs.video-ios.result }}
         run: |
-          echo "$RESULTS"
+          echo "jobs: $RESULTS; video runtime moved: $VIDEO; video builds: $VIDEO_RESULTS"
           for result in $RESULTS; do [ "$result" = success ] || exit 1; done
+          for result in $VIDEO_RESULTS; do
+            [ "$result" = success ] || { [ "$VIDEO" != true ] && [ "$result" = skipped ]; } || exit 1
+          done
 
   # NOTE: the Android build is NOT run in CI — it is a LOCAL pre-merge gate instead (the hosted
   # runner repeatedly hung for 3+ hours on the native C++ builds and burned hours). Run it locally

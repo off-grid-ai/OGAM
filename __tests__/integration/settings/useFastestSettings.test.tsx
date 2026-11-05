@@ -42,14 +42,13 @@ function npuPhone() {
   });
 }
 
-/** Open Model Settings → Text Generation → Advanced. */
+/** Open Model Settings and General, where the backend shows. */
 async function openModelSettingsAdvanced(h: Harness) {
   // Model Settings opens inside the app, on its own route.
   const screen = await h.openScreen('ModelSettings');
-  // The backend is a shared General control; the fastest-settings run is in Text > Advanced.
+  // It places every modality, so it leads the screen: no section has to open to reach it.
+  expect(screen.getByTestId('fastest-settings-button')).toBeTruthy();
   h.rtl.fireEvent.press(screen.getByTestId('general-generation-accordion'));
-  h.rtl.fireEvent.press(screen.getByTestId('text-generation-accordion'));
-  h.rtl.fireEvent.press(screen.getByTestId('text-advanced-toggle'));
   return screen;
 }
 
@@ -71,6 +70,9 @@ describe('Use fastest settings', () => {
     // AFTER: the NPU is selected and the batch follows it.
     expect(screen.queryByText('Text NPU Layers')).not.toBeNull();
     expect(screen.queryByText(CPU_DESC)).toBeNull();
+    // The batch it set is a text control, under Text Generation › Advanced.
+    h.rtl.fireEvent.press(screen.getByTestId('text-generation-accordion'));
+    h.rtl.fireEvent.press(screen.getByTestId('text-advanced-toggle'));
     expect(String(screen.getByTestId('batch-size-stepper-value').props.children)).toBe('Auto (128)');
     // Every backend this device class may run was really measured, each on its own load.
     expect(h.boundary.llama!.calls.bench.map(b => b.backend)).toEqual(['cpu', 'htp', 'opencl']);

@@ -1,6 +1,7 @@
 package ai.offgridmobile.litert
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -50,6 +51,20 @@ class LiteRTTokenBudgetTest {
     @Test
     fun `never returns more than requested even with abundant RAM`() {
         assertEquals(2048, LiteRTModule.clampMaxTokens(2048, 16000, 1000))
+    }
+
+    @Test
+    fun `a context clamped below the floor is too small to load`() {
+        // The Pixel 9 case: 2.1 GB free for a 2.4 GB model clamps 4096 to 1 token.
+        val effective = LiteRTModule.clampMaxTokens(4096, 2109, 2468)
+        assertTrue(LiteRTModule.isUnusableContext(effective, 4096))
+        assertTrue(LiteRTModule.isUnusableContext(333, 4096))
+    }
+
+    @Test
+    fun `a small context the caller asked for still loads`() {
+        assertFalse(LiteRTModule.isUnusableContext(512, 512))
+        assertFalse(LiteRTModule.isUnusableContext(1024, 4096))
     }
 
     @Test

@@ -27,7 +27,7 @@ function tokenizer(perMessage: number) {
   }));
 }
 
-const compactWith = (messages: Message[], extra: { previousSummary?: string } = {}) =>
+const compactWith = (messages: Message[], extra: { previousSummary?: string; summarize?: unknown } = {}) =>
   compaction.compact({ conversationId: d.conversationId, systemPrompt: 'System', allMessages: messages, ...extra });
 const conversation = () =>
   d.useChatStore.getState().conversations.find((c: any) => c.id === d.conversationId);
@@ -56,6 +56,32 @@ describe('isContextFullError', () => {
 });
 
 describe('compact', () => {
+  it('budgets for the context the engine holds, not the setting, when one is given', async () => {
+    tokenizer(200);
+    const messages = [
+      createMessage({ role: 'system', content: 'System' }),
+      createMessage({ role: 'user', content: 'Write a story about Paris' }),
+      createMessage({ role: 'assistant', content: 'A long story' }),
+      createMessage({ role: 'user', content: 'Now one about Lyon' }),
+    ];
+
+    // The context setting holds all three turns, so nothing is compacted.
+    const fromSetting = await compactWith(messages);
+    expect(fromSetting.map((m: Message) => m.content)).toEqual(['System', 'Write a story about Paris', 'A long story', 'Now one about Lyon']);
+
+    // A LiteRT engine native clamped to 1024 cannot hold them, so the oldest turn is summarized.
+    d.boundary.llama!.scriptCompletion({ text: 'Asked for a Paris story' });
+    const fromEngine = await compaction.compact({
+      conversationId: d.conversationId, systemPrompt: 'System', allMessages: messages, contextLength: 1024,
+    });
+    expect(fromEngine.map((m: Message) => m.content)).toEqual([
+      'System',
+      '[Previous conversation summary]\nAsked for a Paris story',
+      'A long story',
+      'Now one about Lyon',
+    ]);
+  });
+
   it('clears the native KV cache, and keeps a chat that fits as it is', async () => {
     tokenizer(5);
     const messages = [
@@ -107,6 +133,29 @@ describe('compact', () => {
     const result = await compactWith([createMessage({ role: 'user', content: 'Hello' })], { previousSummary: 'Earlier talk' });
 
     expect(result.map((m: Message) => m.content)).toEqual(['System', '[Previous conversation summary]\nEarlier talk', 'Hello']);
+  });
+
+  it('has a loaded LiteRT model write the summary when the chat hands it the active engine, since llama.cpp is not loaded beside it', async () => {
+    d = await launchGeneration({ engine: 'litert' });
+    compaction = require('../../../src/services/contextCompaction').contextCompactionService;
+    d.boundary.litert.scriptTurn({ content: 'The user asked for stories about Paris and Lyon.' });
+    const story = 'word '.repeat(2000); // ~2,500 tokens by the character estimate LiteRT falls back to
+    const messages = [
+      createMessage({ role: 'system', content: 'System' }),
+      createMessage({ role: 'user', content: 'Write a story about Paris' }),
+      createMessage({ role: 'assistant', content: story }),
+      createMessage({ role: 'user', content: 'Which city has the best food?' }),
+    ];
+
+    const { summarizeWithActiveEngine } = require('../../../src/services/engines');
+    const result = await compactWith(messages, { summarize: summarizeWithActiveEngine });
+
+    expect(result.map((m: Message) => m.content)).toEqual([
+      'System',
+      '[Previous conversation summary]\nThe user asked for stories about Paris and Lyon.',
+      'Which city has the best food?',
+    ]);
+    expect(conversation().compactionSummary).toBe('The user asked for stories about Paris and Lyon.');
   });
 
   it('trims without a summary when the model fails to write one, and stores nothing', async () => {

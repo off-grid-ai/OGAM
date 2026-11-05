@@ -49,6 +49,8 @@ export type ImageGenerationListener = (state: ImageGenerationState) => void;
 
 export interface GenerateImageParams {
   prompt: string;
+  /** A style's words (shared @offgrid/models), added after enhancement so a rewrite never drops them. */
+  styleWords?: string;
   conversationId?: string;
   negativePrompt?: string;
   steps?: number;

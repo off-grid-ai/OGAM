@@ -39,12 +39,17 @@ it('plays in the card with pause, time, scrubber and mute; full screen opens at 
   expect(view.queryByTestId('video-viewer')).toBeNull();
   expect(view.getByTestId(`time-${CARD}`)).toBeTruthy();
 
-  // Pause, then play again.
+  // Nothing sits over the playing picture: a 1 s clip ends before any fade (community report, 2026-11-03).
+  expect(view.queryByTestId(`play-${CARD}`)).toBeNull();
+
+  // A tap on the picture brings Pause back; pause, then play again.
+  rtl.fireEvent.press(view.getByTestId(`frame-${CARD}`));
   expect(view.getByTestId(`play-${CARD}`).props.accessibilityLabel).toBe('Pause');
   rtl.fireEvent.press(view.getByTestId(`play-${CARD}`));
   expect(view.getByTestId(`clip-${CARD}`).props.paused).toBe(true);
   rtl.fireEvent.press(view.getByTestId(`play-${CARD}`));
   expect(view.getByTestId(`clip-${CARD}`).props.paused).toBe(false);
+  expect(view.queryByTestId(`play-${CARD}`)).toBeNull();
 
   // Mute and unmute.
   rtl.fireEvent.press(view.getByTestId(`mute-${CARD}`));
@@ -113,9 +118,11 @@ it('one clip plays at a time: starting the second card pauses the first', async 
   rtl.fireEvent.press(view.getByTestId('send-button'));
   await rtl.waitFor(() => expect(view.getAllByTestId(`play-${CARD}`)).toHaveLength(2), { timeout: 15_000 });
 
-  rtl.fireEvent.press(view.getAllByTestId(`play-${CARD}`)[0]);
+  // Taken before the first plays: a playing card shows no play/pause over its picture.
+  const [playFirst, playSecond] = view.getAllByTestId(`play-${CARD}`);
+  rtl.fireEvent.press(playFirst);
   expect(view.getAllByTestId(`clip-${CARD}`)[0].props.paused).toBe(false);
-  rtl.fireEvent.press(view.getAllByTestId(`play-${CARD}`)[1]);
+  rtl.fireEvent.press(playSecond);
   const [first, second] = view.getAllByTestId(`clip-${CARD}`);
   expect(first.props.paused).toBe(true);
   expect(second.props.paused).toBe(false);

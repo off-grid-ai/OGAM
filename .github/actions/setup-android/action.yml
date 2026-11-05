@@ -55,7 +55,8 @@ runs:
     # The video runtime's prebuilt parts: the host shader compiler (shaderc) and the Hexagon DSP
     # libraries built in Docker, plus the patched stable-diffusion.cpp source. Built once per
     # revision of scripts/video; the script skips each part whose ready marker matches. The Hexagon
-    # SDK and the build trees are left out: they are only needed to build those parts.
+    # SDK and the build trees are left out: the app's compile needs only the SDK headers, which
+    # build-hexagon.sh copies into .video-build/hexagon-runtime/sdk.
     - name: Restore the Android video runtime
       id: video_cache
       if: ${{ inputs.video == 'true' }}

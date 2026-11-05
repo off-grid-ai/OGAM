@@ -1,0 +1,18 @@
+{
+  "leliuga/all-MiniLM-L12-v2-GGUF@f048c4f3577816f9825989a59a7eed3c9afa3f1d/all-MiniLM-L12-v2.Q8_0.gguf": {
+    "size": 36413728,
+    "sha256": "161d07a32057e754e1fe82e30547c736032ab255a6719890b7e76414c565b748",
+    "loadError": null,
+    "dimension": 384,
+    "near": 0.9065260683692492,
+    "unrelated": -0.09877803106199996
+  },
+  "mykor/paraphrase-multilingual-MiniLM-L12-v2.gguf@a964c09982b6e28b13646d5f9860b8a04f4182c4/paraphrase-multilingual-MiniLM-L12-118M-v2-Q6_K.gguf": {
+    "size": 130724128,
+    "sha256": "83199ec9f234f797cadce91b2f96a492610ab0a274c808dc3c67a87ef65a01be",
+    "loadError": null,
+    "dimension": 384,
+    "near": 0.9915996683843898,
+    "unrelated": 0.054667211857339956
+  }
+}

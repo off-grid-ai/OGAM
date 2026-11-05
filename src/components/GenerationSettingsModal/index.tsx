@@ -1,3 +1,4 @@
+import { FastestSettingsButton } from '../settings/FastestSettingsButton';
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
@@ -102,6 +103,8 @@ export const GenerationSettingsModal: React.FC<
           activeProjectName={activeProjectName}
         />
 
+        {/* It places every modality (text, image, video, speech, voice, search), so it leads the settings. */}
+        <FastestSettingsButton />
         <TouchableOpacity
           style={[styles.accordionHeader, !hasConversationActions && styles.accordionHeaderNoMargin]}
           onPress={() => setGeneralSettingsOpen(!generalSettingsOpen)}

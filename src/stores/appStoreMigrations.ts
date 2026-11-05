@@ -18,6 +18,7 @@ interface PersistedStateMigrationContext {
   documentsPath?: string;
 }
 import { Platform } from 'react-native';
+import { withoutReasoning } from '../utils/messageContent';
 import { INFERENCE_BACKENDS } from '../types';
 
 function migrateEnabledTools(merged: any): void {
@@ -115,6 +116,7 @@ export function migratePersistedState<TState>(
   migrateAutoBatch(merged);
   migrateGeneratedImageTimestamps(merged);
   migrateGeneratedImagePaths(merged, documentsPath);
+  migrateGeneratedVideoPrompts(merged);
   return merged as TState;
 }
 
@@ -150,5 +152,19 @@ function migrateGeneratedImageTimestamps(merged: any): void {
       Number.isFinite(epochMs)
       ? { ...image, createdAt: new Date(epochMs).toISOString() }
       : image;
+  });
+}
+
+/**
+ * Video prompts that carry a model's reasoning, put right. The prompt rewrite kept a thinking model's
+ * whole reply, `<think>` and all; the prompt is the clip's title on its card, viewer and library, and
+ * Extend sends it on to the video model. New clips keep the answer only; this repairs saved ones.
+ */
+function migrateGeneratedVideoPrompts(merged: any): void {
+  if (!Array.isArray(merged.generatedVideos)) return;
+  merged.generatedVideos = merged.generatedVideos.map((video: any) => {
+    if (typeof video?.prompt !== 'string') return video;
+    const prompt = withoutReasoning(video.prompt);
+    return prompt === video.prompt ? video : { ...video, prompt };
   });
 }

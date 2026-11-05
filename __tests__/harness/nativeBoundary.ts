@@ -383,7 +383,7 @@ export interface LlamaFake {
    *  the Adreno OpenCL GPU. Persistent until cleared. */
   scriptHtpUnavailable(unavailable?: boolean): void;
   /** Make EVERY init attempt fail (a model that can't load on any backend) — the real load path throws. */
-  scriptInitFailure(fail?: boolean, message?: string): void;
+  scriptInitFailure(fail?: boolean, message?: string, nativeLogLine?: string): void;
   /** HOLD the next post-init multimodal-support check (context.getMultimodalSupport) open until
    *  releaseMultimodalHold() — the device-shaped load window between context init and capability
    *  detection (the 2026-07-13 18:50 device log shows ~3.4s there for gemma-4-E2B: init succeeded
@@ -470,6 +470,8 @@ function makeLlamaFake(
   let gpuInitFails = false; // when true, initLlama with n_gpu_layers>0 rejects (GPU/HTP init timeout → CPU fallback)
   let initFails = false; // when true, EVERY initLlama attempt rejects (a model that fails to load on any backend)
   let initFailMessage = 'Failed to load model: unsupported architecture'; // what llama.cpp says when it does
+  // What llama.cpp writes to its own log as it refuses the file, while rnllama throws only initFailMessage.
+  let initFailNativeLog: string | undefined;
   // Sticky Metal backend error (ggml-metal-context has_error): set when the app goes to background with a
   // completion in flight on Metal; cleared only by a fresh initLlama (a new native context).
   let backendFault = false;
@@ -806,8 +808,10 @@ function makeLlamaFake(
       backendFault = false; // a new native context starts without the old one's backend error
       const n = Number((params?.n_gpu_layers as number) ?? 0);
       // A model that fails to load on EVERY backend (corrupt file / unsupported arch) — all 3 attempts reject.
-      if (initFails)
+      if (initFails) {
+        if (initFailNativeLog) nativeLog('error', initFailNativeLog);
         throw new Error(initFailMessage);
+      }
       // Device-faithful GPU/HTP init failure: a hung/timed-out accelerator init rejects, so the real
       // initContextWithFallback falls back to the CPU attempt (which requests n_gpu_layers:0 and succeeds).
       if (gpuInitFails && n > 0)
@@ -870,10 +874,14 @@ function makeLlamaFake(
     scriptGpuInitFailure: (fail = true) => {
       gpuInitFails = fail;
     },
-    /** Every load fails, with llama.cpp's message: an unsupported file by default, or e.g. an allocation failure. */
-    scriptInitFailure: (fail = true, message = 'Failed to load model: unsupported architecture') => {
+    /**
+     * Every load fails, with llama.cpp's message: an unsupported file by default, or e.g. an allocation failure.
+     * `nativeLog` is the line llama.cpp logs as it refuses the file, for rnllama's bare "Failed to load model".
+     */
+    scriptInitFailure: (fail = true, message = 'Failed to load model: unsupported architecture', nativeLogLine?: string) => {
       initFails = fail;
       initFailMessage = message;
+      initFailNativeLog = nativeLogLine;
     },
     scriptMultimodalHold: () => {
       mmHoldPending = true;

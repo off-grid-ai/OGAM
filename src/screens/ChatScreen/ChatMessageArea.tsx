@@ -23,6 +23,7 @@ import {
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { generationService } from '../../services';
 import type { QueueActions } from '../../components/ChatInput/Toolbar';
+import { RestyleSheet } from '../../components/MediaStyles/RestyleSheet';
 import { EmptyChat, ImageProgressIndicator } from './ChatScreenComponents';
 import { getPlaceholderText, useChatScreen } from './useChatScreen';
 import { createStyles } from './styles';
@@ -416,11 +417,11 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
       />
       <View
         onLayout={e => setInputHeight(e.nativeEvent.layout.height)}
-        style={{
-          backgroundColor: colors.background,
-          paddingBottom: footerPaddingBottom,
-        }}
+        style={{ backgroundColor: colors.background }}
       >
+        <RestyleSheet
+          onSend={(prompt, kind) => chat.handleSend(prompt, undefined, kind === 'video' ? 'video' : 'force')}
+        />
         <ChatInput
           assistantSelected={assistantSelected}
           onAssistantSelectedChange={onAssistantSelectedChange}
@@ -433,6 +434,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           supportsVision={chat.supportsVision}
           visionNeedsRepair={chat.visionNeedsRepair}
           conversationId={chat.activeConversationId}
+          bottomInset={footerPaddingBottom}
           imageModelLoaded={chat.imageModelLoaded}
           onOpenSettings={() => chat.setShowSettingsPanel(true)}
           queue={chat.queue}
