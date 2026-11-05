@@ -2,7 +2,7 @@
  * Documents the person gives Atlas to study. A PDF goes through five steps, each of which can be interrupted and resumed:
  *
  *   import   copy into private storage, SHA-256, recognise a document already imported
- *   extract  page text, 20 pages at a time, page numbers kept; pages with no text are listed (no OCR on this device)
+ *   extract  page text, 20 pages at a time, page numbers kept; pages with no text are listed (read with the vision model when one is loaded)
  *   chunk    section-aware chunks of 500-1,000 tokens, 50 to a file
  *   study    the expert reads chunks in small batches and files cited findings (study.ts)
  *   remove   delete the original, its text and chunks, and the knowledge that rests only on it
@@ -11,6 +11,7 @@
  * document: pages move through the chunker one at a time and files hold a few dozen records each.
  */
 import RNFS from 'react-native-fs';
+import { ocrAvailable, ocrPage } from './ocr';
 import { SCHEMA_VERSION, type ChunkRecord, type SourceDocument } from './schema';
 import {
   P, appendJsonl, atomicWriteText, ensureDir, nowIso, readJson, readJsonl, removeTree, sha256Text, uuid, withLock, writeJson,
@@ -82,6 +83,17 @@ const pagesFile = (hash: string, n: number) => `${P.extractedDir(hash)}/pages-${
 export interface RunOptions { shouldStop?: () => boolean; onProgress?: (doc: SourceDocument) => void }
 
 /** Reads the PDF's text a few pages at a time and stores it page by page. Resumes where an earlier run stopped. */
+/** Replaces the text of pages with no text by what the vision model reads from their picture (when one is loaded). Returns the pages it filled. */
+async function readPagesByOcr(pdfPath: string, rows: PageRow[]): Promise<number[]> {
+  if (!ocrAvailable()) return [];
+  const done: number[] = [];
+  for (const row of rows) {
+    if (row.text.replace(/\s/g, '').length >= MIN_PAGE_CHARS) continue;
+    try { const text = (await ocrPage(pdfPath, row.page - 1)).trim(); if (text.replace(/\s/g, '').length >= MIN_PAGE_CHARS) { row.text = text; done.push(row.page); } } catch { /* the page stays flagged */ }
+  }
+  return done;
+}
+
 export async function extractDocument(sourceId: string, opts: RunOptions = {}): Promise<SourceDocument> {
   let doc = (await getDocument(sourceId))!;
   if (!doc) throw new Error('No such document.');
@@ -95,10 +107,12 @@ export async function extractDocument(sourceId: string, opts: RunOptions = {}): 
     if (!texts.length) throw new Error(`The PDF returned no pages at page ${start + 1}.`);
     const rows: PageRow[] = texts.map((text, i) => ({ page: start + i + 1, text }));
     await atomicWriteText(pagesFile(doc.hash, Math.floor(start / PAGES_PER_FILE) + 1), `${rows.map((r) => JSON.stringify(r)).join('\n')  }\n`);
+    const ocrDone = await readPagesByOcr(P.original(doc.hash), rows);
     const unreadable = rows.filter((r) => r.text.replace(/\s/g, '').length < MIN_PAGE_CHARS).map((r) => r.page);
     doc = await patchDocument(sourceId, (d) => {
       d.progress.pagesExtracted = start + texts.length;
-      d.unreadablePages = Array.from(new Set([...d.unreadablePages, ...unreadable])).sort((a, b) => a - b);
+      d.unreadablePages = Array.from(new Set([...d.unreadablePages.filter((p) => !ocrDone.includes(p)), ...unreadable])).sort((a, b) => a - b);
+      if (ocrDone.length) d.ocrPages = Array.from(new Set([...(d.ocrPages ?? []), ...ocrDone])).sort((a, b) => a - b);
     });
     opts.onProgress?.(doc);
   }
@@ -132,7 +146,7 @@ export async function chunkDocument(sourceId: string): Promise<SourceDocument> {
   }
   for (const c of chunker.flush()) { buffer.push(c); if (buffer.length === CHUNKS_PER_FILE) await writePart(); }
   await writePart();
-  return patchDocument(sourceId, (d) => { d.progress.chunksTotal = total; d.status = total > 0 ? 'ready' : 'failed'; if (!total) d.error = 'No readable text was found in this PDF (it may be scanned images; no OCR is available on this device).'; });
+  return patchDocument(sourceId, (d) => { d.progress.chunksTotal = total; d.status = total > 0 ? 'ready' : 'failed'; if (!total) d.error = 'No readable text was found in this PDF (it may be scanned images; load a vision model to read them).'; });
 }
 
 // The part being read stays in memory so consecutive small reads do not re-read the file; cleared whenever chunks are rewritten.

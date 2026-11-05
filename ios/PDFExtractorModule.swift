@@ -164,4 +164,36 @@ class PDFExtractorModule: NSObject {
       resolve(pages)
     }
   }
+
+  /// Draws one page (0-based) as a PNG in the caches folder, at most `maxWidth` pixels wide, and resolves its path.
+  @objc
+  func renderPage(_ filePath: String, pageIndex: Double, maxWidth: Double, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      guard let (document, url, didStart) = self.openDocument(filePath) else {
+        reject("PDF_ERROR", "Could not open PDF file: \(filePath)", nil as NSError?)
+        return
+      }
+      defer { if didStart { url.stopAccessingSecurityScopedResource() } }
+      guard let page = document.page(at: Int(pageIndex)) else {
+        reject("PDF_ERROR", "No such page: \(Int(pageIndex))", nil as NSError?)
+        return
+      }
+      let bounds = page.bounds(for: .mediaBox)
+      let width = min(max(maxWidth, 200), 2000)
+      let size = CGSize(width: width, height: width * bounds.height / max(bounds.width, 1))
+      let image = page.thumbnail(of: size, for: .mediaBox)
+      guard let data = image.pngData() else {
+        reject("PDF_ERROR", "Failed to draw the page", nil as NSError?)
+        return
+      }
+      let caches = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first ?? NSTemporaryDirectory()
+      let out = (caches as NSString).appendingPathComponent("pdf-page-\(abs(filePath.hashValue))-\(Int(pageIndex)).png")
+      do {
+        try data.write(to: URL(fileURLWithPath: out))
+        resolve(out)
+      } catch {
+        reject("PDF_ERROR", "Failed to save the page image: \(error.localizedDescription)", error as NSError)
+      }
+    }
+  }
 }

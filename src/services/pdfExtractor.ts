@@ -56,3 +56,9 @@ export async function pdfExtractPages(filePath: string, start: number, count: nu
   if (!PDFExtractorModule?.extractPages) throw new Error('PDF page reading is not available on this platform');
   return (await PDFExtractorModule.extractPages(filePath, start, count)) as string[];
 }
+
+/** Draws one page (0-based) as a PNG file and returns its path, so a scanned page can be read by the vision model. */
+export async function pdfRenderPage(filePath: string, pageIndex: number, maxWidth = 1400): Promise<string> {
+  if (!PDFExtractorModule?.renderPage) throw new Error('Drawing PDF pages is not available on this platform');
+  return String(await PDFExtractorModule.renderPage(filePath, pageIndex, maxWidth));
+}

@@ -153,6 +153,8 @@ export interface SourceDocument {
   progress: { pagesExtracted: number; chunksTotal: number; chunksStudied: number };
   /** Pages with no extractable text and no OCR available: studied as nothing, and listed so that is visible. */
   unreadablePages: number[];
+  /** Pages whose text was read from a picture by the vision model (may contain misreadings). */
+  ocrPages?: number[];
   error?: string;
   /** Removed by the person: the original and its knowledge are deleted; a tombstone stops it coming back through sync. */
   removed?: boolean;

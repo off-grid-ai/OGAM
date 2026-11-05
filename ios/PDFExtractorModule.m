@@ -17,4 +17,10 @@ RCT_EXTERN_METHOD(extractPages:(NSString *)filePath
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(renderPage:(NSString *)filePath
+                  pageIndex:(double)pageIndex
+                  maxWidth:(double)maxWidth
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end

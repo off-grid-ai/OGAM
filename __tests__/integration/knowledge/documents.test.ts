@@ -281,4 +281,30 @@ describe('PDF learning', () => {
     expect(bookChars).toBeGreaterThan(400_000);
     expect(Math.max(...sizes)).toBeLessThan(bookChars / 4); // no read ever pulled in more than a fraction of the book (a chunk file is ~25 chunks)
   }, 120000);
+
+  it('reads a scanned page with the vision model when one is loaded, marks it as read from a picture, and leaves it flagged when none is', async () => {
+    const { NativeModules } = await setup(bookPages(40), { model: false });
+    NativeModules.PDFExtractorModule.renderPage = jest.fn(async (_p: string, index: number) => `/cache/page-${index}.png`);
+    const { docs } = mods();
+    const { llmService } = require('../../../src/services/llm');
+
+    // No vision model: the scanned page stays flagged.
+    const none = await docs.importPdf({ uri: 'file:///picked/book.pdf', name: 'Accounting Textbook.pdf' });
+    expect((await docs.extractDocument(none.doc.sourceId)).unreadablePages).toEqual([18]);
+    await docs.removeDocument(none.doc.sourceId);
+
+    // A vision model is loaded: page 18 is read from its picture.
+    jest.spyOn(llmService, 'isModelLoaded').mockReturnValue(true);
+    jest.spyOn(llmService, 'supportsVision').mockReturnValue(true);
+    const seen: string[] = [];
+    jest.spyOn(llmService, 'generateResponse').mockImplementation(async (messages: any) => {
+      seen.push(messages[0].attachments?.[0]?.uri);
+      return 'Chapter 2 Scan\n\nThe receivable concept is explained here with a worked example and a short definition of terms.';
+    });
+    const again = await docs.importPdf({ uri: 'file:///picked/book.pdf', name: 'Accounting Textbook.pdf' });
+    const doc = await docs.extractDocument(again.doc.sourceId);
+    expect(seen).toEqual(['file:///cache/page-17.png']);
+    expect(doc.unreadablePages).toEqual([]);
+    expect(doc.ocrPages).toEqual([18]);
+  });
 });

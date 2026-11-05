@@ -10,6 +10,9 @@ import io.legere.pdfiumandroid.PdfDocument
 import io.legere.pdfiumandroid.PdfiumCore
 import android.os.ParcelFileDescriptor
 import java.io.File
+import java.io.FileOutputStream
+import android.graphics.Bitmap
+import android.graphics.Color
 
 class PDFExtractorModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -120,6 +123,40 @@ class PDFExtractorModule(reactContext: ReactApplicationContext) : ReactContextBa
                 safeResolve(promise, result)
             } catch (e: Exception) {
                 safeReject(promise, "PDF_ERROR", "Failed to extract pages: ${e.message}", e)
+            }
+        }.start()
+    }
+
+    /**
+     * Draws one page (0-based) as a PNG in the app cache, `maxWidth` pixels wide at most, and resolves its path. Used to read a
+     * scanned page with the vision model.
+     */
+    @ReactMethod
+    fun renderPage(filePath: String, pageIndex: Double, maxWidth: Double, promise: Promise) {
+        Thread {
+            try {
+                val file = File(filePath)
+                if (!file.exists()) { safeReject(promise, "PDF_ERROR", "File not found: $filePath"); return@Thread }
+                val core = PdfiumCore(reactApplicationContext)
+                val fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+                val doc = core.newDocument(fd)
+                val page = doc.openPage(pageIndex.toInt())
+                val wPt = page.getPageWidthPoint().toDouble().coerceAtLeast(1.0)
+                val hPt = page.getPageHeightPoint().toDouble().coerceAtLeast(1.0)
+                val w = maxWidth.toInt().coerceIn(200, 2000)
+                val h = (w * hPt / wPt).toInt().coerceAtLeast(1)
+                val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                bitmap.eraseColor(Color.WHITE)
+                page.renderPageBitmap(bitmap, 0, 0, w, h)
+                val out = File(reactApplicationContext.cacheDir, "pdf-page-${file.name.hashCode()}-${pageIndex.toInt()}.png")
+                FileOutputStream(out).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                bitmap.recycle()
+                page.close()
+                doc.close()
+                fd.close()
+                safeResolve(promise, out.absolutePath)
+            } catch (e: Exception) {
+                safeReject(promise, "PDF_ERROR", "Failed to draw the page: ${e.message}", e)
             }
         }.start()
     }
