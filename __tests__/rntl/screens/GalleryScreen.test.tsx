@@ -124,9 +124,10 @@ describe('GalleryScreen', () => {
     for (const image of sampleImages) expect(view.getByTestId(`gallery-image-${image.id}`)).toBeTruthy();
   });
 
-  it('shows image count badge when images exist', async () => {
+  it('counts the images once, on the tab, with no bare count in the header', async () => {
     const { view } = await openGallery({ images: sampleImages });
-    expect(view.getByText('3')).toBeTruthy();
+    expect(view.getByText('Images (3)')).toBeTruthy();
+    expect(view.queryByText('3')).toBeNull();
   });
 
   it('tapping an image opens the viewer modal', async () => {
@@ -208,7 +209,7 @@ describe('GalleryScreen', () => {
       ],
       params: { conversationId: 'conv-123' },
     });
-    expect(view.getByText('1')).toBeTruthy();
+    expect(view.getByText('Images (1)')).toBeTruthy();
     expect(view.getByTestId('gallery-image-img-1')).toBeTruthy();
     expect(view.queryByTestId('gallery-image-img-2')).toBeNull();
   });
@@ -219,7 +220,7 @@ describe('GalleryScreen', () => {
     g.rtl.fireEvent.press(g.view.getByText('Delete'));
     await g.view.findByText('Delete Image');
     await g.rtl.act(async () => {
-      g.rtl.fireEvent.press(g.view.getByLabelText('Delete'));
+      g.rtl.fireEvent.press(g.rtl.within(g.view.getByTestId('app-alert')).getByLabelText('Delete'));
     });
 
     await g.rtl.waitFor(() => expect(g.view.queryByTestId('gallery-image-img-1')).toBeNull());
@@ -267,7 +268,7 @@ describe('GalleryScreen', () => {
     expect(g.view.getByText('Are you sure you want to delete 3 images?')).toBeTruthy();
 
     await g.rtl.act(async () => {
-      g.rtl.fireEvent.press(g.view.getByLabelText('Delete'));
+      g.rtl.fireEvent.press(g.rtl.within(g.view.getByTestId('app-alert')).getByLabelText('Delete'));
     });
 
     await g.rtl.waitFor(() => expect(g.view.getByText('No generated images yet')).toBeTruthy());
@@ -303,7 +304,7 @@ describe('GalleryScreen', () => {
 
     expect(await g.view.findByTestId('gallery-image-disk-img-1')).toBeTruthy();
     expect(g.useAppStore.getState().generatedImages.map((i: { id: string }) => i.id).sort()).toEqual(['disk-img-1', 'img-1']);
-    expect(g.view.getByText('2')).toBeTruthy();
+    expect(g.view.getByText('Images (2)')).toBeTruthy();
   });
 
   it('on iOS, Save hands the image file to the share sheet', async () => {
@@ -426,7 +427,7 @@ describe('GalleryScreen', () => {
         return { conversationId };
       },
     });
-    expect(view.getByText('1')).toBeTruthy();
+    expect(view.getByText('Images (1)')).toBeTruthy();
     expect(view.getByTestId('gallery-image-img-1')).toBeTruthy();
     expect(view.queryByTestId('gallery-image-img-2')).toBeNull();
   });
