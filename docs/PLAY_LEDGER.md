@@ -486,3 +486,10 @@ Chats header compact again, failed row tighter, Models and Settings pass. Top 3:
 1. The first answer lists GitHub, web search and URL fetch: the 5 tools on by default. Mac's call (asked).
 2. The project sheet opens ~6 s after the tap (1270 chats); a late sheet caught the next tap. Title "Select Project" → sentence case.
 3. Paused 0-byte download: drop the bar row and the duplicate "Paused"; search clear shows ~3 s late; Downloads a11y says "2 in progress" with no visible badge.
+
+## Supervisor 11:55 (hand test 48, build at 7267b7842)
+
+Paused 0-byte row tight, Document search copy, "Choose project" (opened in ~1 s) pass. Top 3:
+1. Downloads flashes two stale failed Whisper rows for ~2 s before the list settles.
+2. Knowledge base row: filename cut by a red "Couldn't sync to OGAD: Mac (Debug)"; black toggle thumbs; toggles not exposed as switches.
+3. Project sheet: every letter tile emerald and the chosen row a boxed emerald border. Also: project page has a grey "New chat" and an emerald "+"; "New Conversation" title case; Projects sort order unclear.
