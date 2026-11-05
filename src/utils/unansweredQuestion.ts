@@ -18,10 +18,12 @@ function hasVisibleReply(message: Message): boolean {
  * (Stop before the first word saves one). Either way the person needs a visible way to ask again.
  */
 export function unansweredQuestionId(messages: readonly Message[]): string | undefined {
-  const last = messages.at(-1);
+  // Notes the app adds ("Model loaded: …") are not replies; a question before one is still unanswered.
+  const turns = messages.filter(message => !message.isSystemInfo);
+  const last = turns.at(-1);
   if (!last) return undefined;
   if (last.role === 'user') return last.id;
-  const before = messages.at(-2);
+  const before = turns.at(-2);
   if (last.role === 'assistant' && before?.role === 'user' && !hasVisibleReply(last)) return before.id;
   return undefined;
 }

@@ -13,6 +13,12 @@ describe('unansweredQuestionId', () => {
     expect(unansweredQuestionId([q('q1'), a('a1', { turnStatus: 'cancelled' } as Partial<Message>)])).toBe('q1');
   });
 
+  it('looks past an app note such as "Model loaded" (Stop during a model load)', () => {
+    const note = a('n1', { content: 'Model loaded: Qwen 3.5 2B (1.9s)', isSystemInfo: true });
+    expect(unansweredQuestionId([q('q1'), note])).toBe('q1');
+    expect(unansweredQuestionId([q('q1'), note, a('a1', { content: 'Periyar.' })])).toBeUndefined();
+  });
+
   it('is undefined when a reply has words', () => {
     expect(unansweredQuestionId([q('q1'), a('a1', { content: 'Sinhagad.' })])).toBeUndefined();
   });
