@@ -15,8 +15,22 @@ describe('TTSSummary: what the closed Text to speech row says', () => {
     expect(render(<TTSSummary />).getByText('Off')).toBeTruthy();
   });
 
-  it('names the voice and speed when on', () => {
+  it('names the voice by its label, never its engine id', () => {
     const engineId = useTTSStore.getState().settings.engineId;
+    act(() => {
+      useTTSStore.setState({ voices: [{ id: 'am_michael', label: 'Michael' }] as never });
+    });
+    set({ enabled: true, voiceByEngine: { [engineId]: 'am_michael' }, speed: 1.2 });
+    const view = render(<TTSSummary />);
+    expect(view.getByText('Michael · 1.2×')).toBeTruthy();
+    expect(view.queryByText(/am_michael/)).toBeNull();
+  });
+
+  it('falls back to the saved id when the voice list does not hold it yet', () => {
+    const engineId = useTTSStore.getState().settings.engineId;
+    act(() => {
+      useTTSStore.setState({ voices: [] as never });
+    });
     set({ enabled: true, voiceByEngine: { [engineId]: 'af_heart' }, speed: 1.2 });
     expect(render(<TTSSummary />).getByText('af_heart · 1.2×')).toBeTruthy();
   });
