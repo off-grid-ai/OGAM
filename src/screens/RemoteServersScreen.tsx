@@ -260,15 +260,15 @@ export const RemoteServersScreen: React.FC = () => {
             title={isScanning ? 'Scanning' : 'Scan network'}
             onPress={handleScanNetwork}
             disabled={isScanning}
-            style={styles.actionButton}
+            size="small"
             testID="scan-network"
-            icon={<Icon name="wifi" size={14} color={theme.colors.primary} />}
+            icon={<Icon name="wifi" size={14} color={theme.colors.textSecondary} />}
           />
           <Button
             title="Add manually"
-            variant="secondary"
+            variant="ghost"
+            size="small"
             onPress={() => navigation.navigate('RemoteServerEditor')}
-            style={styles.actionButton}
             testID="add-server"
             icon={<Icon name="plus" size={14} color={theme.colors.text} />}
           />

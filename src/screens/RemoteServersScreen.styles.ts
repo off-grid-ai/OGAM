@@ -70,6 +70,7 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
     actionRow: {
       flexDirection: 'row' as const,
       gap: SPACING.sm,
+      alignItems: 'center' as const,
     },
     actionButton: {
       flex: 1,
