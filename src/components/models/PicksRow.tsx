@@ -84,10 +84,13 @@ const PickCard: React.FC<{ item: PickItem }> = ({ item }) => {
   );
 };
 
+const ICON_ACTION_FRAME = { width: 44, height: 44, margin: -14, alignItems: 'center' as const, justifyContent: 'center' as const };
+
 const IconAction: React.FC<{ icon: string; label: string; onPress: () => void; testID: string }> = ({ icon, label, onPress, testID }) => {
   const { colors } = useTheme();
   return (
-    <AnimatedPressable onPress={onPress} accessibilityLabel={label} accessibilityRole="button" hitSlop={14} testID={testID}>
+    // A 44 pt frame around the 16 pt glyph, pulled back so the row keeps its height (hand test 39: 17 pt).
+    <AnimatedPressable onPress={onPress} accessibilityLabel={label} accessibilityRole="button" style={ICON_ACTION_FRAME} testID={testID}>
       <Icon name={icon} size={16} color={colors.textSecondary} />
     </AnimatedPressable>
   );
