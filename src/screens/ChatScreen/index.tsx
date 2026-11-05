@@ -310,6 +310,7 @@ export const ChatScreen: React.FC = () => {
           setShowSettingsPanel={chat.setShowSettingsPanel}
           setShowProjectSelector={chat.setShowProjectSelector}
           isRemote={chat.activeModelInfo?.isRemote}
+          modelName={chat.activeModelName || chat.activeModel?.name}
           documentCount={documents.count}
           onOpenDocuments={documents.open}
         />
