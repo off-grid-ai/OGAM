@@ -67,7 +67,8 @@ export const quoteIsOnThePage = (quote: string, chunkText: string): boolean => {
 
 interface Checkpoint { sourceId: string; next: number; findings: number; updatedAt: string }
 
-async function findingsForChunk(chunk: ChunkRecord, agentName: string, ask: Ask, handle: CycleHandle): Promise<RawFinding[]> {
+async function findingsForChunk(chunk: ChunkRecord, ctx: { agentName: string; ask: Ask; handle: CycleHandle }): Promise<RawFinding[]> {
+  const { agentName, ask, handle } = ctx;
   const where = `page ${chunk.page}${chunk.pageEnd > chunk.page ? `-${chunk.pageEnd}` : ''}${chunk.section ? `, ${chunk.section}` : ''}`;
   const user = `Passage (${where}):\n"""\n${chunk.text}\n"""`;
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -87,7 +88,8 @@ async function findingsForChunk(chunk: ChunkRecord, agentName: string, ask: Ask,
 }
 
 /** Files one raw finding with its evidence, runs the evidence check, and returns the status it ended with. */
-async function fileFinding(handle: CycleHandle, chunk: ChunkRecord, raw: RawFinding, title: string): Promise<boolean> {
+async function fileFinding(ctx: { handle: CycleHandle; chunk: ChunkRecord; title: string }, raw: RawFinding): Promise<boolean> {
+  const { handle, chunk, title } = ctx;
   const finding = typeof raw.finding === 'string' ? raw.finding.trim() : '';
   const question = typeof raw.question === 'string' ? raw.question.trim() : '';
   if (finding.length < 15 || !question) return false;
@@ -185,8 +187,8 @@ export async function studyDocument(sourceId: string, opts: StudyOptions = {}): 
         const chunks = await readChunks(doc.hash, next, batch);
         if (!chunks.length) break;
         for (const chunk of chunks) {
-          const raws = await findingsForChunk(chunk, agentName, ask, handle);
-          for (const raw of raws) if (await fileFinding(handle, chunk, raw, doc.title ?? doc.name)) filed++;
+          const raws = await findingsForChunk(chunk, { agentName, ask, handle });
+          for (const raw of raws) if (await fileFinding({ handle, chunk, title: doc.title ?? doc.name }, raw)) filed++;
           handle.report.attempted.chunksExamined += 1;
         }
         next += chunks.length;
@@ -208,7 +210,7 @@ export async function studyDocument(sourceId: string, opts: StudyOptions = {}): 
     const mine = (await searchFindings({ agentId, limit: 200 })).filter((f) => f.cycleId === handle.cycleId);
     const report = await finalizeCycle(handle, {
       status: done ? 'completed' : 'interrupted',
-      summary: summarise(doc.title ?? doc.name, mine.map((f) => f.finding), next - startedAt, doc.progress.chunksTotal, doc.pages, doc.unreadablePages, done),
+      summary: summarise(doc.title ?? doc.name, mine.map((f) => f.finding), { chunksThisRun: next - startedAt, chunksTotal: doc.progress.chunksTotal, pages: doc.pages, unreadable: doc.unreadablePages, done }),
       followUps: mine.filter((f) => f.confidence < 0.6).slice(0, 5).map((f) => f.question),
       knowledgeGaps: Array.from(new Set(mine.map((f) => f.uncertainty).filter(Boolean))).slice(0, 8),
     });
@@ -221,10 +223,11 @@ export async function studyDocument(sourceId: string, opts: StudyOptions = {}): 
 }
 
 /** What was learned, in plain words and from the findings themselves (no model call, so it cannot embellish them). */
-export function summarise(title: string, findings: string[], chunksThisRun: number, chunksTotal: number, pages: number | undefined, unreadable: number[], done: boolean): string {
+export function summarise(title: string, findings: string[], run: { chunksThisRun: number; chunksTotal: number; pages: number | undefined; unreadable: number[]; done: boolean }): string {
+  const { chunksThisRun, chunksTotal, pages, unreadable, done } = run;
   const parts = [`${done ? 'Studied' : 'Studied part of'} "${title}": ${chunksThisRun} section${chunksThisRun === 1 ? '' : 's'} this run${pages ? ` of a ${pages}-page document (${chunksTotal} sections in all)` : ''}.`];
   parts.push(findings.length ? `Filed ${findings.length} new finding${findings.length === 1 ? '' : 's'}, for example: ${findings.slice(0, 3).map((f) => `"${f}"`).join(' ')}` : 'No new findings were filed.');
-  if (unreadable.length) parts.push(`${unreadable.length} page${unreadable.length === 1 ? ' has' : 's have'} no readable text (scans?) and were not studied: pages ${unreadable.slice(0, 12).join(', ')}${unreadable.length > 12 ? ', ...' : ''}. No OCR is available on this device.`);
+  if (unreadable.length) parts.push(`${unreadable.length} page${unreadable.length === 1 ? ' has' : 's have'} no readable text (scans?) and were not studied: pages ${unreadable.slice(0, 12).join(', ')}${unreadable.length > 12 ? ', ...' : ''}. Load a vision model before adding the PDF to read scanned pages.`);
   return parts.join(' ');
 }
 

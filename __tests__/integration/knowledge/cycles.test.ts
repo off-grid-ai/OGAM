@@ -89,7 +89,7 @@ describe('knowledge cycles', () => {
     const h = await cycles.startCycle({ agentId: 'a', topicId: 't', topic: 'T', model: 'm' });
     const a = await cycles.addFinding(h, { ...base, finding: 'The standard realization rate is 90 percent.', evidence: [ev(HASH_A, 'c1')] });
     const b = await cycles.addFinding(h, { ...base, finding: 'The standard realization rate is 75 percent.', evidence: [ev(HASH_B, 'c2')] });
-    await cycles.markConflict(a.recordId, b.recordId, 'different numbers for the same measure');
+    await cycles.markConflict([a.recordId, b.recordId], 'different numbers for the same measure');
     const conflicted = await cycles.searchFindings({ status: 'conflicted' });
     expect(conflicted.map((f: any) => f.recordId).sort()).toEqual([a.recordId, b.recordId].sort());
     expect(conflicted.every((f: any) => f.finding.includes('percent'))).toBe(true); // neither was overwritten
@@ -100,7 +100,7 @@ describe('knowledge cycles', () => {
     const h = await cycles.startCycle({ agentId: 'a', topicId: 't', topic: 'T', model: 'm' });
     const old = await cycles.addFinding(h, { ...base, finding: 'Old rule applies.', evidence: [ev(HASH_A, 'c1')] });
     const next = await cycles.addFinding(h, { ...base, finding: 'New rule applies from 2026.', evidence: [ev(HASH_B, 'c2')] });
-    await cycles.supersede(old.recordId, next.recordId, 'rule changed');
+    await cycles.supersede({ oldId: old.recordId, newId: next.recordId }, 'rule changed');
     expect((await cycles.getFinding(old.recordId)).status).toBe('superseded');
     expect((await cycles.getFinding(old.recordId)).finding).toBe('Old rule applies.');
   });

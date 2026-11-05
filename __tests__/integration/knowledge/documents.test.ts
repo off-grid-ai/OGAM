@@ -136,7 +136,7 @@ describe('PDF learning', () => {
     expect(report.retained.provisional).toBe(findings.length);
     expect(report.summary).toMatch(/Studied "Accounting Textbook"/);
     expect(report.summary).toMatch(/page 18|pages 18/); // the unreadable page is reported, with the OCR caveat
-    expect(report.summary).toMatch(/No OCR is available/);
+    expect(report.summary).toMatch(/vision model/);
     expect((await docs.getDocument(doc.sourceId)).status).toBe('done');
     expect(await agents.getProfile('accounting-expert')).toMatchObject({ stage: 'provisional', stats: { documents: 1 } });
     // The expert can now answer from it, with the citation and the "not yet reviewed" label.

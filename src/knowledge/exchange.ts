@@ -374,7 +374,7 @@ async function runImport(zipPath: string, preview: boolean): Promise<ImportRepor
         await stateIndex.put({ ...st, status, sources: new Set(f.evidence.map((e) => e.sourceHash)).size, updatedAt: nowIso() });
         if (status === 'approved') report.approved++; else report.provisional++;
         // Contradictions with what this phone already knows are kept, as a conflict, not merged away.
-        for (const other of await findContradiction(f)) { await markConflict(f.recordId, other.recordId, 'imported finding disagrees with an existing one', 'import'); report.conflicts.push({ a: f.recordId, b: other.recordId, note: 'different figures for the same question' }); }
+        for (const other of await findContradiction(f)) { await markConflict([f.recordId, other.recordId], 'imported finding disagrees with an existing one', 'import'); report.conflicts.push({ a: f.recordId, b: other.recordId, note: 'different figures for the same question' }); }
       }
       // Deletions made elsewhere are applied here (and remembered), so removed knowledge does not reappear.
       const toErase: string[] = [];

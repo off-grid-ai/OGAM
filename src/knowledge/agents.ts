@@ -76,7 +76,8 @@ export async function resolveAgent(agentId: string): Promise<string> {
   return id;
 }
 
-function newProfile(topicId: string, name: string, keywords: string[], scope: string): AgentProfile {
+function newProfile(subject: { topicId: string; name: string }, keywords: string[], scope: string): AgentProfile {
+  const { topicId, name } = subject;
   const now = nowIso();
   return {
     schemaVersion: SCHEMA_VERSION, agentId: `${topicId}-expert`, topicId, name, specialization: name.replace(/ Expert$/, ''), scope,
@@ -109,7 +110,7 @@ export async function routeSubject(text: string, opts: { createIfMissing?: boole
   // A real overlap (several shared words, or the same subject) routes to the existing agent; one stray shared word does not.
   if (best && best.score >= 3) return { agentId: best.p.agentId, topicId: best.p.topicId, created: false, score: best.score };
   if (opts.createIfMissing === false) return null;
-  const profile = newProfile(subject.topicId, subject.name, wanted, text.slice(0, 200));
+  const profile = newProfile({ topicId: subject.topicId, name: subject.name }, wanted, text.slice(0, 200));
   await saveProfile(profile);
   return { agentId: profile.agentId, topicId: profile.topicId, created: true, score: 0 };
 }
@@ -226,7 +227,7 @@ export async function splitAgent(agentId: string, name: string, keywords: string
   const parent = await getProfile(agentId);
   if (!parent) throw new Error('No such agent.');
   const subject = topicIdFor(`${name} ${keywords.join(' ')}`);
-  const child = newProfile(subject.topicId === parent.topicId ? slug(name) : subject.topicId, name.endsWith('Expert') ? name : `${name} Expert`, keywords, `Part of ${parent.name}`);
+  const child = newProfile({ topicId: subject.topicId === parent.topicId ? slug(name) : subject.topicId, name: name.endsWith('Expert') ? name : `${name} Expert` }, keywords, `Part of ${parent.name}`);
   await saveProfile(child);
   const entries = await readJsonl<{ recordId: string; cycleDir: string; terms: string[] }>(P.agentKeywords(agentId));
   const moving = entries.filter((e) => overlap(keywords.map((k) => k.toLowerCase()), e.terms) > 0);

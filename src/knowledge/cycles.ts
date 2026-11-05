@@ -322,7 +322,8 @@ export async function addEvidence(recordId: string, evidence: EvidenceRef[], not
 
 // ------------------------------------------------------------------ conflicts and supersession
 /** Keeps two contradictory findings side by side, both flagged for review, neither overwriting the other. */
-export async function markConflict(a: string, b: string, note: string, by = 'atlas'): Promise<void> {
+export async function markConflict(pair: readonly [string, string], note: string, by = 'atlas'): Promise<void> {
+  const [a, b] = pair;
   for (const [id, other] of [[a, b], [b, a]] as const) {
     const state = await stateIndex.get(id);
     if (!state) throw new Error('No such finding.');
@@ -331,7 +332,8 @@ export async function markConflict(a: string, b: string, note: string, by = 'atl
   }
 }
 
-export async function supersede(oldId: string, newId: string, note: string, by = 'atlas'): Promise<void> {
+export async function supersede(ids: { oldId: string; newId: string }, note: string, by = 'atlas'): Promise<void> {
+  const { oldId, newId } = ids;
   const state = await stateIndex.get(oldId);
   if (!state) throw new Error('No such finding.');
   await writeRevision({ recordId: oldId, kind: 'supersession', status: 'superseded', supersededBy: newId, note, by });
