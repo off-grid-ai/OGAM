@@ -9,7 +9,7 @@ import { Button } from '../components/Button';
 import { useProjectStore } from '../stores';
 import { check, practiceSet, topicScores, useExerciseStore, type Exercise, type TableRow, type Verdict } from '../study/exercises';
 import { generatePractice } from '../study/practice';
-import { makeDrillSet } from '../study/drills';
+import { ACCOUNTING_DRILLS, STATS_DRILLS, makeDrillSet, type DrillKind } from '../study/drills';
 
 type Colors = ReturnType<typeof useTheme>['colors'];
 const good = '#16A34A';
@@ -98,7 +98,7 @@ export const PracticeScreen: React.FC = () => {
       setQueue(practiceSet(Object.values(useExerciseStore.getState().exercises), useExerciseStore.getState().progress, { topic: topic.trim() || undefined }));
     } catch (e: any) { Alert.alert('Could not make questions', String(e?.message || e)); } finally { setBusy(false); }
   };
-  const drills = () => { const set = makeDrillSet(6); addSet(set); setVerdict(undefined); setNote(''); setQueue(set); };
+  const drills = (kinds: DrillKind[]) => { const set = makeDrillSet(8, Date.now() % 100000, kinds); addSet(set); setVerdict(undefined); setNote(''); setQueue(set); };
   const start = (t?: string) => { setVerdict(undefined); setQueue(practiceSet(all, progress, { topic: t })); if (!all.length) setNote('No questions yet. Make some from your documents.'); };
   const value = current ? progress[current.id]?.saved : undefined;
   const submit = () => { if (!current) return; const v = check(current, value); setVerdict(v); record(current.id, v.correct); };
@@ -115,7 +115,8 @@ export const PracticeScreen: React.FC = () => {
           <View>
             <TextInput testID="practice-topic" value={topic} onChangeText={setTopic} placeholder="Topic or chapter (optional)" placeholderTextColor={colors.textMuted} style={[st.input, { borderColor: colors.border, color: colors.text }]} />
             <Button title={busy ? 'Writing questions...' : 'Make questions from my documents'} onPress={make} loading={busy} disabled={busy} testID="practice-make" style={st.top10} />
-            <Button title="Accounting drills (no documents needed)" variant="outline" onPress={drills} testID="practice-drills" style={st.top8} />
+            <Button title="Accounting drills (balance sheet, interest, loans, statements...)" variant="outline" onPress={() => drills(ACCOUNTING_DRILLS)} testID="practice-drills" style={st.top8} />
+            <Button title="Research statistics drills (doctoral courses)" variant="outline" onPress={() => drills(STATS_DRILLS)} testID="practice-stats-drills" style={st.top8} />
             <Button title="Practise what I have (missed and due first)" variant="outline" onPress={() => start(topic.trim() || undefined)} testID="practice-start" style={st.top8} />
             {!!note && <Text testID="practice-note" style={[st.top10, { color: colors.textSecondary }]}>{note}</Text>}
             {scores.length > 0 && <View style={st.top18}>
