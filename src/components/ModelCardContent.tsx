@@ -141,7 +141,7 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
             <MaterialIcon
               name="verified"
               size={12}
-              color={colors.primary}
+              color={colors.textMuted}
               accessibilityLabel={credibilitySource === 'official' ? 'Official' : 'Verified'}
             />
           )}
@@ -260,7 +260,7 @@ export const StandardModelCardContent: React.FC<StandardModelCardContentProps> =
         </View>}
         {credibility?.source === 'offgrid' && <MadeByOffGrid />}
         {credibilityInfo && (credibility?.source === 'official' || credibility?.source === 'verified-quantizer') && (
-          <MaterialIcon name="verified" size={14} color={colors.primary} accessibilityLabel={credibilityInfo.label} />
+          <MaterialIcon name="verified" size={14} color={colors.textMuted} accessibilityLabel={credibilityInfo.label} />
         )}
         {credibilityInfo && credibility?.source === 'lmstudio' && (
           <View style={[styles.credibilityBadge, { backgroundColor: `${credibilityInfo.color}25` }]}>
@@ -461,13 +461,13 @@ export const ModelCardActions: React.FC<ModelCardActionsProps> = ({
 
   if (isDownloading || isQueued || isPaused) {
     return <>
-      {isPaused && onResume && <ActionButton icon="play" color={colors.primary} haptic="impactLight" onPress={onResume} testID={tid('resume')} accessibilityLabel="Resume download" styles={styles} />}
-      {isDownloading && onPause && <ActionButton icon="pause" color={colors.primary} haptic="impactLight" onPress={onPause} testID={tid('pause')} accessibilityLabel="Pause download" styles={styles} />}
+      {isPaused && onResume && <ActionButton icon="play" color={colors.textSecondary} haptic="impactLight" onPress={onResume} testID={tid('resume')} accessibilityLabel="Resume download" styles={styles} />}
+      {isDownloading && onPause && <ActionButton icon="pause" color={colors.textSecondary} haptic="impactLight" onPress={onPause} testID={tid('pause')} accessibilityLabel="Pause download" styles={styles} />}
       {onCancel && <ActionButton icon="x" color={colors.error} haptic="notificationWarning" onPress={onCancel} testID={tid('cancel')} accessibilityLabel="Cancel download" styles={styles} />}
     </>;
   }
   if (!isDownloaded && onDownload) {
-    return <ActionButton icon="download" color={colors.primary} haptic="impactLight" onPress={onDownload} disabled={!isCompatible} testID={tid('download')} accessibilityLabel={modelName ? `Download ${modelName}` : 'Download model'} styles={styles} />;
+    return <ActionButton icon="download" color={colors.textSecondary} haptic="impactLight" onPress={onDownload} disabled={!isCompatible} testID={tid('download')} accessibilityLabel={modelName ? `Download ${modelName}` : 'Download model'} styles={styles} />;
   }
   if (isDownloaded) {
     return <DownloadedActions isActive={isActive} testID={testID} colors={colors} styles={styles} onSelect={onSelect} onDelete={onDelete} onRepairVision={onRepairVision} isRepairingVision={isRepairingVision} />;
