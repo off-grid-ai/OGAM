@@ -33,7 +33,14 @@ const ToolsSentCollapsibleInner: React.FC<ToolsSentCollapsibleProps> = ({ names,
   if (!names?.length) return null;
   return (
     <View testID="tools-sent-collapsible" style={[styles.toolRow, styles.messageFooterRow]}>
-      <TouchableOpacity style={[styles.toolStatusRow, styles.messageFooterHeader]} onPress={toggle} activeOpacity={0.6}>
+      <TouchableOpacity
+        style={[styles.toolStatusRow, styles.messageFooterHeader]}
+        onPress={toggle}
+        activeOpacity={0.6}
+        accessibilityRole="button"
+        accessibilityLabel={`Tools it could use, ${names.length}`}
+        accessibilityState={{ expanded }}
+      >
         <Icon name="tool" size={13} color={colors.textMuted} />
         <Text style={[styles.toolStatusText, styles.toolStatusTextCompact]} numberOfLines={1}>
           Tools it could use ({names.length})

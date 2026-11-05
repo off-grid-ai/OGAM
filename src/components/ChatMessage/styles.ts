@@ -73,8 +73,12 @@ const createBubbleStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     width: MESSAGE_MAX_WIDTH,
     alignSelf: 'flex-start' as const,
   },
+  // A footer toggle is a 44 pt target. Two of them stack (tools, details), so the frame cannot be
+  // pulled back over its neighbour; it absorbs only the row's own 4 pt padding and the footer grows.
   messageFooterHeader: {
     paddingVertical: 0,
+    minHeight: 44,
+    marginVertical: -4,
   },
   /**
    * The head of a call/result pair: the "Using X" row, which is always followed by the row carrying
