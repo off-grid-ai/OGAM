@@ -32,6 +32,7 @@ import {
 } from '../../services/proLicenseService';
 import { loadProFeatures } from '../../bootstrap/loadProFeatures';
 import logger from '../../utils/logger';
+import { cardSurface } from '../../theme/surface';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '';
@@ -165,7 +166,7 @@ export const ProManageSection: React.FC = () => {
           accessibilityRole="button"
           accessibilityLabel="Manage licensed devices in Sync"
         >
-          <Icon name="monitor" size={18} color={colors.primary} />
+          <Icon name="monitor" size={18} color={colors.textSecondary} />
           <View style={styles.rowText}>
             <Text style={styles.rowTitle}>Licensed devices</Text>
             <Text style={styles.rowDescription}>View or deactivate from Sync</Text>
@@ -177,7 +178,7 @@ export const ProManageSection: React.FC = () => {
       {/* Web Billing authenticates by email, so the only real path to cancelling is that link. */}
       {renewing ? (
         <View style={styles.row}>
-          <Icon name="mail" size={18} color={colors.primary} />
+          <Icon name="mail" size={18} color={colors.textSecondary} />
           <View style={styles.rowText}>
             <Text style={styles.rowTitle}>Manage subscription</Text>
             <Text style={styles.rowDescription}>
@@ -198,7 +199,7 @@ export const ProManageSection: React.FC = () => {
         accessibilityRole="button"
         accessibilityLabel="Reset Pro on this phone"
       >
-        <Icon name="rotate-ccw" size={18} color={colors.primary} />
+        <Icon name="rotate-ccw" size={18} color={colors.textSecondary} />
         <View style={styles.rowText}>
           <Text style={styles.rowTitle}>
             {resetting ? 'Resetting…' : 'Reset Pro'}
@@ -214,16 +215,14 @@ export const ProManageSection: React.FC = () => {
 };
 
 // The same card as the rest of the app: one surface, an uppercase title, hairline-divided rows.
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) =>
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) =>
   ({
     card: {
-      backgroundColor: colors.surface,
-      borderRadius: 12,
+      ...cardSurface(colors),
       paddingHorizontal: SPACING.md,
       paddingVertical: SPACING.xs,
       marginHorizontal: SPACING.xl,
       marginBottom: SPACING.xl,
-      ...shadows.small,
     },
     cardTitle: {
       ...TYPOGRAPHY.label,
@@ -245,5 +244,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) =>
     lastRow: { borderBottomWidth: 0 },
     rowText: { flex: 1, gap: SPACING.xs },
     rowTitle: { ...TYPOGRAPHY.bodySmall, color: colors.text, flex: 1 },
-    rowDescription: { ...TYPOGRAPHY.meta, color: colors.textMuted },
+    // A sentence, so Geist (reading text), not the Mono kept for labels and numbers.
+    rowDescription: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
   });
