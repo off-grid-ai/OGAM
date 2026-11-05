@@ -48,7 +48,7 @@ export const ComposerIconsRow: React.FC<ComposerIconsRowProps> = ({
         style={styles.pillIconButton}
         onPress={onAttachPress}
         disabled={disabled}
-        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
       >
         <Icon name="plus" size={20} color={disabled ? colors.textMuted : colors.textSecondary} />
       </TouchableOpacity>
@@ -60,7 +60,7 @@ export const ComposerIconsRow: React.FC<ComposerIconsRowProps> = ({
         style={styles.pillIconButton}
         onPress={onQuickSettingsPress}
         disabled={disabled}
-        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
       >
         <View style={styles.iconWrapper}>
           <Icon name="settings" size={18} color={disabled ? colors.textMuted : colors.textSecondary} />

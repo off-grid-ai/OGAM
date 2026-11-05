@@ -107,6 +107,9 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({
               <TouchableOpacity
                 style={[styles.viewerButton, showDetails && styles.viewerButtonActive]}
                 onPress={onToggleDetails}
+                accessibilityRole="button"
+                accessibilityLabel="Info"
+                accessibilityState={{ expanded: showDetails }}
               >
                 <Icon name="info" size={22} color={showDetails ? colors.primary : VIEWER_INK} />
                 <Text style={showDetails ? styles.viewerButtonTextPrimary : styles.viewerButtonText}>

@@ -111,7 +111,13 @@ export const ChatHeader: React.FC<{
           {activeConversation?.title || 'New chat'}
         </Text>
         <View style={styles.headerSubtitleRow}>
-          <TouchableOpacity style={styles.modelSelector} onPress={onOpenModels} testID="model-selector">
+          <TouchableOpacity
+            style={styles.modelSelector}
+            onPress={onOpenModels}
+            testID="model-selector"
+            accessibilityRole="button"
+            accessibilityLabel={`Model: ${modelName || 'none'}${isRemote ? ', on a remote server' : ''}. Change model`}
+          >
             {isRemote && (
               <Icon name="cloud" size={12} color={colors.primary} style={styles.remoteIcon} />
             )}
@@ -122,7 +128,12 @@ export const ChatHeader: React.FC<{
             <Text style={styles.modelSelectorArrow}>▼</Text>
           </TouchableOpacity>
           <Text style={styles.headerSubtitleDivider}>·</Text>
-          <TouchableOpacity style={styles.headerProjectRow} onPress={() => setShowProjectSelector(true)}>
+          <TouchableOpacity
+            style={styles.headerProjectRow}
+            onPress={() => setShowProjectSelector(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Project: ${activeProject ? activeProject.name : 'Default'}. Change project`}
+          >
             <Icon name="folder" size={11} color={colors.textMuted} />
             <Text style={[styles.headerSubtitle, { color: colors.textMuted }]} numberOfLines={1}>
               {activeProject ? activeProject.name : 'Default'}
