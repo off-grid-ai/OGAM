@@ -637,7 +637,9 @@ describe('Pro mobile state sync journey', () => {
     );
 
     fireEvent.press(ui.getByText('Desktop Research'));
-    fireEvent.press(await waitFor(() => ui!.getByText('Delete project')));
+    // Delete lives behind Edit project.
+    fireEvent.press(await waitFor(() => ui!.UNSAFE_getByProps({ name: 'edit-2' })));
+    fireEvent.press(await waitFor(() => ui!.getByTestId('project-edit-delete')));
     fireEvent.press(await waitFor(() => ui!.getByText('Delete')));
     await waitFor(() =>
       expect(
