@@ -162,3 +162,10 @@ Pass: 1 alive, 2 depth, 4 main action, 7 lists, 9 icons, 10 tokens. Fail: 3 (eme
 - **Built:** `AliveProvider` (listen-only gesture, UI-thread worklets) and `LivingField` answering it: lit dots under a finger, a press ring, scroll drift; breathing as native CSS keyframes. Values in `@offgrid/design` `ALIVE` (shared `d1eb0c1`). Commits `43a05e10c`, `73c396abb` (mask dropped: react-native-svg did not redraw it).
 - **On the phone (`r09-alive-touch/`):** 0.25 s after a touch the dots around it light emerald (`home-touch-ring.png`); by 1.15 s with the finger still down the light has gone (`home-touch-held.png`): a held finger should keep it lit. Open.
 - **Checklist (home-touch-ring):** 1 alive pass (touch now answered); 8 pass (Clipboard, Sync, Gallery, feedback are one group); 3 pass in this shot (emerald only on New chat, Home tab, lit dots); open: the Models card (Mac: "ugly") → three options on the canvas.
+
+## Supervisor 17:44 — r09 scored
+Pass: 2, 3, 4, 6, 9, 10. Partial: 1 (light gone while held), 7 (Sync row 3 lines; "-" vs "·"), 8 (Models card box), 12. Fail: 5 (bell circled; Metro banner), 11 ("Text" caption contrast). No per-frame JS work found.
+1. Keep the light while a finger is held → acted on: a cancel holds the light for ALIVE.holdAfterCancelMs, then fades; hidden tabs' fields stay dark.
+2. Models card redesign → three options on the canvas, waiting for Mac.
+3. Bell without its circle; "Text" caption contrast; shots without the Metro banner.
+- Also: the field now sits behind Chats, Projects, Models and Settings.
