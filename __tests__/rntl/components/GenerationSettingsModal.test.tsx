@@ -156,7 +156,7 @@ describe('GenerationSettingsModal', () => {
     fireEvent.press(getByText('TEXT GENERATION'));
 
     expect(getByText('Temperature')).toBeTruthy();
-    expect(getByText('Max Tokens')).toBeTruthy();
+    expect(getByText('Max tokens')).toBeTruthy();
   });
 
   it('lets context reach the model 262K limit and caps max tokens at the context', () => {
@@ -488,10 +488,10 @@ describe('GenerationSettingsModal', () => {
     fireEvent.press(getByTestId('modal-text-advanced-toggle'));
 
     expect(getByText('Temperature')).toBeTruthy();
-    expect(getByText('Max Tokens')).toBeTruthy();
+    expect(getByText('Max tokens')).toBeTruthy();
     expect(getByText('Top P')).toBeTruthy();
-    expect(getByText('Repeat Penalty')).toBeTruthy();
-    expect(getByText('Context Length')).toBeTruthy();
+    expect(getByText('Repeat penalty')).toBeTruthy();
+    expect(getByText('Context length')).toBeTruthy();
   });
 
   it('displays formatted values for text settings', () => {

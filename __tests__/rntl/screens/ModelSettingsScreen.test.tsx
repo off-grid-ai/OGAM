@@ -423,7 +423,7 @@ describe('ModelSettingsScreen', () => {
 
     it('shows Max Tokens slider label and default value', () => {
       const { getByText } = renderWithSections('text');
-      expect(getByText('Max Tokens')).toBeTruthy();
+      expect(getByText('Max tokens')).toBeTruthy();
       expect(getByText('1.0K')).toBeTruthy(); // 1024 -> 1.0K
     });
 
@@ -435,13 +435,13 @@ describe('ModelSettingsScreen', () => {
 
     it('shows Repeat Penalty slider label and default value', () => {
       const { getByText } = renderWithSections('text');
-      expect(getByText('Repeat Penalty')).toBeTruthy();
+      expect(getByText('Repeat penalty')).toBeTruthy();
       expect(getByText('1.10')).toBeTruthy();
     });
 
     it('shows Context Length slider label and default value', () => {
       const { getByText, getAllByText } = renderWithSections('text');
-      expect(getByText('Context Length')).toBeTruthy();
+      expect(getByText('Context length')).toBeTruthy();
       // getAllByText, because Max Tokens and Context Length BOTH default to 4096 and both format
       // to "4K" - a single-match query asserted that coincidence rather than this slider's value.
       expect(getAllByText('4K').length).toBeGreaterThan(0); // 4096 -> 4K

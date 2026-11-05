@@ -176,15 +176,15 @@ describe('model settings surface parity', () => {
     const chatSettings = render(<GenerationSettingsModal visible onClose={() => {}} />);
     fireEvent.press(chatSettings.getByText('TEXT GENERATION'));
     const chatOrder = JSON.stringify(chatSettings.toJSON());
-    expect(chatOrder.indexOf('Context Length')).toBeLessThan(chatOrder.indexOf('Max Tokens'));
-    expect(chatOrder.indexOf('Max Tokens')).toBeLessThan(chatOrder.indexOf('Thinking Budget'));
+    expect(chatOrder.indexOf('Context length')).toBeLessThan(chatOrder.indexOf('Max tokens'));
+    expect(chatOrder.indexOf('Max tokens')).toBeLessThan(chatOrder.indexOf('Thinking Budget'));
     chatSettings.unmount();
 
     const modelSettings = renderModelSettings();
     fireEvent.press(modelSettings.getByTestId('text-generation-accordion'));
     const modelOrder = JSON.stringify(modelSettings.toJSON());
-    expect(modelOrder.indexOf('Context Length')).toBeLessThan(modelOrder.indexOf('Max Tokens'));
-    expect(modelOrder.indexOf('Max Tokens')).toBeLessThan(modelOrder.indexOf('Thinking Budget'));
+    expect(modelOrder.indexOf('Context length')).toBeLessThan(modelOrder.indexOf('Max tokens'));
+    expect(modelOrder.indexOf('Max tokens')).toBeLessThan(modelOrder.indexOf('Thinking Budget'));
   });
 
   it('shows the selected STT model in Models, outside chat settings', () => {
