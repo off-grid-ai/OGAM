@@ -312,9 +312,8 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     backgroundColor: colors.primary,
-    ...shadows.small,
   },
-  // Stop is a quiet raised control: red is kept for errors, and a full-contrast disc would outshine
+  // Stop is a quiet control (no shadow): red is kept for errors, and a full-contrast disc would outshine
   // the emerald that marks the one important thing on screen.
   circleButtonStop: {
     backgroundColor: colors.surfaceLight,
@@ -366,7 +365,6 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   audioControlButton: {
     backgroundColor: colors.surface,
-    ...shadows.small,
   },
   audioVoiceLabel: {
     ...TYPOGRAPHY.meta,
