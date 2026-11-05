@@ -401,3 +401,10 @@ Project purpose line, Speech dates, voice name and icon names pass. No lost beha
 1. Gallery: no dot field, 4 pt gutter, count twice, white images read as holes, indigo selection. AliveScreen, surface + hairline tiles, 24 pt gutter, emerald selection.
 2. Names: attach "+" unnamed; model selector and viewer labels leak glyphs; viewer not modal to a11y.
 3. Downloads: failed row and empty bar (fixed in b07b7814c / 8e56f1a13, not yet built); badge "4 in progress" over 1 paused + 1 failed.
+
+## Supervisor 05:20 (hand test 36, build at c12e675e0)
+
+Gallery field, gutter, hairlines, one count; Attach name; chat 24 pt gutter; failed-row copy all pass. No lost behaviour. Top 3:
+1. Downloads: stray "0%" on the failed row; Retry named by file; badge "4 in progress" over 1 paused + 1 failed.
+2. Names and targets: viewer Info unnamed; model selector and project chip leak glyphs; Speak unnamed; Attach and Chat options 32 pt.
+3. White images still read as holes; composer on 12 pt, assistant meta row at 32 pt. Also Settings root Title Case and "PRO" twice; About: Twitter bird, red heart, "Built by Wednesday" twice.
