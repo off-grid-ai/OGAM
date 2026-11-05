@@ -24,8 +24,8 @@ interface ScreenHeaderProps {
  * Sync lost the shadow and used a chevron in a 44px box, the Pro screen had no header at all - and
  * "make it match" meant editing each one. Now it means editing this.
  *
- * The touch target comes from hitSlop rather than padding, so the arrow can sit beside the title at
- * the standard inset while staying comfortably tappable.
+ * The back target is a 44 pt frame pulled back by negative margins, so the arrow sits beside the
+ * title at the standard inset while the frame a thumb and a screen reader measure stays 44 pt.
  */
 export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   title,
@@ -45,7 +45,6 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
       {onBack ? (
         <TouchableOpacity
           style={styles.backButton}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           onPress={onBack}
           accessibilityRole="button"
           accessibilityLabel="Back"
@@ -80,6 +79,8 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     minHeight: 52,
     borderBottomWidth: 0,
   },
-  backButton: { padding: SPACING.xs },
+  // A 44 pt frame pulled back 8 pt, so the arrow still sits beside the title and the header keeps
+  // its height. A screen reader measures the frame, not hitSlop (hand test 44: 28 pt).
+  backButton: { width: 44, height: 44, margin: -8, alignItems: 'center' as const, justifyContent: 'center' as const },
   title: { ...TYPOGRAPHY.h2, color: colors.text, flex: 1 },
 });
