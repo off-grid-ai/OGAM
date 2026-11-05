@@ -144,8 +144,9 @@ const createFilterStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   filterChipActive: { backgroundColor: `${colors.primary}25`, borderColor: colors.primary },
   filterChipText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
   filterChipTextActive: { color: colors.primary },
-  filterToggle: { padding: 12, borderRadius: 12, backgroundColor: colors.surface },
-  filterToggleActive: { backgroundColor: `${colors.primary}15` },
+  // Toolbar actions are bare glyphs with a 44px target; the chosen one shows by its emerald glyph.
+  filterToggle: { padding: 12 },
+  filterToggleActive: {},
   filterDot: {
     position: 'absolute' as const,
     top: 6,

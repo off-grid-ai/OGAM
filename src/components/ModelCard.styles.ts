@@ -67,20 +67,15 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.meta,
     color: colors.textSecondary,
   },
+  // What a model can do, as a glyph and a word: labels on the row, not boxes on it.
   capabilityBadge: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 4,
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 6,
-    paddingHorizontal: 6,
     paddingVertical: 2,
   },
   authorTag: {
-    backgroundColor: colors.surfaceLight,
-    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 6,
     flexShrink: 0,
   },
   authorTagText: {
