@@ -72,3 +72,9 @@ Each round: expected / found / root cause / change / commit / screenshots.
 - **Switches:** 13 switches move onto one AppSwitch (wrapping the counted Switch). Off reads as off; no white knob in dark mode (`a07f91e79`).
 - **Still queued for the device (phone offline):** every visual change since `311f8ace3`.
 - **Chat:** an empty chat offers three starter prompts; a tap sends one (`61dffeb30`). Rendered test `starterPrompts.rendered.test.tsx`.
+
+## Supervisor 14:10
+1. Starters: show them only when a model is ready (a tap while loading hits "No Model Selected"). They send without the composer's mode. The last row has a double hairline, and the list is narrow, so prompts wrap.
+2. Switches: on Android a disabled switch keeps full colour; the on-state knob has low contrast on a 50% emerald track. Models list: incompatible rows fade their own surface (patchy group); the active border is hidden in the grouped list.
+3. Next: a fresh-install first run with a best-fit default; Remote Servers as grouped rows; then the alive layer.
+- Done: Settings › Search Model is a pushed route (this round).
