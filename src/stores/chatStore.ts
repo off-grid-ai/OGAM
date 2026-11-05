@@ -59,13 +59,18 @@ function speakableStreamingAnswer(
     ? ''
     : streamingMessage;
 }
+/** An untitled chat's name, in sentence case like every other label. */
+const NEW_CHAT_TITLE = 'New chat';
+/** Earlier builds (and other devices on Sync) named it this; it still means "untitled". */
+const UNTITLED = new Set([NEW_CHAT_TITLE, 'New Conversation']);
+
 /** Derive conversation title from the first user message. */
 function deriveTitle(
   currentTitle: string,
   role: string,
   content: string,
 ): string {
-  if (currentTitle !== 'New Conversation' || role !== 'user')
+  if (!UNTITLED.has(currentTitle) || role !== 'user')
     return currentTitle;
   const truncated = content.slice(0, 50);
   return content.length > 50 ? `${truncated}...` : truncated;
@@ -344,7 +349,7 @@ export const useChatStore = create<ChatState>()(
         const id = generateId();
         const conversation: Conversation = {
           id,
-          title: title || 'New Conversation',
+          title: title || NEW_CHAT_TITLE,
           modelId,
           messages: [],
           createdAt: new Date().toISOString(),
