@@ -53,20 +53,22 @@ describe('ProjectsScreen', () => {
   });
 
   describe('the list', () => {
-    it('lists each project with a folder glyph (no letter badge), and its description only when it has one', async () => {
+    it('lists each project by name, then its purpose; a purpose that only repeats the name is dropped', async () => {
       const app = await mountProjectsApp({ noStarterProjects: true });
       const alpha = await makeProject(app, 'Project Alpha', 'A detailed project description');
       const beta = await makeProject(app, 'Sample Beta');
+      const echo = await makeProject(app, 'Recipes', '  recipes ');
 
       expect(rowOf(app, alpha).getByText('Project Alpha')).toBeTruthy();
       expect(rowOf(app, alpha).getByText('A detailed project description')).toBeTruthy();
       expect(rowOf(app, alpha).queryByText('P')).toBeNull();
       expect(rowOf(app, beta).getByText('Sample Beta')).toBeTruthy();
-      expect(rowOf(app, beta).queryByText('S')).toBeNull();
       expect(rowOf(app, beta).queryByText('A detailed project description')).toBeNull();
+      expect(rowOf(app, echo).getByText('Recipes')).toBeTruthy();
+      expect(rowOf(app, echo).queryByText(/^\s*recipes\s*$/)).toBeNull();
     });
 
-    it('counts the chats filed in each project', async () => {
+    it('says how many chats each project holds, in words', async () => {
       const app = await mountProjectsApp({ noStarterProjects: true });
       const busy = await makeProject(app, 'Busy');
       const quiet = await makeProject(app, 'Quiet');
@@ -80,9 +82,26 @@ describe('ProjectsScreen', () => {
         chats.createConversation('model-1', 'Loose');
       });
 
-      expect(rowOf(app, busy).getByText('2')).toBeTruthy();
-      expect(rowOf(app, quiet).getByText('1')).toBeTruthy();
-      expect(rowOf(app, empty).getByText('0')).toBeTruthy();
+      expect(rowOf(app, busy).getByText(/^2 chats · /)).toBeTruthy();
+      expect(rowOf(app, quiet).getByText(/^1 chat · /)).toBeTruthy();
+      expect(rowOf(app, empty).getByText(/^0 chats · /)).toBeTruthy();
+    });
+
+    it('dates a project by its most recent chat', async () => {
+      const app = await mountProjectsApp({ noStarterProjects: true });
+      const id = await makeProject(app, 'Dated');
+
+      app.rtl.act(() => {
+        const chats = app.useChatStore.getState();
+        chats.createConversation('model-1', 'Old', id);
+        chats.createConversation('model-1', 'Newer', id);
+        const at = { Old: '2026-01-15T10:00:00.000Z', Newer: '2026-02-03T10:00:00.000Z' } as Record<string, string>;
+        app.useChatStore.setState({
+          conversations: app.useChatStore.getState().conversations.map((c: { title: string }) => ({ ...c, updatedAt: at[c.title] ?? (c as never as { updatedAt: string }).updatedAt })),
+        });
+      });
+
+      expect(rowOf(app, id).getByText('2 chats · Feb 3')).toBeTruthy();
     });
 
     it('opening a project shows that project', async () => {
