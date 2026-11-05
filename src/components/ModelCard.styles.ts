@@ -59,7 +59,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   capabilityText: {
     ...TYPOGRAPHY.meta,
-    color: colors.primary,
+    color: colors.textSecondary,
   },
   capabilityBadge: {
     flexDirection: 'row' as const,

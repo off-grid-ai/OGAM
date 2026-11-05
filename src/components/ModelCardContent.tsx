@@ -173,7 +173,9 @@ export function speedHint(capabilities?: ModelCardCapabilities): string | undefi
   return speedDescriptions(capabilities).join('. ') || undefined;
 }
 
-/** The badge row: what makes a model fast for its size first, then what it can do. */
+/** The badge row: what makes a model fast for its size first, then what it can do. Each badge names
+ *  itself in a word: an eye, a wrench and a bolt alone meant nothing to a new user. One tone, no
+ *  colour-coding (brand: emerald is the only accent). */
 const CapabilityBadges: React.FC<{ capabilities?: ModelCardCapabilities; isVisionModel: boolean }> = ({ capabilities, isVisionModel }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -182,21 +184,24 @@ const CapabilityBadges: React.FC<{ capabilities?: ModelCardCapabilities; isVisio
   return (
     <View style={styles.capabilityRow}>
       {!!capabilities?.moeActiveB && <View style={styles.capabilityBadge} accessibilityLabel={speedDescriptions({ moeActiveB: capabilities.moeActiveB })[0]}>
-        <Icon name="layers" size={13} color={colors.primary} />
+        <Icon name="layers" size={13} color={colors.textSecondary} />
         <Text style={styles.capabilityText}>{`MoE ${capabilities.moeActiveB}B`}</Text>
       </View>}
       {capabilities?.mtp && <View style={styles.capabilityBadge} accessibilityLabel={speedDescriptions({ mtp: true })[0]}>
-        <Icon name="fast-forward" size={13} color={colors.primary} />
+        <Icon name="fast-forward" size={13} color={colors.textSecondary} />
         <Text style={styles.capabilityText}>MTP</Text>
       </View>}
       {vision && <View style={styles.capabilityBadge} accessibilityLabel="Vision">
-        <Icon name="eye" size={13} color={colors.info} />
+        <Icon name="eye" size={13} color={colors.textSecondary} />
+        <Text style={styles.capabilityText}>Sees images</Text>
       </View>}
       {capabilities?.tools && <View style={styles.capabilityBadge} accessibilityLabel={capabilities.predicted ? 'Tool calling likely' : 'Tool calling'}>
-        <Icon name="tool" size={13} color={colors.warning} />
+        <Icon name="tool" size={13} color={colors.textSecondary} />
+        <Text style={styles.capabilityText}>Tools</Text>
       </View>}
       {capabilities?.thinking && <View style={styles.capabilityBadge} accessibilityLabel={capabilities.predicted ? 'Thinking likely' : 'Thinking'}>
-        <Icon name="zap" size={13} color={colors.primary} />
+        <Icon name="zap" size={13} color={colors.textSecondary} />
+        <Text style={styles.capabilityText}>Thinks</Text>
       </View>}
     </View>
   );
