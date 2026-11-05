@@ -52,6 +52,9 @@ const createStyles = (colors: ThemeColors) => ({
   },
 });
 
+/** A card (ModelCard) used as a row inside a group: the group owns the surface, so the card drops its own. */
+export const GROUPED_CARD_ROW: ViewStyle = { borderRadius: 0, marginTop: 0, marginBottom: 0, borderWidth: 0, shadowOpacity: 0, elevation: 0 };
+
 /**
  * The same look for a virtualized list, whose rows cannot sit inside one wrapper: the first and last
  * rows round the group's corners, and `ListGroupSeparator` draws the hairline between rows.

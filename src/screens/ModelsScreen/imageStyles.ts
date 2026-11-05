@@ -14,13 +14,8 @@ const createImageModelsStylesPart1 = (colors: ThemeColors, _shadows: ThemeShadow
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 5,
-    paddingHorizontal: 10,
     paddingVertical: 6,
     marginBottom: 8,
-    backgroundColor: `${colors.primary}10`,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: `${colors.primary}30`,
   },
   recHintText: {
     ...TYPOGRAPHY.meta,
@@ -28,10 +23,10 @@ const createImageModelsStylesPart1 = (colors: ThemeColors, _shadows: ThemeShadow
     flex: 1,
   },
   imageModelsSection: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
   },
   imageModelsList: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     marginBottom: 24,
   },
   recommendedBadge: {

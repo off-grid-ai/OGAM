@@ -3,7 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { View, Text, FlatList, TextInput, RefreshControl, Platform, type StyleProp, type ViewStyle } from 'react-native';
-import { ListGroupSeparator, listGroupRowEnds } from '../../components/ListGroup';
+import { GROUPED_CARD_ROW, ListGroupSeparator, listGroupRowEnds } from '../../components/ListGroup';
 import { TouchableOpacity } from '../../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import { LoadingDots } from '../../components/LoadingDots';
@@ -336,7 +336,6 @@ interface ModelListItemProps {
   rowStyle?: StyleProp<ViewStyle>;
 }
 /** A model card as a row of the grouped list: no box of its own (the group draws the surface). */
-const GROUPED_MODEL_ROW: ViewStyle = { borderRadius: 0, marginTop: 0, marginBottom: 0, borderWidth: 0, shadowOpacity: 0, elevation: 0 };
 const ModelListItem: React.FC<ModelListItemProps> = ({ item, index, focusTrigger, isDownloaded, isActive, isTrending, onPress, onDownload, rowStyle }) => {
   const { isCompatible, incompatibleReason } = getTextModelCompatibility(item);
   const isLiteRTParent = item.id === LITERT_PARENT_ID;
@@ -436,7 +435,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
     // The model you talk to is marked "In use" on its row, the same way every other kind marks it.
     const isActive = downloadedModels.some(model => model.id === activeTextModelId && isFamilyFile(model));
     return (
-      <ModelListItem item={item} index={index} focusTrigger={focusTrigger} isDownloaded={isDownloaded} isActive={isActive} isTrending={trendingAsModelInfo.some(t => t.id === item.id)} onPress={directDownload ?? (() => handleSelectModel(item))} onDownload={directDownload} rowStyle={[GROUPED_MODEL_ROW, listGroupRowEnds(index, listData.length)]} />
+      <ModelListItem item={item} index={index} focusTrigger={focusTrigger} isDownloaded={isDownloaded} isActive={isActive} isTrending={trendingAsModelInfo.some(t => t.id === item.id)} onPress={directDownload ?? (() => handleSelectModel(item))} onDownload={directDownload} rowStyle={[GROUPED_CARD_ROW, listGroupRowEnds(index, listData.length)]} />
     );
   };
 
