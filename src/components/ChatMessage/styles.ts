@@ -14,7 +14,8 @@ const MESSAGE_MAX_WIDTH = '85%' as const;
 const createBubbleStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
     marginVertical: 6,
-    paddingHorizontal: 16,
+    // The screen's 24 pt gutter, so replies line up with the header above them.
+    paddingHorizontal: SPACING.xl,
   },
   userContainer: {
     alignItems: 'flex-end' as const,
@@ -24,7 +25,7 @@ const createBubbleStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   systemInfoContainer: {
     paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.xl,
     alignItems: 'center' as const,
   },
   systemInfoText: {
@@ -94,7 +95,7 @@ const createBubbleStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
    * assistant turn sat at 16px - the same unequal rhythm, reintroduced from the other side.
    */
   toolMessageRow: {
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.xl,
     alignItems: 'flex-start' as const,
   },
   toolStatusRow: {
@@ -387,7 +388,7 @@ const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
 
 const createActionStyles = (colors: ThemeColors) => ({
   actionSheetContent: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingBottom: SPACING.xl,
   },
   actionSheetItem: {
@@ -404,7 +405,7 @@ const createActionStyles = (colors: ThemeColors) => ({
     color: colors.text,
   },
   editSheetContent: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingBottom: SPACING.xl,
   },
   editInput: {

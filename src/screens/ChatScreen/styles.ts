@@ -11,7 +11,8 @@ const createLayoutStyles = (colors: ThemeColors) => ({
 
 const createHeaderStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   header: {
-    paddingHorizontal: 16,
+    // The 24 pt gutter every other screen uses (hand test 34: chat sat at 16).
+    paddingHorizontal: SPACING.xl,
     paddingTop: 16,
     paddingBottom: 12,
     // See-through over the living field, with a hairline under it (no slab, no shadow).
@@ -162,7 +163,7 @@ const createIndicatorStyles = (colors: ThemeColors) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: colors.border,
@@ -173,7 +174,7 @@ const createIndicatorStyles = (colors: ThemeColors) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: colors.border,
