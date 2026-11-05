@@ -60,14 +60,18 @@ const createStyles = (colors: ThemeColors) => ({
     paddingTop: SPACING.sm,
     gap: SPACING.md,
   },
-  item: { paddingVertical: 10, alignItems: 'center' as const },
+  // 44 pt tall: a tab is a target (it was 36).
+  item: { minHeight: 44, justifyContent: 'center' as const, alignItems: 'center' as const },
   text: { ...TYPOGRAPHY.body, color: colors.textMuted },
   textActive: { color: colors.text, fontWeight: '500' as const },
+  // Absolute, so the chosen tab's label sits level with the others in the 44 pt row.
   indicator: {
+    position: 'absolute' as const,
+    left: 0,
+    right: 0,
+    bottom: 6,
     height: 2,
     backgroundColor: colors.primary,
     borderRadius: 1,
-    marginTop: 4,
-    alignSelf: 'stretch' as const,
   },
 });
