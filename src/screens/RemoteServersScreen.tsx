@@ -346,6 +346,7 @@ export const RemoteServersScreen: React.FC = () => {
                         ? `Stop using ${server.name}`
                         : `Use ${server.name}`
                     }
+                    accessibilityState={{ selected: isActive }}
                     testID={`server-use-${server.id}`}
                   >
                     <View style={styles.serverTopRow}>
@@ -353,6 +354,7 @@ export const RemoteServersScreen: React.FC = () => {
                       <Text style={styles.serverName} numberOfLines={1}>
                         {server.name}
                       </Text>
+                      {isActive && <Icon name="check" size={14} color={theme.colors.primary} />}
                       <Text
                         style={isActive ? styles.activeBadge : styles.useHint}
                       >
