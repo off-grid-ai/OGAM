@@ -94,10 +94,14 @@ const createGridStyles = (colors: ThemeColors) => ({
     overflow: 'hidden' as const,
     // A hairline edge, so a white image is a tile and not a hole in the page (hand test 35).
     backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   gridImage: { width: '100%' as const, height: '100%' as const },
+  gridEdge: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: SPACING.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   unavailableImage: {
     flex: 1,
     justifyContent: 'center' as const,

@@ -63,6 +63,9 @@ export const GalleryGridItem: React.FC<GalleryGridItemProps> = ({
             onError={() => setFailed(true)}
           />
         )}
+        {/* An edge drawn OVER the picture: the container's own border sits under a white image, so a
+            row of white images still read as holes in the page (hand test 36). */}
+        <View pointerEvents="none" style={styles.gridEdge} />
         {isSelectMode && (
           <View style={[styles.selectionOverlay, isSelected && styles.selectionOverlaySelected]}>
             <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
