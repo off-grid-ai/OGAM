@@ -188,6 +188,14 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   renderItem,
 }) => {
   const hasScrolledRef = React.useRef(false);
+  // A chat opens at its newest message. The list renders in batches, so one scroll on the first
+  // layout lands at the end of the first batch only; until you touch the list, every growth pins
+  // it to the end again (hand test 51: a long chat opened from Home sat at its oldest message).
+  const openingRef = React.useRef(true);
+  React.useEffect(() => {
+    openingRef.current = true;
+    hasScrolledRef.current = false;
+  }, [chat.activeConversationId]);
   const interfaceMode = useUiModeStore(s => s.interfaceMode);
   const tabNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const toolCountHintDismissed = useAppStore(state => state.toolCountHintDismissed);
@@ -324,7 +332,10 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           contentContainerStyle={styles.messageList}
           onScroll={handleScroll}
           onContentSizeChange={(_w, h) => {
-            if (!hasScrolledRef.current && h > 0) {
+            if (openingRef.current && h > 0) {
+              flatListRef.current?.scrollToEnd({ animated: false });
+              hasScrolledRef.current = true;
+            } else if (!hasScrolledRef.current && h > 0) {
               // Initial layout: force scroll to bottom regardless of isNearBottom
               flatListRef.current?.scrollToEnd({ animated: false });
               hasScrolledRef.current = true;
@@ -337,6 +348,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
             }
           }}
           onScrollBeginDrag={() => {
+            openingRef.current = false;
             if (chat.isGeneratingForThisConversation) {
               userScrolledDuringGenerationRef.current = true;
             }
