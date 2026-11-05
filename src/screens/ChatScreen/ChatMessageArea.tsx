@@ -272,8 +272,8 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
               activeProject={chat.activeProject}
               setShowProjectSelector={chat.setShowProjectSelector}
               isRemote={chat.activeModelInfo?.isRemote}
-              // Offered only once a model can answer: a tap while none is ready had no next step.
-              onStarter={chat.hasActiveModel && !chat.isModelLoading ? prompt => chat.handleSend(prompt) : undefined}
+              // Starters are text prompts, so they need a text model: with only an image model a tap drew a picture.
+              onStarter={chat.hasTextModel && !chat.isModelLoading ? prompt => chat.handleSend(prompt) : undefined}
             />
           );
         })()
