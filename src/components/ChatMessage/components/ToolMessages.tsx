@@ -54,7 +54,7 @@ function getToolLabel(toolName?: string, content?: string): string {
         ? /^No results found for "([^"]+)"/.exec(content)
         : null;
       if (queryMatch) return `Searched: "${queryMatch[1]}" (no results)`;
-      return 'Web search result';
+      return 'Searched the web';
     }
     case 'search_knowledge_base': {
       const passages = content ? parseSearchBlock(content) : [];
@@ -82,6 +82,39 @@ function getToolLabel(toolName?: string, content?: string): string {
       return 'Film started';
     default:
       return toolName || 'Tool result';
+  }
+}
+
+/**
+ * What a tool is doing while it runs, in plain words (callers add the trailing ellipsis). A tool this
+ * list does not know reads as "Looking that up", never its raw name (which is developer detail).
+ */
+function getRunningLabel(toolName?: string): string {
+  switch (toolName) {
+    case 'web_search':
+      return 'Searching the web';
+    case 'read_url':
+    case 'web_fetch':
+    case 'read_wiki_contents':
+      return 'Reading the page';
+    case 'search_knowledge_base':
+      return 'Searching your documents';
+    case 'calculator':
+      return 'Calculating';
+    case 'get_current_datetime':
+      return 'Checking the time';
+    case 'get_device_info':
+      return 'Checking this phone';
+    case 'web_use':
+    case 'computer_use':
+      return 'Working on your task';
+    case 'generate_image':
+      return 'Making the picture';
+    case 'generate_video':
+    case 'make_film':
+      return 'Making the video';
+    default:
+      return 'Looking that up';
   }
 }
 
@@ -296,7 +329,7 @@ export const SyncedToolArtifacts: React.FC<{
             toolIcon={getToolIcon(artifact.name)}
             toolLabel={
               running
-                ? `Using ${getToolLabel(artifact.name)}...`
+                ? `${getRunningLabel(artifact.name)}…`
                 : getToolLabel(artifact.name, artifact.result)
             }
             toolName={artifact.name}
@@ -375,7 +408,7 @@ function toolCallRows(message: Message): readonly ToolCallRow[] {
       stableKey: `${messageKey}:call:${callKey}`,
       name: call.name,
       icon: getToolIcon(call.name),
-      label: `Using ${call.name}${toolArgumentsLabel(call.arguments)}`,
+      label: `${getRunningLabel(call.name)}${toolArgumentsLabel(call.arguments)}…`,
     };
   });
   toolCallRowsByMessage.set(message, { calls, rows });

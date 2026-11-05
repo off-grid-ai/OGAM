@@ -45,7 +45,7 @@ describe('ChatMessage — Tool message rendering', () => {
     });
 
     it.each([
-      ['web_search', 'Web results', /Web search result/],
+      ['web_search', 'Web results', /Searched the web/],
       ['calculator', '42', /42/],
       ['get_current_datetime', '2026-02-24T10:30:00Z', /Retrieved date\/time/],
       ['get_device_info', '{"model":"iPhone 15"}', /Retrieved device info/],
@@ -82,11 +82,11 @@ describe('ChatMessage — Tool message rendering', () => {
       const { getByText } = renderToolResult('web_search', 'Detailed search results');
 
       // Expand
-      fireEvent.press(getByText(/Web search result/));
+      fireEvent.press(getByText(/Searched the web/));
       expect(getByText('Detailed search results')).toBeTruthy();
 
       // Collapse
-      fireEvent.press(getByText(/Web search result/));
+      fireEvent.press(getByText(/Searched the web/));
     });
 
     it('renders calculator multiplication result with literal asterisks when expanded', () => {
@@ -177,7 +177,7 @@ describe('ChatMessage — Tool message rendering', () => {
       expect(getByText(/Let me check the docs\./)).toBeTruthy();
     });
 
-    it('shows "Using web_search" text with arguments preview', () => {
+    it('shows "Searching the web" text with arguments preview', () => {
       const message = makeMessage({
         role: 'assistant',
         content: '',
@@ -188,7 +188,7 @@ describe('ChatMessage — Tool message rendering', () => {
 
       const { getByText } = render(<ChatMessage message={message} />);
 
-      expect(getByText(/Using web_search.*react native/)).toBeTruthy();
+      expect(getByText(/Searching the web: .*react native/)).toBeTruthy();
     });
 
     it('shows multiple tool calls', () => {
@@ -203,8 +203,8 @@ describe('ChatMessage — Tool message rendering', () => {
 
       const { getByText } = render(<ChatMessage message={message} />);
 
-      expect(getByText(/Using web_search/)).toBeTruthy();
-      expect(getByText(/Using calculator/)).toBeTruthy();
+      expect(getByText(/Searching the web/)).toBeTruthy();
+      expect(getByText(/Calculating/)).toBeTruthy();
     });
 
     it('gives every call its own row, so a turn is a list and not one dense block', () => {
@@ -258,7 +258,7 @@ describe('ChatMessage — Tool message rendering', () => {
 
       // With empty object, Object.values({}).join(', ') === ''
       // So argsPreview is '' and the text should just be "Using get_current_datetime"
-      expect(getByText('Using get_current_datetime')).toBeTruthy();
+      expect(getByText('Checking the time…')).toBeTruthy();
     });
 
     it('renders tool call without id (uses index as key)', () => {

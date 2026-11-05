@@ -139,7 +139,7 @@ describe('demo email-draft handoff scenes (rendered, real App)', () => {
     expect(await view.findByText(REQUEST)).toBeTruthy();
     expect(await view.findByText(/No email has been sent/)).toBeTruthy();
     expect(view.getByText(/is ready in your mail app/)).toBeTruthy();
-    // The finished work folds under "Work done"; opening it shows the mail tool's finished row, and
+    // The finished work folds under "How I got this"; opening it shows the mail tool's finished row, and
     // its result opens to show the mail app opened with the draft.
     expect(view.queryByTestId('tool-result-label-send_email')).toBeNull();
     rtl.fireEvent.press(view.getByTestId('assistant-work-toggle'));

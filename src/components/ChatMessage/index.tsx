@@ -326,12 +326,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             key={isStreaming ? 'live' : 'done'}
             title={
               isStreaming
-                ? 'Working'
+                ? 'Finding your answer'
                 : message.turnStatus === 'failed'
-                  ? 'Work failed'
+                  ? 'Could not finish'
                 : message.turnStatus === 'cancelled'
-                  ? 'Work stopped'
-                  : 'Work done'
+                  ? 'Stopped'
+                  : 'How I got this'
             }
             defaultOpen={Boolean(isStreaming)}
             variant="plain"
