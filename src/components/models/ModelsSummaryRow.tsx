@@ -82,7 +82,7 @@ export const ModelsSummaryRow: React.FC<Props> = ({
                   <Icon
                     name={icon}
                     size={18}
-                    color={active ? colors.primary : colors.textMuted}
+                    color={active ? colors.text : colors.textMuted}
                   />
                   <Text
                     style={[styles.caption, active && styles.captionActive]}
@@ -151,5 +151,6 @@ const createStyles = (colors: ThemeColors) => ({
     lineHeight: 34,
     color: colors.textMuted,
   },
-  countActive: { color: colors.primary },
+  // Active reads as bright text, not emerald: the page keeps one emerald, its main action.
+  countActive: { color: colors.text },
 });
