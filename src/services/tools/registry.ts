@@ -34,7 +34,7 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
     id: 'study_math',
     name: 'study_math',
     displayName: 'Study maths',
-    description: 'Exact maths done in code, not by guessing. action: describe (mean, median, stdev of values), t_test (values, optional second, mu0, paired), regression (x, y), sample_size (margin, confidence), convert (value, from, to units), date (from, to or add_days, as YYYY-MM-DD), tvm (time value of money: give all of pv, fv, pmt, rate, nper except the one to solve). Lists are comma separated.',
+    description: 'Exact maths done in code, not by guessing. action: describe (mean, median, stdev of values), t_test (values, optional second, mu0, paired), regression (x, y), sample_size (margin, confidence), convert (value, from, to units), date (from, to or add_days, as YYYY-MM-DD), tvm (time value of money: give all of pv, fv, pmt, rate, nper except the one to solve). Also, with input as JSON text: solve {type:linear|quadratic|system,a,b,c...}, number {op:gcd|lcm|factorial|choose|permute|prime_factors|is_prime,n,k,a,b}, percent {op:change|of|what_percent,...}, geometry {shape:circle|rectangle|triangle|right_triangle|sphere|cylinder|cone,r,w,h,...}, fraction {op:add|subtract|multiply|divide|simplify,a,b}. Use this for ANY arithmetic you are not certain of; never calculate by guessing. Lists are comma separated.',
     icon: 'percent',
     parameters: {
       action: { type: 'string', description: 'describe, t_test, regression, sample_size, convert, date or tvm', required: true },
@@ -50,6 +50,7 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
       confidence: { type: 'string', description: '0.80, 0.90, 0.95 or 0.99' },
       mu0: { type: 'string', description: 'Hypothesised mean for a one-sample t_test' },
       paired: { type: 'string', description: 'true for a paired t_test' },
+      input: { type: 'string', description: 'JSON text of inputs for solve, number, percent, geometry or fraction' },
       pv: { type: 'string', description: 'Present value' }, fv: { type: 'string', description: 'Future value' },
       pmt: { type: 'string', description: 'Payment per period' }, rate: { type: 'string', description: 'Rate per period, e.g. 0.05' },
       nper: { type: 'string', description: 'Number of periods' },
@@ -59,7 +60,7 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
     id: 'study_helpers',
     name: 'study_helpers',
     displayName: 'Study helpers',
-    description: 'Planner, rubric check and references, computed in code from what the person gives. action: plan (exams = JSON [{name,date YYYY-MM-DD,topics[],done[]}] in the order taken, today, done_topics), rubric (rubric text one criterion per line, draft text: lists criteria the draft does not address), apa (source = JSON {author,year,title,publisher,url,page}), matrix (papers = JSON list of {title,author,year,question,method,sample,findings,limitations}). Never invent author, year or title: leave a field out if unknown.',
+    description: 'Planner, rubric check and references, computed in code from what the person gives. action: plan (exams = JSON [{name,date YYYY-MM-DD,topics[],done[]}] in the order taken, today, done_topics), rubric (rubric text one criterion per line, draft text: lists criteria the draft does not address), apa (source = JSON {author,year,title,publisher,url,page}), matrix (papers = JSON list of {title,author,year,question,method,sample,findings,limitations}), text_stats (text: word and sentence counts, reading ease and grade level, most-used words; use for English and writing help). Never invent author, year or title: leave a field out if unknown.',
     icon: 'book-open',
     parameters: {
       action: { type: 'string', description: 'plan, rubric, apa or matrix', required: true },
@@ -70,6 +71,7 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
       draft: { type: 'string', description: 'The draft text to check' },
       source: { type: 'string', description: 'JSON source for apa' },
       papers: { type: 'string', description: 'JSON list of papers for matrix' },
+      text: { type: 'string', description: 'The passage for text_stats' },
     },
   },
   {
@@ -80,6 +82,17 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
     icon: 'image',
     requiresNetwork: true,
     parameters: { query: { type: 'string', description: 'What the picture should show', required: true } },
+  },
+  {
+    id: 'science_data',
+    name: 'science_data',
+    displayName: 'Science data',
+    description: 'Look up science facts instead of recalling them. action: element (input = symbol, name or atomic number: mass, group, period, category), molar_mass (input = formula such as Ca(OH)2 or CuSO4.5H2O), moles (input JSON {formula, grams or moles}), ph (input JSON {concentration, of: "H+" or "OH-"}), constant (input = c, g, G, h, kB, NA, R, e, me, mp, F or atm).',
+    icon: 'thermometer',
+    parameters: {
+      action: { type: 'string', description: 'element, molar_mass, moles, ph or constant', required: true },
+      input: { type: 'string', description: 'Plain text or JSON for the action', required: true },
+    },
   },
   {
     id: 'get_current_datetime',

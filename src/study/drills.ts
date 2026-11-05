@@ -358,3 +358,37 @@ export const DRILL_LABELS: Record<DrillKind, string> = {
   'bond-price': 'Bond price', 'lease-liability': 'Lease liability', 'bond-interest': 'Bond interest expense',
   'std-dev': 'Standard deviation', 'confidence-interval': 'Margin of error', 't-statistic': 't statistic', 'sample-size': 'Sample size', 'regression-slope': 'Regression slope',
 };
+
+const KEYWORDS: Array<[DrillKind, RegExp]> = [
+  ['balance-sheet', /balance sheet|accounting equation|assets.*liabilities/],
+  ['journal-entry', /journal|debit|credit|double.entry/],
+  ['net-income', /net income|profit and loss|p&l/],
+  ['income-statement', /income statement|statement of (operations|earnings)/],
+  ['cash-flow', /cash flow/],
+  ['trial-balance', /trial balance|ledger/],
+  ['depreciation', /straight.line|depreciation/],
+  ['double-declining', /double.declining|declining balance|accelerated/],
+  ['compound-solve', /compound|future value|present value|time value|annuit|interest/],
+  ['loan-payment', /loan|mortgage|amortiz/],
+  ['effective-rate', /effective (annual )?rate|apr|apy|nominal/],
+  ['inventory-cost', /inventory|fifo|lifo|weighted.average|cost of goods/],
+  ['ratio', /ratio|return on equity|margin|liquidity|leverage|debt.to.equity/],
+  ['current-ratio', /current ratio|working capital/],
+  ['break-even', /break.even|cost.volume|cvp/],
+  ['npv', /\bnpv\b|net present value|capital budget|discount rate/],
+  ['bond-price', /bond/],
+  ['lease-liability', /lease/],
+  ['bond-interest', /bond interest|effective interest/],
+  ['std-dev', /standard deviation|variance|dispersion/],
+  ['confidence-interval', /confidence interval|margin of error/],
+  ['t-statistic', /t.?test|t statistic|hypothesis|significance/],
+  ['sample-size', /sample size|sampling/],
+  ['regression-slope', /regression|slope|correlation|least.squares/],
+];
+/** The code-made drill that fits a square's title and focus, or undefined. The longest matching words win ("bond interest" beats "bond"). */
+export function drillFor(text: string): DrillKind | undefined {
+  const t = text.toLowerCase();
+  const hits = KEYWORDS.filter(([, re]) => re.test(t));
+  if (hits.length) return hits.sort((a, b) => (t.match(b[1])?.[0].length ?? 0) - (t.match(a[1])?.[0].length ?? 0))[0][0];
+  return DRILL_KINDS.find((k) => t.includes(DRILL_LABELS[k].toLowerCase()));
+}

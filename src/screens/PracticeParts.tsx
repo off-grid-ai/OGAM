@@ -4,7 +4,7 @@ import { Button } from '../components/Button';
 import { DRILL_LABELS, type DrillKind } from '../study/drills';
 import { answerText, type Exercise } from '../study/exercises';
 import { secondsLeft, type Exam, type ExamResult } from '../study/exam';
-import { Answer, good, st, type Colors } from './PracticeScreen';
+import { Answer, good, st, type Colors } from '../components/ExerciseAnswer';
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 

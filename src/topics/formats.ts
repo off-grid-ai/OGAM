@@ -5,10 +5,15 @@
  * answers. Pure, so it is tested without a device.
  */
 import { parseJsonLoose, str } from '../study/games/json';
+import { evalExpression } from '../study/mathTools';
+import { DRILL_LABELS } from '../study/drills';
+import type { Exercise } from '../study/exercises';
 
 export type SquareFormat = 'lesson' | 'quiz' | 'cards' | 'match' | 'order' | 'practice' | 'fill' | 'truefalse' | 'scenario' | 'numeric' | 'worked' | 'table'
-  | 'recall' | 'fix' | 'tablefill' | 'sort' | 'dictation' | 'reading' | 'predict';
+  | 'recall' | 'fix' | 'tablefill' | 'sort' | 'dictation' | 'reading' | 'predict' | 'drill';
+const DRILL_TOPICS = Object.values(DRILL_LABELS).join(', ');
 export const FORMATS: { id: SquareFormat; label: string; icon: string; use: string }[] = [
+  { id: 'drill', label: 'Exact drill', icon: 'cpu', use: `practice problems the app makes and marks itself with exact arithmetic, for ONLY these topics: ${DRILL_TOPICS}. Put the topic words in the title or focus. Use it for accounting, finance and statistics practice` },
   { id: 'lesson', label: 'Lesson', icon: 'book-open', use: 'a short explanation with sections, an example and key points: for new ideas, rules, worked examples, code to read' },
   { id: 'quiz', label: 'Quiz', icon: 'help-circle', use: 'multiple choice questions with a reason for each answer: to check understanding, scenarios, case studies' },
   { id: 'cards', label: 'Flashcards', icon: 'layers', use: 'terms and definitions, formulas, syntax, vocabulary: to memorise' },
@@ -63,7 +68,7 @@ export const FORMAT_IDS = FORMATS.map((f) => f.id);
 export interface PlannedSquare { key: string; format: SquareFormat; title: string; focus: string; unit: string; checkpoint?: boolean; remedial?: boolean }
 export interface CoursePlan { title: string; summary: string; style: string; theme: string; squares: PlannedSquare[] }
 
-export const MAX_SQUARES = 36;
+export const MAX_SQUARES = 60;
 const asFormat = (v: unknown): SquareFormat => (FORMAT_IDS.includes(String(v).toLowerCase() as SquareFormat) ? (String(v).toLowerCase() as SquareFormat) : 'lesson');
 
 /** What the person asked for, passed to the AI. */
@@ -87,7 +92,7 @@ Every square is one sitting, and has a format chosen to suit the subject and the
 ${menu}
 
 ${subjectAdvice(r.topic) ? `${subjectAdvice(r.topic)}\n` : ''}Choose the formats yourself. Teach the way this subject is really learned: for example accounting needs worked examples and practice with numbers; coding needs short explanations with code and practice tasks; history suits timelines (put in order) and scenarios; a language-like subject needs flashcards and match. Mix formats so it does not feel the same every square; start with a lesson, put a quiz or practice after every one or two lessons, and finish with a quiz that covers everything.
-Use 12 to 30 squares in 2 to 6 units, ordered from the basics up, sized to the goal. Use many different formats across the course (at least five), not just lessons and quizzes.
+Use 12 to 30 squares in 2 to 6 units for a narrow topic. When the subject is a whole school or university subject (for example algebra, biology, accounting, English), cover EVERY major part of it from the basics up: use 30 to 60 squares in 6 to 10 units. Order from the basics up, sized to the goal. Use many different formats across the course (at least five), not just lessons and quizzes.
 
 Reply with ONLY this JSON:
 {"title": "course title", "summary": "one sentence on what the learner will be able to do", "style": "one sentence on how you will teach it", "theme": "a short fun name for the board journey",
@@ -127,7 +132,8 @@ export type SquareContent =
   | { kind: 'match'; pairs: { left: string; right: string }[] }
   | { kind: 'order'; prompt: string; steps: string[] }
   | { kind: 'practice'; task: string; hint?: string; model: string; rubric: string[]; code?: boolean }
-  | { kind: 'numeric'; task: string; answer: number; tolerance: number; unit: string; working: string[] }
+  | { kind: 'numeric'; task: string; answer: number; tolerance: number; unit: string; working: string[]; checked?: boolean }
+  | { kind: 'drill'; exercises: Exercise[] }
   | { kind: 'worked'; problem: string; steps: { step: string; why: string }[]; takeaway: string }
   | { kind: 'table'; title: string; markdown: string }
   | { kind: 'typed'; items: { prompt: string; answer: string; alternatives: string[]; why: string }[]; mode: 'recall' | 'fix' }
@@ -138,6 +144,7 @@ export type SquareContent =
 export interface SquareRequest { courseTitle: string; topic: string; level: string; how: string; style: string; square: PlannedSquare; before: string[]; minutes: number; excerpts?: { source: string; text: string }[] }
 
 const SHAPES: Record<SquareFormat, string> = {
+  drill: '{}  (made by the app, not written by the AI)',
   lesson: '{"sections": [{"heading": "...", "text": "plain explanation, 2-5 sentences, may use short code or numbers", "example": "a worked example or code (optional)"}], "commonMistakes": ["a mistake learners make here and how to avoid it"], "quickCheck": {"q": "one question to test yourself", "a": "its answer"}, "keyPoints": ["..."]}  (3 to 5 sections, 2 or 3 common mistakes, 3 to 6 key points)',
   quiz: '{"questions": [{"q": "...", "options": ["A", "B", "C", "D"], "answer": 0, "why": "one sentence on why that answer is right"}]}  (5 to 8 questions, "answer" is the index of the right option, vary where it is)',
   cards: '{"cards": [{"front": "term or question", "back": "short definition or answer"}]}  (8 to 14 cards)',
@@ -147,7 +154,7 @@ const SHAPES: Record<SquareFormat, string> = {
   fill: '{"questions": [{"q": "a sentence, formula or code line with ____ where the gap is", "options": ["A", "B", "C"], "answer": 0, "why": "..."}]}  (6 to 8 items, "answer" is the index of the right option)',
   truefalse: '{"questions": [{"q": "a statement", "options": ["True", "False"], "answer": 0, "why": "the reason it is true or false"}]}  (6 to 8 statements; "answer" is 0 for True or 1 for False; about half false)',
   scenario: '{"questions": [{"q": "a short situation, then the decision to make", "options": ["choice 1", "choice 2", "choice 3"], "answer": 0, "why": "why that is the best choice"}]}  (3 to 5 different situations)',
-  numeric: '{"task": "a problem with all the numbers it needs and a single numeric answer", "answer": 1250.5, "tolerance": 0.5, "unit": "unit or currency (empty if none)", "working": ["step 1 of the working", "step 2"]}',
+  numeric: '{"task": "a problem with all the numbers it needs and a single numeric answer", "expression": "the sum as plain arithmetic the app can calculate, e.g. 1000*(1+0.05)^3", "answer": 1250.5, "tolerance": 0.5, "unit": "unit or currency (empty if none)", "working": ["step 1 of the working", "step 2"]}',
   worked: '{"problem": "the problem being solved", "steps": [{"step": "what is done", "why": "the reason"}], "takeaway": "the one thing to remember"}  (4 to 8 steps)',
   recall: '{"items": [{"prompt": "a definition, picture-in-words or question", "answer": "the term or short answer", "alternatives": ["other accepted answers"], "why": "optional note"}]}  (8 to 12 items, answers short)',
   fix: '{"items": [{"prompt": "the text with ONE mistake in it", "answer": "the corrected text", "why": "what was wrong"}]}  (6 to 8 items)',
@@ -236,7 +243,10 @@ export function parseContent(format: SquareFormat, raw: string): SquareContent |
     const answer = Number(j.answer);
     if (!task || !Number.isFinite(answer)) return null;
     const tolerance = Number.isFinite(Number(j.tolerance)) && Number(j.tolerance) >= 0 ? Number(j.tolerance) : Math.abs(answer) * 0.01;
-    return { kind: 'numeric', task, answer, tolerance, unit: str(j.unit, 20), working: list(j.working).map((w) => str(w, 300)).filter(Boolean).slice(0, 10) };
+    // The AI also writes the sum as a plain expression; the app works it out itself. If the two disagree, the app's number is used.
+    let checked = false; let final = answer;
+    try { const computed = evalExpression(String(j.expression ?? '')); checked = true; if (Math.abs(computed - answer) > Math.max(tolerance, Math.abs(computed) * 0.001)) final = Math.round(computed * 1e6) / 1e6; } catch { /* no usable expression: the answer is the AI's own and is labelled so */ }
+    return { kind: 'numeric', task, answer: final, tolerance, unit: str(j.unit, 20), working: list(j.working).map((w) => str(w, 300)).filter(Boolean).slice(0, 10), checked };
   }
   if (format === 'worked') {
     const steps = list(j.steps).map((x) => ({ step: str(x?.step, 400), why: str(x?.why, 300) })).filter((x) => x.step);

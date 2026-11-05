@@ -7,6 +7,8 @@ import { Choice, GOOD } from '../components/games/kit';
 import { editDistance, shuffle } from '../study/games/logic';
 import { gradeAnswer } from './service';
 import { starsForShare, type SquareContent } from './formats';
+import { Answer } from '../components/ExerciseAnswer';
+import { check, type Verdict } from '../study/exercises';
 
 type Of<K extends SquareContent['kind']> = Extract<SquareContent, { kind: K }>;
 interface ViewProps<K extends SquareContent['kind']> { content: Of<K>; onDone: (stars: 1 | 2 | 3) => void }
@@ -238,7 +240,7 @@ export function NumericView({ content, onDone }: ViewProps<'numeric'>) {
         {!!content.unit && <Text style={t.body}>{content.unit}</Text>}
       </View>
       {result === 'wrong' && <Text style={{ color: t.colors.error }} testID="numeric-wrong">Not quite. Check the working and try again{tries >= 2 ? ', or look at the working below' : ''}.</Text>}
-      {result === 'right' && <Text style={{ color: t.colors.primary }} testID="numeric-right">Correct: {content.answer} {content.unit}</Text>}
+      {result === 'right' && <Text style={{ color: t.colors.primary }} testID="numeric-right">Correct: {content.answer} {content.unit}{content.checked ? ' (checked with the calculator)' : ''}</Text>}
       {result !== 'right' && <Button title="Check" disabled={!typed.trim()} onPress={check} testID="numeric-check" />}
       {result !== 'right' && !shown && <TouchableOpacity onPress={() => setShown(true)} testID="numeric-show"><Text style={t.meta}>Show the working</Text></TouchableOpacity>}
       {shown && (
@@ -459,6 +461,32 @@ export function DictationView({ content, onDone }: ViewProps<'dictation'>) {
   );
 }
 
+/** Exact drills: made and marked by the app, so the answer key is always right. */
+export function DrillView({ content, onDone }: ViewProps<'drill'>) {
+  const t = useText();
+  const [i, setI] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, unknown>>({});
+  const [verdict, setVerdict] = useState<Verdict | undefined>();
+  const [right, setRight] = useState(0);
+  const ex = content.exercises[i];
+  if (!ex) return null;
+  const last = i === content.exercises.length - 1;
+  const submit = () => { const v = check(ex, answers[ex.id]); setVerdict(v); if (v.correct) setRight((r) => r + 1); };
+  return (
+    <ScrollView contentContainerStyle={styles.gap} keyboardShouldPersistTaps="handled" testID="square-drill">
+      <Text style={t.meta}>{i + 1} of {content.exercises.length}</Text>
+      <Text style={t.body} testID="drill-prompt">{ex.kind === 'testlet' ? 'Answer all parts' : ex.prompt}</Text>
+      <Answer ex={ex} value={answers[ex.id]} onChange={(v) => setAnswers((a) => ({ ...a, [ex.id]: v }))} verdict={verdict} colors={t.colors} />
+      {verdict && <Text testID="drill-result" style={{ color: verdict.correct ? GOOD : t.colors.error }}>{verdict.correct ? 'Correct' : 'Not quite'}{verdict.note ? ` - ${verdict.note}` : ''}{!verdict.correct && ex.explain ? `. ${ex.explain}` : ''}</Text>}
+      <Text style={t.meta}>Checked by the app with exact arithmetic.</Text>
+      {!verdict
+        ? <Button title="Check" onPress={submit} testID="drill-check" />
+        : <Button title={last ? 'Finish' : 'Next'} testID={last ? 'drill-done' : 'drill-next'}
+          onPress={() => { if (last) onDone(starsForShare(right / content.exercises.length)); else { setI(i + 1); setVerdict(undefined); } }} />}
+    </ScrollView>
+  );
+}
+
 export function SquareView({ content, onDone }: { content: SquareContent; onDone: (stars: 1 | 2 | 3) => void }) {
   switch (content.kind) {
     case 'lesson': return <LessonView content={content} onDone={onDone} />;
@@ -473,6 +501,7 @@ export function SquareView({ content, onDone }: { content: SquareContent; onDone
     case 'sort': return <SortView content={content} onDone={onDone} />;
     case 'dictation': return <DictationView content={content} onDone={onDone} />;
     case 'order': return <OrderView content={content} onDone={onDone} />;
+    case 'drill': return <DrillView content={content} onDone={onDone} />;
     default: return <PracticeView content={content} onDone={onDone} />;
   }
 }

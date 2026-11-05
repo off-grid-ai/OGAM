@@ -45,6 +45,7 @@ async function dispatchTool(call: ToolCall): Promise<string> {
     case 'find_image':
     case 'study_helpers':
     case 'study_math':
+    case 'science_data':
       return runStudyTool(call.name, call.arguments as Record<string, unknown>);
     case 'get_current_datetime':
       return handleGetDatetime(call.arguments.timezone);

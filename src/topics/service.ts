@@ -3,6 +3,7 @@
  * asked for once more before giving up with a message the person can act on.
  */
 import { askModel } from '../study/engine';
+import { drillFor, makeDrillSet } from '../study/drills';
 import { contentMessages, gradeMessages, parseContent, parseGrade, parsePlan, planMessages, type CourseRequest, type SquareContent } from './formats';
 import { useTopics, type Course } from './store';
 import { makeSource, parsePicks, pickPrompt, relevantExcerpts, type Candidate, type CourseSource } from './sources';
@@ -43,11 +44,21 @@ export async function squareContent(course: Course, key: string): Promise<Square
   const square = course.squares[index];
   if (!square) throw new Error('That square is not in this course.');
   const before = course.squares.slice(0, index).map((s) => s.title);
+  // An exact drill is made by the app in code (no AI, so the answers cannot be wrong). If no drill fits the words, it becomes a calculation square.
+  if (square.format === 'drill') {
+    const kind = drillFor(`${square.title} ${square.focus}`);
+    if (kind) {
+      const made: SquareContent = { kind: 'drill', exercises: makeDrillSet(5, Date.now() % 100000, [kind]) };
+      useTopics.getState().setContent(course.id, key, made);
+      return made;
+    }
+  }
+  const asked = square.format === 'drill' ? { ...square, format: 'numeric' as const } : square;
   const content = await askUntil(contentMessages({
     courseTitle: course.title, topic: course.topic, level: course.request.level, how: course.request.how, style: course.style,
-    square, before, minutes: course.request.minutes,
+    square: asked, before, minutes: course.request.minutes,
     excerpts: [...await projectExcerpts(course.projectId, `${square.title} ${square.focus}`), ...relevantExcerpts(course.sources ?? [], `${square.title} ${square.focus}`)].slice(0, 5),
-  }), (raw) => parseContent(square.format, raw), `the "${square.title}" square`);
+  }), (raw) => parseContent(asked.format, raw), `the "${square.title}" square`);
   useTopics.getState().setContent(course.id, key, content);
   return content;
 }

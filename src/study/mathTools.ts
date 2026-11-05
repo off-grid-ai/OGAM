@@ -128,8 +128,100 @@ export function tvm(a: Tvm): Record<string, number> {
   return { [key]: round(SOLVERS[key](full), 4) };
 }
 
+
+// ---------------------------------------------------------------- everyday maths: equations, numbers, percents, shapes, fractions
+const gcd = (a: number, b: number): number => (b === 0 ? Math.abs(a) : gcd(b, a % b));
+const nInt = (v: unknown, what: string): number => { const n = num(v); if (!Number.isInteger(n)) throw new Error(`${what} must be a whole number.`); return n; };
+function choose(n: number, k: number): number { if (k < 0 || k > n) return 0; let r = 1; for (let i = 1; i <= Math.min(k, n - k); i++) r = (r * (n - i + 1)) / i; return Math.round(r); }
+
+export function solveEquation(i: any) {
+  switch (i.type) {
+    case 'linear': { const a = num(i.a); const b = num(i.b); if (a === 0) throw new Error('a cannot be 0 in ax + b = 0.'); return { equation: `${a}x + ${b} = 0`, x: round(-b / a) }; }
+    case 'quadratic': {
+      const a = num(i.a); const b = num(i.b); const c = num(i.c); if (a === 0) throw new Error('a cannot be 0 in a quadratic.');
+      const d = b * b - 4 * a * c;
+      if (d > 0) return { discriminant: round(d), roots: [round((-b + Math.sqrt(d)) / (2 * a)), round((-b - Math.sqrt(d)) / (2 * a))].sort((x, y) => x - y), kind: 'two real roots' };
+      if (d === 0) return { discriminant: 0, roots: [round(-b / (2 * a))], kind: 'one repeated root' };
+      return { discriminant: round(d), roots: [`${round(-b / (2 * a))} + ${round(Math.sqrt(-d) / (2 * a))}i`, `${round(-b / (2 * a))} - ${round(Math.sqrt(-d) / (2 * a))}i`], kind: 'two complex roots' };
+    }
+    case 'system': {
+      const [a1, b1, c1, a2, b2, c2] = ['a1', 'b1', 'c1', 'a2', 'b2', 'c2'].map((k) => num(i[k]));
+      const det = a1 * b2 - a2 * b1; if (det === 0) throw new Error('No single solution: the lines are parallel or the same.');
+      return { x: round((c1 * b2 - c2 * b1) / det), y: round((a1 * c2 - a2 * c1) / det), note: 'for a1 x + b1 y = c1 and a2 x + b2 y = c2' };
+    }
+    default: throw new Error('type must be linear, quadratic or system.');
+  }
+}
+
+export function numberOps(i: any) {
+  switch (i.op) {
+    case 'gcd': return { gcd: gcd(nInt(i.a, 'a'), nInt(i.b, 'b')) };
+    case 'lcm': { const a = nInt(i.a, 'a'); const b = nInt(i.b, 'b'); return { lcm: Math.abs(a * b) / (gcd(a, b) || 1) }; }
+    case 'factorial': { const n = nInt(i.n, 'n'); if (n < 0 || n > 170) throw new Error('n must be 0 to 170.'); let f = 1; for (let k = 2; k <= n; k++) f *= k; return { factorial: f }; }
+    case 'choose': return { combinations: choose(nInt(i.n, 'n'), nInt(i.k, 'k')) };
+    case 'permute': { const n = nInt(i.n, 'n'); const k = nInt(i.k, 'k'); if (k < 0 || k > n) return { permutations: 0 }; let p = 1; for (let t = 0; t < k; t++) p *= n - t; return { permutations: p }; }
+    case 'prime_factors': { let n = nInt(i.n, 'n'); if (n < 2) throw new Error('n must be 2 or more.'); const out: number[] = []; for (let f = 2; f * f <= n; f++) while (n % f === 0) { out.push(f); n /= f; } if (n > 1) out.push(n); return { factors: out }; }
+    case 'is_prime': { const n = nInt(i.n, 'n'); if (n < 2) return { prime: false }; for (let f = 2; f * f <= n; f++) if (n % f === 0) return { prime: false, smallestFactor: f }; return { prime: true }; }
+    default: throw new Error('op must be gcd, lcm, factorial, choose, permute, prime_factors or is_prime.');
+  }
+}
+
+export function percentOps(i: any) {
+  switch (i.op) {
+    case 'change': { const from = num(i.from); const to = num(i.to); if (from === 0) throw new Error('The starting value cannot be 0.'); return { percentChange: round(((to - from) / Math.abs(from)) * 100, 4) }; }
+    case 'of': return { result: round((num(i.percent) / 100) * num(i.value), 6) };
+    case 'what_percent': { const whole = num(i.whole); if (whole === 0) throw new Error('The whole cannot be 0.'); return { percent: round((num(i.part) / whole) * 100, 4) }; }
+    default: throw new Error('op must be change, of or what_percent.');
+  }
+}
+
+export function geometry(i: any) {
+  const d = (k: string) => { const v = num(i[k]); if (v < 0) throw new Error(`${k} cannot be negative.`); return v; };
+  switch (i.shape) {
+    case 'circle': { const r = d('r'); return { area: round(Math.PI * r * r), circumference: round(2 * Math.PI * r) }; }
+    case 'rectangle': { const w = d('w'); const h = d('h'); return { area: round(w * h), perimeter: round(2 * (w + h)), diagonal: round(Math.hypot(w, h)) }; }
+    case 'triangle': {
+      if (i.base !== undefined) return { area: round(0.5 * d('base') * d('height')) };
+      const a = d('a'); const b = d('b'); const c = d('c'); if (a + b <= c || a + c <= b || b + c <= a) throw new Error('Those sides cannot make a triangle.');
+      const p = (a + b + c) / 2; return { area: round(Math.sqrt(p * (p - a) * (p - b) * (p - c))), perimeter: round(a + b + c), note: "Heron's formula" };
+    }
+    case 'right_triangle': { const a = d('a'); const b = d('b'); return { hypotenuse: round(Math.hypot(a, b)), area: round(0.5 * a * b) }; }
+    case 'sphere': { const r = d('r'); return { volume: round((4 / 3) * Math.PI * r ** 3), surfaceArea: round(4 * Math.PI * r * r) }; }
+    case 'cylinder': { const r = d('r'); const h = d('h'); return { volume: round(Math.PI * r * r * h), surfaceArea: round(2 * Math.PI * r * (r + h)) }; }
+    case 'cone': { const r = d('r'); const h = d('h'); return { volume: round((Math.PI * r * r * h) / 3), slantHeight: round(Math.hypot(r, h)), surfaceArea: round(Math.PI * r * (r + Math.hypot(r, h))) }; }
+    default: throw new Error('shape must be circle, rectangle, triangle, right_triangle, sphere, cylinder or cone.');
+  }
+}
+
+const frac = (t: unknown): [number, number] => {
+  const m = String(t).trim().match(/^(-?\d+)\s*(?:\/\s*(\d+))?$/); if (!m) throw new Error(`Not a fraction: ${String(t)} (write 3/4 or 5).`);
+  const d = m[2] ? Number(m[2]) : 1; if (d === 0) throw new Error('The denominator cannot be 0.'); return [Number(m[1]), d];
+};
+export function fractionOps(i: any) {
+  const [an, ad] = frac(i.a); const b = i.b !== undefined ? frac(i.b) : ([0, 1] as [number, number]);
+  let n: number; let d: number;
+  switch (i.op) {
+    case 'add': n = an * b[1] + b[0] * ad; d = ad * b[1]; break;
+    case 'subtract': n = an * b[1] - b[0] * ad; d = ad * b[1]; break;
+    case 'multiply': n = an * b[0]; d = ad * b[1]; break;
+    case 'divide': if (b[0] === 0) throw new Error('Cannot divide by zero.'); n = an * b[1]; d = ad * b[0]; break;
+    case 'simplify': n = an; d = ad; break;
+    default: throw new Error('op must be add, subtract, multiply, divide or simplify.');
+  }
+  if (d < 0) { n = -n; d = -d; }
+  const g = gcd(n, d) || 1; n /= g; d /= g;
+  const whole = Math.trunc(n / d); const rem = Math.abs(n) % d;
+  return { fraction: d === 1 ? `${n}` : `${n}/${d}`, mixed: d !== 1 && Math.abs(n) > d ? `${whole} ${rem}/${d}` : undefined, decimal: round(n / d, 6) };
+}
+
+const JSON_ACTIONS: Record<string, (i: any) => unknown> = { solve: solveEquation, number: numberOps, percent: percentOps, geometry, fraction: fractionOps };
+function jsonInput(v: unknown): any {
+  if (v && typeof v === 'object') return v;
+  try { return JSON.parse(String(v ?? '')); } catch { throw new Error('input must be valid JSON, for example {"type":"quadratic","a":1,"b":-3,"c":2}.'); }
+}
+
 export type StudyMathArgs = { action?: string; values?: unknown; x?: unknown; y?: unknown; second?: unknown; mu0?: unknown; paired?: unknown; margin?: unknown; confidence?: unknown;
-  value?: unknown; from?: string; to?: string; add_days?: unknown; pv?: unknown; fv?: unknown; pmt?: unknown; rate?: unknown; nper?: unknown };
+  input?: unknown; value?: unknown; from?: string; to?: string; add_days?: unknown; pv?: unknown; fv?: unknown; pmt?: unknown; rate?: unknown; nper?: unknown };
 
 /** The tutor's one maths tool. Returns plain JSON text; throws a clear error for bad input. */
 export function studyMath(a: StudyMathArgs): string {
@@ -141,7 +233,46 @@ export function studyMath(a: StudyMathArgs): string {
     case 'sample_size': return JSON.stringify({ n: sampleSize(num(a.margin), opt(a.confidence) ?? 0.95) });
     case 'convert': return JSON.stringify({ value: convertUnits(num(a.value), String(a.from), String(a.to)), unit: a.to });
     case 'date': return JSON.stringify(dateMath({ from: a.from, to: a.to, add_days: opt(a.add_days) }));
+    case 'solve': case 'number': case 'percent': case 'geometry': case 'fraction': return JSON.stringify(JSON_ACTIONS[a.action as string](jsonInput(a.input)));
     case 'tvm': return JSON.stringify(tvm({ pv: opt(a.pv), fv: opt(a.fv), pmt: opt(a.pmt), rate: opt(a.rate), nper: opt(a.nper) }));
-    default: throw new Error('action must be one of: describe, t_test, regression, sample_size, convert, date, tvm');
+    default: throw new Error('action must be one of: describe, t_test, regression, sample_size, convert, date, tvm, solve, number, percent, geometry, fraction');
   }
+}
+
+// ---------------------------------------------------------------- safe expression evaluator
+const FUNCS: Record<string, (x: number) => number> = { sqrt: Math.sqrt, abs: Math.abs, ln: Math.log, log: Math.log10, exp: Math.exp, sin: Math.sin, cos: Math.cos, tan: Math.tan, round: Math.round, floor: Math.floor, ceil: Math.ceil };
+/**
+ * Evaluates a plain arithmetic expression: + - * / ^ ( ) %, pi, e and sqrt, abs, ln, log, exp, sin, cos, tan, round, floor, ceil.
+ * Nothing else is accepted (no variables, no code), so text written by a model can be checked safely. Throws on anything unreadable.
+ */
+export function evalExpression(text: string): number {
+  const src = text.replace(/[×]/g, '*').replace(/[÷]/g, '/').replace(/−/g, '-').replace(/,(?=\d{3}\b)/g, '').replace(/\s+/g, '').replace(/\$/g, '');
+  if (!src || src.length > 200) throw new Error('Not an expression.');
+  let i = 0;
+  const peek = () => src[i];
+  const fail = (): never => { throw new Error(`Cannot read "${text.slice(0, 40)}".`); };
+  const primary = (): number => {
+    const c = peek();
+    if (c === '(') { i++; const v = expr(); if (peek() !== ')') fail(); i++; return v; }
+    const n = src.slice(i).match(/^(\d+\.?\d*|\.\d+)(e[+-]?\d+)?/i);
+    if (n) { i += n[0].length; return Number(n[0]); }
+    const w = src.slice(i).match(/^[a-z]+/i);
+    if (w) {
+      const name = w[0].toLowerCase(); i += w[0].length;
+      if (name === 'pi') return Math.PI;
+      if (name === 'e') return Math.E;
+      const f = FUNCS[name]; if (!f || peek() !== '(') return fail();
+      i++; const v = expr(); if (peek() !== ')') fail(); i++; return f(v);
+    }
+    return fail();
+  };
+  const postfix = (): number => { let v = primary(); while (peek() === '%') { i++; v /= 100; } return v; };
+  const unary = (): number => { if (peek() === '-') { i++; return -unary(); } if (peek() === '+') { i++; return unary(); } return postfix(); };
+  const power = (): number => { const b = unary(); if (peek() === '^') { i++; return b ** power(); } return b; };
+  const term = (): number => { let v = power(); while (peek() === '*' || peek() === '/') { const op = src[i++]; const r = power(); v = op === '*' ? v * r : v / r; } return v; };
+  const expr = (): number => { let v = term(); while (peek() === '+' || peek() === '-') { const op = src[i++]; const r = term(); v = op === '+' ? v + r : v - r; } return v; };
+  const value = expr();
+  if (i !== src.length) fail();
+  if (!Number.isFinite(value)) throw new Error('The result is not a finite number.');
+  return value;
 }
