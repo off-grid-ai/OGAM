@@ -260,3 +260,13 @@ export const RADIUS = {
   sm: 2,
   md: 8,
 };
+
+// The living background, with desktop's values (ui-library living-field.tsx and alive.css): a dot
+// lattice, and an emerald light with an echo that breathe against each other.
+export const LIVING_FIELD = {
+  spacing: 26,
+  dotRadius: 1.25,
+  dotAlphaDark: 0.11,
+  dotAlphaLight: 0.16,
+  breathMs: 3500,
+};
