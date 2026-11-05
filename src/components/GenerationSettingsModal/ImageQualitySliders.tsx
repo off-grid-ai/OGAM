@@ -65,7 +65,6 @@ export const ImageQualityBasicSliders: React.FC = () => {
 /** Advanced controls: Guidance Scale, Image Threads, GPU Acceleration */
 export const ImageQualityAdvancedSliders: React.FC = () => {
   const { parameters, setParameter } = useImageParameterSettings();
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
 

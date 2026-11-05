@@ -5,7 +5,7 @@ import { TouchableOpacity } from '../../components/Touchable';
 import { AdvancedToggle, Card } from '../../components';
 import { SliderSetting } from '../../components/SliderSetting';
 import { Button } from '../../components/Button';
-import { useTheme, useThemedStyles } from '../../theme';
+import { useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
 import { useClearGpuCache, useImageParameterSettings } from '../../hooks/useImageGenerationSettings';
 import {
@@ -17,7 +17,6 @@ import { createStyles } from './styles';
 // ─── Advanced Sub-Components ─────────────────────────────────────────────────
 
 const EnhanceImageToggle: React.FC = () => {
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings, downloadedModels } = useAppStore();
   // Enhancement runs the prompt through a text model, so it needs one available.
@@ -49,7 +48,6 @@ const EnhanceImageToggle: React.FC = () => {
 };
 
 const ImageGpuSection: React.FC = () => {
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
   const { clearing, handleClearCache } = useClearGpuCache();
@@ -158,7 +156,6 @@ const ImageAdvancedSection: React.FC = () => {
 
 export const ImageGenerationSection: React.FC = () => {
   const { parameters, defaults, maxSize, applyDefaults, setParameter } = useImageParameterSettings();
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
   const [showAdvanced, setShowAdvanced] = useState(false);
