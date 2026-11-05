@@ -5,12 +5,11 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { TouchableOpacity } from '../components/Touchable';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import Icon from 'react-native-vector-icons/Feather';
+import { AliveScreen } from '../components/AliveScreen';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { useNavigation } from '@react-navigation/native';
 import { Card } from '../components';
-import { useTheme, useThemedStyles } from '../theme';
+import { useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useAppStore } from '../stores';
@@ -19,7 +18,6 @@ import { hardwareService } from '../services';
 export const DeviceInfoScreen: React.FC = () => {
   const navigation = useNavigation();
   const { deviceInfo } = useAppStore();
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
   const totalRamGB = hardwareService.getTotalMemoryGB();
@@ -39,18 +37,8 @@ export const DeviceInfoScreen: React.FC = () => {
   const gb = (mb: number) => `${(mb / 1024).toFixed(1)} GB`;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Device information</Text>
-      </View>
+    <AliveScreen style={styles.container}>
+      <ScreenHeader title="Device information" onBack={() => navigation.goBack()} />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <Card style={styles.section}>
@@ -108,7 +96,7 @@ export const DeviceInfoScreen: React.FC = () => {
             </View>
             <View style={[styles.tierItem, deviceTier === 'high' && styles.tierItemActive]}>
               <Text style={[styles.tierName, deviceTier === 'high' && styles.tierNameActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>High</Text>
-              <Text style={styles.tierDesc}>{'>6GB RAM'}</Text>
+              <Text style={styles.tierDesc}>6-8GB RAM</Text>
               <Text style={styles.tierModels}>All models</Text>
             </View>
             <View style={[styles.tierItem, deviceTier === 'flagship' && styles.tierItemActive]}>
@@ -119,7 +107,7 @@ export const DeviceInfoScreen: React.FC = () => {
           </View>
         </Card>
       </ScrollView>
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 
@@ -152,7 +140,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flex: 1,
   },
   content: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.xxl,
   },
@@ -213,7 +201,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     borderColor: 'transparent',
   },
   tierItemActive: {
-    borderColor: colors.heroBorder,
     backgroundColor: colors.selectedFill,
   },
   tierName: {
