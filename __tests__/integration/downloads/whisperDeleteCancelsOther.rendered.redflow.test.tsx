@@ -33,7 +33,7 @@ describe('V1 (rendered) — deleting a whisper model aborts an unrelated downloa
   it('keeps the in-flight base.en download card after deleting the unrelated small.en', async () => {
     const t = await setup();
     const before = t.rtl.render(t.React.createElement(t.DownloadManagerScreen, {}));
-    await t.rtl.waitFor(() => { expect(before.queryByText(/ggml-base\.en\.bin/)).not.toBeNull(); });
+    await t.rtl.waitFor(() => { expect(before.queryByText(/ggml-base\.en/)).not.toBeNull(); });
     before.unmount();
 
     // User deletes the already-downloaded small.en in the Download Manager.
@@ -45,7 +45,7 @@ describe('V1 (rendered) — deleting a whisper model aborts an unrelated downloa
 
     // Correct: deleting small.en does not touch base.en — its download card is still there.
     // Today deleteModel cancels the single activeDownloadId (base.en's) → its card vanishes → RED.
-    expect(after.queryByText(/ggml-base\.en\.bin/)).not.toBeNull();
+    expect(after.queryByText(/ggml-base\.en/)).not.toBeNull();
   });
 
   it('control: without a delete, the base.en download card SURVIVES the re-hydrate', async () => {
@@ -53,8 +53,8 @@ describe('V1 (rendered) — deleting a whisper model aborts an unrelated downloa
     // No delete — just a foreground re-hydrate.
     await t.hydrateDownloadStore();
     const view = t.rtl.render(t.React.createElement(t.DownloadManagerScreen, {}));
-    await t.rtl.waitFor(() => { expect(view.queryByText(/ggml-base\.en\.bin/)).not.toBeNull(); });
+    await t.rtl.waitFor(() => { expect(view.queryByText(/ggml-base\.en/)).not.toBeNull(); });
     // Proves the RED above is caused by the delete-induced cancel, not re-hydrate emptying the list.
-    expect(view.queryByText(/ggml-base\.en\.bin/)).not.toBeNull();
+    expect(view.queryByText(/ggml-base\.en/)).not.toBeNull();
   });
 });

@@ -160,7 +160,7 @@ describe('DownloadManagerScreen', () => {
         status: 'failed', reason: 'http_416',
       })]),
     );
-    expect(view.getByText('model.gguf')).toBeTruthy();
+    expect(view.getByText('model')).toBeTruthy();
     expect(view.getByText('The server could not resume this download. Please retry it.')).toBeTruthy();
     expect(view.queryByText('No active downloads')).toBeNull();
   });
@@ -176,7 +176,7 @@ describe('DownloadManagerScreen', () => {
       start('waiting.gguf').catch(() => {}); // resolves only when a slot frees
     });
     expect(boundary.download!.active().map(r => r.fileName)).toEqual(['one.gguf', 'two.gguf', 'three.gguf']);
-    expect(view.getByText('waiting.gguf')).toBeTruthy();
+    expect(view.getByText('waiting')).toBeTruthy();
     // The word "Queued" was dropped in favor of the clock icon (a11y label "Queued").
     expect(view.queryByText('Queued')).toBeNull();
     expect(view.getByLabelText('Queued')).toBeTruthy();
@@ -189,10 +189,12 @@ describe('DownloadManagerScreen', () => {
   });
 
   it('renders completed text model with details', async () => {
-    const { view } = await openManager(async ctx => {
+    const { view, useAppStore } = await openManager(async ctx => {
       await placeTextModel(ctx, { repo: 'test-author/test-model', fileName: 'test-model-q4.gguf', bytes: 4 * GB });
     });
-    expect(view.getByText('test-model-q4.gguf')).toBeTruthy();
+    // The model's own name, as on Models, never its file name.
+    expect(view.getByText(useAppStore.getState().downloadedModels[0].name)).toBeTruthy();
+    expect(view.queryByText('test-model-q4.gguf')).toBeNull();
     // Cards say only what helps a choice: size and quant, no publisher name, no type label.
     expect(view.getByText('4.00 GB · Q4_K_M')).toBeTruthy();
     expect(view.queryByText('test-author')).toBeNull();
@@ -214,7 +216,7 @@ describe('DownloadManagerScreen', () => {
     const { view } = await openManager(ctx =>
       nativeDownloads(ctx, [runningText({ bytesDownloaded: 2 * GB, totalBytes: 4 * GB, combinedTotalBytes: 4 * GB })]),
     );
-    expect(view.getByText('model-file.gguf')).toBeTruthy();
+    expect(view.getByText('model-file')).toBeTruthy();
     expect(view.getByText('Downloading')).toBeTruthy();
     expect(view.getByText('50%')).toBeTruthy();
   });
@@ -257,12 +259,11 @@ describe('DownloadManagerScreen', () => {
   });
 
   it('renders multiple completed models', async () => {
-    const { view } = await openManager(async ctx => {
+    const { view, useAppStore } = await openManager(async ctx => {
       await placeTextModel(ctx, { repo: 'author-a/a', fileName: 'model-a.gguf', bytes: KB });
       await placeTextModel(ctx, { repo: 'author-b/b', fileName: 'model-b.gguf', quantization: 'Q8_0', bytes: 2 * KB });
     });
-    expect(view.getByText('model-a.gguf')).toBeTruthy();
-    expect(view.getByText('model-b.gguf')).toBeTruthy();
+    for (const model of useAppStore.getState().downloadedModels) expect(view.getAllByText(model.name).length).toBeGreaterThan(0);
     expect(view.getByText('2')).toBeTruthy();
   });
 
@@ -335,7 +336,7 @@ describe('DownloadManagerScreen', () => {
     await confirm(m, 'Delete');
 
     expect(await m.view.findByText("Couldn't remove the model files. Try again.")).toBeTruthy();
-    expect(m.view.getByText('model.gguf')).toBeTruthy();
+    expect(m.view.getByText('model')).toBeTruthy();
     expect(m.useAppStore.getState().downloadedModels).toHaveLength(1);
     expect(await m.boundary.fs!.exists(path)).toBe(true);
 
@@ -394,7 +395,7 @@ describe('DownloadManagerScreen', () => {
     await m.view.findByText('Remove Download');
     await confirm(m, 'Yes');
 
-    await m.rtl.waitFor(() => expect(m.view.queryByText('model-file.gguf')).toBeNull());
+    await m.rtl.waitFor(() => expect(m.view.queryByText('model-file')).toBeNull());
     expect(m.boundary.download!.active()).toEqual([]);
     expect(m.useDownloadStore.getState().downloads).toEqual({});
   });
@@ -422,7 +423,7 @@ describe('DownloadManagerScreen', () => {
         fileName: 'bg-model.gguf', bytesDownloaded: 500, totalBytes: 2000, combinedTotalBytes: 2000,
       })]),
     );
-    expect(view.getByText('bg-model.gguf')).toBeTruthy();
+    expect(view.getByText('bg-model')).toBeTruthy();
     expect(view.getByText(/Q4_K_M · Text/)).toBeTruthy();
     // The publisher name is not repeated on the card.
     expect(view.queryByText('author')).toBeNull();
@@ -438,7 +439,7 @@ describe('DownloadManagerScreen', () => {
     await confirm(m, 'Cancel');
 
     await m.rtl.waitFor(() => expect(m.view.queryByText('Delete Model')).toBeNull());
-    expect(m.view.getByText('model.gguf')).toBeTruthy();
+    expect(m.view.getByText('model')).toBeTruthy();
     expect(m.useAppStore.getState().downloadedModels).toHaveLength(1);
     expect(await m.boundary.fs!.exists(path)).toBe(true);
   });
@@ -461,10 +462,10 @@ describe('DownloadManagerScreen', () => {
   });
 
   it('does not invent a file size when the completed model size is unknown', async () => {
-    const { view } = await openManager(async ctx => {
+    const { view, useAppStore } = await openManager(async ctx => {
       await placeTextModel(ctx, { fileName: 'zero-model.gguf', bytes: 0 });
     });
-    expect(view.getByText('zero-model.gguf')).toBeTruthy();
+    expect(view.getByText(useAppStore.getState().downloadedModels[0].name)).toBeTruthy();
     expect(view.queryByText(/0 B · Q4_K_M/)).toBeNull();
   });
 

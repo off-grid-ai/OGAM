@@ -105,7 +105,7 @@ describe('vision projector that fails to start', () => {
     // BEFORE: no repair wrench. Unlinked, it is listed as a text model; linked at launch, it is
     // listed as a vision model that looks ready.
     let downloads = await openDownloads();
-    await waitFor(() => expect(within(downloads).getByText(MODEL_FILE)).toBeTruthy(), RENDER_WAIT);
+    await waitFor(() => expect(within(downloads).getByText('Gemma 4 E2B')).toBeTruthy(), RENDER_WAIT);
     if (arrival === 'folder scan') {
       expect(within(downloads).getByText(/Q4_K_M$/)).toBeTruthy();
       expect(within(downloads).queryByLabelText('Vision')).toBeNull();

@@ -144,7 +144,7 @@ describe('catalog GGUF model names', () => {
       // Downloads lists the stored file under its own name, and no repo id leaks in beside it.
       fireEvent.press(ui.getByTestId('downloads-icon'));
       const downloads = await waitFor(() => ui.getByTestId('downloaded-models-screen'), RENDER_WAIT);
-      await waitFor(() => expect(within(downloads).getByText(FILE_NAME)).toBeTruthy(), RENDER_WAIT);
+      await waitFor(() => expect(within(downloads).getByText(CATALOG_NAME)).toBeTruthy(), RENDER_WAIT);
       expectNoRepoId(within(downloads));
       fireEvent.press(within(downloads).getByTestId('back-button'));
 

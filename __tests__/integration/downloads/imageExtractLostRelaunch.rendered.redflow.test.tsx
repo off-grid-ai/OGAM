@@ -25,7 +25,7 @@ describe('D1 (rendered) — failed image extraction lost on relaunch', () => {
 
     // Before the kill: the DM shows the image download.
     const before = render(React.createElement(DownloadManagerScreen, {}));
-    await waitFor(() => { expect(before.queryByText(/anythingv5\.zip/)).not.toBeNull(); });
+    await waitFor(() => { expect(before.queryByText(/anythingv5/)).not.toBeNull(); });
     before.unmount();
 
     // Force-quit + relaunch: WorkManager pruned the completed row; disk survives; store rebuilt empty.

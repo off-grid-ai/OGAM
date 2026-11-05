@@ -17,6 +17,13 @@ import { isMMProjFile } from '../../services/mmproj';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
 import { splitGgufModelName } from '@offgrid/models';
 
+/** The name a person knows a download by: the model's own name, else its file name without the
+ *  split-part suffix or extension (never `Qwen3.5-0.8B-Q4_K_M.gguf`). */
+export function downloadDisplayName(item: Pick<DownloadItem, 'name' | 'fileName'>): string {
+  if (item.name?.trim()) return item.name;
+  return splitGgufModelName(item.fileName).replace(/\.(gguf|bin|onnx|zip|tar|litertlm|task)$/i, '');
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type DownloadItem = {
@@ -135,7 +142,7 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
     <ModelCard
       compact
       style={GROUPED_CARD_ROW}
-      model={{ id: item.modelId, name: splitGgufModelName(item.fileName), author: item.author,
+      model={{ id: item.modelId, name: downloadDisplayName(item), author: item.author,
         modelType: item.isVisionModel ? 'vision' : item.modelType === 'text' ? 'text' : undefined }}
       file={{ name: splitGgufModelName(item.fileName), size: item.fileSize, quantization: item.quantization, downloadUrl: '' }}
       capabilities={textCapabilities(item)}
@@ -312,7 +319,7 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({
         style={GROUPED_CARD_ROW}
         model={{
           id: item.modelId,
-          name: splitGgufModelName(item.fileName),
+          name: downloadDisplayName(item),
           author: item.author,
           modelType: item.isVisionModel
             ? 'vision'
