@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { FONTS, TYPOGRAPHY, SPACING } from '../../constants';
 import { Platform } from 'react-native';
@@ -9,8 +10,9 @@ const TOOL_WARNING_COLOR = '#F59E0B';
 
 export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   // The bar holds one box, edge to edge: anything queued or attached above it keeps the side inset.
+  // Transparent: the living field shows around the floating composer.
   container: {
-    backgroundColor: colors.background,
+    backgroundColor: 'transparent',
   },
   aboveComposer: { paddingHorizontal: 12 },
   // Attachment previews row
@@ -167,20 +169,31 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   // One box, edge to edge, in every mode: image or video mode adds the styles at its top, and nothing else moves.
   // Only the top corners are rounded; the input inside draws no edge of its own (the theme shadow is a boxShadow,
   // so it is cleared as one). Its bottom padding (with the home-indicator inset) is set where it is drawn.
+  // Desktop's composer: a floating rounded box with a hairline edge over the living field, not a slab
+  // edge to edge. Image or video mode still adds its style row at the top, inside the box.
   composer: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
+    marginHorizontal: 12,
     overflow: 'hidden' as const,
     paddingTop: 4,
+    paddingBottom: 8,
     ...shadows.small,
+  },
+  // Focus draws light to the field: the edge turns emerald with a soft emerald ring (desktop's composer).
+  composerFocused: {
+    borderColor: colors.heroBorder,
+    boxShadow: `0px 0px 0px 4px ${colors.selectedFill}, 0px 0px 24px ${colors.selectedFill}`,
   },
   pillInComposer: { backgroundColor: 'transparent', borderRadius: 0, boxShadow: [] },
   pillInput: {
     flex: 1,
     color: colors.text,
     fontSize: 15,
-    fontFamily: FONTS.mono,
+    // What you type is reading text: Geist, not the Mono kept for labels and numbers.
+    fontFamily: FONTS.sans,
     minHeight: 36,
     maxHeight: 150,
     textAlignVertical: 'top' as const,

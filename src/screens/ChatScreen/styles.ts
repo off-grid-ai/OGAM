@@ -14,10 +14,10 @@ const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.background,
-    ...shadows.small,
+    // See-through over the living field, with a hairline under it (no slab, no shadow).
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
+    backgroundColor: 'transparent',
     zIndex: 10,
   },
   headerRow: {

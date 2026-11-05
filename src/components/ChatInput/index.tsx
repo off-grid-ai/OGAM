@@ -652,7 +652,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       </View>
       {/* One box across the full width, down to the screen's bottom edge; in image or video mode the styles
           are its top, the input and send below. */}
-      <View style={[styles.composer, { paddingBottom: 8 + bottomInset }]}>
+      <View style={[styles.composer, isFocused && styles.composerFocused, { marginBottom: bottomInset }]}>
       {styleKind && (stylesShown || chosenStyle) ? (
         <StyleRow
           attached
@@ -663,7 +663,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         />
       ) : null}
       <View style={styles.mainRow}>
-        <View style={[styles.pill, styles.pillInComposer, isFocused && styles.pillFocused]} testID="composer-pill" accessibilityState={{ selected: isFocused }}>
+        <View style={[styles.pill, styles.pillInComposer]} testID="composer-pill" accessibilityState={{ selected: isFocused }}>
           {showVoiceStatus ? (
             <RecordingHint
               awaitingSpeech={isAwaitingSpeech}

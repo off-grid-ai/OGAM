@@ -44,6 +44,8 @@ import { findTranscriptionModel } from '../../services/whisperModels';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabels';
 import { useChatStore } from '../../stores';
+import { useIsFocused } from '@react-navigation/native';
+import { LivingField } from '../../components/LivingField';
 
 function countConversationImages(conv: Conversation | undefined): number {
   return (conv?.messages || []).reduce(
@@ -59,6 +61,7 @@ export const ChatScreen: React.FC = () => {
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const isFocused = useIsFocused();
   const chat = useChatScreen();
   const [assistantSelected, setAssistantSelected] = useState(false);
   // Historical message rows are memoized. Their Retry callback must read the latest composer
@@ -294,6 +297,8 @@ export const ChatScreen: React.FC = () => {
   // gap below the bar.
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* The living field behind the conversation: it answers touch and breathes, as on every tab. */}
+      <LivingField active={isFocused} />
       <KeyboardAvoidingView
         testID="chat-screen"
         style={styles.keyboardView}
