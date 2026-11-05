@@ -142,12 +142,9 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   button_active: {
     borderColor: colors.primary,
   },
-  // Small is small to look at, never to tap: 44 pt is the floor for every button (it measured 38).
   button_small: {
     paddingVertical: 10,
     paddingHorizontal: SPACING.md,
-    minHeight: 44,
-    minWidth: 44,
   },
   button_medium: {
     paddingVertical: 14,
