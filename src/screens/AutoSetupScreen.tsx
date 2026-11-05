@@ -170,7 +170,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
             <Icon
               name={shareAnalytics ? 'check-square' : 'square'}
               size={20}
-              color={shareAnalytics ? colors.primary : colors.textSecondary}
+              color={shareAnalytics ? colors.text : colors.textSecondary}
             />
             <View style={styles.consentText}>
               <Text style={styles.consentLabel}>
@@ -248,7 +248,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
                           {needsAction ? (
                             <Button
                               title=""
-                              icon={<Icon name={checked ? 'check-square' : 'square'} size={20} color={checked ? colors.primary : colors.textSecondary} />}
+                              icon={<Icon name={checked ? 'check-square' : 'square'} size={20} color={checked ? colors.text : colors.textSecondary} />}
                               variant="ghost"
                               size="small"
                               active={checked}
@@ -509,7 +509,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textSecondary,
     flexShrink: 0,
   },
-  total: { ...TYPOGRAPHY.meta, color: colors.primary, textAlign: 'left' as const },
+  total: { ...TYPOGRAPHY.meta, color: colors.textSecondary, textAlign: 'left' as const },
   itemKind: {
     ...TYPOGRAPHY.labelSmall,
     color: colors.textMuted,
