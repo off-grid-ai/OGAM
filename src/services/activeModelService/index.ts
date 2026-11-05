@@ -37,6 +37,9 @@ import {
   syncWithNativeState as _syncWithNativeState,
 } from './utils';
 ;
+/** `utility`: a side-task load (the intent classifier) that borrows the engine without becoming the chat model. */
+type TextLoadOptions = { override?: boolean; utility?: boolean };
+
 class ActiveModelService {
   private readonly listeners: Set<ModelChangeListener> = new Set();
   private readonly loadingState = { text: false, image: false };
@@ -118,7 +121,10 @@ class ActiveModelService {
    */
   keepLoadedTextModelSelected(): void {
     const loaded = this.loadedTextModelId;
-    if (loaded && useAppStore.getState().activeModelId !== loaded) this.markSelected(loaded);
+    const store = useAppStore.getState();
+    // The classifier can still be resident after a side task; it is never kept as the chat pick.
+    if (loaded === store.settings.classifierModelId) return;
+    if (loaded && store.activeModelId !== loaded) this.markSelected(loaded);
   }
   /**
    * Runs `work` on a utility text model (the image-intent classifier) without making it the person's
@@ -133,7 +139,7 @@ class ActiveModelService {
     const chatModelId = this.resolveSelectedTextModel()?.id ?? null;
     try {
       // Inside the try: a failed or partial load still gets its selection put back.
-      await this.loadTextModel(modelId);
+      await this.loadTextModel(modelId, undefined, { utility: true });
       return await work();
     } finally {
       try {
@@ -175,12 +181,12 @@ class ActiveModelService {
   async loadTextModel(
     modelId: string,
     timeoutMs: number = 120000,
-    opts?: { override?: boolean },
+    opts?: TextLoadOptions,
   ): Promise<void> {
     // Fast path — model already loaded (no lock; just sync the store).
     if (this.isTextModelCurrent(modelId)) {
       const store = useAppStore.getState();
-      if (store.activeModelId !== modelId) {
+      if (!opts?.utility && store.activeModelId !== modelId) {
         store.setActiveModelId(modelId);
       }
       return;
@@ -194,12 +200,12 @@ class ActiveModelService {
   private async doLoadTextModelLocked(
     modelId: string,
     timeoutMs: number,
-    opts?: { override?: boolean },
+    opts?: TextLoadOptions,
   ): Promise<void> {
     // Re-check after acquiring — a queued call may have loaded it already.
     if (this.isTextModelCurrent(modelId)) {
       const store = useAppStore.getState();
-      if (store.activeModelId !== modelId) {
+      if (!opts?.utility && store.activeModelId !== modelId) {
         store.setActiveModelId(modelId);
       }
       return;
@@ -217,7 +223,7 @@ class ActiveModelService {
     model: DownloadedModel,
     modelId: string,
     timeoutMs: number,
-    opts?: { override?: boolean },
+    opts?: TextLoadOptions,
   ): Promise<void> {
     const store = useAppStore.getState();
     // Use estimated runtime RAM (file size + overhead), not just file size,
@@ -256,6 +262,7 @@ class ActiveModelService {
       timeoutMs,
       override: !!opts?.override || modelResidencyManager.hasSessionOverride(modelId),
       loadedTextModelId: this.loadedTextModelId,
+      recordSelection: opts?.utility ? () => {} : id => useAppStore.getState().setActiveModelId(id),
       onLoaded: id => {
         this.setLoadedText(id);
         useAppStore.getState().setTextModelEvicted(false); // loaded → clear any prior eviction
