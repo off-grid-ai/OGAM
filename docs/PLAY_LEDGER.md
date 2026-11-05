@@ -479,3 +479,10 @@ Chats header compact again, failed row tighter, Models and Settings pass. Top 3:
 1. First reply to "What can you do here?" claims Tongyi Lab and a browser; nothing about Off Grid AI. The built-in prompt should say what the app is and does.
 2. Downloads failed/paused rows: Retry and Delete still on their own line; put them on the title line.
 3. Tab switches take 2 s+ (1269 chats); Chats Select/New 38 pt. Also: attach hides while typing (intended?), Sync row uses "-" not "·", "Multilingual MiniLM L12" is jargon.
+
+## Supervisor 11:20 (hand test 47, build at 6229eb69b)
+
+"I am Off Grid AI, running privately on this phone" (pass); Built-in prompt row, Downloads actions on the title line, Chats search, Sync "·" pass. Top 3:
+1. The first answer lists GitHub, web search and URL fetch: the 5 tools on by default. Mac's call (asked).
+2. The project sheet opens ~6 s after the tap (1270 chats); a late sheet caught the next tap. Title "Select Project" → sentence case.
+3. Paused 0-byte download: drop the bar row and the duplicate "Paused"; search clear shows ~3 s late; Downloads a11y says "2 in progress" with no visible badge.
