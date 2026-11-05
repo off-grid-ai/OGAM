@@ -186,7 +186,7 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
                           <Icon
                             name="refresh-cw"
                             size={14}
-                            color={colors.primary}
+                            color={colors.textSecondary}
                           />
                         </TouchableOpacity>
                       )}
@@ -198,7 +198,7 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
                       accessibilityLabel={`Remove ${item.fileName}`}
                       onPress={() => onRemove(item)}
                     >
-                      <Icon name="trash-2" size={14} color={colors.error} />
+                      <Icon name="trash-2" size={14} color={colors.textMuted} />
                     </TouchableOpacity>
                   </>
                 ) : (
@@ -216,7 +216,7 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
                         <Icon
                           name={item.canResume ? 'play' : 'pause'}
                           size={14}
-                          color={colors.primary}
+                          color={colors.textSecondary}
                         />
                       </TouchableOpacity>
                     )}
@@ -228,7 +228,7 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
                       hitSlop={6}
                       onPress={() => onRemove(item)}
                     >
-                      <Icon name="x" size={16} color={colors.error} />
+                      <Icon name="x" size={16} color={colors.textMuted} />
                     </TouchableOpacity>
                   </>
                 )}

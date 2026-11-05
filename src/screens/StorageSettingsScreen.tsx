@@ -216,7 +216,7 @@ export const StorageSettingsScreen: React.FC = () => {
                 accessibilityLabel={`Delete ${videoModelDisplayName(model.id, model.name)}`}
                 testID={`storage-delete-video-${model.id}`}
               >
-                <Icon name="trash-2" size={16} color={colors.error} />
+                <Icon name="trash-2" size={16} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
           ))}

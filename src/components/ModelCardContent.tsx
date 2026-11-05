@@ -446,7 +446,7 @@ function DownloadedActions({ isActive, testID, colors, styles, onSelect, onDelet
       {/* A radio: the model in use shows a check; any other shows an empty circle that picks it. */}
       {isActive && onSelect && <View style={styles.iconButton} accessibilityLabel="In use" testID={tid('in-use')}><Icon name="check-circle" size={16} color={colors.primary} /></View>}
       {!isActive && onSelect && <ActionButton icon="circle" color={colors.textMuted} haptic="selection" onPress={onSelect} testID={tid('select')} accessibilityLabel="Use this model" styles={styles} />}
-      {onDelete && <ActionButton icon="trash-2" color={colors.error} haptic="notificationWarning" onPress={onDelete} testID={tid('delete') ?? 'delete-model-button'} accessibilityLabel="Delete model" styles={styles} />}
+      {onDelete && <ActionButton icon="trash-2" color={colors.textMuted} haptic="notificationWarning" onPress={onDelete} testID={tid('delete') ?? 'delete-model-button'} accessibilityLabel="Delete model" styles={styles} />}
     </>
   );
 }
@@ -463,7 +463,7 @@ export const ModelCardActions: React.FC<ModelCardActionsProps> = ({
     return <>
       {isPaused && onResume && <ActionButton icon="play" color={colors.textSecondary} haptic="impactLight" onPress={onResume} testID={tid('resume')} accessibilityLabel="Resume download" styles={styles} />}
       {isDownloading && onPause && <ActionButton icon="pause" color={colors.textSecondary} haptic="impactLight" onPress={onPause} testID={tid('pause')} accessibilityLabel="Pause download" styles={styles} />}
-      {onCancel && <ActionButton icon="x" color={colors.error} haptic="notificationWarning" onPress={onCancel} testID={tid('cancel')} accessibilityLabel="Cancel download" styles={styles} />}
+      {onCancel && <ActionButton icon="x" color={colors.textMuted} haptic="notificationWarning" onPress={onCancel} testID={tid('cancel')} accessibilityLabel="Cancel download" styles={styles} />}
     </>;
   }
   if (!isDownloaded && onDownload) {
