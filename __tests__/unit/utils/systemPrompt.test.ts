@@ -1,4 +1,4 @@
-import { APP_CONFIG } from '../../../src/constants';
+import { APP_CONFIG, PREVIOUS_DEFAULT_SYSTEM_PROMPTS } from '../../../src/constants';
 import { firstPrompt, isBuiltInPrompt, resolveSystemPrompt } from '../../../src/utils/systemPrompt';
 
 describe('system prompt resolver: a blank prompt is no prompt', () => {
@@ -19,4 +19,21 @@ describe('system prompt resolver: a blank prompt is no prompt', () => {
     expect(isBuiltInPrompt(`  ${APP_CONFIG.defaultSystemPrompt}\n`)).toBe(true);
     expect(isBuiltInPrompt('Answer in French.')).toBe(false);
   });
+
+  it('reads a default an older build stored as the current built-in prompt', () => {
+    expect(PREVIOUS_DEFAULT_SYSTEM_PROMPTS.length).toBeGreaterThan(0);
+    for (const old of PREVIOUS_DEFAULT_SYSTEM_PROMPTS) {
+      expect(resolveSystemPrompt(`${old}\n`)).toBe(APP_CONFIG.defaultSystemPrompt);
+      expect(firstPrompt(undefined, old)).toBe(APP_CONFIG.defaultSystemPrompt);
+      expect(isBuiltInPrompt(old)).toBe(true);
+    }
+  });
+
+  it('leaves a prompt the person wrote untouched, and a project prompt still wins over an old default', () => {
+    const mine = 'You are a helpful AI assistant. Answer in French.';
+    expect(resolveSystemPrompt(mine)).toBe(mine);
+    expect(isBuiltInPrompt(mine)).toBe(false);
+    expect(resolveSystemPrompt('Project rules', PREVIOUS_DEFAULT_SYSTEM_PROMPTS[0])).toBe('Project rules');
+  });
 });
+
