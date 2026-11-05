@@ -107,7 +107,10 @@ export function entryToActiveItem(entry: DownloadEntry): DownloadItem {
     ...(whisperId ? { name: transcriptionModelName(whisperId) } : {}),
     downloadId: entry.downloadId,
     modelKey: entry.modelKey,
-    modelId: getActiveItemModelId(entry, isImage),
+    // A Whisper row goes by the Whisper id, the id its downloaded model carries, so a leftover row
+    // for a model already on the phone is recognised and dropped (hand test 50: a failed
+    // "Whisper Tiny" row stayed beside the downloaded one, keyed by its old text-model key).
+    modelId: whisperId ?? getActiveItemModelId(entry, isImage),
     fileName: getActiveItemFileName(entry, isImage, metadata),
     author: getActiveItemAuthor(entry, isImage, metadata),
     quantization: getActiveItemQuantization(entry, isImage, metadata),
