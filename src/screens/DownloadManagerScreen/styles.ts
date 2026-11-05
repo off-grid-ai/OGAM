@@ -52,12 +52,8 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.textMuted,
     flex: 1,
   },
-  countBadge: {
-    backgroundColor: colors.surfaceLight,
-    paddingHorizontal: SPACING.sm + 2,
-    paddingVertical: SPACING.xs,
-    borderRadius: 12,
-  },
+  // A count is a figure beside the label, not a pill.
+  countBadge: {},
   countText: {
     ...TYPOGRAPHY.meta,
     color: colors.textSecondary,
