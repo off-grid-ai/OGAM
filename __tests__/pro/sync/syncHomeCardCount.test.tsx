@@ -57,13 +57,13 @@ describe('Home Sync count (hand test 31: Home said 5 saved, Sync listed four)', 
   it('counts the devices Sync lists, even when this phone holds a pairing for one more', () => {
     seed(['a', 'b', 'c', 'd', 'gone'], ['a', 'b', 'c', 'd']);
     const view = card();
-    expect(view.getByText(/0 connected - 4 saved/)).toBeTruthy();
+    expect(view.getByText(/0 connected · 4 saved/)).toBeTruthy();
     expect(view.queryByText(/5 saved/)).toBeNull();
   });
 
   it('falls back to the pairings this phone holds while Sync lists nobody', () => {
     seed(['a', 'b'], []);
     const view = card();
-    expect(view.getByText(/0 connected - 2 saved/)).toBeTruthy();
+    expect(view.getByText(/0 connected · 2 saved/)).toBeTruthy();
   });
 });
