@@ -48,7 +48,7 @@ async function chatOnModelA(modelBBytes: number) {
     return rtl.waitFor(() => view().getByTestId('text-model-row-b'));
   };
 
-  await rtl.waitFor(() => expect(view().queryByText(/chatting with Model A/)).not.toBeNull());
+  await rtl.waitFor(() => expect(view().queryByText(/Model A answers/)).not.toBeNull());
   // GESTURE: the first message loads Model A and it answers.
   await h.send('Hi', { text: 'Hello from A.' });
   await rtl.waitFor(() => expect(view().queryByText('Hello from A.')).not.toBeNull(), { timeout: 8000 });

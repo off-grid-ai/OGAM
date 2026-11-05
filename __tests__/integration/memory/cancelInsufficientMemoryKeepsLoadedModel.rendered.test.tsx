@@ -60,7 +60,7 @@ describe('Insufficient Memory → Cancel keeps the chat on the loaded model', ()
     };
 
     // The chat opens on Model A.
-    await rtl.waitFor(() => expect(view().queryByText(/chatting with Model A/)).not.toBeNull());
+    await rtl.waitFor(() => expect(view().queryByText(/Model A answers/)).not.toBeNull());
 
     // GESTURE: the first message loads Model A and it answers.
     await h.send('Hi', { text: 'Hello from A.' });
@@ -99,9 +99,9 @@ describe('Insufficient Memory → Cancel keeps the chat on the loaded model', ()
 
     // A new chat says it is chatting with Model A — not "Unknown", not the model that did not fit.
     await h.newChatViaHome();
-    await rtl.waitFor(() => expect(view().queryByText(/chatting with Model A/)).not.toBeNull());
-    expect(view().queryByText(/chatting with Unknown/)).toBeNull();
-    expect(view().queryByText(/chatting with Model B/)).toBeNull();
+    await rtl.waitFor(() => expect(view().queryByText(/Model A answers/)).not.toBeNull());
+    expect(view().queryByText(/Unknown answers/)).toBeNull();
+    expect(view().queryByText(/Model B answers/)).toBeNull();
   }, 45000);
 
   it('offers another model as the way forward: the picker opens and the chat stays on Model A', async () => {

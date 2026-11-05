@@ -165,7 +165,7 @@ describe('catalog GGUF model names', () => {
       // The chat started with it.
       fireEvent.press(await waitFor(() => ui.getByTestId('new-chat-button'), RENDER_WAIT));
       await waitFor(
-        () => expect(ui.getByText(new RegExp(`begin chatting with ${CATALOG_NAME}`))).toBeTruthy(),
+        () => expect(ui.getByText(new RegExp(`Ask anything\\. ${CATALOG_NAME} answers`))).toBeTruthy(),
         RENDER_WAIT,
       );
       expectNoRepoId(ui);
@@ -247,7 +247,7 @@ describe('catalog GGUF model names', () => {
 
       fireEvent.press(await waitFor(() => ui.getByTestId('new-chat-button'), RENDER_WAIT));
       await waitFor(
-        () => expect(ui.getByText(new RegExp(`begin chatting with ${CATALOG_NAME}`))).toBeTruthy(),
+        () => expect(ui.getByText(new RegExp(`Ask anything\\. ${CATALOG_NAME} answers`))).toBeTruthy(),
         RENDER_WAIT,
       );
       expectNoRepoId(ui);

@@ -46,7 +46,7 @@ describe('model sheet: switching back to the loaded model', () => {
     };
     const rowState = (id: string) => view().getByTestId(`text-model-row-${id}`).props.accessibilityState;
 
-    await rtl.waitFor(() => expect(view().queryByText(/chatting with Qwen3.5 0.8B/)).not.toBeNull());
+    await rtl.waitFor(() => expect(view().queryByText(/Qwen3.5 0.8B answers/)).not.toBeNull());
 
     // GESTURE: the first message loads 0.8B and it answers.
     await h.send('Hi', { text: 'Hello from 0.8B.' });

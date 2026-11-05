@@ -123,8 +123,8 @@ export const ChatHeader: React.FC<{
           </TouchableOpacity>
           <Text style={styles.headerSubtitleDivider}>·</Text>
           <TouchableOpacity style={styles.headerProjectRow} onPress={() => setShowProjectSelector(true)}>
-            <Icon name="folder" size={11} color={activeProject ? colors.primary : colors.textMuted} />
-            <Text style={[styles.headerSubtitle, { color: activeProject ? colors.primary : colors.textMuted }]} numberOfLines={1}>
+            <Icon name="folder" size={11} color={colors.textMuted} />
+            <Text style={[styles.headerSubtitle, { color: colors.textMuted }]} numberOfLines={1}>
               {activeProject ? activeProject.name : 'Default'}
             </Text>
           </TouchableOpacity>
@@ -170,14 +170,14 @@ export const EmptyChat: React.FC<{
       </View>
     </AnimatedEntry>
     <AnimatedEntry index={1} staggerMs={60}>
-      <Text style={styles.emptyChatTitle}>Start a Conversation</Text>
+      <Text style={styles.emptyChatTitle}>What's on your mind?</Text>
     </AnimatedEntry>
     <AnimatedEntry index={2} staggerMs={60}>
       <Text style={styles.emptyChatText} testID="empty-chat-hint">
         {/* With no model chosen yet, no name: never "Unknown". */}
         {activeModelName || activeModel?.name
-          ? `Type a message below to begin chatting with ${activeModelName || activeModel?.name}.`
-          : 'Type a message below to begin.'}
+          ? `Ask anything. ${activeModelName || activeModel?.name} answers.`
+          : 'Ask anything.'}
       </Text>
     </AnimatedEntry>
     {onStarter && (
@@ -206,7 +206,7 @@ export const EmptyChat: React.FC<{
           </Text>
         </View>
         <Text style={styles.projectHintText}>
-          Project: {activeProject?.name || 'Default'} — tap to change
+          Project: {activeProject?.name || 'Default'} · Change
         </Text>
       </TouchableOpacity>
     </AnimatedEntry>
@@ -214,7 +214,7 @@ export const EmptyChat: React.FC<{
       <Text style={styles.privacyText}>
         {isRemote
           ? 'This chat runs on a remote server, not on this phone.'
-          : 'This conversation is completely private. All processing happens on your device.'}
+          : 'Private. Nothing you type leaves this phone.'}
       </Text>
     </AnimatedEntry>
   </View>
