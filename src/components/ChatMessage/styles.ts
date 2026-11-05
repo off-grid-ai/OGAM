@@ -151,9 +151,10 @@ const createBubbleStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderBottomRightRadius: 4,
   },
   // The answer sits on the surface, like text on a page, not in a box.
+  // No box, so no inset: a reply's text starts on the 24 pt gutter, level with the header and meta row.
   assistantBubble: {
     backgroundColor: 'transparent',
-    paddingHorizontal: SPACING.xs,
+    paddingHorizontal: 0,
     minWidth: '85%' as const,
   },
   attachmentsContainer: {
