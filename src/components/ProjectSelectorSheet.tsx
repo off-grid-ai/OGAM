@@ -3,6 +3,7 @@ import {
   View,
   Text,
   ScrollView,
+  StyleSheet,
 } from 'react-native';
 import { TouchableOpacity } from './Touchable';
 import { AppSheet } from './AppSheet';
@@ -110,24 +111,22 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     // the list is scrolled to the end.
     paddingBottom: SPACING.xxl,
   },
+  // Rows on one surface with hairlines, as every list: the chosen one is marked by its check, not a
+  // box, and the letter tiles are grey (hand test 48: every tile emerald, the chosen row boxed).
   projectOption: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    padding: 14,
-    borderRadius: 12,
-    marginBottom: 8,
-    backgroundColor: colors.surface,
+    paddingVertical: SPACING.md,
+    minHeight: 56,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
   },
-  projectOptionSelected: {
-    backgroundColor: `${colors.primary  }20`,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
+  projectOptionSelected: {},
   projectOptionIcon: {
     width: 36,
     height: 36,
     borderRadius: 8,
-    backgroundColor: `${colors.primary  }30`,
+    backgroundColor: colors.surfaceLight,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     marginRight: 12,
@@ -135,18 +134,17 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   projectOptionIconText: {
     ...TYPOGRAPHY.h2,
     fontWeight: '500' as const,
-    color: colors.primary,
+    color: colors.textSecondary,
   },
   projectOptionInfo: {
     flex: 1,
   },
   projectOptionName: {
-    ...TYPOGRAPHY.h2,
-    fontWeight: '500' as const,
+    ...TYPOGRAPHY.body,
     color: colors.text,
   },
   projectOptionDesc: {
-    ...TYPOGRAPHY.h3,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
     marginTop: 2,
   },
