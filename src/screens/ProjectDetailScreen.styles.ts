@@ -246,6 +246,22 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.textSecondary,
     flex: 1,
   },
+  kbDocRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  kbDocInfo: {
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  kbDocDelete: {
+    padding: 13,
+    marginLeft: SPACING.sm,
+  },
   kbTransferIcon: {
     marginRight: SPACING.sm,
   },
