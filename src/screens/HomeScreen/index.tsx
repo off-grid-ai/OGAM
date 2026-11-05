@@ -223,10 +223,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               header's actions on the same row: the bell, Pro, and New chat as the one main action. */}
           <View style={styles.header}>
             <View style={styles.titleRow}>
-              <View style={styles.titleText}>
-                <Text style={styles.title} accessibilityRole="header">Off Grid AI</Text>
-                <Text style={styles.subtitle}>Nothing you type leaves this phone.</Text>
-              </View>
+              <Text style={styles.title} accessibilityRole="header">Off Grid AI</Text>
               <View style={styles.headerActions}>
                 {HomeNotificationsButton ? (
                   <HomeNotificationsButton onOpen={openSyncNotifications} />
@@ -252,6 +249,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 ) : null}
               </View>
             </View>
+            {/* The promise gets its own line, never squeezed by the actions beside the title. */}
+            <Text style={styles.subtitle}>Nothing you type leaves this phone.</Text>
           </View>
 
           <FeatureShowcase features={showcase} active={isFocused} />

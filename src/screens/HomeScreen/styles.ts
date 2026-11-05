@@ -45,6 +45,7 @@ const createLayoutStyles = (colors: ThemeColors) => ({
   title: {
     ...TYPOGRAPHY.h2,
     color: colors.text,
+    flex: 1,
   },
   subtitle: {
     ...TYPOGRAPHY.bodySmall,
