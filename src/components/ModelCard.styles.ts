@@ -55,12 +55,17 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   denseMeta: {
     ...TYPOGRAPHY.meta,
     color: colors.textMuted,
-    marginTop: SPACING.xs,
   },
   capabilityRow: {
     flexDirection: 'row' as const,
     flexWrap: 'wrap' as const,
     gap: SPACING.xs,
+  },
+  denseMetaRow: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    alignItems: 'center' as const,
+    columnGap: SPACING.sm,
     marginTop: SPACING.xs,
   },
   capabilityText: {

@@ -154,10 +154,13 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
       {!!description && (
         <Text style={styles.denseDescription} numberOfLines={1}>{description}</Text>
       )}
-      {facts.length > 0 && (
-        <Text style={styles.denseMeta} numberOfLines={2} testID={factsTestID}>{facts.join(' · ')}</Text>
-      )}
-      <CapabilityBadges capabilities={capabilities} isVisionModel={isVisionModel} />
+      {/* Facts and what it can do share one line, so a row is three short lines, not four. */}
+      <View style={styles.denseMetaRow}>
+        {facts.length > 0 && (
+          <Text style={styles.denseMeta} numberOfLines={1} testID={factsTestID}>{facts.join(' · ')}</Text>
+        )}
+        <CapabilityBadges capabilities={capabilities} isVisionModel={isVisionModel} />
+      </View>
     </>
   );
 };
