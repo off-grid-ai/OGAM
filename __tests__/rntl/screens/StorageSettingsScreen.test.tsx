@@ -87,15 +87,15 @@ describe('StorageSettingsScreen', () => {
 
   // ---- Breakdown section tests ----
 
-  it('shows LLM Models count in breakdown', () => {
+  it('shows the chat models count in the breakdown', () => {
     useAppStore.getState().setDownloadedModels([
       createDownloadedModel({ id: 'm1', name: 'Model 1', fileSize: 1024, quantization: 'Q4' }),
       createDownloadedModel({ id: 'm2', name: 'Model 2', fileSize: 2048, quantization: 'Q8' }),
     ]);
 
     const { getAllByText } = renderStorage();
-    // "LLM Models" appears in breakdown AND section title
-    expect(getAllByText('LLM Models').length).toBeGreaterThanOrEqual(1);
+    // "Chat models" appears in breakdown AND section title
+    expect(getAllByText('Chat models').length).toBeGreaterThanOrEqual(1);
     expect(getAllByText('2').length).toBeGreaterThanOrEqual(1);
   });
 
@@ -105,8 +105,8 @@ describe('StorageSettingsScreen', () => {
     ]);
 
     const { getAllByText } = renderStorage();
-    // "Image Models" appears in breakdown AND section title
-    expect(getAllByText('Image Models').length).toBeGreaterThanOrEqual(1);
+    // "Image models" appears in breakdown AND section title
+    expect(getAllByText('Image models').length).toBeGreaterThanOrEqual(1);
     expect(getAllByText('1').length).toBeGreaterThanOrEqual(1);
   });
 
@@ -120,15 +120,15 @@ describe('StorageSettingsScreen', () => {
 
   it('shows Model Storage label in breakdown', () => {
     const { getByText } = renderStorage();
-    expect(getByText('Model Storage')).toBeTruthy();
+    expect(getByText('All models')).toBeTruthy();
   });
 
   // ---- Model summary tests ----
 
-  it('does not show LLM Models section when no models', () => {
+  it('does not show a chat models section when there are none', () => {
     const { queryAllByText } = renderStorage();
-    // "LLM Models" appears once in breakdown
-    const llmTexts = queryAllByText('LLM Models');
+    // "Chat models" appears once in breakdown
+    const llmTexts = queryAllByText('Chat models');
     expect(llmTexts.length).toBe(1); // Only breakdown, no separate section
   });
 

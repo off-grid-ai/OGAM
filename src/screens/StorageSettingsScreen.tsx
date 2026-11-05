@@ -180,21 +180,21 @@ export const StorageSettingsScreen: React.FC = () => {
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
               <Icon name="cpu" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>LLM Models</Text>
+              <Text style={styles.infoLabel}>Chat models</Text>
             </View>
             <Text style={styles.infoValue}>{downloadedModels.length}</Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
               <Icon name="image" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Image Models</Text>
+              <Text style={styles.infoLabel}>Image models</Text>
             </View>
             <Text style={styles.infoValue}>{downloadedImageModels.length}</Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
               <Icon name="video" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Video Models</Text>
+              <Text style={styles.infoLabel}>Video models</Text>
             </View>
             <Text style={styles.infoValue}>{downloadedVideoModels.length}</Text>
           </View>
@@ -216,35 +216,35 @@ export const StorageSettingsScreen: React.FC = () => {
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
               <Icon name="search" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Search Models</Text>
+              <Text style={styles.infoLabel}>Search models</Text>
             </View>
             <Text style={styles.infoValue}>{hardwareService.formatBytes(extra.search)}</Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
               <Icon name="mic" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Transcription Models</Text>
+              <Text style={styles.infoLabel}>Speech-to-text models</Text>
             </View>
             <Text style={styles.infoValue}>{transcriptionModelCount}</Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
               <Icon name="volume-2" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Speech Models</Text>
+              <Text style={styles.infoLabel}>Voices</Text>
             </View>
             <Text style={styles.infoValue}>{speechModelCount}</Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
               <Icon name="hard-drive" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Model Storage</Text>
+              <Text style={styles.infoLabel}>All models</Text>
             </View>
             <Text style={styles.infoValue}>{hardwareService.formatBytes(storageUsed)}</Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
               <Icon name="film" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Videos and Films</Text>
+              <Text style={styles.infoLabel}>Videos and films</Text>
             </View>
             <Text style={styles.infoValue}>
               {generatedVideoCount} · {hardwareService.formatBytes(extra.videos)}
@@ -253,7 +253,7 @@ export const StorageSettingsScreen: React.FC = () => {
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
               <Icon name="file-text" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Document Index</Text>
+              <Text style={styles.infoLabel}>Document search index</Text>
             </View>
             <Text style={styles.infoValue}>{hardwareService.formatBytes(extra.index)}</Text>
           </View>
