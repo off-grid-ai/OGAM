@@ -142,17 +142,19 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     paddingVertical: SPACING.xl,
+    paddingHorizontal: SPACING.xl,
   },
   emptyStateText: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,
     marginTop: SPACING.sm,
+    textAlign: 'center' as const,
   },
   emptyStateButton: {
     marginTop: SPACING.md,
   },
   chatList: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
   },
   chatItem: {
     flexDirection: 'row' as const,
