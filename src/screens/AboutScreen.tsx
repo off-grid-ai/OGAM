@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, Linking, ScrollView, Image, StyleSheet } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
 import { AliveScreen } from '../components/AliveScreen';
+import { cardSurface } from '../theme/surface';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -133,7 +134,7 @@ const staticStyles = StyleSheet.create({
   appIcon: { width: 72, height: 72, borderRadius: 16, marginBottom: SPACING.md },
 });
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row' as const,
@@ -175,19 +176,18 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     lineHeight: 22,
     paddingHorizontal: SPACING.md,
   },
+  // One surface with hairlines (theme/surface), like every list.
   navSection: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
+    ...cardSurface(colors),
     marginBottom: SPACING.lg,
     overflow: 'hidden' as const,
-    ...shadows.small,
   },
   navItem: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     padding: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
   },
   navItemLast: { borderBottomWidth: 0 },
   navItemIcon: {
