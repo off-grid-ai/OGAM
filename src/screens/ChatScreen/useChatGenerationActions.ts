@@ -781,7 +781,7 @@ export async function startGenerationFn(
   const { setDebugInfo, targetConversationId, messageText, assistantEnabled } = call;
   if (!deps.hasActiveModel) return;
   // Pure text executor — image-vs-text routing happens upstream in dispatchGenerationFn.
-  generationSession.begin(targetConversationId);
+  const turn = generationSession.begin(targetConversationId);
   // For remote models, skip local model loading
   if (
     !deps.activeModelInfo?.isRemote &&
@@ -791,6 +791,11 @@ export async function startGenerationFn(
     }))
   ) {
     generationSession.end('not-ready');
+    return;
+  }
+  // Stop pressed while the model loaded ends the turn; the reply it was waiting to start never runs.
+  if (!generationSession.isCurrent(turn)) {
+    logger.log('[GEN-SM] turn stopped during model load; not generating');
     return;
   }
   const conversation = useChatStore
@@ -1317,7 +1322,7 @@ export async function regenerateResponseFn(
   const targetConversationId = deps.activeConversationId;
   // Resend starts before memory reclaim, routing, and remote preparation. Publish that fact now so
   // the existing thinking loader covers the full wait instead of appearing only when generation starts.
-  generationSession.begin(targetConversationId);
+  const turn = generationSession.begin(targetConversationId);
   await modelResidencyManager.reclaimSttForGeneration(); // free idle Whisper before the LLM reload (memory-tight)
   const messageTextForRoute = userMessage.content;
   // Same decision seam as dispatch (resolveTurnKind): a replay passes the RECORDED kind, which wins
@@ -1365,6 +1370,10 @@ export async function regenerateResponseFn(
     }))
   ) {
     generationSession.end('not-ready');
+    return;
+  }
+  if (!generationSession.isCurrent(turn)) {
+    logger.log('[RESEND-SM] turn stopped during model load; not generating');
     return;
   }
   logger.log('[RESEND-SM] regenerate → reached LLM generate path');

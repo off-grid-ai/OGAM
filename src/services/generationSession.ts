@@ -19,6 +19,8 @@ type Listener = () => void;
  */
 class GenerationSessionService {
   private conversationId: string | null = null;
+  /** Counts turns, so a caller that awaited (a model load) can tell whether Stop ended its turn. */
+  private turn = 0;
   private readonly listeners = new Set<Listener>();
 
   /** The conversation a turn is currently generating for, or null. */
@@ -31,12 +33,22 @@ class GenerationSessionService {
     return this.conversationId != null && this.conversationId === conversationId;
   }
 
-  /** Mark a turn as generating for a conversation. Idempotent for the same id. */
-  begin(conversationId: string): void {
-    if (this.conversationId === conversationId) return;
+  /**
+   * Mark a turn as generating for a conversation. Idempotent for the same id. Returns the turn, for
+   * `isCurrent` after an await.
+   */
+  begin(conversationId: string): number {
+    if (this.conversationId === conversationId) return this.turn;
     logger.log(`[GEN-SM] session begin conv=${conversationId} (was ${this.conversationId ?? 'none'})`);
     this.conversationId = conversationId;
+    this.turn += 1;
     this.notify();
+    return this.turn;
+  }
+
+  /** Whether this turn is still the one generating: false once Stop (or anything) ended it. */
+  isCurrent(turn: number): boolean {
+    return this.conversationId != null && this.turn === turn;
   }
 
   /** Clear the generating session (turn finished / failed / aborted / switched). */

@@ -60,3 +60,28 @@ describe('generationSession', () => {
     expect(generationSession.isGeneratingFor('c1')).toBe(false);
   });
 });
+
+describe('generationSession turns', () => {
+  const { generationSession: session } = require('../../../src/services/generationSession');
+  beforeEach(() => session._reset());
+
+  it('a turn is current until it ends', () => {
+    const turn = session.begin('c1');
+    expect(session.isCurrent(turn)).toBe(true);
+    session.end('stopped');
+    expect(session.isCurrent(turn)).toBe(false);
+  });
+
+  it('a new turn after Stop is not the old one', () => {
+    const first = session.begin('c1');
+    session.end('stopped');
+    const second = session.begin('c1');
+    expect(session.isCurrent(first)).toBe(false);
+    expect(session.isCurrent(second)).toBe(true);
+  });
+
+  it('begin again for the same chat keeps the same turn', () => {
+    const turn = session.begin('c1');
+    expect(session.begin('c1')).toBe(turn);
+  });
+});
