@@ -188,3 +188,9 @@ Pass: 2, 3, 4, 6, 9, 10. Partial: 1 (light gone while held), 7 (Sync row 3 lines
 1. Chats rows need a quiet detail so same-title chats can be told apart → done (time, kind).
 2. Developer text (tool names, "Generation details", "WORKING") behind a developer setting → tools-sent done; "WORKING" and "Using Web search result…" next.
 3. Home promise on its own line → done; Models and Settings to 24 px padding and plain hairline lists next.
+
+## Supervisor 18:46 — hand test 3
+1. Chats: same-title rows looked alike ("Yesterday" under YESTERDAY) → rows under Today/Yesterday show the clock time (`f1ef0210f`). Open: an opened swipe should close on a tap elsewhere or a scroll.
+2. Models and Settings: 24 px padding, one hairline list, emerald only on the one main action; Model Settings copy in plain words. Next.
+3. Chat: speed was emerald and the hint dot orange; system lines showed raw underscores → fixed (`f1ef0210f`). Answers say what they did in plain words (`5be36c15a`).
+- Hygiene caught my test mistakes (import depth, a missed label, two sources for one setting); the tools-sent row now rides ChatMessage's generation-details prop (`7b74ed44f`).
