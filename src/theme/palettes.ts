@@ -1,6 +1,9 @@
-// Light and dark color palettes + shadow definitions
+// Colours come from @offgrid/design, the one token source desktop also reads; shadows are
+// React Native's form of the same look and stay here.
+import { COLORS_LIGHT, COLORS_DARK, type ThemeColors } from '@offgrid/design';
 
-export type ThemeColors = typeof COLORS_LIGHT;
+export { COLORS_LIGHT, COLORS_DARK };
+export type { ThemeColors };
 
 interface ShadowStyle {
   boxShadow: string;
@@ -15,94 +18,7 @@ export type ThemeShadows = {
   edge: ShadowStyle;
 };
 
-// ── Light palette ──────────────────────────────────────────────────
-export const COLORS_LIGHT = {
-  // Primary accent
-  primary: '#059669',
-  primaryDark: '#047857',
-  primaryLight: '#34D399',
-  /** Text and icons on a filled emerald surface: near-black keeps AA contrast in both themes. */
-  onPrimary: '#0A0A0A',
-  // The main action: a deeper emerald, so white text passes 4.5:1.
-  heroFill: '#047857',
-  heroBorder: '#065F46',
-  onHero: '#FFFFFF',
 
-  // Backgrounds
-  background: '#FFFFFF',
-  surface: '#F5F5F5',
-  // A surface the living field shows through; on the white background it reads as `surface` (#F5F5F5).
-  surfaceGlass: 'rgba(0,0,0,0.04)',
-  surfaceLight: '#EBEBEB',
-  surfaceHover: '#E0E0E0',
-
-  // Text hierarchy
-  text: '#0A0A0A',
-  textSecondary: '#525252',
-  textMuted: '#8A8A8A',
-  textDisabled: '#BFBFBF',
-
-  // Borders
-  border: '#E5E5E5',
-  borderLight: '#D4D4D4',
-  borderFocus: '#059669',
-
-  // Semantic colors
-  success: '#525252',
-  warning: '#0A0A0A',
-  error: '#DC2626',
-  trending: '#D97706',
-  errorBackground: 'rgba(220, 38, 38, 0.10)',
-  info: '#525252',
-
-  // Special
-  overlay: 'rgba(0, 0, 0, 0.4)',
-  divider: '#EBEBEB',
-};
-
-// ── Dark palette ───────────────────────────────────────────────────
-export const COLORS_DARK = {
-  // Primary accent
-  primary: '#34D399',
-  primaryDark: '#10B981',
-  primaryLight: '#6EE7B7',
-  onPrimary: '#0A0A0A',
-  // The main action, as desktop's candy accent button: emerald blended into the page, light text.
-  heroFill: '#217B5A',
-  heroBorder: 'rgba(52,211,153,0.55)',
-  onHero: '#F2FFF8',
-
-  // Backgrounds
-  background: '#0A0A0A',
-  surface: '#141414',
-  // A surface the living field shows through; on a plain background it reads as `surface`.
-  surfaceGlass: 'rgba(255,255,255,0.04)',
-  surfaceLight: '#1E1E1E',
-  surfaceHover: '#252525',
-
-  // Text hierarchy
-  text: '#FFFFFF',
-  textSecondary: '#B0B0B0',
-  textMuted: '#808080',
-  textDisabled: '#4A4A4A',
-
-  // Borders
-  border: '#1E1E1E',
-  borderLight: '#2A2A2A',
-  borderFocus: '#34D399',
-
-  // Semantic colors
-  success: '#B0B0B0',
-  warning: '#FFFFFF',
-  error: '#C75050',
-  trending: '#F59E0B',
-  errorBackground: 'rgba(239, 68, 68, 0.15)',
-  info: '#B0B0B0',
-
-  // Special
-  overlay: 'rgba(0, 0, 0, 0.7)',
-  divider: '#1A1A1A',
-};
 
 // ── Light shadows ────────────────────────────────────────────────────
 // Uses CSS boxShadow (RN 0.76+ with New Architecture) for cross-platform

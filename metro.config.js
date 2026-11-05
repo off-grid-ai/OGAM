@@ -25,6 +25,8 @@ const ragPackagePath = path.resolve(sharedRoot, 'packages/rag');
 // with desktop. Out-of-root like rag, prebuilt CJS in dist/.
 const modelsPackagePath = path.resolve(sharedRoot, 'packages/models');
 const uiPackagePath = path.resolve(sharedRoot, 'packages/ui');
+// @offgrid/design: the one token source for desktop and mobile (colours, type, spacing, motion).
+const designPackagePath = path.resolve(sharedRoot, 'packages/design');
 // @offgrid/speech: voice-turn decisions (when a spoken turn begins and ends) shared with desktop.
 // Out-of-root like sync, so Metro must watch it and be pointed at its built entry.
 const speechPackagePath = path.resolve(sharedRoot, 'packages/speech');
@@ -45,6 +47,7 @@ const config = {
     modelsPackagePath,
     speechPackagePath,
     uiPackagePath,
+    designPackagePath,
     sharedNodeModulesPath,
   ],
   resolver: {
@@ -71,6 +74,7 @@ const config = {
       '@offgrid/models': path.resolve(modelsPackagePath, 'dist/index.js'),
       '@offgrid/speech': path.resolve(speechPackagePath, 'dist/index.cjs'),
       '@offgrid/ui': path.resolve(uiPackagePath, 'dist/index.js'),
+      '@offgrid/design': path.resolve(designPackagePath, 'dist/index.js'),
       // @offgrid/sync owns this dependency in its package manifest. Metro still needs the
       // out-of-root file dependency mapped to a watched, built CommonJS entry.
       '@offgrid/automation': path.resolve(automationPackagePath, 'dist/index.js'),
