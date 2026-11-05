@@ -3,13 +3,16 @@ import { useAppStore } from '../../stores';
 import { INFERENCE_BACKENDS } from '../../types';
 import { useTextGenerationSettings } from '../../hooks/useTextGenerationSettings';
 import { useImageParameterSettings } from '../../hooks/useImageGenerationSettings';
+import {
+  NO_TRANSCRIPTION_MODEL_LABEL,
+  useTranscriptionModelSetting,
+} from '../../hooks/useTranscriptionModelSetting';
 
 type Numeric = { value: number; decimals?: number; formatValue?: (value: number) => string };
 
 const show = (setting: Numeric): string =>
   setting.formatValue ? setting.formatValue(setting.value) : setting.value.toFixed(setting.decimals ?? 0);
 
-const DEFAULT_PROMPT = 'You are a helpful AI assistant.';
 const HARDWARE: Record<string, string> = {
   [INFERENCE_BACKENDS.CPU]: 'CPU',
   [INFERENCE_BACKENDS.METAL]: 'GPU',
@@ -23,6 +26,7 @@ export const useSectionSummaries = () => {
   const settings = useAppStore(s => s.settings);
   const { isLiteRT, llama, liteRT } = useTextGenerationSettings();
   const { parameters } = useImageParameterSettings();
+  const { modelName: transcriptionModel } = useTranscriptionModelSetting();
 
   const text = isLiteRT
     ? `Temperature ${show(liteRT.temperature)} · ${show(liteRT.maxTokens)} tokens`
@@ -36,8 +40,10 @@ export const useSectionSummaries = () => {
 
   return {
     general: `${backend} · ${LOADING[loading]} loading`,
-    prompt: (settings.systemPrompt ?? DEFAULT_PROMPT).trim().split('\n')[0] || 'None',
+    // Chat sends the built-in prompt when this is empty (`||`, not `??`), so an empty one is not "None".
+    prompt: settings.systemPrompt?.trim().split('\n')[0] || 'Built-in prompt',
     text,
+    transcription: transcriptionModel ?? NO_TRANSCRIPTION_MODEL_LABEL,
     image: `${parameters.steps} steps · guidance ${parameters.guidanceScale} · ${parameters.size}px`,
   };
 };
