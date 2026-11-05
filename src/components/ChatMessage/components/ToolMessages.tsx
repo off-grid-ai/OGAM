@@ -524,7 +524,9 @@ export const SystemInfoMessage: React.FC<{
 }> = ({ content, styles, alertState, onCloseAlert }) => (
   <>
     <View testID="system-info-message" style={styles.systemInfoContainer}>
-      <Text style={styles.systemInfoText}>{content}</Text>
+      {/* A note is shown as plain text, never markdown, so notes saved as "_…_" by older builds
+          (or another device) lose the underscores here rather than showing them. */}
+      <Text style={styles.systemInfoText}>{content.replace(/^_(.+)_$/s, '$1')}</Text>
     </View>
     <CustomAlert
       visible={alertState.visible}

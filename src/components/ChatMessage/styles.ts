@@ -29,6 +29,7 @@ const createBubbleStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   systemInfoText: {
     ...TYPOGRAPHY.meta,
+    fontFamily: FONTS.mono,
     color: colors.textMuted,
     textAlign: 'center' as const,
   },

@@ -79,7 +79,7 @@ function addBackendFallbackMsg(deps: Pick<ModelActionDeps, 'activeModel' | 'acti
   if (!notice || !deps.activeConversationId) return;
   deps.addMessage(deps.activeConversationId, {
     role: 'assistant',
-    content: `_${notice}_`,
+    content: notice,
     isSystemInfo: true,
   });
 }
