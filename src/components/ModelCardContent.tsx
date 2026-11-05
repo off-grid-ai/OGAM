@@ -270,7 +270,7 @@ export const StandardModelCardContent: React.FC<StandardModelCardContentProps> =
         )}
         {isActive && (
           <View style={styles.activeBadge}>
-            <Text style={styles.activeBadgeText}>Active</Text>
+            <Text style={styles.activeBadgeText}>In use</Text>
           </View>
         )}
         {recommended && <MaterialIcon name="whatshot" size={14} color={colors.trending} accessibilityLabel="Recommended" />}

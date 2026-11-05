@@ -23,6 +23,7 @@ import { ModelInfo, ModelFile } from '../../types';
 import { createStyles } from './styles';
 import { ModelsScreenViewModel } from './useModelsScreen';
 import { useDownloadStore, isActiveStatus, isQueuedStatus } from '../../stores/downloadStore';
+import { useAppStore } from '../../stores/appStore';
 import { jobBytesDownloaded } from '../../utils/downloadStatus';
 import { makeModelKey } from '../../utils/modelKey';
 import { modelSupportsNpuGpu, isAccelerableQuant } from '../../utils/acceleration';
@@ -329,14 +330,14 @@ const downloadBytes = (file: ModelFile): number => file.size + (file.mmProjFile?
 
 interface ModelListItemProps {
   item: ModelInfo; index: number; focusTrigger: number;
-  isDownloaded: boolean; isTrending: boolean; onPress: () => void;
+  isDownloaded: boolean; isActive?: boolean; isTrending: boolean; onPress: () => void;
   onDownload?: () => void;
   /** The row's place in the grouped list: flat, with the group's corners on the end rows. */
   rowStyle?: StyleProp<ViewStyle>;
 }
 /** A model card as a row of the grouped list: no box of its own (the group draws the surface). */
 const GROUPED_MODEL_ROW: ViewStyle = { borderRadius: 0, marginTop: 0, marginBottom: 0, borderWidth: 0, shadowOpacity: 0, elevation: 0 };
-const ModelListItem: React.FC<ModelListItemProps> = ({ item, index, focusTrigger, isDownloaded, isTrending, onPress, onDownload, rowStyle }) => {
+const ModelListItem: React.FC<ModelListItemProps> = ({ item, index, focusTrigger, isDownloaded, isActive, isTrending, onPress, onDownload, rowStyle }) => {
   const { isCompatible, incompatibleReason } = getTextModelCompatibility(item);
   const isLiteRTParent = item.id === LITERT_PARENT_ID;
   const recommended = isLiteRTParent ? LITERT_PARENT_RECOMMENDED : undefined;
@@ -353,7 +354,7 @@ const ModelListItem: React.FC<ModelListItemProps> = ({ item, index, focusTrigger
     predicted: true,
     ...modelSpeedBadges(item),
   };
-  return <AnimatedEntry index={index} staggerMs={30} trigger={focusTrigger}><ModelCard model={cardModel} isDownloaded={isDownloaded} isDownloading={agg.downloading} isQueued={agg.queued} downloadProgress={agg.progress} downloadBytes={agg.bytes} downloadCount={agg.count} isCompatible={isCompatible} incompatibleReason={incompatibleReason} onPress={isCompatible ? onPress : undefined} onDownload={isCompatible ? onDownload : undefined} testID={`model-card-${index}`} compact facts={modelFactChips(item)} isTrending={isTrending} recommended={recommended} supportsAcceleration={!isLiteRTParent && modelSupportsNpuGpu(item)} capabilities={capabilities} style={rowStyle} /></AnimatedEntry>;
+  return <AnimatedEntry index={index} staggerMs={30} trigger={focusTrigger}><ModelCard model={cardModel} isDownloaded={isDownloaded} isActive={isActive} isDownloading={agg.downloading} isQueued={agg.queued} downloadProgress={agg.progress} downloadBytes={agg.bytes} downloadCount={agg.count} isCompatible={isCompatible} incompatibleReason={incompatibleReason} onPress={isCompatible ? onPress : undefined} onDownload={isCompatible ? onDownload : undefined} testID={`model-card-${index}`} compact facts={modelFactChips(item)} isTrending={isTrending} recommended={recommended} supportsAcceleration={!isLiteRTParent && modelSupportsNpuGpu(item)} capabilities={capabilities} style={rowStyle} /></AnimatedEntry>;
 };
 
 function applyBackNavigation(setSelectedModel: (m: ModelInfo | null) => void, setModelFiles: (f: ModelFile[]) => void): void {
@@ -398,6 +399,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
   const liteRTModel = useMemo(() => liteRTRecommendedModel(liteRTEntries), [liteRTEntries]);
   const catalog = useWithRemoteCatalog('models', CATALOG);
   // The picks are shown once, above; the list below holds the other models.
+  const activeTextModelId = useAppStore(state => state.activeModelId);
   const moreModels = React.useMemo(() => {
     const pickIds = new Set(devicePicks(ramGB, catalog).map(pick => pick.model.id));
     return recommendedAsModelInfo.filter(model => !pickIds.has(model.id));
@@ -428,12 +430,13 @@ export const TextModelsTab: React.FC<Props> = (props) => {
       : undefined;
     // A disk scan can restore a file under a recovered_ id. The detail rows
     // recognize it by filename, so the family row must use those same files.
-    const isDownloaded = downloadedModels.some(model =>
-      model.id.startsWith(`${item.id}/`) ||
-      item.files.some(file => file.name === model.fileName),
-    );
+    const isFamilyFile = (model: { id: string; fileName: string }) =>
+      model.id.startsWith(`${item.id}/`) || item.files.some(file => file.name === model.fileName);
+    const isDownloaded = downloadedModels.some(isFamilyFile);
+    // The model you talk to is marked "In use" on its row, the same way every other kind marks it.
+    const isActive = downloadedModels.some(model => model.id === activeTextModelId && isFamilyFile(model));
     return (
-      <ModelListItem item={item} index={index} focusTrigger={focusTrigger} isDownloaded={isDownloaded} isTrending={trendingAsModelInfo.some(t => t.id === item.id)} onPress={directDownload ?? (() => handleSelectModel(item))} onDownload={directDownload} rowStyle={[GROUPED_MODEL_ROW, listGroupRowEnds(index, listData.length)]} />
+      <ModelListItem item={item} index={index} focusTrigger={focusTrigger} isDownloaded={isDownloaded} isActive={isActive} isTrending={trendingAsModelInfo.some(t => t.id === item.id)} onPress={directDownload ?? (() => handleSelectModel(item))} onDownload={directDownload} rowStyle={[GROUPED_MODEL_ROW, listGroupRowEnds(index, listData.length)]} />
     );
   };
 

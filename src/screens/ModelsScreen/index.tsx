@@ -33,7 +33,7 @@ const MODEL_TABS: ReadonlyArray<{
   testID?: string;
 }> = [
   { key: 'text', label: 'Text' },
-  { key: 'embedding', label: 'Search', testID: 'embedding-tab' },
+  { key: 'embedding', label: 'Documents', testID: 'embedding-tab' },
   { key: 'image', label: 'Image' },
   { key: 'video', label: 'Video', testID: 'video-models-tab' },
   { key: 'voice', label: 'Voice', testID: 'voice-models-tab' },
