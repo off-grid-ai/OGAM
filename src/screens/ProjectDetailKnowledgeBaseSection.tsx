@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { AppSwitch } from '../components/AppSwitch';
 import {
   View,
   Text,
@@ -21,10 +20,8 @@ import { resolvePickedFileUri } from '../utils/resolvePickedFileUri';
 import { Button } from '../components/Button';
 import { showAlert, AlertState } from '../components/CustomAlert';
 import { PasteNoteSheet } from '../components/knowledge/PasteNoteSheet';
-import {
-  KnowledgeDocumentInfo,
-  KnowledgeTransferInfo,
-} from '../components/knowledge/KnowledgeDocumentInfo';
+import { KnowledgeDocumentRow } from '../components/knowledge/KnowledgeDocumentRow';
+import { KnowledgeTransferInfo } from '../components/knowledge/KnowledgeDocumentInfo';
 import { useKnowledgeDocumentTransfers } from '../hooks/useKnowledgeDocumentTransfers';
 import {
   arrivingKnowledgeDocumentTransfers,
@@ -340,41 +337,14 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
           keyExtractor={doc => String(doc.id)}
           {...LIST_CLIPPING_PROPS}
           renderItem={({ item: doc }) => (
-            <TouchableOpacity
-              style={styles.kbDocRow}
-              onPress={() => {
-                const documentId = doc.document_id;
-                if (documentId) onDocumentPress({ ...doc, document_id: documentId });
-              }}
-              disabled={!doc.document_id}
-              activeOpacity={0.7}
-              accessibilityLabel={`Knowledge document ${doc.name}`}
-              testID={`kb-document-row-${doc.sync_id}`}
-            >
-              <View style={styles.kbDocInfo}>
-                <KnowledgeDocumentInfo
-                  name={doc.name}
-                  size={doc.size}
-                  documentId={doc.document_id}
-                  transfer={rowKnowledgeDocumentTransfer(transfers, doc.sync_id)}
-                />
-              </View>
-              <AppSwitch
-                value={doc.enabled === 1}
-                onValueChange={val => handleToggleDocument(doc.id, val)}
-                testID={`kb-document-toggle-${doc.sync_id}`}
-                accessibilityLabel={`Use ${doc.name}, ${doc.enabled === 1 ? 'ON' : 'OFF'}`}
-              />
-              <TouchableOpacity
-                style={styles.kbDocDelete}
-                onPress={() => handleDeleteDocument(doc)}
-                testID={`kb-document-remove-${doc.sync_id}`}
-                accessibilityRole="button"
-                accessibilityLabel={`Remove ${doc.name}`}
-              >
-                <Icon name="trash-2" size={14} color={colors.textMuted} />
-              </TouchableOpacity>
-            </TouchableOpacity>
+            <KnowledgeDocumentRow
+              doc={doc}
+              transfer={rowKnowledgeDocumentTransfer(transfers, doc.sync_id)}
+              onOpen={onDocumentPress}
+              onToggle={(row, enabled) => handleToggleDocument(row.id, enabled)}
+              onRemove={handleDeleteDocument}
+              testIDPrefix="kb-document"
+            />
           )}
         />
       )}

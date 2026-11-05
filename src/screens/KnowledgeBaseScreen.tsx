@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { AppSwitch } from '../components/AppSwitch';
 import {
   View,
   Text,
@@ -24,10 +23,8 @@ import { useProjectStore } from '../stores';
 import { knowledgeBase } from '../services/rag';
 import type { KnowledgeDocument } from '../services/rag';
 import { RootStackParamList } from '../navigation/types';
-import {
-  KnowledgeDocumentInfo,
-  KnowledgeTransferInfo,
-} from '../components/knowledge/KnowledgeDocumentInfo';
+import { KnowledgeDocumentRow } from '../components/knowledge/KnowledgeDocumentRow';
+import { KnowledgeTransferInfo } from '../components/knowledge/KnowledgeDocumentInfo';
 import { useKnowledgeDocumentTransfers } from '../hooks/useKnowledgeDocumentTransfers';
 import {
   arrivingKnowledgeDocumentTransfers,
@@ -189,43 +186,14 @@ export const KnowledgeBaseScreen: React.FC = () => {
   // opens a preview. Opening, toggling and deleting are three different actions and each needs to
   // be reachable on its own.
   const renderDoc = ({ item }: { item: KnowledgeDocument }) => (
-    <View style={styles.docRow}>
-      <TouchableOpacity
-        style={styles.docInfo}
-        onPress={() => {
-          if (item.document_id) openDocumentPage(navigation, { documentId: item.document_id, name: item.name });
-        }}
-        disabled={!item.document_id}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel={`Knowledge document ${item.name}`}
-        testID={`knowledge-document-row-${item.sync_id}`}
-      >
-        <KnowledgeDocumentInfo
-          name={item.name}
-          size={item.size}
-          documentId={item.document_id}
-          transfer={rowKnowledgeDocumentTransfer(transfers, item.sync_id)}
-        />
-      </TouchableOpacity>
-      <AppSwitch
-        value={item.enabled === 1}
-        onValueChange={(val) => handleToggleDocument(item.id, val)}
-        // A switch reads its own on/off; the label says what it does.
-        accessibilityRole="switch"
-        accessibilityLabel={`Use in answers: ${item.name}`}
-        testID={`knowledge-document-toggle-${item.sync_id}`}
-      />
-      <TouchableOpacity
-        style={styles.docDelete}
-        onPress={() => handleDeleteDocument(item)}
-        accessibilityRole="button"
-        accessibilityLabel={`Remove ${item.name}`}
-        testID={`knowledge-document-remove-${item.sync_id}`}
-      >
-        <Icon name="trash-2" size={16} color={colors.error} />
-      </TouchableOpacity>
-    </View>
+    <KnowledgeDocumentRow
+      doc={item}
+      transfer={rowKnowledgeDocumentTransfer(transfers, item.sync_id)}
+      onOpen={doc => openDocumentPage(navigation, { documentId: doc.document_id, name: doc.name })}
+      onToggle={(doc, enabled) => handleToggleDocument(doc.id, enabled)}
+      onRemove={handleDeleteDocument}
+      testIDPrefix="knowledge-document"
+    />
   );
 
   const renderArriving = (transfer: KnowledgeDocumentTransfer) => (

@@ -97,22 +97,6 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   list: {
     flex: 1,
   },
-  docRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  docInfo: {
-    flex: 1,
-    marginRight: SPACING.sm,
-  },
-  docDelete: {
-    padding: SPACING.sm,
-    marginLeft: SPACING.sm,
-  },
   transferIcon: {
     marginRight: SPACING.sm,
   },
