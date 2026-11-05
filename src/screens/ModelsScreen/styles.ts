@@ -31,7 +31,7 @@ const createBaseStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   tabBar: {
     flexDirection: 'row' as const,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.sm,
     gap: SPACING.md,
   },
@@ -49,7 +49,7 @@ const createBaseStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   searchContainer: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     paddingBottom: 16,
     gap: 8,
   },
@@ -94,7 +94,7 @@ const createBaseStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   loadingText: { ...TYPOGRAPHY.body, color: colors.textSecondary },
   // Top padding keeps the first card off the list's clip edge, under the search row.
-  listContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, paddingBottom: 32 },
+  listContent: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.sm, paddingBottom: 32 },
   deviceBanner: {
     backgroundColor: `${colors.trending}15`,
     borderRadius: 8,
@@ -116,7 +116,7 @@ const createBaseStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
 const createFilterStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   filterBar: { marginBottom: 4, paddingBottom: 4 },
   filterPillRow: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     gap: 8,
     alignItems: 'center' as const,
   },
@@ -146,7 +146,7 @@ const createFilterStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   filterCountText: { ...TYPOGRAPHY.labelSmall, color: colors.background, fontWeight: '500' as const },
   clearFiltersButton: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
   clearFiltersText: { ...TYPOGRAPHY.bodySmall, color: colors.error },
-  filterExpandedContent: { paddingHorizontal: SPACING.md, paddingTop: 8, paddingBottom: 4 },
+  filterExpandedContent: { paddingHorizontal: SPACING.xl, paddingTop: 8, paddingBottom: 4 },
   filterChipWrap: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
   filterChip: {
     flexDirection: 'row' as const,
@@ -207,7 +207,7 @@ const createTextModelsStyles = (colors: ThemeColors, _shadows: ThemeShadows) => 
   modelDescription: { ...TYPOGRAPHY.bodySmall, color: colors.text, marginBottom: SPACING.xs },
   modelStats: { flexDirection: 'row' as const, gap: 16 },
   statText: { ...TYPOGRAPHY.meta, color: colors.textMuted },
-  sectionTitle: { ...TYPOGRAPHY.h3, color: colors.text, paddingHorizontal: SPACING.md, marginBottom: 4 },
+  sectionTitle: { ...TYPOGRAPHY.h3, color: colors.text, paddingHorizontal: SPACING.xl, marginBottom: 4 },
   sectionSubtitle: {
     ...TYPOGRAPHY.body,
     color: colors.textSecondary,

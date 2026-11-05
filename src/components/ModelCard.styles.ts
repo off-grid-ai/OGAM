@@ -1,13 +1,13 @@
 import type { ThemeColors, ThemeShadows } from '../theme';
+import { cardSurface } from '../theme/surface';
 import { SPACING, TYPOGRAPHY } from '../constants';
 
-export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+  // The one card surface (brand: translucent over the field, hairline edge), not its own shadowed box.
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
+    ...cardSurface(colors),
     padding: 16,
     marginBottom: 16,
-    ...shadows.small,
   },
   cardDense: {
     paddingHorizontal: SPACING.md,
@@ -38,7 +38,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   denseSource: {
     ...TYPOGRAPHY.labelSmall,
-    color: colors.primary,
+    color: colors.textMuted,
     flexShrink: 1,
   },
   denseDescription: {
@@ -81,9 +81,10 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.metaSmall,
     color: colors.textSecondary,
   },
+  // In use: desktop's chosen state, an emerald hairline over a faint emerald fill (not a thick border).
   cardActive: {
-    borderWidth: 2,
-    borderColor: colors.primary,
+    borderColor: colors.heroBorder,
+    backgroundColor: colors.selectedFill,
   },
   cardIncompatible: {
     opacity: 0.6,

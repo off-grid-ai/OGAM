@@ -428,7 +428,8 @@ function DownloadedActions({ isActive, testID, colors, styles, onSelect, onDelet
   onSelect?: () => void; onDelete?: () => void; onRepairVision?: () => void; isRepairingVision?: boolean;
 }>) {
   const tid = (s: string) => testID ? `${testID}-${s}` : undefined;
-  if (!onSelect && !onDelete && !onRepairVision) return <Icon name="check-circle" size={16} color={colors.primary} testID={tid('downloaded')} />;
+  // Downloaded is a fact, not the thing in use: a quiet tick. Emerald stays for "In use" (one accent).
+  if (!onSelect && !onDelete && !onRepairVision) return <Icon name="check" size={16} color={colors.textMuted} testID={tid('downloaded')} />;
   return (
     <>
       {isRepairingVision ? (
