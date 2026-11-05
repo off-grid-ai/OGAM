@@ -24,27 +24,6 @@ const createBaseStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingHorizontal: 4,
   },
   downloadBadgeText: { ...TYPOGRAPHY.label, color: colors.text },
-  tabScroller: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    marginBottom: 12,
-  },
-  tabBar: {
-    flexDirection: 'row' as const,
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.sm,
-    gap: SPACING.md,
-  },
-  tabItem: { paddingVertical: 10, alignItems: 'center' as const },
-  tabText: { ...TYPOGRAPHY.body, color: colors.textMuted },
-  tabTextActive: { color: colors.text, fontWeight: '500' as const },
-  tabIndicator: {
-    height: 2,
-    backgroundColor: colors.primary,
-    borderRadius: 1,
-    marginTop: 4,
-    alignSelf: 'stretch' as const,
-  },
   imageTabContent: { flex: 1 },
   searchContainer: {
     flexDirection: 'row' as const,
