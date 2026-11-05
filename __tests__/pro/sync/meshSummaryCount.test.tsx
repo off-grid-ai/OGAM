@@ -46,3 +46,20 @@ describe('MeshSummary offline notice (hand test 29: "authoritative device roster
     expect(view.getByText('The device roster will refresh soon.')).toBeTruthy();
   });
 });
+
+describe('MeshSummary who-line (hand test 30: "5 of 5" over four rows)', () => {
+  it('says the count includes this phone, which is not in the list', () => {
+    const view = render(<MeshSummary mesh={mesh(5, 5)} connectedCount={1} savedCount={4} />);
+    expect(view.getByTestId('sync-mesh-who').props.children.join('')).toBe('This phone and 4 others');
+  });
+
+  it('uses the singular for one other device', () => {
+    const view = render(<MeshSummary mesh={mesh(2, 5)} connectedCount={1} savedCount={2} />);
+    expect(view.getByTestId('sync-mesh-who').props.children.join('')).toBe('This phone and 1 other');
+  });
+
+  it('says nothing when this phone is the only device', () => {
+    const view = render(<MeshSummary mesh={mesh(1, 5)} connectedCount={1} savedCount={1} />);
+    expect(view.queryByTestId('sync-mesh-who')).toBeNull();
+  });
+});
