@@ -65,3 +65,9 @@ Each round: expected / found / root cause / change / commit / screenshots.
 3. M4: Home with one hero, Clipboard and Sync after Recent; a fresh-install audit; then the alive layer. Check: "Text 16" is greyed on Home; the swipe action may show past the round corners of the end rows.
 - **13:48 device blocked:** the phone has no internet (the hotspot left; office Wi-Fi needs a password I may not enter). iOS cannot verify the developer certificate for a new install ("Unable to Verify App"), so new builds do not open. The Mac is online (10.86.x). Device checks are queued until the phone is online: Home light/dark (hero, order, weights), Chats, Models badges, the memory sheet (plain copy, stacked buttons, contrast).
 - **Commits since 13:45:** weights capped at 500 and the onPrimary token (`d23a8f644`), Home order (`5fe3c9d02`), plain GB memory copy (`a9845b11d`). Each was checked with touched-file tests; full suites run in the hygiene thread.
+
+## r04 polish while offline — M3
+- **Models:** "More models" is one grouped list, with ModelCard flattened by an optional style (`527369877`). Capability badges are labelled and one tone (`d2622c852`).
+- **Device Information:** tier names stay on one line, so "Flagship" no longer breaks (`4a7818dfb`).
+- **Switches:** 13 switches move onto one AppSwitch (wrapping the counted Switch). Off reads as off; no white knob in dark mode (`a07f91e79`).
+- **Still queued for the device (phone offline):** every visual change since `311f8ace3`.
