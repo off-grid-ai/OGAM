@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
-import type { Conversation } from '../../types';
+import { useEffect, useMemo, useState } from 'react';
+import type { Conversation, Message } from '../../types';
 import { useChatStore } from '../../stores/chatStore';
 import { ragDatabase } from '../rag/database';
 
 /** The tool that searches a chat's documents and its project's knowledge base. */
 export const KNOWLEDGE_SEARCH_TOOL = 'search_knowledge_base';
 
-function chatHasDocument(conversation: Conversation | undefined): boolean {
-  return !!conversation?.messages.some(message =>
+function chatHasDocumentIn(messages: readonly Message[] | undefined): boolean {
+  return !!messages?.some(message =>
     message.attachments?.some(attachment => attachment.type === 'document' && !!attachment.documentId),
   );
 }
@@ -19,7 +19,7 @@ function chatHasDocument(conversation: Conversation | undefined): boolean {
  */
 export async function hasSearchableKnowledge(conversationId: string): Promise<boolean> {
   const conversation = useChatStore.getState().conversations.find(c => c.id === conversationId);
-  if (chatHasDocument(conversation)) return true;
+  if (chatHasDocumentIn(conversation?.messages)) return true;
   if (!conversation?.projectId) return false;
   await ragDatabase.ensureReady();
   return ragDatabase.getEnabledDocumentsByProject(conversation.projectId).length > 0;
@@ -36,7 +36,9 @@ export function toolsForTurn(enabledTools: readonly string[], searchable: boolea
 
 /** The same answer for a screen: false until the chat or its project is known to hold a document. */
 export function useHasSearchableKnowledge(conversation: Conversation | null | undefined): boolean {
-  const attached = chatHasDocument(conversation ?? undefined);
+  // Scanned once per change to the chat's messages, not on every render of the screen that asks.
+  const messages = conversation?.messages;
+  const attached = useMemo(() => chatHasDocumentIn(messages), [messages]);
   const id = conversation?.id;
   const projectId = conversation?.projectId;
   const [inProject, setInProject] = useState(false);

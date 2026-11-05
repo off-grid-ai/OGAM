@@ -1,6 +1,6 @@
 import { videoModelDisplayName } from '../../utils/modelHelpers';
 import { useAppStore } from '../../stores/appStore';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Keyboard, Platform } from 'react-native';
 // Edge-to-edge-aware KeyboardAvoidingView. RN's own version leaves a residual
 // padding band on Android under edge-to-edge (adjustResize is a no-op there);
@@ -21,7 +21,7 @@ import {
 import { useEjectAllModels } from '../../hooks/useEjectAllModels';
 import { subscribeSharePrompt } from '../../utils/sharePrompt';
 import { subscribeProPrompt } from '../../services/proPrompt';
-import type { Conversation, Message } from '../../types';
+import type { Message } from '../../types';
 import { useTheme, useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
 import { useChatScreen } from './useChatScreen';
@@ -48,8 +48,8 @@ import { useChatStore } from '../../stores';
 import { useIsFocused } from '@react-navigation/native';
 import { LivingField } from '../../components/LivingField';
 
-function countConversationImages(conv: Conversation | undefined): number {
-  return (conv?.messages || []).reduce(
+function countConversationImages(messages: Message[] | undefined): number {
+  return (messages || []).reduce(
     (n: number, m: Message) =>
       n + (m.attachments?.filter(a => a.type === 'image').length || 0),
     0,
@@ -64,6 +64,9 @@ export const ChatScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const isFocused = useIsFocused();
   const chat = useChatScreen();
+  // Counted once per change to the chat, not on every render: opening a sheet re-renders this screen.
+  const activeMessages = chat.activeConversation?.messages;
+  const imageCount = useMemo(() => countConversationImages(activeMessages), [activeMessages]);
   const [assistantSelected, setAssistantSelected] = useState(false);
   // Historical message rows are memoized. Their Retry callback must read the latest composer
   // selection even when the row itself has not re-rendered since Assistant was tapped.
@@ -294,8 +297,6 @@ export const ChatScreen: React.FC = () => {
       onCitationPress={source => openDocumentPage(rootNavigation, source)}
     />
   );
-
-  const imageCount = countConversationImages(chat.activeConversation);
 
   // Bottom safe-area is applied on the input footer (ChatMessageArea), not here
   // — otherwise the inset stacks on top of the input's own padding and leaves a
