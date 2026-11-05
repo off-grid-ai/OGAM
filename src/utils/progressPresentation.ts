@@ -13,14 +13,15 @@ export interface MobileProgressPresentation {
   detailText: string;
 }
 
-/** Mobile copy for a finite byte rate. Input is sanitized again for safe direct use. */
+/** Mobile copy for a finite byte rate; nothing when there is no rate to tell (a paused or failed
+ *  download), never "Rate unavailable" noise. Input is sanitized again for safe direct use. */
 export function formatByteRate(bytesPerSecond: number | undefined): string {
   if (
     bytesPerSecond === undefined ||
     !Number.isFinite(bytesPerSecond) ||
     bytesPerSecond < 0
   ) {
-    return 'Rate unavailable';
+    return '';
   }
   if (bytesPerSecond >= 1024 ** 3) {
     return `${(bytesPerSecond / 1024 ** 3).toFixed(1)} GB/s`;
