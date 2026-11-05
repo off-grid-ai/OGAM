@@ -61,9 +61,9 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
       marginBottom: SPACING.xs,
     },
     cardDesc: {
-      ...TYPOGRAPHY.meta,
+      ...TYPOGRAPHY.bodySmall,
       color: colors.textSecondary,
-      lineHeight: 15,
+      lineHeight: 18,
     },
 
     /* Scan and Add sit side by side: they are two ways to do one job, not a ranked pair. */
@@ -76,9 +76,9 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
     },
     /* What the scan actually did, in place, instead of a modal that has to be dismissed. */
     scanNote: {
-      ...TYPOGRAPHY.meta,
+      ...TYPOGRAPHY.bodySmall,
       color: colors.textMuted,
-      lineHeight: 15,
+      lineHeight: 18,
     },
 
     sectionLabel: {
@@ -99,10 +99,10 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
       color: colors.text,
     },
     emptyText: {
-      ...TYPOGRAPHY.meta,
+      ...TYPOGRAPHY.bodySmall,
       color: colors.textSecondary,
       textAlign: 'center' as const,
-      lineHeight: 16,
+      lineHeight: 18,
     },
     desktopLink: {
       flexDirection: 'row' as const,
@@ -111,7 +111,7 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
       paddingVertical: SPACING.xs,
     },
     desktopLinkText: {
-      ...TYPOGRAPHY.meta,
+      ...TYPOGRAPHY.bodySmall,
       color: colors.primary,
     },
 
