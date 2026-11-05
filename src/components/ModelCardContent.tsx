@@ -72,6 +72,8 @@ interface DenseModelCardContentProps {
   isTrending?: boolean;
   credibilitySource?: ModelCredibility['source'];
   credibilityLabel?: string;
+  /** The model you talk to: its row says "In use" in words, not only a tint. */
+  isActive?: boolean;
   incompatibleReason?: string;
   facts?: string[];
   capabilities?: ModelCardCapabilities;
@@ -93,6 +95,7 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
   credibilitySource,
   credibilityLabel,
   incompatibleReason,
+  isActive,
   facts: additionalFacts = [],
   capabilities,
   sourceBadge,
@@ -130,6 +133,7 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
       <View style={styles.denseTitleRow}>
         {credibilitySource === 'offgrid' && <MadeByOffGrid />}
         <Text style={styles.denseName} numberOfLines={1} testID={nameTestID}>{model.name}</Text>
+        {isActive ? <Text style={styles.denseInUse} testID="model-in-use">In use</Text> : null}
         <View style={styles.denseSourceGroup}>
           {sourceBadge === 'Remote' ? <Icon name="cloud" size={14} color={colors.textMuted} accessibilityLabel="Remote model" />
             : sourceBadge ? <Text style={styles.denseSource}>{sourceBadge}</Text> : null}

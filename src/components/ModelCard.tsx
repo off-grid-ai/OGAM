@@ -138,6 +138,7 @@ const ModelCardHeading: React.FC<ModelCardHeadingProps> = ({
   facts, capabilities, sourceBadge, nameTestID, factsTestID,
 }) => dense ? (
   <DenseModelCardContent
+    isActive={isActive}
     model={model}
     fileSize={fileSize}
     quantization={quantization}

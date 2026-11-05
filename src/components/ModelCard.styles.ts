@@ -30,6 +30,12 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.text,
     flex: 1,
   },
+  // In use, in words: the one emerald on the row.
+  denseInUse: {
+    ...TYPOGRAPHY.label,
+    textTransform: 'uppercase' as const,
+    color: colors.primary,
+  },
   denseSourceGroup: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
