@@ -2,14 +2,9 @@ import { TYPOGRAPHY, SPACING } from '../../constants';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 
 const createImageModelsStylesPart1 = (colors: ThemeColors, _shadows: ThemeShadows) => ({
-  recToggle: {
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-  },
-  recToggleActive: {
-    backgroundColor: `${colors.primary}15`,
-  },
+  // A bare toolbar glyph like the Text tab's; the star itself says when it is on.
+  recToggle: { padding: 12 },
+  recToggleActive: {},
   recHint: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
