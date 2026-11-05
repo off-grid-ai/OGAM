@@ -493,3 +493,10 @@ Paused 0-byte row tight, Document search copy, "Choose project" (opened in ~1 s)
 1. Downloads flashes two stale failed Whisper rows for ~2 s before the list settles.
 2. Knowledge base row: filename cut by a red "Couldn't sync to OGAD: Mac (Debug)"; black toggle thumbs; toggles not exposed as switches.
 3. Project sheet: every letter tile emerald and the chosen row a boxed emerald border. Also: project page has a grey "New chat" and an emerald "+"; "New Conversation" title case; Projects sort order unclear.
+
+## Supervisor 12:30 (hand test 49, build at dce7f8db7)
+
+Project sheet rows pass (third open 0.96 s; first open still ~7 s); KB names full, sync line under the name. Top 3:
+1. The project KB tab is ProjectDetailKnowledgeBaseSection, not KnowledgeBaseScreen: its switch still sits inside the row touchable with the old label. One shared row for both.
+2. Chat: a streaming reply runs behind the keyboard; the list never scrolls to it; tapping the list does not close the keyboard.
+3. Failed KB row lost its size line; long red error still cut. First project-sheet open still ~7 s (cold).
