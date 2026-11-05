@@ -297,3 +297,9 @@ Pass: the late-Stop guard blocked real recording; the project screen on the fiel
 1. Late Stop: the mic rests (verify on device).
 2. About, Storage, Edit project on one surface, 24px, hairline inputs.
 3. Delete project out of the tab-bar zone (done).
+
+## Supervisor 03:20 — hand test 21 (build 22, head 1e85c4810)
+Pass: a late Stop tap inside the rest changes nothing; the mic works after 2 s; Delete project only in Edit project; Edit project hairline fields; About header; quiet "Use fastest settings"; Storage button and gutter; image search ends with "Search took too long" and Retry. Fail: Default-project chats answer "Based on the codebase…" with facebook/react context ("Name one fruit" gave carrot and dill); Model settings sliders emerald knobs and pills, Title Case labels; Speech models boxed cards, amber Mono banner, grey search; About links in three boxes; Edit project Cancel/Save 24pt; "Start a Chat" Title Case.
+1. Stop code context reaching plain chats in the Default project.
+2. Speech models, Model settings sliders, About on one surface, one emerald.
+3. Edit project Cancel/Save 44pt; local image picks in search results.
