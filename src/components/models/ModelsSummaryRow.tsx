@@ -120,11 +120,11 @@ const createStyles = (colors: ThemeColors) => ({
     marginTop: SPACING.xs,
     marginBottom: SPACING.lg,
     // Bleed to the screen edges so chips scroll out of view rather than clip at the padding.
-    marginHorizontal: -SPACING.md,
+    marginHorizontal: -SPACING.xl,
   },
   chips: {
     gap: SPACING.sm,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
   },
   chip: {
     flexDirection: 'row' as const,

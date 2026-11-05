@@ -9,8 +9,9 @@ const createLayoutStyles = (colors: ThemeColors) => ({
   scrollView: {
     flex: 1,
   },
+  // brand Mobile profile: standard screen padding is 24px.
   content: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.md,
     paddingBottom: SPACING.xxl,
     gap: SPACING.xs,
@@ -18,27 +19,6 @@ const createLayoutStyles = (colors: ThemeColors) => ({
   header: {
     gap: SPACING.sm,
     marginBottom: SPACING.lg,
-  },
-  headerTop: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'space-between' as const,
-  },
-  headerLeft: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: SPACING.sm,
-  },
-  appLogo: {
-    width: 20,
-    height: 20,
-  },
-  kicker: {
-    ...TYPOGRAPHY.label,
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: 'uppercase' as const,
-    color: colors.textMuted,
   },
   headerActions: {
     flexDirection: 'row' as const,
@@ -53,7 +33,7 @@ const createLayoutStyles = (colors: ThemeColors) => ({
   },
   titleRow: {
     flexDirection: 'row' as const,
-    alignItems: 'flex-end' as const,
+    alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
     gap: SPACING.md,
   },

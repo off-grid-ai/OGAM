@@ -1,7 +1,7 @@
 import { videoModelDisplayName } from '../../utils/modelHelpers';
 import { useAppStore } from '../../stores/appStore';
 import React from 'react';
-import { View, Text, Image } from 'react-native';
+import { View, Text } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { TouchableOpacity } from '../../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,6 +27,7 @@ import { useHomeScreen, HomeScreenNavigationProp } from './hooks/useHomeScreen';
 import { RecentConversations } from './components/RecentConversations';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { DesktopPromoCard } from './components/DesktopPromoCard';
+import { FeatureShowcase, featuresToTry } from './components/FeatureShowcase';
 import { ModelsSummaryRow } from '../../components/models/ModelsSummaryRow';
 import {
   ModelsManagerSheet,
@@ -75,7 +76,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const focusTrigger = useFocusTrigger();
   const isFocused = useIsFocused();
   const scrollRef = useAliveScrollRef();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const SyncHomeCard = useSlot(SLOTS.homeSyncCard);
   const HomeNotificationsButton = useSlot(SLOTS.homeNotificationsButton);
@@ -156,6 +157,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     voice: voiceSummary ? 1 : 0,
   };
 
+  // The top of Home: what this person has not tried yet, each a tap that starts it.
+  const showcase = featuresToTry(
+    {
+      imagesMade: generatedImages.length,
+      videosMade: generatedVideos.length,
+      hasVoice: (modelCounts.voice ?? 0) > 0,
+      hasSpeech: (modelCounts.speech ?? 0) > 0,
+    },
+    {
+      image: () => (downloadedImageModels.length > 0 ? startNewChat() : presentModelSheet('image')),
+      video: () => ((modelCounts.video ?? 0) > 0 ? startNewChat() : presentModelSheet('video')),
+      voice: () => presentModelSheet('voice'),
+      speech: () => presentModelSheet('speech'),
+    },
+  );
+
   // Stash an action and close the manager; the action runs from the manager's
   // onClosed once it has fully dismissed — so opening a picker or the eject
   // confirmation never collides with the manager's own dismissal.
@@ -202,23 +219,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           style={styles.scrollView}
           contentContainerStyle={styles.content}
         >
-          {/* Desktop's page header: a Mono kicker, a large regular title with a grey line under it, and the
-              main action as a compact pill beside the title, not a full-width slab. */}
+          {/* One title and the promise that matters (brand Mobile profile: one h2 screen title), with the
+              header's actions on the same row: the bell, Pro, and New chat as the one main action. */}
           <View style={styles.header}>
-            <View style={styles.headerTop}>
-              <View style={styles.headerLeft}>
-                <Image
-                  source={
-                    isDark
-                      ? require('../../assets/home-logo-dark.png')
-                      : require('../../assets/home-logo-light.png')
-                  }
-                  style={styles.appLogo}
-                  resizeMode="contain"
-                  accessible={false}
-                  testID="home-app-logo"
-                />
-                <Text style={styles.kicker}>Off Grid AI · on this phone</Text>
+            <View style={styles.titleRow}>
+              <View style={styles.titleText}>
+                <Text style={styles.title} accessibilityRole="header">Off Grid AI</Text>
+                <Text style={styles.subtitle}>Nothing you type leaves this phone.</Text>
               </View>
               <View style={styles.headerActions}>
                 {HomeNotificationsButton ? (
@@ -233,25 +240,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 >
                   <IconMC name="crown" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
+                {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? (
+                  <Button
+                    title="New chat"
+                    variant="hero"
+                    size="small"
+                    icon={<Icon name="plus" size={16} color={colors.onHero} />}
+                    onPress={startNewChat}
+                    testID="new-chat-button"
+                  />
+                ) : null}
               </View>
-            </View>
-            <View style={styles.titleRow}>
-              <View style={styles.titleText}>
-                <Text style={styles.title} accessibilityRole="header">Home</Text>
-                <Text style={styles.subtitle}>Private and on this device.</Text>
-              </View>
-              {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? (
-                <Button
-                  title="New chat"
-                  variant="hero"
-                  size="small"
-                  icon={<Icon name="plus" size={16} color={colors.onHero} />}
-                  onPress={startNewChat}
-                  testID="new-chat-button"
-                />
-              ) : null}
             </View>
           </View>
+
+          <FeatureShowcase features={showcase} active={isFocused} />
 
           {/* Collapsed Models summary — tap to open the manager sheet. Both the
               text (1) and image (13) tour steps anchor here now. */}
