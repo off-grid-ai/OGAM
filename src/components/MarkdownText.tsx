@@ -1,3 +1,4 @@
+import { ChartBlock } from './ChartCard';
 import React, { useCallback, useMemo } from 'react';
 import { Clipboard, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Markdown from '@ronradtke/react-native-markdown-display';
@@ -47,14 +48,14 @@ const selectableRules = {
       {children}
     </Text>
   ),
-  fence: (node: any, _children: any, ...[, styles, inheritedStyles = {}]: any[]) => (
+  fence: (node: any, _children: any, ...[, styles, inheritedStyles = {}]: any[]) => (node.sourceInfo?.trim() === 'chart' ? <View key={node.key}><ChartBlock content={node.content} /></View> : (
     <View key={node.key}>
       <Text style={[inheritedStyles, styles.fence]} selectable>
         {trimTrailingNewline(node.content)}
       </Text>
       <CopyActions testID="copy-code" actions={[{ label: 'Copy code', text: () => trimTrailingNewline(node.content) }]} />
     </View>
-  ),
+  )),
   code_block: (node: any, _children: any, ...[, styles, inheritedStyles = {}]: any[]) => (
     <Text key={node.key} style={[inheritedStyles, styles.code_block]} selectable>
       {trimTrailingNewline(node.content)}
