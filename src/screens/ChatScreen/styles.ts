@@ -27,7 +27,8 @@ const createHeaderStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     justifyContent: 'space-between' as const,
     gap: SPACING.md,
   },
-  backButton: { padding: SPACING.xs },
+  // 44 pt frames pulled back by negative margins: the header keeps its look, the targets their size.
+  backButton: { width: 44, height: 44, margin: -8, alignItems: 'center' as const, justifyContent: 'center' as const },
   headerLeft: { flex: 1, marginRight: 12 },
   headerTitle: { ...TYPOGRAPHY.h2, color: colors.text, marginBottom: 2 },
   headerSubtitleRow: {
@@ -68,8 +69,9 @@ const createHeaderStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   // Header actions are bare glyphs, as on desktop: no box behind them.
   iconButton: {
-    width: 30,
-    height: 30,
+    width: 44,
+    height: 44,
+    margin: -7,
     borderRadius: 8,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
