@@ -16,10 +16,13 @@ const createLayoutStyles = (colors: ThemeColors) => ({
     gap: SPACING.xs,
   },
   header: {
+    gap: SPACING.sm,
+    marginBottom: SPACING.lg,
+  },
+  headerTop: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
-    marginBottom: SPACING.md,
   },
   headerLeft: {
     flexDirection: 'row' as const,
@@ -27,26 +30,47 @@ const createLayoutStyles = (colors: ThemeColors) => ({
     gap: SPACING.sm,
   },
   appLogo: {
-    width: SPACING.xxl + SPACING.sm,
-    height: SPACING.xxl + SPACING.sm,
+    width: 20,
+    height: 20,
+  },
+  kicker: {
+    ...TYPOGRAPHY.label,
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase' as const,
+    color: colors.textMuted,
   },
   headerActions: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: 8,
+    gap: SPACING.xs,
   },
   crownButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.primary,
+    width: 36,
+    height: 36,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
+  titleRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-end' as const,
+    justifyContent: 'space-between' as const,
+    gap: SPACING.md,
+  },
+  titleText: {
+    flex: 1,
+    gap: 2,
+  },
   title: {
-    ...TYPOGRAPHY.h2,
+    fontFamily: TYPOGRAPHY.h1.fontFamily,
+    fontSize: 32,
+    fontWeight: '400' as const,
+    letterSpacing: -0.8,
     color: colors.text,
+  },
+  subtitle: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
   },
 });
 const createModelCardStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
@@ -120,9 +144,6 @@ const createModelCardStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     fontSize: 14,
     color: colors.error,
     fontWeight: '500' as const,
-  },
-  newChatButton: {
-    marginBottom: SPACING.md,
   },
 });
 const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({

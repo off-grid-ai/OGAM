@@ -198,34 +198,54 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           style={styles.scrollView}
           contentContainerStyle={styles.content}
         >
+          {/* Desktop's page header: a Mono kicker, a large regular title with a grey line under it, and the
+              main action as a compact pill beside the title, not a full-width slab. */}
           <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <Image
-                source={
-                  isDark
-                    ? require('../../assets/home-logo-dark.png')
-                    : require('../../assets/home-logo-light.png')
-                }
-                style={styles.appLogo}
-                resizeMode="contain"
-                accessible={false}
-                testID="home-app-logo"
-              />
-              <Text style={styles.title}>Off Grid AI</Text>
+            <View style={styles.headerTop}>
+              <View style={styles.headerLeft}>
+                <Image
+                  source={
+                    isDark
+                      ? require('../../assets/home-logo-dark.png')
+                      : require('../../assets/home-logo-light.png')
+                  }
+                  style={styles.appLogo}
+                  resizeMode="contain"
+                  accessible={false}
+                  testID="home-app-logo"
+                />
+                <Text style={styles.kicker}>Off Grid AI · on this phone</Text>
+              </View>
+              <View style={styles.headerActions}>
+                {HomeNotificationsButton ? (
+                  <HomeNotificationsButton onOpen={openSyncNotifications} />
+                ) : null}
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('ProDetail')}
+                  hitSlop={8}
+                  style={styles.crownButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open Off Grid AI Pro"
+                >
+                  <IconMC name="crown" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={styles.headerActions}>
-              {HomeNotificationsButton ? (
-                <HomeNotificationsButton onOpen={openSyncNotifications} />
+            <View style={styles.titleRow}>
+              <View style={styles.titleText}>
+                <Text style={styles.title} accessibilityRole="header">Home</Text>
+                <Text style={styles.subtitle}>Private and on this device.</Text>
+              </View>
+              {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? (
+                <Button
+                  title="New chat"
+                  variant="hero"
+                  size="small"
+                  icon={<Icon name="plus" size={16} color={colors.onHero} />}
+                  onPress={startNewChat}
+                  testID="new-chat-button"
+                />
               ) : null}
-              <TouchableOpacity
-                onPress={() => navigation.navigate('ProDetail')}
-                hitSlop={8}
-                style={styles.crownButton}
-                accessibilityRole="button"
-                accessibilityLabel="Open Off Grid AI Pro"
-              >
-                <IconMC name="crown" size={16} color={colors.primary} />
-              </TouchableOpacity>
             </View>
           </View>
 
@@ -241,16 +261,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             />
           </AnimatedEntry>
 
-          {/* New Chat Button */}
-          {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? (
-            <Button
-              title="New Chat"
-              variant="hero"
-              onPress={startNewChat}
-              style={styles.newChatButton}
-              testID="new-chat-button"
-            />
-          ) : (
+          {/* With no model there is nothing to chat with yet: say how to get one. */}
+          {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? null : (
             <Card style={styles.setupCard} testID="setup-card">
               <Text style={styles.setupText}>
                 {downloadedModels.length > 0 || remoteTextModels.length > 0
