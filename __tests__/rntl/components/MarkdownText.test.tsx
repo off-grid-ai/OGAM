@@ -184,7 +184,8 @@ describe('dropDanglingBold (a reply cut off mid-bold)', () => {
 });
 
 describe('plainMathSpans (maths in an answer reads as text, hand test 22)', () => {
-  const { plainMathSpans } = jest.requireActual('../../../src/components/MarkdownText');
+  // Through the one entry point the renderer uses.
+  const plainMathSpans = preprocessMarkdown;
   it('turns LaTeX spans into plain symbols', () => {
     expect(plainMathSpans('Working: $$37 \\times 43 = ?$$')).toBe('Working: 37 × 43 = ?');
     expect(plainMathSpans('So $30 \\times 43 = 1290$ and')).toBe('So 30 × 43 = 1290 and');

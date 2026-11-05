@@ -15,7 +15,7 @@ import { mtpHeadForPrimaryFile } from '@offgrid/models';
  * published MTP head (the shared catalog's rule, the same one the loader uses). None of these is
  * ever an orphan while the model is on the phone.
  */
-export function filesOfModel(mainFile: string): string[] {
+function filesOfModel(mainFile: string): string[] {
   const names = [mainFile];
   const split = /^(.*)-(\d{5})-of-(\d{5})(\.gguf)$/i.exec(mainFile);
   if (split) {

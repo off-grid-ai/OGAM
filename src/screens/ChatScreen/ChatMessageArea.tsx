@@ -160,7 +160,7 @@ const ModelStatusBar: React.FC<{
  * Compacting can take a minute on a phone (the model summarises the older turns). Say what it is for
  * and how long it has run, so the wait never looks stuck (hand test 23: 90 s of bare dots).
  */
-export const CompactingNote: React.FC = () => {
+const CompactingNote: React.FC = () => {
   const [seconds, setSeconds] = React.useState(0);
   React.useEffect(() => {
     const timer = setInterval(() => setSeconds(s => s + 1), 1000);

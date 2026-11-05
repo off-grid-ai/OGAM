@@ -22,7 +22,7 @@ export function preprocessMarkdown(text: string): string {
  * Maths a small model writes as LaTeX ("$$37 \\times 43$$") reads as text ("37 × 43"): only spans
  * between $ signs that hold a LaTeX command are touched, so a price like "$5" stays as it is.
  */
-export function plainMathSpans(text: string): string {
+function plainMathSpans(text: string): string {
   const spanHasLatex = (inner: string) => /\\[a-zA-Z]/.test(inner);
   return text
     .replace(/\$\$([^$]+)\$\$/g, (whole, inner: string) => (spanHasLatex(inner) ? plainMath(inner) : whole))
