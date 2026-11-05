@@ -22,7 +22,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   title: { ...TYPOGRAPHY.h2, flex: 1, color: colors.text },
   scrollView: { flex: 1 },
   content: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.xxl,
   },

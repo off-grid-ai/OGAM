@@ -412,7 +412,7 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
 const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) =>
   ({
     flex: { flex: 1 },
-    content: { paddingHorizontal: SPACING.md, paddingTop: SPACING.xs, paddingBottom: SPACING.xxl },
+    content: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.xs, paddingBottom: SPACING.xxl },
     sectionLabel: {
       ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, color: colors.textMuted,
       letterSpacing: 0.3, marginBottom: SPACING.sm, marginTop: SPACING.xs,

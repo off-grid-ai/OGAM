@@ -150,7 +150,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   backButton: { width: 36, padding: SPACING.xs },
   headerTitle: { ...TYPOGRAPHY.h2, color: colors.text },
   content: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.xxl,
   },

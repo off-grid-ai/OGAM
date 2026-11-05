@@ -159,7 +159,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   backButton: { padding: SPACING.xs },
   title: { ...TYPOGRAPHY.h2, flex: 1, color: colors.text },
   scrollView: { flex: 1 },
-  content: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.lg, paddingBottom: SPACING.xxl },
+  content: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.lg, paddingBottom: SPACING.xxl },
   section: { marginBottom: SPACING.lg },
   sectionTitle: {
     ...TYPOGRAPHY.label,

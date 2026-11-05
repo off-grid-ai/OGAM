@@ -147,7 +147,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingBottom: SPACING.xl,
   },
   proToolsButton: {
