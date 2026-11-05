@@ -71,3 +71,4 @@ Each round: expected / found / root cause / change / commit / screenshots.
 - **Device Information:** tier names stay on one line, so "Flagship" no longer breaks (`4a7818dfb`).
 - **Switches:** 13 switches move onto one AppSwitch (wrapping the counted Switch). Off reads as off; no white knob in dark mode (`a07f91e79`).
 - **Still queued for the device (phone offline):** every visual change since `311f8ace3`.
+- **Chat:** an empty chat offers three starter prompts; a tap sends one (`61dffeb30`). Rendered test `starterPrompts.rendered.test.tsx`.
