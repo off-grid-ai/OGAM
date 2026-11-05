@@ -47,3 +47,13 @@ export function sourceStatus(cites: CheckedCitation[]): string {
   const ok = cites.filter((c) => c.verified).length;
   return ok === cites.length ? `${ok} source${ok === 1 ? '' : 's'}, all quotes found.` : `${ok} of ${cites.length} quotes found in the source; the rest are unverified.`;
 }
+
+/** Sources from a web-search tool result ("1. [Title](url)\n   snippet"). The snippet is the quote; it is the search engine's text, so it is not marked verified. */
+export function sourcesFromSearch(content: string): CheckedCitation[] {
+  const out: CheckedCitation[] = [];
+  const re = /^\s*\d+\.\s*\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)\s*\n\s*([^\n]*)/gm;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) out.push({ title: m[1].trim(), url: m[2], quote: m[3].trim(), verified: false });
+  return out;
+}
+export const hostOf = (url?: string): string => (url ? url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] : '');

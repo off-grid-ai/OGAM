@@ -6,6 +6,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../theme';
 import { Button } from '../components/Button';
+import { CitationChips } from '../components/CitationChips';
 import { useProjectStore } from '../stores';
 import { check, practiceSet, topicScores, useExerciseStore, type Exercise, type TableRow, type Verdict } from '../study/exercises';
 import { generatePractice } from '../study/practice';
@@ -133,7 +134,7 @@ export const PracticeScreen: React.FC = () => {
             {verdict && <View style={st.top14}>
               <Text testID="practice-result" style={[st.semi, { color: verdict.correct ? good : colors.error }]}>{verdict.correct ? 'Correct' : 'Not quite'}{verdict.note ? ` - ${verdict.note}` : ''}</Text>
               {!!current.explain && <Text style={[st.top4, { color: colors.textSecondary }]}>{current.explain}</Text>}
-              {current.source && <Text style={[st.small12, st.top6, { color: colors.textMuted }]}>Source: {current.source.doc}{current.source.page ? `, p. ${current.source.page}` : ''}{current.source.section ? `, ${current.source.section}` : ''}: "{current.source.quote}"</Text>}
+              {current.source && <CitationChips cites={[{ title: current.source.doc, page: current.source.page, section: current.source.section, quote: current.source.quote, verified: true }]} />}
             </View>}
             <Button title={verdict ? 'Next' : 'Check'} onPress={verdict ? next : submit} testID={verdict ? 'practice-next' : 'practice-check'} style={st.top14} />
             <Button title="Stop" variant="ghost" onPress={() => { setQueue([]); setVerdict(undefined); }} style={st.top6} />

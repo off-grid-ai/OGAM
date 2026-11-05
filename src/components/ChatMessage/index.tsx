@@ -1,3 +1,5 @@
+import { CitationChips } from '../CitationChips';
+import { sourcesFromSearch } from '../../study/citations';
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Clipboard } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -86,6 +88,7 @@ const ToolResultBubbleInner: React.FC<ToolResultBubbleProps> = ({
           />
         )}
       </TouchableOpacity>
+      {hasDetails && (toolName === 'web_search') && <CitationChips cites={sourcesFromSearch(content)} />}
       {expanded && hasDetails && (
         <View style={styles.toolDetailContainer}>
           <MarkdownText dimmed>{content}</MarkdownText>
