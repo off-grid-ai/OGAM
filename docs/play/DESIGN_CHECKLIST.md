@@ -4,6 +4,11 @@ Each device screenshot is scored against these, item by item, before it goes in 
 `ui-library/docs/direction/DESIGN_PHILOSOPHY.md`, plus desktop's live page pattern. A screenshot passes
 only when every item is a pass or a stated, accepted exception.
 
+Every screenshot is ALSO validated against `/oga-ux` (`~/.claude/skills/oga-ux/SKILL.md`, the product bar)
+and `/oga-cpto` (`~/.claude/skills/oga-cpto/SKILL.md`: never lose functionality; hand tests by driving the
+phone). The bar is an amazing consumer experience. The supervisor drives the phone by hand as a new user
+and writes one line per screenshot: what passes, what breaks these rules.
+
 | # | Check | Pass when |
 |---|---|---|
 | 1 | Alive | The living field (dot lattice, breathing light) is behind the page; presses give way. |
@@ -18,3 +23,5 @@ only when every item is a pass or a stated, accepted exception.
 | 10 | Tokens | Colours, sizes and timings come from `@offgrid/design`; no hard-coded hex in components. |
 | 11 | Accessible | Text 4.5:1, targets 44 px, icon buttons named. |
 | 12 | Same family | Side by side with desktop's page, it reads as the same product. |
+| 13 | Nothing lost | Every control and fact the screen had before is still reachable (oga-cpto); anything removed was agreed with Mac first. |
+| 14 | New user | A first-time user knows the one next step on this screen without help (oga-ux). |
