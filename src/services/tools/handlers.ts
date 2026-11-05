@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { studyMath, type StudyMathArgs } from '../../study/mathTools';
 import DeviceInfo from 'react-native-device-info';
 import { ToolCall, ToolResult } from './types';
 import type { RagSearchResult } from '../rag';
@@ -41,6 +42,8 @@ async function dispatchTool(call: ToolCall): Promise<string> {
     }
     case 'calculator':
       return handleCalculator(call.arguments.expression);
+    case 'study_math':
+      return studyMath(call.arguments as StudyMathArgs);
     case 'get_current_datetime':
       return handleGetDatetime(call.arguments.timezone);
     case 'get_device_info':
