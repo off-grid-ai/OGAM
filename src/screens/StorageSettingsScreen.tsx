@@ -162,7 +162,7 @@ export const StorageSettingsScreen: React.FC = () => {
           <View style={styles.storageLegend}>
             <View style={styles.legendItem}>
               <View
-                style={[styles.legendDot, { backgroundColor: colors.primary }]}
+                style={[styles.legendDot, { backgroundColor: colors.textSecondary }]}
               />
               <Text style={styles.legendText}>
                 Used: {size(storageUsed)}
@@ -224,7 +224,7 @@ export const StorageSettingsScreen: React.FC = () => {
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
               <Icon name="search" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Document search</Text>
+              <Text style={styles.infoLabel}>Document search model</Text>
             </View>
             <Text style={styles.infoValue}>{size(extra.search)}</Text>
           </View>

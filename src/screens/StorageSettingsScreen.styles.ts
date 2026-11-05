@@ -53,7 +53,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   storageUsed: {
     height: '100%' as const,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.textSecondary,
     borderRadius: 6,
   },
   storageLegend: {
