@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, SectionList } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
@@ -172,6 +172,14 @@ export const ChatsListScreen: React.FC = () => {
   // One line per chat: a quiet icon for an image or video chat, its title, its project when it has
   // one, and when it was last active, so chats with the same title can still be told apart. Each
   // date group is one surface divided by hairlines (brand: lists in one surface).
+  // One row open at a time, and an open row closes on a tap elsewhere or a scroll.
+  const openRow = useRef<Swipeable | null>(null);
+  const rowRefs = useRef(new Map<string, Swipeable | null>());
+  const closeOpenRow = () => {
+    openRow.current?.close();
+    openRow.current = null;
+  };
+
   const renderChat = ({ item, index: rowIndex, section }: { item: Conversation; index: number; section: { title: string; data: readonly Conversation[] } }) => {
     const project = item.projectId ? getProject(item.projectId) : null;
     const selected = selectedIds.has(item.id);
@@ -180,6 +188,14 @@ export const ChatsListScreen: React.FC = () => {
 
     return (
       <Swipeable
+        ref={ref => {
+          rowRefs.current.set(item.id, ref);
+        }}
+        onSwipeableWillOpen={() => {
+          const row = rowRefs.current.get(item.id) ?? null;
+          if (openRow.current && openRow.current !== row) openRow.current.close();
+          openRow.current = row;
+        }}
         enabled={!selecting}
         renderRightActions={selecting ? undefined : () => renderRightActions(item)}
         overshootRight={false}
@@ -190,6 +206,10 @@ export const ChatsListScreen: React.FC = () => {
           trigger={focusTrigger}
           style={[styles.chatItem, listGroupRowEnds(rowIndex, section.data.length)]}
           onPress={() => {
+            if (openRow.current) {
+              closeOpenRow();
+              return;
+            }
             if (!selecting) {
               handleChatPress(item);
               return;
@@ -370,6 +390,7 @@ export const ChatsListScreen: React.FC = () => {
           ) : null}
           <SectionList
             {...SCROLL_DEPTH_PROPS}
+            onScrollBeginDrag={closeOpenRow}
             sections={sections}
             renderItem={renderChat}
             renderSectionHeader={({ section }) => (
