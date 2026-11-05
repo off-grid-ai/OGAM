@@ -33,7 +33,7 @@ export function setTextAppearance(next: TextAppearance): void {
 export const getTextAppearance = (): TextAppearance => current;
 
 /** Plain system families the app uses by default; only these follow the chosen font. Code (monospace, Menlo) stays. */
-const FOLLOWS_FONT = new Set(['sans-serif', 'serif', ...FONT_CHOICES.filter(f => f.id !== 'mono').flatMap(f => [f.heading, f.body])]);
+const FOLLOWS_FONT = new Set(['sans-serif', 'serif', ...FONT_CHOICES.filter(f => f.id !== 'mono' && f.id !== 'pixel').flatMap(f => [f.heading, f.body])]);
 /** Every family that is real text, so it scales; anything else (an icon font) does not. */
 const TEXT_FAMILIES = new Set(['sans-serif', 'serif', 'monospace', 'Menlo', ...FONT_CHOICES.flatMap(f => [f.heading, f.body])]);
 

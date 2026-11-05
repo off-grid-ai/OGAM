@@ -569,6 +569,7 @@ What changed:
   model. A second, short-prompt check decides whether to use the first-word workaround: prompts under about 192 tokens run
   once first so the first word comes from the engine's single-token step; it is switched on only if the same check passes with
   it, and never for long prompts. The remembered verdict records the batch size and CPU-kernel setting.
+- 0.0.141: fix: code blocks stayed monospace only on phones with the bundled fonts; with the new 8-bit font on other platforms they followed the chosen font. They now always stay monospace. (Found by the full test run on 0.0.140.)
 - 0.0.140: (1) The Terminal style now uses an 8-bit pixel font (Press Start 2P, SIL Open Font License; a new "8-bit" font choice too).
   (2) Citation chips: numbered chips under practice answers and web-search results; tap one for the quote, the link and whether the
   quote was found in the source (practice quotes are checked against your document; search snippets are the search engine's text and

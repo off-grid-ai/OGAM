@@ -19,6 +19,11 @@ describe('global text appearance', () => {
     expect(adjustTextStyle([{ color: 'red' }], a)).toMatchObject({ fontSize: Math.round(14 * 1.3), color: 'red' });
   });
 
+  it('keeps code monospace when the 8-bit font is chosen', () => {
+    const a = textAppearanceFor({ font: 'pixel', textSize: 'normal' });
+    expect(adjustTextStyle({ fontFamily: 'monospace' }, a)).toMatchObject({ fontFamily: 'monospace' });
+  });
+
   it('keeps code in its own monospace face and maps serif headings to the chosen heading font', () => {
     const a = textAppearanceFor({ font: 'sans', textSize: 'normal' });
     expect(adjustTextStyle({ fontFamily: 'monospace' }, a)).toMatchObject({ fontFamily: 'monospace' });
