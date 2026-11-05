@@ -130,10 +130,10 @@ describe.each([
     expect(view.queryByText('Not answering')).toBeNull();
 
     // Tapping Test on the saved row keeps it Connected, with no failure dialog.
-    rtl.fireEvent.press(view.getByText('Test'));
+    rtl.fireEvent.press(view.getByLabelText('Test'));
     // Let the check finish: a failure would open its dialog and mark the row Not answering.
     await rtl.act(async () => { await new Promise(resolve => setTimeout(resolve, 100)); });
-    await rtl.waitFor(() => expect(view.getByText('Test')).toBeTruthy());
+    await rtl.waitFor(() => expect(view.getByLabelText('Test')).not.toBeBusy());
     expect(view.getByText('Connected')).toBeTruthy();
     expect(view.queryByText('Could not connect')).toBeNull();
     rtl.fireEvent.press(view.getByLabelText('Back'));

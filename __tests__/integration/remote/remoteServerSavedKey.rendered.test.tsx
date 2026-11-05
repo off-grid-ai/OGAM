@@ -126,7 +126,7 @@ describe('a saved API key on the Remote Servers screen', () => {
 
     // The server goes down for a moment: the user's Test shows it is not answering.
     server.failAll(503);
-    fireEvent.press(serverRow(ui).getByText('Test'));
+    fireEvent.press(serverRow(ui).getByLabelText('Test'));
     await waitFor(() => expect(ui.getByText('Could not connect')).toBeTruthy());
     fireEvent.press(ui.getByText('OK'));
     await waitFor(() => expect(serverRow(ui).getByText('Not answering')).toBeTruthy());
@@ -147,7 +147,7 @@ describe('a saved API key on the Remote Servers screen', () => {
     // chat request the app uses to learn whether the model thinks.
     server.refusePaths(['/v1/chat/completions']);
 
-    fireEvent.press(serverRow(ui).getByText('Test'));
+    fireEvent.press(serverRow(ui).getByLabelText('Test'));
     await waitFor(() => expect(ui.getByText('Could not connect')).toBeTruthy());
     expect(ui.getByText(/rejected the saved API key \(HTTP 401\)/)).toBeTruthy();
     fireEvent.press(ui.getByText('OK'));
@@ -156,7 +156,7 @@ describe('a saved API key on the Remote Servers screen', () => {
 
     // The editor's own check, run with the key it loads from the Keychain, says the same thing
     // rather than "Connected" with no models.
-    fireEvent.press(serverRow(ui).getByText('Edit'));
+    fireEvent.press(serverRow(ui).getByLabelText('Edit'));
     await waitFor(() => expect(ui.getByText('Edit server')).toBeTruthy());
     fireEvent.press(ui.getByLabelText('Show API key'));
     await waitFor(() => expect(ui.getByDisplayValue(API_KEY)).toBeTruthy());
@@ -179,7 +179,7 @@ describe('a saved API key on the Remote Servers screen', () => {
     expect(serverRow(ui).queryByText('Connected')).toBeNull();
 
     // Tapping Test says the check could not run.
-    fireEvent.press(serverRow(ui).getByText('Test'));
+    fireEvent.press(serverRow(ui).getByLabelText('Test'));
     await waitFor(() => expect(ui.getByText('Could not connect')).toBeTruthy());
     fireEvent.press(ui.getByText('OK'));
     await waitFor(() => expect(ui.queryByText('Could not connect')).toBeNull());

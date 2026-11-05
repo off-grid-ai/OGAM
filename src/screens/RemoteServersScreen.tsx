@@ -366,22 +366,19 @@ export const RemoteServersScreen: React.FC = () => {
                     <Text style={styles.serverStatus}>{statusText}</Text>
                   </TouchableOpacity>
 
+                  {/* Row actions as icon buttons (brand: one surface, actions at the row's end, never a
+                      bar of buttons under each item). Their words stay as accessible names. */}
                   <View style={styles.serverActions}>
                     <TouchableOpacity
                       style={styles.serverAction}
                       onPress={() => handleTestServer(server.id)}
                       disabled={isTesting}
+                      accessibilityRole="button"
+                      accessibilityLabel="Test"
+                      accessibilityState={{ busy: isTesting, disabled: isTesting }}
+                      hitSlop={8}
                     >
-                      {/* The row's status line already says "Checking", so the icon stays put
-                          rather than being swapped for a spinner that reads as retry. */}
-                      <Icon
-                        name="refresh-cw"
-                        size={13}
-                        color={theme.colors.textSecondary}
-                      />
-                      <Text style={styles.serverActionText}>
-                        {isTesting ? 'Checking' : 'Test'}
-                      </Text>
+                      <Icon name="refresh-cw" size={16} color={theme.colors.textSecondary} />
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.serverAction}
@@ -390,31 +387,20 @@ export const RemoteServersScreen: React.FC = () => {
                           serverId: server.id,
                         })
                       }
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit"
+                      hitSlop={8}
                     >
-                      <Icon
-                        name="edit-2"
-                        size={13}
-                        color={theme.colors.textSecondary}
-                      />
-                      <Text style={styles.serverActionText}>Edit</Text>
+                      <Icon name="edit-2" size={16} color={theme.colors.textSecondary} />
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.serverAction, styles.serverActionDanger]}
+                      style={styles.serverAction}
                       onPress={() => handleDeleteServer(server)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Remove"
+                      hitSlop={8}
                     >
-                      <Icon
-                        name="trash-2"
-                        size={13}
-                        color={theme.colors.error}
-                      />
-                      <Text
-                        style={[
-                          styles.serverActionText,
-                          styles.serverActionDangerText,
-                        ]}
-                      >
-                        Remove
-                      </Text>
+                      <Icon name="trash-2" size={16} color={theme.colors.textSecondary} />
                     </TouchableOpacity>
                   </View>
                 </View>

@@ -119,6 +119,8 @@ export function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
 
     serverCard: {
       ...card,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
       gap: SPACING.sm,
     },
     /* The one in use is marked by its border, so the list reads at a glance. */
@@ -126,6 +128,7 @@ export function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
       borderColor: colors.primary,
     },
     serverIdentity: {
+      flex: 1,
       gap: SPACING.xs,
     },
     serverTopRow: {
@@ -171,30 +174,17 @@ export function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
       color: colors.textMuted,
     },
 
+    // The row's actions sit on its right edge as icon buttons.
     serverActions: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
-      gap: SPACING.lg,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-      paddingTop: SPACING.sm,
+      gap: SPACING.xs,
     },
     serverAction: {
-      flexDirection: 'row' as const,
+      width: 36,
+      height: 36,
       alignItems: 'center' as const,
-      gap: SPACING.xs,
-      paddingVertical: SPACING.xs,
-    },
-    serverActionText: {
-      ...TYPOGRAPHY.meta,
-      color: colors.textSecondary,
-    },
-    /* Destructive, so it sits at the far end and is the only coloured one. */
-    serverActionDanger: {
-      marginLeft: 'auto' as const,
-    },
-    serverActionDangerText: {
-      color: colors.error,
+      justifyContent: 'center' as const,
     },
   };
 }

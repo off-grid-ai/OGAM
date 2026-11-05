@@ -36,7 +36,7 @@ it.each([200, 401, 403])('M7: the HTTP server response (%s) decides the connecti
     expect(await view.findByText('Private studio')).toBeTruthy();
     expect(await view.findByText('Connected')).toBeTruthy();
     if (status !== 200) server.failAll(status);
-    rtl.fireEvent.press(view.getByText('Test'));
+    rtl.fireEvent.press(view.getByLabelText('Test'));
     if (status === 200) {
       expect(await view.findByText('Connected')).toBeTruthy();
       expect(view.queryByText('Could not connect')).toBeNull();

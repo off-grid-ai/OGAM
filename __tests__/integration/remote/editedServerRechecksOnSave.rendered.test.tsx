@@ -103,7 +103,7 @@ describe('saving an edited remote server', () => {
     // The key is rotated on the server: the old one is refused, and Test says so on the row.
     server.restore();
     server = installKeyedServer({ origin: ORIGIN, flavour: 'lmstudio', apiKey: NEW_KEY, modelId: MODEL });
-    fireEvent.press(serverRow(ui).getByText('Test'));
+    fireEvent.press(serverRow(ui).getByLabelText('Test'));
     await waitFor(() => expect(ui.getByText('Could not connect')).toBeTruthy());
     fireEvent.press(ui.getByText('OK'));
     // BEFORE: the row reads Not answering.
@@ -111,7 +111,7 @@ describe('saving an edited remote server', () => {
     expect(serverRow(ui).queryByText('Connected')).toBeNull();
 
     // The person types the new key in the editor and saves.
-    fireEvent.press(serverRow(ui).getByText('Edit'));
+    fireEvent.press(serverRow(ui).getByLabelText('Edit'));
     await waitFor(() => expect(ui.getByText('Edit server')).toBeTruthy());
     fireEvent.changeText(ui.getByTestId('server-api-key'), NEW_KEY);
     // The editor saves only after its own check of the values typed in it.
