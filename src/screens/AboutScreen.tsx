@@ -45,7 +45,7 @@ export const AboutScreen: React.FC = () => {
             index={0}
             staggerMs={40}
             trigger={focusTrigger}
-            style={[styles.navItem, styles.navItemLast]}
+            style={styles.navItem}
             onPress={() => Linking.openURL(GITHUB_URL)}
           >
             <View style={styles.navItemIcon}>
@@ -57,10 +57,7 @@ export const AboutScreen: React.FC = () => {
             </View>
             <Icon name="external-link" size={14} color={colors.textMuted} />
           </AnimatedListItem>
-        </View>
-
         {/* Follow / Community */}
-        <View style={styles.navSection}>
           <AnimatedListItem
             index={1}
             staggerMs={40}
@@ -82,7 +79,7 @@ export const AboutScreen: React.FC = () => {
             index={2}
             staggerMs={40}
             trigger={focusTrigger}
-            style={[styles.navItem, styles.navItemLast]}
+            style={styles.navItem}
             testID="about-join-slack"
             onPress={() => Linking.openURL(SLACK_INVITE_URL)}
           >
@@ -95,10 +92,7 @@ export const AboutScreen: React.FC = () => {
             </View>
             <Icon name="external-link" size={14} color={colors.textMuted} />
           </AnimatedListItem>
-        </View>
-
         {/* Built by Wednesday row */}
-        <View style={styles.navSection}>
           <AnimatedListItem
             index={3}
             staggerMs={40}
