@@ -1,8 +1,9 @@
+import { StyleSheet } from 'react-native';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { createImageModelsStyles } from './imageStyles';
 
-const createBaseStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   flex1: { flex: 1 },
   backButton: { padding: 4, marginRight: 8 },
   searchContainerNoPadding: { paddingHorizontal: 0 },
@@ -33,16 +34,18 @@ const createBaseStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     gap: 8,
   },
   // The Text tab's search row stays put with a shadow along its bottom edge; the list scrolls under it.
+  // It stays put above the list, over the living field: no slab, no shadow edge across the screen.
   searchContainerRaised: {
-    backgroundColor: colors.background,
     zIndex: 1,
-    ...shadows.edge,
   },
+  // The same field as Chats and Projects search (ListSearchBar): rounded, a hairline edge.
   searchInput: {
     ...TYPOGRAPHY.body,
     flex: 1,
     backgroundColor: colors.surface,
     borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
     paddingHorizontal: 16,
     paddingVertical: 12,
     color: colors.text,
