@@ -26,6 +26,7 @@ import { useTheme, useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
 import { useChatScreen } from './useChatScreen';
 import { MessageRenderer } from './MessageRenderer';
+import { unansweredQuestionId } from '../../utils/unansweredQuestion';
 import { NoModelScreen, ChatHeader } from './ChatScreenComponents';
 import { openDocumentPage, useChatDocumentsSheet } from '../../components/ChatDocumentsSheet';
 import { ChatModalSection } from './ChatModalSection';
@@ -261,6 +262,7 @@ export const ChatScreen: React.FC = () => {
     chat.setShowScrollToBottom(!isNearBottomRef.current);
   };
 
+  const unansweredId = unansweredQuestionId(chat.displayMessages as Message[]);
   const renderItem = ({ item, index }: { item: any; index: number }) => (
     <MessageRenderer
       item={item}
@@ -271,6 +273,7 @@ export const ChatScreen: React.FC = () => {
       isStreaming={chat.isStreaming}
       isGeneratingImage={chat.isGeneratingImage}
       isBusy={chat.isThinking || chat.isCompacting || chat.isGeneratingForThisConversation}
+      showTryAgain={item.id === unansweredId}
       showGenerationDetails={chat.settings.showGenerationDetails}
       onCopy={chat.handleCopyMessage}
       onRetry={message => {

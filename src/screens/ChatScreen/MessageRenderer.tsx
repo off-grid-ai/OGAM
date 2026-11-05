@@ -19,6 +19,8 @@ type MessageRendererProps = {
   isGeneratingImage: boolean;
   /** Any reply is being made for this chat (loading, thinking, streaming, compacting). */
   isBusy?: boolean;
+  /** This question ends the chat with no answer (see utils/unansweredQuestion). */
+  showTryAgain?: boolean;
   showGenerationDetails: boolean;
   onCopy: (content: string) => void;
   onRetry: (message: Message) => void;
@@ -43,6 +45,7 @@ const MessageRendererInner: React.FC<MessageRendererProps> = props => {
     isStreaming,
     isGeneratingImage,
     isBusy,
+    showTryAgain,
     showGenerationDetails,
     onCopy,
     onRetry,
@@ -59,8 +62,7 @@ const MessageRendererInner: React.FC<MessageRendererProps> = props => {
   // A question left with no answer (the reply failed or was cut off) gets a visible
   // way to ask again, not only "Resend" behind the message menu.
   const unanswered =
-    msg.role === 'user' &&
-    index === displayMessagesLength - 1 &&
+    showTryAgain === true &&
     !isStreaming &&
     !isBusy &&
     !isGeneratingImage;
@@ -206,6 +208,7 @@ export function messageRendererPropsEqual(
     prev.isStreaming === next.isStreaming &&
     prev.isGeneratingImage === next.isGeneratingImage &&
     prev.isBusy === next.isBusy &&
+    prev.showTryAgain === next.showTryAgain &&
     prev.showGenerationDetails === next.showGenerationDetails
   );
 }

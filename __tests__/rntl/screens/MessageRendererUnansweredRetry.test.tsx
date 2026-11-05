@@ -14,6 +14,7 @@ const base = {
   isStreaming: false,
   isGeneratingImage: false,
   isBusy: false,
+  showTryAgain: true,
   showGenerationDetails: false,
   onCopy: jest.fn(),
   onRetry: jest.fn(),
@@ -40,14 +41,14 @@ describe('<MessageRenderer/> question with no answer', () => {
     expect(view.queryByTestId('unanswered-retry')).toBeNull();
   });
 
-  it('hides Try again when an answer follows the question', () => {
-    const view = render(<MessageRenderer {...base} displayMessagesLength={2} />);
+  it('hides Try again when the screen says the question has an answer', () => {
+    const view = render(<MessageRenderer {...base} showTryAgain={false} />);
     expect(view.queryByTestId('unanswered-retry')).toBeNull();
   });
 
   it('never shows Try again under an answer', () => {
     const answer: Message = { id: 'a1', role: 'assistant', content: 'A language.', timestamp: 2 };
-    const view = render(<MessageRenderer {...base} item={answer} />);
+    const view = render(<MessageRenderer {...base} item={answer} showTryAgain={false} />);
     expect(view.queryByTestId('unanswered-retry')).toBeNull();
   });
 });
