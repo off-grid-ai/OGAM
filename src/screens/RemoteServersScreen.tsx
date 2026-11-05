@@ -140,7 +140,7 @@ export const RemoteServersScreen: React.FC = () => {
       if (abort.signal.aborted) {
         setScanNote(
           newServers.length === 0
-            ? 'Scan stopped. Nothing found yet.'
+            ? 'Scan stopped. No new servers found.'
             : `Scan stopped. Added ${newServers.length} server${newServers.length > 1 ? 's' : ''}.`,
         );
         return;
