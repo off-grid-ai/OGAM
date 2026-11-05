@@ -77,19 +77,15 @@ const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   loadingText: { ...TYPOGRAPHY.body, color: colors.textSecondary },
   // Top padding keeps the first card off the list's clip edge, under the search row.
   listContent: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.sm, paddingBottom: 32 },
+  // A quiet line, not an amber box: what runs where, said once in the page's own voice.
   deviceBanner: {
-    backgroundColor: `${colors.trending}15`,
-    borderRadius: 8,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    marginBottom: SPACING.lg,
-    borderWidth: 1,
-    borderColor: `${colors.trending}40`,
+    paddingVertical: SPACING.xs,
+    marginBottom: SPACING.md,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: SPACING.xs,
   },
-  deviceBannerText: { ...TYPOGRAPHY.meta, color: colors.trending, flex: 1 },
+  deviceBannerText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, flex: 1 },
   deviceBannerWarning: { color: colors.error, marginTop: 2 },
   emptyCard: { alignItems: 'center' as const, padding: 32 },
   emptyText: { color: colors.textSecondary, textAlign: 'center' as const },
