@@ -82,6 +82,19 @@ describe('ChatMessage', () => {
       expect(getByText('Model loaded successfully')).toBeTruthy();
     });
 
+    it('shows a note saved as "_x_" by an older build as plain "x"', () => {
+      const message = createMessage({ role: 'system', content: '_GPU failed, running on CPU._', isSystemInfo: true });
+      const { getByText, queryByText } = render(<ChatMessage message={message} />);
+      expect(getByText('GPU failed, running on CPU.')).toBeTruthy();
+      expect(queryByText(/_/)).toBeNull();
+    });
+
+    it('keeps underscores inside a note', () => {
+      const message = createMessage({ role: 'system', content: 'Loaded model_v2 on GPU', isSystemInfo: true });
+      const { getByText } = render(<ChatMessage message={message} />);
+      expect(getByText('Loaded model_v2 on GPU')).toBeTruthy();
+    });
+
     it('renders empty content gracefully', () => {
       const message = createMessage({ content: '' });
       const { queryByText, getByTestId } = render(
