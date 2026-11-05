@@ -19,6 +19,7 @@ import { useTheme, useThemedStyles } from '../../theme';
 import { useHasRegisteredScreen } from '../../navigation/screenRegistry';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { SPACING, TYPOGRAPHY } from '../../constants';
+import { cardSurface } from '../../theme/surface';
 
 interface IncludedRow {
   screen: string;
@@ -75,7 +76,7 @@ export const ProIncludedSection: React.FC = () => {
           onPress={() => navigation.navigate(row.screen)}
           testID={`pro-included-${row.screen}`}
         >
-          <Icon name={row.icon} size={18} color={colors.primary} />
+          <Icon name={row.icon} size={18} color={colors.textSecondary} />
           <View style={styles.rowText}>
             <Text style={styles.rowTitle}>{row.title}</Text>
             <Text style={styles.rowDescription}>{row.description}</Text>
@@ -87,15 +88,13 @@ export const ProIncludedSection: React.FC = () => {
   );
 };
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
+    ...cardSurface(colors),
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     marginHorizontal: SPACING.xl,
     marginBottom: SPACING.xl,
-    ...shadows.small,
   },
   cardTitle: {
     ...TYPOGRAPHY.label,
@@ -117,5 +116,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   lastRow: { borderBottomWidth: 0 },
   rowText: { flex: 1, gap: SPACING.xs },
   rowTitle: { ...TYPOGRAPHY.body, color: colors.text },
-  rowDescription: { ...TYPOGRAPHY.meta, color: colors.textSecondary },
+  // A sentence, so Geist (reading text), not the Mono kept for labels and numbers.
+  rowDescription: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
 });

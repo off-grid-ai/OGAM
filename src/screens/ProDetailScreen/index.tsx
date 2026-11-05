@@ -207,7 +207,7 @@ export const ProDetailScreen: React.FC = () => {
               {PILLARS.map(p => (
                 <View key={p.title} style={styles.pillarRow}>
                   <View style={styles.pillarIconWrap}>
-                    <Icon name={p.icon} size={18} color={colors.primary} />
+                    <Icon name={p.icon} size={18} color={colors.textSecondary} />
                   </View>
                   <View style={styles.pillarText}>
                     <Text style={styles.pillarTitle}>{p.title}</Text>
