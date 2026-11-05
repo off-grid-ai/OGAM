@@ -243,7 +243,7 @@ const createVideoStyles = (colors: ThemeColors) => ({
   videoDeleteText: { color: colors.error },
 });
 
-export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   ...createHeaderStyles(colors, shadows),
   ...createGridStyles(colors),
   ...createViewerStyles(colors),
