@@ -7,6 +7,27 @@ import { DownloadedModel, ModelFile, PersistedDownloadInfo } from '../../types';
 import { backgroundDownloadService } from '../backgroundDownloadService';
 import { buildDownloadedModel, persistDownloadedModel } from './storage';
 import { sizeToBytes } from '../../utils/fileSize';
+import { mtpHeadForPrimaryFile } from '@offgrid/models';
+
+/**
+ * Every file a model owns besides its vision projector: the main file, the later parts of a model
+ * split into several files (`-00001-of-00003` loads `-00002-` and `-00003-` beside it), and its
+ * published MTP head (the shared catalog's rule, the same one the loader uses). None of these is
+ * ever an orphan while the model is on the phone.
+ */
+export function filesOfModel(mainFile: string): string[] {
+  const names = [mainFile];
+  const split = /^(.*)-(\d{5})-of-(\d{5})(\.gguf)$/i.exec(mainFile);
+  if (split) {
+    const total = Number(split[3]);
+    for (let part = 1; part <= total; part++) {
+      names.push(`${split[1]}-${String(part).padStart(5, '0')}-of-${split[3]}${split[4]}`);
+    }
+  }
+  const head = mtpHeadForPrimaryFile(mainFile);
+  if (head) names.push(head.name);
+  return names;
+}
 
 export async function getOrphanedTextFiles(
   modelsDir: string,
@@ -26,7 +47,7 @@ export async function getOrphanedTextFiles(
   const fileName = (path: string) => path.split('/').pop() ?? path;
   const trackedNames = new Set<string>();
   for (const model of models) {
-    trackedNames.add(fileName(model.filePath));
+    for (const name of filesOfModel(fileName(model.filePath))) trackedNames.add(name);
     if ('mmProjPath' in model && model.mmProjPath) trackedNames.add(fileName(model.mmProjPath));
   }
 

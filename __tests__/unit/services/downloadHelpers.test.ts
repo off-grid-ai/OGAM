@@ -150,6 +150,27 @@ describe('getOrphanedTextFiles', () => {
     expect(result).toEqual([]);
   });
 
+  it('never calls a model\'s later split parts or its MTP head orphaned (hand test 7)', async () => {
+    mockedRNFS.exists.mockResolvedValue(true);
+    mockedRNFS.readDir.mockResolvedValue([
+      makeRNFSFile('qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf', `${MODELS_DIR}/qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf`),
+      makeRNFSFile('qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf', `${MODELS_DIR}/qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf`),
+      makeRNFSFile('gemma-4-E4B-it-Q4_K_M.gguf', `${MODELS_DIR}/gemma-4-E4B-it-Q4_K_M.gguf`),
+      makeRNFSFile('mtp-gemma-4-E4B-it-Q8_0.gguf', `${MODELS_DIR}/mtp-gemma-4-E4B-it-Q8_0.gguf`),
+      makeRNFSFile('left-behind.gguf', `${MODELS_DIR}/left-behind.gguf`),
+    ]);
+    const model = (fileName: string) => ({
+      id: fileName, name: fileName, author: 'x', fileName, filePath: `${MODELS_DIR}/${fileName}`,
+      fileSize: 1, quantization: 'Q4', downloadedAt: '',
+    });
+    const result = await getOrphanedTextFiles(MODELS_DIR, async () => [
+      model('qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf'),
+      model('gemma-4-E4B-it-Q4_K_M.gguf'),
+    ] as never);
+
+    expect(result.map(file => file.name)).toEqual(['left-behind.gguf']);
+  });
+
   it('correctly identifies mix of tracked and untracked files', async () => {
     mockedRNFS.exists.mockResolvedValue(true);
     mockedRNFS.readDir.mockResolvedValue([
