@@ -71,6 +71,9 @@ export const RecentConversations: React.FC<Props> = ({
             style={styles.conversationItem}
             onPress={() => onContinueChat(conv.id)}
             testID={`conversation-item-${index}`}
+            // In words: grouped, the row also read its chevron glyph aloud (hand test 41).
+            accessibilityRole="button"
+            accessibilityLabel={`${conv.title}, ${formatDate(conv.updatedAt)}`}
           >
             <View style={styles.conversationInfo}>
               <View style={styles.conversationHeader}>
