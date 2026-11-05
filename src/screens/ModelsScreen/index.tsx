@@ -24,6 +24,8 @@ import { checkForNewModels, useModelCatalogStore, withRemoteCatalog, type Catalo
 import { CatalogCheckSheet } from '../../components/models/CatalogCheckSheet';
 import { proGateShown } from '../../services/analytics/analytics';
 import { SCROLL_DEPTH_PROPS } from '../../constants/scrollDepth';
+import { useIsFocused } from '@react-navigation/native';
+import { LivingField } from '../../components/LivingField';
 
 const MODEL_TABS: ReadonlyArray<{
   key: ModelTab;
@@ -46,12 +48,18 @@ const ScreenFrame: React.FC<{
   embedded: boolean;
   styles: ReturnType<typeof createStyles>;
   children: React.ReactNode;
-}> = ({ embedded, styles, children }) =>
-  embedded ? (
+}> = ({ embedded, styles, children }) => {
+  const isFocused = useIsFocused();
+  return embedded ? (
     <View style={[styles.container, embeddedStyles.container]} testID="embedded-models-screen">{children}</View>
   ) : (
-    <SafeAreaView style={styles.container} edges={['top']} testID="models-screen">{children}</SafeAreaView>
+    <SafeAreaView style={styles.container} edges={['top']} testID="models-screen">
+      {/* The living field behind the tab, resting while the tab is hidden. */}
+      <LivingField active={isFocused} />
+      {children}
+    </SafeAreaView>
   );
+};
 
 const HideWhenEmbedded: React.FC<{
   embedded: boolean;

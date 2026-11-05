@@ -28,6 +28,8 @@ import { Project } from '../types';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { PROJECT_DELETE_FALLBACK_REASON } from '../stores/projectDeleteOutcome';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
+import { useIsFocused } from '@react-navigation/native';
+import { LivingField } from '../components/LivingField';
 
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'ProjectsTab'>,
@@ -39,6 +41,7 @@ export const ProjectsScreen: React.FC = () => {
   const focusTrigger = useFocusTrigger();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const isFocused = useIsFocused();
   const projects = useProjectStore(state => state.projects);
   const deleteProject = useProjectStore(state => state.deleteProject);
   const conversations = useChatStore(state => state.conversations);
@@ -158,6 +161,8 @@ export const ProjectsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']} testID="projects-screen">
+      {/* The living field behind the tab, resting while the tab is hidden. */}
+      <LivingField active={isFocused} />
       <ScreenHeader
         title="Projects"
         variant="tab"
