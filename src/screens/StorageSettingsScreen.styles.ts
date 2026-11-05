@@ -165,8 +165,9 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.textMuted,
     marginTop: 2,
   },
+  // A 44px target around the 16-18px glyph.
   deleteButton: {
-    padding: SPACING.sm,
+    padding: 13,
   },
   deleteAllButton: {
     flexDirection: 'row' as const,
