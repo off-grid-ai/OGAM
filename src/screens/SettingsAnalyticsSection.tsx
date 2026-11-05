@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { AppSwitch } from '../components/AppSwitch';
 import { Text, View } from 'react-native';
-import { Switch, TouchableOpacity } from '../components/Touchable';
+import { TouchableOpacity } from '../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedEntry } from '../components/AnimatedEntry';
 import { DebugLogsScreen } from '../components/DebugLogsScreen';
@@ -38,12 +39,10 @@ export const SettingsAnalyticsSection: React.FC<SettingsAnalyticsSectionProps> =
       <View style={styles.navItemContent}>
         <Text style={styles.navItemTitle}>{label}</Text>
       </View>
-      <Switch
+      <AppSwitch
         accessibilityLabel={label}
         value={value}
         onValueChange={onChange}
-        trackColor={{ false: colors.surfaceLight, true: `${colors.primary}80` }}
-        thumbColor={value ? colors.primary : colors.textMuted}
       />
     </View>
   );

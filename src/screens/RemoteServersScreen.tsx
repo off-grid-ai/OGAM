@@ -6,13 +6,14 @@
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
+import { AppSwitch } from '../components/AppSwitch';
 import {
   View,
   Text,
   ScrollView,
   Linking,
 } from 'react-native';
-import { TouchableOpacity, Switch } from '../components/Touchable';
+import { TouchableOpacity } from '../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
@@ -219,16 +220,12 @@ export const RemoteServersScreen: React.FC = () => {
                   : 'Turn this on to find servers on your network without scanning by hand.'}
               </Text>
             </View>
-            <Switch
+            <AppSwitch
               testID="auto-discover-toggle"
               value={autoDiscover}
               onValueChange={v =>
                 updateSettings({ autoDiscoverRemoteModels: v })
               }
-              trackColor={{
-                false: theme.colors.border,
-                true: theme.colors.primary,
-              }}
             />
           </View>
         </View>
@@ -238,7 +235,7 @@ export const RemoteServersScreen: React.FC = () => {
           {SCAN_KINDS.map(item => (
             <View key={item.kind} style={styles.scanKindRow}>
               <Text style={styles.cardDesc}>{item.label} ({item.port})</Text>
-              <Switch
+              <AppSwitch
                 testID={`scan-kind-${item.kind}`}
                 accessibilityLabel={`Scan for ${item.label}`}
                 value={scanKinds.includes(item.kind)}
@@ -249,7 +246,6 @@ export const RemoteServersScreen: React.FC = () => {
                     : scanKinds.filter(kind => kind !== item.kind);
                   if (next.length > 0) updateSettings({ remoteScanKinds: next });
                 }}
-                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
               />
             </View>
           ))}

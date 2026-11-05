@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { AppSwitch } from '../components/AppSwitch';
 import { View, Text, ScrollView } from 'react-native';
-import { TouchableOpacity, Switch } from '../components/Touchable';
+import { TouchableOpacity } from '../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
@@ -86,13 +87,11 @@ export const EngineUpdatesScreen: React.FC = () => {
                   the background and switch on the next time you open the app.
                 </Text>
               </View>
-              <Switch
+              <AppSwitch
                 testID="engine-updates-switch"
                 accessibilityLabel="Automatic engine updates"
                 value={enabled}
                 onValueChange={value => { updateSettings({ engineUpdates: value }); setResult(''); }}
-                trackColor={{ false: colors.surfaceLight, true: `${colors.primary}80` }}
-                thumbColor={enabled ? colors.primary : colors.textMuted}
               />
             </View>
             {!enabled ? (

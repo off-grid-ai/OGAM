@@ -1,4 +1,5 @@
 import { useSearchModelLabel } from '../hooks/useSearchModelLabel';
+import { AppSwitch } from '../components/AppSwitch';
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -6,7 +7,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import { TouchableOpacity, Switch } from '../components/Touchable';
+import { TouchableOpacity } from '../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -357,12 +358,10 @@ export const SettingsScreen: React.FC = () => {
             <View style={styles.devButtonGroup}>
               <View style={styles.devButton}>
                 <Text style={styles.devButtonText}>Show sync status bar</Text>
-                <Switch
+                <AppSwitch
                   accessibilityLabel="Show sync status bar"
                   value={showSyncStatusBar}
                   onValueChange={setShowSyncStatusBar}
-                  trackColor={{ false: colors.surfaceLight, true: `${colors.primary}80` }}
-                  thumbColor={showSyncStatusBar ? colors.primary : colors.textMuted}
                 />
               </View>
               <TouchableOpacity

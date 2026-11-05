@@ -1,6 +1,7 @@
 import React from 'react';
+import { AppSwitch } from '../../components/AppSwitch';
 import { View, Text, ScrollView } from 'react-native';
-import { Switch, TouchableOpacity } from '../../components/Touchable';
+import { TouchableOpacity } from '../../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -103,12 +104,9 @@ export const ToolsScreen: React.FC = () => {
                 </View>
                 <Text style={styles.toolDescription}>{tool.description}</Text>
               </View>
-              <Switch
+              <AppSwitch
                 value={isEnabled}
                 onValueChange={() => handleToggleTool(tool.id)}
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor="#FFFFFF"
-                ios_backgroundColor={colors.border}
                 accessibilityLabel={`${tool.displayName}, ${isEnabled ? 'ON' : 'OFF'}`}
                 testID={`tool-picker-toggle-${tool.id}`}
               />

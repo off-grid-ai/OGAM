@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { AppSwitch } from '../../components/AppSwitch';
 import { View, Text, Platform } from 'react-native';
-import { Switch, TouchableOpacity } from '../../components/Touchable';
+import { TouchableOpacity } from '../../components/Touchable';
 import { AdvancedToggle, Card } from '../../components';
 import { SliderSetting } from '../../components/SliderSetting';
 import { Button } from '../../components/Button';
@@ -19,7 +20,6 @@ const EnhanceImageToggle: React.FC = () => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings, downloadedModels } = useAppStore();
-  const trackColor = { false: colors.surfaceLight, true: `${colors.primary}80` };
   // Enhancement runs the prompt through a text model, so it needs one available.
   const hasTextModel = downloadedModels.length > 0;
   const enabled = (settings?.enhanceImagePrompts ?? false) && hasTextModel;
@@ -39,12 +39,10 @@ const EnhanceImageToggle: React.FC = () => {
         <Text style={styles.toggleLabel}>Enhance Image Prompts</Text>
         <Text style={styles.toggleDesc}>{description}</Text>
       </View>
-      <Switch
+      <AppSwitch
         value={enabled}
         disabled={!hasTextModel}
         onValueChange={(value) => updateSettings({ enhanceImagePrompts: value })}
-        trackColor={trackColor}
-        thumbColor={enabled ? colors.primary : colors.textMuted}
       />
     </View>
   );
@@ -55,7 +53,6 @@ const ImageGpuSection: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
   const { clearing, handleClearCache } = useClearGpuCache();
-  const trackColor = { false: colors.surfaceLight, true: `${colors.primary}80` };
   const isOpenCL = settings?.imageUseOpenCL ?? true;
 
   return (
@@ -67,11 +64,9 @@ const ImageGpuSection: React.FC = () => {
             Use GPU for faster image generation. First run may be slower while optimizing for your device.
           </Text>
         </View>
-        <Switch
+        <AppSwitch
           value={isOpenCL}
           onValueChange={(value) => updateSettings({ imageUseOpenCL: value })}
-          trackColor={trackColor}
-          thumbColor={isOpenCL ? colors.primary : colors.textMuted}
         />
       </View>
       {isOpenCL && (
@@ -169,7 +164,6 @@ export const ImageGenerationSection: React.FC = () => {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const isAutoMode = settings?.imageGenerationMode === 'auto';
-  const trackColor = { false: colors.surfaceLight, true: `${colors.primary}80` };
 
   return (
     <Card style={styles.section}>
@@ -188,13 +182,11 @@ export const ImageGenerationSection: React.FC = () => {
               : 'Only generate images when you tap the image button'}
           </Text>
         </View>
-        <Switch
+        <AppSwitch
           value={isAutoMode}
           onValueChange={(value) =>
             updateSettings({ imageGenerationMode: value ? 'auto' : 'manual' })
           }
-          trackColor={trackColor}
-          thumbColor={isAutoMode ? colors.primary : colors.textMuted}
         />
       </View>
       <Text style={styles.toggleNote}>

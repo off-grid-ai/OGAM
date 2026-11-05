@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { AppSwitch } from '../components/AppSwitch';
 import {
   View,
   Text,
@@ -6,7 +7,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { TouchableOpacity, Switch } from '../components/Touchable';
+import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { LoadingDots } from '../components/LoadingDots';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -206,12 +207,11 @@ export const KnowledgeBaseScreen: React.FC = () => {
           transfer={rowKnowledgeDocumentTransfer(transfers, item.sync_id)}
         />
       </TouchableOpacity>
-      <Switch
+      <AppSwitch
         value={item.enabled === 1}
         onValueChange={(val) => handleToggleDocument(item.id, val)}
         accessibilityLabel={`Use ${item.name}, ${item.enabled === 1 ? 'ON' : 'OFF'}`}
         testID={`knowledge-document-toggle-${item.sync_id}`}
-        trackColor={{ false: colors.border, true: colors.primary }}
       />
       <TouchableOpacity
         style={styles.docDelete}

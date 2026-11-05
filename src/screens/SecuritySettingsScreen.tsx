@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
+import { AppSwitch } from '../components/AppSwitch';
 import {
   View,
   Text,
   ScrollView,
   Modal,
 } from 'react-native';
-import { TouchableOpacity, Switch } from '../components/Touchable';
+import { TouchableOpacity } from '../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../components/Button';
@@ -84,11 +85,9 @@ export const SecuritySettingsScreen: React.FC = () => {
               <Text style={styles.settingLabel}>Passphrase Lock</Text>
               <Text style={styles.settingHint}>Require passphrase to open app</Text>
             </View>
-            <Switch
+            <AppSwitch
               value={authEnabled}
               onValueChange={handleTogglePassphrase}
-              trackColor={{ false: colors.surfaceLight, true: `${colors.primary  }80` }}
-              thumbColor={authEnabled ? colors.primary : colors.textMuted}
             />
           </View>
 

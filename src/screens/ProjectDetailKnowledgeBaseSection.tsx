@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { AppSwitch } from '../components/AppSwitch';
 import {
   View,
   Text,
   FlatList,
   Platform,
 } from 'react-native';
-import { TouchableOpacity, Switch } from '../components/Touchable';
+import { TouchableOpacity } from '../components/Touchable';
 import { useFocusEffect } from '@react-navigation/native';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { LoadingDots } from '../components/LoadingDots';
@@ -347,12 +348,11 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
                   transfer={rowKnowledgeDocumentTransfer(transfers, doc.sync_id)}
                 />
               </View>
-              <Switch
+              <AppSwitch
                 value={doc.enabled === 1}
                 onValueChange={val => handleToggleDocument(doc.id, val)}
                 testID={`kb-document-toggle-${doc.sync_id}`}
                 accessibilityLabel={`Use ${doc.name}, ${doc.enabled === 1 ? 'ON' : 'OFF'}`}
-                trackColor={{ false: colors.border, true: colors.primary }}
               />
               <TouchableOpacity
                 style={styles.kbDocDelete}
