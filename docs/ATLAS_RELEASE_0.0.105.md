@@ -569,6 +569,16 @@ What changed:
   model. A second, short-prompt check decides whether to use the first-word workaround: prompts under about 192 tokens run
   once first so the first word comes from the engine's single-token step; it is switched on only if the same check passes with
   it, and never for long prompts. The remembered verdict records the batch size and CPU-kernel setting.
+- 0.0.137: more study tools for the CPA and a doctorate. Tutor tools: "study_helpers" (exam planner in the order you sit them, rubric
+  check that lists criteria a draft never mentions, APA 7 references and in-text citations, literature matrix; nothing is invented, a
+  missing author or year is shown as n.d. or left blank), "find_image" (Wikimedia Commons pictures with author, licence and link,
+  switched off by off-grid mode; matches are not guaranteed to be right). Charts: a reply can contain a chart block that is drawn as a
+  pie, bar or line with its source underneath, or a note that no source was given. Scanned PDF pages are read by the loaded vision
+  model (the page is drawn to a picture by the native PDF code on Android and iOS) and listed as read from a picture; with no vision
+  model they stay flagged. Briefing audio no longer re-activates the audio session before every line. The shared citation format
+  (verified quotes, numbered reference list) is code only so far: it is not yet shown as chips in chat. Not verified on a phone, and the
+  new native page-drawing code is compiled for the first time by CI. Not done: custom font files and background images, per-subject
+  packs, citation chips in the UI, a screen for the planner/rubric/matrix (they are tutor tools in chat).
 - 0.0.136: study tools. (1) Tutor tool "study_math": statistics, t tests, regression, sample size, unit conversion, date arithmetic and
   time-value of money computed in code, on by default for the default agent. (2) Practice questions: Study > Practice questions
   makes exercises from a project's documents in one shared format (multiple choice, true/false, fill in, calculation, order, match,

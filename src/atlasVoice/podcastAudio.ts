@@ -74,6 +74,7 @@ export function preRenderEpisode(key: string, items: CastLine[]): void {
   items.forEach((_, i) => { render(key, items, i).catch(() => undefined); });
 }
 
+let sessionReadyAt = 0;
 let ctx: any = null;
 let source: any = null;
 let stopToken = 0;
@@ -120,7 +121,8 @@ function playFile(path: string): Promise<PlayResult> {
   const token = stopToken;
   return new Promise((resolve) => {
     (async () => {
-      await audioSessionManager.ensurePlayback();
+      // The session is set up once and kept for the lines that follow: asking again before every line added a pause each time.
+      if (Date.now() - sessionReadyAt > 20000) { await audioSessionManager.ensurePlayback(); sessionReadyAt = Date.now(); }
       const buffer = await decode(path);
       decoded.delete(path);
       if (token !== stopToken) { resolve('stopped'); return; }
@@ -166,6 +168,7 @@ export async function playLine(key: string, items: CastLine[], i: number): Promi
 /** Stops whatever podcast line is playing from a file. */
 export function stopPodcastAudio(): void {
   stopToken++;
+  sessionReadyAt = 0; // something else may take the audio session before the next play
   try { source?.stop(); } catch { /* already stopped */ }
   source = null;
 }
