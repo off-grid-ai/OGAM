@@ -102,3 +102,9 @@ Each round: expected / found / root cause / change / commit / screenshots.
 3. Fresh-install audit once the phone is online; then the alive layer.
 - **Acted on 14:34:** classifier never auto-selected (third path, restored queued download); Storage counts only chat models; two labels fixed; the active server has a check and the selected state.
 - **14:40 hold:** visual work is paused until the phone is online. 15 visual commits wait for the device pass (`docs/play/DEVICE_QUEUE.md`); more blind changes would raise the risk of that pass. Next, once online: the device pass, the fresh-install run, the living background, and Home's model-count card.
+
+## r06 device pass and the alive gap (15:52)
+- **Hold ended 15:41:** the phone opens builds again; `06ada3e58` installed. Screens in `docs/play/r06-device-pass/` (full-resolution PNG from now on).
+- **Home (queue 1):** passes: Geist, filled New Chat, Recent right after it in one surface. Still open: "Text 16" greyed.
+- **New chat (queue 2):** this phone has only an image model selected, so the composer reads "Describe an image…" and the text starters showed; a tap would draw a picture. Fixed at the gate: starters need a text model (`7533d507f`; the new test fails on the old code).
+- **Mac 15:44:** "it doesn't feel like the alive desktop design." Checked against DESIGN_PHILOSOPHY: no living background, no emerald halo, no press/settle motion, boxed cards. Next is the React Native alive layer, Home first. Mockup for Mac: https://claude.ai/artifact/TS748CG4JNdaWPiRmpEAqu (waits for his go).
