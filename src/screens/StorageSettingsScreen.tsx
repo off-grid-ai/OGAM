@@ -13,6 +13,7 @@ import {
   Text,
   ScrollView,
 } from 'react-native';
+import { isClassifierModel } from '../services/classifierModel';
 import { TouchableOpacity } from '../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -41,8 +42,10 @@ export const StorageSettingsScreen: React.FC = () => {
   const generatedVideoCount = useAppStore(s => s.generatedVideos.length);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
-  const { downloadedModels, downloadedImageModels, downloadedVideoModels } =
+  const { downloadedModels, downloadedImageModels, downloadedVideoModels, settings } =
     useAppStore();
+  // The intent classifier is a utility model, not one of your chat models.
+  const chatModelCount = downloadedModels.filter(m => !isClassifierModel(m.id, settings.classifierModelId)).length;
   const { conversations } = useChatStore();
   const transcriptionModelCount = useWhisperStore(s => s.presentModelIds.length);
   const speechModelCount = useModelDownloads().filter(
@@ -182,7 +185,7 @@ export const StorageSettingsScreen: React.FC = () => {
               <Icon name="cpu" size={18} color={colors.primary} />
               <Text style={styles.infoLabel}>Chat models</Text>
             </View>
-            <Text style={styles.infoValue}>{downloadedModels.length}</Text>
+            <Text style={styles.infoValue}>{chatModelCount}</Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
@@ -237,7 +240,7 @@ export const StorageSettingsScreen: React.FC = () => {
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
               <Icon name="hard-drive" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>All models</Text>
+              <Text style={styles.infoLabel}>Chat, image, video and search models</Text>
             </View>
             <Text style={styles.infoValue}>{hardwareService.formatBytes(storageUsed)}</Text>
           </View>

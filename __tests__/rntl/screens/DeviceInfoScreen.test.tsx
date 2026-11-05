@@ -66,7 +66,7 @@ describe('DeviceInfoScreen', () => {
     expect(row(rtl, view, 'Memory').getByText('8.0 GB')).toBeTruthy();
     await rtl.waitFor(() => expect(row(rtl, view, 'Free now').getByText('5.0 GB')).toBeTruthy());
     expect(row(rtl, view, 'Used by Off Grid AI').getByText('3.0 GB')).toBeTruthy();
-    expect(row(rtl, view, 'Most the app can use').getByText('8.0 GB')).toBeTruthy();
+    expect(row(rtl, view, 'Off Grid AI can use up to').getByText('8.0 GB')).toBeTruthy();
     expect(view.queryByText('…')).toBeNull();
   });
 

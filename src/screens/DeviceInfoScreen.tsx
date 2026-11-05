@@ -77,7 +77,7 @@ export const DeviceInfoScreen: React.FC = () => {
             <Text style={styles.infoValue}>{proc ? gb(proc.footprintMB) : '…'}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Most the app can use</Text>
+            <Text style={styles.infoLabel}>Off Grid AI can use up to</Text>
             <Text style={styles.infoValue}>{proc ? gb(proc.limitMB) : '…'}</Text>
           </View>
           <View style={[styles.infoRow, styles.lastRow]}>

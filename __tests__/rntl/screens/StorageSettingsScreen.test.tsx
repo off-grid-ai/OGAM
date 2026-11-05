@@ -87,6 +87,17 @@ describe('StorageSettingsScreen', () => {
 
   // ---- Breakdown section tests ----
 
+  it('does not count the intent classifier as one of your chat models', () => {
+    useAppStore.getState().setDownloadedModels([
+      createDownloadedModel({ id: 'm1', name: 'Model 1', fileSize: 1024, quantization: 'Q4' }),
+      createDownloadedModel({ id: 'bartowski/SmolLM2-135M-Instruct-GGUF/smol.gguf', name: 'SmolLM2', fileSize: 1024, quantization: 'Q8' }),
+    ]);
+
+    const { getAllByText, queryByText } = renderStorage();
+    expect(getAllByText('1').length).toBeGreaterThanOrEqual(1);
+    expect(queryByText('2')).toBeNull();
+  });
+
   it('shows the chat models count in the breakdown', () => {
     useAppStore.getState().setDownloadedModels([
       createDownloadedModel({ id: 'm1', name: 'Model 1', fileSize: 1024, quantization: 'Q4' }),
@@ -120,7 +131,7 @@ describe('StorageSettingsScreen', () => {
 
   it('shows Model Storage label in breakdown', () => {
     const { getByText } = renderStorage();
-    expect(getByText('All models')).toBeTruthy();
+    expect(getByText('Chat, image, video and search models')).toBeTruthy();
   });
 
   // ---- Model summary tests ----
