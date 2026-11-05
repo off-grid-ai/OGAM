@@ -11,7 +11,7 @@ import { TYPOGRAPHY, SPACING, FONTS } from '../../constants';
  */
 const MESSAGE_MAX_WIDTH = '85%' as const;
 
-const createBubbleStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createBubbleStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
     marginVertical: 6,
     paddingHorizontal: 16,
@@ -134,20 +134,24 @@ const createBubbleStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     borderRadius: 8,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-    ...shadows.small,
   },
   bubbleWithAttachments: {
     paddingHorizontal: 8,
     paddingTop: 8,
     paddingBottom: 12,
   },
+  // Your message is a quiet raised surface with a faint emerald edge; emerald stays the light source,
+  // not a block on every message.
   userBubble: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: `${colors.primary}40`,
     borderBottomRightRadius: 4,
   },
+  // The answer sits on the surface, like text on a page, not in a box.
   assistantBubble: {
-    backgroundColor: colors.surface,
-    borderBottomLeftRadius: 4,
+    backgroundColor: 'transparent',
+    paddingHorizontal: SPACING.xs,
     minWidth: '85%' as const,
   },
   attachmentsContainer: {
@@ -195,7 +199,7 @@ const createBubbleStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     maxWidth: 140,
   },
   documentBadgeTextUser: {
-    color: colors.background,
+    color: colors.textSecondary,
   },
   documentBadgeTextAssistant: {
     color: colors.text,
@@ -226,7 +230,7 @@ const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingHorizontal: 0,
   },
   userText: {
-    color: colors.background,
+    color: colors.text,
     fontWeight: '400' as const,
   },
   assistantText: {
