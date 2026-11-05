@@ -31,9 +31,10 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     padding: 3,
     gap: 2,
   },
+  // 44 pt choices (they were 34 x 30): each is a target on its own.
   themeSelectorOption: {
-    width: 34,
-    height: 30,
+    width: 44,
+    height: 44,
     borderRadius: 6,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,

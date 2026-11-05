@@ -30,10 +30,10 @@ export const SettingsAppearanceRow: React.FC<SettingsAppearanceRowProps> = ({
             <Text style={styles.themeToggleLabel}>Appearance</Text>
             <View style={styles.themeSelector}>
               {[
-                { mode: 'system' as const, icon: 'monitor' },
-                { mode: 'light' as const, icon: 'sun' },
-                { mode: 'dark' as const, icon: 'moon' },
-              ].map(({ mode, icon }) => (
+                { mode: 'system' as const, icon: 'monitor', label: 'System' },
+                { mode: 'light' as const, icon: 'sun', label: 'Light' },
+                { mode: 'dark' as const, icon: 'moon', label: 'Dark' },
+              ].map(({ mode, icon, label }) => (
                 <TouchableOpacity
                   key={mode}
                   style={[
@@ -42,6 +42,9 @@ export const SettingsAppearanceRow: React.FC<SettingsAppearanceRowProps> = ({
                   ]}
                   onPress={() => onSelect(mode)}
                   testID={`theme-option-${mode}`}
+                  accessibilityRole="radio"
+                  accessibilityLabel={label}
+                  accessibilityState={{ selected: themeMode === mode }}
                 >
                   <Icon
                     name={icon}
