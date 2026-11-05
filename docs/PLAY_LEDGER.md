@@ -101,3 +101,4 @@ Each round: expected / found / root cause / change / commit / screenshots.
 2. Copy: "All models" leaves out speech-to-text and voices; "Most the app can use" is ungrammatical. Servers: "In use" and "Use" differ only by colour; mark the active row with a check and the selected state.
 3. Fresh-install audit once the phone is online; then the alive layer.
 - **Acted on 14:34:** classifier never auto-selected (third path, restored queued download); Storage counts only chat models; two labels fixed; the active server has a check and the selected state.
+- **14:40 hold:** visual work is paused until the phone is online. 15 visual commits wait for the device pass (`docs/play/DEVICE_QUEUE.md`); more blind changes would raise the risk of that pass. Next, once online: the device pass, the fresh-install run, the living background, and Home's model-count card.
