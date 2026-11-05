@@ -39,7 +39,7 @@ export const ProjectSelectorSheet: React.FC<ProjectSelectorSheetProps> = ({
       visible={visible}
       onClose={onClose}
       snapPoints={['45%']}
-      title="Select Project"
+      title="Choose project"
     >
       <ScrollView
         style={styles.projectList}
