@@ -51,3 +51,60 @@ describe('accounting drills', () => {
     for (const t of ['Compound interest and loans', 'Inventory', 'Depreciation', 'Ratios', 'Cost-volume-profit', 'Capital budgeting', 'Income statement', 'Cash flow statement', 'Trial balance', 'Research statistics']) expect(topics.has(t)).toBe(true);
   });
 });
+
+import { answerText, check as checkAnswer, missedExercises, streak, useExerciseStore } from '../../src/study/exercises';
+import { buildExam, gradeExam, secondsLeft } from '../../src/study/exam';
+
+describe('bonds and leases', () => {
+  it('price a bond and a lease the way a textbook does', () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const bond: any = makeDrill('bond-price', seed);
+      const [, years, face, coupon, market] = bond.prompt.match(/A (\d+)-year bond with a face value of \$([\d,]+) pays ([\d.]+)%.*market rate is ([\d.]+)%/) as string[];
+      const F = Number(face.replace(/,/g, '')); const c = Number(coupon) / 100; const m = Number(market) / 100; const n = Number(years);
+      let pv = F / (1 + m) ** n; for (let t = 1; t <= n; t++) pv += (F * c) / (1 + m) ** t;
+      expect(bond.answer).toBeCloseTo(pv, 1);
+      const lease: any = makeDrill('lease-liability', seed);
+      const [, pay, when, yrs, rate] = lease.prompt.match(/requires \$([\d,]+) at the (start|end) of each year for (\d+) years.*rate is ([\d.]+)%/) as string[];
+      const P = Number(pay.replace(/,/g, '')); const r = Number(rate) / 100; let lv = 0;
+      for (let t = when === 'start' ? 0 : 1; t < Number(yrs) + (when === 'start' ? 0 : 1); t++) lv += P / (1 + r) ** t;
+      expect(lease.answer).toBeCloseTo(lv, 1);
+    }
+  });
+});
+
+describe('timed exam, flashcards, notes and streaks', () => {
+  const make = (id: string, topic: string, answer: number) => ({ id, kind: 'calc', topic, prompt: id, answer }) as any;
+  const bank = Object.fromEntries([make('a', 'Tax', 1), make('b', 'Tax', 2), make('c', 'Audit', 3)].map((e) => [e.id, e]));
+
+  it('grades only at the end, counts blanks as wrong and ranks weak topics first', () => {
+    const exam = buildExam(Object.values(bank), {}, { count: 3, minutes: 10, now: 0 });
+    expect(exam.ids).toHaveLength(3);
+    expect(secondsLeft(exam, 0)).toBe(600);
+    expect(secondsLeft(exam, 601000)).toBe(0);
+    const r = gradeExam(exam, bank, { a: '1', b: '9' });
+    expect(r).toMatchObject({ correct: 1, total: 3, unanswered: 1, percent: 33 });
+    expect(r.byTopic[0]).toEqual({ topic: 'Audit', correct: 0, total: 1 });
+    expect(r.wrong.sort()).toEqual(['b', 'c']);
+  });
+
+  it('writes the right answer in words and picks out missed questions', () => {
+    expect(answerText(make('x', 't', 7.5))).toBe('7.5');
+    expect(answerText({ id: 'm', kind: 'mcq', prompt: 'p', choices: ['a', 'b'], answer: 1 } as any)).toBe('b');
+    expect(checkAnswer(bank.a, '1').correct).toBe(true);
+    const progress = { a: { box: 0, due: 0, attempts: 1, correct: 0, last: false }, b: { box: 1, due: 0, attempts: 1, correct: 1, last: true } } as any;
+    expect(missedExercises(Object.values(bank), progress).map((e: any) => e.id)).toEqual(['a']);
+  });
+
+  it('counts a daily streak only when the goal is met, and saves a note on a question', () => {
+    const daily = { '2026-11-03': 12, '2026-11-04': 10, '2026-11-05': 4 };
+    expect(streak(daily, '2026-11-05', 10)).toBe(2); // today still in progress
+    expect(streak({ ...daily, '2026-11-05': 10 }, '2026-11-05', 10)).toBe(3);
+    expect(streak({ '2026-11-01': 20 }, '2026-11-05', 10)).toBe(0);
+    const s = useExerciseStore.getState();
+    s.setNote('q1', 'I forgot salvage value');
+    s.record('q2', true, Date.parse('2026-11-05T10:00:00Z'));
+    expect(useExerciseStore.getState().progress.q1.note).toBe('I forgot salvage value');
+    expect(useExerciseStore.getState().daily['2026-11-05']).toBe(1);
+    expect(useExerciseStore.getState().goal).toEqual({ on: false, perDay: 10 });
+  });
+});

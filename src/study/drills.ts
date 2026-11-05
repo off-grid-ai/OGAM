@@ -9,11 +9,12 @@ export type DrillKind =
   | 'balance-sheet' | 'journal-entry' | 'net-income' | 'depreciation' | 'current-ratio'
   | 'compound-solve' | 'loan-payment' | 'effective-rate' | 'inventory-cost' | 'double-declining' | 'ratio' | 'break-even' | 'npv'
   | 'income-statement' | 'cash-flow' | 'trial-balance'
+  | 'bond-price' | 'lease-liability' | 'bond-interest'
   | 'std-dev' | 'confidence-interval' | 't-statistic' | 'sample-size' | 'regression-slope';
 export const DRILL_KINDS: DrillKind[] = [
   'balance-sheet', 'journal-entry', 'net-income', 'depreciation', 'current-ratio',
   'compound-solve', 'loan-payment', 'effective-rate', 'inventory-cost', 'double-declining', 'ratio', 'break-even', 'npv',
-  'income-statement', 'cash-flow', 'trial-balance',
+  'income-statement', 'cash-flow', 'trial-balance', 'bond-price', 'lease-liability', 'bond-interest',
   'std-dev', 'confidence-interval', 't-statistic', 'sample-size', 'regression-slope',
 ];
 /** Drills for the doctoral research courses, and for the accounting courses. */
@@ -263,6 +264,35 @@ function trialBalance(r: () => number, id: string): Exercise {
   return { id, kind: 'table', topic: 'Trial balance', prompt: 'Complete the trial balance: pick the account and enter its balance. Total debits must equal total credits.', rows, totals: [{ name: 'Debits = credits', groups: ['debit'], equals: ['credit'] }], explain: `Debits ${fmt(cash + ar + equipment + rent)} = credits ${fmt(ap + sales + stock)}.` };
 }
 
+
+const BONDS = 'Bonds and leases';
+/** Price of a bond: the present value of its coupons plus its face value at the market rate. */
+function bondPrice(r: () => number, id: string): Exercise {
+  const face = [1000, 5000, 10000][Math.floor(r() * 3)] * (1 + Math.floor(r() * 5));
+  const coupon = (4 + Math.floor(r() * 6)) / 100;
+  const market = (3 + Math.floor(r() * 8)) / 100;
+  const years = 3 + Math.floor(r() * 8);
+  const pay = face * coupon;
+  const price = pay * ((1 - (1 + market) ** -years) / market) + face / (1 + market) ** years;
+  return calc(id, BONDS, `A ${years}-year bond with a face value of ${fmt(face)} pays ${pct(coupon)} interest once a year. The market rate is ${pct(market)}. What should it sell for?`, r2(price), `Coupons of ${fmt(pay)} for ${years} years discounted at ${pct(market)}, plus ${fmt(face)} discounted ${years} years.`, 0.5, '$');
+}
+/** Lease liability: the present value of the lease payments at the incremental borrowing rate. */
+function leaseLiability(r: () => number, id: string): Exercise {
+  const payment = money(r, 2000, 20000, 500);
+  const rate = (4 + Math.floor(r() * 7)) / 100;
+  const years = 3 + Math.floor(r() * 6);
+  const due = r() < 0.5;
+  const ordinary = payment * ((1 - (1 + rate) ** -years) / rate);
+  const value = due ? ordinary * (1 + rate) : ordinary;
+  return calc(id, BONDS, `A lease requires ${fmt(payment)} ${due ? 'at the start' : 'at the end'} of each year for ${years} years. The borrowing rate is ${pct(rate)}. What is the initial lease liability?`, r2(value), `Present value of ${years} payments of ${fmt(payment)} at ${pct(rate)}${due ? ', annuity due (multiply the ordinary annuity by 1 + rate)' : ', ordinary annuity'}.`, 0.5, '$');
+}
+/** First-year interest expense on a bond issued at a discount or premium, by the effective interest method. */
+function bondInterest(r: () => number, id: string): Exercise {
+  const carrying = money(r, 90000, 110000, 500);
+  const market = (4 + Math.floor(r() * 6)) / 100;
+  return calc(id, BONDS, `A bond is issued with a carrying amount of ${fmt(carrying)} and a market rate of ${pct(market)}. Using the effective interest method, what is interest expense for the first year?`, r2(carrying * market), `${fmt(carrying)} x ${pct(market)}.`, 0.5, '$');
+}
+
 const sample = (r: () => number, n: number, lo: number, hi: number) => Array.from({ length: n }, () => Math.round(lo + r() * (hi - lo)));
 const RS = 'Research statistics';
 
@@ -304,6 +334,7 @@ function regressionSlope(r: () => number, id: string): Exercise {
 const MAKERS: Record<DrillKind, (r: () => number, id: string) => Exercise> = {
   'balance-sheet': balanceSheet, 'journal-entry': journalEntry, 'net-income': netIncome, depreciation, 'current-ratio': currentRatio,
   'compound-solve': compoundSolve, 'loan-payment': loanPayment, 'effective-rate': effectiveRate, 'inventory-cost': inventoryCost, 'double-declining': doubleDeclining,
+  'bond-price': bondPrice, 'lease-liability': leaseLiability, 'bond-interest': bondInterest,
   ratio: ratioDrill, 'break-even': breakEven, npv, 'income-statement': incomeStatement, 'cash-flow': cashFlow, 'trial-balance': trialBalance,
   'std-dev': stdDev, 'confidence-interval': confidenceInterval, 't-statistic': tStatistic, 'sample-size': sampleSizeDrill, 'regression-slope': regressionSlope,
 };
@@ -318,3 +349,12 @@ export function makeDrillSet(count = 6, start = Date.now() % 100000, kinds: Dril
   const order = [...kinds].sort((a, b) => ((Math.sin(start + kinds.indexOf(a)) * 1e4) % 1) - ((Math.sin(start + kinds.indexOf(b)) * 1e4) % 1));
   return Array.from({ length: count }, (_, i) => makeDrill(order[i % order.length], start + i));
 }
+
+/** Plain names for the drill picker. */
+export const DRILL_LABELS: Record<DrillKind, string> = {
+  'balance-sheet': 'Balance sheet', 'journal-entry': 'Journal entry', 'net-income': 'Net income', depreciation: 'Straight-line depreciation', 'current-ratio': 'Current ratio',
+  'compound-solve': 'Compound interest', 'loan-payment': 'Loan payment', 'effective-rate': 'Effective rate', 'inventory-cost': 'Inventory (FIFO, average)', 'double-declining': 'Double-declining depreciation',
+  ratio: 'Financial ratios', 'break-even': 'Break-even', npv: 'Net present value', 'income-statement': 'Income statement', 'cash-flow': 'Cash flow statement', 'trial-balance': 'Trial balance',
+  'bond-price': 'Bond price', 'lease-liability': 'Lease liability', 'bond-interest': 'Bond interest expense',
+  'std-dev': 'Standard deviation', 'confidence-interval': 'Margin of error', 't-statistic': 't statistic', 'sample-size': 'Sample size', 'regression-slope': 'Regression slope',
+};

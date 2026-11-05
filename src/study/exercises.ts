@@ -105,11 +105,16 @@ export function groundExercises(raw: unknown[], chunks: SourceChunk[], topic?: s
 function hash(s: string): number { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }
 
 // ---------------------------------------------------------------- progress, review and difficulty
-export interface Progress { box: number; due: number; attempts: number; correct: number; last?: boolean; saved?: unknown }
+export interface Progress { box: number; due: number; attempts: number; correct: number; last?: boolean; saved?: unknown; /** The person's own note on why they got it wrong. */ note?: string }
 const DAYS = [0, 1, 2, 4, 8, 16];
 
 interface ExerciseState {
   progress: Record<string, Progress>;
+  /** Questions answered per day (YYYY-MM-DD), for the optional streak and daily goal. */
+  daily: Record<string, number>;
+  goal: { on: boolean; perDay: number };
+  setGoal: (g: Partial<{ on: boolean; perDay: number }>) => void;
+  setNote: (id: string, note: string) => void;
   exercises: Record<string, Exercise>;
   addSet: (set: Exercise[]) => void;
   record: (id: string, correct: boolean, now?: number) => void;
@@ -118,12 +123,15 @@ interface ExerciseState {
   clearSet: (topic: string) => void;
 }
 export const useExerciseStore = create<ExerciseState>()(persist((set) => ({
-  progress: {}, exercises: {},
+  progress: {}, exercises: {}, daily: {}, goal: { on: false, perDay: 10 },
+  setGoal: (g) => set((st) => ({ goal: { ...st.goal, ...g } })),
+  setNote: (id, note) => set((st) => ({ progress: { ...st.progress, [id]: { ...(st.progress[id] ?? { box: 0, due: 0, attempts: 0, correct: 0 }), note: note.slice(0, 400) } } })),
   addSet: (s) => set((st) => ({ exercises: { ...st.exercises, ...Object.fromEntries(s.map((e) => [e.id, e])) } })),
   record: (id, correct, now = Date.now()) => set((st) => {
     const p = st.progress[id] ?? { box: 0, due: 0, attempts: 0, correct: 0 };
     const box = correct ? Math.min(DAYS.length - 1, p.box + 1) : 0;
-    return { progress: { ...st.progress, [id]: { box, due: now + DAYS[box] * 86400000, attempts: p.attempts + 1, correct: p.correct + (correct ? 1 : 0), last: correct, saved: undefined } } };
+    const day = new Date(now).toISOString().slice(0, 10);
+    return { progress: { ...st.progress, [id]: { ...p, box, due: now + DAYS[box] * 86400000, attempts: p.attempts + 1, correct: p.correct + (correct ? 1 : 0), last: correct, saved: undefined } }, daily: { ...st.daily, [day]: (st.daily[day] ?? 0) + 1 } };
   }),
   saveDraft: (id, draft) => set((st) => ({ progress: { ...st.progress, [id]: { ...(st.progress[id] ?? { box: 0, due: 0, attempts: 0, correct: 0 }), saved: draft } } })),
   clearSet: (topic) => set((st) => {
@@ -159,3 +167,31 @@ Never invent facts, numbers or quotes that are not in the material. If the mater
 MATERIAL:
 ${material}`;
 }
+
+/** The right answer in words, for a flashcard back. */
+export function answerText(ex: Exercise): string {
+  switch (ex.kind) {
+    case 'mcq': return ex.choices[ex.answer];
+    case 'truefalse': return `${ex.answer ? 'True' : 'False'}${ex.why ? `. ${ex.why}` : ''}`;
+    case 'fill': return ex.answers[0];
+    case 'calc': return `${ex.answer}${ex.unit ? ` ${ex.unit}` : ''}`;
+    case 'order': return ex.items.join(' > ');
+    case 'match': return ex.pairs.map(([a, b]) => `${a} = ${b}`).join('; ');
+    case 'short': return ex.keyTerms.join(', ');
+    case 'table': return ex.rows.map((r) => `${r.account ?? r.label}${r.amount !== undefined ? `: ${r.amount}` : ''}`).join('; ');
+    case 'testlet': return ex.items.map((i, n) => `${n + 1}. ${answerText(i)}`).join('  ');
+  }
+}
+
+/** Days in a row, ending today or yesterday, with at least `perDay` questions answered. */
+export function streak(daily: Record<string, number>, today: string, perDay: number): number {
+  const day = (t: number) => new Date(t).toISOString().slice(0, 10);
+  let t = Date.parse(`${today}T00:00:00Z`);
+  if ((daily[day(t)] ?? 0) < perDay) t -= 86400000; // today may still be in progress
+  let n = 0;
+  while ((daily[day(t)] ?? 0) >= perDay) { n++; t -= 86400000; }
+  return n;
+}
+
+/** Missed questions (last attempt wrong), most recent first by due date, for the flashcards. */
+export const missedExercises = (exercises: Exercise[], progress: Record<string, Progress>): Exercise[] => exercises.filter((e) => progress[e.id]?.last === false);
