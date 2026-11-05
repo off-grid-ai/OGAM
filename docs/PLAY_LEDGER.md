@@ -237,3 +237,9 @@ Pass: Home, Try again after Stop (model loaded), Try again asks again, "Tools it
 1. The Image tab crash.
 2. Stop during a model load cancels the waiting reply.
 3. Grey row actions everywhere; plain names in Downloads.
+
+## Supervisor 21:30 — hand test 11 (build 12, head 77467bef9)
+Pass: no crash over five Text/Image/Video/Text cycles; underline tabs; Stop during a model load stops the reply; Stop mid-reply; bare viewer controls. Fail: no Try again after Stop during a load (Resend works); Gallery still has blank tiles that report "loaded"; Video tab and Models sheet boxed, red eject/trash; first send shows bare dots while loading; Downloads names and colours (fixed after this build: `622e7aeb5`, `7752f88ec`).
+1. Try again after Stop during a model load.
+2. Gallery tiles that draw nothing.
+3. One emerald rule on model surfaces (Video tab, Models sheet).
