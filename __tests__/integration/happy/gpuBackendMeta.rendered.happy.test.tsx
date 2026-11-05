@@ -14,11 +14,6 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-// The tools-sent row is developer detail: the chat shows it with "Show generation details" on.
-beforeEach(() => {
-  const { useAppStore } = require('../../../src/stores/appStore');
-  useAppStore.setState((state: { settings: object }) => ({ settings: { ...state.settings, showGenerationDetails: true } }));
-});
 
 
 // Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
@@ -52,6 +47,7 @@ function selectBackendViaUI(h: Awaited<ReturnType<typeof setupChatScreen>>, back
 describe('T014 — GPU/OpenCL backend → GenerationMeta shows GPU layers offloaded (heavy entry point)', () => {
   it('selecting OpenCL + reloading renders a GPU-offloaded backend, not CPU', async () => {
     const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
+    h.enableGenerationDetailsViaUI();
     // Device boundary: an Adreno (Qualcomm) GPU — getOpenCLCapability keys off DeviceInfo.getHardware.
     // The seeded 'unknown' device would (correctly) refuse OpenCL, so seed the real device's SoC family.
      
@@ -87,6 +83,7 @@ describe('T014 — GPU/OpenCL backend → GenerationMeta shows GPU layers offloa
 
   it('falsify: CPU backend renders "CPU" with no offloaded layers', async () => {
     const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
+    h.enableGenerationDetailsViaUI();
      
     const DeviceInfo = require('react-native-device-info');
     (DeviceInfo.getHardware as jest.Mock).mockResolvedValue('qcom');
@@ -107,6 +104,7 @@ describe('T014 — GPU/OpenCL backend → GenerationMeta shows GPU layers offloa
 
   it('shows native prompt usage, not the reply token count, in generation details', async () => {
     const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'ios' });
+    h.enableGenerationDetailsViaUI();
     h.enableToolViaUI('calculator');
     h.enableGenerationDetailsViaUI();
     h.render();

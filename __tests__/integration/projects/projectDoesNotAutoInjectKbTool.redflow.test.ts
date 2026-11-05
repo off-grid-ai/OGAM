@@ -16,11 +16,6 @@ import { installNativeBoundary, GB } from '../../harness/nativeBoundary';
 import { makeGenDeps } from '../../harness/genDeps';
 import { createProject } from '../../utils/factories';
 
-// The tools-sent row is developer detail: the chat shows it with "Show generation details" on.
-beforeEach(() => {
-  const { useAppStore } = require('../../../src/stores/appStore');
-  useAppStore.setState((state: { settings: object }) => ({ settings: { ...state.settings, showGenerationDetails: true } }));
-});
 
 
 describe('project chat does NOT auto-inject search_knowledge_base (red-flow)', () => {

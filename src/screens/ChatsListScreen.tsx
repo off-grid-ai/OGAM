@@ -32,6 +32,7 @@ import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { byRecentActivity } from '../utils/conversationOrdering';
 import { formatClockTime, formatWhen } from '../utils/localTime';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
+import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
 import { useIsFocused } from '@react-navigation/native';
 import { LivingField } from '../components/LivingField';
 type NavigationProp = CompositeNavigationProp<
@@ -172,6 +173,8 @@ export const ChatsListScreen: React.FC = () => {
   // One line per chat: a quiet icon for an image or video chat, its title, its project when it has
   // one, and when it was last active, so chats with the same title can still be told apart. Each
   // date group is one surface divided by hairlines (brand: lists in one surface).
+  const previewLine = useConversationPreviewLine();
+
   // One row open at a time, and an open row closes on a tap elsewhere or a scroll.
   const openRow = useRef<Swipeable | null>(null);
   const rowRefs = useRef(new Map<string, Swipeable | null>());
@@ -185,6 +188,8 @@ export const ChatsListScreen: React.FC = () => {
     const selected = selectedIds.has(item.id);
     const index = listIndex.get(item.id) ?? 0;
     const kind = item.messages[item.messages.length - 1]?.turnKind ?? 'text';
+    // The last reply (or your own last message after "You:"), unless it only repeats the title.
+    const preview = repeatsTitle(previewLine(item.messages), item.title) ? '' : previewLine(item.messages);
 
     return (
       <Swipeable
@@ -233,9 +238,16 @@ export const ChatsListScreen: React.FC = () => {
           {kind !== 'text' ? (
             <Icon name={kind === 'video' ? 'video' : 'image'} size={14} color={colors.textMuted} />
           ) : null}
-          <Text style={styles.chatTitle} numberOfLines={1}>
-            {item.title}
-          </Text>
+          <View style={styles.chatText}>
+            <Text style={styles.chatTitle} numberOfLines={1}>
+              {item.title}
+            </Text>
+            {preview ? (
+              <Text style={styles.chatPreview} numberOfLines={1}>
+                {preview}
+              </Text>
+            ) : null}
+          </View>
           {project ? (
             <Text style={styles.projectName} numberOfLines={1}>
               {project.name}
@@ -493,11 +505,15 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     fontSize: 11,
     color: colors.textMuted,
   },
+  chatText: { flex: 1, gap: 2 },
   chatTitle: {
     ...TYPOGRAPHY.body,
     fontSize: 15,
     color: colors.text,
-    flex: 1,
+  },
+  chatPreview: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
   },
   projectName: {
     ...TYPOGRAPHY.meta,
@@ -568,3 +584,12 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginLeft: SPACING.sm,
   },
 });
+
+/** A preview that only says the title again (e.g. "You: <the same words>") adds nothing to the row. */
+function repeatsTitle(preview: string | null | undefined, title: string): boolean {
+  if (!preview) return true;
+  const plain = (text: string) => text.replace(/^You:\s*/, '').replace(/[.…\s]+$/, '').trim().toLowerCase();
+  const p = plain(preview);
+  const t = plain(title);
+  return p.length > 0 && t.length > 0 && (p.startsWith(t) || t.startsWith(p));
+}

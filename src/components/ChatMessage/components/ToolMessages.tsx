@@ -19,7 +19,6 @@ import { MarkdownText } from '../../MarkdownText';
 import { ToolsSentCollapsible } from './ToolsSentCollapsible';
 import type { createStyles } from '../styles';
 import type { Message } from '../../../types';
-import { useAppStore } from '../../../stores/appStore';
 
 function getToolIcon(toolName?: string): string {
   switch (toolName) {

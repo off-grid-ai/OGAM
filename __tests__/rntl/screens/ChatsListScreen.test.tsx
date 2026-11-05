@@ -204,7 +204,7 @@ describe('ChatsListScreen', () => {
       expect(rowOf(app, view, 'Orphan Chat').queryByText('Code Review')).toBeNull();
     });
 
-    it('dates a chat by the clock: time today, Yesterday, the weekday this week, else the date', () => {
+    it('dates a chat under its day heading: the clock time today and yesterday, the weekday this week, else the date', () => {
       const app = boot();
       jest.useFakeTimers({ now: new Date(2026, 9, 16, 9, 30) });
       app.chat('Old Chat');
@@ -219,10 +219,11 @@ describe('ChatsListScreen', () => {
       const dateOf = (index: number) => {
         const { Text } = require('react-native');
         const texts = app.rtl.within(view.getByTestId(`conversation-item-${index}`)).UNSAFE_getAllByType(Text);
-        return String(texts[1].props.children);
+        return String(texts[texts.length - 1].props.children);
       };
       expect(dateOf(0)).toMatch(/9:30/);
-      expect(dateOf(1)).toBe('Yesterday');
+      expect(dateOf(1)).toMatch(/9:30/);
+      expect(view.getByText('Yesterday')).toBeTruthy();
       expect(dateOf(2)).toMatch(/^Tue/);
       expect(dateOf(3)).toMatch(/Oct\s*16|16\s*Oct/);
     });

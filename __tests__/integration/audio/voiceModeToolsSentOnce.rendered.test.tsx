@@ -11,11 +11,6 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
-// The tools-sent row is developer detail: the chat shows it with "Show generation details" on.
-beforeEach(() => {
-  const { useAppStore } = require('../../../src/stores/appStore');
-  useAppStore.setState((state: { settings: object }) => ({ settings: { ...state.settings, showGenerationDetails: true } }));
-});
 
 
 // Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
@@ -24,6 +19,7 @@ jest.unmock('@react-navigation/native');
 describe('voice mode: tools sent in request', () => {
   it('shows the row once under a plain spoken reply to a turn that sent tools', async () => {
     const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'android', whisper: true, pro: true });
+    h.enableGenerationDetailsViaUI();
     await h.setupWhisperModel();
     h.enableToolViaUI('calculator');
     h.render();

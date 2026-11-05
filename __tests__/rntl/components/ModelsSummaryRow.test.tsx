@@ -19,11 +19,11 @@ describe('ModelsSummaryRow', () => {
     expect(getByTestId('model-summary-image').props.accessibilityState).toEqual({ selected: false });
   });
 
-  it('says Text when no text model is in use, so the chip still leads to one', () => {
+  it('asks you to pick a text model when none is in use', () => {
     const { getByText } = render(
       <ModelsSummaryRow labels={{ ...labels, text: '—' }} isLoading={false} onPress={jest.fn()} />,
     );
-    expect(getByText('Text')).toBeTruthy();
+    expect(getByText('Pick a text model')).toBeTruthy();
   });
 
   it('a kind\'s chip opens that kind\'s picker', () => {
