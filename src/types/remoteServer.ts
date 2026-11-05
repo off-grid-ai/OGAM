@@ -6,7 +6,7 @@
  */
 
 /** Provider types supported by the system */
-export type RemoteProviderType = 'openai-compatible' | 'anthropic' | 'minimax';
+type RemoteProviderType = 'openai-compatible' | 'anthropic' | 'minimax';
 
 /** Optional OpenAI-compatible media models served by this endpoint. */
 export interface RemoteMediaModelIds {

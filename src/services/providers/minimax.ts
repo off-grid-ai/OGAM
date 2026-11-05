@@ -5,8 +5,6 @@
  * single registry lets callers present a provider choice without duplicating
  * routing facts throughout the remote-server UI.
  */
-export const MINIMAX_PROVIDER = 'MiniMax' as const;
-
 export const MINIMAX_ENDPOINTS = {
   global: {
     openai: 'https://api.minimax.io/v1',
@@ -24,8 +22,6 @@ export const MINIMAX_MODELS = [
 ] as const;
 
 export const MINIMAX_DEFAULT_MODEL = MINIMAX_MODELS[0].id;
-
-export type MiniMaxRegion = keyof typeof MINIMAX_ENDPOINTS;
 
 export const MINIMAX_OPENROUTER_MODELS = [
   'minimax/minimax-m3.1-flash:free',
@@ -68,15 +64,4 @@ export function isMiniMaxEndpoint(endpoint: string): boolean {
   } catch {
     return false;
   }
-}
-
-export function miniMaxRegion(endpoint: string): MiniMaxRegion | null {
-  try {
-    const hostname = new URL(endpoint).hostname;
-    if (hostname === 'api.minimax.io') return 'global';
-    if (hostname === 'api.minimaxi.com') return 'china';
-  } catch {
-    // Invalid endpoints are handled by the editor's URL validation.
-  }
-  return null;
 }
