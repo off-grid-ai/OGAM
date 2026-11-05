@@ -9,7 +9,7 @@ const createLayoutStyles = (colors: ThemeColors) => ({
   messageList: { paddingVertical: 16 },
 });
 
-const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createHeaderStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   header: {
     paddingHorizontal: 16,
     paddingTop: 16,

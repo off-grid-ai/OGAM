@@ -237,10 +237,7 @@ export const RoutedToolsRow: React.FC<{
   colors: any;
 }> = ({ message, isUser, isStreaming, styles, colors }) => {
   const names = message.generationMeta?.routedToolNames;
-  // The tools offered to the model are developer detail: shown with "Show generation details" on,
-  // never to a new user by default (the list stays one switch away, so nothing is lost).
-  const showDetails = useAppStore(state => state.settings.showGenerationDetails);
-  if (isUser || isStreaming || !names?.length || !showDetails) return null;
+  if (isUser || isStreaming || !names?.length) return null;
   // This row only renders on a finalized assistant message (isStreaming is false),
   // so message.id is already the real, stable id here.
   return (

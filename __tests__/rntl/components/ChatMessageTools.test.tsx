@@ -242,7 +242,7 @@ describe('ChatMessage — Tool message rendering', () => {
 
       const { getByText } = render(<ChatMessage message={message} />);
 
-      expect(getByText(/Using custom_tool.*not-valid-json/)).toBeTruthy();
+      expect(getByText(/Looking that up.*not-valid-json/)).toBeTruthy();
     });
 
     it('shows tool call without arguments preview when arguments are empty object', () => {

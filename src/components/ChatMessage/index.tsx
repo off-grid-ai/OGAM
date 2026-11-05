@@ -432,7 +432,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         />
       )}
 
-      {showTurnFooter && (
+      {/* The tools offered to the model are developer detail: they ride with generation details. */}
+      {showTurnFooter && showGenerationDetails && (
         <RoutedToolsRow
           message={message}
           isUser={isUser}

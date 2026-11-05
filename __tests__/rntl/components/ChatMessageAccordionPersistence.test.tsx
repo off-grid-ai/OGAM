@@ -24,11 +24,6 @@ import { useAccordionStore } from '../../../src/stores';
 import { createMessage } from '../../utils/factories';
 import type { Message } from '../../../src/types';
 
-// The tools-sent row is developer detail, shown with "Show generation details" on (ToolMessages).
-beforeEach(() => {
-  const { useAppStore } = require('../../src/stores/appStore');
-  useAppStore.setState((state: { settings: object }) => ({ settings: { ...state.settings, showGenerationDetails: true } }));
-});
 
 
 const makeToolResult = (overrides: Partial<Message>): Message =>
@@ -50,7 +45,7 @@ describe('Tool accordion — expand-state persistence across remount', () => {
     it('KEEPS expanded state when the message id changes streaming→finalized (regression)', () => {
       // Render the in-progress tool result (id === 'streaming') and expand it.
       const streaming = makeToolResult({ id: 'streaming', toolCallId: 'tc-stable-1' });
-      const first = render(<ChatMessage message={streaming} />);
+      const first = render(<ChatMessage showGenerationDetails message={streaming} />);
       fireEvent.press(first.getByTestId('tool-result-label-web_search'));
       expect(first.getByText('Detailed search results')).toBeTruthy();
 
@@ -59,7 +54,7 @@ describe('Tool accordion — expand-state persistence across remount', () => {
       // fresh mount mimics the keyExtractor 'streaming' → realId transition.
       first.unmount();
       const finalized = makeToolResult({ id: 'assistant-real-42', toolCallId: 'tc-stable-1' });
-      const second = render(<ChatMessage message={finalized} />);
+      const second = render(<ChatMessage showGenerationDetails message={finalized} />);
 
       // Old local-useState would reset to collapsed here (detail region gone).
       // With the store keyed by toolCallId, it stays expanded.
@@ -68,7 +63,7 @@ describe('Tool accordion — expand-state persistence across remount', () => {
 
     it('toggles open and closed on tap', () => {
       const msg = makeToolResult({ id: 'm1', toolCallId: 'tc-a' });
-      const { getByTestId, queryByText, getByText } = render(<ChatMessage message={msg} />);
+      const { getByTestId, queryByText, getByText } = render(<ChatMessage showGenerationDetails message={msg} />);
 
       // Starts collapsed: detail content not shown.
       expect(queryByText('Detailed search results')).toBeNull();
@@ -86,8 +81,8 @@ describe('Tool accordion — expand-state persistence across remount', () => {
       // Render both in one tree so a single store update projects to both rows.
       const { getAllByTestId, getByText, queryByText } = render(
         <>
-          <ChatMessage message={makeToolResult({ id: 'ma', toolCallId: 'tc-a', content: 'Result A body' })} />
-          <ChatMessage message={makeToolResult({ id: 'mb', toolCallId: 'tc-b', content: 'Result B body' })} />
+          <ChatMessage showGenerationDetails message={makeToolResult({ id: 'ma', toolCallId: 'tc-a', content: 'Result A body' })} />
+          <ChatMessage showGenerationDetails message={makeToolResult({ id: 'mb', toolCallId: 'tc-b', content: 'Result B body' })} />
         </>,
       );
 
