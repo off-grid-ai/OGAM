@@ -194,7 +194,7 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
                           hitSlop={SPACING.md}
                           testID="failed-retry-button"
                           accessibilityRole="button"
-                          accessibilityLabel={`Retry ${item.fileName}`}
+                          accessibilityLabel={`Retry ${downloadDisplayName(item)}`}
                           onPress={() => onRetry(item)}
                         >
                           <Icon
@@ -209,7 +209,7 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
                       hitSlop={SPACING.md}
                       testID="failed-remove-button"
                       accessibilityRole="button"
-                      accessibilityLabel={`Remove ${item.fileName}`}
+                      accessibilityLabel={`Remove ${downloadDisplayName(item)}`}
                       onPress={() => onRemove(item)}
                     >
                       <Icon name="trash-2" size={14} color={colors.textMuted} />
@@ -238,7 +238,7 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
                       style={styles.transferIconButton}
                       testID="remove-download-button"
                       accessibilityRole="button"
-                      accessibilityLabel={`Remove ${item.fileName}`}
+                      accessibilityLabel={`Remove ${downloadDisplayName(item)}`}
                       hitSlop={6}
                       onPress={() => onRemove(item)}
                     >
@@ -255,9 +255,12 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
               >
                 {presented.detailText}
               </Text>
-              <Text style={styles.progressText}>
-                {presented.percentageText}
-              </Text>
+              {/* No bar, no percent: "0%" beside a failure that never started meant nothing. */}
+              {item.status === 'failed' && percentage === 0 ? null : (
+                <Text style={styles.progressText}>
+                  {presented.percentageText}
+                </Text>
+              )}
             </View>
           </View>
           <View style={styles.downloadMeta}>
