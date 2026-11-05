@@ -175,10 +175,11 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingTop: SPACING.sm,
   },
   // A bare glyph, as on Chats: no grey disc behind it.
-  chatIcon: {
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    marginRight: SPACING.md,
+  projectPurpose: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
+    paddingHorizontal: SPACING.xl,
+    marginBottom: SPACING.sm,
   },
   chatContent: {
     flex: 1,

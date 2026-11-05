@@ -140,9 +140,8 @@ export const ProjectDetailScreen: React.FC = () => {
           style={styles.chatItem}
           onPress={() => handleChatPress(item)}
         >
-          <View style={styles.chatIcon}>
-            <Icon name="message-circle" size={14} color={colors.textMuted} />
-          </View>
+          {/* Title, date, preview: as the Chats list. A chat glyph on every row and a chevron under
+              the date said nothing the row did not (hand test 33). */}
           <View style={styles.chatContent}>
             <View style={styles.chatHeader}>
               <Text style={styles.chatTitle} numberOfLines={1}>
@@ -156,7 +155,6 @@ export const ProjectDetailScreen: React.FC = () => {
               </Text>
             ) : null}
           </View>
-          <Icon name="chevron-right" size={14} color={colors.textMuted} />
         </TouchableOpacity>
       </Swipeable>
     );
@@ -203,6 +201,12 @@ export const ProjectDetailScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      {/* What the project is for, under its name, so the page says why these chats are together. */}
+      {project.description?.trim() && project.description.trim().toLowerCase() !== project.name.trim().toLowerCase() ? (
+        <Text style={styles.projectPurpose} numberOfLines={2}>
+          {project.description.trim()}
+        </Text>
+      ) : null}
       <View style={styles.tabRow}>
         <View style={styles.tabs} accessibilityRole="tablist">
           {(['chats', 'knowledge'] as const).map(id => (
