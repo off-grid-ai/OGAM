@@ -380,3 +380,10 @@ Labels sentence case, sheet Transcription row and gutter pass. Top 3:
 1. A blank prompt ("\n") is sent as the prompt while the row says "Built-in prompt": one resolver that trims, used by chat, the OpenAI builder and the debug sheet; save '' for whitespace.
 2. Home's Sync row shows the local count ("5 saved") on cold start before the list loads.
 3. Projects rows: drop the repeated folder glyph, hide a description equal to the name, add a Mono last-used time. Also: Text to speech value; the sheet header on the 24 pt gutter.
+
+## Supervisor 03:55 (hand test 33, build at 7cce9d642)
+
+Projects rows, "Built-in prompt" and the scan switch pass. No lost behaviour (DebugSheet has no entry point on the phone). Top 3:
+1. The five enabled tools (DeepWiki, web) take over "who are you" on a plain turn. This is the user's enabledTools setting; offering tools only when needed is Mac's call (asked).
+2. Chat: "_Model loaded…_" shows its underscores; Generation details does not show the system prompt sent.
+3. Downloads: size, quant and date on one Mono line; sentence-case chips plus Video; a failed row says why and offers Retry.
