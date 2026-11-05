@@ -472,3 +472,10 @@ Badge equals the list (2), tab underline on the line, Your videos Back 44, Appea
 2. Downloads failed row puts Retry/Delete on their own line with 40 pt of air; footer toggles 29 pt; new-film-go 40.
 3. Dark choice box may overhang the card by 2 pt; Chats search filter lags on 1268 chats.
 Milestone shots: docs/play/r12-milestone/{settings,downloads,chat}-after.png.
+
+## Supervisor 10:40 (hand test 46, build at 2b9acb8ee) — first-run walk
+
+Chats header compact again, failed row tighter, Models and Settings pass. Top 3:
+1. First reply to "What can you do here?" claims Tongyi Lab and a browser; nothing about Off Grid AI. The built-in prompt should say what the app is and does.
+2. Downloads failed/paused rows: Retry and Delete still on their own line; put them on the title line.
+3. Tab switches take 2 s+ (1269 chats); Chats Select/New 38 pt. Also: attach hides while typing (intended?), Sync row uses "-" not "·", "Multilingual MiniLM L12" is jargon.
