@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Pressable, TouchableOpacity } from '../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -7,6 +7,7 @@ import { Button, Card } from '../components';
 import { LoadingDots } from '../components/LoadingDots';
 import { AliveScreen } from '../components/AliveScreen';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { cardSurface } from '../theme/surface';
 import { SLOTS, useSlot } from '../bootstrap/slotRegistry';
 import { SPACING, TYPOGRAPHY } from '../constants';
 import type { RootStackParamList } from '../navigation/types';
@@ -119,6 +120,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
   if (snapshot.phase === 'loading_catalog')
     return (
       <AliveScreen style={styles.container}>
+        {openedFromApp && <ScreenHeader title="Choose models" onBack={navigation.goBack} />}
         <View style={styles.center}>
           <LoadingDots color={colors.primary} />
           <Text style={styles.secondary}>
@@ -436,13 +438,12 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   secondary: { ...TYPOGRAPHY.body, color: colors.textSecondary, textAlign: 'left' as const },
   planGrid: { gap: SPACING.xs },
   planCard: {
-    borderWidth: 1,
-    borderColor: colors.border,
+    ...cardSurface(colors),
     gap: SPACING.xs,
     padding: SPACING.sm,
-    borderRadius: SPACING.sm,
   },
-  selectedCard: { borderColor: colors.primary },
+  // The chosen plan: desktop's chosen state, a faint emerald fill under an emerald hairline.
+  selectedCard: { backgroundColor: colors.selectedFill, borderColor: colors.heroBorder },
   planHeader: {
     gap: SPACING.xs,
     minHeight: 44,
@@ -455,8 +456,8 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   planTitle: { ...TYPOGRAPHY.h3, color: colors.text, textAlign: 'left' as const },
   expandedPlan: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderLight,
     marginTop: SPACING.xs,
     paddingTop: SPACING.xs,
     gap: SPACING.xs,
@@ -467,8 +468,8 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     gap: SPACING.sm,
     minHeight: 44,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
   },
   unavailableItem: {
     padding: SPACING.sm,
@@ -521,7 +522,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     overflow: 'hidden' as const,
   },
   progressFill: { height: SPACING.xs, backgroundColor: colors.primary },
-  errorCard: { gap: SPACING.md, borderWidth: 1, borderColor: colors.error },
+  errorCard: { gap: SPACING.md },
   consentRow: { gap: SPACING.xs },
   consentToggle: {
     flexDirection: 'row' as const,
