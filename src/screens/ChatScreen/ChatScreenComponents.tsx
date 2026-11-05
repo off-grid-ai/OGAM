@@ -144,7 +144,7 @@ export const ChatHeader: React.FC<{
             <Icon name="file-text" size={16} color={colors.textSecondary} />
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={styles.iconButton} onPress={() => setShowSettingsPanel(true)} testID="chat-settings-icon">
+        <TouchableOpacity style={styles.iconButton} onPress={() => setShowSettingsPanel(true)} testID="chat-settings-icon" accessibilityRole="button" accessibilityLabel="Chat settings" hitSlop={7}>
           <Icon name="sliders" size={16} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>

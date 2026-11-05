@@ -16,9 +16,12 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     // On the living field like every header: no surface slab.
     zIndex: 2,
   },
+  // 44pt targets for the header's controls.
   backButton: {
-    padding: SPACING.xs,
-    marginRight: SPACING.md,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center' as const,
+    marginRight: SPACING.sm,
   },
   headerCenter: {
     flex: 1,
@@ -33,7 +36,10 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     flex: 1,
   },
   editButton: {
-    padding: SPACING.sm,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   projectInfo: {
     padding: SPACING.lg,

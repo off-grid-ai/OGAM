@@ -196,6 +196,8 @@ export const ProjectDetailScreen: React.FC = () => {
         <TouchableOpacity
           onPress={() => navigation.navigate('ProjectEdit', { projectId })}
           style={styles.editButton}
+          accessibilityRole="button"
+          accessibilityLabel="Edit project"
         >
           <Icon name="edit-2" size={16} color={colors.textSecondary} />
         </TouchableOpacity>
@@ -283,7 +285,7 @@ export const ProjectDetailScreen: React.FC = () => {
                 <Text style={styles.emptyStateText}>No chats yet</Text>
                 {hasModels && (
                   <Button
-                    title="Start a chat"
+                    title="New chat"
                     variant="primary"
                     size="small"
                     onPress={handleNewChat}
