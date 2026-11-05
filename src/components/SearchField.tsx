@@ -36,6 +36,8 @@ export const SearchField: React.FC<SearchFieldProps> = ({ value, onChangeText, p
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={colors.textMuted}
+        // A placeholder is not a name: it goes once you type. The field keeps it as its label.
+        accessibilityLabel={placeholder}
         style={styles.input}
         autoCapitalize="none"
         autoCorrect={false}
