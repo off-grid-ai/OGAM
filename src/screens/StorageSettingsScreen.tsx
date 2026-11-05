@@ -182,21 +182,21 @@ export const StorageSettingsScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Breakdown</Text>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
-              <Icon name="cpu" size={18} color={colors.primary} />
+              <Icon name="cpu" size={18} color={colors.textSecondary} />
               <Text style={styles.infoLabel}>Chat models</Text>
             </View>
             <Text style={styles.infoValue}>{chatModelCount}</Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
-              <Icon name="image" size={18} color={colors.primary} />
+              <Icon name="image" size={18} color={colors.textSecondary} />
               <Text style={styles.infoLabel}>Image models</Text>
             </View>
             <Text style={styles.infoValue}>{downloadedImageModels.length}</Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
-              <Icon name="video" size={18} color={colors.primary} />
+              <Icon name="video" size={18} color={colors.textSecondary} />
               <Text style={styles.infoLabel}>Video models</Text>
             </View>
             <Text style={styles.infoValue}>{downloadedVideoModels.length}</Text>
@@ -218,35 +218,35 @@ export const StorageSettingsScreen: React.FC = () => {
           ))}
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
-              <Icon name="search" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Search models</Text>
+              <Icon name="search" size={18} color={colors.textSecondary} />
+              <Text style={styles.infoLabel}>Document search</Text>
             </View>
             <Text style={styles.infoValue}>{hardwareService.formatBytes(extra.search)}</Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
-              <Icon name="mic" size={18} color={colors.primary} />
+              <Icon name="mic" size={18} color={colors.textSecondary} />
               <Text style={styles.infoLabel}>Speech-to-text models</Text>
             </View>
             <Text style={styles.infoValue}>{transcriptionModelCount}</Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
-              <Icon name="volume-2" size={18} color={colors.primary} />
+              <Icon name="volume-2" size={18} color={colors.textSecondary} />
               <Text style={styles.infoLabel}>Voices</Text>
             </View>
             <Text style={styles.infoValue}>{speechModelCount}</Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
-              <Icon name="hard-drive" size={18} color={colors.primary} />
+              <Icon name="hard-drive" size={18} color={colors.textSecondary} />
               <Text style={styles.infoLabel}>Chat, image, video and search models</Text>
             </View>
             <Text style={styles.infoValue}>{hardwareService.formatBytes(storageUsed)}</Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
-              <Icon name="film" size={18} color={colors.primary} />
+              <Icon name="film" size={18} color={colors.textSecondary} />
               <Text style={styles.infoLabel}>Videos and films</Text>
             </View>
             <Text style={styles.infoValue}>
@@ -255,14 +255,14 @@ export const StorageSettingsScreen: React.FC = () => {
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
-              <Icon name="file-text" size={18} color={colors.primary} />
+              <Icon name="file-text" size={18} color={colors.textSecondary} />
               <Text style={styles.infoLabel}>Document search index</Text>
             </View>
             <Text style={styles.infoValue}>{hardwareService.formatBytes(extra.index)}</Text>
           </View>
           <View style={[styles.infoRow, styles.lastRow]}>
             <View style={styles.infoRowLeft}>
-              <Icon name="message-circle" size={18} color={colors.primary} />
+              <Icon name="message-circle" size={18} color={colors.textSecondary} />
               <Text style={styles.infoLabel}>Conversations</Text>
             </View>
             <Text style={styles.infoValue}>{conversations.length}</Text>

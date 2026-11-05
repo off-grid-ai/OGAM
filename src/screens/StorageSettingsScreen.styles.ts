@@ -93,9 +93,10 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.body,
     color: colors.text,
   },
+  // A size is a fact, not an accent (brand: emerald only for what is in use or chosen).
   infoValue: {
     ...TYPOGRAPHY.body,
-    color: colors.primary,
+    color: colors.text,
   },
   indented: { flex: 1, marginLeft: SPACING.xl + SPACING.xs, color: colors.textSecondary },
   modelRow: {
