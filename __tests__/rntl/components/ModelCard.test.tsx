@@ -68,7 +68,7 @@ describe('ModelCard', () => {
         />
       );
       // Both the size caption and the percent render (full-width bar + left/right row).
-      expect(getByText('2.0 GB / 4.0 GB · Rate unavailable')).toBeTruthy();
+      expect(getByText('2.0 GB / 4.0 GB')).toBeTruthy();
       expect(getByText('50%')).toBeTruthy();
     });
 
@@ -277,7 +277,7 @@ describe('ModelCard', () => {
           downloadCount={2}
         />
       );
-      expect(getByText('1.5 GB / 10.0 GB · Rate unavailable · 2 downloads')).toBeTruthy();
+      expect(getByText('1.5 GB / 10.0 GB · 2 downloads')).toBeTruthy();
     });
 
     it('omits the "N downloads" note for a single download', () => {
@@ -291,7 +291,7 @@ describe('ModelCard', () => {
           downloadCount={1}
         />
       );
-      expect(getByText('2.0 GB / 4.0 GB · Rate unavailable')).toBeTruthy();
+      expect(getByText('2.0 GB / 4.0 GB')).toBeTruthy();
       expect(queryByText(/downloads/)).toBeNull();
     });
 

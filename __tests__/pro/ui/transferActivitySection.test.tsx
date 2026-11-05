@@ -353,7 +353,7 @@ describePro('the Activity list', () => {
     expect(ui.getByText(/25%/)).toBeTruthy();
     expect(ui.getByText(/MB \/ /)).toBeTruthy();
     expect(ui.queryByText(/MB\/s/)).toBeNull();
-    expect(ui.getByText(/Rate unavailable/)).toBeTruthy();
+    expect(ui.queryByText(/Rate unavailable/)).toBeNull();
   });
 
   it('shows the live rate for an ordinary file transfer', () => {

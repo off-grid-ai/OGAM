@@ -274,7 +274,7 @@ describe('DownloadManagerScreen', () => {
     const { view } = await openManager(ctx =>
       nativeDownloads(ctx, [runningText({ fileName: 'active-model.gguf', bytesDownloaded: 256, totalBytes: 1024, combinedTotalBytes: 1024 })]),
     );
-    expect(view.getByText('256 B / 1 KB · Rate unavailable')).toBeTruthy();
+    expect(view.getByText('256 B / 1 KB')).toBeTruthy();
     expect(view.getByText('25%')).toBeTruthy();
   });
 

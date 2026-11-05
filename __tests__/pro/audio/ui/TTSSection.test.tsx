@@ -182,9 +182,9 @@ describe('when a voice model is ready', () => {
     await app.rtl.waitFor(() => expect(app.store().pendingVoiceId).toBe('bf_emma'));
     expect(getByTestId('chat-tts-language-download-status')).toBeTruthy();
     expect(queryByTestId('icon-check-circle')).toBeNull();
-    // The fetcher reports a fraction only (no byte counts), so the rate reads unavailable.
+    // The fetcher reports a fraction only (no byte counts), so no rate shows.
     await app.rtl.waitFor(() =>
-      expect(getByText('Downloading English (UK) voice - 42% · Rate unavailable')).toBeTruthy(),
+      expect(getByText('Downloading English (UK) voice - 42%')).toBeTruthy(),
     );
 
     // A second selection cannot start while one voice is still being prepared.
