@@ -44,3 +44,17 @@ it('marks a table wrong, then right, and keeps a missed question for review', as
   rtl.fireEvent.press(r.getByTestId('practice-check'));
   expect(r.getByTestId('practice-result').props.children.join('')).toMatch(/Correct/);
 });
+
+it('starts code-made accounting drills without any documents and marks a wrong entry', () => {
+  const rtl = requireRTL();
+  const React = require('react');
+  const { PracticeScreen } = require('../../src/screens/PracticeScreen');
+  const { useExerciseStore } = require('../../src/study/exercises');
+  const r = rtl.render(React.createElement(PracticeScreen));
+  rtl.fireEvent.press(r.getByTestId('practice-drills'));
+  expect(r.getByTestId('practice-prompt')).toBeTruthy();
+  const first = useExerciseStore.getState().exercises;
+  expect(Object.keys(first).length).toBeGreaterThanOrEqual(6);
+  rtl.fireEvent.press(r.getByTestId('practice-check')); // nothing entered yet
+  expect(r.getByTestId('practice-result').props.children.join('')).toMatch(/Not quite/);
+});
