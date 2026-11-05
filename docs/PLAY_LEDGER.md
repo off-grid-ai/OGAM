@@ -201,3 +201,9 @@ Pass: Home, Settings top level, Chats clock times. Fail: Settings sub-pages (Mod
 2. Every Settings sub-page and the Download manager on the one surface with the emerald rules.
 3. Models: one clear "In use" mark, one quiet tick for downloaded, "Document search" everywhere.
 - Also: a swiped Chats row closes on a tap or a scroll (`7eca8a4da`).
+
+## Supervisor 19:17 — hand test 5
+Did not work on the phone: "In use" (the Text list uses the compact card, which has no badge), readable search sources (the step shows the cut text the model got, not valid JSON). Storage shows 0 B while loading, and lists an in-use model's vision projector (mmproj) as orphaned: deleting it would break image reading. Pro's licence section still emerald and Mono. Chat progress now shows.
+1. Search step from a tolerant reader (cut results), one "Searched the web" line, a test with a cut result.
+2. "In use" in the compact card and on Documents.
+3. Storage: never call an in-use projector orphaned; a loading state, not 0 B; plain copy. Then Pro's licence section.
