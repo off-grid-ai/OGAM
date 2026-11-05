@@ -193,7 +193,8 @@ const createTextModelsStyles = (colors: ThemeColors, _shadows: ThemeShadows) => 
     paddingHorizontal: SPACING.md,
     marginBottom: 16,
   },
-  recommendedTitle: { ...TYPOGRAPHY.meta, color: colors.textMuted, marginBottom: SPACING.md },
+  // The same kicker as "For this phone" above it: one section-label style on the tab.
+  recommendedTitle: { ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, letterSpacing: 0.3, color: colors.textMuted, marginBottom: SPACING.sm },
 });
 
 export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
