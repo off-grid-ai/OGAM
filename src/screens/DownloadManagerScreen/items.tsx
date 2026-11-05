@@ -162,22 +162,28 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
         <>
           <View style={styles.progressContainer}>
             <View style={styles.transferRow}>
-              <View
-                style={[
-                  styles.progressBarBackground,
-                  styles.transferProgressBar,
-                ]}
-              >
+              {/* A failed download that never started has no progress to show; an empty bar beside
+                  Retry read as stuck (hand test 34). It keeps the bar once some bytes arrived. */}
+              {item.status === 'failed' && percentage === 0 ? (
+                <View style={styles.transferProgressBar} />
+              ) : (
                 <View
                   style={[
-                    styles.progressBarFill,
-                    {
-                      width: `${percentage}%` as const,
-                      backgroundColor: progressColor,
-                    },
+                    styles.progressBarBackground,
+                    styles.transferProgressBar,
                   ]}
-                />
-              </View>
+                >
+                  <View
+                    style={[
+                      styles.progressBarFill,
+                      {
+                        width: `${percentage}%` as const,
+                        backgroundColor: progressColor,
+                      },
+                    ]}
+                  />
+                </View>
+              )}
               <View style={styles.transferActions}>
                 {item.status === 'failed' ? (
                   <>
