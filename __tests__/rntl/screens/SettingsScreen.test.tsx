@@ -106,9 +106,9 @@ describe('SettingsScreen', () => {
   });
 
   it.each([
-    ['Remote Servers', 'RemoteServers'],
+    ['Remote servers', 'RemoteServers'],
     ['Security', 'SecuritySettings'],
-    ['Device Information', 'DeviceInfo'],
+    ['Device information', 'DeviceInfo'],
     ['Storage', 'StorageSettings'],
   ])('navigates to its settings screen when %s is pressed', async (label, route) => {
     const { getByText, findByTestId } = renderSettings();
