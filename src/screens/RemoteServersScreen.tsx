@@ -376,9 +376,8 @@ export const RemoteServersScreen: React.FC = () => {
                       accessibilityRole="button"
                       accessibilityLabel="Test"
                       accessibilityState={{ busy: isTesting, disabled: isTesting }}
-                      hitSlop={8}
                     >
-                      <Icon name="refresh-cw" size={16} color={theme.colors.textSecondary} />
+                      <Icon name="activity" size={16} color={theme.colors.textSecondary} />
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.serverAction}
@@ -389,7 +388,6 @@ export const RemoteServersScreen: React.FC = () => {
                       }
                       accessibilityRole="button"
                       accessibilityLabel="Edit"
-                      hitSlop={8}
                     >
                       <Icon name="edit-2" size={16} color={theme.colors.textSecondary} />
                     </TouchableOpacity>
@@ -398,7 +396,6 @@ export const RemoteServersScreen: React.FC = () => {
                       onPress={() => handleDeleteServer(server)}
                       accessibilityRole="button"
                       accessibilityLabel="Remove"
-                      hitSlop={8}
                     >
                       <Icon name="trash-2" size={16} color={theme.colors.textSecondary} />
                     </TouchableOpacity>

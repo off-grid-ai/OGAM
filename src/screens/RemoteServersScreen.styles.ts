@@ -178,11 +178,11 @@ export function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
     serverActions: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
-      gap: SPACING.xs,
     },
+    // 44pt boxes side by side: full touch targets with no overlap between neighbours.
     serverAction: {
-      width: 36,
-      height: 36,
+      width: 44,
+      height: 44,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
     },
