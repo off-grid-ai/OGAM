@@ -294,6 +294,8 @@ export const SettingsScreen: React.FC = () => {
             style={styles.proNavButton}
             onPress={() => navigation.navigate('ProDetail')}
             activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel={`Off Grid AI Pro. ${proStatusLabel}`}
           >
             <View style={styles.proIconContainer}>
               <IconMC name="crown" size={18} color={colors.textSecondary} />
