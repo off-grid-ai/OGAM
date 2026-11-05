@@ -22,6 +22,8 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     flexDirection: 'row' as const,
     gap: 2,
     marginVertical: -8,
+    // The last glyph lands on the chevron column of the rows below (its 44 pt frame centres it 14 pt in).
+    marginRight: -14,
   },
   // 44 pt choices (they were 34 x 30): each is a target on its own.
   themeSelectorOption: {

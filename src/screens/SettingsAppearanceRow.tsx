@@ -28,7 +28,7 @@ export const SettingsAppearanceRow: React.FC<SettingsAppearanceRowProps> = ({
         <AnimatedEntry index={0} staggerMs={40} trigger={focusTrigger}>
           <View style={styles.navItem}>
             <View style={styles.navItemIcon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-              <Icon name="sun" size={16} color={colors.textSecondary} />
+              <Icon name="aperture" size={16} color={colors.textSecondary} />
             </View>
             <View style={styles.navItemContent}>
               <Text style={styles.navItemTitle}>Appearance</Text>
