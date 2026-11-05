@@ -3,6 +3,7 @@ import {
   View,
   Text,
   ScrollView,
+  StyleSheet,
 } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -191,8 +192,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   tierBadge: {
     ...TYPOGRAPHY.label,
     textTransform: 'uppercase' as const,
-    backgroundColor: `${colors.primary  }20`,
-    color: colors.primary,
+    color: colors.textSecondary,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
     borderRadius: 6,
@@ -202,18 +202,19 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexDirection: 'row' as const,
     gap: SPACING.sm,
   },
+  // Three tiers side by side on the card's surface; this phone's tier has desktop's chosen state.
   tierItem: {
     flex: 1,
     backgroundColor: 'transparent',
     borderRadius: 8,
     padding: SPACING.md,
     alignItems: 'center' as const,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'transparent',
   },
   tierItemActive: {
-    borderColor: colors.primary,
-    backgroundColor: 'transparent',
+    borderColor: colors.heroBorder,
+    backgroundColor: colors.selectedFill,
   },
   tierName: {
     ...TYPOGRAPHY.body,
@@ -224,12 +225,12 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.primary,
   },
   tierDesc: {
-    ...TYPOGRAPHY.bodySmall,
+    ...TYPOGRAPHY.meta,
     color: colors.textMuted,
     marginBottom: SPACING.xs,
   },
   tierModels: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
     textAlign: 'center' as const,
   },
