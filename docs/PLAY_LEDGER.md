@@ -329,3 +329,9 @@ Least desktop-like now: Models Text tab, Home, Settings.
 1. Models Text tab: picks as rows, shorter rows, one kicker style.
 2. The last shadows (search fields, voice mic, voice answer card).
 3. Home and Settings on one hairline surface; sentence case everywhere.
+
+## Supervisor 07:55 — hand test 26 (build 27, head ae34b2482)
+Pass: For this phone as rows (Text, Speech), one label style, flat search fields, flat mics and voice card, "New chat", "Gallery", "Last reply", answer visible while streaming. Fail: older [test] chats hold swapped answers ("Say hi in three words" holds a rivers answer and the reverse; a new chat did not) — investigating; More models rows about 100px; the 2B model's "But wait…" thinking inside the answer; project Back 28pt and unnamed edit/settings icons; "Start a chat" vs "New chat"; Chat settings "Use fastest settings" and Reset still slabs. Incident: a tap near the top opened Slack (a notification banner); nothing touched there.
+1. Swapped answers in older chats.
+2. More models rows 40–52px.
+3. Top-bar icons 44pt and named; one empty-state label.
