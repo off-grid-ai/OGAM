@@ -113,6 +113,28 @@ describe('ProDetailScreen', () => {
     ).toBeTruthy();
   });
 
+  // Hand test 15: a style edit once took the outline off the real Get Pro button instead of the status.
+  const boxStyle = (node: any) => {
+    const { StyleSheet } = require('react-native');
+    let n = node;
+    while (n && !(n.props?.style && (StyleSheet.flatten(n.props.style).borderWidth !== undefined || n.props.onPress))) n = n.parent;
+    return n ? StyleSheet.flatten(n.props.style) : {};
+  };
+
+  it('Get Pro is an outlined button for someone without Pro', () => {
+    const ui = render(<ProDetailScreen />);
+    expect(boxStyle(ui.getAllByText('Get Pro')[0]).borderWidth).toBe(1);
+  });
+
+  it('the Pro Active status has no outline, so it does not look tappable', async () => {
+    useAppStore.setState({ hasRegisteredPro: true });
+    const ui = render(<ProDetailScreen />);
+    await waitFor(() => expect(ui.getByText('Pro Active')).toBeTruthy());
+    const { StyleSheet } = require('react-native');
+    const status = ui.getByText('Pro Active').parent?.parent;
+    expect(StyleSheet.flatten(status?.props.style).borderWidth).toBeUndefined();
+  });
+
   it('shows the Off Grid AI Desktop link to Pro-active users too', async () => {
     useAppStore.setState({ hasRegisteredPro: true });
     const { getByText } = render(<ProDetailScreen />);

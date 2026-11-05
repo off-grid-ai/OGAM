@@ -304,20 +304,20 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     justifyContent: 'center' as const,
   },
   getProButton: {
-    // A status, not a button: a tick and words, no outline to tap at.
-    paddingVertical: SPACING.xs,
-  },
-  getProButtonText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
-  proActiveBadge: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: SPACING.xs,
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: colors.primary,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: 8,
+  },
+  getProButtonText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
+  proActiveBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.xs,
+    // A status, not a button: a tick and words, no outline to tap at.
+    paddingVertical: SPACING.xs,
   },
   proActiveBadgeText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
   proInactiveBadge: {},
