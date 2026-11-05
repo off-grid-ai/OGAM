@@ -151,7 +151,7 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
         item.modelType === 'tts'
           ? 'Voice'
           : item.modelType === 'stt'
-            ? 'Transcription'
+            ? 'Speech'
             : item.modelType === 'video'
               ? 'Video'
               : item.modelType === 'image'

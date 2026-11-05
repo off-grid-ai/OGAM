@@ -5,6 +5,7 @@
  * downloads.listVoiceModels hook (absent in free builds).
  */
 import { useState, useEffect, useCallback } from 'react';
+import RNFS from 'react-native-fs';
 import { AlertState, showAlert } from '../../components/CustomAlert';
 import { whisperService } from '../../services';
 import { useWhisperStore } from '../../stores';
@@ -20,11 +21,17 @@ async function loadItems(): Promise<DownloadItem[]> {
   try {
     const stt = await whisperService.listDownloadedModels();
     for (const m of stt) {
+      // The file's own time is when it arrived; these models have no store row that records it.
+      const downloadedAt = await RNFS.stat(m.filePath)
+        .then(stat => new Date(stat.mtime).toISOString())
+        .catch(() => undefined);
       items.push({
         type: 'completed', modelType: 'stt', modelId: m.modelId, fileName: m.fileName,
-        author: 'Transcription', quantization: '', fileSize: m.sizeBytes,
+        // "Speech", the Models tab and Downloads chip it sits under.
+        author: 'Speech', quantization: '', fileSize: m.sizeBytes,
         bytesDownloaded: m.sizeBytes, progress: 1, status: 'completed',
         filePath: m.filePath, name: transcriptionModelName(m.modelId),
+        ...(downloadedAt ? { downloadedAt } : {}),
       });
     }
   } catch {
