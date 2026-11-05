@@ -168,9 +168,12 @@ export const ONBOARDING_SLIDES: readonly OnboardingSlide[] = [
   },
 ];
 
-// Fonts
+// Fonts: the brand faces (ui-library/docs/direction/DESIGN_PHILOSOPHY.md §4). Geist for reading text,
+// controls and titles; Geist Mono for labels, numbers, timestamps and code. Both are bundled (iOS
+// UIAppFonts via the OffgridFonts pod, Android res/font families), so fontWeight picks the face.
 export const FONTS = {
-  mono: 'Menlo',
+  sans: 'Geist',
+  mono: 'Geist Mono',
 };
 
 // Typography Scale - Centralized font sizes and styles
@@ -186,19 +189,19 @@ export const TYPOGRAPHY = {
   // Headings
   h1: {
     fontSize: 24,
-    fontFamily: FONTS.mono,
+    fontFamily: FONTS.sans,
     fontWeight: '300' as const,
     letterSpacing: -0.5,
   },
   h2: {
     fontSize: 16,
-    fontFamily: FONTS.mono,
+    fontFamily: FONTS.sans,
     fontWeight: '400' as const,
     letterSpacing: -0.2,
   },
   h3: {
     fontSize: 13,
-    fontFamily: FONTS.mono,
+    fontFamily: FONTS.sans,
     fontWeight: '400' as const,
     letterSpacing: -0.2,
   },
@@ -206,12 +209,12 @@ export const TYPOGRAPHY = {
   // Body text
   body: {
     fontSize: 14,
-    fontFamily: FONTS.mono,
+    fontFamily: FONTS.sans,
     fontWeight: '400' as const,
   },
   bodySmall: {
     fontSize: 13,
-    fontFamily: FONTS.mono,
+    fontFamily: FONTS.sans,
     fontWeight: '400' as const,
   },
 
