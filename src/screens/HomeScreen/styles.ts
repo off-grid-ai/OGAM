@@ -126,16 +126,12 @@ const createModelCardStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
 });
 const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
-  galleryCard: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+  linksGroup: {
     marginBottom: SPACING.md,
+  },
+  galleryCard: {
+    ...listRowStyle,
     gap: SPACING.md,
-    ...shadows.small,
   },
   galleryCardInfo: {
     flex: 1,
@@ -213,13 +209,8 @@ const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textSecondary,
   },
   supportCard: {
-    marginBottom: SPACING.md,
+    ...listRowStyle,
     gap: SPACING.md,
-  },
-  supportHeader: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: SPACING.sm,
   },
   supportTitle: {
     ...TYPOGRAPHY.h3,

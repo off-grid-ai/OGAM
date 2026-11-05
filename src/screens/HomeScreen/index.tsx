@@ -13,6 +13,8 @@ import {
 } from '../../components';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
+import { LivingField } from '../../components/LivingField';
+import { ListGroup } from '../../components/ListGroup';
 import { useFocusTrigger } from '../../hooks/useFocusTrigger';
 import Icon from 'react-native-vector-icons/Feather';
 import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -188,6 +190,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View testID="home-screen" style={styles.scrollView}>
+        <LivingField />
         <ScrollView
           {...SCROLL_DEPTH_PROPS}
           style={styles.scrollView}
@@ -308,48 +311,47 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </AnimatedEntry>
           ) : null}
 
-          {/* Media Gallery */}
-          <AnimatedPressable
-            style={styles.galleryCard}
-            onPress={() => navigation.navigate('Gallery')}
-            hapticType="selection"
-            testID="home-gallery-card"
-          >
-            <Icon name="grid" size={18} color={colors.primary} />
-            <View style={styles.galleryCardInfo}>
-              <Text style={styles.galleryCardTitle}>Image Gallery</Text>
-              <Text style={styles.galleryCardMeta}>
-                {generatedImages.length} images · {generatedVideos.length}{' '}
-                videos
-              </Text>
-            </View>
-            <Icon name="chevron-right" size={16} color={colors.textMuted} />
-          </AnimatedPressable>
-
+          {/* Gallery and feedback: one surface with a hairline, not two boxes. */}
           <AnimatedEntry index={5} staggerMs={50} trigger={focusTrigger}>
-            <Card style={styles.supportCard} testID="home-support-card">
-              <View style={styles.supportHeader}>
-                <Icon name="message-square" size={18} color={colors.primary} />
-                <Text style={styles.supportTitle}>
-                  What should we build next?
-                </Text>
+            <ListGroup style={styles.linksGroup}>
+              <AnimatedPressable
+                style={styles.galleryCard}
+                onPress={() => navigation.navigate('Gallery')}
+                hapticType="selection"
+                testID="home-gallery-card"
+              >
+                <Icon name="grid" size={18} color={colors.textSecondary} />
+                <View style={styles.galleryCardInfo}>
+                  <Text style={styles.galleryCardTitle}>Image Gallery</Text>
+                  <Text style={styles.galleryCardMeta}>
+                    {generatedImages.length} images · {generatedVideos.length}{' '}
+                    videos
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={16} color={colors.textMuted} />
+              </AnimatedPressable>
+              <View style={styles.supportCard} testID="home-support-card">
+                <Icon name="message-square" size={18} color={colors.textSecondary} />
+                <View style={styles.galleryCardInfo}>
+                  <Text style={styles.supportTitle}>What should we build next?</Text>
+                  <Text style={styles.supportDescription}>
+                    Tell us what you would like to see in Off Grid AI Mobile.
+                  </Text>
+                </View>
+                <Button
+                  title="Write to us"
+                  variant="outline"
+                  size="small"
+                  onPress={() =>
+                    openSupportEmail({
+                      subject: '[Idea] Off Grid AI Mobile',
+                      body: 'Hi,\n\nI would like to see this in Off Grid AI Mobile:\n\n',
+                    })
+                  }
+                  testID="home-support-email"
+                />
               </View>
-              <Text style={styles.supportDescription}>
-                Tell us what you would like to see in Off Grid AI Mobile.
-              </Text>
-              <Button
-                title="Write to us"
-                variant="outline"
-                size="small"
-                onPress={() =>
-                  openSupportEmail({
-                    subject: '[Idea] Off Grid AI Mobile',
-                    body: 'Hi,\n\nI would like to see this in Off Grid AI Mobile:\n\n',
-                  })
-                }
-                testID="home-support-email"
-              />
-            </Card>
+            </ListGroup>
           </AnimatedEntry>
 
           {/* Off Grid AI Desktop — live announcement; owns its own copy/dismiss state. */}
