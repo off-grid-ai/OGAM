@@ -240,6 +240,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? (
             <Button
               title="New Chat"
+              variant="hero"
               onPress={startNewChat}
               style={styles.newChatButton}
               testID="new-chat-button"

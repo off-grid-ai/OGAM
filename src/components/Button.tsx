@@ -13,7 +13,8 @@ const LOADER_LINE_BOX = 1.4;
 interface ButtonProps {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+  /** `hero`: the one main action on a screen, filled emerald so it is the brightest thing there. */
+  variant?: 'primary' | 'hero' | 'secondary' | 'outline' | 'ghost' | 'danger';
   size?: 'small' | 'medium' | 'large';
   /** Highlighted state for toggle buttons */
   active?: boolean;
@@ -80,7 +81,7 @@ export const Button: React.FC<ButtonProps> = ({
         // The dots, not a ring spinner: a rotating ring on a button reads as a retry glyph, so
         // "Pair" and "Share" both looked like they had failed the moment they started working.
         <LoadingDots
-          color={variant === 'primary' ? colors.primary : colors.textSecondary}
+          color={variant === 'hero' ? colors.background : variant === 'primary' ? colors.primary : colors.textSecondary}
           style={styles[`loader_${size}`]}
         />
       ) : (
@@ -107,6 +108,12 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
+    ...shadows.glow,
+  },
+  button_hero: {
+    backgroundColor: colors.primary,
+    borderWidth: 1,
+    borderColor: colors.primary,
     ...shadows.glow,
   },
   button_secondary: {
@@ -151,6 +158,10 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   text_primary: {
     color: colors.primary,
+  },
+  text_hero: {
+    color: colors.background,
+    fontWeight: '500' as const,
   },
   text_secondary: {
     color: colors.text,
