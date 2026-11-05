@@ -303,3 +303,9 @@ Pass: a late Stop tap inside the rest changes nothing; the mic works after 2 s; 
 1. Stop code context reaching plain chats in the Default project.
 2. Speech models, Model settings sliders, About on one surface, one emerald.
 3. Edit project Cancel/Save 44pt; local image picks in search results.
+
+## Supervisor 04:15 — hand test 22 (build 23, head 536662561)
+Pass: Speech models (quiet line, shared search, one surface per group), Text/Image quiet line, "Start a chat", Edit project 44pt. Fail: a reply after a DeepWiki tool call and a mid-turn "Compacting" streamed out of sight for about 3 minutes (only Stop showed; the answer appeared on Stop) — investigating; raw LaTeX in the answer bubble; slider knob a near-black capsule and values boxed, "Thinking Budget"/"Max Tokens"/"Reset All Settings" title case; the project's Knowledge base tab has its own old empty state; a red trash beside the document toggle. Incident: the supervisor's tap for a tab bar hit "Reset to defaults" on Model settings, then Cancel; nothing reset.
+1. Show the reply while it streams (investigating).
+2. Maths in the answer bubble.
+3. Project Knowledge base tab: the same empty state; slider knob and labels.
