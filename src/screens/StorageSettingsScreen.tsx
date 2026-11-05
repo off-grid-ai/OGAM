@@ -39,6 +39,9 @@ export const StorageSettingsScreen: React.FC = () => {
   const [storageUsed, setStorageUsed] = useState(0);
   const [availableStorage, setAvailableStorage] = useState(0);
   const [extra, setExtra] = useState({ videos: 0, search: 0, index: 0 });
+  // Until the first measurement lands, sizes read "Measuring…", never a false "0 B".
+  const [measured, setMeasured] = useState(false);
+  const size = (bytes: number) => (measured ? hardwareService.formatBytes(bytes) : 'Measuring…');
   const generatedVideoCount = useAppStore(s => s.generatedVideos.length);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
@@ -79,6 +82,7 @@ export const StorageSettingsScreen: React.FC = () => {
     setExtra({ videos, search, index });
     setStorageUsed(used + imageStorageUsed + videoStorageUsed + search);
     setAvailableStorage(available);
+    setMeasured(true);
   }, [imageStorageUsed, downloadedVideoModels]);
 
   const confirmDeleteVideoPack = (id: string, name: string) => {
@@ -161,7 +165,7 @@ export const StorageSettingsScreen: React.FC = () => {
                 style={[styles.legendDot, { backgroundColor: colors.primary }]}
               />
               <Text style={styles.legendText}>
-                Used: {hardwareService.formatBytes(storageUsed)}
+                Used: {size(storageUsed)}
               </Text>
             </View>
             <View style={styles.legendItem}>
@@ -172,7 +176,7 @@ export const StorageSettingsScreen: React.FC = () => {
                 ]}
               />
               <Text style={styles.legendText}>
-                Free: {hardwareService.formatBytes(availableStorage)}
+                Free: {size(availableStorage)}
               </Text>
             </View>
           </View>
@@ -221,7 +225,7 @@ export const StorageSettingsScreen: React.FC = () => {
               <Icon name="search" size={18} color={colors.textSecondary} />
               <Text style={styles.infoLabel}>Document search</Text>
             </View>
-            <Text style={styles.infoValue}>{hardwareService.formatBytes(extra.search)}</Text>
+            <Text style={styles.infoValue}>{size(extra.search)}</Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
@@ -242,7 +246,7 @@ export const StorageSettingsScreen: React.FC = () => {
               <Icon name="hard-drive" size={18} color={colors.textSecondary} />
               <Text style={styles.infoLabel}>Chat, image, video and search models</Text>
             </View>
-            <Text style={styles.infoValue}>{hardwareService.formatBytes(storageUsed)}</Text>
+            <Text style={styles.infoValue}>{size(storageUsed)}</Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
@@ -250,7 +254,7 @@ export const StorageSettingsScreen: React.FC = () => {
               <Text style={styles.infoLabel}>Videos and films</Text>
             </View>
             <Text style={styles.infoValue}>
-              {generatedVideoCount} · {hardwareService.formatBytes(extra.videos)}
+              {generatedVideoCount} · {size(extra.videos)}
             </Text>
           </View>
           <View style={styles.infoRow}>
@@ -258,7 +262,7 @@ export const StorageSettingsScreen: React.FC = () => {
               <Icon name="file-text" size={18} color={colors.textSecondary} />
               <Text style={styles.infoLabel}>Document search index</Text>
             </View>
-            <Text style={styles.infoValue}>{hardwareService.formatBytes(extra.index)}</Text>
+            <Text style={styles.infoValue}>{size(extra.index)}</Text>
           </View>
           <View style={[styles.infoRow, styles.lastRow]}>
             <View style={styles.infoRowLeft}>
