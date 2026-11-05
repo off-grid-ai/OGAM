@@ -7,12 +7,12 @@ import { formatFileSize } from '@offgrid/models';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { AnimatedPressable } from '../AnimatedPressable';
 import type { PickSlot } from '../../services/devicePicks';
-import { cardSurface } from '../../theme/surface';
+import { ListGroup } from '../ListGroup';
 import { MadeByOffGrid } from '../ModelCardContent';
 
 /**
- * Fast, Balanced and Best for this phone, at the top of a models tab: three small cards side by
- * side with the app's card depth, so the picks take one short row and the list starts high.
+ * Fast, Balanced and Best for this phone, at the top of a models tab: three short rows on one surface
+ * with hairlines (the list's own look), the kind on the left, the action on the right.
  */
 const PICK_LABELS: Record<PickSlot, string> = {
   fast: 'Fast',
@@ -44,15 +44,14 @@ export const PicksRow: React.FC<{ items: PickItem[]; testID?: string }> = ({ ite
   return (
     <View style={styles.section} testID={testID}>
       <Text style={styles.sectionLabel}>For this phone</Text>
-      <View style={styles.row}>
+      <ListGroup>
         {items.map(item => <PickCard key={item.slot} item={item} />)}
-      </View>
+      </ListGroup>
     </View>
   );
 };
 
-/** One pick: a small card with the app's card depth, side by side with the others, so the list
- *  below starts high. The action is the card's trailing icon. */
+/** One pick: a row of the group; the action is the row's trailing icon. */
 const PickCard: React.FC<{ item: PickItem }> = ({ item }) => {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
@@ -72,15 +71,15 @@ const PickCard: React.FC<{ item: PickItem }> = ({ item }) => {
   }
   return (
     <View style={[styles.card, state.kind === 'active' && styles.cardActive]} testID={`pick-${slot}`}>
-      <View style={styles.cardTop}>
-        <Text style={styles.slot}>{PICK_LABELS[slot]}</Text>
-        {action}
+      <Text style={styles.slot}>{PICK_LABELS[slot]}</Text>
+      <View style={styles.body}>
+        <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+        <View style={styles.meta}>
+          {item.madeByOffGrid && <MadeByOffGrid />}
+          <Text style={styles.size}>{formatFileSize(item.sizeBytes)}</Text>
+        </View>
       </View>
-      <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
-      <View style={styles.meta}>
-        {item.madeByOffGrid && <MadeByOffGrid />}
-        <Text style={styles.size}>{formatFileSize(item.sizeBytes)}</Text>
-      </View>
+      {action}
     </View>
   );
 };
@@ -100,17 +99,16 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, color: colors.textMuted,
     letterSpacing: 0.3, marginBottom: SPACING.sm,
   },
-  row: { flexDirection: 'row' as const, gap: SPACING.sm },
-  // The same depth as the app's compact model cards.
-  // One surface like every list (theme/surface); the pick in use gets desktop's chosen state.
+  // A row of the group: the kind, the model and its size, the action; about 52px tall.
   card: {
-    ...cardSurface(colors), flex: 1, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.sm,
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.md,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, minHeight: 52,
   },
-  cardActive: { backgroundColor: colors.selectedFill, borderColor: colors.heroBorder },
-  cardTop: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: SPACING.xs },
-  slot: { ...TYPOGRAPHY.labelSmall, textTransform: 'uppercase' as const, color: colors.textMuted, letterSpacing: 0.3 },
-  name: { ...TYPOGRAPHY.bodySmall, color: colors.text, minHeight: 34 },
+  cardActive: { backgroundColor: colors.selectedFill },
+  slot: { ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, color: colors.textMuted, letterSpacing: 0.3, width: 64 },
+  body: { flex: 1 },
+  name: { ...TYPOGRAPHY.body, color: colors.text },
   meta: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.xs, marginTop: 2 },
-  size: { ...TYPOGRAPHY.metaSmall, color: colors.textMuted },
+  size: { ...TYPOGRAPHY.meta, color: colors.textMuted },
   progress: { ...TYPOGRAPHY.meta, color: colors.textSecondary },
 });
