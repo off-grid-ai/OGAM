@@ -598,6 +598,11 @@ jest.mock('react-native-gesture-handler', () => {
       onStart: () => gesture,
       onUpdate: () => gesture,
       onEnd: () => gesture,
+      // The alive layer's listen-only gesture (AliveProvider): its touch callbacks are worklets.
+      onTouchesDown: () => gesture,
+      onTouchesMove: () => gesture,
+      onTouchesUp: () => gesture,
+      onTouchesCancelled: () => gesture,
     };
     return gesture;
   };
@@ -614,6 +619,7 @@ jest.mock('react-native-gesture-handler', () => {
       Pan: mockGestureBuilder,
       Tap: mockGestureBuilder,
       LongPress: mockGestureBuilder,
+      Manual: mockGestureBuilder,
       Race: (..._gestures: any[]) => ({}),
       Simultaneous: (..._gestures: any[]) => ({}),
       Exclusive: (..._gestures: any[]) => ({}),
@@ -629,11 +635,12 @@ jest.mock('react-native-worklets', () => ({}));
 
 // react-native-reanimated mock — fully manual to avoid loading native worklets
 jest.mock('react-native-reanimated', () => {
-  const { View, Text, Image } = require('react-native');
+  const { View, Text, Image, ScrollView } = require('react-native');
   return {
     __esModule: true,
     default: {
       createAnimatedComponent: (component: any) => component || View,
+      ScrollView,
       addWhitelistedNativeProps: jest.fn(),
       addWhitelistedUIProps: jest.fn(),
       View,
@@ -643,6 +650,10 @@ jest.mock('react-native-reanimated', () => {
     useSharedValue: jest.fn((init: any) => ({ value: init })),
     useAnimatedStyle: jest.fn((fn: any) => fn()),
     useDerivedValue: jest.fn((fn: any) => ({ value: fn() })),
+    // AliveProvider's scroll link: the ref, its offset, and the reaction that carries it to the field.
+    useAnimatedRef: jest.fn(() => ({ current: null })),
+    useScrollOffset: jest.fn(() => ({ value: 0 })),
+    useAnimatedReaction: jest.fn(),
     useAnimatedProps: jest.fn((fn: any) => fn()),
     useReducedMotion: jest.fn(() => false),
     css: {
