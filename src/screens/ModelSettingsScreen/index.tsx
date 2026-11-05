@@ -210,7 +210,7 @@ export const ModelSettingsScreen: React.FC = () => {
         )}
 
         <Button
-          title="Reset All to Defaults"
+          title="Reset to defaults"
           variant="ghost"
           size="small"
           onPress={handleReset}

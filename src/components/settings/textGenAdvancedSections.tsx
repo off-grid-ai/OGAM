@@ -39,20 +39,21 @@ const isAndroid = Platform.OS === 'android';
 type BackendOption = { id: InferenceBackend; label: string; desc: string };
 
 const IOS_BACKENDS: BackendOption[] = [
-  { id: INFERENCE_BACKENDS.CPU, label: 'CPU', desc: 'Always available. Stable, predictable performance.' },
-  { id: INFERENCE_BACKENDS.METAL, label: 'Metal', desc: 'Offload layers to GPU via Metal. Faster for larger models. Requires model reload.' },
+  { id: INFERENCE_BACKENDS.CPU, label: 'CPU', desc: 'Always works, at a steady speed.' },
+  // Display label 'GPU' as on Android (few people know Metal); id stays METAL.
+  { id: INFERENCE_BACKENDS.METAL, label: 'GPU', desc: 'Faster answers from larger models. Reloads the model.' },
 ];
 
 const ANDROID_BASE_BACKENDS: BackendOption[] = [
-  { id: INFERENCE_BACKENDS.CPU, label: 'CPU', desc: 'Always available. Stable, predictable performance.' },
+  { id: INFERENCE_BACKENDS.CPU, label: 'CPU', desc: 'Always works, at a steady speed.' },
   // Display label 'GPU' (users don't know OpenCL); id stays OPENCL.
-  { id: INFERENCE_BACKENDS.OPENCL, label: 'GPU', desc: 'Offload layers to GPU via OpenCL. Fast decode on Adreno GPUs. Requires model reload.' },
+  { id: INFERENCE_BACKENDS.OPENCL, label: 'GPU', desc: 'Faster answers on most phones. Reloads the model.' },
 ];
 
 const HTP_BACKEND: BackendOption = {
   id: INFERENCE_BACKENDS.HTP,
   label: 'NPU (Beta)',
-  desc: 'Experimental — works best with Llama- and Qwen-style models. Some models (e.g. Gemma) fall back to CPU or produce invalid output. Requires model reload.',
+  desc: 'Experimental. Fastest with Llama and Qwen models; Gemma can fail. Reloads the model.',
 };
 
 export const BackendSelector: React.FC = () => {
@@ -91,7 +92,7 @@ export const BackendSelector: React.FC = () => {
           <SliderSetting
             testID="gpu-layers-stepper"
             label={layersLabel}
-            description="Layers offloaded to GPU. Higher = faster but may crash on low-VRAM devices. Requires model reload."
+            description="More on the GPU is faster, but too much can crash a phone short on memory. Reloads the model."
             value={gpuLayersEffective}
             min={1} max={GPU_LAYERS_MAX} step={1}
             onChange={(value) => updateSettings({ gpuLayers: value })}
