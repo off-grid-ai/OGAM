@@ -80,7 +80,7 @@ export const BackendSelector: React.FC = () => {
 
   return (
     <SegmentedRow<InferenceBackend>
-      label="Text Model Backend"
+      label="Text model hardware"
       description={`Text model default for all chats. ${backends.find(b => b.id === current)?.desc ?? ''} Image and video engines select their own hardware.`}
       options={backends}
       current={current}
@@ -115,7 +115,7 @@ export const LiteRTBackendSelector: React.FC = () => {
   const current = settings.liteRTBackend === 'cpu' ? 'cpu' : 'gpu';
   return (
     <SegmentedRow<LiteRTBackend>
-      label="Text Model Acceleration"
+      label="Text model hardware"
       description={`Text model default for all chats. ${LITERT_BACKENDS.find(b => b.id === current)?.desc ?? ''} Image and video engines select their own hardware.`}
       options={LITERT_BACKENDS}
       current={current}
@@ -193,7 +193,7 @@ export const ModelLoadingModeSelector: React.FC = () => {
     settings.modelLoadingMode ?? (settings.aggressiveModelLoading ? 'aggressive' : 'balanced');
   return (
     <SegmentedRow<ModelLoadingMode>
-      label="Model Loading"
+      label="Model loading"
       description="Applies to all chats. Lean keeps ONE model in memory at a time. Balanced keeps models loaded together when they fit and swaps when they do not. Aggressive commits a larger share of RAM so bigger models load. You can always Load Anyway if a model is refused."
       options={MODE_OPTIONS}
       current={current}
