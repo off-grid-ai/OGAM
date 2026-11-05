@@ -7,6 +7,7 @@ import { formatFileSize } from '@offgrid/models';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { AnimatedPressable } from '../AnimatedPressable';
 import type { PickSlot } from '../../services/devicePicks';
+import { cardSurface } from '../../theme/surface';
 import { MadeByOffGrid } from '../ModelCardContent';
 
 /**
@@ -88,12 +89,12 @@ const IconAction: React.FC<{ icon: string; label: string; onPress: () => void; t
   const { colors } = useTheme();
   return (
     <AnimatedPressable onPress={onPress} accessibilityLabel={label} accessibilityRole="button" hitSlop={10} testID={testID}>
-      <Icon name={icon} size={16} color={colors.primary} />
+      <Icon name={icon} size={16} color={colors.textSecondary} />
     </AnimatedPressable>
   );
 };
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   section: { marginBottom: SPACING.md },
   sectionLabel: {
     ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, color: colors.textMuted,
@@ -101,12 +102,11 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   row: { flexDirection: 'row' as const, gap: SPACING.sm },
   // The same depth as the app's compact model cards.
+  // One surface like every list (theme/surface); the pick in use gets desktop's chosen state.
   card: {
-    flex: 1, backgroundColor: colors.surface, borderRadius: SPACING.sm, borderWidth: 1,
-    borderColor: colors.border, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.sm,
-    ...shadows.small,
+    ...cardSurface(colors), flex: 1, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.sm,
   },
-  cardActive: { borderWidth: 2, borderColor: colors.primary },
+  cardActive: { backgroundColor: colors.selectedFill, borderColor: colors.heroBorder },
   cardTop: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: SPACING.xs },
   slot: { ...TYPOGRAPHY.labelSmall, textTransform: 'uppercase' as const, color: colors.textMuted, letterSpacing: 0.3 },
   name: { ...TYPOGRAPHY.bodySmall, color: colors.text, minHeight: 34 },
