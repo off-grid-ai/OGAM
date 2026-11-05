@@ -247,7 +247,7 @@ function createMarkdownStyles(
       marginVertical: SPACING.md,
     },
     link: {
-      color: colors.primary,
+      color: colors.text,
       textDecorationLine: 'underline' as const,
     },
     paragraph: {
