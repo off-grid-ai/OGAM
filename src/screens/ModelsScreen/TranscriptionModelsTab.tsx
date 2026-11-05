@@ -11,7 +11,9 @@
  * the active one.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, TextInput } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
+import { SearchField } from '../../components/SearchField';
+import { GROUPED_CARD_ROW, ListGroup } from '../../components/ListGroup';
 import { TouchableOpacity } from '../../components/Touchable';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -110,6 +112,7 @@ const WhisperCard: React.FC<WhisperCardProps> = ({
   return (
     <ModelCard
       compact
+      style={GROUPED_CARD_ROW}
       model={{
         id: model.id,
         name: model.name,
@@ -339,7 +342,7 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
         <Icon
           name={remoteLabels.transcription ? 'cloud' : 'shield'}
           size={11}
-          color={colors.trending}
+          color={colors.textMuted}
         />
         <Text style={shared.deviceBannerText}>
           {showRemoteModels && remoteLabels.transcription
@@ -358,16 +361,12 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
         <RemoteModelOptionsSection category="transcription" />
       )}
 
-      <TextInput
-        style={styles.search}
+      <SearchField
+        style={styles.searchField}
         value={query}
         onChangeText={setQuery}
         placeholder="Search Hugging Face"
-        placeholderTextColor={colors.textMuted}
-        accessibilityLabel="Search speech models on Hugging Face"
-        autoCapitalize="none"
-        autoCorrect={false}
-        returnKeyType="search"
+        clearLabel="Clear speech model search"
         testID="speech-search-input"
       />
       {query.trim() ? (
@@ -377,7 +376,9 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
             <Text style={styles.status}>No models this phone can run. Try another name.</Text>
           ) : null}
           {searchError ? <Text style={styles.error}>{searchError}</Text> : null}
-          {results.map((m, i) => renderWhisperCard(m, whisperModels.length + i))}
+          {results.length > 0 && (
+            <ListGroup style={styles.group}>{results.map((m, i) => renderWhisperCard(m, whisperModels.length + i))}</ListGroup>
+          )}
         </>
       ) : null}
 
@@ -389,16 +390,20 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
       }))} />
 
       <Text style={styles.sectionLabel}>English only</Text>
-      {englishModels.map((m, i) => renderWhisperCard(m, i))}
+      <ListGroup style={styles.group}>{englishModels.map((m, i) => renderWhisperCard(m, i))}</ListGroup>
 
       <Text style={styles.sectionLabel}>Multilingual - 99 languages</Text>
       {/* The card keeps its catalogue position as its index, so a card means the same model whatever the picks are. */}
-      {multiModels.map((m, i) => (pickedIds.has(m.id) ? null : renderWhisperCard(m, englishModels.length + i)))}
+      <ListGroup style={styles.group}>
+        {multiModels.map((m, i) => (pickedIds.has(m.id) ? null : renderWhisperCard(m, englishModels.length + i)))}
+      </ListGroup>
 
       {asrModel ? (
         <>
           <Text style={styles.sectionLabel}>Multilingual - 30 languages</Text>
-          {renderWhisperCard(asrModel, whisperModels.length, 'transcription-model-card-qwen3-asr')}
+          <ListGroup style={styles.group}>
+            {renderWhisperCard(asrModel, whisperModels.length, 'transcription-model-card-qwen3-asr')}
+          </ListGroup>
         </>
       ) : null}
 
@@ -412,6 +417,8 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
 const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) =>
   ({
     flex: { flex: 1 },
+    group: { marginBottom: SPACING.md },
+    searchField: { marginBottom: SPACING.md },
     content: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.xs, paddingBottom: SPACING.xxl },
     sectionLabel: {
       ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, color: colors.textMuted,
