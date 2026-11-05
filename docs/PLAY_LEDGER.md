@@ -394,3 +394,10 @@ Downloads chips and dates, Text to speech value, sheet gutter and plain Mono not
 1. Downloads Speech rows: no date (useVoiceDownloadItems lacks downloadedAt); author "Transcription" vs the "Speech" chip; failed row has no reason and a dead 0% bar.
 2. Text to speech value shows the raw voice id ("am_michael"); show the voice's name.
 3. Touch targets and names: download chips under 44 pt and no selected state; sheet "Done" 34×16; unnamed icons (downloads, back, sort, filter, quick settings). Chat header on a 16 pt gutter.
+
+## Supervisor 04:55 (hand test 35, build at a4844cf30)
+
+Project purpose line, Speech dates, voice name and icon names pass. No lost behaviour. Top 3:
+1. Gallery: no dot field, 4 pt gutter, count twice, white images read as holes, indigo selection. AliveScreen, surface + hairline tiles, 24 pt gutter, emerald selection.
+2. Names: attach "+" unnamed; model selector and viewer labels leak glyphs; viewer not modal to a11y.
+3. Downloads: failed row and empty bar (fixed in b07b7814c / 8e56f1a13, not yet built); badge "4 in progress" over 1 paused + 1 failed.
