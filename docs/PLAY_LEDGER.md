@@ -422,3 +422,10 @@ Names, composer gutter, white tiles, failed-row copy, Pro named once pass. No lo
 1. Header model chip 101x16, sheet Done 34x17, Voice mode (fixed 412c349ae, not yet built).
 2. "•••" unnamed; Downloads wrench and Resume not reachable; Models sheet Eject 15 pt, not a button.
 3. Reply text at x=28 (fixed dd31472f7); "MODELS", "Eject All Models", "Refresh Models" Title Case; Pro row misaligned; Downloads Delete 37 pt.
+
+## Supervisor 06:45 (hand test 39, build at dc299649b)
+
+Every item in this build passes: header targets 44 and named, reply at 24, Done ink, Models sheet wording, model-row buttons 44 with rows unchanged, Pro row aligned. No regressions. Top 3:
+1. "Message actions" is folded into the message's label, not its own button; "•••" ~24 pt. Voice mode overlaps Chat settings by 9 pt.
+2. Downloads: Retry/Remove 33 pt, Back 28; Resume and the wrench not in the a11y tree.
+3. Models tab: Check for new models and Downloads 28, Sort/Filter/Import 38, picks Download 17. Pro row has no button role.
