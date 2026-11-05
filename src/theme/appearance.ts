@@ -44,7 +44,13 @@ export interface Appearance {
   layoutMode?: LayoutMode;
   density?: Density;
   chatLayout?: ChatLayout;
+  /** Corner roundness on top of the skin: 0 = square, 1 = as designed, 2 = very round. */
+  cornerRadius?: number;
+  /** A theme the person imported (see parseCustomTheme); overrides the chosen palette and accent. */
+  custom?: CustomTheme;
 }
+
+export interface CustomTheme { name: string; light?: Partial<ThemeColors>; dark?: Partial<ThemeColors>; cornerRadius?: number }
 
 type Surfaces = Pick<ThemeColors, 'background' | 'surface' | 'surfaceLight' | 'surfaceHover' | 'border' | 'borderLight' | 'divider'>;
 /** [background, surface, surfaceLight, surfaceHover, border, borderLight] */
@@ -209,15 +215,16 @@ export function applyAppearanceColors(base: ThemeColors, isDark: boolean, appear
   const accent = ACCENTS.find(a => a.id === appearance.accent);
   const bg = palette && (isDark ? palette.dark : palette.light);
   const ac = accent && (isDark ? accent.dark : accent.light);
+  const custom = appearance.custom && (isDark ? appearance.custom.dark : appearance.custom.light);
   const colorful = appearance.layoutMode === 'colorful';
   const colorfulAccent = isDark ? ACCENTS[3].dark : ACCENTS[5].light;
   const colorfulSurfaces = isDark
     ? surfaces(['#11152B', '#211D38', '#252F43', '#303950', '#3E4160', '#545B77'])
     : surfaces(['#F3F6FF', '#FFF9EC', '#E8F6F3', '#DFF0FF', '#D4DEED', '#B6CEED']);
-  if (!bg && !ac && !colorful) return base;
+  if (!bg && !ac && !colorful && !custom) return base;
   return { ...base, ...(colorful && !bg ? colorfulSurfaces : {}), ...(bg ?? {}),
     ...(colorful && !ac ? { ...colorfulAccent, borderFocus: colorfulAccent.primary } : {}),
-    ...(ac ? { ...ac, borderFocus: ac.primary } : {}) };
+    ...(ac ? { ...ac, borderFocus: ac.primary } : {}), ...(custom ?? {}) };
 }
 
 // TYPOGRAPHY is a shared constant read when style sheets are built, so the font family is
@@ -244,4 +251,32 @@ export function applyTypography(appearance?: Appearance): string {
     style.fontFamily = base.heading ? font.heading : font.body;
   }
   return key;
+}
+
+// ---------------------------------------------------------------- imported themes
+const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const COLOR_KEYS: Array<keyof ThemeColors> = ['background', 'surface', 'surfaceLight', 'surfaceHover', 'border', 'borderLight', 'divider', 'text', 'textSecondary', 'textMuted', 'primary', 'primaryDark', 'error', 'borderFocus'];
+const pickColors = (src: unknown, where: string): Partial<ThemeColors> => {
+  if (src === undefined) return {};
+  if (!src || typeof src !== 'object') throw new Error(`"${where}" must be an object of colors.`);
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(src as Record<string, unknown>)) {
+    if (!COLOR_KEYS.includes(k as keyof ThemeColors)) throw new Error(`Unknown colour "${k}" in ${where}. Allowed: ${COLOR_KEYS.join(', ')}.`);
+    if (typeof v !== 'string' || !HEX.test(v)) throw new Error(`"${k}" in ${where} must be a hex colour like #1a2b3c.`);
+    out[k] = v;
+  }
+  return out as Partial<ThemeColors>;
+};
+/** Reads a theme file (JSON text): {"name","light":{colours},"dark":{colours},"cornerRadius":0-2}. Every colour is checked; nothing is half-applied. */
+export function parseCustomTheme(text: string): { theme?: CustomTheme; error?: string } {
+  try {
+    const j = JSON.parse(text);
+    if (!j || typeof j !== 'object' || Array.isArray(j)) throw new Error('A theme file is a JSON object.');
+    const name = typeof j.name === 'string' && j.name.trim() ? j.name.trim().slice(0, 40) : 'My theme';
+    const light = pickColors(j.light, 'light'); const dark = pickColors(j.dark, 'dark');
+    if (!Object.keys(light).length && !Object.keys(dark).length) throw new Error('Give colours under "light" and/or "dark".');
+    const cr = j.cornerRadius;
+    if (cr !== undefined && !(typeof cr === 'number' && cr >= 0 && cr <= 2)) throw new Error('"cornerRadius" must be a number from 0 to 2.');
+    return { theme: { name, light, dark, ...(cr !== undefined ? { cornerRadius: cr } : {}) } };
+  } catch (e: any) { return { error: e instanceof SyntaxError ? 'That is not valid JSON.' : String(e?.message ?? e) }; }
 }

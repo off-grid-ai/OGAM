@@ -1,6 +1,7 @@
 /** Settings > Appearance & AI style: theme, background, accent, font, text size, bottom bar, and how the AI answers. */
 import React from 'react';
 import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Button } from '../components/Button';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -8,7 +9,7 @@ import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useAppStore } from '../stores';
-import { ACCENTS, SKINS, CHAT_LAYOUTS, FONT_CHOICES, PALETTES, TEXT_SIZES, LAYOUT_MODES, type Appearance } from '../theme/appearance';
+import { parseCustomTheme, ACCENTS, SKINS, CHAT_LAYOUTS, FONT_CHOICES, PALETTES, TEXT_SIZES, LAYOUT_MODES, type Appearance } from '../theme/appearance';
 import { NavBarSettings } from '../components/NavBarSettings';
 import { AI_LENGTHS, AI_LEVELS, AI_TONES, type AiStyle } from '../services/aiStyle';
 
@@ -48,6 +49,13 @@ export const AppearanceScreen: React.FC = () => {
   const appearance: Appearance = settings.appearance ?? {};
   const ai: AiStyle = settings.aiStyle ?? {};
   const setLook = (patch: Partial<Appearance>) => updateSettings({ appearance: { ...appearance, ...patch } });
+  const [themeText, setThemeText] = React.useState('');
+  const [themeMsg, setThemeMsg] = React.useState('');
+  const importTheme = () => {
+    const r = parseCustomTheme(themeText);
+    if (r.error) { setThemeMsg(r.error); return; }
+    setLook({ custom: r.theme, cornerRadius: undefined }); setThemeMsg(`Applied "${r.theme!.name}".`); setThemeText('');
+  };
   const setAi = (patch: Partial<AiStyle>) => updateSettings({ aiStyle: { ...ai, ...patch } });
 
   return (
@@ -60,6 +68,11 @@ export const AppearanceScreen: React.FC = () => {
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.section}>Look</Text>
+        <Text style={styles.label}>Easy mode</Text>
+        <Button title={appearance.layoutMode === 'focus' ? 'Easy mode is on. Turn off' : 'Turn on easy mode'} testID="easy-mode" variant={appearance.layoutMode === 'focus' ? 'outline' : 'primary'}
+          onPress={() => setLook(appearance.layoutMode === 'focus' ? { layoutMode: 'standard' } : { layoutMode: 'focus', chatLayout: 'clean', density: 'spacious' })} />
+        <Text style={styles.note}>Easy mode shows only chat, learning and the briefing, with plain replies and larger spacing. One tap turns it off.</Text>
+
         <Text style={styles.label}>Style</Text>
         <Chips testID="skin" value={appearance.skin ?? 'none'}
           onPick={id => (id === 'none'
@@ -67,6 +80,18 @@ export const AppearanceScreen: React.FC = () => {
             : setLook({ ...SKINS.find(k => k.id === id)!.look, skin: id as typeof SKINS[number]['id'] }))}
           options={[{ id: 'none', name: 'Atlas', hint: 'The standard look' }, ...SKINS.map(k => ({ id: k.id, name: k.name, hint: k.hint }))]} />
         <Text style={styles.note}>A style sets the colors, font, chat style and the shape of boxes in one go. You can still change any part below.</Text>
+
+        <Text style={styles.label}>Corner roundness</Text>
+        <Chips testID="corner-radius" value={String(appearance.cornerRadius ?? appearance.custom?.cornerRadius ?? 'skin')}
+          onPick={id => setLook({ cornerRadius: id === 'skin' ? undefined : Number(id) })}
+          options={[{ id: 'skin', name: 'As styled' }, { id: '0', name: 'Square' }, { id: '0.5', name: 'Slight' }, { id: '1', name: 'Standard' }, { id: '1.5', name: 'Round' }, { id: '2', name: 'Very round' }]} />
+
+        <Text style={styles.label}>Import a theme</Text>
+        <Text style={styles.note}>Paste a theme file: {'{"name":"Mine","light":{"background":"#fff8f0","primary":"#c2410c"},"dark":{"background":"#1a1008"},"cornerRadius":1.5}'}. Colour names: background, surface, surfaceLight, surfaceHover, border, borderLight, divider, text, textSecondary, textMuted, primary, primaryDark, error, borderFocus.</Text>
+        <TextInput testID="theme-json" value={themeText} onChangeText={setThemeText} multiline autoCapitalize="none" autoCorrect={false} placeholder="Paste theme JSON" placeholderTextColor={colors.textMuted} style={[styles.note, { color: colors.text, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 10, minHeight: 90 }]} />
+        <Button title="Apply theme" onPress={importTheme} testID="theme-apply" />
+        {!!themeMsg && <Text testID="theme-msg" style={styles.note}>{themeMsg}</Text>}
+        {!!appearance.custom && <Button title={`Remove "${appearance.custom.name}"`} variant="outline" onPress={() => { setLook({ custom: undefined }); setThemeMsg('Removed.'); }} testID="theme-remove" />}
 
         <Text style={styles.label}>Light or dark</Text>
         <Chips testID="theme-mode" value={themeMode} onPick={setThemeMode}

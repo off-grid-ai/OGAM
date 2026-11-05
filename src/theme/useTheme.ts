@@ -31,6 +31,12 @@ export interface Theme {
 }
 
 /** Get theme for a given mode (non-hook, for use outside components) */
+function shapeWith(appearance?: Appearance): SkinShape {
+  const base = shapeOf(appearance?.skin);
+  const r = appearance?.cornerRadius ?? appearance?.custom?.cornerRadius;
+  return r === undefined ? base : { ...base, radius: r };
+}
+
 export function getTheme(mode: 'light' | 'dark', appearance?: Appearance): Theme {
   const isDark = mode === 'dark';
   const colors = applyAppearanceColors(isDark ? COLORS_DARK : COLORS_LIGHT, isDark, appearance);
@@ -39,7 +45,7 @@ export function getTheme(mode: 'light' | 'dark', appearance?: Appearance): Theme
   const typographyKey = applyTypography(appearance);
   const density = appearance?.density ?? (appearance?.layoutMode === 'compact' ? 'compact' : appearance?.layoutMode === 'simple' ? 'spacious' : 'comfortable');
   const densityScale = density === 'compact' ? 0.8 : density === 'spacious' ? 1.15 : 1;
-  return { colors, shadows, elevation, isDark, typographyKey, densityScale, shape: shapeOf(appearance?.skin) };
+  return { colors, shadows, elevation, isDark, typographyKey, densityScale, shape: shapeWith(appearance) };
 }
 
 /** Hook that returns the current theme based on appStore themeMode */
