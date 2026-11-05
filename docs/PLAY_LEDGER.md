@@ -79,3 +79,10 @@ Each round: expected / found / root cause / change / commit / screenshots.
 3. Next: a fresh-install first run with a best-fit default; Remote Servers as grouped rows; then the alive layer.
 - Done: Settings › Search Model is a pushed route (this round).
 - **Acted on 14:10:** starters show only when a model can answer, with one hairline at the end and the full width (`c1172a7b4`; `batch2-send` asserts no starters without a model). Switches: disabled dims; on is a near-black knob on full emerald (`2890b6c47`). Open: incompatible rows fade their own surface in the grouped Models list; markdown bold at 500 is weak.
+
+## r05 offline polish (14:40) — M3/M4
+- **Models:** an incompatible model fades its content, not its surface, so the grouped list stays solid (`372ea268e`).
+- **Remote Servers:** Test / Edit / Remove became three quiet icon buttons on the row's right edge, with their words as accessible names. Tests now find them by label (`bb983d320`).
+- **Kept:** markdown bold at 500, inside the brand's 300–500 range.
+- **Push gate:** it blocked 4 lint errors from the switch change. Cause: `eslint $F` in zsh linted no files. Fixed in `3ddf7e2f8`, which also locks the OffgridFonts pod. All 78 changed files lint clean.
+- **Device:** still offline; every visual change since `311f8ace3` is queued.
