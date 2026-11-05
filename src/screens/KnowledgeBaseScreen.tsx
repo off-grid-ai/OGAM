@@ -211,7 +211,9 @@ export const KnowledgeBaseScreen: React.FC = () => {
       <AppSwitch
         value={item.enabled === 1}
         onValueChange={(val) => handleToggleDocument(item.id, val)}
-        accessibilityLabel={`Use ${item.name}, ${item.enabled === 1 ? 'ON' : 'OFF'}`}
+        // A switch reads its own on/off; the label says what it does.
+        accessibilityRole="switch"
+        accessibilityLabel={`Use in answers: ${item.name}`}
         testID={`knowledge-document-toggle-${item.sync_id}`}
       />
       <TouchableOpacity
