@@ -148,7 +148,8 @@ export const KnowledgeDocumentInfo: React.FC<{
   const statusText = (
     <Text
       style={[styles.meta, shownTransfer && styles.metaTransfer, failed && styles.metaFailed]}
-      numberOfLines={1}
+      // A sync line is a sentence on its own line: two lines, so its reason is not cut off.
+      numberOfLines={shownTransfer ? 2 : 1}
       testID={documentId ? `knowledge-document-status-${documentId}` : undefined}
     >
       {label}
