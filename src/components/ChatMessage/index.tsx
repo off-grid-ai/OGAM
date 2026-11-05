@@ -1,7 +1,7 @@
 import { useAppStore } from '../../stores';
 import { videoGenerationMeta } from '../../utils/modelHelpers';
 import React, { useEffect, useState } from 'react';
-import { View, Text, Clipboard } from 'react-native';
+import { View, Text, Clipboard, Keyboard } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -325,6 +325,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         isUser ? styles.userContainer : styles.assistantContainer,
       ]}
       activeOpacity={0.8}
+      // The row fills the list's width, so it catches most taps on the list. With the list's
+      // keyboardShouldPersistTaps="handled" a tap the row swallows kept the keyboard up; a tap on
+      // the message closes it, as a tap on the empty list does. Controls inside take their own taps.
+      onPress={() => Keyboard.dismiss()}
       onLongPress={onLongPress}
       delayLongPress={300}
     >
