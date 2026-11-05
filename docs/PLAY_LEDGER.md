@@ -373,3 +373,10 @@ Closed rows show values; Stop scan and "This phone and 4 others" pass. No lost b
 1. Prompt row says "None" while chat sends the built-in default: use `settings.systemPrompt || APP_CONFIG.defaultSystemPrompt` (chat's own fallback).
 2. Chat settings sheet matches Model settings: Transcription and Text to speech values, one name ("Transcription"), 24 pt gutter.
 3. Sync reclaim still names the connected Mac (shared, waiting on Mac); "Show Generation Details" to sentence case; Home's Sync row and Sync's count say the same thing.
+
+## Supervisor 03:30 (hand test 32, build at c5f6fb319)
+
+Labels sentence case, sheet Transcription row and gutter pass. Top 3:
+1. A blank prompt ("\n") is sent as the prompt while the row says "Built-in prompt": one resolver that trims, used by chat, the OpenAI builder and the debug sheet; save '' for whitespace.
+2. Home's Sync row shows the local count ("5 saved") on cold start before the list loads.
+3. Projects rows: drop the repeated folder glyph, hide a description equal to the name, add a Mono last-used time. Also: Text to speech value; the sheet header on the 24 pt gutter.
