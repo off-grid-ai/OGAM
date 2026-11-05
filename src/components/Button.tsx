@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, ViewStyle, TextStyle } from 'react-native';
+import { StyleSheet, Text, ViewStyle, TextStyle } from 'react-native';
 import { TouchableOpacity } from './Touchable';
 import type { AccessibilityRole, AccessibilityState } from 'react-native';
 import { useTheme, useThemedStyles } from '../theme';
@@ -94,7 +94,7 @@ export const Button: React.FC<ButtonProps> = ({
   );
 };
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   button: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -104,11 +104,12 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   // The screen's main action: lifted on the surface layer with the brand's soft emerald halo
   // (brand/DESIGN_PHILOSOPHY.md: "Primary actions carry a soft emerald halo"), not a flat bright outline.
+  // A quiet action on the field: the card surface and a hairline, no glow (the slab look on Model
+  // settings and Storage). The one main action uses `hero`.
   button_primary: {
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.glow,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
   },
   // As desktop's candy accent button: a pill of emerald blended into the page, a light top edge and a
   // faint glow, not a bright block.
