@@ -387,3 +387,10 @@ Projects rows, "Built-in prompt" and the scan switch pass. No lost behaviour (De
 1. The five enabled tools (DeepWiki, web) take over "who are you" on a plain turn. This is the user's enabledTools setting; offering tools only when needed is Mac's call (asked).
 2. Chat: "_Model loaded…_" shows its underscores; Generation details does not show the system prompt sent.
 3. Downloads: size, quant and date on one Mono line; sentence-case chips plus Video; a failed row says why and offers Retry.
+
+## Supervisor 04:25 (hand test 34, build at 765ff4490)
+
+Downloads chips and dates, Text to speech value, sheet gutter and plain Mono notes all pass. No lost behaviour. Top 3:
+1. Downloads Speech rows: no date (useVoiceDownloadItems lacks downloadedAt); author "Transcription" vs the "Speech" chip; failed row has no reason and a dead 0% bar.
+2. Text to speech value shows the raw voice id ("am_michael"); show the voice's name.
+3. Touch targets and names: download chips under 44 pt and no selected state; sheet "Done" 34×16; unnamed icons (downloads, back, sort, filter, quick settings). Chat header on a 16 pt gutter.
