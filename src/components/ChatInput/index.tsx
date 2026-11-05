@@ -618,7 +618,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       style={[styles.circleButton, styles.circleButtonStop]}
       onPress={handleStop}
     >
-      <Icon name="square" size={18} color={colors.background} />
+      <Icon name="square" size={16} color={colors.text} />
     </TouchableOpacity>
   ) : (
     <VoiceRecordButton
