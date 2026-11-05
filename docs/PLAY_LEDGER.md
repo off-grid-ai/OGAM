@@ -507,3 +507,10 @@ Chat opens at the newest message, reply stays in view while streaming, tap close
 1. Downloads: a failed "Whisper Tiny (English)" row stays though the model is on the phone (id mismatch between the store row and the downloaded list).
 2. Long press opens the actions sheet AND the native Copy callout; the sent message is out of view ~5 s with the keyboard up.
 3. KB red error still cut; status line read twice by VoiceOver; project Chats tab still shows old "New Conversation" titles.
+
+## Supervisor 13:50 (hand test 51, build 52 at a5d22f1be)
+
+Sent message in view at once, reply stays in view, stale Whisper row gone, Downloads steady, KB sync error wraps: pass. Top 3:
+1. Regression: a chat opened from Home Recent starts at the oldest message.
+2. Weakest screen is the project Knowledge base: red Mono error with "OGAD" jargon and no next step; four emerald switches; a trash per row.
+3. Models rows 80 pt; Downloads badge "1 in progress" while the only download is paused.
