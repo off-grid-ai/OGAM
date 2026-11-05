@@ -95,10 +95,18 @@ export async function getOrphanedImageDirs(
 
   const items = await RNFS.readDir(imageModelsDir);
   const imageModels = await imageModelsGetter();
-  const trackedImagePaths = imageModels.map(m => m.modelPath);
+  // Compared by the path INSIDE the image-models folder, not the full path: the app's container
+  // path changes across installs, so a stored modelPath can name an old container for the same
+  // folder. Comparing full paths listed the image model in use as orphaned (hand test 8).
+  const folderName = imageModelsDir.replace(/\/+$/, '').split('/').pop() ?? '';
+  const insideFolder = (path: string) => {
+    const at = path.lastIndexOf(`/${folderName}/`);
+    return at === -1 ? path : path.slice(at + folderName.length + 2);
+  };
+  const trackedImagePaths = imageModels.map(m => insideFolder(m.modelPath));
 
   for (const item of items) {
-    if (isItemTracked(item.path, trackedImagePaths)) continue;
+    if (isItemTracked(item.name, trackedImagePaths)) continue;
 
     const totalSize = item.isDirectory()
       ? await calculateDirectorySize(item.path)

@@ -206,6 +206,20 @@ describe('getOrphanedImageDirs', () => {
     jest.clearAllMocks();
   });
 
+  it('never calls the image model in use orphaned when its stored path names an old app container (hand test 8)', async () => {
+    mockedRNFS.exists.mockResolvedValue(true);
+    mockedRNFS.readDir.mockResolvedValue([
+      makeRNFSDir('sd-offgrid-ai--realvisxl-v5.0-lightning-GGUF-Q4', `${IMAGE_MODELS_DIR}/sd-offgrid-ai--realvisxl-v5.0-lightning-GGUF-Q4`),
+      makeRNFSDir('left-behind', `${IMAGE_MODELS_DIR}/left-behind`),
+    ]);
+    const stale = '/var/mobile/Containers/Data/Application/OLD-UUID/Documents/image_models';
+    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, async () => [
+      makeImageModel({ id: 'realvis', modelPath: `${stale}/sd-offgrid-ai--realvisxl-v5.0-lightning-GGUF-Q4/model.gguf` }),
+    ]);
+
+    expect(result.map(dir => dir.name)).toEqual(['left-behind']);
+  });
+
   it('returns empty array when image models directory does not exist', async () => {
     mockedRNFS.exists.mockResolvedValue(false);
 
