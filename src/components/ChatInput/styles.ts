@@ -156,7 +156,13 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingRight: 4,
     paddingVertical: 6,
     minHeight: 56,
+    borderWidth: 1,
+    borderColor: 'transparent',
     ...shadows.small,
+  },
+  pillFocused: {
+    borderColor: `${colors.primary}80`,
+    ...shadows.glow,
   },
   // One box, edge to edge, in every mode: image or video mode adds the styles at its top, and nothing else moves.
   // Only the top corners are rounded; the input inside draws no edge of its own (the theme shadow is a boxShadow,

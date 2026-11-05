@@ -196,6 +196,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const [message, setMessage] = useState('');
+  // Focus draws light to the field (brand: its edge glows while you are inside it).
+  const [isFocused, setIsFocused] = useState(false);
   const [localAssistantEnabled, setLocalAssistantEnabled] = useState(false);
   const assistantEnabled = assistantSelected ?? localAssistantEnabled;
   const setAssistantEnabled = (selected: boolean) => {
@@ -661,7 +663,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         />
       ) : null}
       <View style={styles.mainRow}>
-        <View style={[styles.pill, styles.pillInComposer]}>
+        <View style={[styles.pill, styles.pillInComposer, isFocused && styles.pillFocused]} testID="composer-pill" accessibilityState={{ selected: isFocused }}>
           {showVoiceStatus ? (
             <RecordingHint
               awaitingSpeech={isAwaitingSpeech}
@@ -707,6 +709,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 editable={!disabled}
                 blurOnSubmit={false}
                 returnKeyType="default"
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
               />
               <ComposerIconsRow
                 hasText={hasText}
