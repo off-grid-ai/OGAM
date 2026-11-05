@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 /** How long after Stop leaves that a tap on the same spot is still taken as the Stop tap. */
-export const STOP_TAP_GRACE_MS = 1200;
+export const STOP_TAP_GRACE_MS = 2000;
 
 /**
  * Stop and the mic share one spot: when a reply ends, the mic takes Stop's place. A Stop tap that
