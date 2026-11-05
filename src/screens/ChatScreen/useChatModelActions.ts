@@ -63,7 +63,7 @@ function addSystemMsg(
   if (!deps.activeConversationId || !deps.settings.showGenerationDetails) return;
   deps.addMessage(deps.activeConversationId, {
     role: 'assistant',
-    content: `_${content}_`,
+    content,
     isSystemInfo: true,
   });
 }

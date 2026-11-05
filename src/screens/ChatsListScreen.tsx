@@ -30,7 +30,7 @@ import { deleteChatImages, imagesNotDeletedAlert } from '../services/chatImageCl
 import { Conversation } from '../types';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { byRecentActivity } from '../utils/conversationOrdering';
-import { formatWhen } from '../utils/localTime';
+import { formatClockTime, formatWhen } from '../utils/localTime';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
 import { useIsFocused } from '@react-navigation/native';
 import { LivingField } from '../components/LivingField';
@@ -172,7 +172,7 @@ export const ChatsListScreen: React.FC = () => {
   // One line per chat: a quiet icon for an image or video chat, its title, its project when it has
   // one, and when it was last active, so chats with the same title can still be told apart. Each
   // date group is one surface divided by hairlines (brand: lists in one surface).
-  const renderChat = ({ item, index: rowIndex, section }: { item: Conversation; index: number; section: { data: readonly Conversation[] } }) => {
+  const renderChat = ({ item, index: rowIndex, section }: { item: Conversation; index: number; section: { title: string; data: readonly Conversation[] } }) => {
     const project = item.projectId ? getProject(item.projectId) : null;
     const selected = selectedIds.has(item.id);
     const index = listIndex.get(item.id) ?? 0;
@@ -221,7 +221,12 @@ export const ChatsListScreen: React.FC = () => {
               {project.name}
             </Text>
           ) : null}
-          <Text style={styles.chatTime}>{formatWhen(item.updatedAt)}</Text>
+          {/* The heading already says the day, so Today and Yesterday rows show the clock time. */}
+          <Text style={styles.chatTime}>
+            {section.title === 'Today' || section.title === 'Yesterday'
+              ? formatClockTime(item.updatedAt)
+              : formatWhen(item.updatedAt)}
+          </Text>
         </AnimatedListItem>
       </Swipeable>
     );

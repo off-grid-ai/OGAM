@@ -6,7 +6,6 @@ import { Platform } from 'react-native';
 export const PILL_ICON_SIZE = 32;
 export const ANIM_DURATION_IN = 180;
 export const ANIM_DURATION_OUT = 200;
-const TOOL_WARNING_COLOR = '#F59E0B';
 
 export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   // The bar holds one box, edge to edge: anything queued or attached above it keeps the side inset.
@@ -274,7 +273,8 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: TOOL_WARNING_COLOR,
+    // One accent only (brand): the hint dot is emerald, not orange.
+    backgroundColor: colors.primary,
   },
   // Small badge on image gen icon
   iconBadge: {

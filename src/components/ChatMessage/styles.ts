@@ -351,7 +351,8 @@ const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   generationTime: {
     ...TYPOGRAPHY.meta,
     fontWeight: '400' as const,
-    color: colors.primary,
+    // Quiet metadata, not emerald: colour never carries information (brand).
+    color: colors.textMuted,
   },
   actionHint: {
     padding: 4,
