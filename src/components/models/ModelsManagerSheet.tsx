@@ -5,6 +5,7 @@ import { LoadingDots } from '../LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../../components/AppSheet';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
+import { ListGroup } from '../ListGroup';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
@@ -128,6 +129,7 @@ export const ModelsManagerSheet: React.FC<Props> = ({
       enableDynamicSizing
     >
       <View style={styles.content}>
+        <ListGroup>
         {ROWS.map(row => {
           const isLoading =
             loadingState.isLoading && loadingState.type === row.type;
@@ -187,6 +189,7 @@ export const ModelsManagerSheet: React.FC<Props> = ({
             </AnimatedPressable>
           );
         })}
+        </ListGroup>
 
         <View style={styles.actions}>
           {hasActiveModel && (
@@ -237,12 +240,9 @@ const createStyles = (colors: ThemeColors) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: SPACING.md,
+    // A row of the one grouped surface (ListGroup draws the hairlines).
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
   },
   label: {
     ...TYPOGRAPHY.label,
