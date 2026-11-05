@@ -13,7 +13,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   container: {
     backgroundColor: 'transparent',
   },
-  aboveComposer: { paddingHorizontal: 12 },
+  aboveComposer: { paddingHorizontal: SPACING.xl },
   // Attachment previews row
   attachmentsContainer: {
     marginBottom: 6,
@@ -175,7 +175,8 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
-    marginHorizontal: 12,
+    // The screen's 24 pt gutter, so the composer lines up with the messages above it.
+    marginHorizontal: SPACING.xl,
     overflow: 'hidden' as const,
     paddingTop: 4,
     paddingBottom: 8,

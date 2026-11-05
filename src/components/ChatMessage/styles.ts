@@ -343,7 +343,7 @@ const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     marginTop: 6,
-    marginHorizontal: 8,
+    // On the message's own edge (the container carries the 24 pt gutter), not 8 pt inside it.
     gap: 8,
   },
   timestamp: {
