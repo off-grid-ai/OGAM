@@ -6,6 +6,7 @@ import {
   aliveTouchDown,
   aliveTouchMove,
   aliveTouchUp,
+  aliveTouchCancelled,
   useAlive,
   type AliveSignals,
 } from '../../../src/components/AliveProvider';
@@ -59,6 +60,15 @@ describe('AliveProvider', () => {
     aliveTouchUp(signals());
     // Reanimated's test build settles a timing at its target.
     expect(signals().touch.value).toBe(0);
+  });
+
+  it('a cancelled touch is not a lift: the light holds first, then fades', () => {
+    const reanimated = require('react-native-reanimated');
+    const { signals } = renderSignals();
+    aliveTouchDown(signals(), 10, 10, false);
+    reanimated.withDelay.mockClear?.();
+    aliveTouchCancelled(signals());
+    expect(reanimated.withDelay).toHaveBeenCalledWith(ALIVE.holdAfterCancelMs, expect.anything());
   });
 
   it('is absent outside the provider, so a field there only breathes', () => {

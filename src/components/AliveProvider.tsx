@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
+  withDelay,
   useAnimatedReaction,
   useAnimatedRef,
   useReducedMotion,
@@ -68,6 +69,15 @@ export function aliveTouchUp(signals: AliveSignals) {
   signals.touch.value = withTiming(0, { duration: ALIVE.trailMs });
 }
 
+/**
+ * A scroll view or button took the touch from the listener. The finger may still be down, so a
+ * cancel is not a lift: the light holds, then fades as if lifted (the listener hears no more).
+ */
+export function aliveTouchCancelled(signals: AliveSignals) {
+  'worklet';
+  signals.touch.value = withDelay(ALIVE.holdAfterCancelMs, withTiming(0, { duration: ALIVE.trailMs }));
+}
+
 export const AliveProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const reducedMotion = useReducedMotion();
   const touchX = useSharedValue(-1000);
@@ -97,7 +107,7 @@ export const AliveProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           if (finger) aliveTouchMove(signals, finger.absoluteX, finger.absoluteY);
         })
         .onTouchesUp(() => aliveTouchUp(signals))
-        .onTouchesCancelled(() => aliveTouchUp(signals)),
+        .onTouchesCancelled(() => aliveTouchCancelled(signals)),
     [signals, reducedMotion],
   );
 

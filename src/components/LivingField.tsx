@@ -58,18 +58,19 @@ export const LivingField: React.FC<{
   const driftStyle = useAnimatedStyle(() => ({ transform: [{ translateY: drift.value }] }));
   // The light under the finger, and the ring a press sends out (desktop: 1.1 px/ms to 520 px).
   // Three widening, fainter discs of lit dots make the light's soft falloff.
-  const lightOuter = useAnimatedProps(() => lightDisc(alive, originX.value, originY.value, drift.value, 1, 0.35));
-  const lightMid = useAnimatedProps(() => lightDisc(alive, originX.value, originY.value, drift.value, 0.6, 0.45));
-  const lightCore = useAnimatedProps(() => lightDisc(alive, originX.value, originY.value, drift.value, 0.3, 0.6));
+  const lightOuter = useAnimatedProps(() => lightDisc(active ? alive : null, originX.value, originY.value, drift.value, 1, 0.35), [active]);
+  const lightMid = useAnimatedProps(() => lightDisc(active ? alive : null, originX.value, originY.value, drift.value, 0.6, 0.45), [active]);
+  const lightCore = useAnimatedProps(() => lightDisc(active ? alive : null, originX.value, originY.value, drift.value, 0.3, 0.6), [active]);
+  // Only the visible screen's field answers: a hidden tab's stays dark and costs no redraw.
   const ringProps = useAnimatedProps(() => {
-    const radius = alive ? alive.ringRadius.value : ALIVE.ringReach;
+    const radius = alive && active ? alive.ringRadius.value : ALIVE.ringReach;
     return {
       cx: alive ? alive.ringX.value - originX.value : -1000,
       cy: alive ? alive.ringY.value - originY.value - drift.value : -1000,
       r: radius,
       opacity: Math.max(0, 1 - radius / ALIVE.ringReach) * 0.9,
     };
-  });
+  }, [active]);
 
   const dot = isDark
     ? `rgba(255,255,255,${LIVING_FIELD.dotAlphaDark})`
