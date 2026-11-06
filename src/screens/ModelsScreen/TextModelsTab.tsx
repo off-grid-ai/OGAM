@@ -405,7 +405,6 @@ export const TextModelsTab: React.FC<Props> = (props) => {
     return recommendedAsModelInfo.filter(model => !pickIds.has(model.id));
   }, [recommendedAsModelInfo, ramGB, catalog]);
   const hasNonSortActiveFilters = hasNonSortFilters(filterState);
-  const currentSort = SORT_OPTIONS.find(o => o.key === filterState.sort) ?? SORT_OPTIONS[0];
   const isSortActive = filterState.sort !== 'recommended';
   const sortToggleActive = isSortActive || filterState.expandedDimension === 'sort';
   const filterToggleActive = textFiltersVisible || hasNonSortActiveFilters;
@@ -511,7 +510,8 @@ export const TextModelsTab: React.FC<Props> = (props) => {
           accessibilityRole="button"
           accessibilityLabel="Sort models"
         >
-          <Icon name={currentSort.icon} size={14} color={sortToggleActive ? colors.primary : colors.textMuted} />
+          {/* One sort glyph: the chosen option's own icon (a bolt for Fastest) read as "fast", not "sort" (hand test 69). */}
+          <Icon name="bar-chart-2" size={14} color={sortToggleActive ? colors.primary : colors.textMuted} style={styles.sortGlyph} />
           {isSortActive && <View style={styles.filterDot} />}
         </TouchableOpacity>
         <TouchableOpacity

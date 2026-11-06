@@ -148,6 +148,8 @@ const createFilterStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   // Toolbar actions are bare glyphs with a 44px target; the chosen one shows by its emerald glyph.
   filterToggle: { width: 44, height: 44, margin: -3, alignItems: 'center' as const, justifyContent: 'center' as const },
   filterToggleActive: {},
+  // Bars of three lengths turned on their side: the usual sort mark.
+  sortGlyph: { transform: [{ rotate: '90deg' }, { scaleX: -1 }] },
   filterDot: {
     position: 'absolute' as const,
     top: 6,
