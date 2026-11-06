@@ -34,6 +34,9 @@ import { AliveScreen } from '../components/AliveScreen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SectionLabel } from '../components/SectionLabel';
 
+/** A number with what it counts ("15 models", "1 chat"): bare counts beside sizes read as one unit (hand test 84). */
+const count = (n: number, noun: string): string => `${n.toLocaleString()} ${noun}${n === 1 ? '' : 's'}`;
+
 export const StorageSettingsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { colors } = useTheme();
@@ -180,15 +183,15 @@ export const StorageSettingsScreen: React.FC = () => {
         <Card style={styles.section}>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Chat models</Text>
-            <Text style={styles.infoValue}>{chatModelCount}</Text>
+            <Text style={styles.infoValue}>{count(chatModelCount, 'model')}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Image models</Text>
-            <Text style={styles.infoValue}>{downloadedImageModels.length}</Text>
+            <Text style={styles.infoValue}>{count(downloadedImageModels.length, 'model')}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Video models</Text>
-            <Text style={styles.infoValue}>{downloadedVideoModels.length}</Text>
+            <Text style={styles.infoValue}>{count(downloadedVideoModels.length, 'model')}</Text>
           </View>
           {downloadedVideoModels.map(model => (
             <View key={model.id} style={styles.infoRow}>
@@ -212,11 +215,11 @@ export const StorageSettingsScreen: React.FC = () => {
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Speech-to-text models</Text>
-            <Text style={styles.infoValue}>{transcriptionModelCount}</Text>
+            <Text style={styles.infoValue}>{count(transcriptionModelCount, 'model')}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Voices</Text>
-            <Text style={styles.infoValue}>{speechModelCount}</Text>
+            <Text style={styles.infoValue}>{count(speechModelCount, 'voice')}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>All models</Text>
@@ -225,7 +228,7 @@ export const StorageSettingsScreen: React.FC = () => {
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Videos and films</Text>
             <Text style={styles.infoValue}>
-              {generatedVideoCount} · {size(extra.videos)}
+              {count(generatedVideoCount, 'video')} · {size(extra.videos)}
             </Text>
           </View>
           <View style={styles.infoRow}>
@@ -234,7 +237,7 @@ export const StorageSettingsScreen: React.FC = () => {
           </View>
           <View style={[styles.infoRow, styles.lastRow]}>
             <Text style={styles.infoLabel}>Conversations</Text>
-            <Text style={styles.infoValue}>{conversations.length}</Text>
+            <Text style={styles.infoValue}>{count(conversations.length, 'chat')}</Text>
           </View>
         </Card>
 
