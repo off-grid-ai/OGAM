@@ -228,20 +228,23 @@ export const KnowledgeBaseScreen: React.FC = () => {
   return (
     <AliveScreen style={styles.container} testID="knowledge-base-screen">
       <ScreenHeader
-        title={project?.name || 'Knowledge base'}
+        // Named for what it holds, with the project under it; the project page calls these files.
+        title="Files"
+        subtitle={project?.name}
         onBack={() => navigation.goBack()}
         backTestID="knowledge-base-back"
-        right={
+        // One add: while the list is empty, its own Add a file button is the add (hand test 74).
+        right={kbDocs.length === 0 && !addingFile ? undefined : (
           <TouchableOpacity
             onPress={handleAddDocument}
             style={styles.addButton}
             disabled={isPicking || !!addingFile}
             accessibilityRole="button"
-            accessibilityLabel="Add documents"
+            accessibilityLabel="Add files"
           >
             {addingFile ? <LoadingDots color={colors.textMuted} /> : <Icon name="plus" size={20} color={colors.text} />}
           </TouchableOpacity>
-        }
+        )}
       />
 
       {indexError && !addingFile && (
@@ -271,10 +274,10 @@ export const KnowledgeBaseScreen: React.FC = () => {
       ) : kbDocs.length === 0 && arriving.length === 0 ? (
         <View style={styles.centered}>
           <Icon name="file-text" size={40} color={colors.textMuted} />
-          <Text style={styles.emptyText}>No documents yet</Text>
-          <Text style={styles.emptySubtext}>Add a PDF or notes, and every chat in this project can answer from them.</Text>
+          <Text style={styles.emptyText}>No files yet</Text>
+          <Text style={styles.emptySubtext}>Add a PDF or notes, and every chat in this project answers from them.</Text>
           <Button
-            title="Add a document"
+            title="Add a file"
             variant="hero"
             size="small"
             icon={<Icon name="plus" size={16} color={colors.onHero} />}

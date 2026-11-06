@@ -26,8 +26,13 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.text,
     fontWeight: '500' as const,
   },
+  // A 44 pt target (it was 36), pulled back so the header keeps its height.
   addButton: {
-    padding: SPACING.sm,
+    width: 44,
+    height: 44,
+    margin: -6,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   errorCard: {
     flexDirection: 'row' as const,
