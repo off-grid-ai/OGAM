@@ -662,3 +662,8 @@ Top 3: (1) Sync rows: a state icon and a dot say one thing twice; keep the dot; 
 
 No Metro banner on any screen; Sync device-type icons with the state as the dot; Desktop tools amber dot; Remote servers "Checking" then red / green. Glass reads well on the six main screens. No lost behaviour.
 Top 3: (1) Desktop tools "Connecting…" never ends while Remote servers says Not answering: one fact, one state; (2) Sync "last seen" a bare timestamp with seconds, wraps to three lines; (3) header hairline only on Projects; Chats first row indented by an image icon.
+
+## Supervisor 15:10 (hand test 81, build 82 via Metro) — 3 pass, 1 untestable, gallery split
+
+Pass: Chats titles at one edge with the media mark on line two; Home title weights; Desktop tools red "Not reachable" (line cut). Sync last seen untestable (no offline row). Gallery images: own screen, Back to grid, a bottom sheet with Animate / Save / Delete and the details. Gallery videos fail: the Videos tab leaves for "Your videos", tiles play inline, the player has boxed buttons, the tile sheet lacks Save and Info. JS now loads from Metro over Tailscale; POST /reload pushes edits in ~15 s.
+Top 3: (1) videos get the image viewer: own screen, one sheet with Save, Info, Extend, inside Gallery; (2) Not reachable line fits; (3) no boxed buttons or overlays on video tiles and player.
