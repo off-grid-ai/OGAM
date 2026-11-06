@@ -194,7 +194,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     setModelsManagerOpen(false);
   };
 
-  const presentModelSheet = (type: ModelRowType) => {
+  // A picker opened from the Models sheet offers Back to it; one opened straight from Home (a carousel
+  // card, a chip) has only Done, so it never shows two ways out (hand test 87).
+  const [pickerFromModels, setPickerFromModels] = React.useState(false);
+  const presentModelSheet = (type: ModelRowType, fromModels = false) => {
+    setPickerFromModels(fromModels);
     if (type === 'text') setPickerType('text');
     else if (type === 'image') setPickerType('image');
     else if (type === 'video') setPickerType('video');
@@ -203,7 +207,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     else setVoiceOpen(true);
   };
   const openModelRow = (type: ModelRowType) => {
-    closeManagerThen(() => presentModelSheet(type));
+    closeManagerThen(() => presentModelSheet(type, true));
   };
 
   const runPendingAfterClose = () => {
@@ -411,7 +415,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         initialTab={pickerType ?? 'text'}
         onClose={() => setPickerType(null)}
         onClosed={reopenModelsAfterChildClose}
-        onBackToModels={() => closeChildForModels(() => setPickerType(null))}
+        onBackToModels={pickerFromModels ? () => closeChildForModels(() => setPickerType(null)) : undefined}
         onSelectModel={handleSelectTextModel}
         onUnloadModel={handleUnloadTextModel}
         onSelectImageModel={handleSelectImageModel}
@@ -454,13 +458,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         visible={whisperOpen}
         onClose={() => setWhisperOpen(false)}
         onClosed={reopenModelsAfterChildClose}
-        onBackToModels={() => closeChildForModels(() => setWhisperOpen(false))}
+        onBackToModels={pickerFromModels ? () => closeChildForModels(() => setWhisperOpen(false)) : undefined}
       />
       <VoiceModelsSheet
         visible={voiceOpen}
         onClose={() => setVoiceOpen(false)}
         onClosed={reopenModelsAfterChildClose}
-        onBackToModels={() => closeChildForModels(() => setVoiceOpen(false))}
+        onBackToModels={pickerFromModels ? () => closeChildForModels(() => setVoiceOpen(false)) : undefined}
       />
 
       {/* Full-screen model-loading overlay (animated progress + rotating tips). */}
