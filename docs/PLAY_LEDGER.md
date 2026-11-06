@@ -723,3 +723,8 @@ Bug to investigate: the paused "Wan 2.1 (1.3B), FP16" download is gone (Models >
 - Pass: no "Sees images" on image makers, RealVisXL photorealistic; Image picks steady after loading; Speech pick cards and rows never share a name; Voice line plain grey; text picker filled check; Downloads tabs match Models and filter right; Home, Chats, reply in 2.4 s, Projects, Settings, About, Documents. No lost behaviour.
 - Fail: Gallery Videos top section (prompt, recent cards, cast) still at 16 pt and boxed; Models Video uses an outline check; Video search field has no icon. Small: Speech names differ between Models and Downloads.
 - Top 3: (1) Videos top section on the 24 pt gutter; (2) one filled check on Models Video; (3) search icon on Video.
+
+## Supervisor 18:09 (hand test 93, release pass) — Videos fixed; In-use and gutters still split
+- Pass: Gallery Videos all at 24 pt, glass cards; Video tab filled check, search icon, clear works; Speech, Chats, reply in 2.7 s, Projects, Settings, About, Downloads. No lost behaviour.
+- Fail: Video search field edge to edge; "In use" still green text on Text, Image and Documents tabs; Library "Your videos" field and cast at 48 pt (double gutter); film page at 16 pt with circled header buttons; Voice search field not the shared one; oversized scrubber thumb. First taps after a screen change sometimes missed (likely WDA; needs a finger).
+- Top 3: (1) Video search on the gutter; (2) one filled check for In use on every Models tab; (3) Library single gutter, Voice shared search field.
