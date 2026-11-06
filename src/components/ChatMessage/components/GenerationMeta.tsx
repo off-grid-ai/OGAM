@@ -21,24 +21,24 @@ function formatOptionalMeta(meta: NonNullable<Message['generationMeta']>, tps: n
   const m = meta;
   const contextLabel = m.contextPromptTokens
     ? m.contextWindowTokens
-      ? `Context: ${m.contextEstimate ? '~' : ''}${Math.round((m.contextPromptTokens / m.contextWindowTokens) * 100)}% used`
-      : `Context: ${m.contextEstimate ? '~' : ''}${m.contextPromptTokens} tokens used (limit unknown)`
+      ? `${m.contextEstimate ? '~' : ''}${Math.round((m.contextPromptTokens / m.contextWindowTokens) * 100)}% of its memory used`
+      : `${m.contextEstimate ? '~' : ''}${m.contextPromptTokens} tokens of memory used`
     : undefined;
   const entries: Array<[string, string | undefined, number?]> = [
     ['context', contextLabel],
     ['model', m.modelName, 1],
-    ['load', m.modelLoadTimeSeconds != null && m.modelLoadTimeSeconds > 0 ? `load ${m.modelLoadTimeSeconds.toFixed(1)}s` : undefined],
-    ['prefill', m.prefillTokensPerSecond != null && m.prefillTokensPerSecond > 0 ? `prefill ${m.prefillTokensPerSecond.toFixed(0)} tok/s` : undefined],
-    ['tps', tps != null && tps > 0 ? `${tps.toFixed(1)} tok/s` : undefined],
-    ['ttft', m.timeToFirstToken != null && m.timeToFirstToken > 0 ? `TTFT ${m.timeToFirstToken.toFixed(2)}s` : undefined],
+    ['load', m.modelLoadTimeSeconds != null && m.modelLoadTimeSeconds > 0 ? `loaded in ${m.modelLoadTimeSeconds.toFixed(1)}s` : undefined],
+    ['prefill', m.prefillTokensPerSecond != null && m.prefillTokensPerSecond > 0 ? `read your message at ${m.prefillTokensPerSecond.toFixed(0)} tok/s` : undefined],
+    ['tps', tps != null && tps > 0 ? `wrote at ${tps.toFixed(1)} tok/s` : undefined],
+    ['ttft', m.timeToFirstToken != null && m.timeToFirstToken > 0 ? `first word in ${m.timeToFirstToken.toFixed(2)}s` : undefined],
     ['tokens', m.tokenCount != null && m.tokenCount > 0 ? `${m.tokenCount} tokens` : undefined],
     ['steps', m.steps == null ? undefined : `${m.steps} steps`],
     ['cfg', m.guidanceScale == null ? undefined : `cfg ${m.guidanceScale}`],
     ['res', m.resolution],
     ['frames', m.frames == null ? undefined : `${m.frames} frames`],
     ['fps', m.fps == null ? undefined : `${m.fps} fps`],
-    ['seed', m.seed == null ? undefined : `Seed: ${m.seed}`],
-    ['cache', m.cacheType ? `KV ${m.cacheType}` : undefined],
+    ['seed', m.seed == null ? undefined : `seed ${m.seed}`],
+    ['cache', m.cacheType ? `memory cache ${m.cacheType}` : undefined],
   ];
   return entries
     .filter((e): e is [string, string, number?] => e[1] != null)
