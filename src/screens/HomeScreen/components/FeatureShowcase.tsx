@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { AppState, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedPressable } from '../../../components/AnimatedPressable';
@@ -104,6 +104,18 @@ export const FeatureShowcase: React.FC<{ features: ShowcaseFeature[]; active: bo
   // Until when the row counts as moving: a tap then would open whatever card passes under the finger.
   const movingUntil = useRef(0);
   const [rowWidth, setRowWidth] = useState(0);
+  // Any touch, and coming back to the app, restarts the wait, so the card never changes just before a
+  // tap (hand test 88: a timer overdue while the app was away fired on return and swapped the card).
+  const [holdSince, setHoldSince] = useState(0);
+  const hold = useCallback(() => setHoldSince(Date.now()), []);
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      setAppActive(state === 'active');
+      if (state === 'active') hold();
+    });
+    return () => sub.remove();
+  }, [hold]);
   const last = features.length - 1;
 
   const jumpTo = useCallback((i: number) => {
@@ -112,10 +124,10 @@ export const FeatureShowcase: React.FC<{ features: ShowcaseFeature[]; active: bo
   }, [step]);
 
   useEffect(() => {
-    if (!active || touching || features.length < 2) return undefined;
+    if (!active || !appActive || touching || features.length < 2) return undefined;
     const timer = setInterval(() => jumpTo((indexRef.current + 1) % features.length), SHOWCASE_MS);
     return () => clearInterval(timer);
-  }, [active, touching, features.length, jumpTo]);
+  }, [active, appActive, touching, features.length, jumpTo, holdSince]);
 
   if (features.length === 0) return null;
 
@@ -123,6 +135,7 @@ export const FeatureShowcase: React.FC<{ features: ShowcaseFeature[]; active: bo
   // The row loops: a swipe on past the last card comes back to the first, and back past the first
   // goes to the last (hand test 86: it stopped at card 12).
   const onDragEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    hold();
     const x = event.nativeEvent.contentOffset.x;
     const from = at(dragStartX.current);
     if (from === last && x > dragStartX.current) jumpTo(0);
@@ -200,7 +213,10 @@ export const FeatureShowcase: React.FC<{ features: ShowcaseFeature[]; active: bo
           {features.map((item, i) => (
             <AnimatedPressable
               key={item.key}
-              onPress={() => jumpTo(i)}
+              onPress={() => {
+                hold();
+                jumpTo(i);
+              }}
               style={[styles.pipTarget, pipWidth ? { width: pipWidth } : null]}
               accessibilityRole="tab"
               accessibilityLabel={item.title}
@@ -273,9 +289,12 @@ const createStyles = (colors: ThemeColors) => ({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.borderLight,
+    // Darker than the dot field behind Home, so the row reads as pips (hand test 88).
+    backgroundColor: colors.textMuted,
+    opacity: 0.5,
   },
   pipOn: {
+    opacity: 1,
     width: 18,
     backgroundColor: colors.primary,
   },
