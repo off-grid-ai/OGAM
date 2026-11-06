@@ -577,3 +577,7 @@ Newly passing: project, settings-model, security, engine updates. Fail: settings
 ## Supervisor 00:20 (hand test 63, build 64) — 15 of 26 pass (was 13)
 
 Newly passing: chat settings sheet, Delete at the end; white switch knobs in. Fail: chat (3 meta rows), chat options (gold Pro crown and pill), Pro tools (MCP server cards: letter tile, Active pill, trash), Tools (model-facing footer, "Tools 0" with Knowledge base on), settings-lower (6 unlabelled cards), remote servers (3 icons + radio), device info (tier boxes), storage (4 cards, empty Leftover files), about, gallery + viewer.
+
+## Supervisor 01:30 (hand test 64, build 65) — 16 of 26 pass (was 15)
+
+Newly passing: Tools, Settings (Pro in the list). Pro tools: each MCP server is still a card (logo tile, status pill, separate tools line). Still failing: chat meta rows, chat options count, pro tools, settings-lower, about, device info (tier grid fixed after this build), storage, remote servers, gallery + viewer.
