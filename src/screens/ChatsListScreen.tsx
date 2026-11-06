@@ -22,6 +22,7 @@ import { pairedComputer } from '../services/pairedComputerSearch';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
+import { cardFill } from '../theme/surface';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useChatStore, useProjectStore, useAppStore, useRemoteServerStore } from '../stores';
 import { useActiveTextModel } from '../hooks/useActiveTextModel';
@@ -505,7 +506,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...listRowStyle,
     gap: SPACING.sm,
     paddingVertical: SPACING.md,
-    backgroundColor: colors.surfaceGlass,
+    backgroundColor: cardFill(colors),
   },
   chatTime: {
     ...TYPOGRAPHY.meta,

@@ -11,13 +11,18 @@ function withAlpha(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+/** The card's fill alone, for a row or chip that draws its own surface without the card's edge. */
+export function cardFill(colors: ThemeColors): string {
+  return colors.surface.startsWith('#') ? withAlpha(colors.surface, CARD_OPACITY) : colors.surface;
+}
+
 /**
  * The one card surface: a hairline edge and a faint top highlight over a mostly opaque surface.
  * Card, ListGroup and Home's cards all use it, so they change together.
  */
 export function cardSurface(colors: ThemeColors) {
   return {
-    backgroundColor: colors.surface.startsWith('#') ? withAlpha(colors.surface, CARD_OPACITY) : colors.surface,
+    backgroundColor: cardFill(colors),
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
     borderRadius: 12,
