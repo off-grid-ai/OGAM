@@ -19,6 +19,7 @@ import {
   type KnowledgeDocumentSnapshot,
 } from '../sync/knowledgeDocument';
 import { itemDeleted } from '../analytics/analytics';
+import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
 
 export type { KnowledgeDocument } from './database';
 
@@ -276,7 +277,11 @@ class KnowledgeBase {
       syncId: document.sync_id,
       projectId: document.project_id,
       name: document.name,
-      filePath: document.path,
+      // The stored path names the app's container at the time it was saved, and iOS moves that
+      // container between installs. Resolved against today's Documents, so Sync finds the file it
+      // already has instead of asking the peer for it again on every launch (measured: ~12 files,
+      // ~35 s of work per launch, each then discarded as already present).
+      filePath: resolveDocumentPath(document.path),
       fileSize: document.size,
       createdAt: document.created_at,
       enabled: document.enabled === 1,
