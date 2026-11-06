@@ -681,3 +681,8 @@ Twelve cards across the phone, Pro and Mac (Mac's ask: discovery of every featur
 
 Fail: project-knowledge (file row bare, not glass; unlabelled switch), downloads (a 3-line row, "Q1_", look-alike Bonsai rows), settings-model (paragraphs under every control), settings-document-search (a copy of Models > Documents), settings-storage (counts and sizes in one column), settings-about (copies Settings' X and Slack rows; blue logo, red heart: Mac's call), settings-lower (stats rows with no line), device information (internal tier values). No lost behaviour.
 Top 3: (1) one home per thing: Document search links to Models > Documents, About drops the copied community rows; (2) Storage sizes only, Files on glass; (3) one line per Model settings control, Downloads rows two lines.
+
+## Supervisor 17:45 (hand test 85, recheck) — 6 of 8 pass; a paused download lost
+
+Pass: About (one home for X and Slack), Document search opens Models > Documents, stats rows with a line, Files on glass, Storage values with units, Device tiers in outcomes. Fail then fixed: Model settings lines (shortened again), Downloads facts clipped mid-word (capability tags dropped from Downloads; Models keeps them).
+Bug to investigate: the paused "Wan 2.1 (1.3B), FP16" download is gone (Models > Video shows a fresh download icon; Downloads badge gone). Nothing in today's diff touches downloads; most likely cleared when the gallery session installed a main-based build on this phone. A paused download should survive a reinstall.
