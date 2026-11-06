@@ -176,6 +176,8 @@ const CompactingNote: React.FC = () => {
 /** The chat list's position rule: keep the first visible row in place; never auto-scroll to the start. */
 export const CHAT_LIST_KEEP_POSITION = { minIndexForVisible: 0 } as const;
 
+const OPENING_HIDDEN = { opacity: 0 };
+
 export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   assistantSelected,
   onAssistantSelectedChange,
@@ -201,7 +203,10 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
     openingRef.current = true;
     hasScrolledRef.current = false;
     setSettled(false);
+    // Never hidden for long: whatever the content does, the list shows within 800 ms.
+    const fallback = setTimeout(() => setSettled(true), 800);
     return () => {
+      clearTimeout(fallback);
       if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
     };
   }, [chat.activeConversationId]);
@@ -331,6 +336,9 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
         <FlatList
           testID="chat-message-list"
           ref={flatListRef}
+          // Drawn once it rests at the newest message, so an opening chat never shows old turns
+          // and then jumps (hand test 54: at 1 s a cold open still showed 5:07).
+          style={settled ? undefined : OPENING_HIDDEN}
           data={chat.displayMessages}
           renderItem={renderItem}
           keyExtractor={item => item.id}
