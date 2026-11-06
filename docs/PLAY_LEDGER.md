@@ -732,3 +732,8 @@ Bug to investigate: the paused "Wan 2.1 (1.3B), FP16" download is gone (Models >
 ## Supervisor 18:18 (hand test 94, release pass) — release-ready: yes
 - Pass: Video search on the 24 pt gutter; Voice uses the shared search field; "In use" in words on every Models tab; Library field, cast and grid all at 24 pt; Home, Chats, reply in 1.9 s, Settings, Gallery, Downloads. No lost behaviour from this branch.
 - Watch (not blocking): 3 first taps dropped and 1–2 s lag after some screen changes (WDA or real, needs a finger); a paused "Wan 2.1 FP16" download row disappeared with no notice (the paused-download loss seen before); Video tab row icons draw late.
+
+## Supervisor 20:24 (hand test 96, composer from Mac's review) — pass with two fixes
+- Pass: "Ask anything" on one line; +, settings and assistant all grey, only mic or send filled; the composer grows cleanly while typing; a reply came; image mode reads "Describe a picture" with its styles inside the composer.
+- Fixed after: the assistant icon was thinner and smaller than + and settings (now 19 pt, 1.5 stroke); the attach menu now says why Photo is missing when the model can't see photos, since the placeholder no longer says it.
+- Open: the photo-attached composer needs Mac's own photo on the phone to check (hand tests never open the library).
