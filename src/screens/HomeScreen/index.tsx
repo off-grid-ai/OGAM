@@ -1,7 +1,9 @@
 import { videoModelDisplayName } from '../../utils/modelHelpers';
 import { useAppStore } from '../../stores/appStore';
 import React from 'react';
-import { View, Text, Image } from 'react-native';
+import { View, Text, Image, Linking } from 'react-native';
+import { OFF_GRID_DESKTOP_URL } from '../../constants';
+import { withUtm } from '../../utils/utm';
 import Animated from 'react-native-reanimated';
 import { TouchableOpacity } from '../../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -179,6 +181,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       sync: openSync,
       tools: openProTools,
       pro: () => navigation.navigate('ProDetail'),
+      desktop: () => { Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'home-showcase')).catch(() => {}); },
     },
     isProActive,
   );

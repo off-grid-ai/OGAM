@@ -17,6 +17,8 @@ export interface ShowcaseFeature {
   line: string;
   /** Part of Pro: the card says so, and opens Pro for someone without it. */
   pro?: boolean;
+  /** Lives in Off Grid AI Desktop: the card says so, and opens the Mac app's page. */
+  mac?: boolean;
   onPress: () => void;
 }
 
@@ -40,6 +42,7 @@ export interface FeatureOpeners {
   sync: () => void;
   tools: () => void;
   pro: () => void;
+  desktop: () => void;
 }
 
 /**
@@ -48,18 +51,26 @@ export interface FeatureOpeners {
  * What you have not tried comes first.
  */
 export function showcaseFeatures(use: FeatureUse, open: FeatureOpeners, isPro: boolean): ShowcaseFeature[] {
+  // What you get, in plain words, across the phone, Pro and the Mac app, mixed so a swipe shows all
+  // three. Copy in Mac's voice: the outcome first, nothing to unlock (Mac, 2026-11-06).
   const all: Array<ShowcaseFeature & { tried: boolean }> = [
-    { key: 'image', icon: 'image', tried: use.imagesMade > 0, title: 'Describe it, and see it.', line: 'Make a picture on this phone.', onPress: open.image },
-    { key: 'speech', icon: 'mic', tried: use.hasSpeech, title: 'Talk instead of typing.', line: 'Pick a speech model, then just speak.', onPress: open.speech },
-    { key: 'documents', icon: 'file-text', tried: false, title: 'Ask your own files.', line: 'Add a document to a project.', onPress: open.documents },
-    { key: 'video', icon: 'film', pro: true, tried: use.videosMade > 0, title: 'Turn words into a clip.', line: 'Make a short video.', onPress: open.video },
-    { key: 'voice', icon: 'volume-2', pro: true, tried: use.hasVoice, title: 'Hear every answer.', line: 'Pick a voice to read replies aloud.', onPress: open.voice },
-    { key: 'sync', icon: 'monitor', pro: true, tried: false, title: "Your Mac's models, here.", line: 'Pair this phone with your Mac.', onPress: open.sync },
-    { key: 'tools', icon: 'calendar', pro: true, tried: false, title: 'Let it do things for you.', line: 'Email, calendar and more.', onPress: open.tools },
+    { key: 'image', icon: 'image', tried: use.imagesMade > 0, title: 'Describe it, and see it.', line: 'Pictures made on this phone, offline.', onPress: open.image },
+    { key: 'video', icon: 'film', pro: true, tried: use.videosMade > 0, title: 'Turn a line into a clip.', line: 'Short videos, made on this phone.', onPress: open.video },
+    { key: 'mac-models', icon: 'monitor', mac: true, tried: false, title: 'Run the big models on your Mac.', line: 'Your phone uses them over Wi-Fi.', onPress: open.desktop },
+    { key: 'speech', icon: 'mic', tried: use.hasSpeech, title: 'Talk instead of typing.', line: 'Your words turn to text right here.', onPress: open.speech },
+    { key: 'voice', icon: 'volume-2', pro: true, tried: use.hasVoice, title: 'Hear every answer.', line: 'Replies read aloud in a voice you pick.', onPress: open.voice },
+    { key: 'mac-dictation', icon: 'type', mac: true, pro: true, tried: false, title: 'Talk, and it types where you are.', line: 'Hold Option and Space in any app on your Mac.', onPress: open.desktop },
+    { key: 'documents', icon: 'file-text', tried: false, title: 'Ask your own files.', line: 'Add a PDF to a project and ask away.', onPress: open.documents },
+    { key: 'tools', icon: 'calendar', pro: true, tried: false, title: 'Let it do the small jobs.', line: 'It drafts the email and adds the meeting.', onPress: open.tools },
+    { key: 'mac-recall', icon: 'search', mac: true, pro: true, tried: false, title: 'Find anything you saw on your Mac.', line: 'Search your screen, meetings and notes.', onPress: open.desktop },
+    { key: 'sync', icon: 'refresh-cw', pro: true, tried: false, title: 'Your chats, on every device.', line: 'Pair once with your Mac. Pick up anywhere.', onPress: open.sync },
+    { key: 'mac-meetings', icon: 'users', mac: true, pro: true, tried: false, title: 'Meetings, written up for you.', line: 'Recorded and transcribed on your Mac.', onPress: open.desktop },
+    { key: 'mac-clipboard', icon: 'clipboard', mac: true, pro: true, tried: false, title: 'Never lose a copy again.', line: 'Every copy saved, two keys to paste it back.', onPress: open.desktop },
   ];
   return [...all.filter(f => !f.tried), ...all.filter(f => f.tried)].map(({ tried: _tried, ...feature }) => ({
     ...feature,
-    onPress: feature.pro && !isPro ? open.pro : feature.onPress,
+    // A Mac feature opens the Mac app's page; a phone Pro feature opens Pro for someone without it.
+    onPress: !feature.mac && feature.pro && !isPro ? open.pro : feature.onPress,
   }));
 }
 
@@ -123,15 +134,17 @@ export const FeatureShowcase: React.FC<{ features: ShowcaseFeature[]; active: bo
             hapticType="selection"
             onPress={feature.onPress}
             accessibilityRole="button"
-            accessibilityLabel={`${feature.title} ${feature.line}${feature.pro ? ' Pro.' : ''}`}
+            accessibilityLabel={`${feature.title} ${feature.line}${feature.mac ? ' On your Mac.' : ''}${feature.pro ? ' Pro.' : ''}`}
             testID={`feature-showcase-${feature.key}`}
             style={[styles.card, { width: cardWidth }]}
           >
             <View style={styles.cardTop}>
               <Icon name={feature.icon} size={18} color={colors.textSecondary} />
-              {feature.pro ? <Text style={styles.proTag}>Pro</Text> : null}
+              {feature.pro || feature.mac ? (
+                <Text style={styles.proTag}>{[feature.mac ? 'On your Mac' : null, feature.pro ? 'Pro' : null].filter(Boolean).join(' · ')}</Text>
+              ) : null}
             </View>
-            <Text style={styles.title} numberOfLines={1}>{feature.title}</Text>
+            <Text style={styles.title} numberOfLines={2}>{feature.title}</Text>
             <View style={styles.lineRow}>
               <Text style={styles.line} numberOfLines={1}>{feature.line}</Text>
               <Icon name="arrow-right" size={16} color={colors.primary} />
