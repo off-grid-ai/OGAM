@@ -5,7 +5,7 @@ Everything still runs on your phone. It's quicker to read now, and it looks like
 ## When you open the app
 
 **Home shows you what you can do.**
-- A row of cards you can swipe: describe a picture and watch it appear, talk instead of typing, ask your own files, turn a line into a clip, or borrow your Mac's bigger models. Things you haven't tried come first.
+- A row of cards you can swipe: describe a picture and watch it appear, talk instead of typing, ask your own files, turn a line into a clip, or borrow your computer's bigger models. Things you haven't tried come first.
 - The row moves on by itself every 8 seconds, waits whenever you touch it or come back to the app, and holds still while a sheet is open.
 - Clipboard and Sync each fit on one line, and the bell and crown line up with the title.
 
@@ -30,7 +30,7 @@ Everything still runs on your phone. It's quicker to read now, and it looks like
 
 **The model sheet opens straight away.**
 - The text model sheet opens in about half a second. It used to take nearly 3.
-- Your Mac or a server with hundreds of models shows five, plus Show all.
+- A computer or server with hundreds of models shows five, plus Show all.
 - Your model has one check, the same in every sheet.
 
 **Picks made for your phone.**
@@ -61,6 +61,6 @@ Everything still runs on your phone. It's quicker to read now, and it looks like
 
 ## The look, everywhere
 
-- Cards are glass, so the moving field shows through, the way Off Grid AI looks on your Mac.
+- Cards are glass, so the moving field shows through, the way Off Grid AI looks on your computer.
 - The same 24-point edges on every screen and sheet.
 - The same search field, with its icon and a clear button, on every Models tab.
