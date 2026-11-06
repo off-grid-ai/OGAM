@@ -152,9 +152,9 @@ const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   galleryCardInfo: {
     flex: 1,
   },
+  // The same weight as the Clipboard and Sync rows above it (brand: 400; hand test 80).
   galleryCardTitle: {
     ...TYPOGRAPHY.body,
-    fontWeight: '500' as const,
     color: colors.text,
   },
   galleryCardMeta: {
