@@ -10,12 +10,19 @@ jest.unmock('@react-navigation/native');
  * measured rows, scrolled to offset 0. The re-pins after it run on timers, and on that cold start
  * the JS timers waited 22 s.
  *
- * The invariant: the content-size change alone brings an opening chat to the end of its content,
- * with no row measured and no timer run. The native scroll view is modelled as the device has it:
- * scrollTo goes to the offset it is given; scrollToEnd goes to content height minus list height.
+ * A second cold open stopped two turns short: the native scroll view still had the content size
+ * from before that layout when the scroll ran.
+ *
+ * The invariant: the content-size change alone brings an opening chat to the end of the content it
+ * reports, with no row measured, no timer run, and the native size one layout behind. The native
+ * scroll view is modelled as the device has it: scrollTo goes to the offset it is given; scrollToEnd
+ * goes to ITS content height minus list height.
  */
 describe('an opening chat lands at its newest message', () => {
-  it('ends at the content end on the first content-size change, before rows are measured or timers run', async () => {
+  it.each([
+    ['the native size is current', 1959],
+    ['the native size is one layout behind', 1500],
+  ])('ends at the content end on the first content-size change when %s', async (_case, nativeContentHeight) => {
     const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'ios' });
     h.render();
     await h.send('[test] List five fruits, one short line each.', { text: 'Apple\nBanana\nCherry' });
@@ -48,7 +55,7 @@ describe('an opening chat lands at its newest message', () => {
       // The order the device delivered: the list's frame, then its content size. No row layout.
       native.listHeight = 747;
       h.rtl.fireEvent(list, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 440, height: 747 } } });
-      native.contentHeight = 1959;
+      native.contentHeight = nativeContentHeight;
       h.rtl.fireEvent(list, 'contentSizeChange', 440, 1959);
 
       expect(native.offset).toBe(1959 - 747);

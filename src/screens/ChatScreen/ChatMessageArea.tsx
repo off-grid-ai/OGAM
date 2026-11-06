@@ -257,6 +257,9 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   const showSettingsDot = totalToolCount > 3 && !toolCountHintDismissed;
   const [inputHeight, setInputHeight] = useState(84);
   const flatListHeightRef = useRef(0);
+  const contentHeightRef = useRef(0);
+  // Where the list ends, from the latest layout: the scroll does not wait for the native mount.
+  const contentExtent = () => ({ contentHeight: contentHeightRef.current, listHeight: flatListHeightRef.current });
   const generationWasActiveRef = useRef(false);
   const userScrolledDuringGenerationRef = useRef(false);
 
@@ -352,29 +355,30 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           contentContainerStyle={styles.messageList}
           onScroll={handleScroll}
           onContentSizeChange={(_w, h) => {
-            // Every pin goes to the NATIVE end of the content. This first change arrives before any
-            // row has reported its height, so FlatList.scrollToEnd would scroll to 0, the oldest
-            // message, and on a cold start the timers that pin again wait for seconds (hand test 58).
+            contentHeightRef.current = h;
+            // Every pin goes to the end this layout reports. This first change arrives before any row
+            // has reported its height, so FlatList.scrollToEnd would scroll to 0, the oldest message,
+            // and on a cold start the timers that pin again wait for seconds (hand test 58).
             if (openingRef.current && h > 0) {
-              scrollToContentEnd(flatListRef.current, false);
+              scrollToContentEnd(flatListRef.current, false, contentExtent());
               // Settled once the content has not grown for 400 ms: one last scroll, then the list
               // keeps a reader's place as usual.
               if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
               settleTimerRef.current = setTimeout(() => {
-                if (openingRef.current) scrollToContentEnd(flatListRef.current, false);
+                if (openingRef.current) scrollToContentEnd(flatListRef.current, false, contentExtent());
                 setSettled(true);
               }, 400);
               hasScrolledRef.current = true;
             } else if (!hasScrolledRef.current && h > 0) {
               // Initial layout: force scroll to bottom regardless of isNearBottom
-              scrollToContentEnd(flatListRef.current, false);
+              scrollToContentEnd(flatListRef.current, false, contentExtent());
               hasScrolledRef.current = true;
             } else if (
               isNearBottomRef.current ||
               (chat.isGeneratingForThisConversation &&
                 !userScrolledDuringGenerationRef.current)
             ) {
-              scrollToContentEnd(flatListRef.current, false);
+              scrollToContentEnd(flatListRef.current, false, contentExtent());
             }
           }}
           onScrollBeginDrag={() => {
