@@ -713,3 +713,8 @@ Bug to investigate: the paused "Wan 2.1 (1.3B), FP16" download is gone (Models >
 - Pass: carousel held its card for 26 s behind the Models sheet and advanced ~8 s after close; RAM labels stable across 4 opens; image picker's power icon is plain, 44 pt, named; Chats and Settings intact. No lost behaviour.
 - Fail: text picker still 2.2–3.2 s of bare Home on every open (also from the Qwen chip, so the stall is in the text picker itself; the header cache was not the cause); repeating 250–375 ms hangs while it is open; tags cut off ("Thin", "Tools ·"); no current-model row or check for the selected-not-loaded Qwen 3.5 2B, and tapping it gives no feedback.
 - Top 3: (1) profile and remove the text picker stall; (2) tags never cut off in list rows; (3) mark the selected text model and answer a tap on it.
+
+## Supervisor 17:47 (hand test 91, release pass) — hand test 90 fixes pass; not release-ready
+- Pass: text picker up with rows ~0.4 s after the tap (was 2.5–3 s); selected text model checked; no cut tags; remote groups show 5 + Show all; Home, Chats, chat reply ("blue and red", 4.1 s), Projects, Settings, About, Documents. No lost behaviour.
+- Fail: image generators tagged "Sees images", RealVisXL called "anime"; Image tab "For this phone" picks change after a second; Speech "Small" card offers download while its row shows trash; Voice banner in warning colour; two check styles; Gallery Videos gutters 16 pt and boxed cards; Downloads tabs differ from Models; Qwen 3.5 4B description touches "On phone"; Video search field has no icon.
+- Top 3: (1) correct capability tags on image models; (2) stable Image picks, Speech card and row agree; (3) consistency: Voice banner, one check style, Videos gutters, Downloads tabs.
