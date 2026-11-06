@@ -205,14 +205,14 @@ export const SettingsScreen: React.FC = () => {
                 icon: 'search',
                 title: 'Document search',
                 // What it does for you; the model's name is one tap in, on its own screen.
-                desc: 'How chat finds the right part of your documents',
+                desc: 'How chats find the right part of a file',
                 screen: 'SearchModel' as const,
                 testID: 'open-search-model',
               },
               {
                 icon: 'wifi',
                 title: 'Remote servers',
-                desc: 'Connect to Off Grid AI Desktop, Ollama, LM Studio, and more',
+                desc: 'Your Mac, Ollama or LM Studio',
                 screen: 'RemoteServers' as const,
               },
               ...(hasSync
@@ -221,8 +221,8 @@ export const SettingsScreen: React.FC = () => {
                       icon: 'refresh-cw',
                       title: isSyncUnlocked ? 'Sync' : 'Sync with Pro',
                       desc: isSyncUnlocked
-                        ? 'Chats, projects, files, and copied text across your devices'
-                        : 'Get Pro to set up encrypted Sync across your devices',
+                        ? 'Chats and files on all your devices'
+                        : 'Chats and files on all your devices, with Pro',
                       screen: 'Sync' as const,
                       testID: 'open-sync-settings',
                     },
@@ -250,7 +250,7 @@ export const SettingsScreen: React.FC = () => {
               {
                 icon: 'cpu',
                 title: 'Engine updates',
-                desc: 'The engine that runs your models, and how it stays current',
+                desc: 'What runs your models',
                 screen: 'EngineUpdates' as const,
                 testID: 'open-engine-updates',
               },
@@ -281,7 +281,8 @@ export const SettingsScreen: React.FC = () => {
                 </View>
                 <View style={styles.navItemContent}>
                   <Text style={styles.navItemTitle}>{item.title}</Text>
-                  <Text style={styles.navItemDesc}>{item.desc}</Text>
+                  {/* One line, so every row in the list keeps one height (design philosophy: rhythm). */}
+                  <Text style={styles.navItemDesc} numberOfLines={1}>{item.desc}</Text>
                 </View>
                 <Icon name="chevron-right" size={16} color={colors.textMuted} />
               </AnimatedListItem>
