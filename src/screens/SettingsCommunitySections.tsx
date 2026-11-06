@@ -4,6 +4,7 @@ import { TouchableOpacity } from '../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
 import { AnimatedEntry } from '../components/AnimatedEntry';
+import { SectionLabel } from '../components/SectionLabel';
 import {
   FOLLOW_X_URL,
   GITHUB_URL,
@@ -49,7 +50,7 @@ export const SettingsCommunitySections: React.FC<
   ];
   return (
     <AnimatedEntry index={7} staggerMs={40} trigger={focusTrigger}>
-      <Text style={styles.sectionLabel}>Community</Text>
+      <SectionLabel title="Community" />
       <View style={styles.navSection}>
         {rows.map((row, i) => (
           <TouchableOpacity

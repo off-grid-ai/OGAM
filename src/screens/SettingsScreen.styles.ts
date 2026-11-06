@@ -89,15 +89,6 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.textMuted,
     lineHeight: 18,
   },
-  sectionLabel: {
-    ...TYPOGRAPHY.label,
-    // brand/DESIGN_PHILOSOPHY.md: labels are quiet uppercase whispers.
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.3,
-    color: colors.textMuted,
-    marginBottom: SPACING.sm,
-    marginLeft: SPACING.xs,
-  },
   devButton: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
