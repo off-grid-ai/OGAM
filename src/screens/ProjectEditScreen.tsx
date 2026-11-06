@@ -85,7 +85,7 @@ export const ProjectEditScreen: React.FC = () => {
       return;
     }
     if (!formData.systemPrompt.trim()) {
-      setAlertState(showAlert('Error', 'Please enter a system prompt'));
+      setAlertState(showAlert('Add instructions', 'Tell chats in this project how to answer.'));
       return;
     }
 

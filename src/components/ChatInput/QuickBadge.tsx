@@ -9,9 +9,10 @@ export type QuickBadgeTone = 'on' | 'off' | 'count' | 'warn';
 
 const WARNING = '#F59E0B';
 
-/** "ON" and "AUTO" read as words: "On", "Auto". Counts stay numbers. */
+/** "ON", "OFF" and "AUTO" read as words: "On", "Off", "Auto". Anything else (a count, N/A) is shown as given. */
+const WORDS: Record<string, string> = { ON: 'On', OFF: 'Off', AUTO: 'Auto' };
 const asWord = (label: string | number): string =>
-  typeof label === 'number' ? String(label) : label.charAt(0).toUpperCase() + label.slice(1).toLowerCase();
+  typeof label === 'number' ? String(label) : WORDS[label.toUpperCase()] ?? label;
 
 /**
  * The value at the end of a quick-settings row, as plain text: a boxed uppercase Mono pill on every

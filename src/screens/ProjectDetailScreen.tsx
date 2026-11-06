@@ -245,7 +245,7 @@ export const ProjectDetailScreen: React.FC = () => {
           style={[styles.knowsRow, styles.knowsRowDivided]}
           onPress={() => navigation.navigate('KnowledgeBase', { projectId })}
           accessibilityRole="button"
-          accessibilityLabel={fileCount > 0 ? `${fileCount} files` : 'Add a file'}
+          accessibilityLabel={fileCount === 0 ? 'Add a file' : fileCount === 1 ? '1 file' : `${fileCount} files`}
           testID="project-files"
         >
           <Icon name="file-text" size={16} color={colors.textSecondary} />
