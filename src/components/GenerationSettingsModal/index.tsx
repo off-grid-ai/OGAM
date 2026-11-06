@@ -52,8 +52,9 @@ export const GenerationSettingsModal: React.FC<
       sheet="generation-settings"
       visible={visible}
       onClose={onClose}
-      // Three rows now, so the sheet fits them instead of opening half the screen (hand test 71).
-      enableDynamicSizing
+      // A fixed short height for its few rows. Dynamic sizing measured the scroll view as zero and
+      // opened the sheet as a bare header (hand test 72).
+      snapPoints={['42%']}
       title="Chat settings"
     >
       {performanceStats.lastTokensPerSecond > 0 && (
