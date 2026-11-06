@@ -622,3 +622,8 @@ Top 3: (1) Model settings tabs: one flat surface, no cards in cards, no accordio
 
 Pass: quick settings solid, chat Details capital and no cache, no regressions on Home / Projects / Models. Fail: chat settings sheet opened as a bare header (enableDynamicSizing measured the ScrollView as 0); Project and Model settings unreachable from a chat. Fixed after: fixed 42% snap point. Partial: Model settings tabs (Image: example box touching Image steps, "Image Size", Video generation outside the card; Voice: two cards with no gap, dropdown shadow; Text Advanced copy technical).
 Top 3: (1) chat settings sheet rows visible (fixed); (2) Image & video and Voice tabs: one card per section, gaps, no dropdown shadow, inline example; (3) Tools count font matches Pro tools.
+
+## Supervisor 13:55 (hand test 73, build 74) — 4 of 4 pass
+
+Chat settings sheet shows Project, Model settings, Delete chat (half empty below); image example inline and "Image size"; a gap between the Voice cards; one face for the quick-settings counts. Watch: a Home recent-chat row did not respond to two taps (Chats tab worked), cause not found.
+Top 3: (1) Video generation inside the Image & video card; (2) no dropdown shadows on Voice, a clear state for Read replies aloud; (3) the chat settings sheet sized to its rows without the bare-header bug.

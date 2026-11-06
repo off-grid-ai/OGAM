@@ -54,7 +54,7 @@ export const GenerationSettingsModal: React.FC<
       onClose={onClose}
       // A fixed short height for its few rows. Dynamic sizing measured the scroll view as zero and
       // opened the sheet as a bare header (hand test 72).
-      snapPoints={['42%']}
+      snapPoints={['34%']}
       title="Chat settings"
     >
       {performanceStats.lastTokensPerSecond > 0 && (
