@@ -20,6 +20,12 @@ import { SCROLL_DEPTH_PROPS } from '../../constants/scrollDepth';
 
 type GalleryScreenRouteProp = RouteProp<RootStackParamList, 'Gallery'>;
 
+/** A hairline between video rows, inset to the row's text. */
+const VideoDivider: React.FC = () => {
+  const styles = useThemedStyles(createStyles);
+  return <View style={styles.videoDivider} />;
+};
+
 export const GalleryScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const route = useRoute<GalleryScreenRouteProp>();
@@ -227,7 +233,9 @@ export const GalleryScreen: React.FC = () => {
             {...SCROLL_DEPTH_PROPS}
             data={displayVideos}
             keyExtractor={item => item.id}
-            contentContainerStyle={styles.videoList}
+            style={styles.videoList}
+            contentContainerStyle={styles.videoGroup}
+            ItemSeparatorComponent={VideoDivider}
             ListHeaderComponent={hasVideoLibrary ? (
               <TouchableOpacity
                 onPress={() => navigation.navigate('VideoLibrary' as never)}

@@ -219,16 +219,17 @@ const createViewerStyles = (colors: ThemeColors) => ({
 });
 
 const createVideoStyles = (colors: ThemeColors) => ({
-  videoList: { padding: SPACING.md },
-  // Glass like every card.
+  videoList: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md },
+  // Rows on one glass surface with hairlines, as every list (hand test 82: a card per video).
   videoRow: {
-    ...cardSurface(colors),
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    padding: SPACING.lg,
-    marginBottom: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
     gap: SPACING.md,
   },
+  videoGroup: { ...cardSurface(colors), overflow: 'hidden' as const },
+  videoDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.borderLight, marginLeft: SPACING.lg },
   videoRowBody: { flex: 1 },
   videoRowTitle: { color: colors.text },
   videoRowMeta: { color: colors.textMuted },
