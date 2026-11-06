@@ -59,7 +59,7 @@ describeIfPro('McpGuideScreen', () => {
 
   it('renders the header title and every section heading', () => {
     render(withNavigatorRoutes(<McpGuideScreen />, { openedFrom: 'Previous' }));
-    expect(screen.getByText('MCP Setup Guide')).toBeTruthy();
+    expect(screen.getByText('Connect a tools server')).toBeTruthy();
     expect(screen.getByText('What MCP enables')).toBeTruthy();
     expect(screen.getByText('Local models: what to expect')).toBeTruthy();
     expect(screen.getByText('Remote models: best results')).toBeTruthy();
@@ -108,13 +108,13 @@ describeIfPro('McpGuideScreen', () => {
   it('resolves colors via the REAL useTheme for both light and dark theme modes', () => {
     useAppStore.setState({ themeMode: 'light' });
     const light = render(withNavigatorRoutes(<McpGuideScreen />, { openedFrom: 'Previous' }));
-    expect(light.getByText('MCP Setup Guide')).toBeTruthy();
+    expect(light.getByText('Connect a tools server')).toBeTruthy();
     light.unmount();
 
     useAppStore.setState({ themeMode: 'dark' });
     render(withNavigatorRoutes(<McpGuideScreen />, { openedFrom: 'Previous' }));
     // Same content renders regardless of resolved palette — proves the real
     // useTheme branch runs without throwing for either mode.
-    expect(screen.getByText('MCP Setup Guide')).toBeTruthy();
+    expect(screen.getByText('Connect a tools server')).toBeTruthy();
   });
 });

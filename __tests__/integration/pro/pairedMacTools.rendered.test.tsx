@@ -64,10 +64,10 @@ describe('paired Mac tools in Pro settings', () => {
 
     expect(ui.getAllByText('Mac tools')).toHaveLength(1);
     expect(ui.getByText('0/3 tools enabled')).toBeTruthy();
-    expect(ui.getByText('Edit Tools')).toBeTruthy();
+    expect(ui.getByText('Edit tools')).toBeTruthy();
     expect(ui.queryByText('3/3 tools')).toBeNull();
     expect(ui.queryByText('2/2 tools')).toBeNull();
-    fireEvent.press(ui.getByText('Edit Tools'));
+    fireEvent.press(ui.getByText('Edit tools'));
     expect(await ui.findByText('web_use')).toBeTruthy();
     expect(ui.getByText('calendar_list')).toBeTruthy();
     const { Switch } = require('react-native');

@@ -94,7 +94,7 @@ describe('tools screen while the server waits for sign-in', () => {
     await waitFor(() => expect(ui.getByTestId(`mcp-server-status-${DOCS.id}`)).toHaveTextContent('Active'));
     expect(ui.getByTestId(`mcp-server-tool-count-${DOCS.id}`)).toHaveTextContent('2/2 tools');
 
-    fireEvent.press(ui.getByText('Edit Tools'));
+    fireEvent.press(ui.getByText('Edit tools'));
     expect(await ui.findByText('search')).toBeTruthy();
     expect(ui.queryByTestId('mcp-tools-empty')).toBeNull();
 

@@ -53,7 +53,7 @@ it.each([['Alpha first', alpha, beta], ['Beta first', beta, alpha]] as const)(
       await rtl.waitFor(() => expect(ui.getByTestId(`mcp-server-status-${second.id}`)).toHaveTextContent('Active'));
       expect(ui.getByTestId(`mcp-server-tool-count-${alpha.id}`)).toHaveTextContent('0/1 tools');
       expect(ui.getByTestId(`mcp-server-tool-count-${beta.id}`)).toHaveTextContent('1/1 tools');
-      rtl.fireEvent.press(ui.getAllByText('Edit Tools')[1]);
+      rtl.fireEvent.press(ui.getAllByText('Edit tools')[1]);
       expect(await ui.findByText('Beta Docs')).toBeTruthy();
       expect(ui.getByRole('switch', { checked: true })).toBeTruthy();
       expect(ui.getByText('Disable All')).toBeEnabled();

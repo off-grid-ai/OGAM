@@ -71,7 +71,7 @@ async function launch() {
   /** Cards render in the order the user added the servers: Alpha, then Beta. */
   const openTools = async (serverName: string) => {
     const index = [ALPHA.name, BETA.name].indexOf(serverName);
-    rtl.fireEvent.press(ui.getAllByText('Edit Tools')[index]);
+    rtl.fireEvent.press(ui.getAllByText('Edit tools')[index]);
     await rtl.waitFor(() => expect(ui.getByText(/TOOLS AVAILABLE/)).toBeTruthy());
     // The list behind is hidden from the user, so the visible name is the Tools screen's header.
     expect(ui.getByText(serverName)).toBeTruthy();

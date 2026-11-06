@@ -75,7 +75,7 @@ describe('same-named MCP tools stay on the server the user picked', () => {
     expect(ui.getByTestId(`mcp-server-tool-count-${BETA.id}`)).toHaveTextContent('1/2 tools');
 
     // Open Beta's tools and turn search on there.
-    fireEvent.press(ui.getAllByText('Edit Tools')[1]);
+    fireEvent.press(ui.getAllByText('Edit tools')[1]);
     expect(await ui.findByText('Beta Wiki')).toBeTruthy();
     const { Switch } = require('react-native');
     const betaSwitches = () => ui.UNSAFE_getAllByType(Switch).filter(sw => sw.props.testID === undefined);

@@ -30,10 +30,15 @@ jest.mock('react-native-inappbrowser-reborn', () => ({
 }));
 // Node already provides crypto.getRandomValues; the RN polyfill's native module does not exist here.
 jest.mock('react-native-get-random-values', () => ({}), { virtual: true });
-// Render the bundled SVG mark as something queryable.
+// Render the bundled SVG mark as something queryable. The rest of react-native-svg stays real: the
+// screen sits on the living field, which draws with Svg, Defs and RadialGradient.
 jest.mock('react-native-svg', () => {
   const { Text } = require('react-native');
-  return { __esModule: true, SvgXml: () => <Text testID="preset-logo-svg">svg</Text> };
+  return {
+    ...jest.requireActual('react-native-svg'),
+    __esModule: true,
+    SvgXml: () => <Text testID="preset-logo-svg">svg</Text>,
+  };
 });
 
 import React from 'react';
