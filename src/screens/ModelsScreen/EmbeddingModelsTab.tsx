@@ -22,8 +22,11 @@ const createEmbeddingStyles = (colors: ThemeColors) => ({
     color: colors.textSecondary,
     marginBottom: SPACING.md,
   },
+  // The same section label as the Text tab ("FOR THIS PHONE"): Mono, upper case, grey.
   sectionLabel: {
     ...TYPOGRAPHY.label,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.3,
     color: colors.textMuted,
     marginTop: SPACING.sm,
     marginBottom: SPACING.sm,
