@@ -10,6 +10,7 @@
  * remote image runner and GalleryScreen. Fakes only at the network (fetch) and native file system
  * (RNFS) edges.
  */
+import { deleteOpenImage, galleryWithRoutes } from '../../harness/galleryRoutes';
 import { setupChatScreen } from '../../harness/chatHarness';
 import { REMOTE_IMAGE_URL, chooseRemoteImageModel, serveImageGeneration } from '../../harness/remoteImageServer';
 
@@ -77,8 +78,8 @@ describe('remote image formats', () => {
     expect(saved[0]).toMatch(/\.webp$/);
     h.view!.unmount();
 
-    // BEFORE: the Gallery lists the image.
-    const gallery = openGallery();
+    // BEFORE: the Gallery lists the image. It opens with its image route, as the app's stack has it.
+    const gallery = h.rtl.render(galleryWithRoutes());
     const tiles = await h.rtl.waitFor(() => {
       const found = gallery.queryAllByTestId(/^gallery-image-/);
       expect(found).toHaveLength(1);
@@ -87,11 +88,7 @@ describe('remote image formats', () => {
     expect(gallery.queryByText('No generated images yet')).toBeNull();
 
     h.rtl.fireEvent.press(tiles[0]);
-    h.rtl.fireEvent.press(gallery.getByText('Delete'));
-    await gallery.findByText('Delete Image');
-    await h.rtl.act(async () => {
-      h.rtl.fireEvent.press(gallery.getAllByText('Delete')[1]);
-    });
+    await deleteOpenImage(h.rtl, gallery);
 
     await h.rtl.waitFor(() => {
       expect(gallery.queryAllByTestId(/^gallery-image-/)).toHaveLength(0);

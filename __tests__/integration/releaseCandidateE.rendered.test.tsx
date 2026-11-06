@@ -1,4 +1,5 @@
 /** Release-candidate journeys on the production navigation stack. Only device boundaries are faked. */
+import { pressImageAction } from '../harness/galleryRoutes';
 import { GB, installNativeBoundary, requireRTL } from '../harness/nativeBoundary';
 import { createDownloadedModel } from '../utils/factories';
 import type { LicensedMesh } from '../harness/licensedMesh';
@@ -201,19 +202,22 @@ it('M6: Gallery deletes a synced copy and reports an unsafe path for single and 
   const { view, rtl } = app;
   await openGallery(app);
   rtl.fireEvent.press(view.getByTestId('gallery-image-synced'));
-  rtl.fireEvent.press((await view.findByText('Delete')));
+  await pressImageAction(rtl, view, 'Delete');
   await view.findByText('Delete Image');
   await confirmDelete(app);
-  await rtl.waitFor(() => expect(view.queryByTestId('gallery-image-synced')).toBeNull());
+  // A deleted image's route closes, back to the grid without it.
+  await rtl.waitFor(() => expect(view.queryByTestId('gallery-image-screen')).toBeNull());
+  expect(view.queryByTestId('gallery-image-synced')).toBeNull();
   rtl.fireEvent.press(view.getByTestId('gallery-image-outside'));
-  rtl.fireEvent.press((await view.findByText('Delete')));
+  await pressImageAction(rtl, view, 'Delete');
   await view.findByText('Delete Image');
   await confirmDelete(app);
   expect(await view.findByText('Image was not deleted')).toBeTruthy();
   rtl.fireEvent.press(view.getByText('OK'));
   await rtl.waitFor(() => expect(view.queryByText('Image was not deleted')).toBeNull());
-  // Close the full-screen viewer through its real dismiss control.
-  rtl.fireEvent.press(view.getByText('Close'));
+  // Leave the full-screen image through its real Back.
+  rtl.fireEvent.press(view.getByTestId('gallery-image-back'));
+  await rtl.waitFor(() => expect(view.queryByTestId('gallery-image-screen')).toBeNull());
   rtl.fireEvent(view.getByTestId('gallery-image-outside'), 'longPress');
   rtl.fireEvent.press(view.getByLabelText('Delete selected images'));
   await view.findByText('Delete Images');

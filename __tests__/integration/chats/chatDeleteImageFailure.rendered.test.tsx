@@ -6,6 +6,7 @@
  * diffusion module are the in-memory native boundary; the filesystem refuses one unlink, as a
  * locked or permission-protected file does on device.
  */
+import { deleteOpenImage, galleryWithRoutes } from '../../harness/galleryRoutes';
 import {
   installNativeBoundary,
   requireRTL,
@@ -94,15 +95,10 @@ describe.each<DeleteGesture>(['swipe delete', 'select and delete'])('Deleting a 
 
     // Retry from the Gallery: the image that stayed is listed, and deleting it now succeeds.
     locked = false;
-    const { GalleryScreen } = require('../../../src/screens/GalleryScreen');
-    const gallery = rtl.render(withNavigator(React.createElement(GalleryScreen)));
+    const gallery = rtl.render(galleryWithRoutes());
     rtl.fireEvent.press(await gallery.findByTestId('gallery-image-img-locked'));
     expect(gallery.queryByTestId('gallery-image-img-free')).toBeNull();
-    rtl.fireEvent.press(gallery.getByText('Delete'));
-    await gallery.findByText('Delete Image');
-    await rtl.act(async () => {
-      rtl.fireEvent.press(gallery.getAllByText('Delete')[1]);
-    });
+    await deleteOpenImage(rtl, gallery);
 
     await rtl.waitFor(() => {
       expect(gallery.queryByTestId('gallery-image-img-locked')).toBeNull();

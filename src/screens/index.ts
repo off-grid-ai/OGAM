@@ -6,6 +6,8 @@ export { ModelsScreen } from './ModelsScreen';
 export { ChatScreen } from './ChatScreen';
 export { SettingsScreen } from './SettingsScreen';
 export { GalleryScreen } from './GalleryScreen';
+export { GalleryImageScreen } from './GalleryScreen/GalleryImageScreen';
+export { GalleryVideoScreen } from './GalleryScreen/GalleryVideoScreen';
 export { ProjectsScreen } from './ProjectsScreen';
 export { ProjectDetailScreen } from './ProjectDetailScreen';
 export { ProjectEditScreen } from './ProjectEditScreen';
