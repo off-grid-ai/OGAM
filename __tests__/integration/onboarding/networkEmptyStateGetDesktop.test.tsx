@@ -77,7 +77,7 @@ describe('Onboarding network empty state — leads with Off Grid AI Desktop + Ge
   it('does not open any URL when an unrelated control (Scan Network) is pressed — falsifier', () => {
     const ui = renderEmptyNetworkSection();
 
-    fireEvent.press(ui.getByText('Scan Network'));
+    fireEvent.press(ui.getByText('Scan network'));
 
     expect(openURLSpy).not.toHaveBeenCalled();
   });
