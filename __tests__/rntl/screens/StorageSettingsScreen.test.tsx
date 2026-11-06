@@ -48,7 +48,7 @@ const renderStorage = () =>
 
 /** Let the first orphan scan of the disk finish. */
 const scanned = async (view: ReturnType<typeof renderStorage>) => {
-  await waitFor(() => expect(view.queryByText('Looking…')).toBeNull());
+  await waitFor(() => expect(view.queryByText('Looking')).toBeNull());
 };
 
 describe('StorageSettingsScreen', () => {
@@ -71,13 +71,13 @@ describe('StorageSettingsScreen', () => {
   it('back button returns to the screen it was opened from', async () => {
     const view = renderStorage();
     fireEvent.press(view.UNSAFE_getByProps({ name: 'arrow-left' }));
-    await waitFor(() => expect(view.queryByText('Storage used')).toBeNull());
+    await waitFor(() => expect(view.queryByText('Space on this phone')).toBeNull());
   });
 
   it('shows storage info sections', () => {
     const { getByText } = renderStorage();
-    expect(getByText('Storage used')).toBeTruthy();
-    expect(getByText('Breakdown')).toBeTruthy();
+    expect(getByText('Space on this phone')).toBeTruthy();
+    expect(getByText('What uses it')).toBeTruthy();
   });
 
   it('shows hint text at the bottom', () => {
@@ -129,9 +129,9 @@ describe('StorageSettingsScreen', () => {
     expect(getByText('3')).toBeTruthy();
   });
 
-  it('shows Model Storage label in breakdown', () => {
+  it('shows the models line in what uses the space', () => {
     const { getByText } = renderStorage();
-    expect(getByText('Chat, image, video and search models')).toBeTruthy();
+    expect(getByText('All models')).toBeTruthy();
   });
 
   // ---- Model summary tests ----
@@ -143,10 +143,10 @@ describe('StorageSettingsScreen', () => {
     expect(llmTexts.length).toBe(1); // Only breakdown, no separate section
   });
 
-  it('shows "No orphaned files found" after scan completes', async () => {
+  it('says None beside Leftover files after the scan finds nothing', async () => {
     const view = renderStorage();
     await scanned(view);
-    expect(view.getByText('No leftover files.')).toBeTruthy();
+    expect(view.getByText('None')).toBeTruthy();
   });
 
   it('shows orphaned files when they exist', async () => {
@@ -291,7 +291,7 @@ describe('StorageSettingsScreen', () => {
       fireEvent.press(view.getByRole('button', { name: 'Delete All' }));
     });
 
-    await waitFor(() => expect(view.getByText('No leftover files.')).toBeTruthy());
+    await waitFor(() => expect(view.getByText('None')).toBeTruthy());
     expect(await disk.exists(`${MODELS_DIR}/orphan1.gguf`)).toBe(false);
     expect(await disk.exists(`${MODELS_DIR}/orphan2.gguf`)).toBe(false);
   });
@@ -312,7 +312,7 @@ describe('StorageSettingsScreen', () => {
     await scanned(view);
 
     // Should still render without crashing
-    expect(view.getByText('No leftover files.')).toBeTruthy();
+    expect(view.getByText('None')).toBeTruthy();
     disk.module.readDir.mockReset();
   });
 
@@ -332,7 +332,7 @@ describe('StorageSettingsScreen', () => {
   it('rescans for orphaned files when scan button pressed', async () => {
     const view = renderStorage();
     await scanned(view);
-    expect(view.getByText('No leftover files.')).toBeTruthy();
+    expect(view.getByText('None')).toBeTruthy();
 
     // A file appears on disk after the first scan; the scan button finds it.
     disk.seedFile(`${MODELS_DIR}/late.gguf`, 1024);

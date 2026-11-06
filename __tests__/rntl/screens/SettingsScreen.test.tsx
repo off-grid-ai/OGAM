@@ -136,9 +136,9 @@ describe('SettingsScreen', () => {
     expect(getByText(/Version/)).toBeTruthy();
   });
 
-  it('renders the "Stay in the loop" card with the Follow-on-X and Join-Slack items', () => {
-    const { getByText, getByTestId } = renderSettings();
-    expect(getByText('Stay in the loop')).toBeTruthy();
+  it('renders the Community group with the Follow-on-X and Join-Slack items', () => {
+    const { getByText, getByTestId, getByRole } = renderSettings();
+    expect(getByRole('header', { name: 'Community' })).toBeTruthy();
     expect(getByText('Follow @alichherawalla on X')).toBeTruthy();
     // The two affordances are present and tappable.
     expect(getByTestId('follow-on-x')).toBeTruthy();
