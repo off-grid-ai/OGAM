@@ -142,7 +142,7 @@ export function TurnDetails({ messageId, generationMeta, toolNames, styles }: Re
       )}
       {toolNames?.length ? (
         <Text testID="tools-sent-list" style={styles.generationMetaText}>
-          {`Tools it could use: ${toolNames.map(toolDisplayName).join(', ')}`}
+          {`Tools it had for this reply: ${toolNames.map(toolDisplayName).join(', ')}`}
         </Text>
       ) : null}
     </Animated.View>
