@@ -672,3 +672,7 @@ Top 3: (1) videos get the image viewer: own screen, one sheet with Save, Info, E
 
 Videos tab stays in Gallery with a Stories and clips row; Images / Videos switching no longer crashes (numColumns); the video viewer matches the image viewer: dark screen, More opens one sheet with Share, Delete and details; grey play marks; Desktop tools line fits. Fixed after: the video sits centred. Extend lives in Stories and clips.
 Top 3: (1) video centred (done); (2) video rows on one glass surface; (3) Pro's film input and Ready cards off the Videos tab.
+
+## Supervisor 16:30 (hand test 83, Home carousel) — layout pass, read as an ad
+
+Twelve cards across the phone, Pro and Mac (Mac's ask: discovery of every feature, outcome copy). Fit and tags pass. Fail: 9 of 12 tagged Pro or Mac and a fast auto-turn read as a rotating ad; three lines rang false. Fixed after: free phone cards lead (untried first within each group), 8 s turn, lines rewritten plain ("Your copies, kept." / "Search what you saw on your Mac." / "Start on your Mac, finish here.").
