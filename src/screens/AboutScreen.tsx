@@ -66,7 +66,7 @@ export const AboutScreen: React.FC = () => {
             onPress={() => Linking.openURL(WEDNESDAY_MOBILE_URL)}
           >
             <View style={styles.navItemIcon}>
-              <Image source={require('../assets/wednesday_logo.png')} style={styles.wednesdayLogo} />
+              <Image source={require('../assets/wednesday_logo.png')} style={[styles.wednesdayLogo, { tintColor: colors.textSecondary }]} />
             </View>
             <View style={styles.navItemContent}>
               <Text style={styles.navItemTitle}>Built by Wednesday</Text>
