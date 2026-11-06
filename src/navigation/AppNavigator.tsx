@@ -36,6 +36,8 @@ import {
   SecuritySettingsScreen,
   EngineUpdatesScreen,
   GalleryScreen,
+  GalleryImageScreen,
+  GalleryVideoScreen,
   RemoteServersScreen,
   RemoteServerEditorScreen,
   ProDetailScreen,
@@ -255,6 +257,13 @@ export const AppNavigator: React.FC = () => {
         />
         {/* A stack screen, not a modal: its Videos, Animate and player screens push on top of it full screen. */}
         <RootStack.Screen name="Gallery" component={GalleryScreen} />
+        {/* The image and the video player are routes, never modals: Back and the swipe close them. */}
+        <RootStack.Screen
+          name="GalleryImage"
+          component={GalleryImageScreen}
+          options={{ animation: 'fade', contentStyle: { backgroundColor: '#000' } }}
+        />
+        <RootStack.Screen name="GalleryVideo" component={GalleryVideoScreen} />
         {registeredScreens.map(s => (
           <RootStack.Screen key={s.name} name={s.name as any} component={s.component} />
         ))}
