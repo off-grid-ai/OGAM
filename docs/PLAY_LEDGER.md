@@ -686,3 +686,8 @@ Top 3: (1) one home per thing: Document search links to Models > Documents, Abou
 
 Pass: About (one home for X and Slack), Document search opens Models > Documents, stats rows with a line, Files on glass, Storage values with units, Device tiers in outcomes. Fail then fixed: Model settings lines (shortened again), Downloads facts clipped mid-word (capability tags dropped from Downloads; Models keeps them).
 Bug to investigate: the paused "Wan 2.1 (1.3B), FP16" download is gone (Models > Video shows a fresh download icon; Downloads badge gone). Nothing in today's diff touches downloads; most likely cleared when the gallery session installed a main-based build on this phone. A paused download should survive a reinstall.
+
+## Supervisor 16:31 (hand test 86, carousel copy + grey credit) — copy reads as outcomes; carousel does not loop
+- Pass: Home field and glass, 9 of 12 card titles, Settings credit, Chats, Projects. No lost behaviour.
+- Fail: carousel stops at card 12 and auto-advance jumps to card 6; two card lines clip ("mac-models", "tools"); pips are 6x7 pt; About shows the credit twice (row + footer); six white Gallery tiles; Qwen 3.5 2B refused "Name two colours".
+- Top 3: (1) chat default prompt so the small model answers simple asks; (2) carousel loops on swipe and auto-advance, one-line lines, 44 pt pip targets; (3) Talk card: on-phone Whisper first, Mac servers grouped below with hairlines.
