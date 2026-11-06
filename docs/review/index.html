@@ -80,6 +80,13 @@ button, textarea { font: inherit; color: inherit; }
 .note.done .num { background: var(--done); }
 .note.done .text { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
 .note .text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.note .reply { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 6px; padding: 6px 8px; border-left: 2px solid var(--line); color: var(--muted); }
+.note .reply b { color: inherit; font-weight: 600; }
+.note.done .reply { text-decoration: none; }
+.views { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-right: 8px; }
+.views button { background: transparent; border: 0; padding: 6px 12px; color: var(--muted); font: inherit; cursor: pointer; }
+.views button[aria-pressed="true"] { background: var(--line); color: inherit; }
+.views[hidden] { display: none; }
 .note .meta { color: var(--muted); font: 11px/1.4 var(--mono); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
 .note .meta button { background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .note .meta button:hover { color: var(--fg); }
@@ -111,6 +118,10 @@ button, textarea { font: inherit; color: inherit; }
       <h2 id="title">Loading screens…</h2>
       <span class="what" id="what"></span>
       <div class="nav">
+        <div class="views" id="views" role="group" aria-label="Before or after">
+          <button type="button" id="view-before" aria-pressed="false">Before</button>
+          <button type="button" id="view-after" aria-pressed="true">After</button>
+        </div>
         <button class="btn" id="prev" aria-label="Previous screen">←</button>
         <button class="btn" id="next" aria-label="Next screen">→</button>
       </div>
@@ -141,13 +152,23 @@ let notes = [];        // every note, all screens
 let current = 0;
 let draft = null;      // {x, y} in 0..1 of the screenshot
 let lit = null;        // id of the highlighted note
+let view = "after";   // which shot of a screen with a before: "before" or "after"
 let db = null, user = null, me = null;
 const names = {};
 
 function screenId() { return screens[current]?.id; }
-function onScreen(id) {
-  return notes.filter((n) => n.screen === id).sort((a, b) => a.created - b.created);
+// A note made before a screen had a before/after pair was pinned on the old shot, so it lives on Before.
+function noteView(n) {
+  if (n.on) return n.on;
+  return screens.find((s) => s.id === n.screen)?.before ? "before" : "after";
 }
+function shownView(s) { return s?.before ? view : "after"; }
+function shotFile(s) { return shownView(s) === "before" ? s.before : s.file; }
+function onScreen(id) {
+  const s = screens.find((x) => x.id === id);
+  return notes.filter((n) => n.screen === id && noteView(n) === shownView(s)).sort((a, b) => a.created - b.created);
+}
+function allOnScreen(id) { return notes.filter((n) => n.screen === id); }
 
 function renderList() {
   const ul = $("screens");
@@ -163,7 +184,7 @@ function renderList() {
     const gp = document.createElement("span"); gp.className = "group"; gp.textContent = s.group || "";
     label.append(nm, gp);
     const c = document.createElement("span"); c.className = "count";
-    const open = onScreen(s.id).filter((n) => !n.done).length;
+    const open = allOnScreen(s.id).filter((n) => !n.done).length;
     c.textContent = open ? String(open) : "";
     b.append(img, label, c);
     b.onclick = () => go(i);
@@ -181,8 +202,11 @@ function renderStage() {
   if (!s) { $("title").textContent = "No screens yet"; return; }
   $("title").textContent = s.name;
   $("what").textContent = s.what || "";
+  $("views").hidden = !s.before;
+  $("view-before").setAttribute("aria-pressed", String(shownView(s) === "before"));
+  $("view-after").setAttribute("aria-pressed", String(shownView(s) === "after"));
   const img = document.createElement("img");
-  img.src = s.file; img.alt = s.name; img.draggable = false;
+  img.src = shotFile(s); img.alt = s.name + (shownView(s) === "before" ? " (before)" : ""); img.draggable = false;
   shot.append(img);
   img.addEventListener("click", (e) => {
     const r = img.getBoundingClientRect();
@@ -232,7 +256,7 @@ async function renderThread() {
     return;
   }
   if (user && list.length) {
-    try { Object.assign(names, await user.profiles([...new Set(list.map((n) => n.author).filter(Boolean))])); } catch (_) {}
+    try { Object.assign(names, await user.profiles([...new Set(list.map((n) => n.author).filter((a) => a && a !== "claude"))])); } catch (_) {}
   }
   list.forEach((n, i) => {
     const row = document.createElement("div");
@@ -240,15 +264,22 @@ async function renderThread() {
     const num = document.createElement("div"); num.className = "num"; num.textContent = String(i + 1);
     const body = document.createElement("div");
     const t = document.createElement("div"); t.className = "text"; t.textContent = n.text;
+    const parts = [t];
+    if (n.reply) {
+      const r = document.createElement("div"); r.className = "reply";
+      const b = document.createElement("b"); b.textContent = "Claude: ";
+      r.append(b, document.createTextNode(n.reply));
+      parts.push(r);
+    }
     const meta = document.createElement("div"); meta.className = "meta";
-    const who = document.createElement("span"); who.textContent = (names[n.author]?.name) || "Someone";
+    const who = document.createElement("span"); who.textContent = n.author === "claude" ? "Claude" : ((names[n.author]?.name) || "Someone");
     const at = document.createElement("span"); at.textContent = `${Math.round(n.x * 100)}%, ${Math.round(n.y * 100)}% · ${when(n.created)}`;
     const toggle = document.createElement("button"); toggle.type = "button"; toggle.textContent = n.done ? "Reopen" : "Mark done";
     toggle.onclick = () => write(n.id, { done: !n.done });
     const del = document.createElement("button"); del.type = "button"; del.textContent = "Delete";
     del.onclick = () => remove(n.id);
     meta.append(who, at, toggle, del);
-    body.append(t, meta);
+    body.append(...parts, meta);
     row.append(num, body);
     row.onclick = (e) => { if (e.target.tagName === "BUTTON") return; lit = n.id; renderPins(); renderThread(); };
     box.append(row);
@@ -293,7 +324,7 @@ $("compose").addEventListener("submit", async (e) => {
   if (!draft) { status("Click the screen first to show where the note points."); return; }
   if (!text) { status("Write the note first."); return; }
   const s = screens[current];
-  const doc = { screen: s.id, screenName: s.name, x: +draft.x.toFixed(4), y: +draft.y.toFixed(4), text, created: Date.now(), done: false };
+  const doc = { screen: s.id, screenName: s.name, x: +draft.x.toFixed(4), y: +draft.y.toFixed(4), text, created: Date.now(), done: false, on: shownView(s) };
   if (me) doc.author = me;
   $("save").disabled = true;
   try {
@@ -305,6 +336,13 @@ $("compose").addEventListener("submit", async (e) => {
   renderPins(); renderCompose();
 });
 $("cancel").onclick = () => { draft = null; renderPins(); renderCompose(); };
+function setView(v) {
+  view = v; draft = null; lit = null;
+  try { localStorage.setItem("goc-review-view", v); } catch (_) {}
+  renderStage(); renderThread(); renderCompose();
+}
+$("view-before").onclick = () => setView("before");
+$("view-after").onclick = () => setView("after");
 $("prev").onclick = () => go(current - 1);
 $("next").onclick = () => go(current + 1);
 // Arrows move between screens from anywhere, including the note box while it's empty.
@@ -331,6 +369,7 @@ async function boot() {
     const r = await fetch("screens.json");
     screens = await r.json();
   } catch (_) { screens = []; }
+  try { view = localStorage.getItem("goc-review-view") === "before" ? "before" : "after"; } catch (_) {}
   let start = 0;
   const want = location.hash.slice(1) || (() => { try { return localStorage.getItem("goc-review-screen"); } catch (_) { return null; } })();
   const k = screens.findIndex((s) => s.id === want);
