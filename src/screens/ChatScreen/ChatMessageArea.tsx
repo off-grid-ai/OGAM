@@ -265,8 +265,14 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
 
   // Your own message comes into view the moment you send it: a sent message is the one thing you
   // always want to see, whatever the list was doing (hand test 50: out of view ~5 s, keyboard up).
-  const lastMessage = chat.displayMessages[chat.displayMessages.length - 1];
-  const lastSentId = lastMessage?.role === 'user' ? lastMessage.id : undefined;
+  // Keyed on the newest USER message, not the last row: a thinking row lands in the same render as
+  // the sent message, so the sent one is never last (hygiene found this; the scroll never ran).
+  const lastSentId = useMemo(() => {
+    for (let i = chat.displayMessages.length - 1; i >= 0; i -= 1) {
+      if (chat.displayMessages[i].role === 'user') return chat.displayMessages[i].id;
+    }
+    return undefined;
+  }, [chat.displayMessages]);
   useEffect(() => {
     if (!lastSentId) return;
     userScrolledDuringGenerationRef.current = false;
