@@ -322,7 +322,8 @@ describe('StorageSettingsScreen', () => {
 
     const view = renderStorage();
     fireEvent.press(view.getByText('Clear all'));
-    fireEvent.press(view.getByRole('button', { name: 'Clear all' }));
+    // The confirm dialog's own Clear all (the one beside the label is the first).
+    fireEvent.press(view.getAllByRole('button', { name: 'Clear all' }).at(-1)!);
 
     expect(useDownloadStore.getState().downloads['stale-1']).toBeUndefined();
     expect(useDownloadStore.getState().downloads['stale-2']).toBeUndefined();
