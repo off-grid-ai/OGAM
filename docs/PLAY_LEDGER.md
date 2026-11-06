@@ -632,3 +632,8 @@ Top 3: (1) Video generation inside the Image & video card; (2) no dropdown shado
 
 Pass: header with New chat beside the purpose, chats under CHATS · 8 at one height with "Last week" / "2 weeks ago", shorter chat settings sheet, Home recent row opens its chat. Partial: "What it knows" card has no label; words differ (file / document, Instructions / SYSTEM PROMPT); 1 file says "from these"; empty project text floats 330 pt below with no CHATS · 0; knowledge base titled with the project name and a duplicate 36 pt "+".
 Top 3: (1) knowledge base titled Files, one add; (2) one vocabulary (Instructions, files), "from it" for one; (3) a label on the card, CHATS · 0 above the empty text.
+
+## Supervisor 14:50 (hand test 75, build 76) — 7 of 7 pass
+
+Project page: WHAT IT KNOWS label, CHATS · N (and · 0 with the line under it), "from it" for one file; Files titled with the project under it, one add (44 pt), file not document; Instructions on the edit screen; Video open under its label. No lost behaviour.
+Top 3: (1) count-aware empty copy (0 files: "Add a file and chats answer from it"; empty line drops "and files"); (2) one vocabulary: file in the VoiceOver label and Settings, Instructions for system prompt; (3) an IMAGE label to match VIDEO, style names on one line.
