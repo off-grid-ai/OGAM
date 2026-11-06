@@ -214,7 +214,6 @@ export const KnowledgeBaseScreen: React.FC = () => {
       onOpen={doc => openDocumentPage(navigation, { documentId: doc.document_id, name: doc.name })}
       onToggle={(doc, enabled) => handleToggleDocument(doc.id, enabled)}
       onRemove={handleDeleteDocument}
-      testIDPrefix="knowledge-document"
     />
   );
 
