@@ -108,12 +108,13 @@ describe('a tool never switches on for another server by itself', () => {
     expect(toolCount(ui, ALPHA.id)).toHaveTextContent(/\b1 of 1 tools$/);
     expect(toolCount(ui, BETA.id)).toHaveTextContent(/\b0 of 1 tools$/);
 
-    // Remove Alpha through its delete control and confirm.
+    // Remove Alpha from its edit screen (tap its name, then Remove server) and confirm.
     let confirmRemove: (() => void) | undefined;
     jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
       confirmRemove = buttons?.find(b => b.style === 'destructive')?.onPress as () => void;
     });
-    fireEvent.press(ui.getByLabelText(`Remove ${ALPHA.name}`));
+    fireEvent.press(ui.getByText(ALPHA.name));
+    fireEvent.press(await ui.findByTestId('mcp-server-remove'));
     await act(async () => { confirmRemove?.(); });
     await waitFor(() => expect(ui.queryByTestId(`mcp-server-card-${ALPHA.id}`)).toBeNull());
     expect(toolCount(ui, BETA.id)).toHaveTextContent(/\b0 of 1 tools$/);

@@ -95,7 +95,7 @@ describe('tools screen while the server waits for sign-in', () => {
     expect(ui.getByTestId(`mcp-server-tool-count-${DOCS.id}`)).toHaveTextContent(/\b2 of 2 tools$/);
 
     fireEvent.press(ui.getByLabelText(new RegExp(`^${DOCS.name}, Active, `)));
-    expect(await ui.findByText('search')).toBeTruthy();
+    expect(await ui.findByText('Search')).toBeTruthy();
     expect(ui.queryByTestId('mcp-tools-empty')).toBeNull();
 
     // Two hours later the sign-in has expired, and the connection drops while the user is here
@@ -116,6 +116,6 @@ describe('tools screen while the server waits for sign-in', () => {
     expect(ui.queryByText(/connect the server first/i)).toBeNull();
     expect(ui.queryByTestId('mcp-tools-connect')).toBeNull();
     expect(ui.queryByTestId('mcp-tools-retry')).toBeNull();
-    expect(ui.queryByText('search')).toBeNull();
+    expect(ui.queryByText('Search')).toBeNull();
   });
 });

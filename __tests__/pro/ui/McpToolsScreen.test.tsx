@@ -128,8 +128,8 @@ const seed = (opts: {
     });
     const { getByText, getAllByText, getByTestId } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     expect(getByTestId('mcp-tools-summary')).toHaveTextContent('0 of 2 on · ~0 tokens');
-    expect(getByText('lookup')).toBeTruthy();
-    expect(getByText('create')).toBeTruthy();
+    expect(getByText('Lookup')).toBeTruthy();
+    expect(getByText('Create')).toBeTruthy();
     // Each tool says what it would cost.
     expect(getAllByText(/^~\d+ tokens$/).length).toBe(2);
   });
@@ -243,12 +243,12 @@ const seed = (opts: {
     const { getByPlaceholderText, getByText, queryByText, getByLabelText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     const input = getByPlaceholderText('Find a tool');
     fireEvent.changeText(input, 'look');
-    expect(getByText('lookup')).toBeTruthy();
-    expect(queryByText('create')).toBeNull();
+    expect(getByText('Lookup')).toBeTruthy();
+    expect(queryByText('Create')).toBeNull();
 
     // The clear button appears and resets.
     fireEvent.press(getByLabelText('Clear search'));
-    expect(getByText('create')).toBeTruthy();
+    expect(getByText('Create')).toBeTruthy();
   });
 
   it('filters by description too, and shows the no-match empty message', () => {
@@ -261,8 +261,8 @@ const seed = (opts: {
 
     // Matches by description.
     fireEvent.changeText(input, 'make');
-    expect(getByText('create')).toBeTruthy();
-    expect(queryByText('lookup')).toBeNull();
+    expect(getByText('Create')).toBeTruthy();
+    expect(queryByText('Lookup')).toBeNull();
 
     // No match -> the filter message, not the server state.
     fireEvent.changeText(input, 'zzzz');

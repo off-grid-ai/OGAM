@@ -68,8 +68,8 @@ describe('paired Mac tools in Pro settings', () => {
     expect(ui.queryAllByTestId(/^mcp-server-tool-count-/)).toHaveLength(0);
     // The Desktop row opens its tools.
     fireEvent.press(ui.getByLabelText(/ Desktop tools$/));
-    expect(await ui.findByText('web_use')).toBeTruthy();
-    expect(ui.getByText('calendar_list')).toBeTruthy();
+    expect(await ui.findByText('Web use')).toBeTruthy();
+    expect(ui.getByText('Calendar list')).toBeTruthy();
     const { Switch } = require('react-native');
     const switches = ui.UNSAFE_getAllByType(Switch);
     expect(switches.map(item => item.props.value)).toEqual([true, false, false, false]);

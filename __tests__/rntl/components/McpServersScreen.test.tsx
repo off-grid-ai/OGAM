@@ -31,6 +31,7 @@ jest.mock('react-native-inappbrowser-reborn', () => ({
 jest.mock('react-native-get-random-values', () => ({}), { virtual: true });
 
 import React from 'react';
+import { Alert, type AlertButton } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -125,5 +126,48 @@ describe('McpServersScreen', () => {
     expect(status(ui, ACME.id)).toHaveTextContent('Inactive');
     expect(ui.getByLabelText('Acme, Inactive, 0 of 0 tools')).toBeTruthy();
     expect(ui.getByLabelText('Notion, Inactive, 0 of 0 tools')).toBeTruthy();
+  });
+
+  describe('removing a server from its edit screen', () => {
+    /** The person's answer to the native confirm dialog (a device boundary): the button they tap. */
+    const answerConfirm = (choice: 'Remove' | 'Cancel') =>
+      jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons?: AlertButton[]) => {
+        buttons?.find(button => button.text === choice)?.onPress?.();
+      });
+
+    afterEach(() => jest.restoreAllMocks());
+
+    it('the row has no trash; tapping the name opens the edit screen, and Remove takes the server away', async () => {
+      useMcpStore.getState().addServer({ ...ACME, authMode: 'none' });
+      const ui = mount();
+      expect(ui.queryByLabelText(/remove|delete/i)).toBeNull();
+
+      fireEvent.press(ui.getByText('Acme'));
+      const confirm = answerConfirm('Remove');
+      await act(async () => { fireEvent.press(await ui.findByTestId('mcp-server-remove')); });
+
+      expect(confirm).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(ui.queryByText('Acme')).toBeNull());
+      expect(ui.queryByTestId('mcp-server-remove')).toBeNull();
+      expect(useMcpStore.getState().servers.find(server => server.id === ACME.id)).toBeUndefined();
+    });
+
+    it('Cancel keeps the server on the list', async () => {
+      useMcpStore.getState().addServer({ ...ACME, authMode: 'none' });
+      const ui = mount();
+
+      fireEvent.press(ui.getByText('Acme'));
+      answerConfirm('Cancel');
+      await act(async () => { fireEvent.press(await ui.findByTestId('mcp-server-remove')); });
+
+      expect(ui.getByText('Acme')).toBeTruthy();
+      expect(useMcpStore.getState().servers.map(server => server.id)).toContain(ACME.id);
+    });
+
+    it('adding a server offers no Remove', async () => {
+      const ui = mount();
+      fireEvent.press(ui.getByTestId('mcp-add-server'));
+      expect(ui.queryByTestId('mcp-server-remove')).toBeNull();
+    });
   });
 });

@@ -60,9 +60,9 @@ async function launch() {
     ),
   );
 
-  /** The switch on the tool card that shows `toolName` on the open Tools screen. */
+  /** The switch beside the tool named `toolName` on the open Tools screen (shown in words: "search" reads "Search"). */
   const toolSwitch = (toolName: string) => {
-    let node = ui.getByText(toolName).parent;
+    let node = ui.getByText(toolName.charAt(0).toUpperCase() + toolName.slice(1)).parent;
     while (node && node.findAllByType(Switch).length === 0) node = node.parent;
     if (!node) throw new Error(`no switch beside ${toolName}`);
     return node.findAllByType(Switch)[0];
