@@ -45,3 +45,15 @@ it('a failed download keeps its card through a hydrate', async () => {
 
   expect(store.getState().downloads[key]).toMatchObject({ status: 'failed', errorMessage: 'Network lost.' });
 });
+
+it('a running download whose native task is gone shows failed, not still downloading', async () => {
+  const { boundary, hydrateDownloadStore, store } = boot();
+  boundary.download!.seedActive({ downloadId: 'dl-txt', fileName: 'gemma-4b.gguf', modelId: 'gemma-4b', modelType: 'text', status: 'running', bytesDownloaded: GB, totalBytes: 6 * GB });
+  await hydrateDownloadStore();
+  const [key] = Object.keys(store.getState().downloads);
+
+  boundary.download!.simulateRelaunch();
+  await hydrateDownloadStore();
+
+  expect(store.getState().downloads[key]).toMatchObject({ status: 'failed', errorMessage: 'Interrupted — app closed. Tap retry.' });
+});

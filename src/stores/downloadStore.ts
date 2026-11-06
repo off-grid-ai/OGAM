@@ -133,12 +133,16 @@ export const useDownloadStore = create<DownloadStoreState>((set, get) => ({
       const existing = state.downloads[next.modelKey];
       let merged: DownloadEntry;
       if (existing && existing.bytesDownloaded >= next.bytesDownloaded) {
-        // Local listeners are ahead — keep them, just refresh metadataJson + total
+        // Local listeners are ahead — keep them, just refresh metadataJson + total. Progress can be
+        // ahead locally; a failure cannot: a hydrate that finds the download failed (its native row,
+        // or its native task gone) says so, or the card would sit "downloading" or "paused" forever.
+        const failed = next.status === 'failed' && existing.status !== 'failed';
         merged = {
           ...existing,
           totalBytes: next.totalBytes || existing.totalBytes,
           combinedTotalBytes: next.combinedTotalBytes || existing.combinedTotalBytes,
           metadataJson: next.metadataJson ?? existing.metadataJson,
+          ...(failed ? { status: next.status, errorMessage: next.errorMessage, errorCode: next.errorCode } : {}),
         };
       } else {
         merged = next;
