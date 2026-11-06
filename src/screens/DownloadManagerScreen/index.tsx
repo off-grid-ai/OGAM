@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, ScrollView } from 'react-native';
-import { TouchableOpacity } from '../../components/Touchable';
+import { View, Text, FlatList } from 'react-native';
 import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -12,6 +11,7 @@ import { createStyles } from './styles';
 import { ActiveDownloadCard, CompletedDownloadCard, formatBytes, type DownloadItem } from './items';
 import { useDownloadManager } from './useDownloadManager';
 import { isQueuedStatus, isDownloadingStatus, isFailedStatus, type DownloadStatus } from '../../stores/downloadStore';
+import { UnderlineTabs, type UnderlineTab } from '../../components/UnderlineTabs';
 import { AliveScreen } from '../../components/AliveScreen';
 import { ScreenHeader } from '../../components/ScreenHeader';
 
@@ -27,6 +27,8 @@ const FILTERS: { id: FilterType; label: string }[] = [
   { id: 'voice',         label: 'Voice' },
   { id: 'transcription', label: 'Speech' },
 ];
+
+const FILTER_TABS: UnderlineTab<FilterType>[] = FILTERS.map(f => ({ key: f.id, label: f.label, testID: `downloads-filter-${f.id}` }));
 
 function matchesFilter(item: DownloadItem, filter: FilterType): boolean {
   if (filter === 'all')    return true;
@@ -74,31 +76,10 @@ export const DownloadManagerScreen: React.FC = () => {
   const activeFailedCount = filteredActive.filter(i => isFailedStatus(i.status as DownloadStatus)).length;
   const activePausedCount = filteredActive.filter(i => i.status === 'paused').length;
 
+  // The same underline tabs as Models and Gallery (design philosophy: one look for every tab row).
   const renderHeader = useCallback(() => (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.filterBarContent}
-    >
-      {FILTERS.map(f => {
-        const active = activeFilter === f.id;
-        return (
-          <TouchableOpacity
-            key={f.id}
-            style={[styles.filterChip, active && styles.filterChipActive]}
-            onPress={() => setActiveFilter(f.id)}
-            // The chip stays small to read as a filter; its tap area is the full 44 pt.
-            hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
-            testID={`downloads-filter-${f.id}`}
-          >
-            <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{f.label}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
-  ), [activeFilter, styles]);
+    <UnderlineTabs tabs={FILTER_TABS} active={activeFilter} onChange={setActiveFilter} />
+  ), [activeFilter]);
 
   return (
     <AliveScreen style={styles.container} testID="downloaded-models-screen">
