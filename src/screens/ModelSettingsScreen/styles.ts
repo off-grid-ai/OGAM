@@ -109,6 +109,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginTop: SPACING.md,
   },
   settingSection: { marginTop: SPACING.lg },
+  footnote: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, lineHeight: 18, marginTop: SPACING.sm, marginHorizontal: SPACING.xs },
   settingLabel: { ...TYPOGRAPHY.body, color: colors.text, marginBottom: SPACING.xs },
   settingDesc: {
     ...TYPOGRAPHY.bodySmall,
