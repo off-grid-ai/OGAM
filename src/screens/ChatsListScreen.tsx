@@ -238,18 +238,21 @@ export const ChatsListScreen: React.FC = () => {
               color={selected ? colors.primary : colors.textMuted}
             />
           ) : null}
-          {kind !== 'text' ? (
-            <Icon name={kind === 'video' ? 'video' : 'image'} size={14} color={colors.textMuted} />
-          ) : null}
           <View style={styles.chatText}>
             <Text style={styles.chatTitle} numberOfLines={1}>
               {chatTitle(item.title)}
             </Text>
-            {preview ? (
+            {/* A picture or clip chat says so at the start of its second line, so every title starts
+                at the same edge; ahead of the title it indented that one row (hand test 80). The
+                line is always there, so every row is two lines. */}
+            <View style={styles.chatPreviewLine}>
+              {kind !== 'text' ? (
+                <Icon name={kind === 'video' ? 'video' : 'image'} size={12} color={colors.textMuted} />
+              ) : null}
               <Text style={styles.chatPreview} numberOfLines={1}>
-                {preview}
+                {preview || ' '}
               </Text>
-            ) : null}
+            </View>
           </View>
           {project ? (
             <Text style={styles.projectName} numberOfLines={1}>
@@ -514,6 +517,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.textMuted,
   },
   chatText: { flex: 1, gap: 2 },
+  chatPreviewLine: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.xs },
   chatTitle: {
     ...TYPOGRAPHY.body,
     fontSize: 15,
@@ -522,6 +526,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   chatPreview: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
+    flexShrink: 1,
   },
   projectName: {
     ...TYPOGRAPHY.meta,
