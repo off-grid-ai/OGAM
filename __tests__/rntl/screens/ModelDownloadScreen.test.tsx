@@ -206,7 +206,10 @@ describe('Advanced Setup', () => {
 
       await rtl.act(async () => { await device.finishDownload(row.downloadId, 4 * GB); });
 
-      await rtl.waitFor(() => expect(view.getByTestId('model-card-0-downloaded')).toBeTruthy());
+      // The downloaded model is picked for chats, so its row says In use where On phone would sit.
+      await rtl.waitFor(() =>
+        expect(rtl.within(view.getByTestId('model-card-0')).getByTestId('model-in-use')).toHaveTextContent('In use'),
+      );
       expect(await device.fs.module.exists(`${device.modelsDir}/${QWEN_08B_FILE}`)).toBe(true);
       // Success is the tick on the card, not a sheet.
       expect(view.queryByText('Download Complete!')).toBeNull();
@@ -222,6 +225,7 @@ describe('Advanced Setup', () => {
       await rtl.waitFor(() => expect(view.getByText('Download Failed')).toBeTruthy());
       expect(view.getByText(/Not enough storage on the phone/)).toBeTruthy();
       expect(view.queryByTestId('model-card-0-downloaded')).toBeNull();
+      expect(view.queryByTestId('model-in-use')).toBeNull();
     });
 
     it('shows Download Failed when the downloader refuses to start', async () => {
