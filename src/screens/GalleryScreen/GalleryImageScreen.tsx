@@ -32,8 +32,7 @@ export const GalleryImageScreen: React.FC = () => {
   const AnimateAction = useSlot(SLOTS.imageAnimateAction);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
-  // An action from the sheet runs once the sheet has fully closed, so the share sheet or the delete
-  // confirmation never presents while this sheet is mid-dismiss (that wedges iOS's modal system).
+  // Delete's confirmation opens once the sheet has fully closed, so two sheets never meet mid-dismiss.
   const afterClose = useRef<(() => void) | null>(null);
   const closeSheetThen = (action: () => void) => {
     afterClose.current = action;
@@ -112,7 +111,9 @@ export const GalleryImageScreen: React.FC = () => {
             )}
             <TouchableOpacity
               style={styles.imageSheetAction}
-              onPress={() => closeSheetThen(() => { saveImage(image, setAlertState); })}
+              // Over the open sheet: iOS presents the share sheet from it. Closing it first left nothing to
+              // present from, and the share sheet never showed (iPhone, 2026-11-06).
+              onPress={() => { saveImage(image, setAlertState); }}
               accessibilityRole="button"
               accessibilityLabel="Save"
             >

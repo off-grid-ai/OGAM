@@ -482,7 +482,7 @@ describe('Gallery image, full screen on its own route', () => {
     expect(await g.boundary.fs!.exists(g.imagePath('img-1'))).toBe(true);
   });
 
-  it('on iOS, Save closes the sheet and hands the image file to the share sheet', async () => {
+  it('on iOS, Save hands the image file to the share sheet, over the open sheet', async () => {
     const g = await openGallery({ images: sampleImages, platform: 'ios' });
     const { Share } = require('react-native');
     // The OS share sheet is the device boundary: record what reached it.
@@ -499,7 +499,8 @@ describe('Gallery image, full screen on its own route', () => {
     });
 
     expect(shared).toEqual([{ url: `file://${g.imagePath('img-1')}` }]);
-    expect(g.view.queryByText('PROMPT')).toBeNull();
+    // The share sheet presents from the open sheet, which stays.
+    expect(g.view.getByText('PROMPT')).toBeTruthy();
   });
 
   it('on Android, Save copies the image to Pictures/OffgridMobile and says where', async () => {
