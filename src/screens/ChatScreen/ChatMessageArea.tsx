@@ -41,6 +41,7 @@ import { RootStackParamList } from '../../navigation/types';
 import { SPACING } from '../../constants';
 import { proGateShown } from '../../services/analytics/analytics';
 import { toolsForTurn, useHasSearchableKnowledge } from '../../services/documents/searchableKnowledge';
+import { scrollToContentEnd } from './scrollToContentEnd';
 
 export type ChatMessageAreaProps = {
   assistantSelected: boolean;
@@ -351,26 +352,29 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           contentContainerStyle={styles.messageList}
           onScroll={handleScroll}
           onContentSizeChange={(_w, h) => {
+            // Every pin goes to the NATIVE end of the content. This first change arrives before any
+            // row has reported its height, so FlatList.scrollToEnd would scroll to 0, the oldest
+            // message, and on a cold start the timers that pin again wait for seconds (hand test 58).
             if (openingRef.current && h > 0) {
-              flatListRef.current?.scrollToEnd({ animated: false });
+              scrollToContentEnd(flatListRef.current, false);
               // Settled once the content has not grown for 400 ms: one last scroll, then the list
               // keeps a reader's place as usual.
               if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
               settleTimerRef.current = setTimeout(() => {
-                if (openingRef.current) flatListRef.current?.scrollToEnd({ animated: false });
+                if (openingRef.current) scrollToContentEnd(flatListRef.current, false);
                 setSettled(true);
               }, 400);
               hasScrolledRef.current = true;
             } else if (!hasScrolledRef.current && h > 0) {
               // Initial layout: force scroll to bottom regardless of isNearBottom
-              flatListRef.current?.scrollToEnd({ animated: false });
+              scrollToContentEnd(flatListRef.current, false);
               hasScrolledRef.current = true;
             } else if (
               isNearBottomRef.current ||
               (chat.isGeneratingForThisConversation &&
                 !userScrolledDuringGenerationRef.current)
             ) {
-              flatListRef.current?.scrollToEnd({ animated: false });
+              scrollToContentEnd(flatListRef.current, false);
             }
           }}
           onScrollBeginDrag={() => {
