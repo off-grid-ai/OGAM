@@ -94,6 +94,23 @@ export const GalleryScreen: React.FC = () => {
     />
   );
 
+  // The Pro library (films, clips to extend) is reached from the Videos tab, with or without Gallery clips.
+  const libraryRow = hasVideoLibrary ? (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('VideoLibrary' as never)}
+                accessibilityRole="button"
+                style={styles.videoRow}
+                testID="gallery-open-video-library"
+              >
+                <Icon name="film" size={20} color={colors.textSecondary} />
+                <View style={styles.videoRowBody}>
+                  <Text style={styles.videoRowTitle}>Stories and clips</Text>
+                  <Text style={styles.videoRowMeta}>Your films, and clips to extend</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+  ) : null;
+
   return (
     <AliveScreen testID="gallery-screen" style={styles.container}>
       <View style={styles.header}>
@@ -222,9 +239,13 @@ export const GalleryScreen: React.FC = () => {
 
       {kind === 'videos' ? (
         displayVideos.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Icon name="video" size={48} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>No videos in this gallery</Text>
+          <View style={styles.videoList}>
+            {/* With no clips here, the library row still leads: films may live only there. */}
+            {libraryRow ? <View style={styles.videoGroup}>{libraryRow}</View> : null}
+            <View style={styles.emptyContainer}>
+              <Icon name="video" size={48} color={colors.textMuted} />
+              <Text style={styles.emptyTitle}>No videos in this gallery</Text>
+            </View>
           </View>
         ) : (
           <FlatList
@@ -236,21 +257,7 @@ export const GalleryScreen: React.FC = () => {
             style={styles.videoList}
             contentContainerStyle={styles.videoGroup}
             ItemSeparatorComponent={VideoDivider}
-            ListHeaderComponent={hasVideoLibrary ? (
-              <TouchableOpacity
-                onPress={() => navigation.navigate('VideoLibrary' as never)}
-                accessibilityRole="button"
-                style={styles.videoRow}
-                testID="gallery-open-video-library"
-              >
-                <Icon name="film" size={20} color={colors.textSecondary} />
-                <View style={styles.videoRowBody}>
-                  <Text style={styles.videoRowTitle}>Stories and clips</Text>
-                  <Text style={styles.videoRowMeta}>Your films, and clips to extend</Text>
-                </View>
-                <Icon name="chevron-right" size={16} color={colors.textMuted} />
-              </TouchableOpacity>
-            ) : null}
+            ListHeaderComponent={libraryRow}
             {...LIST_CLIPPING_PROPS}
             renderItem={({ item }) => (
               <TouchableOpacity
