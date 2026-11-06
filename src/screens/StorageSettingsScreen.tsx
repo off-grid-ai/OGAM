@@ -32,6 +32,7 @@ import { useModelDownloads } from '../services/modelDownloadService/useModelDown
 import type { RootStackParamList } from '../navigation/types';
 import { AliveScreen } from '../components/AliveScreen';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { SectionLabel } from '../components/SectionLabel';
 
 export const StorageSettingsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -147,8 +148,8 @@ export const StorageSettingsScreen: React.FC = () => {
         style={styles.scrollView}
         contentContainerStyle={styles.content}
       >
+        <SectionLabel title="Space on this phone" />
         <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>Storage used</Text>
           <View style={styles.storageBar}>
             <View style={[styles.storageUsed, { width: `${Math.min(usedPercentage, 100)}%` }]} />
           </View>
@@ -175,27 +176,18 @@ export const StorageSettingsScreen: React.FC = () => {
           </View>
         </Card>
 
+        <SectionLabel title="What uses it" />
         <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>Breakdown</Text>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="cpu" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Chat models</Text>
-            </View>
+            <Text style={styles.infoLabel}>Chat models</Text>
             <Text style={styles.infoValue}>{chatModelCount}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="image" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Image models</Text>
-            </View>
+            <Text style={styles.infoLabel}>Image models</Text>
             <Text style={styles.infoValue}>{downloadedImageModels.length}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="video" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Video models</Text>
-            </View>
+            <Text style={styles.infoLabel}>Video models</Text>
             <Text style={styles.infoValue}>{downloadedVideoModels.length}</Text>
           </View>
           {downloadedVideoModels.map(model => (
@@ -215,54 +207,33 @@ export const StorageSettingsScreen: React.FC = () => {
             </View>
           ))}
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="search" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Document search model</Text>
-            </View>
+            <Text style={styles.infoLabel}>Document search model</Text>
             <Text style={styles.infoValue}>{size(extra.search)}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="mic" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Speech-to-text models</Text>
-            </View>
+            <Text style={styles.infoLabel}>Speech-to-text models</Text>
             <Text style={styles.infoValue}>{transcriptionModelCount}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="volume-2" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Voices</Text>
-            </View>
+            <Text style={styles.infoLabel}>Voices</Text>
             <Text style={styles.infoValue}>{speechModelCount}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="hard-drive" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Chat, image, video and search models</Text>
-            </View>
+            <Text style={styles.infoLabel}>All models</Text>
             <Text style={styles.infoValue}>{size(storageUsed)}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="film" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Videos and films</Text>
-            </View>
+            <Text style={styles.infoLabel}>Videos and films</Text>
             <Text style={styles.infoValue}>
               {generatedVideoCount} · {size(extra.videos)}
             </Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="file-text" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Document search index</Text>
-            </View>
+            <Text style={styles.infoLabel}>Document search index</Text>
             <Text style={styles.infoValue}>{size(extra.index)}</Text>
           </View>
           <View style={[styles.infoRow, styles.lastRow]}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="message-circle" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Conversations</Text>
-            </View>
+            <Text style={styles.infoLabel}>Conversations</Text>
             <Text style={styles.infoValue}>{conversations.length}</Text>
           </View>
         </Card>
