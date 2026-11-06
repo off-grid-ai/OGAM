@@ -459,10 +459,8 @@ function DownloadedActions({ modelName, isActive, testID, colors, styles, onSele
         onRepairVision && <ActionButton icon="tool" color={colors.warning} haptic="impactLight" onPress={onRepairVision} testID={tid('repair-vision')} accessibilityLabel={modelName ? `Repair image support for ${modelName}` : 'Repair image support'} styles={styles} />
       )}
       {/* A radio: the model in use shows a check; any other shows an empty circle that picks it. */}
-      {/* The one mark for "your model", the filled check the pickers use (hand test 92: an outline here). */}
-      {isActive && onSelect && <View style={styles.iconButton} accessibilityLabel="In use" testID={tid('in-use')}>
-        <View style={[styles.inUseCheck, { backgroundColor: colors.primary }]}><Icon name="check" size={12} color={colors.background} /></View>
-      </View>}
+      {/* "In use" in words, as every other Models row says it (hand tests 76, 93); not a second mark. */}
+      {isActive && onSelect && <Text style={styles.denseInUse} testID={tid('in-use')}>In use</Text>}
       {!isActive && onSelect && <ActionButton icon="circle" color={colors.textMuted} haptic="selection" onPress={onSelect} testID={tid('select')} accessibilityLabel={modelName ? `Use ${modelName}` : 'Use this model'} styles={styles} />}
       {onDelete && <ActionButton icon="trash-2" color={colors.textMuted} haptic="notificationWarning" onPress={onDelete} testID={tid('delete') ?? 'delete-model-button'} accessibilityLabel={modelName ? `Delete ${modelName}` : 'Delete model'} styles={styles} />}
     </>

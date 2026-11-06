@@ -308,13 +308,6 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     flexShrink: 1,
   },
   // A 44 pt frame (it was 36), pulled back 4 pt each side so the row keeps its height.
-  inUseCheck: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
   iconButton: {
     width: 44,
     height: 44,
