@@ -316,7 +316,8 @@ export const RemoteServersScreen: React.FC = () => {
 
               // The word says it; the dot lets a glance down the list find the one that works (Mac:
               // green connected, amber not yet checked, red not answering).
-              let statusText = 'Not checked yet';
+              // Every server is checked as this screen opens, so no answer yet means it is being checked.
+              let statusText = 'Checking';
               let statusColor = STATUS_AMBER;
               if (health?.isHealthy === true) { statusText = 'Connected'; statusColor = theme.colors.primary; }
               else if (health?.isHealthy === false) { statusText = 'Not answering'; statusColor = theme.colors.error; }
