@@ -15,13 +15,14 @@ import { UnderlineTabs, type UnderlineTab } from '../../components/UnderlineTabs
 import { AliveScreen } from '../../components/AliveScreen';
 import { ScreenHeader } from '../../components/ScreenHeader';
 
-type FilterType = 'all' | 'text' | 'vision' | 'image' | 'video' | 'voice' | 'transcription';
+type FilterType = 'all' | 'text' | 'documents' | 'image' | 'video' | 'voice' | 'transcription';
 
-// The Models tab's own names, so a model is called the same thing in both places.
+// The Models tabs, the same names in the same order, so a model sits under the same tab in both places
+// (hand test 91: Downloads had Vision and no Documents). Vision models are Text models, as on Models.
 const FILTERS: { id: FilterType; label: string }[] = [
   { id: 'all',           label: 'All' },
   { id: 'text',          label: 'Text' },
-  { id: 'vision',        label: 'Vision' },
+  { id: 'documents',     label: 'Documents' },
   { id: 'image',         label: 'Image' },
   { id: 'video',         label: 'Video' },
   { id: 'voice',         label: 'Voice' },
@@ -32,8 +33,8 @@ const FILTER_TABS: UnderlineTab<FilterType>[] = FILTERS.map(f => ({ key: f.id, l
 
 function matchesFilter(item: DownloadItem, filter: FilterType): boolean {
   if (filter === 'all')    return true;
-  if (filter === 'vision') return item.modelType === 'text' && !!item.isVisionModel;
-  if (filter === 'text')   return item.modelType === 'text' && !item.isVisionModel;
+  if (filter === 'text')   return item.modelType === 'text';
+  if (filter === 'documents') return item.modelType === 'embedding';
   if (filter === 'image')  return item.modelType === 'image';
   if (filter === 'video')  return item.modelType === 'video';
   if (filter === 'voice')  return item.modelType === 'tts';
