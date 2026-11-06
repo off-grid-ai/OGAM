@@ -40,7 +40,7 @@ export const ImageQualityBasicSliders: React.FC = () => {
       <SliderSetting
         testID="image-steps"
         compact
-        label="Image Steps"
+        label="Image steps"
         description="4-8 steps for speed, 20-50 for quality"
         value={parameters.steps}
         min={4} max={MAX_IMAGE_STEPS} step={1}
