@@ -72,7 +72,7 @@ export const ToolsScreen: React.FC = () => {
             <Icon name="info" size={16} color={colors.textMuted} style={styles.hintIcon} />
             <View style={styles.hintBody}>
               <Text style={[styles.hintText, { color: colors.text }]}>
-                Too many tools can confuse the model and increase latency on the first response. Stick to 2-3 tools for best results.
+                With this many tools on, answers start slower and the model can pick the wrong one. Two or three is plenty for most chats.
               </Text>
               <TouchableOpacity onPress={setToolCountHintDismissed} style={styles.hintDismiss}>
                 <Text style={styles.hintDismissText}>Got it</Text>
@@ -109,7 +109,7 @@ export const ToolsScreen: React.FC = () => {
         })}
         </View>
         <Text style={styles.hint}>
-          Enabling more tools can confuse the model and increases latency on first response.
+          Fewer tools, faster answers. Two or three is plenty for most chats.
         </Text>
       </ScrollView>
     </AliveScreen>
