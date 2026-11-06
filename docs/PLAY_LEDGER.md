@@ -708,3 +708,8 @@ Bug to investigate: the paused "Wan 2.1 (1.3B), FP16" download is gone (Models >
 - Pass: the card no longer swaps before a tap (two tries); after 16 s away the card holds ~8 s; next advance ~9 s after a swipe; pips read against the field; text, image and speech gutters 24/24 pt; Back from Speech returns Models. No lost behaviour.
 - Fail: text picker opens after ~2.5 s of bare Home (image and speech under 0.5 s); carousel keeps advancing behind an open sheet; clipped "Thinks" and "Sees image" tags; RAM estimate changes between opens (~6.7 GB then ~12.1 GB); image picker's red worded "Deselect"; pip targets 33 pt.
 - Top 3: (1) remove the text-picker gap; (2) pause the carousel behind sheets; (3) clipped tags, stable RAM estimate, plain Deselect.
+
+## Supervisor 17:35 (hand test 90, hand test 89 fixes) — carousel and RAM pass; text picker still 2.5–3 s
+- Pass: carousel held its card for 26 s behind the Models sheet and advanced ~8 s after close; RAM labels stable across 4 opens; image picker's power icon is plain, 44 pt, named; Chats and Settings intact. No lost behaviour.
+- Fail: text picker still 2.2–3.2 s of bare Home on every open (also from the Qwen chip, so the stall is in the text picker itself; the header cache was not the cause); repeating 250–375 ms hangs while it is open; tags cut off ("Thin", "Tools ·"); no current-model row or check for the selected-not-loaded Qwen 3.5 2B, and tapping it gives no feedback.
+- Top 3: (1) profile and remove the text picker stall; (2) tags never cut off in list rows; (3) mark the selected text model and answer a tap on it.
