@@ -28,6 +28,10 @@ import {
 
 // Mock the stripControlTokens utility
 
+/** One item of the Details line, which joins its items with " · ". */
+const metaItem = (item: string) =>
+  new RegExp(`(^| · )${item.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}( · |$)`);
+
 describe('ChatMessage', () => {
   const _defaultProps = {
     message: createUserMessage('Hello world'),
@@ -814,7 +818,7 @@ describe('ChatMessage', () => {
 
       fireEvent.press(getByTestId('generation-details-toggle'));
       expect(getByTestId('generation-meta')).toBeTruthy();
-      expect(getByText('Metal')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('Metal'));
     });
 
     it('shows GPU backend when GPU was used', () => {
@@ -849,7 +853,7 @@ describe('ChatMessage', () => {
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('CPU')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('CPU'));
     });
 
     it('displays tokens per second', () => {
@@ -866,7 +870,7 @@ describe('ChatMessage', () => {
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('22.3 tok/s')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('22.3 tok/s'));
     });
 
     it('displays time to first token', () => {
@@ -898,7 +902,7 @@ describe('ChatMessage', () => {
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('Phi-3-mini-Q4_K_M')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('Phi-3-mini-Q4_K_M'));
     });
 
     it('displays image generation metadata', () => {
@@ -916,9 +920,9 @@ describe('ChatMessage', () => {
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('20 steps')).toBeTruthy();
-      expect(getByText('cfg 7.5')).toBeTruthy();
-      expect(getByText('512x512')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('20 steps'));
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('cfg 7.5'));
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('512x512'));
     });
 
     it('hides metadata when showGenerationDetails is false', () => {
@@ -1095,7 +1099,7 @@ describe('ChatMessage', () => {
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('150 tokens')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('150 tokens'));
     });
 
     it('does not display token count when 0', () => {

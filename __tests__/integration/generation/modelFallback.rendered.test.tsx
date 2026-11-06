@@ -58,7 +58,7 @@ describe('remote model fallback in chat', () => {
       expect(h.view!.queryByTestId('tool-result-label-model_fallback')).not.toBeNull(),
     );
     await h.rtl.act(async () => {
-      let action: any = h.view!.getByText('Generation details');
+      let action: any = h.view!.getByTestId('generation-details-toggle');
       while (action && typeof action.props.onPress !== 'function') action = action.parent;
       expect(action).not.toBeNull();
       action.props.onPress();
@@ -110,12 +110,12 @@ describe('remote model fallback in chat', () => {
       expect(h.view!.queryByTestId('tool-result-label-model_fallback')).not.toBeNull(),
     );
     await h.rtl.act(async () => {
-      let action: any = h.view!.getByText('Generation details');
+      let action: any = h.view!.getByTestId('generation-details-toggle');
       while (action && typeof action.props.onPress !== 'function') action = action.parent;
       expect(action).not.toBeNull();
       action.props.onPress();
     });
-    expect(h.rtl.within(h.view!.getAllByTestId('generation-meta').at(-1)!).queryByText('Test Model')).not.toBeNull();
+    expect(h.view!.getAllByTestId('generation-meta').at(-1)!).toHaveTextContent(/(^| · )Test Model( · |$)/);
     expect(h.view!.queryByText(/Failed route partial/)).toBeNull();
     expect(useRemoteServerStore.getState().activeRemoteTextModelId).toBeNull();
   });

@@ -79,7 +79,7 @@ describe('NPU selected, Hexagon session unavailable → the reply runs on CPU, n
     await chooseNpuAndReply(h);
 
     const meta = await backendShown(h);
-    expect(h.rtl.within(meta).queryByText('CPU')).not.toBeNull();
+    expect(meta).toHaveTextContent(/(^| · )CPU( · |$)/);
     expect(h.rtl.within(meta).queryByText(/OpenCL/)).toBeNull();
     expect(h.rtl.within(meta).queryByText(/\(\d+L\)/)).toBeNull();
     // The person asked for the NPU and got the CPU: the chat says so.

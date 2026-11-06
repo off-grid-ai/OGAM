@@ -450,8 +450,8 @@ describe('Pro mobile state sync journey', () => {
     expect(
       ui.getByText('I should confirm the notes before searching.'),
     ).toBeTruthy();
-    fireEvent.press(ui.getByText('Generation details'));
-    expect(ui.getByText('42.5 tok/s')).toBeTruthy();
+    fireEvent.press(ui.getByTestId('generation-details-toggle'));
+    expect(ui.getByTestId('generation-meta')).toHaveTextContent(/(^| · )42\.5 tok\/s( · |$)/);
 
     // A returning desktop can send a full wire batch of tombstones. The phone must finish the
     // batch and leave navigation responsive after removing those turns from its chat projection.
@@ -505,8 +505,8 @@ describe('Pro mobile state sync journey', () => {
         ).length ?? 0;
     await waitFor(() => expect(visibleBurstCount()).toBeGreaterThan(0));
     expect(visibleBurstCount()).toBeLessThan(burstIds.length);
-    fireEvent.press(ui.getByText('Generation details'));
-    expect(ui.queryByText('42.5 tok/s')).toBeNull();
+    fireEvent.press(ui.getByTestId('generation-details-toggle'));
+    expect(ui.queryByTestId('generation-meta')).toBeNull();
     await waitFor(() =>
       expect(
         useChatStore
@@ -542,8 +542,8 @@ describe('Pro mobile state sync journey', () => {
           ),
       ).toHaveLength(0),
     );
-    fireEvent.press(ui.getByText('Generation details'));
-    expect(ui.getByText('42.5 tok/s')).toBeTruthy();
+    fireEvent.press(ui.getByTestId('generation-details-toggle'));
+    expect(ui.getByTestId('generation-meta')).toHaveTextContent(/(^| · )42\.5 tok\/s( · |$)/);
 
     remoteLog.record(CORE_SYNC_ENTITIES.message, 'older-gap-message', 'put', {
       conversation_id: 'remote-conversation',
