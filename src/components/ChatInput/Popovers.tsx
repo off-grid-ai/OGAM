@@ -7,7 +7,7 @@ import { useTheme } from '../../theme';
 import { ImageModeState } from '../../types';
 import { useAppStore } from '../../stores';
 import { triggerHaptic } from '../../utils/haptics';
-import { FONTS } from '../../constants';
+import { TYPOGRAPHY } from '../../constants';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { QuickBadge, type QuickBadgeTone } from './QuickBadge';
 
@@ -45,10 +45,10 @@ export const popoverStyles = StyleSheet.create({
     paddingHorizontal: 14,
     gap: 10,
   },
+  // A menu item is words: Geist, sentence case (hand test 60: Title Case in Mono).
   rowLabel: {
     flex: 1,
-    fontSize: 14,
-    fontFamily: FONTS.mono,
+    ...TYPOGRAPHY.body,
   },
 });
 
@@ -177,7 +177,7 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
                   color={imageMode === 'force' ? colors.primary : imageModelLoaded ? colors.text : colors.textMuted}
                 />
                 <Text style={[popoverStyles.rowLabel, { color: colors.text }]}>
-                  Image Gen
+                  Image
                 </Text>
                 <QuickBadge
                   testID={imageMode === 'force' ? 'image-mode-force-badge' : undefined}
@@ -206,7 +206,7 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
                   color={imageMode === 'video' ? colors.primary : colors.textMuted}
                 />
                 <Text style={[popoverStyles.rowLabel, { color: colors.text }]}>
-                  Video Gen
+                  Video
                 </Text>
                 <QuickBadge tone={imageMode === 'video' ? 'on' : 'off'} label={imageMode === 'video' ? 'ON' : 'OFF'} />
               </TouchableOpacity>
@@ -269,7 +269,7 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
                   color={showMcpWarning ? TOOL_WARNING_COLOR : colors.text}
                 />
                 <Text style={[popoverStyles.rowLabel, { color: colors.text }]}>
-                  Pro Tools
+                  Pro tools
                 </Text>
                 {mcpToolCount > 0 && (
                   <QuickBadge tone={showMcpWarning ? 'warn' : 'count'} label={mcpToolCount} />
