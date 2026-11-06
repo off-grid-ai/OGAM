@@ -192,9 +192,18 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   // layout lands at the end of the first batch only; until you touch the list, every growth pins
   // it to the end again (hand test 51: a long chat opened from Home sat at its oldest message).
   const openingRef = React.useRef(true);
+  // While a chat opens, rows above the end are still measuring. Keeping the first visible row in
+  // place (maintainVisibleContentPosition) then pushes the end out of view, so it is switched on
+  // only once the content has stopped growing (hand test 53: a cold open sat two turns short).
+  const [settled, setSettled] = useState(false);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   React.useEffect(() => {
     openingRef.current = true;
     hasScrolledRef.current = false;
+    setSettled(false);
+    return () => {
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    };
   }, [chat.activeConversationId]);
   const interfaceMode = useUiModeStore(s => s.interfaceMode);
   const tabNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -334,11 +343,13 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           onContentSizeChange={(_w, h) => {
             if (openingRef.current && h > 0) {
               flatListRef.current?.scrollToEnd({ animated: false });
-              // On a cold open the scroll can land before the new rows are laid out, so ask again
-              // once layout settles (hand test 52: the first chat after launch sat higher up).
-              setTimeout(() => {
+              // Settled once the content has not grown for 400 ms: one last scroll, then the list
+              // keeps a reader's place as usual.
+              if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+              settleTimerRef.current = setTimeout(() => {
                 if (openingRef.current) flatListRef.current?.scrollToEnd({ animated: false });
-              }, 250);
+                setSettled(true);
+              }, 400);
               hasScrolledRef.current = true;
             } else if (!hasScrolledRef.current && h > 0) {
               // Initial layout: force scroll to bottom regardless of isNearBottom
@@ -378,7 +389,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           // within 100 pt of the start (a short chat, or any chat once the keyboard shrinks the
           // list) iOS jumped to the first message on each content change, against scrollToEnd,
           // and a streaming reply stayed out of view (hand test, iPhone, keyboard up).
-          maintainVisibleContentPosition={CHAT_LIST_KEEP_POSITION}
+          maintainVisibleContentPosition={settled ? CHAT_LIST_KEEP_POSITION : undefined}
           {...LIST_CLIPPING_PROPS}
         />
       )}
