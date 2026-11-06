@@ -45,7 +45,7 @@ function formatOptionalMeta(meta: NonNullable<Message['generationMeta']>, tps: n
     .map(([key, label, maxLines]) => ({ key, label, maxLines }));
 }
 
-const parenthesised = (text: string) => `(${text})`.padStart(text.length + 3);
+const parenthesised = (text: string) => ` (${text})`;
 
 function buildMetaItems(
   meta: NonNullable<Message['generationMeta']>,
