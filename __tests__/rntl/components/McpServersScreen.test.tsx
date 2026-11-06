@@ -39,6 +39,8 @@ import * as Keychain from 'react-native-keychain';
 import { McpServersScreen } from '@offgrid/pro/ui/McpServersScreen';
 import { useMcpStore } from '@offgrid/pro/mcp/mcpStore';
 import { installPro } from '../../harness/proHarness';
+import { useAppStore, useRemoteServerStore } from '../../../src/stores';
+import { createDownloadedModel } from '../../utils/factories';
 import { installMcpOAuthFake, type McpOAuthFake } from '../../harness/mcpOAuthFake';
 
 const Stack = createNativeStackNavigator();
@@ -168,6 +170,38 @@ describe('McpServersScreen', () => {
       const ui = mount();
       fireEvent.press(ui.getByTestId('mcp-add-server'));
       expect(ui.queryByTestId('mcp-server-remove')).toBeNull();
+    });
+  });
+
+  describe('the note about a model on this phone', () => {
+    const NOTE = 'mcp-local-model-note';
+
+    afterEach(() => {
+      useAppStore.getState().setActiveModelId(null);
+      useAppStore.getState().setDownloadedModels([]);
+      useRemoteServerStore.getState().setActiveRemoteTextModelId(null);
+    });
+
+    it('shows as a footnote when a model on this phone is in use', () => {
+      const model = createDownloadedModel({ id: 'phone-model' });
+      useAppStore.getState().setDownloadedModels([model]);
+      useAppStore.getState().setActiveModelId(model.id);
+      const ui = mount();
+      expect(ui.getByTestId(NOTE)).toHaveTextContent('Tools work best with a model on your computer. A model on this phone may skip them.');
+    });
+
+    it('is not shown when a model on a computer is in use', () => {
+      const model = createDownloadedModel({ id: 'phone-model' });
+      useAppStore.getState().setDownloadedModels([model]);
+      useAppStore.getState().setActiveModelId(model.id);
+      useRemoteServerStore.getState().setActiveRemoteTextModelId('desk-model');
+      const ui = mount();
+      expect(ui.queryByTestId(NOTE)).toBeNull();
+    });
+
+    it('is not shown when no model is chosen', () => {
+      const ui = mount();
+      expect(ui.queryByTestId(NOTE)).toBeNull();
     });
   });
 });
