@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native';
 import { listRowStyle } from '../components/ListGroup';
 import { cardSurface } from '../theme/surface';
 import type { ThemeColors, ThemeShadows } from '../theme/palettes';
