@@ -1,18 +1,17 @@
 import { cardFill, cardSurface } from '../../../src/theme/surface';
 import type { ThemeColors } from '../../../src/theme/palettes';
 
-const colorsWith = (surface: string) => ({ surface, borderLight: '#222222' } as ThemeColors);
+const colors = { surface: '#102030', surfaceGlass: 'rgba(16,32,48,0.55)', borderLight: '#222222' } as ThemeColors;
 
 describe('cardFill', () => {
-  it('lays a hex surface down mostly opaque, so the dot lattice does not show through', () => {
-    expect(cardFill(colorsWith('#102030'))).toBe('rgba(16,32,48,0.9)');
+  it('is the glass surface, so the living field shows through, not the opaque surface', () => {
+    expect(cardFill(colors)).toBe('rgba(16,32,48,0.55)');
+    expect(cardFill(colors)).not.toBe(colors.surface);
   });
 
-  it('keeps a surface that is not hex as it is', () => {
-    expect(cardFill(colorsWith('rgba(1,2,3,1)'))).toBe('rgba(1,2,3,1)');
-  });
-
-  it('is the fill of the card surface', () => {
-    expect(cardSurface(colorsWith('#102030')).backgroundColor).toBe(cardFill(colorsWith('#102030')));
+  it('is the fill of the card surface, edged with a hairline', () => {
+    const surface = cardSurface(colors);
+    expect(surface.backgroundColor).toBe(cardFill(colors));
+    expect(surface.borderColor).toBe('#222222');
   });
 });
