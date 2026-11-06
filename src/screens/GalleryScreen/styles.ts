@@ -161,6 +161,8 @@ const createViewerStyles = (colors: ThemeColors) => ({
   // The picture fills the screen on black, in either theme.
   imageScreen: { flex: 1, backgroundColor: '#000', justifyContent: 'center' as const },
   imageScreenPicture: { ...StyleSheet.absoluteFillObject },
+  // A video centred on the dark screen, as an image is (hand test 81).
+  videoScreenStage: { ...StyleSheet.absoluteFillObject, justifyContent: 'center' as const },
   imageScreenGone: { ...TYPOGRAPHY.body, color: VIEWER_INK, textAlign: 'center' as const, padding: SPACING.xl },
   imageScreenBar: {
     position: 'absolute' as const,
@@ -231,6 +233,7 @@ const createVideoStyles = (colors: ThemeColors) => ({
   videoRowTitle: { color: colors.text },
   videoRowMeta: { color: colors.textMuted },
   videoPlayer: { width: '100%' as const, backgroundColor: colors.background },
+  videoScreenPlayer: { width: '100%' as const, backgroundColor: 'transparent' },
   videoPrompt: { color: colors.text, padding: SPACING.lg },
   videoDelete: { padding: SPACING.lg },
   videoDeleteText: { color: colors.error },

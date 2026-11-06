@@ -47,13 +47,13 @@ export const GalleryVideoScreen: React.FC = () => {
     <View style={styles.imageScreen} testID="gallery-video-screen">
       <StatusBar barStyle="light-content" />
       {video ? (
-        <View style={styles.imageScreenPicture}>
+        <View style={styles.videoScreenStage}>
           <Video
             source={{ uri: `file://${resolveDocumentPath(video.videoPath)}` }}
             controls
             paused
             resizeMode="contain"
-            style={[styles.videoPlayer, { aspectRatio: video.width / video.height }]}
+            style={[styles.videoScreenPlayer, { aspectRatio: video.width / video.height }]}
             accessibilityLabel={video.prompt}
           />
         </View>
