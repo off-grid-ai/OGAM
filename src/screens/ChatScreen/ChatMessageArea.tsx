@@ -174,7 +174,7 @@ const CompactingNote: React.FC = () => {
 };
 
 /** The chat list's position rule: keep the first visible row in place; never auto-scroll to the start. */
-export const CHAT_LIST_KEEP_POSITION = { minIndexForVisible: 0 } as const;
+const CHAT_LIST_KEEP_POSITION = { minIndexForVisible: 0 } as const;
 
 
 export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
