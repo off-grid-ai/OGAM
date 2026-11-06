@@ -156,17 +156,19 @@ export function getVariantLabel(variant?: string): string | undefined {
   return variant ? VARIANT_LABELS[variant] : undefined;
 }
 
+/** The look a model's name points to, or '' when the name says nothing. Unknown names used to be
+ *  called 'anime', so RealVisXL, a photo model, was labelled anime (hand test 91). */
 export function guessStyle(name: string): string {
   const lower = name.toLowerCase();
   if (
-    lower.includes('reality') ||
-    lower.includes('realistic') ||
+    lower.includes('real') ||
     lower.includes('chillout') ||
     lower.includes('photo')
   ) {
     return 'photorealistic';
   }
-  return 'anime';
+  if (['anime', 'anything', 'cartoon', 'meina', 'counterfeit'].some(word => lower.includes(word))) return 'anime';
+  return '';
 }
 
 const QWEN_IMAGE_WEIGHT = QWEN_IMAGE_21_WEIGHT;
