@@ -87,23 +87,23 @@ export const DeviceInfoScreen: React.FC = () => {
           <View style={styles.tierInfo}>
             <View style={[styles.tierItem, deviceTier === 'low' && styles.tierItemActive]}>
               <Text style={[styles.tierName, deviceTier === 'low' && styles.tierNameActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Low</Text>
-              <Text style={styles.tierDesc}>{'< 4GB RAM'}</Text>
-              <Text style={styles.tierModels}>Small models only</Text>
+              <Text style={styles.tierDesc}>Under 4 GB</Text>
+              <Text style={styles.tierModels}>Quick chats with small models</Text>
             </View>
             <View style={[styles.tierItem, styles.tierDivider, deviceTier === 'medium' && styles.tierItemActive]}>
               <Text style={[styles.tierName, deviceTier === 'medium' && styles.tierNameActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Medium</Text>
-              <Text style={styles.tierDesc}>4-6GB RAM</Text>
-              <Text style={styles.tierModels}>Most models</Text>
+              <Text style={styles.tierDesc}>4 to 6 GB</Text>
+              <Text style={styles.tierModels}>Everyday chat and pictures</Text>
             </View>
             <View style={[styles.tierItem, styles.tierDivider, deviceTier === 'high' && styles.tierItemActive]}>
               <Text style={[styles.tierName, deviceTier === 'high' && styles.tierNameActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>High</Text>
-              <Text style={styles.tierDesc}>6-8GB RAM</Text>
-              <Text style={styles.tierModels}>All models</Text>
+              <Text style={styles.tierDesc}>6 to 8 GB</Text>
+              <Text style={styles.tierModels}>Bigger, smarter chat models</Text>
             </View>
             <View style={[styles.tierItem, styles.tierDivider, deviceTier === 'flagship' && styles.tierItemActive]}>
               <Text style={[styles.tierName, deviceTier === 'flagship' && styles.tierNameActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Flagship</Text>
-              <Text style={styles.tierDesc}>{'8GB+ RAM'}</Text>
-              <Text style={styles.tierModels}>All models + largest</Text>
+              <Text style={styles.tierDesc}>8 GB or more</Text>
+              <Text style={styles.tierModels}>The largest models this app offers</Text>
             </View>
           </View>
         </Card>
