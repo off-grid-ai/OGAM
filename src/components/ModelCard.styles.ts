@@ -32,9 +32,10 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   downloadedLabel: { ...TYPOGRAPHY.metaSmall, fontFamily: FONTS.mono, color: colors.textMuted },
   // In use, in words: the one emerald on the row.
+  // The same face and case as On phone beside it; emerald is the one accent for the model in use.
   denseInUse: {
-    ...TYPOGRAPHY.label,
-    textTransform: 'uppercase' as const,
+    ...TYPOGRAPHY.metaSmall,
+    fontFamily: FONTS.mono,
     color: colors.primary,
   },
   denseSourceGroup: {
