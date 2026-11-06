@@ -62,6 +62,9 @@ class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
     }
 
     let embeddedURL = Bundle.main.url(forResource: "main", withExtension: "jsbundle")
+    // Running the embedded bundle, the "Connect to Metro" banner has nothing to connect to; it sat
+    // over the top of every screen and every hand-test screenshot. Metro-served loads keep it.
+    if embeddedURL != nil { RCTDevLoadingViewSetEnabled(false) }
     NSLog(
       "[bundle] Metro at %@:%d did not answer within 2s; %@",
       host,
