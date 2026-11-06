@@ -261,11 +261,13 @@ export const SettingsScreen: React.FC = () => {
                 staggerMs={40}
                 trigger={focusTrigger}
                 style={styles.navItem}
-                onPress={() =>
-                  item.screen === 'Sync'
-                    ? openSync()
-                    : navigation.navigate(item.screen)
-                }
+                onPress={() => {
+                  if (item.screen === 'Sync') openSync();
+                  // Document search has one home, the Models tab's Documents; a second screen here
+                  // copied it (hand test 84).
+                  else if (item.screen === 'SearchModel') navigation.navigate('ModelsTab', { initialTab: 'embedding' });
+                  else navigation.navigate(item.screen);
+                }}
                 testID={'testID' in item ? item.testID : undefined}
                 // Said in words. A grouped row builds its label from its children, and on iOS an icon
                 // child gives its glyph ("\uf193, Security", hand test 40) whatever label it carries.
