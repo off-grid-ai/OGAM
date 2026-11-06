@@ -1,20 +1,20 @@
 import React from 'react';
 import { AppSwitch } from '../../components/AppSwitch';
-import { View, Text, ScrollView } from 'react-native';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
 import { AliveScreen } from '../../components/AliveScreen';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTheme, useThemedStyles } from '../../theme';
-import { FONTS, TYPOGRAPHY, SPACING } from '../../constants';
+import { TYPOGRAPHY, SPACING } from '../../constants';
+import { cardSurface } from '../../theme/surface';
 import { offeredTools } from '../../services/tools';
 import { useAppStore } from '../../stores';
 import { useOpenProTools } from '../../hooks/useOpenProTools';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { ScreenHeader } from '../../components/ScreenHeader';
 
-const TOOL_WARNING_COLOR = '#F59E0B';
 
 /**
  * Full-page tool picker (replaces the old bottom-sheet drawer). Lists the free
@@ -49,6 +49,7 @@ export const ToolsScreen: React.FC = () => {
 
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         {/* Pro Tools always sits on top of the listing. */}
+        <View style={styles.group}>
         <TouchableOpacity
           style={styles.proToolsButton}
           onPress={openProTools}
@@ -56,7 +57,7 @@ export const ToolsScreen: React.FC = () => {
           testID="tools-pro-tools"
         >
           <View style={styles.proToolsIcon}>
-            <IconMC name="crown" size={20} color={colors.primary} />
+            <IconMC name="crown" size={18} color={colors.textSecondary} />
           </View>
           <View style={styles.toolInfo}>
             <Text style={styles.toolName}>Pro tools</Text>
@@ -64,10 +65,11 @@ export const ToolsScreen: React.FC = () => {
           </View>
           <Icon name="chevron-right" size={18} color={colors.textMuted} />
         </TouchableOpacity>
+        </View>
 
         {showHint && (
           <View style={[styles.hintBanner, { backgroundColor: colors.surface }]}>
-            <Icon name="alert-circle" size={16} color={TOOL_WARNING_COLOR} style={styles.hintIcon} />
+            <Icon name="info" size={16} color={colors.textMuted} style={styles.hintIcon} />
             <View style={styles.hintBody}>
               <Text style={[styles.hintText, { color: colors.text }]}>
                 Too many tools can confuse the model and increase latency on the first response. Stick to 2-3 tools for best results.
@@ -79,12 +81,13 @@ export const ToolsScreen: React.FC = () => {
           </View>
         )}
 
-        {offeredTools().map(tool => {
+        <View style={styles.group}>
+        {offeredTools().map((tool, index) => {
           const isEnabled = enabledTools.includes(tool.id);
           return (
-            <View key={tool.id} style={styles.toolRow} testID={`tool-picker-row-${tool.id}`}>
+            <View key={tool.id} style={[styles.toolRow, index === 0 && styles.firstRow]} testID={`tool-picker-row-${tool.id}`}>
               <View style={styles.toolIcon}>
-                <Icon name={tool.icon} size={20} color={isEnabled ? colors.primary : colors.textMuted} />
+                <Icon name={tool.icon} size={18} color={isEnabled ? colors.text : colors.textMuted} />
               </View>
               <View style={styles.toolInfo}>
                 <View style={styles.toolNameRow}>
@@ -98,12 +101,13 @@ export const ToolsScreen: React.FC = () => {
               <AppSwitch
                 value={isEnabled}
                 onValueChange={() => handleToggleTool(tool.id)}
-                accessibilityLabel={`${tool.displayName}, ${isEnabled ? 'ON' : 'OFF'}`}
+                accessibilityLabel={tool.displayName}
                 testID={`tool-picker-toggle-${tool.id}`}
               />
             </View>
           );
         })}
+        </View>
         <Text style={styles.hint}>
           Enabling more tools can confuse the model and increases latency on first response.
         </Text>
@@ -141,18 +145,21 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingHorizontal: SPACING.xl,
     paddingBottom: SPACING.xl,
   },
+  // One surface with hairlines, as every list (hand test 60: this screen was still the old design).
+  group: {
+    ...cardSurface(colors),
+    overflow: 'hidden' as const,
+    marginTop: SPACING.md,
+  },
   proToolsButton: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
   },
   proToolsIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: `${colors.primary}20`,
+    width: 28,
+    height: 28,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     marginRight: 12,
@@ -160,15 +167,15 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   toolRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderLight,
   },
+  firstRow: { borderTopWidth: 0 },
   toolIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
+    width: 28,
+    height: 28,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     marginRight: 12,
@@ -182,18 +189,15 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
   },
   toolName: {
-    fontSize: 15,
-    fontFamily: FONTS.mono,
-    fontWeight: '400' as const,
+    ...TYPOGRAPHY.body,
     color: colors.text,
   },
   networkIcon: {
     marginLeft: 6,
   },
   toolDescription: {
-    fontSize: 12,
-    fontFamily: FONTS.mono,
-    color: colors.textMuted,
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   hint: {
@@ -205,8 +209,9 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   hintBanner: {
     flexDirection: 'row' as const,
     alignItems: 'flex-start' as const,
-    borderWidth: 1,
-    borderColor: TOOL_WARNING_COLOR,
+    // A quiet note, not an amber alarm.
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
     borderRadius: 10,
     padding: SPACING.md,
     marginTop: SPACING.sm,
@@ -228,6 +233,6 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   hintDismissText: {
     ...TYPOGRAPHY.bodySmall,
     fontWeight: '400' as const,
-    color: TOOL_WARNING_COLOR,
+    color: colors.textSecondary,
   },
 });
