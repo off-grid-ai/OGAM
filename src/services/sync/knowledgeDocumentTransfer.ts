@@ -79,7 +79,8 @@ export function knowledgeDocumentTransferLabel(
   if (transfer.status === 'failed') {
     const reason = FAILURE_WORDS[transfer.failure ?? 'failed'];
     // Plain verbs: "send to" and "get from" say what happened; "sync" did not (hand test 51).
-    return `Couldn't ${send ? 'send to' : 'get from'} ${transfer.deviceName}: ${reason}`;
+    // Two sentences, never "name: reason": a device name can carry its own colon ("OGAD: Mac").
+    return `Couldn't ${send ? 'send to' : 'get from'} ${transfer.deviceName}. ${reason[0].toUpperCase()}${reason.slice(1)}.`;
   }
   const percent = Math.round(knowledgeDocumentTransferFraction(transfer) * 100);
   return `${send ? 'Sending to' : 'Receiving from'} ${transfer.deviceName} · ${percent}%`;
