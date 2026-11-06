@@ -16,18 +16,28 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   aboveComposer: { paddingHorizontal: SPACING.xl },
   // Attachment previews row
+  // Inside the composer, above the text: room on top and right for each remove control.
   attachmentsContainer: {
-    marginBottom: 6,
+    flexGrow: 0,
   },
   attachmentsContent: {
-    gap: 8,
+    gap: 14,
+    paddingTop: 14,
+    paddingLeft: 12,
+    paddingRight: 14,
   },
   attachmentPreview: {
     position: 'relative' as const,
-    width: 60,
-    height: 60,
-    borderRadius: 8,
+    width: 56,
+    height: 56,
+  },
+  // The picture's own corners. A photo with no background shows the composer's glass, never white.
+  attachmentClip: {
+    width: '100%' as const,
+    height: '100%' as const,
+    borderRadius: 12,
     overflow: 'hidden' as const,
+    backgroundColor: colors.surfaceGlass,
   },
   attachmentImage: {
     width: '100%' as const,
@@ -55,22 +65,23 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     textAlign: 'center' as const,
     marginTop: 2,
   },
+  // A quiet ×: a small dark disc on the corner, in a 44 pt frame (remove loses nothing; never red).
   removeAttachment: {
     position: 'absolute' as const,
-    top: 2,
-    right: 2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.error,
+    top: -14,
+    right: -14,
+    width: 44,
+    height: 44,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
-  removeAttachmentText: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '500' as const,
-    marginTop: -2,
+  removeAttachmentDisc: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   // Queued messages (above input)
   queueList: {

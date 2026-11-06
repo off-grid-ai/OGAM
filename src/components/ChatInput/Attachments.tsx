@@ -275,6 +275,7 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
           testID={`attachment-preview-${attachment.id}`}
           style={styles.attachmentPreview}
         >
+          <View style={styles.attachmentClip}>
           {attachment.type === 'image' ? (
             <TouchableOpacity
               testID={`attachment-image-${attachment.id}`}
@@ -311,12 +312,17 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
               )}
             </View>
           )}
+          </View>
           <TouchableOpacity
             testID={`remove-attachment-${attachment.id}`}
             style={styles.removeAttachment}
             onPress={() => onRemove(attachment.id)}
+            accessibilityRole="button"
+            accessibilityLabel="Remove"
           >
-            <Text style={styles.removeAttachmentText}>&times;</Text>
+            <View style={styles.removeAttachmentDisc}>
+              <Icon name="x" size={12} color="#FFFFFF" />
+            </View>
           </TouchableOpacity>
         </View>
       ))}
