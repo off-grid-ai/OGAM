@@ -64,7 +64,7 @@ describe('VoiceModelsPanel', () => {
   it('shows the RAM privacy banner with the device RAM', async () => {
     const { getByText } = await app.renderPanel();
     await app.rtl.waitFor(() =>
-      expect(getByText('8.0GB RAM - speech runs on your phone and your voice never leaves it')).toBeTruthy(),
+      expect(getByText('8.0 GB RAM. Replies are read aloud on this phone, and your voice never leaves it.')).toBeTruthy(),
     );
   });
 
