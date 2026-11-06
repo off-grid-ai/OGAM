@@ -271,10 +271,10 @@ const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textMuted,
   },
   // A row in the Recent ListGroup: flat, the group draws the surface and the hairlines.
+  // Glass like every card: the row sits in a ListGroup, so it draws no fill of its own.
   conversationItem: {
     ...listRowStyle,
     paddingVertical: SPACING.sm + 2,
-    backgroundColor: colors.surface,
   },
   conversationInfo: {
     flex: 1,
