@@ -125,7 +125,6 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
 
   // Tools and MCP warnings are independent — each turns amber at 3+
   const showToolsWarning = supportsToolCalling && enabledToolCount >= 3 && !toolCountHintDismissed;
-  const showMcpWarning = mcpToolCount >= 3;
 
   const toolIconColor = showToolsWarning ? TOOL_WARNING_COLOR : tools.iconColor;
 
@@ -266,13 +265,13 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
                 <IconMC
                   name="crown"
                   size={16}
-                  color={showMcpWarning ? TOOL_WARNING_COLOR : colors.text}
+                  color={colors.text}
                 />
                 <Text style={[popoverStyles.rowLabel, { color: colors.text }]}>
                   Pro tools
                 </Text>
                 {mcpToolCount > 0 && (
-                  <QuickBadge tone={showMcpWarning ? 'warn' : 'count'} label={mcpToolCount} />
+                  <QuickBadge tone="count" label={mcpToolCount} />
                 )}
               </TouchableOpacity>
             </View>
