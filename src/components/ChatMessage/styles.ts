@@ -391,13 +391,14 @@ const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     gap: 3,
   },
-  // "Details" in the time row: a 44 pt target that sits in the row's line height.
+  // Details in the time row: a 44 pt target that sits in the row's line height.
   detailsToggle: {
-    flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: 2,
+    justifyContent: 'center' as const,
+    minWidth: 44,
     minHeight: 44,
     marginVertical: -10,
+    marginHorizontal: -10,
   },
   // A quiet surface, so the dot lattice does not run through the Mono line (hand test 66).
   turnDetails: {

@@ -106,8 +106,8 @@ export function GenerationMeta({ messageId, generationMeta, styles, colors }: Re
 const turnDetailsKey = (messageId: string) => `turn-details:${messageId}`;
 
 /**
- * "Details" in the time row. One quiet word instead of two full-width rows under every reply
- * ("Tools it could use", "Generation details"; hand test 64). Its panel is TurnDetails below.
+ * Details in the time row: an icon with an accessible name, so the whole meta stays one line
+ * (screen review: no words under every reply). Its panel is TurnDetails below.
  */
 export function TurnDetailsToggle({ messageId, styles, colors }: Readonly<{ messageId: string; styles: any; colors: ReturnType<typeof useTheme>['colors'] }>) {
   const [expanded, toggle] = useAccordionExpanded(turnDetailsKey(messageId));
@@ -121,8 +121,7 @@ export function TurnDetailsToggle({ messageId, styles, colors }: Readonly<{ mess
       onPress={toggle}
       activeOpacity={0.6}
     >
-      <Text style={styles.timestamp}>Details</Text>
-      <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={12} color={colors.textMuted} />
+      <Icon name="info" size={14} color={expanded ? colors.text : colors.textMuted} />
     </TouchableOpacity>
   );
 }
