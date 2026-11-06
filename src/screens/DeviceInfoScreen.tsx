@@ -11,7 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Card } from '../components';
 import { useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
-import { TYPOGRAPHY, SPACING } from '../constants';
+import { FONTS, TYPOGRAPHY, SPACING } from '../constants';
 import { useAppStore } from '../stores';
 import { hardwareService } from '../services';
 
@@ -147,9 +147,10 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   section: {
     marginBottom: SPACING.lg,
   },
+  // The shared section-label style, not a heading per card.
   sectionTitle: {
-    ...TYPOGRAPHY.h3,
-    color: colors.text,
+    ...TYPOGRAPHY.label,
+    color: colors.textMuted,
     marginBottom: SPACING.md,
   },
   description: {
@@ -173,8 +174,10 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.body,
     color: colors.textSecondary,
   },
+  // Numbers and facts in Mono, as everywhere.
   infoValue: {
     ...TYPOGRAPHY.body,
+    fontFamily: FONTS.mono,
     color: colors.text,
   },
   tierBadge: {
@@ -208,8 +211,9 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.text,
     marginBottom: SPACING.xs,
   },
+  // Chosen is the grey fill; the name stays ink (hand test 60: an emerald "Flagship").
   tierNameActive: {
-    color: colors.primary,
+    color: colors.text,
   },
   tierDesc: {
     ...TYPOGRAPHY.meta,

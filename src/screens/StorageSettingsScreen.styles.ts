@@ -1,5 +1,6 @@
+import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../theme';
-import { TYPOGRAPHY, SPACING } from '../constants';
+import { FONTS, TYPOGRAPHY, SPACING } from '../constants';
 
 export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
@@ -72,6 +73,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   legendText: {
     ...TYPOGRAPHY.meta,
+    fontFamily: FONTS.mono,
     color: colors.textSecondary,
   },
   infoRow: {
@@ -79,8 +81,8 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     justifyContent: 'space-between' as const,
     alignItems: 'center' as const,
     paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
   },
   lastRow: {
     borderBottomWidth: 0,
@@ -97,6 +99,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   // A size is a fact, not an accent (brand: emerald only for what is in use or chosen).
   infoValue: {
     ...TYPOGRAPHY.body,
+    fontFamily: FONTS.mono,
     color: colors.text,
   },
   indented: { flex: 1, marginLeft: SPACING.xl + SPACING.xs, color: colors.textSecondary },
