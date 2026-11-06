@@ -627,3 +627,8 @@ Top 3: (1) chat settings sheet rows visible (fixed); (2) Image & video and Voice
 
 Chat settings sheet shows Project, Model settings, Delete chat (half empty below); image example inline and "Image size"; a gap between the Voice cards; one face for the quick-settings counts. Watch: a Home recent-chat row did not respond to two taps (Chats tab worked), cause not found.
 Top 3: (1) Video generation inside the Image & video card; (2) no dropdown shadows on Voice, a clear state for Read replies aloud; (3) the chat settings sheet sized to its rows without the bare-header bug.
+
+## Supervisor 14:20 (hand test 74, build 75) — project page: 4 pass, 2 partial
+
+Pass: header with New chat beside the purpose, chats under CHATS · 8 at one height with "Last week" / "2 weeks ago", shorter chat settings sheet, Home recent row opens its chat. Partial: "What it knows" card has no label; words differ (file / document, Instructions / SYSTEM PROMPT); 1 file says "from these"; empty project text floats 330 pt below with no CHATS · 0; knowledge base titled with the project name and a duplicate 36 pt "+".
+Top 3: (1) knowledge base titled Files, one add; (2) one vocabulary (Instructions, files), "from it" for one; (3) a label on the card, CHATS · 0 above the empty text.
