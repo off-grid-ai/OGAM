@@ -2,7 +2,7 @@ import React, { type ReactNode } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
 import { TouchableOpacity } from './Touchable';
 import Icon from 'react-native-vector-icons/Feather';
-import { SPACING, TYPOGRAPHY } from '../constants';
+import { FONTS, SPACING, TYPOGRAPHY } from '../constants';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 
@@ -13,6 +13,10 @@ interface ScreenHeaderProps {
   /** A status or action at the trailing edge, e.g. the Pro badge. */
   right?: ReactNode;
   testID?: string;
+  /** Kept for screens whose Back already had a test id before they moved to this header. */
+  backTestID?: string;
+  /** A second line under the title, e.g. a file's size. */
+  subtitle?: string;
   variant?: 'screen' | 'tab';
 }
 
@@ -32,6 +36,8 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   onBack,
   right,
   testID,
+  backTestID,
+  subtitle,
   variant = 'screen',
 }) => {
   const { colors } = useTheme();
@@ -48,13 +54,25 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
           onPress={onBack}
           accessibilityRole="button"
           accessibilityLabel="Back"
+          testID={backTestID}
         >
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
       ) : null}
-      <Text style={styles.title} numberOfLines={1}>
-        {title}
-      </Text>
+      {subtitle ? (
+        <View style={styles.titleBlock}>
+          <Text style={styles.title} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={styles.subtitle} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        </View>
+      ) : (
+        <Text style={styles.title} numberOfLines={1}>
+          {title}
+        </Text>
+      )}
       {right}
     </View>
   );
@@ -83,4 +101,6 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   // its height. A screen reader measures the frame, not hitSlop (hand test 44: 28 pt).
   backButton: { width: 44, height: 44, margin: -8, alignItems: 'center' as const, justifyContent: 'center' as const },
   title: { ...TYPOGRAPHY.h2, color: colors.text, flex: 1 },
+  titleBlock: { flex: 1 },
+  subtitle: { ...TYPOGRAPHY.meta, fontFamily: FONTS.mono, color: colors.textMuted },
 });

@@ -12,6 +12,7 @@ import { offeredTools } from '../../services/tools';
 import { useAppStore } from '../../stores';
 import { useOpenProTools } from '../../hooks/useOpenProTools';
 import type { ThemeColors, ThemeShadows } from '../../theme';
+import { ScreenHeader } from '../../components/ScreenHeader';
 
 const TOOL_WARNING_COLOR = '#F59E0B';
 
@@ -44,17 +45,7 @@ export const ToolsScreen: React.FC = () => {
 
   return (
     <AliveScreen style={styles.root} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-          testID="tools-back"
-        >
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Tools</Text>
-      </View>
+      <ScreenHeader title="Tools" onBack={() => navigation.goBack()} backTestID="tools-back" />
 
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         {/* Pro Tools always sits on top of the listing. */}

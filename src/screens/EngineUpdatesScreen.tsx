@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AppSwitch } from '../components/AppSwitch';
 import { View, Text, ScrollView } from 'react-native';
-import { TouchableOpacity } from '../components/Touchable';
 import { AliveScreen } from '../components/AliveScreen';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
@@ -17,6 +16,7 @@ import {
   type EngineCheckOutcome,
   type EngineUpdateInfo,
 } from '../services/enginePacks';
+import { ScreenHeader } from '../components/ScreenHeader';
 
 const CHECK_RESULT: Record<EngineCheckOutcome, string> = {
   staged: 'A newer engine is ready. It switches on the next time you open Off Grid AI.',
@@ -64,17 +64,7 @@ export const EngineUpdatesScreen: React.FC = () => {
 
   return (
     <AliveScreen style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Engine updates</Text>
-      </View>
+      <ScreenHeader title="Engine updates" onBack={() => navigation.goBack()} />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         {info && overTheAir ? (

@@ -1,12 +1,12 @@
 import React from 'react';
 import { View, Text, ScrollView } from 'react-native';
-import { TouchableOpacity } from '../components/Touchable';
 import { AliveScreen } from '../components/AliveScreen';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { SPACING, TYPOGRAPHY } from '../constants';
+import { ScreenHeader } from '../components/ScreenHeader';
 
 /** Plain-words summary of docs/ANALYTICS.md. Keep the two lists in step with that file. */
 const WE_SHARE = [
@@ -53,23 +53,11 @@ const ListBlock: React.FC<{
 /** "What we share": what opt-in analytics sends, and what it never sends. */
 export const AnalyticsInfoScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
   return (
     <AliveScreen style={styles.container} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>What we share</Text>
-        <View style={styles.backButton} />
-      </View>
+      <ScreenHeader title="What we share" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.intro}>
           Off by default. If you turn on Anonymous stats or Crash reports, Off Grid AI sends counts of

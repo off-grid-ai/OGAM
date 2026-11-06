@@ -4,7 +4,6 @@ import {
   Text,
   FlatList,
 } from 'react-native';
-import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import type { DocumentPage } from '@offgrid/rag/documents';
 import { LoadingDots } from '../components/LoadingDots';
@@ -19,6 +18,7 @@ import { TYPOGRAPHY, SPACING, FONTS } from '../constants';
 import { documentStore } from '../services/documents/store';
 import { RootStackParamList } from '../navigation/types';
 import logger from '../utils/logger';
+import { ScreenHeader } from '../components/ScreenHeader';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'DocumentPreview'>;
@@ -246,19 +246,12 @@ export const DocumentPreviewScreen: React.FC = () => {
 
   return (
     <AliveScreen style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} testID="document-preview-back">
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {fileName || 'Document'}
-          </Text>
-          {fileSize > 0 && (
-            <Text style={styles.headerSubtitle}>{formatFileSize(fileSize)}</Text>
-          )}
-        </View>
-      </View>
+      <ScreenHeader
+        title={fileName || 'Document'}
+        subtitle={fileSize > 0 ? formatFileSize(fileSize) : undefined}
+        onBack={() => navigation.goBack()}
+        backTestID="document-preview-back"
+      />
 
       {isLoading ? (
         <View style={styles.centered}>
