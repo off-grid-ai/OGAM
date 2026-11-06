@@ -7,12 +7,12 @@ import { formatFileSize } from '@offgrid/models';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { AnimatedPressable } from '../AnimatedPressable';
 import type { PickSlot } from '../../services/devicePicks';
-import { ListGroup } from '../ListGroup';
+import { cardSurface } from '../../theme/surface';
 import { MadeByOffGrid } from '../ModelCardContent';
 
 /**
- * Fast, Balanced and Best for this phone, at the top of a models tab: three short rows on one surface
- * with hairlines (the list's own look), the kind on the left, the action on the right.
+ * Fast, Balanced and Best for this phone, at the top of a models tab: three tiles side by side.
+ * Three full-width rows spent a third of the screen on three names (screen review).
  */
 const PICK_LABELS: Record<PickSlot, string> = {
   fast: 'Fast',
@@ -44,14 +44,14 @@ export const PicksRow: React.FC<{ items: PickItem[]; testID?: string }> = ({ ite
   return (
     <View style={styles.section} testID={testID}>
       <Text style={styles.sectionLabel}>For this phone</Text>
-      <ListGroup>
+      <View style={styles.tiles}>
         {items.map(item => <PickCard key={item.slot} item={item} />)}
-      </ListGroup>
+      </View>
     </View>
   );
 };
 
-/** One pick: a row of the group; the action is the row's trailing icon. */
+/** One pick: a tile with its kind, the model, and its size beside the one action. */
 const PickCard: React.FC<{ item: PickItem }> = ({ item }) => {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
@@ -72,14 +72,14 @@ const PickCard: React.FC<{ item: PickItem }> = ({ item }) => {
   return (
     <View style={[styles.card, state.kind === 'active' && styles.cardActive]} testID={`pick-${slot}`}>
       <Text style={styles.slot}>{PICK_LABELS[slot]}</Text>
-      <View style={styles.body}>
-        <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+      <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
+      <View style={styles.footer}>
         <View style={styles.meta}>
           {item.madeByOffGrid && <MadeByOffGrid />}
           <Text style={styles.size}>{formatFileSize(item.sizeBytes)}</Text>
         </View>
+        {action}
       </View>
-      {action}
     </View>
   );
 };
@@ -102,16 +102,16 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, color: colors.textMuted,
     letterSpacing: 0.3, marginBottom: SPACING.sm,
   },
-  // A row of the group: the kind, the model and its size, the action; about 52px tall.
+  tiles: { flexDirection: 'row' as const, gap: SPACING.sm },
   card: {
-    flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.md,
-    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, minHeight: 52,
+    ...cardSurface(colors),
+    flex: 1, gap: SPACING.xs, padding: SPACING.md, minHeight: 104,
   },
-  cardActive: { backgroundColor: colors.selectedFill },
-  slot: { ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, color: colors.textMuted, letterSpacing: 0.3, width: 64 },
-  body: { flex: 1 },
-  name: { ...TYPOGRAPHY.body, color: colors.text },
-  meta: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.xs, marginTop: 2 },
+  cardActive: { backgroundColor: colors.selectedFill, borderColor: colors.primary },
+  slot: { ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, color: colors.textMuted, letterSpacing: 0.3 },
+  name: { ...TYPOGRAPHY.bodySmall, color: colors.text, flexGrow: 1 },
+  footer: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
+  meta: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.xs },
   size: { ...TYPOGRAPHY.meta, color: colors.textMuted },
   progress: { ...TYPOGRAPHY.meta, color: colors.textSecondary },
 });
