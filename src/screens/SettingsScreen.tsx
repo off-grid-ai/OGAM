@@ -254,16 +254,13 @@ export const SettingsScreen: React.FC = () => {
                 screen: 'EngineUpdates' as const,
                 testID: 'open-engine-updates',
               },
-            ].map((item, index, arr) => (
+            ].map((item, index) => (
               <AnimatedListItem
                 key={item.screen}
                 index={index + 1}
                 staggerMs={40}
                 trigger={focusTrigger}
-                style={[
-                  styles.navItem,
-                  index === arr.length - 1 && styles.navItemLast,
-                ]}
+                style={styles.navItem}
                 onPress={() =>
                   item.screen === 'Sync'
                     ? openSync()
@@ -289,36 +286,40 @@ export const SettingsScreen: React.FC = () => {
                 <Icon name="chevron-right" size={16} color={colors.textMuted} />
               </AnimatedListItem>
             ))}
+            {/* Pro is the last row of this list, not a card on its own (hand tests 60-62). */}
+            <TouchableOpacity
+              style={[styles.navItem, styles.navItemLast]}
+              onPress={() => navigation.navigate('ProDetail')}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel={`Off Grid AI Pro. ${proStatusLabel}`}
+            >
+              <View style={styles.navItemIcon}>
+                <IconMC name="crown" size={16} color={colors.textSecondary} />
+              </View>
+              <View style={styles.navItemContent}>
+                <Text style={styles.navItemTitle}>Off Grid AI Pro</Text>
+                <Text style={styles.navItemDesc}>{proStatusLabel}</Text>
+              </View>
+              <Icon name="chevron-right" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
           </View>
 
-        {/* PRO Button */}
-        <AnimatedEntry index={6} staggerMs={40} trigger={focusTrigger}>
-          <TouchableOpacity
-            style={styles.proNavButton}
-            onPress={() => navigation.navigate('ProDetail')}
-            activeOpacity={0.75}
-            accessibilityRole="button"
-            accessibilityLabel={`Off Grid AI Pro. ${proStatusLabel}`}
-          >
-            <View style={styles.proIconContainer}>
-              <IconMC name="crown" size={18} color={colors.textSecondary} />
-            </View>
-            <View style={styles.proCardText}>
-              <View style={styles.proTitleRow}>
-                {/* Named once: "Off Grid AI PRO" beside a second PRO badge said it twice (hand test 36). */}
-                <Text style={styles.proNavTitle}>Off Grid AI Pro</Text>
-              </View>
-              <Text style={styles.proDesc}>{proStatusLabel}</Text>
-            </View>
-            <Icon name="chevron-right" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
-        </AnimatedEntry>
 
         <SettingsCommunitySections
           focusTrigger={focusTrigger}
           styles={styles}
           colors={colors}
           onSendFeedback={handleSendFeedback}
+        />
+
+
+        {/* Analytics: opt-in consent, what is shared, Report a problem */}
+        <SettingsAnalyticsSection
+          focusTrigger={focusTrigger}
+          styles={styles}
+          colors={colors}
+          onWhatWeShare={() => navigation.navigate('AnalyticsInfo')}
         />
 
         {/* About */}
@@ -343,14 +344,6 @@ export const SettingsScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         </AnimatedEntry>
-
-        {/* Analytics: opt-in consent, what is shared, Report a problem */}
-        <SettingsAnalyticsSection
-          focusTrigger={focusTrigger}
-          styles={styles}
-          colors={colors}
-          onWhatWeShare={() => navigation.navigate('AnalyticsInfo')}
-        />
 
         {/* Pro feature sections registered at runtime by @offgrid/pro */}
         {settingsSections.map((Section, i) => (
