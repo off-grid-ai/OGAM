@@ -657,3 +657,8 @@ Top 3: (1) Recent and Video cards glass; (2) dots near text (accepted with glass
 
 Remote servers: circle beside both lines, status under the name, amber then red / green dots; Pro tools green dots; Sync " · " and dots; Home Recent and the Video card glass. No lost behaviour.
 Top 3: (1) Sync rows: a state icon and a dot say one thing twice; keep the dot; (2) Desktop tools "Connecting…" without a dot; (3) Remote servers read "Not checked yet" for ~15 s while the check runs.
+
+## Supervisor 13:40 (hand test 80, build 81) — 5 of 5 pass, banner gone
+
+No Metro banner on any screen; Sync device-type icons with the state as the dot; Desktop tools amber dot; Remote servers "Checking" then red / green. Glass reads well on the six main screens. No lost behaviour.
+Top 3: (1) Desktop tools "Connecting…" never ends while Remote servers says Not answering: one fact, one state; (2) Sync "last seen" a bare timestamp with seconds, wraps to three lines; (3) header hairline only on Projects; Chats first row indented by an image icon.
