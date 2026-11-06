@@ -8,7 +8,6 @@ import { useAppStore } from '../../stores';
 import { triggerHaptic } from '../../utils/haptics';
 import { TYPOGRAPHY } from '../../constants';
 import Animated, { Easing, withTiming } from 'react-native-reanimated';
-import { cardFill } from '../../theme/surface';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { QuickBadge, type QuickBadgeTone } from './QuickBadge';
 
@@ -174,7 +173,7 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
               style={[
                 popoverStyles.popover,
                 {
-                  backgroundColor: cardFill(colors),
+                  backgroundColor: colors.surface,
                   borderColor: colors.borderLight,
                   ...shadows.medium,
                   bottom: anchorY + 8,
