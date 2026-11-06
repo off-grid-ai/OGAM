@@ -101,11 +101,13 @@ export const FeatureShowcase: React.FC<{ features: ShowcaseFeature[]; active: bo
   // The card in view, read by the timer and the drag handlers without restarting the timer.
   const indexRef = useRef(0);
   const dragStartX = useRef(0);
+  // Until when the row counts as moving: a tap then would open whatever card passes under the finger.
+  const movingUntil = useRef(0);
+  const [rowWidth, setRowWidth] = useState(0);
   const last = features.length - 1;
 
   const jumpTo = useCallback((i: number) => {
     indexRef.current = i;
-    setIndex(i);
     scroller.current?.scrollTo({ x: i * step, animated: true });
   }, [step]);
 
@@ -126,12 +128,21 @@ export const FeatureShowcase: React.FC<{ features: ShowcaseFeature[]; active: bo
     if (from === last && x > dragStartX.current) jumpTo(0);
     else if (from === 0 && x < dragStartX.current) jumpTo(last);
   };
+  // The pip follows the scroll position and nothing else, so it always marks the card in view
+  // (hand test 87: after a swipe that followed the timer it lagged one card).
+  const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    movingUntil.current = Date.now() + 250;
+    const i = at(event.nativeEvent.contentOffset.x);
+    if (i !== index) setIndex(i);
+  };
   const onSettle = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const i = at(event.nativeEvent.contentOffset.x);
     indexRef.current = i;
     setIndex(i);
     setTouching(false);
   };
+  // Each pip gets an equal share of the row, up to 44 pt, so the targets are as wide as the row allows.
+  const pipWidth = rowWidth > 0 ? Math.min(44, rowWidth / features.length) : undefined;
 
   return (
     <View style={styles.showcase} testID="feature-showcase">
@@ -148,6 +159,8 @@ export const FeatureShowcase: React.FC<{ features: ShowcaseFeature[]; active: bo
         }}
         onScrollEndDrag={onDragEnd}
         onMomentumScrollEnd={onSettle}
+        onScroll={onScroll}
+        scrollEventThrottle={32}
         contentContainerStyle={styles.track}
         style={styles.scroller}
       >
@@ -155,7 +168,10 @@ export const FeatureShowcase: React.FC<{ features: ShowcaseFeature[]; active: bo
           <AnimatedPressable
             key={feature.key}
             hapticType="selection"
-            onPress={feature.onPress}
+            onPress={() => {
+              if (Date.now() < movingUntil.current) return;
+              feature.onPress();
+            }}
             accessibilityRole="button"
             accessibilityLabel={`${feature.title} ${feature.line}${feature.mac ? ' On your Mac.' : ''}${feature.pro ? ' Pro.' : ''}`}
             testID={`feature-showcase-${feature.key}`}
@@ -176,12 +192,16 @@ export const FeatureShowcase: React.FC<{ features: ShowcaseFeature[]; active: bo
         ))}
       </ScrollView>
       {features.length > 1 ? (
-        <View style={styles.pips} accessibilityRole="tablist">
+        <View
+          style={styles.pips}
+          accessibilityRole="tablist"
+          onLayout={event => setRowWidth(event.nativeEvent.layout.width)}
+        >
           {features.map((item, i) => (
             <AnimatedPressable
               key={item.key}
               onPress={() => jumpTo(i)}
-              style={styles.pipTarget}
+              style={[styles.pipTarget, pipWidth ? { width: pipWidth } : null]}
               accessibilityRole="tab"
               accessibilityLabel={item.title}
             >
@@ -246,6 +266,7 @@ const createStyles = (colors: ThemeColors) => ({
   pipTarget: {
     height: 44,
     paddingHorizontal: SPACING.xs,
+    alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
   pip: {
