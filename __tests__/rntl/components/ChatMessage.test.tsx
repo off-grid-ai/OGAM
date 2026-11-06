@@ -818,7 +818,7 @@ describe('ChatMessage', () => {
 
       fireEvent.press(getByTestId('generation-details-toggle'));
       expect(getByTestId('generation-meta')).toBeTruthy();
-      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('Metal'));
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('ran on the GPU (Metal)'));
     });
 
     it('shows GPU backend when GPU was used', () => {
@@ -831,12 +831,14 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText(/Metal.*32L/)).toBeTruthy();
+      // Where it ran, in words; the layer count is no longer shown.
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('ran on the GPU (Metal)'));
+      expect(getByTestId('generation-meta')).not.toHaveTextContent(/32L/);
     });
 
     it('shows CPU when GPU was not used', () => {
@@ -853,7 +855,7 @@ describe('ChatMessage', () => {
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('CPU'));
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('ran on the CPU'));
     });
 
     it('displays tokens per second', () => {
@@ -870,7 +872,7 @@ describe('ChatMessage', () => {
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('wrote at 22.3 tok/s'));
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('wrote 22.3 tokens a second'));
     });
 
     it('displays time to first token', () => {
@@ -1099,7 +1101,7 @@ describe('ChatMessage', () => {
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('150 tokens'));
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('150 tokens long'));
     });
 
     it('does not display token count when 0', () => {
@@ -1583,12 +1585,12 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('GPU')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent('ran on the GPU');
     });
   });
 

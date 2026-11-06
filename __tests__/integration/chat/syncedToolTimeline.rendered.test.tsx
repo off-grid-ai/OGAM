@@ -500,6 +500,6 @@ describe('synced assistant tool timeline', () => {
     expect(view.getByText('First source.')).toBeTruthy();
     fireEvent.press(view.getByTestId('generation-details-toggle'));
     expect(view.getByTestId('generation-meta')).toBeTruthy();
-    expect(view.getByTestId('tools-sent-list')).toHaveTextContent('Tools it could use: Web search');
+    expect(view.getByTestId('tools-sent-list')).toHaveTextContent('Tools it had for this reply: Web search');
   });
 });

@@ -31,7 +31,7 @@ describe('greeting with remote tools enabled', () => {
     // Knowledge search is not offered in a chat with no documents (searchableKnowledge), so 2, not 3.
     h.rtl.fireEvent.press(h.view!.getAllByTestId('generation-details-toggle').at(-1)!);
     const offered = h.view!.getAllByTestId('tools-sent-list').at(-1)!;
-    const names = String(offered.props.children).replace(/^Tools it could use: /, '').split(', ');
+    const names = String(offered.props.children).replace(/^Tools it had for this reply: /, '').split(', ');
     expect(names).toHaveLength(2);
     expect(offered).not.toHaveTextContent(/Remote action|remote_action/);
     expect(h.view!.queryByTestId('tool-result-label-model_fallback')).toBeNull();

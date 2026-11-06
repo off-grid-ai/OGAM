@@ -219,7 +219,7 @@ describe('happy — a tool runs and its result renders (heavy entry point)', () 
     h.rtl.fireEvent.press(h.view!.getByTestId('generation-details-toggle'));
     expect(order()).toEqual(['message-bubble', 'message-meta-row', 'generation-meta', 'tools-sent-list']);
     expect(h.rtl.within(answer()).getByTestId('generation-meta')).toHaveTextContent(/Test Model/);
-    expect(h.rtl.within(answer()).getByTestId('tools-sent-list')).toHaveTextContent(/^Tools it could use: .*Calculator/);
+    expect(h.rtl.within(answer()).getByTestId('tools-sent-list')).toHaveTextContent(/^Tools it had for this reply: .*Calculator/);
 
     // Closed again: both go.
     h.rtl.fireEvent.press(h.view!.getByTestId('generation-details-toggle'));

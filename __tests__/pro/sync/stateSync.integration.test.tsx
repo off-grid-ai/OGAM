@@ -451,7 +451,7 @@ describe('Pro mobile state sync journey', () => {
       ui.getByText('I should confirm the notes before searching.'),
     ).toBeTruthy();
     fireEvent.press(ui.getByTestId('generation-details-toggle'));
-    expect(ui.getByTestId('generation-meta')).toHaveTextContent(/(^| · )wrote at 42\.5 tok\/s( · |$)/);
+    expect(ui.getByTestId('generation-meta')).toHaveTextContent(/(^| · )wrote 42\.5 tokens a second( · |$)/);
 
     // A returning desktop can send a full wire batch of tombstones. The phone must finish the
     // batch and leave navigation responsive after removing those turns from its chat projection.
@@ -543,7 +543,7 @@ describe('Pro mobile state sync journey', () => {
       ).toHaveLength(0),
     );
     fireEvent.press(ui.getByTestId('generation-details-toggle'));
-    expect(ui.getByTestId('generation-meta')).toHaveTextContent(/(^| · )wrote at 42\.5 tok\/s( · |$)/);
+    expect(ui.getByTestId('generation-meta')).toHaveTextContent(/(^| · )wrote 42\.5 tokens a second( · |$)/);
 
     remoteLog.record(CORE_SYNC_ENTITIES.message, 'older-gap-message', 'put', {
       conversation_id: 'remote-conversation',
