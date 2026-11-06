@@ -728,3 +728,7 @@ Bug to investigate: the paused "Wan 2.1 (1.3B), FP16" download is gone (Models >
 - Pass: Gallery Videos all at 24 pt, glass cards; Video tab filled check, search icon, clear works; Speech, Chats, reply in 2.7 s, Projects, Settings, About, Downloads. No lost behaviour.
 - Fail: Video search field edge to edge; "In use" still green text on Text, Image and Documents tabs; Library "Your videos" field and cast at 48 pt (double gutter); film page at 16 pt with circled header buttons; Voice search field not the shared one; oversized scrubber thumb. First taps after a screen change sometimes missed (likely WDA; needs a finger).
 - Top 3: (1) Video search on the gutter; (2) one filled check for In use on every Models tab; (3) Library single gutter, Voice shared search field.
+
+## Supervisor 18:18 (hand test 94, release pass) — release-ready: yes
+- Pass: Video search on the 24 pt gutter; Voice uses the shared search field; "In use" in words on every Models tab; Library field, cast and grid all at 24 pt; Home, Chats, reply in 1.9 s, Settings, Gallery, Downloads. No lost behaviour from this branch.
+- Watch (not blocking): 3 first taps dropped and 1–2 s lag after some screen changes (WDA or real, needs a finger); a paused "Wan 2.1 FP16" download row disappeared with no notice (the paused-download loss seen before); Video tab row icons draw late.
