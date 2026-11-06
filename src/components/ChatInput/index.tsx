@@ -512,7 +512,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         ? ['Photo', 'Document', 'Cancel']
         : ['Document', 'Cancel'];
       ActionSheetIOS.showActionSheetWithOptions(
-        { options, cancelButtonIndex: options.length - 1 },
+        {
+          options,
+          cancelButtonIndex: options.length - 1,
+          // The placeholder no longer says it, so the menu says why Photo is missing.
+          message: supportsVision ? undefined : "This model can't see photos. Choose one that can to add a photo.",
+        },
         index => {
           if (supportsVision) {
             if (index === 0) handleVisionPress();
