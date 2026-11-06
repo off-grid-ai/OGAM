@@ -603,23 +603,60 @@ describe('Gallery video, played on its own route', () => {
     return { ...g, videoPath };
   }
 
+  /** More, over the open video: the one sheet with Share or Save, Delete and the details. */
+  async function openVideoSheet(g: Gallery) {
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-video-more'));
+    await g.view.findByText('PROMPT');
+  }
+
+  it('switches Images, Videos and back to Images without breaking the grid (each tab its own list)', async () => {
+    const g = await openGallery({
+      images: sampleImages,
+      before: ({ boundary, useAppStore }) => { seedVideo(boundary, useAppStore); },
+    });
+    expect(g.view.getByTestId('gallery-image-img-1')).toBeTruthy();
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-tab-videos'));
+    expect(await g.view.findByText('a fox in snow')).toBeTruthy();
+    // The tab stays in Gallery.
+    expect(g.view.getByTestId('gallery-screen')).toBeTruthy();
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-tab-images'));
+    expect(await g.view.findByTestId('gallery-image-img-1')).toBeTruthy();
+    expect(g.view.queryByText('a fox in snow')).toBeNull();
+  });
+
   it('a tapped video opens its player on its own route; Back returns to the list', async () => {
     const g = await openVideo();
-    expect(g.view.getAllByText('a fox in snow').length).toBeGreaterThan(0);
+    expect(g.view.getByLabelText('a fox in snow')).toBeTruthy();
+    // The actions live behind More, not in the header or as a link on the page.
+    expect(g.view.queryByText('Delete video')).toBeNull();
+    expect(g.view.queryByTestId('gallery-video-save')).toBeNull();
     g.rtl.fireEvent.press(g.view.getByTestId('gallery-video-back'));
     await g.rtl.waitFor(() => expect(g.view.queryByTestId('gallery-video-screen')).toBeNull());
     expect(g.view.getByText('Videos (1)')).toBeTruthy();
   });
 
+  it('More opens one sheet with Share or Save, Delete and the video\'s details', async () => {
+    const g = await openVideo();
+    await openVideoSheet(g);
+    expect(g.view.getByTestId('gallery-video-save')).toHaveTextContent('Save');
+    expect(g.view.getByTestId('gallery-video-delete')).toBeTruthy();
+    expect(g.view.getAllByText('a fox in snow').length).toBeGreaterThan(0);
+    expect(g.view.getByText('480x832')).toBeTruthy();
+    expect(g.view.getByText('33 frames')).toBeTruthy();
+    expect(g.view.getByText('2.0s')).toBeTruthy();
+  });
+
   it('on iOS, Share hands the video file to the share sheet', async () => {
     const g = await openVideo('ios');
+    await openVideoSheet(g);
     const { Share } = require('react-native');
     const shared: unknown[] = [];
     Share.share = async (content: unknown) => {
       shared.push(content);
       return { action: 'sharedAction' };
     };
-    await g.rtl.act(async () => { g.rtl.fireEvent.press(g.view.getByText('Share')); });
+    expect(g.view.getByTestId('gallery-video-save')).toHaveTextContent('Share');
+    await g.rtl.act(async () => { g.rtl.fireEvent.press(g.view.getByTestId('gallery-video-save')); });
     expect(shared).toEqual([{ url: `file://${g.videoPath}` }]);
   });
 
@@ -636,22 +673,27 @@ describe('Gallery video, played on its own route', () => {
       },
     };
 
-    await g.rtl.act(async () => { g.rtl.fireEvent.press(g.view.getByText('Save')); });
+    await openVideoSheet(g);
+    await g.rtl.act(async () => { g.rtl.fireEvent.press(g.view.getByTestId('gallery-video-save')); });
     expect(await g.view.findByText('Saved to Downloads')).toBeTruthy();
     expect(await g.boundary.fs!.exists(`${downloads}/vid-1.mp4`)).toBe(true);
     g.rtl.fireEvent.press(g.view.getByText('OK'));
     await g.rtl.waitFor(() => expect(g.view.queryByText('Saved to Downloads')).toBeNull());
 
     refuse = true;
-    await g.rtl.act(async () => { g.rtl.fireEvent.press(g.view.getByText('Save')); });
+    await g.rtl.act(async () => { g.rtl.fireEvent.press(g.view.getByTestId('gallery-video-save')); });
     expect(await g.view.findByText('Save failed')).toBeTruthy();
     expect(g.view.getByText('Storage full')).toBeTruthy();
   });
 
   it('Delete asks first; Delete removes the file and the record and returns to the list', async () => {
     const g = await openVideo();
-    g.rtl.fireEvent.press(g.view.getByText('Delete video'));
+    await openVideoSheet(g);
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-video-delete'));
+    // The sheet closes first, then the confirmation asks.
     expect(await g.view.findByText('Delete this video?')).toBeTruthy();
+    expect(g.view.queryByText('PROMPT')).toBeNull();
+    expect(await g.boundary.fs!.exists(g.videoPath)).toBe(true);
     await g.rtl.act(async () => {
       g.rtl.fireEvent.press(g.rtl.within(g.view.getByTestId('app-alert')).getByLabelText('Delete'));
     });
@@ -665,7 +707,8 @@ describe('Gallery video, played on its own route', () => {
   it('a video whose file cannot be removed stays, and says so', async () => {
     const g = await openVideo();
     g.boundary.fs!.module.unlink.mockImplementation(async () => { throw new Error('EACCES: permission denied'); });
-    g.rtl.fireEvent.press(g.view.getByText('Delete video'));
+    await openVideoSheet(g);
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-video-delete'));
     await g.view.findByText('Delete this video?');
     await g.rtl.act(async () => {
       g.rtl.fireEvent.press(g.rtl.within(g.view.getByTestId('app-alert')).getByLabelText('Delete'));
@@ -681,6 +724,8 @@ describe('Gallery video, played on its own route', () => {
     const g = await openVideo();
     await g.rtl.act(async () => { g.useAppStore.getState().removeGeneratedVideo('vid-1'); });
     expect(g.view.getByText('This video is no longer in your Gallery.')).toBeTruthy();
-    expect(g.view.queryByText('Delete video')).toBeNull();
+    expect(g.view.queryByTestId('gallery-video-more')).toBeNull();
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-video-back'));
+    await g.rtl.waitFor(() => expect(g.view.queryByTestId('gallery-video-screen')).toBeNull());
   });
 });
