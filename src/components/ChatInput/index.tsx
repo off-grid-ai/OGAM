@@ -697,10 +697,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 loading={assistantTransitioning}
                 style={styles.assistantButton}
                 icon={<GodIcon
-                  size={16}
+                  size={19}
                   fill={assistantEnabled ? colors.primary : 'none'}
                   stroke={assistantEnabled ? 'none' : colors.textSecondary}
-                  strokeWidth={1}
+                  strokeWidth={1.5}
                   color={assistantEnabled ? colors.primary : colors.textSecondary}
                 />}
               />
