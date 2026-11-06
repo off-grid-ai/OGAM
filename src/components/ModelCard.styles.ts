@@ -30,7 +30,6 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.text,
     flexShrink: 1,
   },
-  denseSpacer: { flex: 1 },
   downloadedLabel: { ...TYPOGRAPHY.metaSmall, fontFamily: FONTS.mono, color: colors.textMuted },
   // In use, in words: the one emerald on the row.
   denseInUse: {

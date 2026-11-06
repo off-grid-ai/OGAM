@@ -95,7 +95,7 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
   credibilitySource,
   credibilityLabel,
   incompatibleReason,
-  isActive,
+  isActive: _isActive,
   facts: additionalFacts = [],
   capabilities,
   sourceBadge,
@@ -151,8 +151,6 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
           </Text>}
 
         </View>
-        <View style={styles.denseSpacer} />
-        {isActive ? <Text style={styles.denseInUse} testID="model-in-use">In use</Text> : null}
       </View>
       {!!description && (
         <Text style={styles.denseDescription} numberOfLines={1}>{description}</Text>
@@ -440,7 +438,12 @@ function DownloadedActions({ modelName, isActive, testID, colors, styles, onSele
   const tid = (s: string) => testID ? `${testID}-${s}` : undefined;
   // Downloaded is a fact, said in words: a tick beside the verified mark read as two checks on one
   // row (screen review). Emerald stays for "In use" (one accent).
-  if (!onSelect && !onDelete && !onRepairVision) return <Text style={styles.downloadedLabel} testID={tid('downloaded')}>On phone</Text>;
+  // In use or On phone, said in the one place at the row's end so the two line up (hand test 76).
+  if (!onSelect && !onDelete && !onRepairVision) {
+    return isActive
+      ? <Text style={styles.denseInUse} testID="model-in-use">In use</Text>
+      : <Text style={styles.downloadedLabel} testID={tid('downloaded')}>On phone</Text>;
+  }
   return (
     <>
       {isRepairingVision ? (
