@@ -642,3 +642,8 @@ Top 3: (1) count-aware empty copy (0 files: "Add a file and chats answer from it
 
 Pass: Settings one-line rows, Home Sync and Clipboard one line, Downloads underline tabs, verified mark after the name, On phone, Tools package mark, Files add offers A file / Paste text (and empty state has both), project page labels, IMAGE / VIDEO labels, style names on two lines. Fail: IN USE ends 30 pt short of the row end, not in line with On phone. No lost behaviour.
 Top 3: (1) IN USE in the action column where On phone sits; (2) Tools count vs switches (explained: counts only with documents); (3) empty Files text centred, Paste sheet says Files not knowledge base.
+
+## Supervisor 16:10 (hand test 77, build 78) — 4 of 5 pass
+
+Pass: IN USE in the action column with On phone, no fill; Documents active row In use at its end; Home feedback a plain row; Files empty text centred, Save to Files. Fail: video style names still mono (the Geist commit came after this build).
+Top 3: (1) style names in Geist (in the next build); (2) In use in one case with On phone; (3) Documents: no "download" on a model already on the phone, the arrow says what it does.
