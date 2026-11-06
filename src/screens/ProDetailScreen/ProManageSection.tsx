@@ -33,6 +33,7 @@ import {
 import { loadProFeatures } from '../../bootstrap/loadProFeatures';
 import logger from '../../utils/logger';
 import { cardSurface } from '../../theme/surface';
+import { SectionLabel } from '../../components/SectionLabel';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '';
@@ -151,8 +152,10 @@ export const ProManageSection: React.FC = () => {
   const renewing = tierMeta?.renews === true;
 
   return (
+    <>
+    {/* The label above the card, as every other group (hand test 66 found it inside). */}
+    <SectionLabel title="Your licence" style={styles.cardLabel} />
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Your licence</Text>
       <View style={[styles.row, hasSyncScreen || renewing ? null : styles.lastRow]}>
         <Icon name="check-circle" size={18} color={colors.primary} />
         <Text style={styles.rowTitle}>{statusLine}</Text>
@@ -211,6 +214,7 @@ export const ProManageSection: React.FC = () => {
         {resetting ? <LoadingDots color={colors.primary} /> : null}
       </TouchableOpacity>
     </View>
+    </>
   );
 };
 
@@ -224,14 +228,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) =>
       marginHorizontal: SPACING.xl,
       marginBottom: SPACING.xl,
     },
-    cardTitle: {
-      ...TYPOGRAPHY.label,
-      color: colors.textMuted,
-      textTransform: 'uppercase' as const,
-      letterSpacing: 0.3,
-      paddingTop: SPACING.md,
-      paddingBottom: SPACING.xs,
-    },
+    cardLabel: { marginLeft: SPACING.xl + SPACING.xs },
     row: {
       minHeight: 44,
       flexDirection: 'row' as const,
