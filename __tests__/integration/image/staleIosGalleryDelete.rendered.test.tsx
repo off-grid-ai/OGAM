@@ -1,3 +1,6 @@
+jest.unmock('@react-navigation/native');
+
+import { deleteOpenImage, galleryWithRoutes, pressImageAction } from '../../harness/galleryRoutes';
 import { GB, installNativeBoundary, requireRTL } from '../../harness/nativeBoundary';
 
 describe('iOS Gallery deletion after an application-container change', () => {
@@ -35,12 +38,13 @@ describe('iOS Gallery deletion after an application-container change', () => {
     const rtl = requireRTL();
     const { useAppStore } = require('../../../src/stores/appStore');
     await useAppStore.persist.rehydrate();
-    const { GalleryScreen } = require('../../../src/screens/GalleryScreen');
-    const gallery = rtl.render(React.createElement(GalleryScreen));
+    const gallery = rtl.render(galleryWithRoutes());
+    // The Android storage dialog is the OS's: the person allows it.
+    const { PermissionsAndroid } = require('react-native');
+    PermissionsAndroid.request = async () => PermissionsAndroid.RESULTS.GRANTED;
 
     rtl.fireEvent.press(await gallery.findByTestId('gallery-image-saved-image'));
-    expect(gallery.getByText('Save')).toBeTruthy();
-    rtl.fireEvent.press(gallery.getByText('Save'));
+    await pressImageAction(rtl, gallery, 'Save');
 
     expect(await gallery.findByText('Image Saved')).toBeTruthy();
   });
@@ -111,27 +115,26 @@ describe('iOS Gallery deletion after an application-container change', () => {
     const rtl = requireRTL();
     const { useAppStore } = require('../../../src/stores/appStore');
     await useAppStore.persist.rehydrate();
-    const { GalleryScreen } = require('../../../src/screens/GalleryScreen');
-    const gallery = rtl.render(React.createElement(GalleryScreen));
+    const gallery = rtl.render(galleryWithRoutes());
 
     rtl.fireEvent.press(await gallery.findByTestId('gallery-image-owned-image'));
-    rtl.fireEvent.press(gallery.getByText('Delete'));
-    await gallery.findByText('Delete Image');
-    rtl.fireEvent.press(gallery.getAllByText('Delete')[1]);
+    await deleteOpenImage(rtl, gallery);
 
     await rtl.waitFor(async () => {
       expect(await boundary.fs!.exists(ownedPath)).toBe(false);
       expect(gallery.queryByTestId('gallery-image-owned-image')).toBeNull();
     });
+    // The deleted image's route closed: the grid is the screen again.
+    await rtl.waitFor(() => expect(gallery.queryByTestId('gallery-image-screen')).toBeNull());
 
     rtl.fireEvent.press(gallery.getByTestId('gallery-image-outside-image'));
-    rtl.fireEvent.press(gallery.getByText('Delete'));
-    await gallery.findByText('Delete Image');
-    rtl.fireEvent.press(gallery.getAllByText('Delete')[1]);
+    await deleteOpenImage(rtl, gallery);
 
-    await rtl.waitFor(async () => {
-      expect(await boundary.fs!.exists(outsidePath)).toBe(true);
-      expect(gallery.getByTestId('gallery-image-outside-image')).toBeTruthy();
-    });
+    // Kept: the image stays open and says so, its file and its Gallery entry still there.
+    expect(await gallery.findByText('Image was not deleted')).toBeTruthy();
+    expect(await boundary.fs!.exists(outsidePath)).toBe(true);
+    rtl.fireEvent.press(gallery.getByText('OK'));
+    rtl.fireEvent.press(gallery.getByTestId('gallery-image-back'));
+    await rtl.waitFor(() => expect(gallery.getByTestId('gallery-image-outside-image')).toBeTruthy());
   });
 });
