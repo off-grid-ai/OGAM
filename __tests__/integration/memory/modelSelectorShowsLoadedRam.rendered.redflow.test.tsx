@@ -27,8 +27,8 @@ describe('residency visibility — model selector shows the loaded model + its R
       currentModelPath: llmService.getLoadedModelPath(),
     })));
 
-    // The selector indicates WHAT is loaded...
-    expect(String(v.getByTestId('currently-loaded-model-name').props.children)).toContain('Test Model');
+    // The selector indicates WHAT is loaded (its rows fill in a frame after the sheet opens)...
+    expect(String((await v.findByTestId('currently-loaded-model-name')).props.children)).toContain('Test Model');
     // ...and HOW MUCH memory it consumes (RAM, not just disk size).
     expect(String(v.getByTestId('currently-loaded-model-ram').props.children)).toMatch(/GB RAM/);
   });
