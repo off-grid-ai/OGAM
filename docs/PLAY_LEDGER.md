@@ -544,3 +544,7 @@ REGRESSION: two of three chat opens stayed blank (list kept opacity 0 after the 
 
 Blank-chat fixed. Cold open settles at the newest message; warm opens from Home, Chats and a project land at the newest; empty state shows; reply stays in view with the keyboard up. Watch: taps take >1 s while Sync runs; a 16 pt late settle after the cold open.
 Milestone shots: docs/play/r13-milestone/{chat-open-after,chat-sent-after}.png.
+
+## Supervisor 17:30 (hand test 57, build 58 at 0586f25a7)
+
+Send with the keyboard up: your message at 0.5 s, reply stays in view (pass). REGRESSION again: two opened chats drawn blank though their rows were in the a11y tree. Hiding the opening list (opacity) is the common factor in both blank runs; removed. Scrolled up with the keyboard down, your message shows at 2 s, not 0.5 s.
