@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { AliveScreen } from '../components/AliveScreen';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { SectionLabel } from '../components/SectionLabel';
 import { useNavigation } from '@react-navigation/native';
 import { Card } from '../components';
 import { useThemedStyles } from '../theme';
@@ -40,8 +41,8 @@ export const DeviceInfoScreen: React.FC = () => {
       <ScreenHeader title="Device information" onBack={() => navigation.goBack()} />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+        <SectionLabel title="Hardware" />
         <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>Hardware</Text>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Model</Text>
             <Text style={styles.infoValue}>{deviceInfo?.deviceModel}</Text>
@@ -76,8 +77,8 @@ export const DeviceInfoScreen: React.FC = () => {
           </View>
         </Card>
 
+        <SectionLabel title="What runs here" />
         <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>Compatibility</Text>
           <Text style={styles.description}>
             Your device tier determines which models will run smoothly. Higher RAM allows larger, more capable models.
           </Text>
@@ -147,11 +148,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     marginBottom: SPACING.lg,
   },
   // The shared section-label style, not a heading per card.
-  sectionTitle: {
-    ...TYPOGRAPHY.label,
-    color: colors.textMuted,
-    marginBottom: SPACING.md,
-  },
   description: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
