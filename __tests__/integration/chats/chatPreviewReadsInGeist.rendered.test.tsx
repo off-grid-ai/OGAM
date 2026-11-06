@@ -15,7 +15,8 @@ it('sets the title in Geist and the time in Geist Mono', async () => {
   installNativeBoundary({ fs: true });
   const AsyncStorage = require('@react-native-async-storage/async-storage');
   await AsyncStorage.clear();
-  const updatedAt = '2026-10-27T12:00:00.000Z';
+  // Active today, so the row shows its clock time (an older chat reads Last week, N weeks ago, a date).
+  const updatedAt = new Date().toISOString();
   await AsyncStorage.setItem(
     'local-llm-chat-storage',
     JSON.stringify({
@@ -45,6 +46,6 @@ it('sets the title in Geist and the time in Geist Mono', async () => {
   const title = await rtl.waitFor(() => chats.getByText('Weekend trip'));
   expect(StyleSheet.flatten(title.props.style).fontFamily).toBe(FONTS.sans);
   // The time stays on the row, so chats with the same title can be told apart.
-  const time = chats.getByText(/\d|Yesterday|Mon|Tue|Wed|Thu|Fri|Sat|Sun|Oct|Nov/, { exact: false });
+  const time = chats.getByText(/^\d{1,2}[:.]\d{2}/);
   expect(StyleSheet.flatten(time.props.style).fontFamily).toBe(FONTS.mono);
 });
