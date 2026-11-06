@@ -21,10 +21,14 @@ const createLayoutStyles = (colors: ThemeColors) => ({
     marginBottom: SPACING.lg,
   },
   // The gap covers the crown's -4 pt pulled-back frame, so neighbours meet but never overlap.
+  // The icons centre on the title's line, and the crown's glyph ends where New chat ends below it, so
+  // the header's right edge is one line (screen review: the icons sat inset and high).
   headerActions: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: SPACING.sm,
+    alignSelf: 'center' as const,
+    gap: SPACING.xs,
+    marginRight: -9,
   },
   // A compact pill that sits level with the title, not a slab that outweighs it (Mac, 2026-11-06).
   newChatButton: { paddingVertical: 6, paddingHorizontal: SPACING.md },
