@@ -652,3 +652,8 @@ Top 3: (1) style names in Geist (in the next build); (2) In use in one case with
 
 Pass: In use in On phone's face, Documents sizes and marks, style names in Geist. Glass reads well on Settings, Remote servers, Pro tools, Projects, project page, Home lower list and hero. Fail: Home Recent card and the Video settings card are still opaque. Note: field dots can sit inside text lines; Pro tools count 5 (was 7: a server's tools differ with connection state).
 Top 3: (1) Recent and Video cards glass; (2) dots near text (accepted with glass, Mac's call); (3) emerald In use contrast at 9 pt.
+
+## Supervisor 17:20 (hand test 79, build 80) — 5 of 5 pass
+
+Remote servers: circle beside both lines, status under the name, amber then red / green dots; Pro tools green dots; Sync " · " and dots; Home Recent and the Video card glass. No lost behaviour.
+Top 3: (1) Sync rows: a state icon and a dot say one thing twice; keep the dot; (2) Desktop tools "Connecting…" without a dot; (3) Remote servers read "Not checked yet" for ~15 s while the check runs.
