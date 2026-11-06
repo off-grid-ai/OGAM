@@ -156,8 +156,9 @@ export const GalleryScreen: React.FC = () => {
         onChange={tab => {
           // Leaving Images ends image select mode: the Videos list cannot show what is selected.
           if (tab === 'videos' && isSelectMode) toggleSelectMode();
-          if (tab === 'videos' && hasVideoLibrary) navigation.navigate('VideoLibrary' as never);
-          else setKind(tab);
+          // Videos stay in Gallery and open in its viewer, like images (hand test 81). The Pro library,
+          // with stories, is one row at the top of this tab rather than where the tab leads.
+          setKind(tab);
         }}
       />
 
@@ -225,6 +226,21 @@ export const GalleryScreen: React.FC = () => {
             data={displayVideos}
             keyExtractor={item => item.id}
             contentContainerStyle={styles.videoList}
+            ListHeaderComponent={hasVideoLibrary ? (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('VideoLibrary' as never)}
+                accessibilityRole="button"
+                style={styles.videoRow}
+                testID="gallery-open-video-library"
+              >
+                <Icon name="film" size={20} color={colors.textSecondary} />
+                <View style={styles.videoRowBody}>
+                  <Text style={styles.videoRowTitle}>Stories and clips</Text>
+                  <Text style={styles.videoRowMeta}>Your films, and clips to extend</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            ) : null}
             {...LIST_CLIPPING_PROPS}
             renderItem={({ item }) => (
               <TouchableOpacity
