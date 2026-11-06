@@ -5,7 +5,7 @@ import { createRemoteStyles } from './remoteStyles';
 const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   tabBar: {
     flexDirection: 'row' as const,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.xs,
     gap: SPACING.sm,
@@ -45,8 +45,10 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderRadius: 4,
     backgroundColor: colors.primary,
   },
+  // The same gutter as the transcription and voice pickers (hand test 88: 12 pt here, 24 pt there).
   content: {
-    padding: SPACING.md,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.sm,
   },
   contentContainer: {
     paddingBottom: SPACING.md,
