@@ -2,8 +2,6 @@
 // Run `node scripts/collect-action-ids.js` after adding a testID.
 
 export const FIXED_ACTION_IDS: readonly string[] = [
-  "about-follow-on-x",
-  "about-join-slack",
   "action-copy",
   "action-edit",
   "action-generate-image",
