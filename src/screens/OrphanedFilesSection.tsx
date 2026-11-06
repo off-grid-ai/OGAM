@@ -199,11 +199,10 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   section: {
     marginBottom: SPACING.lg,
   },
+  // A row's name, not a label inside the card (hand test 67).
   sectionTitle: {
-    ...TYPOGRAPHY.label,
-    textTransform: 'uppercase' as const,
-    color: colors.textMuted,
-    letterSpacing: 0.3,
+    ...TYPOGRAPHY.body,
+    color: colors.text,
   },
   sectionHeader: {
     flexDirection: 'row' as const,
