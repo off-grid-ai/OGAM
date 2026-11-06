@@ -603,3 +603,8 @@ Top 3: (1) server form: room above Remote media labels, readable disabled primar
 
 Pass: MCP tools names in words, Pro tools (no trash; Remove server in its edit sheet, Cancel kept it), Storage labels above, Pro page labels above, Home, Chats, chat, Settings top. Partial: server form (disabled Update server still emerald), Models (three unlabelled icons by search). Fail: Settings lower (emoji heart footer, Anonymous stats card unlabelled). No lost behaviour.
 Top 3: (1) disabled primary label grey, Test connection vs Update server weight; (2) MCP tool descriptions for people, tokens to detail, summary backing; (3) drop the emoji heart, label the stats card, label the Models search icons.
+
+## Supervisor 10:50 (hand test 69, full sweep, build 70) — 16 of 26 pass
+
+Fail: chat (Details still Metal/tok/s/q8_0, all Mono), chat options ("Tools 0" with Knowledge base on), models-text (sort shows a bolt), gallery (7 blank images, generation bug, own card), gallery viewer (overlay, routes card), settings-lower and about (emoji heart, purple logo: Mac's call), security and engine updates (labels inside cards), what we share (mixed-case labels). No lost behaviour.
+Top 3: (1) tool count agrees everywhere; Details sentence in Geist without engine jargon; (2) labels above cards on Security, Engine updates, What we share; heart and logo wait for Mac; (3) gallery viewer route and blank images (both proposed as their own sessions).
