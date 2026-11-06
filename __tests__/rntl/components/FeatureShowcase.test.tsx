@@ -7,6 +7,7 @@
  */
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import { AppState, ScrollView, StyleSheet } from 'react-native';
 import {
   FeatureShowcase,
   showcaseFeatures,
@@ -102,7 +103,36 @@ describe('FeatureShowcase', () => {
 
   const sample = (): ShowcaseFeature[] => showcaseFeatures(fresh, openers(), true).slice(0, 4);
 
+  /** A scroll event at a horizontal offset, as the native scroller sends it. */
+  const scrollAt = (x: number) => ({ nativeEvent: { contentOffset: { x, y: 0 } } });
+
+  // The row on a phone answers scrollTo with scroll events at the new offset, and the pip follows
+  // those. Jest's ScrollView stands still, so here it reports the offset it was asked to reach.
+  // The app is in front, as when Home is on screen. Jest's AppState has no state of its own, so the
+  // test holds it and hands each change to whoever listens, as the phone does.
+  let appListeners: Array<(state: string) => void>;
+  const appGoes = (state: 'active' | 'background') =>
+    act(() => {
+      Object.defineProperty(AppState, 'currentState', { value: state, configurable: true, writable: true });
+      appListeners.forEach(listener => listener(state));
+    });
+  beforeEach(() => {
+    appListeners = [];
+    Object.defineProperty(AppState, 'currentState', { value: 'active', configurable: true, writable: true });
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(((_type: string, listener: (state: string) => void) => {
+      appListeners.push(listener);
+      return { remove: () => { appListeners = appListeners.filter(l => l !== listener); } };
+    }) as never);
+    jest
+      .spyOn(ScrollView.prototype, 'scrollTo')
+      .mockImplementation(function (this: ScrollView, options?: { x?: number } | number) {
+        const x = typeof options === 'object' ? options?.x ?? 0 : 0;
+        this.props.onScroll?.({ nativeEvent: { contentOffset: { x, y: 0 } } } as never);
+      });
+  });
+
   afterEach(() => {
+    jest.restoreAllMocks();
     jest.useRealTimers();
   });
 
@@ -149,20 +179,34 @@ describe('FeatureShowcase', () => {
     expect(view.queryAllByRole('tab')).toHaveLength(0);
   });
 
-  // The pip follows the scroll position, as on the device: a jump asks the row to scroll, and the
-  // platform then reports where it landed. Jest's ScrollView never scrolls, so the test reports the
-  // landing the way the device does, at the offset the row was asked to reach.
-  const scroller = (view: ReturnType<typeof render>) => view.UNSAFE_getByProps({ horizontal: true });
-  const land = (view: ReturnType<typeof render>, index: number) => {
-    const row = scroller(view);
-    const x = (row.props.snapToInterval as number) * index;
-    act(() => { fireEvent.scroll(row, { nativeEvent: { contentOffset: { x, y: 0 } } }); });
-  };
+  it('ignores a tap on a card while the row is still moving, and opens it once the row is still', () => {
+    jest.useFakeTimers();
+    const opened: string[] = [];
+    const features = showcaseFeatures(fresh, { ...openers(), documents: () => opened.push('documents') }, true);
+    const view = render(<FeatureShowcase features={features} active={false} />);
+    const scroller = view.UNSAFE_getByProps({ horizontal: true });
+    act(() => { fireEvent.scroll(scroller, scrollAt(10)); });
+    fireEvent.press(view.getByTestId('feature-showcase-documents'));
+    expect(opened).toEqual([]);
+    act(() => { jest.advanceTimersByTime(300); });
+    fireEvent.press(view.getByTestId('feature-showcase-documents'));
+    expect(opened).toEqual(['documents']);
+  });
+
+  it('shares the pip row between the pips, each up to 44 pt wide', () => {
+    const view = render(<FeatureShowcase features={sample()} active={false} />);
+    const widthOf = () => view.getAllByRole('tab').map(tab => StyleSheet.flatten(tab.props.style)?.width);
+    const layOut = (width: number) =>
+      act(() => { fireEvent(view.UNSAFE_getByProps({ accessibilityRole: 'tablist' }), 'layout', { nativeEvent: { layout: { width, height: 44, x: 0, y: 0 } } }); });
+    layOut(100);
+    expect(widthOf()).toEqual([25, 25, 25, 25]);
+    layOut(400);
+    expect(widthOf()).toEqual([44, 44, 44, 44]);
+  });
 
   it('a pip jumps to its card', () => {
     const view = render(<FeatureShowcase features={sample()} active={false} />);
     fireEvent.press(view.getAllByRole('tab')[2]);
-    land(view, 2);
     expect(selectedPip(view)).toBe(2);
   });
 
@@ -171,13 +215,25 @@ describe('FeatureShowcase', () => {
     const view = render(<FeatureShowcase features={sample()} active />);
     expect(selectedPip(view)).toBe(0);
     act(() => { jest.advanceTimersToNextTimer(); });
-    land(view, 1);
     expect(selectedPip(view)).toBe(1);
-    act(() => { jest.advanceTimersToNextTimer(); });
-    act(() => { jest.advanceTimersToNextTimer(); });
-    act(() => { jest.advanceTimersToNextTimer(); });
-    land(view, 0);
+    act(() => { jest.advanceTimersToNextTimer(3); });
     expect(selectedPip(view)).toBe(0);
+  });
+
+  it('holds still while the app is away, and waits a full turn after you come back', () => {
+    jest.useFakeTimers();
+    const view = render(<FeatureShowcase features={sample()} active />);
+    appGoes('background');
+    act(() => { jest.advanceTimersByTime(60_000); });
+    expect(selectedPip(view)).toBe(0);
+    appGoes('active');
+    // No card change the moment you return: the wait starts again.
+    act(() => { jest.advanceTimersByTime(100); });
+    expect(selectedPip(view)).toBe(0);
+    act(() => { jest.advanceTimersToNextTimer(); });
+    expect(selectedPip(view)).toBe(1);
+    view.unmount();
+    expect(appListeners).toHaveLength(0);
   });
 
   it('stays put while Home is not in view', () => {
@@ -187,21 +243,37 @@ describe('FeatureShowcase', () => {
     expect(selectedPip(view)).toBe(0);
   });
 
+  it('loops: a swipe on past the last card goes to the first, back past the first goes to the last', () => {
+    const view = render(<FeatureShowcase features={sample()} active={false} />);
+    const scroller = view.UNSAFE_getByProps({ horizontal: true });
+    const step = scroller.props.snapToInterval as number;
+    // Back past the first card.
+    act(() => { fireEvent(scroller, 'scrollBeginDrag', scrollAt(0)); });
+    act(() => { fireEvent(scroller, 'scrollEndDrag', scrollAt(-20)); });
+    expect(selectedPip(view)).toBe(3);
+    // On past the last card.
+    act(() => { fireEvent(scroller, 'scrollBeginDrag', scrollAt(step * 3)); });
+    act(() => { fireEvent(scroller, 'scrollEndDrag', scrollAt(step * 3 + 20)); });
+    expect(selectedPip(view)).toBe(0);
+    // A swipe in the middle leaves the snap to settle it.
+    act(() => { fireEvent(scroller, 'scrollBeginDrag', scrollAt(step)); });
+    act(() => { fireEvent(scroller, 'scrollEndDrag', scrollAt(step + 20)); });
+    expect(selectedPip(view)).toBe(0);
+  });
+
   it('stops while you swipe, settles on the card you land on, then moves on again', () => {
     jest.useFakeTimers();
     const view = render(<FeatureShowcase features={sample()} active />);
-    const row = scroller(view);
-    act(() => { fireEvent(row, 'scrollBeginDrag', { nativeEvent: { contentOffset: { x: 0, y: 0 } } }); });
+    const scroller = view.UNSAFE_getByProps({ horizontal: true });
+    act(() => { fireEvent(scroller, 'scrollBeginDrag', scrollAt(0)); });
     act(() => { jest.advanceTimersToNextTimer(2); });
     expect(selectedPip(view)).toBe(0);
 
     // Land on the third card: its offset is two steps of the snap interval.
-    const step = row.props.snapToInterval as number;
-    act(() => { fireEvent(row, 'scrollEndDrag', { nativeEvent: { contentOffset: { x: step * 2, y: 0 } } }); });
-    act(() => { fireEvent(row, 'momentumScrollEnd', { nativeEvent: { contentOffset: { x: step * 2, y: 0 } } }); });
+    const step = scroller.props.snapToInterval as number;
+    act(() => { fireEvent(scroller, 'momentumScrollEnd', { nativeEvent: { contentOffset: { x: step * 2, y: 0 } } }); });
     expect(selectedPip(view)).toBe(2);
     act(() => { jest.advanceTimersToNextTimer(); });
-    land(view, 3);
     expect(selectedPip(view)).toBe(3);
   });
 });
