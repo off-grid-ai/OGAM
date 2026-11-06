@@ -38,7 +38,6 @@ function formatOptionalMeta(meta: NonNullable<Message['generationMeta']>, tps: n
     ['frames', m.frames == null ? undefined : `${m.frames} frames`],
     ['fps', m.fps == null ? undefined : `${m.fps} fps`],
     ['seed', m.seed == null ? undefined : `seed ${m.seed}`],
-    ['cache', m.cacheType ? `memory cache ${m.cacheType}` : undefined],
   ];
   return entries
     .filter((e): e is [string, string, number?] => e[1] != null)
@@ -46,6 +45,8 @@ function formatOptionalMeta(meta: NonNullable<Message['generationMeta']>, tps: n
 }
 
 const parenthesised = (text: string) => ` (${text})`;
+/** The line reads as a sentence: it starts with a capital (hand test 71). */
+const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 function buildMetaItems(
   meta: NonNullable<Message['generationMeta']>,
@@ -141,7 +142,7 @@ export function TurnDetails({ messageId, generationMeta, toolNames, styles }: Re
     <Animated.View entering={FadeIn.duration(200)} style={styles.turnDetails}>
       {items.length > 0 && (
         <Text testID="generation-meta" style={styles.turnDetailsText}>
-          {items.map(item => item.label).join(' · ')}
+          {sentence(items.map(item => item.label).join(' · '))}
         </Text>
       )}
       {toolNames?.length ? (
