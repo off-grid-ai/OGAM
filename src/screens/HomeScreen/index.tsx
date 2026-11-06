@@ -27,7 +27,9 @@ import { useHomeScreen, HomeScreenNavigationProp } from './hooks/useHomeScreen';
 import { RecentConversations } from './components/RecentConversations';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { DesktopPromoCard } from './components/DesktopPromoCard';
-import { FeatureShowcase, featuresToTry } from './components/FeatureShowcase';
+import { FeatureShowcase, showcaseFeatures } from './components/FeatureShowcase';
+import { useIsProActive } from '../../hooks/useIsProActive';
+import { useOpenProTools } from '../../hooks/useOpenProTools';
 import { ModelsSummaryRow } from '../../components/models/ModelsSummaryRow';
 import {
   ModelsManagerSheet,
@@ -81,6 +83,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const SyncHomeCard = useSlot(SLOTS.homeSyncCard);
   const HomeNotificationsButton = useSlot(SLOTS.homeNotificationsButton);
   const { isSyncUnlocked, openSync, openSyncNotifications } = useOpenSync();
+  const isProActive = useIsProActive();
+  const openProTools = useOpenProTools();
 
   const {
     pickerType,
@@ -158,8 +162,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     voice: voiceSummary ? 1 : 0,
   };
 
-  // The top of Home: what this person has not tried yet, each a tap that starts it.
-  const showcase = featuresToTry(
+  // The top of Home: everything it does, free and Pro, what this person has not tried first.
+  const showcase = showcaseFeatures(
     {
       imagesMade: generatedImages.length,
       videosMade: generatedVideos.length,
@@ -171,7 +175,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       video: () => ((modelCounts.video ?? 0) > 0 ? startNewChat() : presentModelSheet('video')),
       voice: () => presentModelSheet('voice'),
       speech: () => presentModelSheet('speech'),
+      documents: () => navigation.navigate('Main', { screen: 'ProjectsTab' }),
+      sync: openSync,
+      tools: openProTools,
+      pro: () => navigation.navigate('ProDetail'),
     },
+    isProActive,
   );
 
   // Stash an action and close the manager; the action runs from the manager's
