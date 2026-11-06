@@ -84,21 +84,19 @@ export const SecuritySettingsScreen: React.FC = () => {
           {authEnabled && (
             <Button
               title="Change passphrase"
-              variant="primary"
-              size="medium"
+              variant="secondary"
+              size="small"
               onPress={handleChangePassphrase}
-              icon={<Icon name="edit-2" size={16} color={colors.primary} />}
+              icon={<Icon name="edit-2" size={14} color={colors.textSecondary} />}
               style={{ alignSelf: 'flex-start' as const, marginTop: SPACING.lg }}
             />
           )}
         </Card>
 
-        <Card style={styles.infoCard}>
-          <Icon name="info" size={18} color={colors.textMuted} />
-          <Text style={styles.infoText}>
-            The app locks when you leave it. Your passphrase stays on this phone.
-          </Text>
-        </Card>
+        {/* A footnote under the one card, not a second box (hand test 60). */}
+        <Text style={styles.footnote}>
+          The app locks when you leave it. Your passphrase stays on this phone.
+        </Text>
       </ScrollView>
 
       <Modal
@@ -165,15 +163,9 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginTop: 2,
     lineHeight: 18,
   },
-  infoCard: {
-    flexDirection: 'row' as const,
-    alignItems: 'flex-start' as const,
-    gap: SPACING.md,
-  },
-  infoText: {
+  footnote: {
     ...TYPOGRAPHY.bodySmall,
-    flex: 1,
     color: colors.textMuted,
-    lineHeight: 18,
+    marginTop: SPACING.sm,
   },
 });
