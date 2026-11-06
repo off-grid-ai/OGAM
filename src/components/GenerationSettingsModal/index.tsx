@@ -6,15 +6,14 @@ import { AppSheet } from '../AppSheet';
 import { useTheme, useThemedStyles } from '../../theme';
 import { llmService } from '../../services';
 import { createStyles } from './styles';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../../navigation/types';
 import { ConversationActionsSection } from './ConversationActionsSection';
 
 interface GenerationSettingsModalProps {
   visible: boolean;
   onClose: () => void;
   onOpenProject?: () => void;
+  /** Opens Settings > Model settings. The screen navigates: a component does not import navigation. */
+  onOpenModelSettings?: () => void;
   onOpenGallery?: () => void;
   onDeleteConversation?: () => void;
   onOpenTTSSettings?: () => void;
@@ -29,6 +28,7 @@ export const GenerationSettingsModal: React.FC<
   visible,
   onClose,
   onOpenProject,
+  onOpenModelSettings,
   onOpenGallery,
   onDeleteConversation,
   conversationImageCount = 0,
@@ -38,8 +38,6 @@ export const GenerationSettingsModal: React.FC<
   const styles = useThemedStyles(createStyles);
 
   const [performanceStats, setPerformanceStats] = useState(llmService.getPerformanceStats());
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-
   useEffect(() => {
     if (visible) {
       setPerformanceStats(llmService.getPerformanceStats());
@@ -89,11 +87,12 @@ export const GenerationSettingsModal: React.FC<
 
         {/* The model settings live in one place, Settings > Model settings, and this row opens it.
             The sheet used to copy every section (screen review). */}
+        {onOpenModelSettings ? (
         <TouchableOpacity
           style={styles.actionRow}
           onPress={() => {
             onClose();
-            setTimeout(() => navigation.navigate('ModelSettings'), 200);
+            setTimeout(onOpenModelSettings, 200);
           }}
           accessibilityRole="button"
           testID="chat-settings-open-model-settings"
@@ -102,6 +101,7 @@ export const GenerationSettingsModal: React.FC<
           <Text style={styles.actionText}>Model settings</Text>
           <Icon name="chevron-right" size={16} color={colors.textMuted} />
         </TouchableOpacity>
+        ) : null}
 
         {/* Deleting the chat is not a setting: it sits last, apart from them (hand test 61). */}
         {onDeleteConversation ? (
