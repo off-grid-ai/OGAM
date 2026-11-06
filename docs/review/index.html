@@ -56,15 +56,20 @@ button, textarea { font: inherit; color: inherit; }
 .btn:hover { border-color: var(--gold); }
 .btn:focus-visible, .screens button:focus-visible, .pin:focus-visible, textarea:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .canvas { flex: 1; min-height: 0; overflow: auto; display: grid; place-items: center; padding: 18px; }
+.shots { display: flex; gap: 18px; align-items: flex-start; justify-content: center; max-width: 100%; }
+.pane { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 0 1 auto; }
+.pane .cap { color: var(--muted); font: 11px/1.4 var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+.shots.split .pane { flex: 1 1 0; }
+.shots.split .shot img { max-height: calc(100vh - 150px); }
 .shot { position: relative; max-width: 100%; max-height: 100%; cursor: crosshair; line-height: 0; }
 .shot img { max-width: 100%; max-height: calc(100vh - 120px); border-radius: 6px; display: block; user-select: none; -webkit-user-drag: none; }
 .hint { color: var(--muted); font-size: 12px; padding: 0 18px 12px; }
 .empty { color: var(--muted); padding: 40px; text-align: center; line-height: 1.5; }
 /* pins: a numbered gold drop, tip on the clicked point */
 .pin {
-  position: absolute; width: 26px; height: 26px; margin: -26px 0 0 0; transform-origin: 0 100%;
+  position: absolute; min-width: 26px; height: 26px; margin: -26px 0 0 0; transform-origin: 0 100%;
   border-radius: 13px 13px 13px 2px; background: var(--gold); color: var(--gold-ink); border: 2px solid var(--gold-ink);
-  font: 600 11px/22px var(--mono); text-align: center; cursor: pointer; padding: 0; box-shadow: 0 2px 6px rgba(0,0,0,.5);
+  font: 600 11px/22px var(--mono); text-align: center; cursor: pointer; padding: 0 4px; box-shadow: 0 2px 6px rgba(0,0,0,.5);
 }
 .pin.done { background: var(--done); }
 .pin.draft { background: var(--fg); }
@@ -76,7 +81,7 @@ button, textarea { font: inherit; color: inherit; }
 .thread { flex: 1; overflow-y: auto; padding: 8px 0; }
 .note { padding: 10px 16px; display: grid; grid-template-columns: 26px minmax(0,1fr); gap: 10px; border-left: 2px solid transparent; }
 .note.lit { background: var(--glass); border-left-color: var(--gold); }
-.note .num { font: 600 11px/22px var(--mono); text-align: center; width: 22px; height: 22px; border-radius: 11px; background: var(--gold); color: var(--gold-ink); }
+.note .num { font: 600 11px/22px var(--mono); text-align: center; min-width: 22px; padding: 0 3px; height: 22px; border-radius: 11px; background: var(--gold); color: var(--gold-ink); }
 .note.done .num { background: var(--done); }
 .note.done .text { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
 .note .text { white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -121,12 +126,13 @@ button, textarea { font: inherit; color: inherit; }
         <div class="views" id="views" role="group" aria-label="Before or after">
           <button type="button" id="view-before" aria-pressed="false">Before</button>
           <button type="button" id="view-after" aria-pressed="true">After</button>
+          <button type="button" id="view-both" aria-pressed="false">Side by side</button>
         </div>
         <button class="btn" id="prev" aria-label="Previous screen">←</button>
         <button class="btn" id="next" aria-label="Next screen">→</button>
       </div>
     </div>
-    <div class="canvas"><div class="shot" id="shot"></div></div>
+    <div class="canvas"><div class="shots" id="shot"></div></div>
     <div class="hint">Click anywhere on the screen to pin a note there. Arrow keys change screens · ⌘ Enter pins the note · Esc clears.</div>
   </main>
 
@@ -163,10 +169,22 @@ function noteView(n) {
   return screens.find((s) => s.id === n.screen)?.before ? "before" : "after";
 }
 function shownView(s) { return s?.before ? view : "after"; }
-function shotFile(s) { return shownView(s) === "before" ? s.before : s.file; }
+// The shots on the stage: one, or Before and After side by side.
+function panes(s) { const v = shownView(s); return v === "both" ? ["before", "after"] : [v]; }
+function fileFor(s, v) { return v === "before" ? s.before : s.file; }
+function inView(id, v) {
+  return notes.filter((n) => n.screen === id && noteView(n) === v).sort((a, b) => a.created - b.created);
+}
 function onScreen(id) {
   const s = screens.find((x) => x.id === id);
-  return notes.filter((n) => n.screen === id && noteView(n) === shownView(s)).sort((a, b) => a.created - b.created);
+  return panes(s).flatMap((v) => inView(id, v));
+}
+// A note's number on its shot; side by side, B1 / A1 say which shot.
+function label(n) {
+  const s = screens.find((x) => x.id === n.screen);
+  const v = noteView(n);
+  const i = inView(n.screen, v).findIndex((x) => x.id === n.id) + 1;
+  return panes(s).length > 1 ? (v === "before" ? "B" : "A") + i : String(i);
 }
 function allOnScreen(id) { return notes.filter((n) => n.screen === id); }
 
@@ -197,24 +215,32 @@ function renderList() {
 
 function renderStage() {
   const s = screens[current];
-  const shot = $("shot");
-  shot.textContent = "";
+  const stage = $("shot");
+  stage.textContent = "";
   if (!s) { $("title").textContent = "No screens yet"; return; }
   $("title").textContent = s.name;
   $("what").textContent = s.what || "";
   $("views").hidden = !s.before;
-  $("view-before").setAttribute("aria-pressed", String(shownView(s) === "before"));
-  $("view-after").setAttribute("aria-pressed", String(shownView(s) === "after"));
-  const img = document.createElement("img");
-  img.src = shotFile(s); img.alt = s.name + (shownView(s) === "before" ? " (before)" : ""); img.draggable = false;
-  shot.append(img);
-  img.addEventListener("click", (e) => {
-    const r = img.getBoundingClientRect();
-    draft = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
-    lit = null;
-    renderPins(); renderCompose();
-    $("text").focus();
-  });
+  for (const v of ["before", "after", "both"]) $("view-" + v).setAttribute("aria-pressed", String(shownView(s) === v));
+  const list = panes(s);
+  stage.classList.toggle("split", list.length > 1);
+  for (const v of list) {
+    const pane = document.createElement("div"); pane.className = "pane";
+    if (list.length > 1) { const c = document.createElement("div"); c.className = "cap"; c.textContent = v === "before" ? "Before" : "After"; pane.append(c); }
+    const shot = document.createElement("div"); shot.className = "shot"; shot.dataset.view = v;
+    const img = document.createElement("img");
+    img.src = fileFor(s, v); img.alt = `${s.name} (${v})`; img.draggable = false;
+    shot.append(img);
+    img.addEventListener("click", (e) => {
+      const r = img.getBoundingClientRect();
+      draft = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height, on: v };
+      lit = null;
+      renderPins(); renderCompose();
+      $("text").focus();
+    });
+    pane.append(shot);
+    stage.append(pane);
+  }
   renderPins();
 }
 
@@ -230,14 +256,16 @@ function pinAt(x, y, label, cls, onclick) {
 }
 
 function renderPins() {
-  const shot = $("shot");
-  shot.querySelectorAll(".pin").forEach((p) => p.remove());
-  onScreen(screenId()).forEach((n, i) => {
-    const p = pinAt(n.x, n.y, String(i + 1), (n.done ? "done" : "") + (lit === n.id ? " lit" : ""), () => { lit = n.id; renderPins(); renderThread(); });
-    p.setAttribute("aria-label", `Note ${i + 1}`);
-    shot.append(p);
+  $("shot").querySelectorAll(".shot").forEach((shot) => {
+    const v = shot.dataset.view;
+    shot.querySelectorAll(".pin").forEach((p) => p.remove());
+    inView(screenId(), v).forEach((n) => {
+      const p = pinAt(n.x, n.y, label(n), (n.done ? "done" : "") + (lit === n.id ? " lit" : ""), () => { lit = n.id; renderPins(); renderThread(); });
+      p.setAttribute("aria-label", `Note ${label(n)}`);
+      shot.append(p);
+    });
+    if (draft && draft.on === v) shot.append(pinAt(draft.x, draft.y, "+", "draft"));
   });
-  if (draft) shot.append(pinAt(draft.x, draft.y, "+", "draft"));
 }
 
 function when(t) {
@@ -258,10 +286,10 @@ async function renderThread() {
   if (user && list.length) {
     try { Object.assign(names, await user.profiles([...new Set(list.map((n) => n.author).filter((a) => a && a !== "claude"))])); } catch (_) {}
   }
-  list.forEach((n, i) => {
+  list.forEach((n) => {
     const row = document.createElement("div");
     row.className = "note" + (n.done ? " done" : "") + (lit === n.id ? " lit" : "");
-    const num = document.createElement("div"); num.className = "num"; num.textContent = String(i + 1);
+    const num = document.createElement("div"); num.className = "num"; num.textContent = label(n);
     const body = document.createElement("div");
     const t = document.createElement("div"); t.className = "text"; t.textContent = n.text;
     const parts = [t];
@@ -324,7 +352,7 @@ $("compose").addEventListener("submit", async (e) => {
   if (!draft) { status("Click the screen first to show where the note points."); return; }
   if (!text) { status("Write the note first."); return; }
   const s = screens[current];
-  const doc = { screen: s.id, screenName: s.name, x: +draft.x.toFixed(4), y: +draft.y.toFixed(4), text, created: Date.now(), done: false, on: shownView(s) };
+  const doc = { screen: s.id, screenName: s.name, x: +draft.x.toFixed(4), y: +draft.y.toFixed(4), text, created: Date.now(), done: false, on: s.before ? draft.on : "after" };
   if (me) doc.author = me;
   $("save").disabled = true;
   try {
@@ -343,6 +371,7 @@ function setView(v) {
 }
 $("view-before").onclick = () => setView("before");
 $("view-after").onclick = () => setView("after");
+$("view-both").onclick = () => setView("both");
 $("prev").onclick = () => go(current - 1);
 $("next").onclick = () => go(current + 1);
 // Arrows move between screens from anywhere, including the note box while it's empty.
@@ -369,7 +398,7 @@ async function boot() {
     const r = await fetch("screens.json");
     screens = await r.json();
   } catch (_) { screens = []; }
-  try { view = localStorage.getItem("goc-review-view") === "before" ? "before" : "after"; } catch (_) {}
+  try { const v = localStorage.getItem("goc-review-view"); view = v === "before" || v === "both" ? v : "after"; } catch (_) {}
   let start = 0;
   const want = location.hash.slice(1) || (() => { try { return localStorage.getItem("goc-review-screen"); } catch (_) { return null; } })();
   const k = screens.findIndex((s) => s.id === want);
