@@ -556,3 +556,7 @@ Blank chats gone (7 opens drawn). Send with the keyboard up in view at 0.5 s (pa
 ## Cold-open root cause (debug agent, 5/5 cold opens pass on device)
 
 FlatList.scrollToEnd computes the end from rows measured so far; on a cold open the first content-size change came before any row was measured, so it scrolled to 0 (oldest). Intermittent because JS timers and rAF stalled 6–22 s after launch while Sync ran. Fix without timers or hiding: scroll to each layout's reported content height; first render starts at the 15 newest rows; re-pin on height change while opening. Commits fcea6bab4..2dc9fd517. Open separately: the Sync JS-thread stall after launch.
+
+## Supervisor 19:30 (hand test 59, cold-open fix build)
+
+Cold open: 1 of 2 runs showed older turns until ~8 s, then landed at the newest; the other run was at the newest by 2 s. History intact (scrolled to the 2:19 first prompt). Warm opens, scroll-up hold: pass. The remaining cold-open delay is the JS thread stalled by Sync after launch (6–22 s, debug agent); the scroll code corrects as soon as JS runs. Next: the Sync launch stall (deferred by Mac; asked).
