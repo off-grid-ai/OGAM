@@ -91,18 +91,12 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
   },
+  // A plain icon button: unloading frees memory and loses nothing, so it is not red (hand test 89).
   unloadButton: {
-    flexDirection: 'row' as const,
+    width: 44,
+    height: 44,
     alignItems: 'center' as const,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: `${colors.error}15`,
-    gap: 6,
-  },
-  unloadButtonText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.error,
+    justifyContent: 'center' as const,
   },
   sectionTitle: {
     ...TYPOGRAPHY.label,
