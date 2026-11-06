@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING, FONTS } from '../../constants';
 
