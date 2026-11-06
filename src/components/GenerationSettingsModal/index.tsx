@@ -101,7 +101,6 @@ export const GenerationSettingsModal: React.FC<
           onClose={onClose}
           onOpenProject={onOpenProject}
           onOpenGallery={onOpenGallery}
-          onDeleteConversation={onDeleteConversation}
           conversationImageCount={conversationImageCount}
           activeProjectName={activeProjectName}
         />
@@ -181,6 +180,21 @@ export const GenerationSettingsModal: React.FC<
         <TouchableOpacity style={styles.resetButton} onPress={resetSettings} accessibilityRole="button">
           <Text style={styles.resetButtonText}>Reset to defaults</Text>
         </TouchableOpacity>
+
+        {/* Deleting the chat is not a setting: it sits last, apart from them (hand test 61). */}
+        {onDeleteConversation ? (
+          <TouchableOpacity
+            style={styles.resetButton}
+            onPress={() => {
+              onClose();
+              setTimeout(onDeleteConversation, 200);
+            }}
+            accessibilityRole="button"
+            testID="chat-settings-delete-chat"
+          >
+            <Text style={styles.deleteChatText}>Delete chat</Text>
+          </TouchableOpacity>
+        ) : null}
 
         <View style={styles.bottomPadding} />
       </ScrollView>

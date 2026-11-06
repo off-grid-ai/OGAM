@@ -178,6 +178,10 @@ const createActionStyles = (colors: ThemeColors) => ({
     ...TYPOGRAPHY.body,
     color: colors.textSecondary,
   },
+  deleteChatText: {
+    ...TYPOGRAPHY.body,
+    color: colors.error,
+  },
   remoteNotice: {
     flexDirection: 'row' as const,
     alignItems: 'flex-start' as const,
