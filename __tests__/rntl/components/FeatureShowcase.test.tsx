@@ -172,11 +172,32 @@ describe('FeatureShowcase', () => {
     expect(selectedPip(view)).toBe(0);
   });
 
+  /** A scroll event at a horizontal offset, as the native scroller sends it. */
+  const scrollAt = (x: number) => ({ nativeEvent: { contentOffset: { x, y: 0 } } });
+
+  it('loops: a swipe on past the last card goes to the first, back past the first goes to the last', () => {
+    const view = render(<FeatureShowcase features={sample()} active={false} />);
+    const scroller = view.UNSAFE_getByProps({ horizontal: true });
+    const step = scroller.props.snapToInterval as number;
+    // Back past the first card.
+    act(() => { fireEvent(scroller, 'scrollBeginDrag', scrollAt(0)); });
+    act(() => { fireEvent(scroller, 'scrollEndDrag', scrollAt(-20)); });
+    expect(selectedPip(view)).toBe(3);
+    // On past the last card.
+    act(() => { fireEvent(scroller, 'scrollBeginDrag', scrollAt(step * 3)); });
+    act(() => { fireEvent(scroller, 'scrollEndDrag', scrollAt(step * 3 + 20)); });
+    expect(selectedPip(view)).toBe(0);
+    // A swipe in the middle leaves the snap to settle it.
+    act(() => { fireEvent(scroller, 'scrollBeginDrag', scrollAt(step)); });
+    act(() => { fireEvent(scroller, 'scrollEndDrag', scrollAt(step + 20)); });
+    expect(selectedPip(view)).toBe(0);
+  });
+
   it('stops while you swipe, settles on the card you land on, then moves on again', () => {
     jest.useFakeTimers();
     const view = render(<FeatureShowcase features={sample()} active />);
     const scroller = view.UNSAFE_getByProps({ horizontal: true });
-    act(() => { fireEvent(scroller, 'scrollBeginDrag'); });
+    act(() => { fireEvent(scroller, 'scrollBeginDrag', scrollAt(0)); });
     act(() => { jest.advanceTimersToNextTimer(2); });
     expect(selectedPip(view)).toBe(0);
 
