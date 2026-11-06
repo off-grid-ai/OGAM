@@ -612,3 +612,8 @@ Top 3: (1) tool count agrees everywhere; Details sentence in Geist without engin
 ## Supervisor 11:30 (hand test 70, build 71) — not run: iPhone disconnected
 
 Home and one [test] chat loaded, then WDA stopped answering after the Details tap; devicectl lists Mac's iPhone as unavailable and idevice_id finds nothing. Build 71 checks (Details sentence, Tools count copy, sort mark, labels on Security / Engine updates / What we share, Pro tools footnote) wait for the phone.
+
+## Supervisor 12:40 (hand test 71, build 72) — Mac's review notes: 6 of 7 pass, 1 partial
+
+Pass: Home header (icons on the title line), Home carousel (free and Pro, swipes, moves on), chat meta one line with an info icon, chat settings sheet (Project, Model settings, Delete chat; Model settings tabs), Projects (one height, chats / documents / last used), Models (three tiles, On phone, sort mark). Partial: quick settings (see-through menu, Tools 0 while Details lists 5). No lost behaviour.
+Top 3: (1) Model settings tabs: one flat surface, no cards in cards, no accordions inside, old copy rewritten; (2) quick settings solid surface, Tools count agrees with Details; (3) chat settings sheet sized to its rows, verified mark aligned on Models, Details sentence capitalised without q8_0.
