@@ -7,6 +7,7 @@ import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { SPACING, TYPOGRAPHY } from '../constants';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { SectionLabel } from '../components/SectionLabel';
 import { cardSurface } from '../theme/surface';
 
 /** Plain-words summary of docs/ANALYTICS.md. Keep the two lists in step with that file. */
@@ -40,7 +41,7 @@ const ListBlock: React.FC<{
   const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.section} testID={testID}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <SectionLabel title={title} />
       {/* The list on one surface with hairlines, as every list (hand test 60: a wall of text). */}
       <View style={styles.group}>
         {items.map((item, index) => (

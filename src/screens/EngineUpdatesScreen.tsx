@@ -17,6 +17,7 @@ import {
   type EngineUpdateInfo,
 } from '../services/enginePacks';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { SectionLabel } from '../components/SectionLabel';
 
 const CHECK_RESULT: Record<EngineCheckOutcome, string> = {
   staged: 'A newer engine is ready. It switches on the next time you open Off Grid AI.',
@@ -95,8 +96,9 @@ export const EngineUpdatesScreen: React.FC = () => {
         ) : null}
 
         {info ? (
+          <>
+          <SectionLabel title="Running now" />
           <Card style={styles.section}>
-            <Text style={styles.sectionTitle}>Running now</Text>
             <Text style={styles.settingLabel} testID="engine-running">{engineName(info)}</Text>
             <Text style={styles.settingHint} testID="engine-source">
               {packInUse ? 'Engine update, installed without an app update' : 'Built into this version of the app'}
@@ -118,6 +120,7 @@ export const EngineUpdatesScreen: React.FC = () => {
               </>
             ) : null}
           </Card>
+          </>
         ) : null}
 
         {info && !overTheAir ? (

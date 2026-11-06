@@ -11,6 +11,7 @@ import { Button } from '../components/Button';
 import { useNavigation } from '@react-navigation/native';
 import { Card } from '../components';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { SectionLabel } from '../components/SectionLabel';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
@@ -68,8 +69,8 @@ export const SecuritySettingsScreen: React.FC = () => {
       <ScreenHeader title="Security" onBack={() => navigation.goBack()} />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+        <SectionLabel title="App lock" />
         <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>App lock</Text>
           <View style={styles.settingRow}>
             <View style={styles.settingInfo}>
               <Text style={styles.settingLabel}>Passphrase lock</Text>
