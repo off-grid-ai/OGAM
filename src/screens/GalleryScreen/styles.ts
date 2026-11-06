@@ -219,7 +219,8 @@ const createViewerStyles = (colors: ThemeColors) => ({
 });
 
 const createVideoStyles = (colors: ThemeColors) => ({
-  videoList: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md },
+  // The page gutter every screen uses (hand test 91: 16 pt here, 24 pt on Images).
+  videoList: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.md },
   // Rows on one glass surface with hairlines, as every list (hand test 82: a card per video).
   videoRow: {
     flexDirection: 'row' as const,
