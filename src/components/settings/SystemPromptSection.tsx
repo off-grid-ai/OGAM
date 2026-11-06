@@ -43,7 +43,7 @@ export const SystemPromptSection: React.FC = () => {
       </Text>
       <TextInput
         testID="default-system-prompt-input"
-        accessibilityLabel="Default system prompt"
+        accessibilityLabel="Default instructions"
         style={styles.textArea}
         value={systemPrompt}
         onChangeText={(text) => updateSettings({ systemPrompt: text.trim() ? text : '' })}

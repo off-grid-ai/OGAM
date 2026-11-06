@@ -39,7 +39,7 @@ export const KnowledgeDocumentRow: React.FC<Props> = ({ doc, transfer, onOpen, o
         disabled={!documentId}
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel={`Knowledge document ${doc.name}`}
+        accessibilityLabel={`File ${doc.name}`}
         testID={`${testIDPrefix}-row-${doc.sync_id}`}
       >
         <KnowledgeDocumentInfo name={doc.name} size={doc.size} documentId={documentId} transfer={transfer} />

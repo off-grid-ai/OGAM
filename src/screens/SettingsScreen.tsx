@@ -196,7 +196,7 @@ export const SettingsScreen: React.FC = () => {
               {
                 icon: 'sliders',
                 title: 'Model settings',
-                desc: 'System prompt, generation, and performance',
+                desc: 'Instructions, replies, and speed',
                 screen: 'ModelSettings' as const,
                 testID: 'open-model-settings',
               },
