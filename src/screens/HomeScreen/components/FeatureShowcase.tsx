@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -60,14 +60,14 @@ export function showcaseFeatures(use: FeatureUse, open: FeatureOpeners, isPro: b
     { key: 'speech', icon: 'mic', tried: use.hasSpeech, title: 'Talk instead of typing.', line: 'Your words turn to text right here.', onPress: open.speech },
     { key: 'documents', icon: 'file-text', tried: false, title: 'Ask your own files.', line: 'Add a PDF to a project, then ask it.', onPress: open.documents },
     { key: 'video', icon: 'film', pro: true, tried: use.videosMade > 0, title: 'Turn a line into a clip.', line: 'Short videos, made on this phone.', onPress: open.video },
-    { key: 'mac-models', icon: 'monitor', mac: true, tried: false, title: 'Smarter answers from your Mac.', line: 'Your phone borrows its bigger models over Wi-Fi.', onPress: open.desktop },
+    { key: 'mac-models', icon: 'monitor', mac: true, tried: false, title: 'Smarter answers from your Mac.', line: 'Your phone uses its bigger models.', onPress: open.desktop },
     { key: 'voice', icon: 'volume-2', pro: true, tried: use.hasVoice, title: 'Hear every answer.', line: 'Replies read aloud in a voice you pick.', onPress: open.voice },
-    { key: 'mac-dictation', icon: 'type', mac: true, pro: true, tried: false, title: 'Talk, and it types where you are.', line: 'Hold Option and Space in any app on your Mac.', onPress: open.desktop },
-    { key: 'tools', icon: 'calendar', pro: true, tried: false, title: 'Have it draft your emails.', line: 'It writes the email and adds the meeting. You send it.', onPress: open.tools },
-    { key: 'mac-recall', icon: 'search', mac: true, pro: true, tried: false, title: 'Find anything that was on your screen.', line: 'Search what your Mac saw, meetings included.', onPress: open.desktop },
+    { key: 'mac-dictation', icon: 'type', mac: true, pro: true, tried: false, title: 'Talk, and it types where you are.', line: 'Hold Option and Space on your Mac.', onPress: open.desktop },
+    { key: 'tools', icon: 'calendar', pro: true, tried: false, title: 'Have it draft your emails.', line: 'It writes them. You check and send.', onPress: open.tools },
+    { key: 'mac-recall', icon: 'search', mac: true, pro: true, tried: false, title: 'Find anything that was on your screen.', line: 'Search what your Mac saw, meetings too.', onPress: open.desktop },
     { key: 'sync', icon: 'refresh-cw', pro: true, tried: false, title: 'Your chats, on every device.', line: 'Start on your Mac, finish here.', onPress: open.sync },
     { key: 'mac-meetings', icon: 'users', mac: true, pro: true, tried: false, title: 'Meetings, written up for you.', line: 'Recorded and transcribed on your Mac.', onPress: open.desktop },
-    { key: 'mac-clipboard', icon: 'clipboard', mac: true, pro: true, tried: false, title: 'Everything you copy, saved.', line: 'Paste any of it back with two keys on your Mac.', onPress: open.desktop },
+    { key: 'mac-clipboard', icon: 'clipboard', mac: true, pro: true, tried: false, title: 'Everything you copy, saved.', line: 'Paste any of it back on your Mac.', onPress: open.desktop },
   ];
   // Free phone features lead, then Pro and Mac; inside each group, what has not been tried yet first.
   const isFree = (f: { pro?: boolean; mac?: boolean }) => !f.pro && !f.mac;
@@ -98,28 +98,39 @@ export const FeatureShowcase: React.FC<{ features: ShowcaseFeature[]; active: bo
   const scroller = useRef<ScrollView>(null);
   const [index, setIndex] = useState(0);
   const [touching, setTouching] = useState(false);
+  // The card in view, read by the timer and the drag handlers without restarting the timer.
+  const indexRef = useRef(0);
+  const dragStartX = useRef(0);
+  const last = features.length - 1;
+
+  const jumpTo = useCallback((i: number) => {
+    indexRef.current = i;
+    setIndex(i);
+    scroller.current?.scrollTo({ x: i * step, animated: true });
+  }, [step]);
 
   useEffect(() => {
     if (!active || touching || features.length < 2) return undefined;
-    const timer = setInterval(() => {
-      setIndex(current => {
-        const next = (current + 1) % features.length;
-        scroller.current?.scrollTo({ x: next * step, animated: true });
-        return next;
-      });
-    }, SHOWCASE_MS);
+    const timer = setInterval(() => jumpTo((indexRef.current + 1) % features.length), SHOWCASE_MS);
     return () => clearInterval(timer);
-  }, [active, touching, features.length, step]);
+  }, [active, touching, features.length, jumpTo]);
 
   if (features.length === 0) return null;
 
-  const onSettle = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    setIndex(Math.round(event.nativeEvent.contentOffset.x / step));
-    setTouching(false);
+  const at = (x: number) => Math.min(last, Math.max(0, Math.round(x / step)));
+  // The row loops: a swipe on past the last card comes back to the first, and back past the first
+  // goes to the last (hand test 86: it stopped at card 12).
+  const onDragEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const x = event.nativeEvent.contentOffset.x;
+    const from = at(dragStartX.current);
+    if (from === last && x > dragStartX.current) jumpTo(0);
+    else if (from === 0 && x < dragStartX.current) jumpTo(last);
   };
-  const jumpTo = (i: number) => {
+  const onSettle = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const i = at(event.nativeEvent.contentOffset.x);
+    indexRef.current = i;
     setIndex(i);
-    scroller.current?.scrollTo({ x: i * step, animated: true });
+    setTouching(false);
   };
 
   return (
@@ -131,7 +142,11 @@ export const FeatureShowcase: React.FC<{ features: ShowcaseFeature[]; active: bo
         showsHorizontalScrollIndicator={false}
         snapToInterval={step}
         decelerationRate="fast"
-        onScrollBeginDrag={() => setTouching(true)}
+        onScrollBeginDrag={event => {
+          dragStartX.current = event.nativeEvent.contentOffset.x;
+          setTouching(true);
+        }}
+        onScrollEndDrag={onDragEnd}
         onMomentumScrollEnd={onSettle}
         contentContainerStyle={styles.track}
         style={styles.scroller}
@@ -166,7 +181,7 @@ export const FeatureShowcase: React.FC<{ features: ShowcaseFeature[]; active: bo
             <AnimatedPressable
               key={item.key}
               onPress={() => jumpTo(i)}
-              hitSlop={{ top: 12, bottom: 12, left: 4, right: 4 }}
+              style={styles.pipTarget}
               accessibilityRole="tab"
               accessibilityLabel={item.title}
             >
@@ -191,7 +206,8 @@ const createStyles = (colors: ThemeColors) => ({
   },
   // Full bleed to the screen edge so the next card peeks in; the track keeps the page gutter.
   scroller: { marginHorizontal: -SPACING.xl },
-  track: { paddingHorizontal: SPACING.xl, gap: SPACING.sm },
+  // The extra right padding lets the last card snap to the gutter like the others, so its index is exact.
+  track: { paddingLeft: SPACING.xl, paddingRight: SPACING.xl + PEEK, gap: SPACING.sm },
   card: {
     ...cardSurface(colors),
     padding: SPACING.lg,
@@ -225,7 +241,12 @@ const createStyles = (colors: ThemeColors) => ({
   pips: {
     flexDirection: 'row' as const,
     justifyContent: 'center' as const,
-    gap: SPACING.sm,
+  },
+  // A 44 pt tall target around each small pip.
+  pipTarget: {
+    height: 44,
+    paddingHorizontal: SPACING.xs,
+    justifyContent: 'center' as const,
   },
   pip: {
     width: 6,
