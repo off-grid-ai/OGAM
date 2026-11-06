@@ -565,3 +565,7 @@ Cold open: 1 of 2 runs showed older turns until ~8 s, then landed at the newest;
 
 Shots: docs/play/r14-sweep/. Pass: Home, Chats, Projects, Knowledge base, Models Text, Downloads. Fail: project page (bare field, folder in title), Models Documents and Document search (label mismatch, tinted first row), Settings lower half (5 cards), Model settings (no surface, emerald text button), Remote servers (cards, cluttered rows), Storage and Device info (cards, numbers not Mono, emerald "Flagship"), Security and Engine updates (box + info box), What we share (12 pt gutter, emerald labels), About (emoji heart, purple logo), Gallery blank tiles, image viewer a modal, every reply 3 meta rows, chat settings sheet flat grey with Delete among settings, chat options menu Title Case mono and gold Pro tools, Tools and Pro tools still the old design.
 Worst 5: Pro tools, Tools, What we share, Remote servers, Device info / Storage.
+
+## Supervisor 21:40 (hand test 61, build 62 at 8e7931687) — 9 of 26 pass (was 8)
+
+Pass: Home, Chats, Projects, Knowledge base, Models Text and Documents, Downloads, Settings, Document search, What we share. Worst 5: Pro tools (still old: icon tiles, Active pill, red trash, info box), Chat (3 meta rows per reply, emerald user border), chat settings sheet (Delete among settings), Tools (Title Case names, model-facing descriptions), Project / Model settings / Security / Engine updates (rows without a surface, info boxes; Security and Engine fixed after this build). Review page: https://claude.ai/artifact/RmSC5fdjd8KrRjAoCVKkJp
