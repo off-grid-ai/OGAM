@@ -187,7 +187,6 @@ export const ProjectDetailScreen: React.FC = () => {
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Icon name="folder" size={16} color={colors.textMuted} style={styles.projectIcon} />
           <Text style={styles.headerTitle} numberOfLines={1}>
             {project.name}
           </Text>
@@ -306,6 +305,8 @@ export const ProjectDetailScreen: React.FC = () => {
             <FlatList
               {...SCROLL_DEPTH_PROPS}
               style={styles.sectionList}
+              // The chats on one surface with hairlines, as on Chats (hand test 61: bare rows on the field).
+              contentContainerStyle={styles.chatGroup}
               data={projectChats}
               keyExtractor={item => item.id}
               renderItem={({ item }) => (

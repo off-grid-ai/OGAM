@@ -1,3 +1,4 @@
+import { cardSurface } from '../theme/surface';
 import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
@@ -170,9 +171,14 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderLight,
   },
+  chatGroup: {
+    ...cardSurface(colors),
+    overflow: 'hidden' as const,
+    marginHorizontal: SPACING.xl,
+    marginBottom: SPACING.xl,
+  },
   chatItemWrapper: {
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
   },
   // A bare glyph, as on Chats: no grey disc behind it.
   projectPurpose: {
