@@ -573,3 +573,7 @@ Pass: Home, Chats, Projects, Knowledge base, Models Text and Documents, Download
 ## Supervisor 23:00 (hand test 62, build 63 at df7de502c) — 13 of 26 pass (was 9)
 
 Newly passing: project, settings-model, security, engine updates. Fail: settings-lower (5 cards), remote servers, storage, device info, about, gallery + viewer, chat (3 meta rows, emerald user border), chat settings sheet (Delete fixed after this build), chat options (gold Pro crown), tools and pro tools. Worst 5: Pro tools layout (sticky info box, one card per tool, model-facing text), chat meta rows, chat settings sheet, gallery, black switch thumbs on 4 screens. Screens take ~2 s to settle.
+
+## Supervisor 00:20 (hand test 63, build 64) — 15 of 26 pass (was 13)
+
+Newly passing: chat settings sheet, Delete at the end; white switch knobs in. Fail: chat (3 meta rows), chat options (gold Pro crown and pill), Pro tools (MCP server cards: letter tile, Active pill, trash), Tools (model-facing footer, "Tools 0" with Knowledge base on), settings-lower (6 unlabelled cards), remote servers (3 icons + radio), device info (tier boxes), storage (4 cards, empty Leftover files), about, gallery + viewer.
