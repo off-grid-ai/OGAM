@@ -116,9 +116,8 @@ export const ModelSettingsScreen: React.FC = () => {
 
         {tab === 'text' && (
           <>
-            <View style={styles.sectionsGroup}>
-              <TextGenerationSection />
-            </View>
+            {/* The section draws its own card: wrapping it made a card inside a card (hand test 71). */}
+            <TextGenerationSection />
             {textIsRemote ? (
               <Text style={styles.footnote} testID="model-settings-remote-note">
                 These apply to models on this phone. A remote server uses its own.
@@ -128,10 +127,10 @@ export const ModelSettingsScreen: React.FC = () => {
         )}
 
         {tab === 'image' && (
-          <View style={styles.sectionsGroup}>
+          <>
             <ImageGenerationSection />
             {VideoSettings && <VideoSettings />}
-          </View>
+          </>
         )}
 
         {tab === 'voice' && (
@@ -165,9 +164,7 @@ export const ModelSettingsScreen: React.FC = () => {
             </View>
             {/* Text to speech is Pro, through a slot; free builds show none. */}
             {TtsSection && (
-              <View style={styles.sectionsGroup}>
-                <TtsSection />
-              </View>
+              <TtsSection />
             )}
           </>
         )}
