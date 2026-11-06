@@ -26,6 +26,7 @@ import { RootStackParamList } from '../navigation/types';
 import { byRecentActivity } from '../utils/conversationOrdering';
 import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
 import { chatTitle } from '../utils/chatTitle';
+import { ScreenHeader } from '../components/ScreenHeader';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProjectChats'>;
@@ -257,19 +258,21 @@ export const ProjectChatsScreen: React.FC = () => {
 
   return (
     <AliveScreen style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Back">
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {project?.name || 'Chats'}
-          </Text>
-        </View>
-        <TouchableOpacity onPress={handleNewChat} style={styles.addButton} disabled={!hasModels}>
-          <Icon name="plus" size={20} color={hasModels ? colors.primary : colors.textMuted} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title={project?.name || 'Chats'}
+        onBack={() => navigation.goBack()}
+        right={
+          <TouchableOpacity
+            onPress={handleNewChat}
+            style={styles.addButton}
+            disabled={!hasModels}
+            accessibilityRole="button"
+            accessibilityLabel="New chat"
+          >
+            <Icon name="plus" size={20} color={hasModels ? colors.text : colors.textMuted} />
+          </TouchableOpacity>
+        }
+      />
 
       {projectChats.length === 0 ? (
         <View style={styles.emptyState}>

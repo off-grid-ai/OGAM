@@ -31,6 +31,7 @@ import { useWhisperStore } from '../stores/whisperStore';
 import { useModelDownloads } from '../services/modelDownloadService/useModelDownloads';
 import type { RootStackParamList } from '../navigation/types';
 import { AliveScreen } from '../components/AliveScreen';
+import { ScreenHeader } from '../components/ScreenHeader';
 
 export const StorageSettingsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -140,15 +141,7 @@ export const StorageSettingsScreen: React.FC = () => {
 
   return (
     <AliveScreen style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Storage</Text>
-      </View>
+      <ScreenHeader title="Storage" onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.scrollView}

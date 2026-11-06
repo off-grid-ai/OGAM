@@ -13,6 +13,7 @@ import { ActiveDownloadCard, CompletedDownloadCard, formatBytes, type DownloadIt
 import { useDownloadManager } from './useDownloadManager';
 import { isQueuedStatus, isDownloadingStatus, isFailedStatus, type DownloadStatus } from '../../stores/downloadStore';
 import { AliveScreen } from '../../components/AliveScreen';
+import { ScreenHeader } from '../../components/ScreenHeader';
 
 type FilterType = 'all' | 'text' | 'vision' | 'image' | 'video' | 'voice' | 'transcription';
 
@@ -101,12 +102,7 @@ export const DownloadManagerScreen: React.FC = () => {
 
   return (
     <AliveScreen style={styles.container} testID="downloaded-models-screen">
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} testID="back-button" accessibilityRole="button" accessibilityLabel="Back">
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Downloads</Text>
-      </View>
+      <ScreenHeader title="Downloads" onBack={() => navigation.goBack()} backTestID="back-button" />
 
       <FlatList
         {...LIST_CLIPPING_PROPS}

@@ -35,6 +35,7 @@ import {
 import { openDocumentPage } from '../components/ChatDocumentsSheet';
 import { isPickerStuck } from '../utils/pickerErrorUtils';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
+import { ScreenHeader } from '../components/ScreenHeader';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'KnowledgeBase'>;
@@ -226,35 +227,22 @@ export const KnowledgeBaseScreen: React.FC = () => {
 
   return (
     <AliveScreen style={styles.container} testID="knowledge-base-screen">
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          testID="knowledge-base-back"
-        >
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {project?.name || 'Knowledge Base'}
-          </Text>
-        </View>
-        <TouchableOpacity
-          onPress={handleAddDocument}
-          style={styles.addButton}
-          disabled={isPicking || !!addingFile}
-          accessibilityRole="button"
-          accessibilityLabel="Add documents"
-        >
-          {addingFile ? (
-            <LoadingDots color={colors.primary} />
-          ) : (
-            <Icon name="plus" size={20} color={colors.primary} />
-          )}
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title={project?.name || 'Knowledge base'}
+        onBack={() => navigation.goBack()}
+        backTestID="knowledge-base-back"
+        right={
+          <TouchableOpacity
+            onPress={handleAddDocument}
+            style={styles.addButton}
+            disabled={isPicking || !!addingFile}
+            accessibilityRole="button"
+            accessibilityLabel="Add documents"
+          >
+            {addingFile ? <LoadingDots color={colors.textMuted} /> : <Icon name="plus" size={20} color={colors.text} />}
+          </TouchableOpacity>
+        }
+      />
 
       {indexError && !addingFile && (
         <View style={styles.errorCard} testID="kb-index-error-card">
