@@ -92,11 +92,13 @@ describe('SettingsScreen', () => {
 
   it('renders navigation item descriptions', () => {
     const { getByText } = renderSettings();
-    expect(getByText('System prompt, generation, and performance')).toBeTruthy();
-    expect(getByText('Connect to Off Grid AI Desktop, Ollama, LM Studio, and more')).toBeTruthy();
+    expect(getByText('Instructions, replies, and speed')).toBeTruthy();
+    expect(getByText('How chats find the right part of a file')).toBeTruthy();
+    expect(getByText('Your Mac, Ollama or LM Studio')).toBeTruthy();
     expect(getByText('Passphrase and app lock')).toBeTruthy();
     expect(getByText('Hardware and compatibility')).toBeTruthy();
     expect(getByText('Models and data usage')).toBeTruthy();
+    expect(getByText('What runs your models')).toBeTruthy();
   });
 
   it('navigates to correct screen when nav item is pressed', async () => {
