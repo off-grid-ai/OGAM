@@ -593,3 +593,8 @@ Pass: Settings lower (opaque cards, labels above), Device information (tier rows
 Also: Chats list card still see-through; Pro page labels inside cards.
 Gallery blank tiles, root cause: seven generated_images are real 5 KB pure-white 512x512 PNGs from 2026-11-02. Generation saved a failed (blank) output as a success; the gallery draws them correctly.
 Top 3: (1) ship the new MCP tools screen; (2) Pro tools: Desktop tools as a quiet label over one surface, full host, trash into the server screen; (3) Details panel on a quiet surface, tool names in words not snake_case.
+
+## Supervisor 10:05 (hand test 67, build 68) — 5 of 7 pass, 2 partial
+
+Pass: MCP tools (rows, Find a tool, one Turn all off), Pro tools (Desktop tools label over one surface, host wraps), chat Details (surface, names in words), Chats list (no dots), Home and Models (no regression). Partial: Storage (Unfinished downloads and Leftover files labels inside cards; raw file name, no size), server form (disabled Update server is pale emerald, about 2:1; Remote media model labels touch the field above). No lost behaviour.
+Top 3: (1) server form: room above Remote media labels, readable disabled primary; (2) MCP tool names through toolDisplayName, a backing under the summary line; (3) Storage and Pro page labels above their cards (Pro page fixed after this build).
