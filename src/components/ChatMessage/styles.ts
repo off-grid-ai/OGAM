@@ -150,10 +150,11 @@ const createBubbleStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   // Your message is a quiet raised surface with a faint emerald edge; emerald stays the light source,
   // not a block on every message.
+  // A quiet tile with a hairline: emerald is for what is in use, not for your own words.
   userBubble: {
     backgroundColor: colors.surfaceLight,
-    borderWidth: 1,
-    borderColor: `${colors.primary}40`,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
     borderBottomRightRadius: 4,
   },
   // The answer sits on the surface, like text on a page, not in a box.
