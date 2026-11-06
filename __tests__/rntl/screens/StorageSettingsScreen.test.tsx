@@ -94,8 +94,8 @@ describe('StorageSettingsScreen', () => {
     ]);
 
     const { getAllByText, queryByText } = renderStorage();
-    expect(getAllByText('1').length).toBeGreaterThanOrEqual(1);
-    expect(queryByText('2')).toBeNull();
+    expect(getAllByText('1 model').length).toBeGreaterThanOrEqual(1);
+    expect(queryByText('2 models')).toBeNull();
   });
 
   it('shows the chat models count in the breakdown', () => {
@@ -107,7 +107,8 @@ describe('StorageSettingsScreen', () => {
     const { getAllByText } = renderStorage();
     // "Chat models" appears in breakdown AND section title
     expect(getAllByText('Chat models').length).toBeGreaterThanOrEqual(1);
-    expect(getAllByText('2').length).toBeGreaterThanOrEqual(1);
+    // Each number says what it counts.
+    expect(getAllByText('2 models').length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows Image Models count in breakdown', () => {
@@ -118,7 +119,7 @@ describe('StorageSettingsScreen', () => {
     const { getAllByText } = renderStorage();
     // "Image models" appears in breakdown AND section title
     expect(getAllByText('Image models').length).toBeGreaterThanOrEqual(1);
-    expect(getAllByText('1').length).toBeGreaterThanOrEqual(1);
+    expect(getAllByText('1 model').length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows Conversations count in breakdown', () => {
@@ -126,7 +127,7 @@ describe('StorageSettingsScreen', () => {
 
     const { getByText } = renderStorage();
     expect(getByText('Conversations')).toBeTruthy();
-    expect(getByText('3')).toBeTruthy();
+    expect(getByText('3 chats')).toBeTruthy();
   });
 
   it('shows the models line in what uses the space', () => {
