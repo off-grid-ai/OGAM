@@ -94,7 +94,7 @@ describe('SettingsScreen', () => {
     const { getByText } = renderSettings();
     expect(getByText('Instructions, replies, and speed')).toBeTruthy();
     expect(getByText('How chats find the right part of a file')).toBeTruthy();
-    expect(getByText('Your Mac, Ollama or LM Studio')).toBeTruthy();
+    expect(getByText('Your computer, Ollama or LM Studio')).toBeTruthy();
     expect(getByText('Passphrase and app lock')).toBeTruthy();
     expect(getByText('Hardware and compatibility')).toBeTruthy();
     expect(getByText('Models and data usage')).toBeTruthy();

@@ -212,7 +212,7 @@ export const SettingsScreen: React.FC = () => {
               {
                 icon: 'wifi',
                 title: 'Remote servers',
-                desc: 'Your Mac, Ollama or LM Studio',
+                desc: 'Your computer, Ollama or LM Studio',
                 screen: 'RemoteServers' as const,
               },
               ...(hasSync

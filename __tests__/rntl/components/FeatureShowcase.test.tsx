@@ -120,15 +120,15 @@ describe('FeatureShowcase', () => {
     // A free phone card: its words, no tag.
     expect(card('image')).toHaveTextContent(`${of('image').title}${of('image').line}`);
     expect(card('image').props.accessibilityLabel).toBe(`${of('image').title} ${of('image').line}`);
-    // A phone Pro card says Pro; a Mac card says On your Mac; a Mac Pro card says both.
-    const tagOf = (key: string) => view.getAllByText(/^(Pro|On your Mac|On your Mac · Pro)$/).find(tag => card(key).findAll(n => n === tag).length > 0);
+    // A phone Pro card says Pro; a desktop card says On your computer; a desktop Pro card says both.
+    const tagOf = (key: string) => view.getAllByText(/^(Pro|On your computer|On your computer · Pro)$/).find(tag => card(key).findAll(n => n === tag).length > 0);
     expect(tagOf('image')).toBeUndefined();
     expect(tagOf('video')).toHaveTextContent('Pro');
     expect(card('video').props.accessibilityLabel).toBe(`${of('video').title} ${of('video').line} Pro.`);
-    expect(tagOf('mac-models')).toHaveTextContent('On your Mac');
-    expect(card('mac-models').props.accessibilityLabel).toBe(`${of('mac-models').title} ${of('mac-models').line} On your Mac.`);
-    expect(tagOf('mac-recall')).toHaveTextContent('On your Mac · Pro');
-    expect(card('mac-recall').props.accessibilityLabel).toMatch(/ On your Mac\. Pro\.$/);
+    expect(tagOf('mac-models')).toHaveTextContent('On your computer');
+    expect(card('mac-models').props.accessibilityLabel).toBe(`${of('mac-models').title} ${of('mac-models').line} On your computer.`);
+    expect(tagOf('mac-recall')).toHaveTextContent('On your computer · Pro');
+    expect(card('mac-recall').props.accessibilityLabel).toMatch(/ On your computer\. Pro\.$/);
     // A title may run to two lines, not be cut at one.
     expect(view.getByText(of('mac-dictation').title).props.numberOfLines).toBe(2);
     expect(view.getAllByRole('tab')).toHaveLength(12);
@@ -149,9 +149,20 @@ describe('FeatureShowcase', () => {
     expect(view.queryAllByRole('tab')).toHaveLength(0);
   });
 
+  // The pip follows the scroll position, as on the device: a jump asks the row to scroll, and the
+  // platform then reports where it landed. Jest's ScrollView never scrolls, so the test reports the
+  // landing the way the device does, at the offset the row was asked to reach.
+  const scroller = (view: ReturnType<typeof render>) => view.UNSAFE_getByProps({ horizontal: true });
+  const land = (view: ReturnType<typeof render>, index: number) => {
+    const row = scroller(view);
+    const x = (row.props.snapToInterval as number) * index;
+    act(() => { fireEvent.scroll(row, { nativeEvent: { contentOffset: { x, y: 0 } } }); });
+  };
+
   it('a pip jumps to its card', () => {
     const view = render(<FeatureShowcase features={sample()} active={false} />);
     fireEvent.press(view.getAllByRole('tab')[2]);
+    land(view, 2);
     expect(selectedPip(view)).toBe(2);
   });
 
@@ -160,8 +171,12 @@ describe('FeatureShowcase', () => {
     const view = render(<FeatureShowcase features={sample()} active />);
     expect(selectedPip(view)).toBe(0);
     act(() => { jest.advanceTimersToNextTimer(); });
+    land(view, 1);
     expect(selectedPip(view)).toBe(1);
-    act(() => { jest.advanceTimersToNextTimer(3); });
+    act(() => { jest.advanceTimersToNextTimer(); });
+    act(() => { jest.advanceTimersToNextTimer(); });
+    act(() => { jest.advanceTimersToNextTimer(); });
+    land(view, 0);
     expect(selectedPip(view)).toBe(0);
   });
 
@@ -175,16 +190,18 @@ describe('FeatureShowcase', () => {
   it('stops while you swipe, settles on the card you land on, then moves on again', () => {
     jest.useFakeTimers();
     const view = render(<FeatureShowcase features={sample()} active />);
-    const scroller = view.UNSAFE_getByProps({ horizontal: true });
-    act(() => { fireEvent(scroller, 'scrollBeginDrag'); });
+    const row = scroller(view);
+    act(() => { fireEvent(row, 'scrollBeginDrag', { nativeEvent: { contentOffset: { x: 0, y: 0 } } }); });
     act(() => { jest.advanceTimersToNextTimer(2); });
     expect(selectedPip(view)).toBe(0);
 
     // Land on the third card: its offset is two steps of the snap interval.
-    const step = scroller.props.snapToInterval as number;
-    act(() => { fireEvent(scroller, 'momentumScrollEnd', { nativeEvent: { contentOffset: { x: step * 2, y: 0 } } }); });
+    const step = row.props.snapToInterval as number;
+    act(() => { fireEvent(row, 'scrollEndDrag', { nativeEvent: { contentOffset: { x: step * 2, y: 0 } } }); });
+    act(() => { fireEvent(row, 'momentumScrollEnd', { nativeEvent: { contentOffset: { x: step * 2, y: 0 } } }); });
     expect(selectedPip(view)).toBe(2);
     act(() => { jest.advanceTimersToNextTimer(); });
+    land(view, 3);
     expect(selectedPip(view)).toBe(3);
   });
 });

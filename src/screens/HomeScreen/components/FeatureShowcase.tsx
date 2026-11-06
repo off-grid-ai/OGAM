@@ -60,14 +60,14 @@ export function showcaseFeatures(use: FeatureUse, open: FeatureOpeners, isPro: b
     { key: 'speech', icon: 'mic', tried: use.hasSpeech, title: 'Talk instead of typing.', line: 'Your words turn to text right here.', onPress: open.speech },
     { key: 'documents', icon: 'file-text', tried: false, title: 'Ask your own files.', line: 'Add a PDF to a project, then ask it.', onPress: open.documents },
     { key: 'video', icon: 'film', pro: true, tried: use.videosMade > 0, title: 'Turn a line into a clip.', line: 'Short videos, made on this phone.', onPress: open.video },
-    { key: 'mac-models', icon: 'monitor', mac: true, tried: false, title: 'Smarter answers from your Mac.', line: 'Your phone uses its bigger models.', onPress: open.desktop },
+    { key: 'mac-models', icon: 'monitor', mac: true, tried: false, title: 'Smarter answers from your computer.', line: 'Your phone uses its bigger models.', onPress: open.desktop },
     { key: 'voice', icon: 'volume-2', pro: true, tried: use.hasVoice, title: 'Hear every answer.', line: 'Replies read aloud in a voice you pick.', onPress: open.voice },
-    { key: 'mac-dictation', icon: 'type', mac: true, pro: true, tried: false, title: 'Talk, and it types where you are.', line: 'Hold Option and Space on your Mac.', onPress: open.desktop },
+    { key: 'mac-dictation', icon: 'type', mac: true, pro: true, tried: false, title: 'Talk, and it types where you are.', line: 'Hold one shortcut in any app on your computer.', onPress: open.desktop },
     { key: 'tools', icon: 'calendar', pro: true, tried: false, title: 'Have it draft your emails.', line: 'It writes them. You check and send.', onPress: open.tools },
-    { key: 'mac-recall', icon: 'search', mac: true, pro: true, tried: false, title: 'Find anything that was on your screen.', line: 'Search what your Mac saw, meetings too.', onPress: open.desktop },
-    { key: 'sync', icon: 'refresh-cw', pro: true, tried: false, title: 'Your chats, on every device.', line: 'Start on your Mac, finish here.', onPress: open.sync },
-    { key: 'mac-meetings', icon: 'users', mac: true, pro: true, tried: false, title: 'Meetings, written up for you.', line: 'Recorded and transcribed on your Mac.', onPress: open.desktop },
-    { key: 'mac-clipboard', icon: 'clipboard', mac: true, pro: true, tried: false, title: 'Everything you copy, saved.', line: 'Paste any of it back on your Mac.', onPress: open.desktop },
+    { key: 'mac-recall', icon: 'search', mac: true, pro: true, tried: false, title: 'Find anything that was on your screen.', line: 'Search what your computer saw, meetings too.', onPress: open.desktop },
+    { key: 'sync', icon: 'refresh-cw', pro: true, tried: false, title: 'Your chats, on every device.', line: 'Start on your computer, finish here.', onPress: open.sync },
+    { key: 'mac-meetings', icon: 'users', mac: true, pro: true, tried: false, title: 'Meetings, written up for you.', line: 'Recorded and transcribed on your computer.', onPress: open.desktop },
+    { key: 'mac-clipboard', icon: 'clipboard', mac: true, pro: true, tried: false, title: 'Everything you copy, saved.', line: 'Paste any of it back on your computer.', onPress: open.desktop },
   ];
   // Free phone features lead, then Pro and Mac; inside each group, what has not been tried yet first.
   const isFree = (f: { pro?: boolean; mac?: boolean }) => !f.pro && !f.mac;
@@ -186,14 +186,14 @@ export const FeatureShowcase: React.FC<{ features: ShowcaseFeature[]; active: bo
               feature.onPress();
             }}
             accessibilityRole="button"
-            accessibilityLabel={`${feature.title} ${feature.line}${feature.mac ? ' On your Mac.' : ''}${feature.pro ? ' Pro.' : ''}`}
+            accessibilityLabel={`${feature.title} ${feature.line}${feature.mac ? ' On your computer.' : ''}${feature.pro ? ' Pro.' : ''}`}
             testID={`feature-showcase-${feature.key}`}
             style={[styles.card, { width: cardWidth }]}
           >
             <View style={styles.cardTop}>
               <Icon name={feature.icon} size={18} color={colors.textSecondary} />
               {feature.pro || feature.mac ? (
-                <Text style={styles.proTag}>{[feature.mac ? 'On your Mac' : null, feature.pro ? 'Pro' : null].filter(Boolean).join(' · ')}</Text>
+                <Text style={styles.proTag}>{[feature.mac ? 'On your computer' : null, feature.pro ? 'Pro' : null].filter(Boolean).join(' · ')}</Text>
               ) : null}
             </View>
             <Text style={styles.title} numberOfLines={2}>{feature.title}</Text>
