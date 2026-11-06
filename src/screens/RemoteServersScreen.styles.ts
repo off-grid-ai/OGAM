@@ -129,8 +129,11 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
     },
     serverIdentity: {
       flex: 1,
-      gap: SPACING.xs,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: SPACING.md,
     },
+    serverText: { flex: 1, gap: 2 },
     serverTopRow: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
@@ -170,6 +173,7 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
     serverEndpoint: {
       ...TYPOGRAPHY.meta,
       color: colors.textSecondary,
+      flexShrink: 1,
     },
     serverStatus: {
       ...TYPOGRAPHY.meta,

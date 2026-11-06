@@ -38,6 +38,9 @@ import { createStyles } from './RemoteServersScreen.styles';
 import { AliveScreen } from '../components/AliveScreen';
 
 const DESKTOP_URL = withUtm(OFF_GRID_DESKTOP_URL, 'remote-servers');
+// Amber for a server not checked yet: the brand's palette has no amber, so it is named here.
+const STATUS_AMBER = '#F59E0B';
+
 const SCAN_KINDS: Array<{ kind: DiscoverableServerKind; label: string; port: number }> = [
   { kind: 'gateway', label: 'Off Grid AI Desktop', port: 7878 },
   { kind: 'ollama', label: 'Ollama', port: 11434 },
@@ -311,10 +314,12 @@ export const RemoteServersScreen: React.FC = () => {
               const isActive = activeServerId === server.id;
               const health = serverHealth[server.id];
 
+              // The word says it; the dot lets a glance down the list find the one that works (Mac:
+              // green connected, amber not yet checked, red not answering).
               let statusText = 'Not checked yet';
-              if (health?.isHealthy === true) statusText = 'Connected';
-              else if (health?.isHealthy === false)
-                statusText = 'Not answering';
+              let statusColor = STATUS_AMBER;
+              if (health?.isHealthy === true) { statusText = 'Connected'; statusColor = theme.colors.primary; }
+              else if (health?.isHealthy === false) { statusText = 'Not answering'; statusColor = theme.colors.error; }
 
               return (
                 <View
@@ -337,20 +342,24 @@ export const RemoteServersScreen: React.FC = () => {
                     accessibilityState={{ selected: isActive }}
                     testID={`server-use-${server.id}`}
                   >
-                    <View style={styles.serverTopRow}>
-                      {/* A radio, as on Models: tap a row to use that server. */}
-                      <Icon name={isActive ? 'check-circle' : 'circle'} size={16} color={isActive ? theme.colors.primary : theme.colors.textMuted} />
-                      <Text style={styles.serverName} numberOfLines={1}>
-                        {server.name}
-                      </Text>
-                      {/* Only the chosen server is marked; tapping any row chooses it (its label says so). */}
-                      {isActive && <Text style={styles.activeBadge}>In use</Text>}
+                    {/* A radio, as on Models: tap a row to use that server. It sits beside both lines,
+                        so the status lines up under the name, not under the circle. */}
+                    <Icon name={isActive ? 'check-circle' : 'circle'} size={16} color={isActive ? theme.colors.primary : theme.colors.textMuted} />
+                    <View style={styles.serverText}>
+                      <View style={styles.serverTopRow}>
+                        <Text style={styles.serverName} numberOfLines={1}>
+                          {server.name}
+                        </Text>
+                        {/* Only the chosen server is marked; tapping any row chooses it (its label says so). */}
+                        {isActive && <Text style={styles.activeBadge}>In use</Text>}
+                      </View>
+                      <View style={styles.serverTopRow}>
+                        <View style={[styles.statusDot, { backgroundColor: statusColor }]} testID={`server-status-dot-${server.id}`} />
+                        <Text style={styles.serverEndpoint} numberOfLines={1}>
+                          {statusText} · {server.endpoint}
+                        </Text>
+                      </View>
                     </View>
-                    {/* One line under the name: whether it answers, then where it is (hand test 61:
-                        a dot, an address line and a status line said the same thing three ways). */}
-                    <Text style={styles.serverEndpoint} numberOfLines={1}>
-                      {statusText} · {server.endpoint}
-                    </Text>
                   </TouchableOpacity>
 
                   {/* One action at the row's end (hand test 64): open the server. Its screen tests the
