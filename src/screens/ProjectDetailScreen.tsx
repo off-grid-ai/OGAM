@@ -223,6 +223,7 @@ export const ProjectDetailScreen: React.FC = () => {
 
       {/* What makes this a project: its instructions and its files, in view rather than behind a tab
           (screen review). Each row opens its own screen. */}
+      <SectionLabel title="What it knows" style={styles.chatsLabel} />
       <View style={styles.knowsGroup}>
         <TouchableOpacity
           style={styles.knowsRow}
@@ -253,20 +254,19 @@ export const ProjectDetailScreen: React.FC = () => {
               {fileCount === 0 ? 'Add a file' : fileCount === 1 ? '1 file' : `${fileCount} files`}
             </Text>
             <Text style={styles.knowsDesc} numberOfLines={1}>
-              {fileCount === 0 ? 'Chats here answer from it.' : 'Chats here answer from these.'}
+              {fileCount <= 1 ? 'Chats here answer from it.' : 'Chats here answer from these.'}
             </Text>
           </View>
           <Icon name="chevron-right" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
 
+      <SectionLabel title={`Chats · ${projectChats.length}`} style={styles.chatsLabel} testID="project-chats-count" />
       {projectChats.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>Start a chat. It uses these instructions and files.</Text>
-        </View>
+        // Under its label, right below the card: centred in the page it floated 330 pt away (hand test 74).
+        <Text style={styles.emptyChatsText}>Start a chat. It uses these instructions and files.</Text>
       ) : (
         <>
-          <SectionLabel title={`Chats · ${projectChats.length}`} style={styles.chatsLabel} testID="project-chats-count" />
           <FlatList
             {...SCROLL_DEPTH_PROPS}
             style={styles.sectionList}

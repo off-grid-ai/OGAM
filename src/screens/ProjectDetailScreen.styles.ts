@@ -213,6 +213,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   knowsTitle: { ...TYPOGRAPHY.body, color: colors.text },
   knowsDesc: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
   chatsLabel: { marginLeft: SPACING.xl + SPACING.xs },
+  emptyChatsText: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, marginHorizontal: SPACING.xl + SPACING.xs },
   chatContent: {
     flex: 1,
   },
