@@ -586,3 +586,10 @@ Newly passing: Tools, Settings (Pro in the list). Pro tools: each MCP server is 
 
 Pass: Remote servers (one chevron; server screen has Test, Update, Remove), Settings community group, Device information tier rows. Partial: Pro tools rows on one surface, but the meta line cuts at "~150 tokens · ht…" so the address never shows (switch not toggled: no [test] server).
 Top 3: (1) cards are see-through, the dot grid shows through on Remote servers, Device information, Pro tools; (2) section labels disagree (COMMUNITY uppercase vs "Tools", "MCP servers", "Hardware", "Compatibility"), tier rows indent 8 pt past their label, no hairlines; (3) server form and MCP tools screen off-brand (edge-to-edge fields, faint Update server, a card per tool, token pills, "Disable All" emerald outline).
+
+## Supervisor 09:45 (hand test 66, build 67) — 4 of 6 pass, 1 partial, 1 not in build
+
+Pass: Settings lower (opaque cards, labels above), Device information (tier rows aligned, hairlines), Remote servers, Chat (one time row with Details; panel opens and closes). Partial: Pro tools ("Desktop tools" a black label, its two servers separate cards, host cut on Parallel, info box, trash per row). MCP tools still the old screen (commit landed after build 67). No lost behaviour.
+Also: Chats list card still see-through; Pro page labels inside cards.
+Gallery blank tiles, root cause: seven generated_images are real 5 KB pure-white 512x512 PNGs from 2026-11-02. Generation saved a failed (blank) output as a success; the gallery draws them correctly.
+Top 3: (1) ship the new MCP tools screen; (2) Pro tools: Desktop tools as a quiet label over one surface, full host, trash into the server screen; (3) Details panel on a quiet surface, tool names in words not snake_case.
