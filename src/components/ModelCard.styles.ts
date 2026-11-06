@@ -63,9 +63,12 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     flexWrap: 'wrap' as const,
     gap: SPACING.xs,
   },
+  // One line: facts then what it can do. Wrapping made one row three lines among two-line rows
+  // (hand test 84); what does not fit is clipped at the row's end.
   denseMetaRow: {
     flexDirection: 'row' as const,
-    flexWrap: 'wrap' as const,
+    flexWrap: 'nowrap' as const,
+    overflow: 'hidden' as const,
     alignItems: 'center' as const,
     columnGap: SPACING.sm,
     marginTop: SPACING.xs,
