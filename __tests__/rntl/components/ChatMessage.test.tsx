@@ -812,7 +812,7 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByTestId, getByText } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
@@ -848,7 +848,7 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
@@ -865,7 +865,7 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
@@ -897,7 +897,7 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
@@ -915,7 +915,7 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
@@ -1094,7 +1094,7 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
