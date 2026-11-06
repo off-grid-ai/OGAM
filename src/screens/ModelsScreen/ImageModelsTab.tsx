@@ -213,12 +213,16 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
           </TouchableOpacity>
         )}
 
-        <ImagePicksRow
-          models={compatible}
-          ramGB={ramGB}
-          isRecommended={isRecommendedModel}
-          onDownload={handleDownloadImageModel}
-        />
+        {/* The picks wait for the device check and the model list, so the three cards never change
+            under you a second after the tab opens (hand test 91). */}
+        {imageRec && !hfModelsLoading ? (
+          <ImagePicksRow
+            models={compatible}
+            ramGB={ramGB}
+            isRecommended={isRecommendedModel}
+            onDownload={handleDownloadImageModel}
+          />
+        ) : null}
         {imageRec?.warning && (
           <View style={styles.deviceBanner}>
             <Text style={[styles.deviceBannerText, styles.deviceBannerWarning]}>{imageRec.warning}</Text>
