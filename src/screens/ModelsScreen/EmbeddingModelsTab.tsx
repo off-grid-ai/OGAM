@@ -161,7 +161,8 @@ export const EmbeddingModelsTab: React.FC = () => {
         isDownloaded isActive={!active}
         disabled={status.busy || !ready || !active}
         onPress={() => select(null)}
-        trailing={active ? <View style={embeddingStyles.rowAction}><Icon name="arrow-right" size={18} color={colors.textMuted} /></View> : undefined}
+        // An empty circle picks it, as on the Text tab; a bare arrow did not say what it would do.
+        trailing={active ? <View style={embeddingStyles.rowAction}><Icon name="circle" size={16} color={colors.textMuted} /></View> : undefined}
       />
       {active && !activeInCandidates && <ModelCard compact style={GROUPED_CARD_ROW}
         model={{ id: active.id, name: active.name, author: '' }}
@@ -174,7 +175,8 @@ export const EmbeddingModelsTab: React.FC = () => {
           facts={[
             candidate.name.toLowerCase().includes('multilingual') ? 'Multilingual' :
               'description' in candidate && candidate.description?.includes('English') ? 'English' : undefined,
-            `${Math.round(candidate.size / 1024 / 1024)} MB download`,
+            // A model already here has a size, not a download.
+            `${Math.round(candidate.size / 1024 / 1024)} MB${downloaded.has(candidate.id) ? '' : ' download'}`,
           ].filter((fact): fact is string => !!fact)}
           isActive={active?.id === candidate.id}
           isDownloaded={downloaded.has(candidate.id)}
@@ -183,7 +185,7 @@ export const EmbeddingModelsTab: React.FC = () => {
           onDelete={downloaded.has(candidate.id) && active?.id !== candidate.id && !status.busy ? () => remove(candidate) : undefined}
           disabled={status.busy || !ready || active?.id === candidate.id}
           onPress={() => select(candidate)}
-          trailing={active?.id === candidate.id ? undefined : <View style={embeddingStyles.rowAction}><Icon name="arrow-right" size={18} color={colors.textMuted} /></View>}
+          trailing={active?.id === candidate.id ? undefined : <View style={embeddingStyles.rowAction}><Icon name={downloaded.has(candidate.id) ? 'circle' : 'download'} size={16} color={colors.textMuted} /></View>}
         />
       ))}
       </ListGroup>
