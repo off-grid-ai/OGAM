@@ -32,7 +32,8 @@ export const SettingsAnalyticsSection: React.FC<SettingsAnalyticsSectionProps> =
   const [showLog, setShowLog] = useState(false);
 
   // Each toggle carries an icon so its words line up with the rows below.
-  const toggle = (label: string, icon: string, value: boolean, onChange: (next: boolean) => void) => (
+  // Each row has one line under its name, like every row in the list (hand test 84: these two were shorter).
+  const toggle = (label: string, desc: string, icon: string, value: boolean, onChange: (next: boolean) => void) => (
     <View style={styles.navItem}>
       {/* Decoration: hidden, or a screen reader reads its glyph. The switch carries the name. */}
       <View style={styles.navItemIcon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -40,6 +41,7 @@ export const SettingsAnalyticsSection: React.FC<SettingsAnalyticsSectionProps> =
       </View>
       <View style={styles.navItemContent}>
         <Text style={styles.navItemTitle} importantForAccessibility="no" accessibilityElementsHidden>{label}</Text>
+        <Text style={styles.navItemDesc} numberOfLines={1}>{desc}</Text>
       </View>
       <AppSwitch
         accessibilityLabel={label}
@@ -53,10 +55,10 @@ export const SettingsAnalyticsSection: React.FC<SettingsAnalyticsSectionProps> =
     <AnimatedEntry index={10} staggerMs={40} trigger={focusTrigger}>
       <SectionLabel title="Analytics" />
       <View style={styles.navSection} testID="settings-analytics">
-        {toggle('Anonymous stats', 'bar-chart-2', usage, next => {
+        {toggle('Anonymous stats', 'Counts, never your words. Off by default.', 'bar-chart-2', usage, next => {
           setAnalyticsConsent({ usage: next }, 'settings').catch(ignore);
         })}
-        {toggle('Crash reports', 'activity', crashes, next => {
+        {toggle('Crash reports', 'What broke, so we can fix it.', 'activity', crashes, next => {
           setAnalyticsConsent({ crashes: next }, 'settings').catch(ignore);
         })}
         <TouchableOpacity style={styles.navItem} onPress={onWhatWeShare} testID="settings-what-we-share" accessibilityRole="button" accessibilityLabel="What we share. Your chats and files never leave your device">
