@@ -30,6 +30,7 @@ const createLayoutStyles = (colors: ThemeColors) => ({
   newChatButton: { paddingVertical: 6, paddingHorizontal: SPACING.md },
   brand: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.sm },
   appLogo: { width: 32, height: 32 },
+  promiseRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: SPACING.md },
   crownButton: {
     width: 44,
     height: 44,
@@ -60,6 +61,7 @@ const createLayoutStyles = (colors: ThemeColors) => ({
   subtitle: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
+    flexShrink: 1,
   },
 });
 const createModelCardStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({

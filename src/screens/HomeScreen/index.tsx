@@ -220,8 +220,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           style={styles.scrollView}
           contentContainerStyle={styles.content}
         >
-          {/* One title and the promise that matters (brand Mobile profile: one h2 screen title), with the
-              header's actions on the same row: the bell, Pro, and New chat as the one main action. */}
+          {/* The app's name and mark, its promise, and New chat as the one main action. */}
           <View style={styles.header}>
             <View style={styles.titleRow}>
               {/* The brand mark beside its name, as on desktop's sidebar: the logo was lost in 5bed503e0. */}
@@ -247,21 +246,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 >
                   <IconMC name="crown" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
-                {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? (
-                  <Button
-                    title="New chat"
-                    variant="hero"
-                    size="small"
-                    icon={<Icon name="plus" size={16} color={colors.onHero} />}
-                    onPress={startNewChat}
-                    style={styles.newChatButton}
-                    testID="new-chat-button"
-                  />
-                ) : null}
               </View>
             </View>
-            {/* The promise gets its own line, never squeezed by the actions beside the title. */}
-            <Text style={styles.subtitle}>Nothing you type leaves this phone.</Text>
+            {/* Two rows (hand check 2026-11-06: one row cut the name to "Off Grid AI…"): the name with
+                its icons above, the promise with the one main action below. */}
+            <View style={styles.promiseRow}>
+              <Text style={styles.subtitle}>Nothing you type leaves this phone.</Text>
+              {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? (
+                <Button
+                  title="New chat"
+                  variant="hero"
+                  size="small"
+                  icon={<Icon name="plus" size={16} color={colors.onHero} />}
+                  onPress={startNewChat}
+                  style={styles.newChatButton}
+                  testID="new-chat-button"
+                />
+              ) : null}
+            </View>
           </View>
 
           <FeatureShowcase features={showcase} active={isFocused} />
