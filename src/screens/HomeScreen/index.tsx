@@ -371,27 +371,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 </View>
                 <Icon name="chevron-right" size={16} color={colors.textMuted} />
               </AnimatedPressable>
-              <View style={styles.supportCard} testID="home-support-card">
+              {/* A row like its neighbours, not a row with a button in it (design philosophy: rhythm). */}
+              <AnimatedPressable
+                style={styles.galleryCard}
+                onPress={() =>
+                  openSupportEmail({
+                    subject: '[Idea] Off Grid AI Mobile',
+                    body: 'Hi,\n\nI would like to see this in Off Grid AI Mobile:\n\n',
+                  })
+                }
+                hapticType="selection"
+                testID="home-support-email"
+                accessibilityRole="button"
+                accessibilityLabel="What should we build next? Write to us."
+              >
                 <Icon name="message-square" size={18} color={colors.textSecondary} />
                 <View style={styles.galleryCardInfo}>
-                  <Text style={styles.supportTitle}>What should we build next?</Text>
-                  <Text style={styles.supportDescription}>
-                    Tell us what you would like to see in Off Grid AI Mobile.
-                  </Text>
+                  <Text style={styles.galleryCardTitle}>What should we build next?</Text>
+                  <Text style={styles.galleryCardMeta} numberOfLines={1}>Tell us, and it may be in the next update.</Text>
                 </View>
-                <Button
-                  title="Write to us"
-                  variant="outline"
-                  size="small"
-                  onPress={() =>
-                    openSupportEmail({
-                      subject: '[Idea] Off Grid AI Mobile',
-                      body: 'Hi,\n\nI would like to see this in Off Grid AI Mobile:\n\n',
-                    })
-                  }
-                  testID="home-support-email"
-                />
-              </View>
+                <Icon name="mail" size={16} color={colors.textMuted} />
+              </AnimatedPressable>
             </ListGroup>
           </AnimatedEntry>
 
