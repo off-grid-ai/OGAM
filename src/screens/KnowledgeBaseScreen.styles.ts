@@ -1,3 +1,4 @@
+import { cardSurface } from '../theme/surface';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 
@@ -97,8 +98,13 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.surface,
     fontWeight: '500' as const,
   },
+  // The files on one glass surface, as every list (hand test 84: rows sat bare on the field).
   listContent: {
-    paddingBottom: SPACING.xxl,
+    ...cardSurface(colors),
+    overflow: 'hidden' as const,
+    marginHorizontal: SPACING.xl,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xxl,
   },
   list: {
     flex: 1,
