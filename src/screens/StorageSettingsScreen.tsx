@@ -250,16 +250,19 @@ export const StorageSettingsScreen: React.FC = () => {
         </View>
 
         {staleDownloads.length > 0 && (
+          <>
+          {/* The label above its card with its one action beside it, as the other groups (hand test 67). */}
+          <View style={styles.labelRow}>
+            <SectionLabel title="Unfinished downloads" style={styles.labelInRow} />
+            <TouchableOpacity
+              style={styles.clearAllButton}
+              onPress={handleClearAllStaleDownloads}
+              accessibilityRole="button"
+            >
+              <Text style={styles.clearAllText}>Clear all</Text>
+            </TouchableOpacity>
+          </View>
           <Card style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Unfinished downloads</Text>
-              <TouchableOpacity
-                style={styles.clearAllButton}
-                onPress={handleClearAllStaleDownloads}
-              >
-                <Text style={styles.clearAllText}>Clear all</Text>
-              </TouchableOpacity>
-            </View>
             <Text
               style={[
                 styles.hint,
@@ -282,6 +285,7 @@ export const StorageSettingsScreen: React.FC = () => {
               </View>
             ))}
           </Card>
+          </>
         )}
 
         <OrphanedFilesSection onStorageChange={loadStorageInfo} />

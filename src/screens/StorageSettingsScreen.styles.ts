@@ -140,8 +140,18 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     marginBottom: SPACING.md,
   },
+  labelRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    marginBottom: SPACING.xs,
+  },
+  labelInRow: { marginBottom: 0 },
   clearAllButton: {
-    padding: SPACING.sm,
+    minHeight: 44,
+    justifyContent: 'center' as const,
+    paddingHorizontal: SPACING.sm,
+    marginVertical: -SPACING.sm,
   },
   clearAllText: {
     ...TYPOGRAPHY.body,
