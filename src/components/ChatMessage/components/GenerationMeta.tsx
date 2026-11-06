@@ -45,13 +45,15 @@ function formatOptionalMeta(meta: NonNullable<Message['generationMeta']>, tps: n
     .map(([key, label, maxLines]) => ({ key, label, maxLines }));
 }
 
+const parenthesised = (text: string) => `(${text})`.padStart(text.length + 3);
+
 function buildMetaItems(
   meta: NonNullable<Message['generationMeta']>,
   tps: number | null | undefined,
 ): MetaItem[] {
   // Where it ran, in words: "ran on the GPU (Metal)", not "Metal (99L)" (hand test 69).
   const onGpu = meta.gpu ?? Boolean(meta.gpuBackend);
-  const engine = meta.gpuBackend && onGpu ? ' (' + meta.gpuBackend + ')' : '';
+  const engine = meta.gpuBackend && onGpu ? parenthesised(meta.gpuBackend) : '';
   const where = meta.gpu === undefined && !meta.gpuBackend ? undefined
     : `ran on the ${onGpu ? 'GPU' : 'CPU'}${engine}`;
   return [
