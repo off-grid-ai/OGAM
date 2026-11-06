@@ -598,3 +598,8 @@ Top 3: (1) ship the new MCP tools screen; (2) Pro tools: Desktop tools as a quie
 
 Pass: MCP tools (rows, Find a tool, one Turn all off), Pro tools (Desktop tools label over one surface, host wraps), chat Details (surface, names in words), Chats list (no dots), Home and Models (no regression). Partial: Storage (Unfinished downloads and Leftover files labels inside cards; raw file name, no size), server form (disabled Update server is pale emerald, about 2:1; Remote media model labels touch the field above). No lost behaviour.
 Top 3: (1) server form: room above Remote media labels, readable disabled primary; (2) MCP tool names through toolDisplayName, a backing under the summary line; (3) Storage and Pro page labels above their cards (Pro page fixed after this build).
+
+## Supervisor 10:25 (hand test 68, build 69) — 4 of 5 fixes pass
+
+Pass: MCP tools names in words, Pro tools (no trash; Remove server in its edit sheet, Cancel kept it), Storage labels above, Pro page labels above, Home, Chats, chat, Settings top. Partial: server form (disabled Update server still emerald), Models (three unlabelled icons by search). Fail: Settings lower (emoji heart footer, Anonymous stats card unlabelled). No lost behaviour.
+Top 3: (1) disabled primary label grey, Test connection vs Update server weight; (2) MCP tool descriptions for people, tokens to detail, summary backing; (3) drop the emoji heart, label the stats card, label the Models search icons.
