@@ -6,6 +6,7 @@ import { FlatList, Keyboard, Platform } from 'react-native';
 // padding band on Android under edge-to-edge (adjustResize is a no-op there);
 // this one reconciles the keyboard frame against the navigation-bar inset.
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { scrollToContentEnd } from './scrollToContentEnd';
 import { useUiModeStore } from '../../stores/uiModeStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -190,7 +191,7 @@ export const ChatScreen: React.FC = () => {
   React.useEffect(() => {
     if (chat.activeConversation?.messages.length && isNearBottomRef.current) {
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
+        scrollToContentEnd(flatListRef.current, true);
       }, 100);
     }
   }, [chat.activeConversation?.messages.length]);
@@ -199,7 +200,7 @@ export const ChatScreen: React.FC = () => {
     const event =
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const sub = Keyboard.addListener(event, () => {
-      flatListRef.current?.scrollToEnd({ animated: true });
+      scrollToContentEnd(flatListRef.current, true);
     });
     return () => sub.remove();
   }, []);
@@ -215,7 +216,7 @@ export const ChatScreen: React.FC = () => {
       // FlatList re-renders via extraData; onContentSizeChange fires and scrolls.
       // Backup: scroll after items have had time to re-measure.
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: false });
+        scrollToContentEnd(flatListRef.current, false);
       }, 300);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

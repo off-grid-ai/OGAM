@@ -273,7 +273,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   useEffect(() => {
     if (!lastSentId) return;
     userScrolledDuringGenerationRef.current = false;
-    requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: true }));
+    requestAnimationFrame(() => scrollToContentEnd(flatListRef.current, true));
   }, [lastSentId, flatListRef]);
 
   // Bottom safe-area for the input footer. We own it here (rather than on the
@@ -389,7 +389,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
             flatListHeightRef.current = newHeight;
             if (prevHeight > 0 && newHeight < prevHeight) {
               setTimeout(
-                () => flatListRef.current?.scrollToEnd({ animated: true }),
+                () => scrollToContentEnd(flatListRef.current, true),
                 50,
               );
             }
@@ -415,7 +415,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           <AnimatedPressable
             hapticType="impactLight"
             style={styles.scrollToBottomButton}
-            onPress={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            onPress={() => scrollToContentEnd(flatListRef.current, true)}
           >
             <Icon name="chevron-down" size={20} color={colors.textSecondary} />
           </AnimatedPressable>

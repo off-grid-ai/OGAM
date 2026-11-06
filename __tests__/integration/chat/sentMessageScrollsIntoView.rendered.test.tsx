@@ -1,4 +1,4 @@
-import { FlatList } from 'react-native';
+import { ScrollView } from 'react-native';
 import { setupChatScreen } from '../../harness/chatHarness';
 
 jest.unmock('@react-navigation/native');
@@ -22,7 +22,8 @@ describe('a sent message scrolls into view', () => {
       nativeEvent: { contentOffset: { y: 0 }, contentSize: { height: 5000, width: 400 }, layoutMeasurement: { height: 600, width: 400 } },
     });
 
-    const scrollToEnd = jest.spyOn(FlatList.prototype, 'scrollToEnd');
+    // The list reaches its end through the native scroll view (scrollToContentEnd).
+    const scrollToEnd = jest.spyOn(ScrollView.prototype, 'scrollToEnd');
     await h.send('[test] And to ten?', { text: '6 7 8 9 10' });
     await h.rtl.waitFor(() => expect(scrollToEnd).toHaveBeenCalledWith({ animated: true }));
     scrollToEnd.mockRestore();
