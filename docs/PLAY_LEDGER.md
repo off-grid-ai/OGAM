@@ -647,3 +647,8 @@ Top 3: (1) IN USE in the action column where On phone sits; (2) Tools count vs s
 
 Pass: IN USE in the action column with On phone, no fill; Documents active row In use at its end; Home feedback a plain row; Files empty text centred, Save to Files. Fail: video style names still mono (the Geist commit came after this build).
 Top 3: (1) style names in Geist (in the next build); (2) In use in one case with On phone; (3) Documents: no "download" on a model already on the phone, the arrow says what it does.
+
+## Supervisor 16:45 (hand test 78, build 79) — glass back; 3 of 4 pass
+
+Pass: In use in On phone's face, Documents sizes and marks, style names in Geist. Glass reads well on Settings, Remote servers, Pro tools, Projects, project page, Home lower list and hero. Fail: Home Recent card and the Video settings card are still opaque. Note: field dots can sit inside text lines; Pro tools count 5 (was 7: a server's tools differ with connection state).
+Top 3: (1) Recent and Video cards glass; (2) dots near text (accepted with glass, Mac's call); (3) emerald In use contrast at 9 pt.
