@@ -1,6 +1,6 @@
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { cardSurface } from '../theme/surface';
-import { SPACING, TYPOGRAPHY } from '../constants';
+import { FONTS, SPACING, TYPOGRAPHY } from '../constants';
 
 export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   // The one card surface (brand: translucent over the field, hairline edge), not its own shadowed box.
@@ -30,6 +30,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.text,
     flex: 1,
   },
+  downloadedLabel: { ...TYPOGRAPHY.metaSmall, fontFamily: FONTS.mono, color: colors.textMuted },
   // In use, in words: the one emerald on the row.
   denseInUse: {
     ...TYPOGRAPHY.label,

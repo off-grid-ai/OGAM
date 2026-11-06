@@ -435,8 +435,9 @@ function DownloadedActions({ modelName, isActive, testID, colors, styles, onSele
   onSelect?: () => void; onDelete?: () => void; onRepairVision?: () => void; isRepairingVision?: boolean;
 }>) {
   const tid = (s: string) => testID ? `${testID}-${s}` : undefined;
-  // Downloaded is a fact, not the thing in use: a quiet tick. Emerald stays for "In use" (one accent).
-  if (!onSelect && !onDelete && !onRepairVision) return <Icon name="check" size={16} color={colors.textMuted} testID={tid('downloaded')} />;
+  // Downloaded is a fact, said in words: a tick beside the verified mark read as two checks on one
+  // row (screen review). Emerald stays for "In use" (one accent).
+  if (!onSelect && !onDelete && !onRepairVision) return <Text style={styles.downloadedLabel} testID={tid('downloaded')}>On phone</Text>;
   return (
     <>
       {isRepairingVision ? (
