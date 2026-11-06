@@ -76,5 +76,19 @@ it('shows the daily goal and streak only when it is switched on', () => {
   const { rtl, r } = mount();
   expect(r.queryByTestId('goal-line')).toBeNull();
   rtl.fireEvent(r.getByTestId('goal-switch'), 'valueChange', true);
-  expect(r.getByTestId('goal-line').props.children.join('')).toMatch(/Today: 0 of 10 questions/);
+  expect(r.getByTestId('goal-line').props.children).toMatch(/Today: 0 of 10 questions/);
+});
+
+it('clears the practice history after asking, and keeps the daily-goal setting', () => {
+  const { rtl, r, store } = mount();
+  const { Alert } = require('react-native');
+  rtl.act(() => { store.getState().addSet([calc('a', 'Tax', 1)]); store.getState().record('a', false); store.getState().setGoal({ on: true }); });
+  const ask = jest.spyOn(Alert, 'alert').mockImplementation((_t: any, _m: any, buttons: any) => { buttons.find((b: any) => b.text === 'Clear').onPress(); });
+  rtl.fireEvent.press(r.getByTestId('practice-clear'));
+  expect(ask).toHaveBeenCalled();
+  expect(Object.keys(store.getState().exercises)).toHaveLength(0);
+  expect(store.getState().progress).toEqual({});
+  expect(store.getState().goal.on).toBe(true);
+  expect(r.getByTestId('practice-note').props.children).toBe('Practice history cleared.');
+  ask.mockRestore();
 });

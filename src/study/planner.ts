@@ -43,3 +43,11 @@ export function todaysTarget(plan: PlanDay[], today: string): string {
 
 /** Calendar events for the plan (title, all-day date) ready for the calendar tool. */
 export const planEvents = (plan: PlanDay[]) => plan.map((p) => ({ title: `${p.exam}: ${p.topics.join('; ').slice(0, 80)}`, date: p.date }));
+
+/** "34 days to go", "tomorrow", "today" or "passed", for the exam list. */
+export function daysToGo(date: string, today: string): string {
+  const n = Math.round((parse(date) - parse(today)) / DAY);
+  if (n < 0) return 'passed';
+  if (n === 0) return 'today';
+  return n === 1 ? 'tomorrow' : `${n} days to go`;
+}

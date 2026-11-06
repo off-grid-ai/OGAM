@@ -1,27 +1,26 @@
-import React, { useMemo, useState } from 'react';
-import { StyleSheet } from 'react-native';
-import { Alert, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../theme';
-import { Button } from '../components/Button';
-import { Answer, good, st } from '../components/ExerciseAnswer';
-import { CitationChips } from '../components/CitationChips';
-import { DrillPicker, ExamResultView, ExamRunner, Flashcards, WhyWrong } from './PracticeParts';
+import { st } from '../components/practiceStyles';
+import { ExamResultView, ExamRunner, Flashcards, PracticeHome, PracticeRun } from './PracticeParts';
 import { useProjectStore } from '../stores';
-import { check, missedExercises, practiceSet, streak, topicScores, useExerciseStore, type Exercise, type TableRow, type Verdict } from '../study/exercises';
+import { keepScreenOn } from '../atlasVoice/tts';
+import { check, missedExercises, practiceSet, streak, topicScores, useExerciseStore, type Exercise, type Verdict } from '../study/exercises';
 import { generatePractice } from '../study/practice';
-import { ACCOUNTING_DRILLS, STATS_DRILLS, makeDrillSet, type DrillKind } from '../study/drills';
+import { makeDrillSet, type DrillKind } from '../study/drills';
 import { buildExam, gradeExam, type Exam, type ExamResult } from '../study/exam';
 
+const todayKey = () => new Date().toISOString().slice(0, 10);
 
 export const PracticeScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { projectId } = useRoute<any>().params as { projectId: string };
   const { colors } = useTheme();
   const project = useProjectStore((s) => s.projects.find((p) => p.id === projectId));
-  const { exercises, progress, daily, goal, addSet, record, saveDraft, freshen, setNote: saveNote, setGoal } = useExerciseStore();
+  const { exercises, progress, daily, goal, addSet, record, saveDraft, freshen, setNote: saveNote, setGoal, clearAll } = useExerciseStore();
   const [topic, setTopic] = useState('');
   const [busy, setBusy] = useState(false);
   const [queue, setQueue] = useState<Exercise[]>([]);
@@ -32,24 +31,28 @@ export const PracticeScreen: React.FC = () => {
   const [result, setResult] = useState<ExamResult | null>(null);
   const [cards, setCards] = useState<Exercise[] | null>(null);
   const [pickDrill, setPickDrill] = useState(false);
+  const answersRef = useRef(answers);
+  answersRef.current = answers;
   const all = useMemo(() => Object.values(exercises), [exercises]);
   const current = queue[0];
-  const scores = topicScores(all, progress);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayKey();
 
-  const queueUp = (list: Exercise[]) => { freshen(list.map((e) => e.id)); setQueue(list); };
+  // A timed exam keeps the screen on, and lets it sleep again afterwards or when leaving.
+  useEffect(() => { keepScreenOn(!!exam); return () => keepScreenOn(false); }, [exam]);
+
+  const queueUp = (list: Exercise[]) => { freshen(list.map((e) => e.id)); setVerdict(undefined); setQueue(list); };
   const make = async () => {
     setBusy(true); setNote('');
     try {
       const r = await generatePractice(projectId, topic);
       setNote(`${r.added} questions added${r.dropped ? `, ${r.dropped} skipped (${r.reasons.join(', ')})` : ''}.`);
-      queueUp(practiceSet(Object.values(useExerciseStore.getState().exercises), useExerciseStore.getState().progress, { topic: topic.trim() || undefined }));
+      const fresh = useExerciseStore.getState();
+      queueUp(practiceSet(Object.values(fresh.exercises), fresh.progress, { topic: topic.trim() || undefined }));
     } catch (e: any) { Alert.alert('Could not make questions', String(e?.message || e)); } finally { setBusy(false); }
   };
-  const drills = (kinds: DrillKind[]) => { const set = makeDrillSet(8, Date.now() % 100000, kinds); addSet(set); setVerdict(undefined); setNote(''); setPickDrill(false); queueUp(set); };
-  const start = (t?: string) => { setVerdict(undefined); queueUp(practiceSet(all, progress, { topic: t })); if (!all.length) setNote('No questions yet. Make some from your documents.'); };
-  const value = current ? progress[current.id]?.saved : undefined;
-  const submit = () => { if (!current) return; const v = check(current, value); setVerdict(v); record(current.id, v.correct); };
+  const drills = (kinds: DrillKind[]) => { const set = makeDrillSet(8, Date.now() % 100000, kinds); addSet(set); setNote(''); setPickDrill(false); queueUp(set); };
+  const start = (t?: string) => { queueUp(practiceSet(all, progress, { topic: t })); if (!all.length) setNote('No questions yet. Make some from your documents.'); };
+  const submit = () => { if (!current) return; const v = check(current, progress[current.id]?.saved); setVerdict(v); record(current.id, v.correct); };
   const next = () => { setVerdict(undefined); setQueue((q) => q.slice(1)); };
 
   const startExam = () => {
@@ -57,20 +60,22 @@ export const PracticeScreen: React.FC = () => {
     setAnswers({}); setResult(null);
     setExam(buildExam(all, progress, { count: Math.min(20, all.length), minutes: 30 }));
   };
-  const finishExam = React.useCallback(() => {
+  const finishExam = useCallback(() => {
     if (!exam) return;
-    const graded = gradeExam(exam, useExerciseStore.getState().exercises, answersRef.current);
-    exam.ids.forEach((id) => { const ex = useExerciseStore.getState().exercises[id]; if (ex) record(id, !graded.wrong.includes(id)); });
+    const bank = useExerciseStore.getState().exercises;
+    const graded = gradeExam(exam, bank, answersRef.current);
+    exam.ids.forEach((id) => { if (bank[id]) record(id, !graded.wrong.includes(id)); });
     setResult(graded); setExam(null);
   }, [exam, record]);
-  const answersRef = React.useRef<Record<string, unknown>>({});
-  answersRef.current = answers;
-  const reviewMisses = () => { if (!result) return; queueUp(result.wrong.map((id) => exercises[id]).filter(Boolean)); setResult(null); };
-  const startCards = () => { const missed = missedExercises(all, progress); if (!missed.length) { setNote('Nothing missed yet, so no flashcards.'); return; } setCards(missed); };
+  const reviewMisses = () => { if (result) { queueUp(result.wrong.map((id) => exercises[id]).filter(Boolean)); setResult(null); } };
+  const startCards = () => { const missed = missedExercises(all, progress); if (missed.length) setCards(missed); else setNote('Nothing missed yet, so no flashcards.'); };
+  const confirmClear = () => Alert.alert('Clear practice history?', 'This deletes the saved practice questions, your scores and notes. Drills can always be made again.', [
+    { text: 'Cancel', style: 'cancel' }, { text: 'Clear', style: 'destructive', onPress: () => { clearAll(); setNote('Practice history cleared.'); } },
+  ]);
 
-  const inRun = !!current;
-  const home = !inRun && !exam && !result && !cards;
   const done = daily[today] ?? 0;
+  const days = streak(daily, today, goal.perDay);
+  const home = !current && !exam && !result && !cards;
   return (
     <SafeAreaView style={[st.flex, { backgroundColor: colors.background }]} edges={['top']}>
       <View style={st.header}>
@@ -80,47 +85,21 @@ export const PracticeScreen: React.FC = () => {
       <ScrollView contentContainerStyle={st.content} keyboardShouldPersistTaps="handled">
         {exam && <ExamRunner exam={exam} questions={exam.ids.map((id) => exercises[id]).filter(Boolean)} answers={answers} onAnswer={(id, v) => setAnswers((a) => ({ ...a, [id]: v }))} onFinish={finishExam} colors={colors} />}
         {result && <ExamResultView result={result} onReview={reviewMisses} onDone={() => setResult(null)} colors={colors} />}
-        {cards && <Flashcards cards={cards} colors={colors} onStop={() => setCards(null)}
-          onGotIt={(id) => setCards((c) => (c ?? []).filter((x) => x.id !== id))} onAgain={(id) => setCards((c) => { const rest = (c ?? []).filter((x) => x.id !== id); const me = (c ?? []).find((x) => x.id === id); return me ? [...rest, me] : rest; })} />}
-        {home && (
-          <View>
-            {goal.on && <Text testID="goal-line" style={{ color: done >= goal.perDay ? good : colors.textSecondary }}>Today: {done} of {goal.perDay} questions. Streak: {streak(daily, today, goal.perDay)} day{streak(daily, today, goal.perDay) === 1 ? '' : 's'}.</Text>}
-            <TextInput testID="practice-topic" value={topic} onChangeText={setTopic} placeholder="Topic or chapter (optional)" placeholderTextColor={colors.textMuted} style={[st.input, st.top8, { borderColor: colors.border, color: colors.text }]} />
-            <Button title={busy ? 'Writing questions...' : 'Make questions from my documents'} onPress={make} loading={busy} disabled={busy} testID="practice-make" style={st.top10} />
-            <Button title="Accounting drills (balance sheet, interest, loans, statements...)" variant="outline" onPress={() => drills(ACCOUNTING_DRILLS)} testID="practice-drills" style={st.top8} />
-            <Button title="Research statistics drills (doctoral courses)" variant="outline" onPress={() => drills(STATS_DRILLS)} testID="practice-stats-drills" style={st.top8} />
-            <Button title={pickDrill ? 'Hide drill types' : 'Pick one drill type'} variant="ghost" onPress={() => setPickDrill(!pickDrill)} testID="practice-pick-drill" style={st.top6} />
-            {pickDrill && <DrillPicker kinds={[...ACCOUNTING_DRILLS, ...STATS_DRILLS]} onPick={(k) => drills([k])} colors={colors} />}
-            <Button title="Practise what I have (missed and due first)" variant="outline" onPress={() => start(topic.trim() || undefined)} testID="practice-start" style={st.top8} />
-            <Button title="Timed exam (20 questions, 30 minutes)" variant="outline" onPress={startExam} testID="practice-exam" style={st.top8} />
-            <Button title="Flashcards from my misses" variant="outline" onPress={startCards} testID="practice-cards" style={st.top8} />
-            {!!note && <Text testID="practice-note" style={[st.top10, { color: colors.textSecondary }]}>{note}</Text>}
-            <View style={[st.wrap, st.top14]}>
-              <Switch value={goal.on} onValueChange={(on) => setGoal({ on })} testID="goal-switch" />
-              <Text style={[st.gap, { color: colors.textSecondary }]}>Daily goal and streak ({goal.perDay} questions a day)</Text>
-            </View>
-            {scores.length > 0 && <View style={st.top18}>
-              <Text style={[st.semi, { color: colors.text }]}>Score by topic (weakest first)</Text>
-              {scores.map((s) => <TouchableOpacity key={s.topic} onPress={() => start(s.topic)} style={st.pad8}>
-                <Text style={{ color: s.percent < 60 ? colors.error : colors.text }}>{s.topic}: {s.percent}% ({s.attempts} tries)</Text></TouchableOpacity>)}
-            </View>}
-          </View>
+        {cards && (
+          <Flashcards cards={cards} colors={colors} onStop={() => setCards(null)}
+            onGotIt={(id) => setCards((c) => (c ?? []).filter((x) => x.id !== id))}
+            onAgain={(id) => setCards((c) => { const me = (c ?? []).find((x) => x.id === id); return me ? [...(c ?? []).filter((x) => x.id !== id), me] : c; })} />
         )}
-        {inRun && current && (
-          <View>
-            <Text style={[st.small12, { color: colors.textMuted }]}>{queue.length} left{current.topic ? ` - ${current.topic}` : ''}</Text>
-            <Text testID="practice-prompt" style={[st.prompt, { color: colors.text }]}>{current.kind === 'testlet' ? 'Answer all parts' : current.prompt}</Text>
-            {!!progress[current.id]?.note && !verdict && <Text testID="earlier-note" style={[st.top8, { color: colors.textSecondary }]}>Your note from last time: {progress[current.id].note}</Text>}
-            <Answer ex={current} value={value} onChange={(v) => saveDraft(current.id, v)} verdict={verdict} colors={colors} />
-            {verdict && <View style={st.top14}>
-              <Text testID="practice-result" style={[st.semi, { color: verdict.correct ? good : colors.error }]}>{verdict.correct ? 'Correct' : 'Not quite'}{verdict.note ? ` - ${verdict.note}` : ''}</Text>
-              {!!current.explain && <Text style={[st.top4, { color: colors.textSecondary }]}>{current.explain}</Text>}
-              {current.source && <CitationChips cites={[{ title: current.source.doc, page: current.source.page, section: current.source.section, quote: current.source.quote, verified: true }]} />}
-              {!verdict.correct && <WhyWrong value={progress[current.id]?.note} onChange={(t) => saveNote(current.id, t)} colors={colors} />}
-            </View>}
-            <Button title={verdict ? 'Next' : 'Check'} onPress={verdict ? next : submit} testID={verdict ? 'practice-next' : 'practice-check'} style={st.top14} />
-            <Button title="Stop" variant="ghost" onPress={() => { setQueue([]); setVerdict(undefined); }} style={st.top6} />
-          </View>
+        {home && (
+          <PracticeHome topic={topic} setTopic={setTopic} busy={busy} note={note} pickDrill={pickDrill} setPickDrill={setPickDrill}
+            goalOn={goal.on} perDay={goal.perDay} setGoalOn={(on) => setGoal({ on })}
+            goalLine={goal.on ? `Today: ${done} of ${goal.perDay} questions. Streak: ${days} day${days === 1 ? '' : 's'}.` : null}
+            scores={topicScores(all, progress)} onMake={make} onDrills={drills} onStart={start} onExam={startExam} onCards={startCards} onClear={confirmClear} colors={colors} />
+        )}
+        {current && (
+          <PracticeRun current={current} left={queue.length} value={progress[current.id]?.saved} earlierNote={progress[current.id]?.note} verdict={verdict} note={progress[current.id]?.note}
+            onDraft={(v) => saveDraft(current.id, v)} onCheck={submit} onNext={next} onStop={() => { setQueue([]); setVerdict(undefined); }}
+            onNote={(t) => saveNote(current.id, t)} colors={colors} />
         )}
       </ScrollView>
     </SafeAreaView>

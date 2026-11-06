@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../theme';
 import { Button } from '../components/Button';
-import { buildPlan, behind, todaysTarget, type PlanDay } from '../study/planner';
+import { buildPlan, behind, daysToGo, todaysTarget, type PlanDay } from '../study/planner';
 import { parseExamLines, usePlanStore } from '../study/planStore';
 
 const st = StyleSheet.create({
@@ -49,6 +49,8 @@ export const PlannerScreen: React.FC = () => {
             <Text testID="plan-today" style={[st.semi, { color: colors.text }]}>Today</Text>
             <Text style={{ color: colors.textSecondary }}>{todaysTarget(plan, today)}</Text>
             {late.length > 0 && <Text testID="plan-behind" style={[st.top8, { color: colors.error }]}>{late.length} topic{late.length === 1 ? '' : 's'} behind: {late.join(', ')}</Text>}
+            <Text style={[st.semi, st.top14, { color: colors.text }]}>Exams</Text>
+            {exams.map((e) => <Text key={e.name} testID={`exam-days-${e.name}`} style={{ color: colors.textSecondary }}>{e.name}: {e.date} ({daysToGo(e.date, today)})</Text>)}
             <Text style={[st.semi, st.top14, { color: colors.text }]}>Topics (tap when finished)</Text>
             {exams.flatMap((e) => e.topics.map((t) => ({ exam: e.name, t }))).map(({ exam, t }) => (
               <TouchableOpacity key={`${exam}-${t}`} onPress={() => toggleDone(t)} style={st.row} accessibilityRole="checkbox" accessibilityState={{ checked: done.includes(t) }}>

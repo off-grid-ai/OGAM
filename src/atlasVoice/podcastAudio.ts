@@ -67,7 +67,8 @@ function prioritize(path: string): void {
 }
 
 /** Render once per file, moving requested playback ahead of queued background work. */
-function render(key: string, items: CastLine[], i: number, urgent = false): Promise<string | null> {
+function render(ref: { key: string; items: CastLine[]; i: number }, urgent = false): Promise<string | null> {
+  const { key, items, i } = ref;
   const path = pathFor(key, i, items[i]);
   const known = pending.get(path);
   if (known) {
@@ -114,7 +115,7 @@ export async function pruneEpisodes(keepKey: string): Promise<void> {
 export function preRenderEpisode(key: string, items: CastLine[]): void {
   if (!renderable(items)) return;
   pruneEpisodes(key).catch(() => undefined);
-  items.forEach((_, i) => { render(key, items, i).catch(() => undefined); });
+  items.forEach((_, i) => { render({ key, items, i }).catch(() => undefined); });
 }
 
 let sessionReady = false;
@@ -200,10 +201,10 @@ export async function playLine(key: string, items: CastLine[], i: number): Promi
   const token = stopToken;
   // This line first, then the next few behind it, so it never waits for the others.
   // Queue the next lines in reverse priority order, then put this line first.
-  for (let k = Math.min(items.length - 1, i + AHEAD); k > i; k--) render(key, items, k, true).catch(() => undefined);
-  const current = render(key, items, i, true);
+  for (let k = Math.min(items.length - 1, i + AHEAD); k > i; k--) render({ key, items, i: k }, true).catch(() => undefined);
+  const current = render({ key, items, i }, true);
   // And the next line is decoded now, while this one plays, so the gap between lines is not a decode.
-  if (i + 1 < items.length) render(key, items, i + 1).then((next) => { if (next) decode(next).catch(() => undefined); }).catch(() => undefined);
+  if (i + 1 < items.length) render({ key, items, i: i + 1 }).then((next) => { if (next) decode(next).catch(() => undefined); }).catch(() => undefined);
   const path = await current;
   if (token !== stopToken) return false;
   if (!path) return speakAndWait(line.text, line.pitch, 'podcast', line.voice || '');

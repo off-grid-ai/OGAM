@@ -11,7 +11,8 @@ const st = StyleSheet.create({
   barTrack: { flex: 1, height: 10, borderRadius: 5, marginHorizontal: 8 }, cap: { fontSize: 12, marginTop: 8 }, pie: { alignItems: 'center' },
 });
 
-const slice = (cx: number, cy: number, r: number, a0: number, a1: number) => {
+const slice = (c: { cx: number; cy: number; r: number }, a0: number, a1: number) => {
+  const { cx, cy, r } = c;
   const p = (a: number) => `${cx + r * Math.cos(a)} ${cy + r * Math.sin(a)}`;
   return `M ${cx} ${cy} L ${p(a0)} A ${r} ${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${p(a1)} Z`;
 };
@@ -26,7 +27,7 @@ export const ChartCard: React.FC<{ spec: ChartSpec }> = ({ spec }) => {
     <View testID="chart-card" style={[st.card, { borderColor: colors.border }]}>
       {!!spec.title && <Text style={[st.title, { color: colors.text }]}>{spec.title}</Text>}
       {spec.type === 'pie' && <View style={st.pie}><Svg width={160} height={160}>{spec.values.map((v, i) => {
-        const a1 = angle + (v / total) * Math.PI * 2; const d = slice(80, 80, 76, angle, Math.min(a1, angle + Math.PI * 2 - 0.0001)); angle = a1;
+        const a1 = angle + (v / total) * Math.PI * 2; const d = slice({ cx: 80, cy: 80, r: 76 }, angle, Math.min(a1, angle + Math.PI * 2 - 0.0001)); angle = a1;
         return v > 0 ? <Path key={i} d={d} fill={PALETTE[i % PALETTE.length]} /> : null;
       })}</Svg></View>}
       {spec.labels.map((l, i) => (

@@ -56,3 +56,19 @@ describe('review and scores', () => {
     expect(topicScores([a, b, c], progress)).toEqual([{ topic: 'Tax', attempts: 2, percent: 50 }, { topic: 'Audit', attempts: 1, percent: 100 }]);
   });
 });
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { debouncedStorage } from '../../src/study/exercises';
+describe('saving while typing', () => {
+  it('writes once, with the latest value, after typing stops', () => {
+    jest.useFakeTimers();
+    const spy = jest.spyOn(AsyncStorage, 'setItem').mockResolvedValue(undefined as any);
+    const store = debouncedStorage<{ n: number }>(600);
+    for (let n = 1; n <= 40; n++) store.setItem('k', { state: { n }, version: 0 });
+    expect(spy).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(700);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(spy.mock.calls[0][1] as string).state.n).toBe(40);
+    spy.mockRestore(); jest.useRealTimers();
+  });
+});
