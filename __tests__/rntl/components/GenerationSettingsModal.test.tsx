@@ -28,12 +28,21 @@ const defaultProps = {
   onClose: jest.fn(),
 };
 
-const renderSheet = (props: Partial<React.ComponentProps<typeof GenerationSettingsModal>> = {}) =>
-  render(
-    withNavigatorRoutes(<GenerationSettingsModal {...defaultProps} {...props} />, {
-      destinations: ['ModelSettings'],
-    }),
+/** The chat screen's side, as ChatModalSection wires it: the screen navigates, the sheet does not. */
+const ChatSide = (props: Partial<React.ComponentProps<typeof GenerationSettingsModal>>) => {
+  const { useNavigation } = require('@react-navigation/native');
+  const navigation = useNavigation();
+  return (
+    <GenerationSettingsModal
+      {...defaultProps}
+      onOpenModelSettings={() => navigation.navigate('ModelSettings')}
+      {...props}
+    />
   );
+};
+
+const renderSheet = (props: Partial<React.ComponentProps<typeof GenerationSettingsModal>> = {}) =>
+  render(withNavigatorRoutes(<ChatSide {...props} />, { destinations: ['ModelSettings'] }));
 
 describe('GenerationSettingsModal', () => {
   beforeEach(() => {
@@ -89,6 +98,11 @@ describe('GenerationSettingsModal', () => {
     expect(queryByTestId('fastest-settings-button')).toBeNull();
     // One row opens them.
     expect(getByTestId('chat-settings-open-model-settings')).toBeTruthy();
+  });
+
+  it('has no Model settings row when the screen gives it nowhere to go', () => {
+    const { queryByTestId } = renderSheet({ onOpenModelSettings: undefined });
+    expect(queryByTestId('chat-settings-open-model-settings')).toBeNull();
   });
 
   it('closes the sheet and opens Model settings when the Model settings row is pressed', async () => {

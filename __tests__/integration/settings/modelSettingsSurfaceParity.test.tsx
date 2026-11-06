@@ -47,7 +47,10 @@ function renderModelSettings(tab: Tab = 'general') {
 /** A chat screen with its settings sheet open, on a stack that also holds the real Model settings. */
 function renderChatWithSettingsSheet() {
   const Stack = createNativeStackNavigator();
-  const ChatScreen = () => <GenerationSettingsModal visible onClose={() => {}} />;
+  // As ChatModalSection wires it: the screen navigates; the sheet imports no navigation.
+  const ChatScreen = ({ navigation }: { navigation: { navigate: (route: string) => void } }) => (
+    <GenerationSettingsModal visible onClose={() => {}} onOpenModelSettings={() => navigation.navigate('ModelSettings')} />
+  );
   return render(
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
