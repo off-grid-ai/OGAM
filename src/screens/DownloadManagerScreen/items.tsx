@@ -15,7 +15,6 @@ import { createStyles } from './styles';
 import { presentProgress } from '../../utils/progressPresentation';
 import { SPACING } from '../../constants';
 import { isMMProjFile } from '../../services/mmproj';
-import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
 import { splitGgufModelName } from '@offgrid/models';
 
 /** The name a person knows a download by: the model's own name, else its file name without the
