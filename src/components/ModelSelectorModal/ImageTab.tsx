@@ -89,11 +89,15 @@ export const ImageTab: React.FC<ImageTabProps> = ({
             facts={activeModel ? [activeModel.style || 'Image',
               `${hardwareService.formatBytes(hardwareService.estimateImageModelRam(activeModel))} RAM`] : []}
             isActive
-            trailing={<TouchableOpacity style={styles.unloadButton} onPress={onUnloadImageModel} disabled={isAnyLoading}>
-              {isLoadingImage ? <LoadingDots color={colors.error} /> : <>
-                <Icon name="power" size={16} color={colors.error} />
-                <Text style={styles.unloadButtonText}>{isCurrentLoaded ? 'Unload' : 'Deselect'}</Text>
-              </>}
+            trailing={<TouchableOpacity
+              style={styles.unloadButton}
+              onPress={onUnloadImageModel}
+              disabled={isAnyLoading}
+              accessibilityRole="button"
+              accessibilityLabel={isCurrentLoaded ? 'Unload' : 'Deselect'}
+            >
+              {isLoadingImage ? <LoadingDots color={colors.textSecondary} />
+                : <Icon name="power" size={18} color={colors.textSecondary} />}
             </TouchableOpacity>}
           />
         </View>

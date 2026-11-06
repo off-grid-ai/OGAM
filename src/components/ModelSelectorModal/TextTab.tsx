@@ -135,9 +135,14 @@ export const TextTab: React.FC<TextTabProps> = ({
                   : hardwareService.formatModelRam(activeLocalModel, ramMultiplier)} RAM`]
               : []}
             isActive
-            trailing={<TouchableOpacity style={styles.unloadButton} onPress={onUnloadModel} disabled={isAnyLoading}>
-              <Icon name="power" size={16} color={colors.error} />
-              <Text style={styles.unloadButtonText}>Unload</Text>
+            trailing={<TouchableOpacity
+              style={styles.unloadButton}
+              onPress={onUnloadModel}
+              disabled={isAnyLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Unload"
+            >
+              <Icon name="power" size={18} color={colors.textSecondary} />
             </TouchableOpacity>}
           />
         </View>
