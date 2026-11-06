@@ -1,17 +1,15 @@
 /**
  * ModelSettingsScreen Tests
  *
- * Tests for the model settings screen including:
- * - Section titles rendering
- * - System prompt editing
- * - Show generation details toggle
- * - Image generation settings (auto detection, steps, guidance, threads, size)
- * - Text generation settings (temperature, max tokens, top P, repeat penalty)
- * - Performance settings (threads, batch size, GPU, model loading strategy) — now in Text Generation
- * - Detection method buttons
- * - Enhance image prompts toggle
- * - Context length slider
- * - Accordion expand/collapse behavior
+ * The one home of every model setting. Tabs (General / Text / Image / Voice) each show their
+ * settings open. Tests drive the real screen against the real app store and assert what the
+ * person sees and the settings the store holds:
+ * - Tabs and what each one shows
+ * - General: fastest settings, hardware, model loading, generation details, system prompt
+ * - Text: sliders, advanced (threads, batch, flash attention, KV cache), remote-server footnote
+ * - Image: picture detection, steps, size, advanced (guidance, threads, detection, enhance)
+ * - Voice: transcription model and language
+ * - Reset to defaults (header button)
  */
 
 import React from 'react';
@@ -19,6 +17,12 @@ import { render, fireEvent, within } from '@testing-library/react-native';
 import { APP_CONFIG } from '../../../src/constants';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAppStore } from '../../../src/stores/appStore';
+import { useRemoteServerStore } from '../../../src/stores/remoteServerStore';
+import {
+  _clearSlotsForTesting,
+  registerSlot,
+  SLOTS,
+} from '../../../src/bootstrap/slotRegistry';
 import { resetStores } from '../../utils/testHelpers';
 
 // Mock Slider component
@@ -47,28 +51,24 @@ const renderScreen = () => {
   );
 };
 
-/** Render screen with specific accordions expanded (also opens Advanced toggles) */
-const renderWithSections = (...sections: ('prompt' | 'image' | 'text')[]) => {
-  const result = renderScreen();
-  const testIDMap: Record<string, string> = {
-    prompt: 'system-prompt-accordion',
-    image: 'image-generation-accordion',
-    text: 'text-generation-accordion',
-  };
-  const advancedMap: Record<string, string> = {
-    image: 'image-advanced-toggle',
-    text: 'text-advanced-toggle',
-  };
-  for (const section of sections) {
-    if (section === 'text') {
-      fireEvent.press(result.getByTestId('general-generation-accordion'));
-    }
-    fireEvent.press(result.getByTestId(testIDMap[section]));
-    if (advancedMap[section]) {
-      fireEvent.press(result.getByTestId(advancedMap[section]));
-    }
-  }
-  return result;
+type Tab = 'general' | 'text' | 'image' | 'voice';
+const ADVANCED_TOGGLE: Partial<Record<Tab, string>> = {
+  text: 'text-advanced-toggle',
+  image: 'image-advanced-toggle',
+};
+
+/** Open a tab the way a person does, with its Advanced settings shown too. */
+const openTab = (view: ReturnType<typeof renderScreen>, tab: Tab) => {
+  fireEvent.press(view.getByTestId(`model-settings-tab-${tab}`));
+  const advanced = ADVANCED_TOGGLE[tab];
+  if (advanced) fireEvent.press(view.getByTestId(advanced));
+};
+
+/** Render the screen on one tab, Advanced open. */
+const renderTab = (tab: Tab) => {
+  const view = renderScreen();
+  openTab(view, tab);
+  return view;
 };
 
 describe('ModelSettingsScreen', () => {
@@ -86,70 +86,96 @@ describe('ModelSettingsScreen', () => {
       expect(getByText('Model settings')).toBeTruthy();
     });
 
-    it('shows all section titles as accordion headers', () => {
-      const { getByText } = renderScreen();
-      expect(getByText('Default system prompt')).toBeTruthy();
-      expect(getByText('Image generation')).toBeTruthy();
-      expect(getByText('Text generation')).toBeTruthy();
+    it('shows the four tabs', () => {
+      const { getByTestId } = renderScreen();
+      expect(within(getByTestId('model-settings-tab-general')).getByText('General')).toBeTruthy();
+      expect(within(getByTestId('model-settings-tab-text')).getByText('Text')).toBeTruthy();
+      expect(within(getByTestId('model-settings-tab-image')).getByText('Image')).toBeTruthy();
+      expect(within(getByTestId('model-settings-tab-voice')).getByText('Voice')).toBeTruthy();
     });
 
-    it('shows section help text for system prompt when expanded', () => {
-      const { getByText } = renderWithSections('prompt');
+    it('opens on General, with its settings shown and the other tabs\' settings not', () => {
+      const { getByText, getByTestId, queryByText } = renderScreen();
+      expect(getByTestId('model-settings-tab-general').props.accessibilityState).toEqual({ selected: true });
+      expect(getByTestId('fastest-settings-button')).toBeTruthy();
       expect(getByText(/What the model is told before every chat/)).toBeTruthy();
-    });
-
-    it('sections are collapsed by default', () => {
-      const { queryByText } = renderScreen();
-      // Content inside collapsed sections should not be visible
+      expect(getByText('Model loading')).toBeTruthy();
       expect(queryByText('Temperature')).toBeNull();
-      expect(queryByText('CPU threads')).toBeNull();
-      expect(queryByText(/What the model is told before every chat/)).toBeNull();
+      expect(queryByText('Image steps')).toBeNull();
+      expect(queryByText('Transcription model')).toBeNull();
     });
 
-    it('shows section help text for image generation when expanded', () => {
-      const { getByText } = renderWithSections('image');
+    it('shows section help text for image generation on the Image tab', () => {
+      const { getByText } = renderTab('image');
       expect(getByText(/Control how image generation/)).toBeTruthy();
     });
 
-    it('shows section help text for text generation when expanded', () => {
-      const { getByText } = renderWithSections('text');
+    it('shows section help text for text generation on the Text tab', () => {
+      const { getByText } = renderTab('text');
       expect(getByText(/How replies sound/)).toBeTruthy();
     });
   });
 
   // ============================================================================
-  // Accordion Behavior
+  // Tabs
   // ============================================================================
-  describe('accordion behavior', () => {
-    it('expands image generation section when header is pressed', () => {
-      const { getByTestId, queryByText } = renderScreen();
-      expect(queryByText('Automatic Detection')).toBeNull();
-
-      fireEvent.press(getByTestId('image-generation-accordion'));
-      expect(queryByText('Automatic Detection')).toBeTruthy();
+  describe('tabs', () => {
+    afterEach(() => {
+      _clearSlotsForTesting();
     });
 
-    it('collapses image generation section when header is pressed again', () => {
+    it('shows the image settings open when the Image tab is pressed', () => {
       const { getByTestId, queryByText } = renderScreen();
+      expect(queryByText('Notice when you want a picture')).toBeNull();
 
-      fireEvent.press(getByTestId('image-generation-accordion'));
-      expect(queryByText('Automatic Detection')).toBeTruthy();
-
-      fireEvent.press(getByTestId('image-generation-accordion'));
-      expect(queryByText('Automatic Detection')).toBeNull();
+      fireEvent.press(getByTestId('model-settings-tab-image'));
+      expect(queryByText('Notice when you want a picture')).toBeTruthy();
+      expect(getByTestId('model-settings-tab-image').props.accessibilityState).toEqual({ selected: true });
+      // General's settings left with its tab.
+      expect(queryByText('Model loading')).toBeNull();
     });
 
-    it('expands text generation section when header is pressed', () => {
+    it('shows the text settings open when the Text tab is pressed', () => {
       const { getByTestId, queryByText } = renderScreen();
       expect(queryByText('Temperature')).toBeNull();
 
-      fireEvent.press(getByTestId('text-generation-accordion'));
+      fireEvent.press(getByTestId('model-settings-tab-text'));
       expect(queryByText('Temperature')).toBeTruthy();
     });
 
-    it('shows CPU Threads inside text generation section', () => {
-      const { queryByText } = renderWithSections('text');
+    it('returns to General settings after visiting another tab', () => {
+      const { getByTestId, queryByText } = renderScreen();
+      fireEvent.press(getByTestId('model-settings-tab-text'));
+      expect(queryByText('Model loading')).toBeNull();
+      fireEvent.press(getByTestId('model-settings-tab-general'));
+      expect(queryByText('Model loading')).toBeTruthy();
+      expect(queryByText('Temperature')).toBeNull();
+    });
+
+    it('shows CPU Threads in the Text tab\'s advanced settings', () => {
+      const { queryByText } = renderTab('text');
       expect(queryByText('CPU threads')).toBeTruthy();
+    });
+
+    it('names the image tab "Image & video" when the video settings are present', () => {
+      const VideoSettings = () => null;
+      registerSlot(SLOTS.generationSettingsVideo, VideoSettings);
+      const { getByTestId } = renderScreen();
+      expect(within(getByTestId('model-settings-tab-image')).getByText('Image & video')).toBeTruthy();
+    });
+
+    it('notes on the Text tab that a remote server uses its own settings', () => {
+      useRemoteServerStore.setState({ activeServerId: 'server-1' });
+      const { getByTestId } = renderTab('text');
+      expect(within(getByTestId('model-settings-remote-note')).getByText(
+        'These apply to models on this phone. A remote server uses its own.',
+      )).toBeTruthy();
+    });
+
+    it('shows no remote-server note when the text model runs on this phone', () => {
+      useRemoteServerStore.setState({ activeServerId: null });
+      const { queryByTestId } = renderTab('text');
+      expect(queryByTestId('model-settings-remote-note')).toBeNull();
     });
   });
 
@@ -158,12 +184,12 @@ describe('ModelSettingsScreen', () => {
   // ============================================================================
   describe('system prompt', () => {
     it('shows default system prompt text', () => {
-      const { getByDisplayValue } = renderWithSections('prompt');
+      const { getByDisplayValue } = renderTab('general');
       expect(getByDisplayValue(/helpful AI assistant/)).toBeTruthy();
     });
 
     it('updates system prompt when text changes', () => {
-      const { getByDisplayValue } = renderWithSections('prompt');
+      const { getByDisplayValue } = renderTab('general');
       const input = getByDisplayValue(/helpful AI assistant/);
 
       fireEvent.changeText(input, 'You are a coding assistant.');
@@ -179,7 +205,7 @@ describe('ModelSettingsScreen', () => {
   // ============================================================================
   describe('show generation details toggle', () => {
     it('renders the toggle with label and description', () => {
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('general');
       expect(getByText('Show generation details')).toBeTruthy();
       expect(
         getByText(
@@ -195,7 +221,7 @@ describe('ModelSettingsScreen', () => {
 
     it('updates store to true when toggled on', () => {
       useAppStore.getState().updateSettings({ showGenerationDetails: false });
-      const { getByTestId } = renderWithSections('text');
+      const { getByTestId } = renderTab('general');
 
       fireEvent.press(getByTestId('show-gen-details-on-button'));
 
@@ -205,7 +231,7 @@ describe('ModelSettingsScreen', () => {
 
     it('updates store to false when toggled off', () => {
       useAppStore.getState().updateSettings({ showGenerationDetails: true });
-      const { getByTestId } = renderWithSections('text');
+      const { getByTestId } = renderTab('general');
 
       fireEvent.press(getByTestId('show-gen-details-off-button'));
 
@@ -215,7 +241,7 @@ describe('ModelSettingsScreen', () => {
     it('syncs with store when showGenerationDetails is already true', () => {
       useAppStore.getState().updateSettings({ showGenerationDetails: true });
 
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('general');
       expect(getByText('Show generation details')).toBeTruthy();
       expect(useAppStore.getState().settings.showGenerationDetails).toBe(true);
     });
@@ -226,13 +252,13 @@ describe('ModelSettingsScreen', () => {
   // ============================================================================
   describe('flash attention toggle', () => {
     it('renders Flash Attention label', () => {
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('text');
       expect(getByText('Flash attention')).toBeTruthy();
     });
 
     it('updates store to true when Flash Attention is turned on', () => {
       useAppStore.getState().updateSettings({ flashAttn: false });
-      const { getByTestId } = renderWithSections('text');
+      const { getByTestId } = renderTab('text');
 
       fireEvent.press(getByTestId('flash-attn-on-button'));
 
@@ -241,7 +267,7 @@ describe('ModelSettingsScreen', () => {
 
     it('updates store to false when Flash Attention is turned off', () => {
       useAppStore.getState().updateSettings({ flashAttn: true });
-      const { getByTestId } = renderWithSections('text');
+      const { getByTestId } = renderTab('text');
 
       fireEvent.press(getByTestId('flash-attn-off-button'));
 
@@ -250,15 +276,26 @@ describe('ModelSettingsScreen', () => {
   });
 
   // ============================================================================
+  describe('flash attention platform default', () => {
+    it('reads as On when the setting is unset on iOS, so Off turns it off', () => {
+      // Unset falls back to the platform default (On off Android).
+      useAppStore.getState().updateSettings({ flashAttn: undefined as any });
+      const { getByTestId } = renderTab('text');
+      fireEvent.press(getByTestId('flash-attn-off-button'));
+      expect(useAppStore.getState().settings.flashAttn).toBe(false);
+    });
+  });
+
+  // ============================================================================
   describe('model loading mode selector', () => {
     it('renders the Model Loading label', () => {
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('general');
       expect(getByText('Model loading')).toBeTruthy();
     });
 
     it('selects aggressive', () => {
       useAppStore.getState().updateSettings({ modelLoadingMode: 'balanced' });
-      const { getByTestId } = renderWithSections('text');
+      const { getByTestId } = renderTab('general');
       fireEvent.press(getByTestId('model-loading-mode-aggressive-button'));
       expect(useAppStore.getState().settings.modelLoadingMode).toBe(
         'aggressive',
@@ -267,7 +304,7 @@ describe('ModelSettingsScreen', () => {
 
     it('selects conservative', () => {
       useAppStore.getState().updateSettings({ modelLoadingMode: 'balanced' });
-      const { getByTestId } = renderWithSections('text');
+      const { getByTestId } = renderTab('general');
       fireEvent.press(getByTestId('model-loading-mode-conservative-button'));
       expect(useAppStore.getState().settings.modelLoadingMode).toBe(
         'conservative',
@@ -279,26 +316,26 @@ describe('ModelSettingsScreen', () => {
   // Image Generation Settings
   // ============================================================================
   describe('image generation settings', () => {
-    it('shows Automatic Detection toggle', () => {
-      const { getByText } = renderWithSections('image');
-      expect(getByText('Automatic Detection')).toBeTruthy();
+    it('shows the picture-detection switch', () => {
+      const { getByText } = renderTab('image');
+      expect(getByText('Notice when you want a picture')).toBeTruthy();
     });
 
     it('shows auto mode description when enabled', () => {
       useAppStore.getState().updateSettings({ imageGenerationMode: 'auto' });
-      const { getByText } = renderWithSections('image');
-      expect(getByText(/LLM will classify/)).toBeTruthy();
+      const { getByText } = renderTab('image');
+      expect(getByText('Ask for a picture in plain words and it makes one.')).toBeTruthy();
     });
 
     it('shows manual mode description when disabled', () => {
       useAppStore.getState().updateSettings({ imageGenerationMode: 'manual' });
-      const { getByText } = renderWithSections('image');
-      expect(getByText(/Only generate images when you tap/)).toBeTruthy();
+      const { getByText } = renderTab('image');
+      expect(getByText('Pictures only when you turn on Image in the chat.')).toBeTruthy();
     });
 
     it('toggles image generation mode', () => {
       useAppStore.getState().updateSettings({ imageGenerationMode: 'manual' });
-      const { getAllByRole } = renderWithSections('image');
+      const { getAllByRole } = renderTab('image');
       const switches = getAllByRole('switch');
 
       // Find the Automatic Detection switch
@@ -315,42 +352,42 @@ describe('ModelSettingsScreen', () => {
 
     it('shows auto mode note', () => {
       useAppStore.getState().updateSettings({ imageGenerationMode: 'auto' });
-      const { getByText } = renderWithSections('image');
-      expect(getByText(/In Auto mode/)).toBeTruthy();
+      const { getByText } = renderTab('image');
+      expect(getByText(/"Draw me a sunset" makes a picture/)).toBeTruthy();
     });
 
     it('shows manual mode note', () => {
       useAppStore.getState().updateSettings({ imageGenerationMode: 'manual' });
-      const { getByText } = renderWithSections('image');
-      expect(getByText(/In Manual mode/)).toBeTruthy();
+      const { getByText } = renderTab('image');
+      expect(getByText('Turn on Image in the chat menu when you want one.')).toBeTruthy();
     });
 
-    it('shows Image Steps slider label and value', () => {
-      const { getByText } = renderWithSections('image');
-      expect(getByText('Image Steps')).toBeTruthy();
+    it('shows Image steps slider label and value', () => {
+      const { getByText } = renderTab('image');
+      expect(getByText('Image steps')).toBeTruthy();
       // Default value
       expect(getByText('8')).toBeTruthy();
     });
 
     it('shows Guidance Scale slider label and value', () => {
-      const { getByText } = renderWithSections('image');
+      const { getByText } = renderTab('image');
       expect(getByText('Guidance Scale')).toBeTruthy();
       expect(getByText('7.5')).toBeTruthy();
     });
 
     it('shows Image Threads slider label', () => {
-      const { getByText } = renderWithSections('image');
+      const { getByText } = renderTab('image');
       expect(getByText('Image Threads')).toBeTruthy();
     });
 
-    it('shows Image Size slider label', () => {
-      const { getByText } = renderWithSections('image');
-      expect(getByText('Image Size')).toBeTruthy();
+    it('shows Image size slider label', () => {
+      const { getByText } = renderTab('image');
+      expect(getByText('Image size')).toBeTruthy();
     });
 
     it('shows Detection Method buttons when auto mode enabled', () => {
       useAppStore.getState().updateSettings({ imageGenerationMode: 'auto' });
-      const { getByText } = renderWithSections('image');
+      const { getByText } = renderTab('image');
       expect(getByText('Detection Method')).toBeTruthy();
       expect(getByText('Pattern')).toBeTruthy();
       expect(getByText('LLM')).toBeTruthy();
@@ -358,12 +395,12 @@ describe('ModelSettingsScreen', () => {
 
     it('hides Detection Method when manual mode', () => {
       useAppStore.getState().updateSettings({ imageGenerationMode: 'manual' });
-      const { queryByText } = renderWithSections('image');
+      const { queryByText } = renderTab('image');
       expect(queryByText('Detection Method')).toBeNull();
     });
 
     it('shows Enhance Image Prompts toggle', () => {
-      const { getByText } = renderWithSections('image');
+      const { getByText } = renderTab('image');
       expect(getByText('Enhance image prompts')).toBeTruthy();
     });
 
@@ -372,7 +409,7 @@ describe('ModelSettingsScreen', () => {
       // Enhancement needs a text model available, else the toggle is disabled.
       useAppStore.setState({ downloadedModels: [{ id: 'text-1' } as any] });
 
-      const { getAllByRole } = renderWithSections('image');
+      const { getAllByRole } = renderTab('image');
       const switches = getAllByRole('switch');
 
       for (const sw of switches) {
@@ -389,20 +426,20 @@ describe('ModelSettingsScreen', () => {
     it('shows enhance prompts on description', () => {
       useAppStore.setState({ downloadedModels: [{ id: 'text-1' } as any] });
       useAppStore.getState().updateSettings({ enhanceImagePrompts: true });
-      const { getByText } = renderWithSections('image');
+      const { getByText } = renderTab('image');
       expect(getByText(/Text model refines your prompt/)).toBeTruthy();
     });
 
     it('shows enhance prompts off description', () => {
       useAppStore.setState({ downloadedModels: [{ id: 'text-1' } as any] });
       useAppStore.getState().updateSettings({ enhanceImagePrompts: false });
-      const { getByText } = renderWithSections('image');
+      const { getByText } = renderTab('image');
       expect(getByText(/Use your prompt directly/)).toBeTruthy();
     });
 
     it('disables enhance prompts when no text model is available', () => {
       useAppStore.setState({ downloadedModels: [] });
-      const { getByText } = renderWithSections('image');
+      const { getByText } = renderTab('image');
       expect(getByText(/Download a text model to enable/)).toBeTruthy();
     });
   });
@@ -412,36 +449,41 @@ describe('ModelSettingsScreen', () => {
   // ============================================================================
   describe('text generation settings', () => {
     it('shows Temperature slider label and default value', () => {
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('text');
       expect(getByText('Temperature')).toBeTruthy();
       expect(getByText('0.70')).toBeTruthy();
     });
 
     it('shows Temperature description', () => {
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('text');
       expect(getByText(/Higher gives more varied replies/)).toBeTruthy();
     });
 
     it('shows Max Tokens slider label and default value', () => {
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('text');
       expect(getByText('Max tokens')).toBeTruthy();
       expect(getByText('1.0K')).toBeTruthy(); // 1024 -> 1.0K
     });
 
+    it('shows Max tokens description', () => {
+      const { getByText } = renderTab('text');
+      expect(getByText('How long one reply can get.')).toBeTruthy();
+    });
+
     it('shows Top P slider label and default value', () => {
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('text');
       expect(getByText('Top P')).toBeTruthy();
       expect(getByText('0.90')).toBeTruthy();
     });
 
     it('shows Repeat Penalty slider label and default value', () => {
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('text');
       expect(getByText('Repeat penalty')).toBeTruthy();
       expect(getByText('1.10')).toBeTruthy();
     });
 
     it('shows Context Length slider label and default value', () => {
-      const { getByText, getAllByText } = renderWithSections('text');
+      const { getByText, getAllByText } = renderTab('text');
       expect(getByText('Context length')).toBeTruthy();
       // getAllByText, because Max Tokens and Context Length BOTH default to 4096 and both format
       // to "4K" - a single-match query asserted that coincidence rather than this slider's value.
@@ -449,7 +491,7 @@ describe('ModelSettingsScreen', () => {
     });
 
     it('shows context length description', () => {
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('text');
       expect(getByText(/How much of the chat it remembers/)).toBeTruthy();
     });
   });
@@ -462,13 +504,13 @@ describe('ModelSettingsScreen', () => {
       // The CPU Threads control migrated from a Slider (which displayed an
       // "Auto (N)" label) to a NumericStepper that shows the resolved numeric
       // value. With the auto sentinel (nThreads: 0) the stepper value is 1.
-      const { getByText, queryByText } = renderWithSections('text');
+      const { getByText, queryByText } = renderTab('text');
       expect(getByText('CPU threads')).toBeTruthy();
       expect(queryByText(/^Auto \(\d+\)$/)).toBeNull();
     });
 
     it('shows Batch Size slider label and default value', () => {
-      const { getByText, getAllByText } = renderWithSections('text');
+      const { getByText, getAllByText } = renderTab('text');
       expect(getByText('Batch size')).toBeTruthy();
       // Same ambiguity as Context Length: another control also renders 512 by default.
       expect(getAllByText('512').length).toBeGreaterThan(0);
@@ -480,7 +522,7 @@ describe('ModelSettingsScreen', () => {
   // ============================================================================
   describe('settings updates via sliders', () => {
     it('updates temperature when slider completes', () => {
-      const { UNSAFE_getAllByType } = renderWithSections('text');
+      const { UNSAFE_getAllByType } = renderTab('text');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
       const sliders = allViews.filter(
@@ -496,7 +538,7 @@ describe('ModelSettingsScreen', () => {
     });
 
     it('updates maxTokens when slider completes', () => {
-      const { UNSAFE_getAllByType } = renderWithSections('text');
+      const { UNSAFE_getAllByType } = renderTab('text');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
       const sliders = allViews.filter(
@@ -512,7 +554,7 @@ describe('ModelSettingsScreen', () => {
     });
 
     it('updates imageSteps when slider completes', () => {
-      const { UNSAFE_getAllByType } = renderWithSections('image');
+      const { UNSAFE_getAllByType } = renderTab('image');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
       const sliders = allViews.filter(
@@ -530,7 +572,7 @@ describe('ModelSettingsScreen', () => {
     });
 
     it('updates nThreads when slider completes', () => {
-      const { UNSAFE_getAllByType } = renderWithSections('text');
+      const { UNSAFE_getAllByType } = renderTab('text');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
       const sliders = allViews.filter(
@@ -548,7 +590,7 @@ describe('ModelSettingsScreen', () => {
     });
 
     it('updates contextLength when slider completes', () => {
-      const { UNSAFE_getAllByType } = renderWithSections('text');
+      const { UNSAFE_getAllByType } = renderTab('text');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
       const sliders = allViews.filter(
@@ -567,7 +609,7 @@ describe('ModelSettingsScreen', () => {
 
     it('lets context reach the model ceiling and caps max tokens at the context', () => {
       useAppStore.getState().setModelMaxContext(262144);
-      const { UNSAFE_getAllByType } = renderWithSections('text');
+      const { UNSAFE_getAllByType } = renderTab('text');
       const { View } = require('react-native');
       const sliders = UNSAFE_getAllByType(View).filter(
         (view: any) =>
@@ -623,13 +665,13 @@ describe('ModelSettingsScreen', () => {
   describe('GPU settings', () => {
     // Platform.OS is 'ios' in the test environment; Metal is the default backend, GPU Layers hidden when cpu
     it('shows Text model hardware section on iOS', () => {
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('general');
       expect(getByText('Text model hardware')).toBeTruthy();
     });
 
     it('does not show GPU Layers on iOS when backend is cpu', () => {
       useAppStore.getState().updateSettings({ inferenceBackend: 'cpu' });
-      const { queryByTestId } = renderWithSections('text');
+      const { queryByTestId } = renderTab('general');
       expect(queryByTestId('gpu-layers-stepper-slider')).toBeNull();
     });
 
@@ -657,11 +699,44 @@ describe('ModelSettingsScreen', () => {
         useAppStore
           .getState()
           .updateSettings({ inferenceBackend: 'opencl', gpuLayers: 6 });
-        const { getByText, getByTestId } = renderWithSections('text');
+        const { getByText, getByTestId } = renderTab('general');
         expect(getByText('Text model hardware')).toBeTruthy();
         // Label now names the backend: "GPU Layers (OpenCL)". Assert the slider by its
         // SliderSetting child testID (SliderSetting suffixes testID with -slider/-value).
         expect(getByTestId('gpu-layers-stepper-slider')).toBeTruthy();
+      });
+
+      it('shows the saved GPU layers on the stepper', () => {
+        useAppStore
+          .getState()
+          .updateSettings({ inferenceBackend: 'opencl', gpuLayers: 8, flashAttn: true });
+        const { getByTestId } = renderTab('general');
+        // Flash attention no longer caps GPU layers.
+        expect(getByTestId('gpu-layers-stepper-value').props.children).toBe('8');
+      });
+
+      it('shows 1 GPU layer when the setting is unset', () => {
+        useAppStore.getState().updateSettings({
+          inferenceBackend: 'opencl',
+          gpuLayers: undefined as any,
+          flashAttn: false,
+        });
+        const { getByTestId } = renderTab('general');
+        expect(getByTestId('gpu-layers-stepper-value').props.children).toBe('1');
+      });
+
+      it.each([
+        ['unset', undefined],
+        ['1', 1],
+      ])('leaves GPU layers as they were (%s) when flash attention is turned on', (_label, gpuLayers) => {
+        useAppStore
+          .getState()
+          .updateSettings({ flashAttn: false, gpuLayers: gpuLayers as any });
+        const before = useAppStore.getState().settings.gpuLayers;
+        const { getByTestId } = renderTab('text');
+        fireEvent.press(getByTestId('flash-attn-on-button'));
+        expect(useAppStore.getState().settings.flashAttn).toBe(true);
+        expect(useAppStore.getState().settings.gpuLayers).toBe(before);
       });
 
       it('does not clamp gpuLayers when flashAttn turned on with layers > 1', () => {
@@ -672,7 +747,7 @@ describe('ModelSettingsScreen', () => {
             flashAttn: false,
             gpuLayers: 8,
           });
-        const { getByTestId } = renderWithSections('text');
+        const { getByTestId } = renderTab('text');
         fireEvent.press(getByTestId('flash-attn-on-button'));
         expect(useAppStore.getState().settings.flashAttn).toBe(true);
         // GPU layers are no longer clamped when enabling flash attention
@@ -683,7 +758,7 @@ describe('ModelSettingsScreen', () => {
         useAppStore
           .getState()
           .updateSettings({ inferenceBackend: 'opencl', gpuLayers: 6 });
-        const { getByTestId } = renderWithSections('text');
+        const { getByTestId } = renderTab('general');
 
         fireEvent.press(getByTestId('backend-cpu-button'));
 
@@ -692,7 +767,7 @@ describe('ModelSettingsScreen', () => {
 
       it('updates inferenceBackend to opencl when OpenCL button is pressed', () => {
         useAppStore.getState().updateSettings({ inferenceBackend: 'cpu' });
-        const { getByTestId } = renderWithSections('text');
+        const { getByTestId } = renderTab('general');
 
         fireEvent.press(getByTestId('backend-opencl-button'));
 
@@ -707,7 +782,7 @@ describe('ModelSettingsScreen', () => {
             flashAttn: false,
             gpuLayers: 6,
           });
-        const { getByTestId } = renderWithSections('text');
+        const { getByTestId } = renderTab('general');
 
         fireEvent(
           getByTestId('gpu-layers-stepper-slider'),
@@ -725,7 +800,7 @@ describe('ModelSettingsScreen', () => {
   // ============================================================================
   describe('additional slider updates', () => {
     it('updates topP when slider completes', () => {
-      const { UNSAFE_getAllByType } = renderWithSections('text');
+      const { UNSAFE_getAllByType } = renderTab('text');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
       const sliders = allViews.filter(
@@ -743,7 +818,7 @@ describe('ModelSettingsScreen', () => {
     });
 
     it('updates repeatPenalty when slider completes', () => {
-      const { UNSAFE_getAllByType } = renderWithSections('text');
+      const { UNSAFE_getAllByType } = renderTab('text');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
       const sliders = allViews.filter(
@@ -761,7 +836,7 @@ describe('ModelSettingsScreen', () => {
     });
 
     it('updates nBatch when slider completes', () => {
-      const { UNSAFE_getAllByType } = renderWithSections('text');
+      const { UNSAFE_getAllByType } = renderTab('text');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
       const sliders = allViews.filter(
@@ -779,7 +854,7 @@ describe('ModelSettingsScreen', () => {
     });
 
     it('updates guidanceScale when slider completes', () => {
-      const { UNSAFE_getAllByType } = renderWithSections('image');
+      const { UNSAFE_getAllByType } = renderTab('image');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
       const sliders = allViews.filter(
@@ -797,7 +872,7 @@ describe('ModelSettingsScreen', () => {
     });
 
     it('updates imageThreads when slider completes', () => {
-      const { UNSAFE_getAllByType } = renderWithSections('image');
+      const { UNSAFE_getAllByType } = renderTab('image');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
       const sliders = allViews.filter(
@@ -815,7 +890,7 @@ describe('ModelSettingsScreen', () => {
     });
 
     it('updates imageWidth and imageHeight when image size slider completes', () => {
-      const { UNSAFE_getAllByType } = renderWithSections('image');
+      const { UNSAFE_getAllByType } = renderTab('image');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
       const sliders = allViews.filter(
@@ -843,7 +918,7 @@ describe('ModelSettingsScreen', () => {
   describe('image generation mode toggle off', () => {
     it('toggles auto detection off', () => {
       useAppStore.getState().updateSettings({ imageGenerationMode: 'auto' });
-      const { getAllByRole } = renderWithSections('image');
+      const { getAllByRole } = renderTab('image');
       const switches = getAllByRole('switch');
 
       for (const sw of switches) {
@@ -869,7 +944,7 @@ describe('ModelSettingsScreen', () => {
   describe('max tokens display formatting', () => {
     it('shows raw number when maxTokens < 1024', () => {
       useAppStore.getState().updateSettings({ maxTokens: 512, nBatch: 256 });
-      const { getAllByText, queryByText } = renderWithSections('text');
+      const { getAllByText, queryByText } = renderTab('text');
       // Under 1024 the value reads as itself rather than a rounded "0K". It appears more than once
       // because max tokens is capped BY the context, so both controls legitimately show 512.
       expect(getAllByText('512').length).toBeGreaterThan(0);
@@ -878,7 +953,7 @@ describe('ModelSettingsScreen', () => {
 
     it('shows K format when maxTokens >= 1024', () => {
       useAppStore.getState().updateSettings({ maxTokens: 2048 });
-      const { getAllByText } = renderWithSections('text');
+      const { getAllByText } = renderTab('text');
       // 2.0K appears for both maxTokens and contextLength (both 2048)
       expect(getAllByText('2.0K').length).toBeGreaterThanOrEqual(1);
     });
@@ -892,7 +967,7 @@ describe('ModelSettingsScreen', () => {
       useAppStore
         .getState()
         .updateSettings({ contextLength: 512, nBatch: 256 });
-      const { getAllByText, queryByText } = renderWithSections('text');
+      const { getAllByText, queryByText } = renderTab('text');
       // Under 1024 the value reads as itself rather than a rounded "0K". It appears more than
       // once because max tokens is capped BY the context, so both controls show 512.
       expect(getAllByText('512').length).toBeGreaterThan(0);
@@ -957,14 +1032,15 @@ describe('ModelSettingsScreen', () => {
         },
       });
 
-      const { getByText, getAllByText } = renderWithSections('image', 'text');
+      const view = renderTab('image');
       // Verify fallback values are used
-      expect(getByText('0.70')).toBeTruthy(); // temperature || 0.7
-      expect(getByText('0.90')).toBeTruthy(); // topP || 0.9
-      expect(getByText('1.10')).toBeTruthy(); // repeatPenalty || 1.1
-      expect(getAllByText('1').length).toBeGreaterThan(0); // undefined falls back to cpuThreadsSliderValue (1)
-      expect(getByText('50')).toBeTruthy(); // imageSteps || the platform default
-      expect(getByText('7.5')).toBeTruthy(); // imageGuidanceScale || 7.5
+      expect(view.getByText('50')).toBeTruthy(); // imageSteps || the platform default
+      expect(view.getByText('7.5')).toBeTruthy(); // imageGuidanceScale || 7.5
+      openTab(view, 'text');
+      expect(view.getByText('0.70')).toBeTruthy(); // temperature || 0.7
+      expect(view.getByText('0.90')).toBeTruthy(); // topP || 0.9
+      expect(view.getByText('1.10')).toBeTruthy(); // repeatPenalty || 1.1
+      expect(view.getAllByText('1').length).toBeGreaterThan(0); // undefined falls back to cpuThreadsSliderValue (1)
     });
 
     it('shows default system prompt when systemPrompt is undefined', () => {
@@ -976,7 +1052,7 @@ describe('ModelSettingsScreen', () => {
       });
 
       // Unset means the built-in prompt: the box is empty and shows that prompt as its placeholder.
-      const { getByTestId } = renderWithSections('prompt');
+      const { getByTestId } = renderTab('general');
       const input = getByTestId('default-system-prompt-input');
       expect(input.props.value).toBe('');
       expect(input.props.placeholder).toBe(APP_CONFIG.defaultSystemPrompt);
@@ -986,8 +1062,8 @@ describe('ModelSettingsScreen', () => {
       useAppStore
         .getState()
         .updateSettings({ imageGenerationMode: undefined as any });
-      const { getByText } = renderWithSections('image');
-      expect(getByText(/Only generate images when you tap/)).toBeTruthy();
+      const { getByText } = renderTab('image');
+      expect(getByText('Pictures only when you turn on Image in the chat.')).toBeTruthy();
     });
   });
 
@@ -996,12 +1072,12 @@ describe('ModelSettingsScreen', () => {
   // ============================================================================
   describe('KV cache type buttons', () => {
     it('renders KV cache type label', () => {
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('text');
       expect(getByText('KV cache type')).toBeTruthy();
     });
 
     it('renders all three cache type buttons', () => {
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('text');
       expect(getByText('f16')).toBeTruthy();
       expect(getByText('q8_0')).toBeTruthy();
       expect(getByText('q4_0')).toBeTruthy();
@@ -1013,32 +1089,32 @@ describe('ModelSettingsScreen', () => {
     });
 
     it('updates store when f16 is pressed', () => {
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('text');
       fireEvent.press(getByText('f16'));
       expect(useAppStore.getState().settings.cacheType).toBe('f16');
     });
 
     it('updates store when q4_0 is pressed', () => {
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('text');
       fireEvent.press(getByText('q4_0'));
       expect(useAppStore.getState().settings.cacheType).toBe('q4_0');
     });
 
     it('shows correct description for f16', () => {
       useAppStore.getState().updateSettings({ cacheType: 'f16' });
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('text');
       expect(getByText(/Full precision/)).toBeTruthy();
     });
 
     it('shows correct description for q8_0', () => {
       useAppStore.getState().updateSettings({ cacheType: 'q8_0' });
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('text');
       expect(getByText(/8-bit quantized/)).toBeTruthy();
     });
 
     it('shows correct description for q4_0', () => {
       useAppStore.getState().updateSettings({ cacheType: 'q4_0' });
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('text');
       expect(getByText(/4-bit quantized/)).toBeTruthy();
     });
 
@@ -1047,7 +1123,7 @@ describe('ModelSettingsScreen', () => {
       useAppStore
         .getState()
         .updateSettings({ inferenceBackend: 'htp', cacheType: 'q4_0' });
-      const { getByText } = renderWithSections('text');
+      const { getByText } = renderTab('text');
       expect(getByText(/Full precision/)).toBeTruthy();
     });
   });
@@ -1062,7 +1138,7 @@ describe('ModelSettingsScreen', () => {
 
     it('updates to pattern detection when Pattern is pressed', () => {
       useAppStore.getState().updateSettings({ autoDetectMethod: 'llm' });
-      const { getByText } = renderWithSections('image');
+      const { getByText } = renderTab('image');
 
       fireEvent.press(getByText('Pattern'));
       expect(useAppStore.getState().settings.autoDetectMethod).toBe('pattern');
@@ -1070,7 +1146,7 @@ describe('ModelSettingsScreen', () => {
 
     it('updates to LLM detection when LLM is pressed', () => {
       useAppStore.getState().updateSettings({ autoDetectMethod: 'pattern' });
-      const { getByText } = renderWithSections('image');
+      const { getByText } = renderTab('image');
 
       fireEvent.press(getByText('LLM'));
       expect(useAppStore.getState().settings.autoDetectMethod).toBe('llm');
@@ -1078,13 +1154,13 @@ describe('ModelSettingsScreen', () => {
 
     it('shows pattern description when pattern is selected', () => {
       useAppStore.getState().updateSettings({ autoDetectMethod: 'pattern' });
-      const { getByText } = renderWithSections('image');
+      const { getByText } = renderTab('image');
       expect(getByText('Fast keyword matching')).toBeTruthy();
     });
 
     it('shows LLM description when LLM is selected', () => {
       useAppStore.getState().updateSettings({ autoDetectMethod: 'llm' });
-      const { getByText } = renderWithSections('image');
+      const { getByText } = renderTab('image');
       expect(getByText('Uses text model for classification')).toBeTruthy();
     });
   });
@@ -1134,19 +1210,37 @@ describe('ModelSettingsScreen', () => {
   });
 });
 
-describe('Speech sections — Transcription (STT) + Text to Speech (TTS)', () => {
-  it('opening Transcription reveals the model row that opens the picker', () => {
+describe('Voice tab — Transcription (STT) + Text to Speech (TTS)', () => {
+  beforeEach(() => {
+    resetStores();
+    _clearSlotsForTesting();
+  });
+
+  afterEach(() => {
+    _clearSlotsForTesting();
+  });
+
+  it('the Voice tab shows the transcription model row that opens the picker', () => {
     const view = renderScreen();
-    // collapsed by default
+    // Not on the General tab.
     expect(view.queryByTestId('stt-open-picker')).toBeNull();
-    fireEvent.press(view.getByTestId('transcription-accordion'));
-    // the row appears and shows the "no model yet" state (whisper store empty in a fresh app)
+    fireEvent.press(view.getByTestId('model-settings-tab-voice'));
+    // the row shows the "no model yet" state (whisper store empty in a fresh app)
     expect(view.getByTestId('stt-open-picker')).toBeTruthy();
     expect(within(view.getByTestId('stt-open-picker')).getByText('No model selected. Tap to choose.')).toBeTruthy();
+    expect(view.getByTestId('settings-transcription-language')).toBeTruthy();
   });
 
   it('does NOT show Text to Speech without the pro TTS slot (free build)', () => {
-    const view = renderScreen();
-    expect(view.queryByTestId('tts-accordion')).toBeNull();
+    const view = renderTab('voice');
+    expect(view.queryByText('Shared TTS settings')).toBeNull();
+  });
+
+  it('shows the pro TTS settings on the Voice tab when the slot is present', () => {
+    const { Text } = require('react-native');
+    const TtsSettings = () => <Text>Shared TTS settings</Text>;
+    registerSlot(SLOTS.generationSettingsTts, TtsSettings);
+    const view = renderTab('voice');
+    expect(view.getByText('Shared TTS settings')).toBeTruthy();
   });
 });
