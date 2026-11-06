@@ -2,6 +2,7 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { ModelCard } from '../ModelCard';
+import { GROUPED_CARD_ROW, ListGroup } from '../ListGroup';
 import { ModelSwitchStop } from './ModelSwitchStop';
 import { useTheme, useThemedStyles } from '../../theme';
 import { createAllStyles } from '../ModelSelectorModal/styles';
@@ -42,10 +43,12 @@ export const RemoteModelServerGroup: React.FC<Props> = ({ serverName, rows, disa
         <Icon name="wifi" size={14} color={colors.textMuted} />
         <Text style={styles.sectionSubTitle}>{serverName}</Text>
       </View>
+      <ListGroup>
       {rows.map(row => (
         <ModelCard
           key={row.id}
           compact
+          style={GROUPED_CARD_ROW}
           testID={row.testID}
           model={row.model}
           sourceBadge="Remote"
@@ -60,6 +63,7 @@ export const RemoteModelServerGroup: React.FC<Props> = ({ serverName, rows, disa
             : null}
         />
       ))}
+      </ListGroup>
     </View>
   );
 };

@@ -15,6 +15,7 @@ import { useSttDownloadState } from '../../hooks/useSttDownloadState';
 import { RemoteModelOptionsSection } from './RemoteModelOptionsSection';
 import { remoteServerManager } from '../../services/remoteServerManager';
 import { ModelCard } from '../ModelCard';
+import { GROUPED_CARD_ROW, ListGroup } from '../ListGroup';
 import { hardwareService } from '../../services/hardware';
 import { isQwenAsrModelId, isQwenAsrOffered, qwenAsrCardFor, QWEN_ASR_MODEL_ID } from '../../services/qwenAsrModel';
 
@@ -87,6 +88,8 @@ export const WhisperPickerSheet: React.FC<Props> = ({
         {/* This phone's models first, then other devices', the same order as the text and image pickers
             (hand test 86: the Talk card opened on a list of Mac servers). */}
         <Text style={styles.sectionLabel}>On this phone</Text>
+        {/* One glass group with hairlines between rows, as in the text picker (hand test 87). */}
+        <ListGroup>
         {models.map(m => {
           const active = downloadedModelId === m.id;
           const present = presentModelIds.includes(m.id);
@@ -98,6 +101,7 @@ export const WhisperPickerSheet: React.FC<Props> = ({
             <ModelCard
               key={m.id}
               compact
+              style={GROUPED_CARD_ROW}
               model={{ id: m.id, name: m.name, author: 'On device', description: m.description }}
               file={{ name: m.name, size: m.size * 1024 * 1024, quantization: '', downloadUrl: '' }}
               facts={[languagesFact(m), 'Transcription']}
@@ -173,6 +177,7 @@ export const WhisperPickerSheet: React.FC<Props> = ({
             />
           );
         })}
+        </ListGroup>
         <RemoteModelOptionsSection
           category="transcription"
           onSelect={onClose}
