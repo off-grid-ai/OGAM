@@ -40,6 +40,11 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
     },
 
     card,
+    cardDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderLight,
+      marginVertical: SPACING.md,
+    },
     cardRow: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,

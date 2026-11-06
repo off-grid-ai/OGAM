@@ -247,9 +247,8 @@ export const RemoteServersScreen: React.FC = () => {
               }
             />
           </View>
-        </View>
-
-        <View style={styles.card}>
+          {/* One surface for how servers are found (hand test 60: two stacked cards). */}
+          <View style={styles.cardDivider} />
           <Text style={styles.cardTitle}>Scan for</Text>
           {SCAN_KINDS.map(item => (
             <View key={item.kind} style={styles.scanKindRow}>
