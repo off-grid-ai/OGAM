@@ -528,3 +528,10 @@ Warm opens land at the newest message; KB failed line grey under an ink name: pa
 1. COLD open still lands ~two turns above the newest message (the 250 ms retry is not enough).
 2. The transfer line reads "Couldn't send to OGAD: Mac (Debug): transfer failed": the device name carries the app's prefix and debug suffix; no next step.
 3. Chats and Recent rows: title is the first prompt, preview is the last reply, so they look mismatched.
+
+## Supervisor 15:35 (hand test 54, build 55 at 67e516a4f)
+
+Cold open lands at the newest message and holds; scroll-up stays with the jump-down chevron; sending keeps your message and the reply in view; warm opens land at the newest: pass. No regressions. Top 3:
+1. At 1 s a cold open still shows old turns, then jumps to the end.
+2. KB switch thumb dark (kept on purpose) and a trash per row.
+3. Recent rows: first prompt as title, last reply as preview (Mac's call). Sync "5 saved" → "4 saved" mid-session (the projection settling).
