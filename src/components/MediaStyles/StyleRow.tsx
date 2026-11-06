@@ -211,7 +211,8 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
-  name: { ...TYPOGRAPHY.meta, color: colors.textSecondary, maxWidth: THUMB, textAlign: 'center' as const },
+  // A name is words, so Geist (the Mono meta face is for numbers and detail).
+  name: { ...TYPOGRAPHY.h3, fontSize: 11, lineHeight: 14, color: colors.textSecondary, maxWidth: THUMB, textAlign: 'center' as const },
   nameSelected: { color: colors.primary },
   // Centred on the previews at the row's edge, on the surface so it reads over a tile.
   moreLeft: { left: SPACING.xs },
