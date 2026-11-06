@@ -691,3 +691,8 @@ Bug to investigate: the paused "Wan 2.1 (1.3B), FP16" download is gone (Models >
 - Pass: Home field and glass, 9 of 12 card titles, Settings credit, Chats, Projects. No lost behaviour.
 - Fail: carousel stops at card 12 and auto-advance jumps to card 6; two card lines clip ("mac-models", "tools"); pips are 6x7 pt; About shows the credit twice (row + footer); six white Gallery tiles; Qwen 3.5 2B refused "Name two colours".
 - Top 3: (1) chat default prompt so the small model answers simple asks; (2) carousel loops on swipe and auto-advance, one-line lines, 44 pt pip targets; (3) Talk card: on-phone Whisper first, Mac servers grouped below with hairlines.
+
+## Supervisor 16:48 (hand test 87, hand test 86 fixes) — 4 of 5 pass; the model answers again
+- Pass: carousel loops both ways, last card snaps, one-line card lines, timer one card per 8 s and wraps; About credit once, Settings credit kept; Talk sheet lists this phone first; "[test] Name two colours." → "red and blue", 12×7 → 84. No lost behaviour.
+- Fail: pip lags one card after a swipe that follows an auto-advance; pip targets 14 pt wide; a tap on a moving card opens the card passing under the finger; Talk sheet rows are bordered boxes with two ways to close; seven Gallery tiles still white.
+- Top 3: (1) carousel: active card from scroll position only, wider pip targets, ignore card taps while moving; (2) Gallery: find why tiles are white and fix the cause; (3) Talk sheet: one hairline surface, one close.
