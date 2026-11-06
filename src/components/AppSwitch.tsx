@@ -1,4 +1,5 @@
 import React from 'react';
+import { Platform } from 'react-native';
 import type { SwitchProps } from 'react-native';
 import { Switch } from './Touchable';
 import { useTheme } from '../theme';
@@ -18,9 +19,12 @@ export const AppSwitch: React.FC<Omit<SwitchProps, 'trackColor' | 'thumbColor' |
       {...props}
       // A disabled switch dims on every platform (Android kept full colour, so it looked usable).
       style={[props.style, props.disabled && DISABLED]}
-      trackColor={{ false: colors.surfaceLight, true: colors.primary }}
-      thumbColor={on ? colors.onPrimary : colors.textMuted}
-      ios_backgroundColor={colors.surfaceLight}
+      // iOS: the platform's white knob, with the TRACK saying on (emerald) or off (a visible grey).
+      // The dark knob read as broken on every screen in four hand tests. Android keeps its own tinted
+      // knob, which is how on and off read there.
+      trackColor={{ false: Platform.OS === 'ios' ? colors.border : colors.surfaceLight, true: colors.primary }}
+      thumbColor={Platform.OS === 'ios' ? '#FFFFFF' : on ? colors.onPrimary : colors.textMuted}
+      ios_backgroundColor={colors.border}
     />
   );
 };
