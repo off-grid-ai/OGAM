@@ -350,12 +350,6 @@ export const RemoteServersScreen: React.FC = () => {
               const isActive = activeServerId === server.id;
               const health = serverHealth[server.id];
 
-              let statusColor = styles.statusDotUnknown;
-              if (health?.isHealthy === true)
-                statusColor = styles.statusDotActive;
-              else if (health?.isHealthy === false)
-                statusColor = styles.statusDotInactive;
-
               let statusText = 'Not checked yet';
               if (isTesting) statusText = 'Checking';
               else if (health?.isHealthy === true) statusText = 'Connected';
@@ -389,14 +383,14 @@ export const RemoteServersScreen: React.FC = () => {
                       <Text style={styles.serverName} numberOfLines={1}>
                         {server.name}
                       </Text>
-                      <View style={[styles.statusDot, statusColor]} />
                       {/* Only the chosen server is marked; tapping any row chooses it (its label says so). */}
                       {isActive && <Text style={styles.activeBadge}>In use</Text>}
                     </View>
+                    {/* One line under the name: whether it answers, then where it is (hand test 61:
+                        a dot, an address line and a status line said the same thing three ways). */}
                     <Text style={styles.serverEndpoint} numberOfLines={1}>
-                      {server.endpoint}
+                      {statusText} · {server.endpoint}
                     </Text>
-                    <Text style={styles.serverStatus}>{statusText}</Text>
                   </TouchableOpacity>
 
                   {/* Row actions as icon buttons (brand: one surface, actions at the row's end, never a
