@@ -153,7 +153,8 @@ const StyleTile: React.FC<{
           </View>
         ) : null}
       </View>
-      <Text numberOfLines={1} style={[styles.name, selected && styles.nameSelected]}>
+      {/* Two lines under a 60 pt preview: one cut "Talking head" to "Talking h…" (hand test 75). */}
+      <Text numberOfLines={2} style={[styles.name, selected && styles.nameSelected]}>
         {style.name}
       </Text>
     </TouchableOpacity>
