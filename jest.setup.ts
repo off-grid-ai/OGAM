@@ -25,6 +25,19 @@ try {
   // RNTL not present in a given suite's module graph — nothing to configure.
 }
 
+// React reports an uncaught render error through window.ErrorEvent + window.dispatchEvent when both
+// look present. The RN preset makes `window` the Node global, and Node 26 added a global ErrorEvent
+// but no global dispatchEvent, so React threw "window.dispatchEvent is not a function" and hid the
+// real error. Without ErrorEvent, React takes its Node path (process 'uncaughtException'), which Jest
+// reports as the real error on the test that caused it, as it did before Node 26.
+{
+  const w = (globalThis as { window?: { ErrorEvent?: unknown; dispatchEvent?: unknown } }).window;
+  if (w && typeof w.ErrorEvent === 'function' && typeof w.dispatchEvent !== 'function') {
+    delete (w as { ErrorEvent?: unknown }).ErrorEvent;
+    if (w !== globalThis) delete (globalThis as { ErrorEvent?: unknown }).ErrorEvent;
+  }
+}
+
 const shouldPrintJestConsole = process.env.DEBUG_JEST_CONSOLE === '1';
 
 // Rendered screens can start provider refreshes during teardown. Keep Jest from
