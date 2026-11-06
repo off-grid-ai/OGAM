@@ -718,3 +718,8 @@ Bug to investigate: the paused "Wan 2.1 (1.3B), FP16" download is gone (Models >
 - Pass: text picker up with rows ~0.4 s after the tap (was 2.5–3 s); selected text model checked; no cut tags; remote groups show 5 + Show all; Home, Chats, chat reply ("blue and red", 4.1 s), Projects, Settings, About, Documents. No lost behaviour.
 - Fail: image generators tagged "Sees images", RealVisXL called "anime"; Image tab "For this phone" picks change after a second; Speech "Small" card offers download while its row shows trash; Voice banner in warning colour; two check styles; Gallery Videos gutters 16 pt and boxed cards; Downloads tabs differ from Models; Qwen 3.5 4B description touches "On phone"; Video search field has no icon.
 - Top 3: (1) correct capability tags on image models; (2) stable Image picks, Speech card and row agree; (3) consistency: Voice banner, one check style, Videos gutters, Downloads tabs.
+
+## Supervisor 17:59 (hand test 92, release pass) — 5 of 6 blockers pass
+- Pass: no "Sees images" on image makers, RealVisXL photorealistic; Image picks steady after loading; Speech pick cards and rows never share a name; Voice line plain grey; text picker filled check; Downloads tabs match Models and filter right; Home, Chats, reply in 2.4 s, Projects, Settings, About, Documents. No lost behaviour.
+- Fail: Gallery Videos top section (prompt, recent cards, cast) still at 16 pt and boxed; Models Video uses an outline check; Video search field has no icon. Small: Speech names differ between Models and Downloads.
+- Top 3: (1) Videos top section on the 24 pt gutter; (2) one filled check on Models Video; (3) search icon on Video.
