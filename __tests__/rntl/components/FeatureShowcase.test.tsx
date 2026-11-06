@@ -7,6 +7,7 @@
  */
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 import {
   FeatureShowcase,
   showcaseFeatures,
@@ -102,7 +103,23 @@ describe('FeatureShowcase', () => {
 
   const sample = (): ShowcaseFeature[] => showcaseFeatures(fresh, openers(), true).slice(0, 4);
 
+  /** A scroll event at a horizontal offset, as the native scroller sends it. */
+  const scrollAt = (x: number) => ({ nativeEvent: { contentOffset: { x, y: 0 } } });
+
+  // The row on a phone answers scrollTo with scroll events at the new offset, and the pip follows
+  // those. Jest's ScrollView stands still, so here it reports the offset it was asked to reach.
+  let scrollTo: jest.SpyInstance;
+  beforeEach(() => {
+    scrollTo = jest
+      .spyOn(ScrollView.prototype, 'scrollTo')
+      .mockImplementation(function (this: ScrollView, options?: { x?: number } | number) {
+        const x = typeof options === 'object' ? options?.x ?? 0 : 0;
+        this.props.onScroll?.({ nativeEvent: { contentOffset: { x, y: 0 } } } as never);
+      });
+  });
+
   afterEach(() => {
+    scrollTo.mockRestore();
     jest.useRealTimers();
   });
 
@@ -149,6 +166,31 @@ describe('FeatureShowcase', () => {
     expect(view.queryAllByRole('tab')).toHaveLength(0);
   });
 
+  it('ignores a tap on a card while the row is still moving, and opens it once the row is still', () => {
+    jest.useFakeTimers();
+    const opened: string[] = [];
+    const features = showcaseFeatures(fresh, { ...openers(), documents: () => opened.push('documents') }, true);
+    const view = render(<FeatureShowcase features={features} active={false} />);
+    const scroller = view.UNSAFE_getByProps({ horizontal: true });
+    act(() => { fireEvent.scroll(scroller, scrollAt(10)); });
+    fireEvent.press(view.getByTestId('feature-showcase-documents'));
+    expect(opened).toEqual([]);
+    act(() => { jest.advanceTimersByTime(300); });
+    fireEvent.press(view.getByTestId('feature-showcase-documents'));
+    expect(opened).toEqual(['documents']);
+  });
+
+  it('shares the pip row between the pips, each up to 44 pt wide', () => {
+    const view = render(<FeatureShowcase features={sample()} active={false} />);
+    const widthOf = () => view.getAllByRole('tab').map(tab => StyleSheet.flatten(tab.props.style)?.width);
+    const layOut = (width: number) =>
+      act(() => { fireEvent(view.UNSAFE_getByProps({ accessibilityRole: 'tablist' }), 'layout', { nativeEvent: { layout: { width, height: 44, x: 0, y: 0 } } }); });
+    layOut(100);
+    expect(widthOf()).toEqual([25, 25, 25, 25]);
+    layOut(400);
+    expect(widthOf()).toEqual([44, 44, 44, 44]);
+  });
+
   it('a pip jumps to its card', () => {
     const view = render(<FeatureShowcase features={sample()} active={false} />);
     fireEvent.press(view.getAllByRole('tab')[2]);
@@ -171,9 +213,6 @@ describe('FeatureShowcase', () => {
     act(() => { jest.advanceTimersToNextTimer(2); });
     expect(selectedPip(view)).toBe(0);
   });
-
-  /** A scroll event at a horizontal offset, as the native scroller sends it. */
-  const scrollAt = (x: number) => ({ nativeEvent: { contentOffset: { x, y: 0 } } });
 
   it('loops: a swipe on past the last card goes to the first, back past the first goes to the last', () => {
     const view = render(<FeatureShowcase features={sample()} active={false} />);
