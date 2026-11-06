@@ -548,3 +548,7 @@ Milestone shots: docs/play/r13-milestone/{chat-open-after,chat-sent-after}.png.
 ## Supervisor 17:30 (hand test 57, build 58 at 0586f25a7)
 
 Send with the keyboard up: your message at 0.5 s, reply stays in view (pass). REGRESSION again: two opened chats drawn blank though their rows were in the a11y tree. Hiding the opening list (opacity) is the common factor in both blank runs; removed. Scrolled up with the keyboard down, your message shows at 2 s, not 0.5 s.
+
+## Supervisor 18:05 (hand test 58, build 59 at ac19fff1d)
+
+Blank chats gone (7 opens drawn). Send with the keyboard up in view at 0.5 s (pass). The FIRST cold open again landed at the oldest message and stayed; all warm opens at the newest. Cold-open root cause handed to a device-debugging agent.
