@@ -617,3 +617,8 @@ Home and one [test] chat loaded, then WDA stopped answering after the Details ta
 
 Pass: Home header (icons on the title line), Home carousel (free and Pro, swipes, moves on), chat meta one line with an info icon, chat settings sheet (Project, Model settings, Delete chat; Model settings tabs), Projects (one height, chats / documents / last used), Models (three tiles, On phone, sort mark). Partial: quick settings (see-through menu, Tools 0 while Details lists 5). No lost behaviour.
 Top 3: (1) Model settings tabs: one flat surface, no cards in cards, no accordions inside, old copy rewritten; (2) quick settings solid surface, Tools count agrees with Details; (3) chat settings sheet sized to its rows, verified mark aligned on Models, Details sentence capitalised without q8_0.
+
+## Supervisor 13:20 (hand test 72, build 73) — 3 of 5 pass, 1 partial, 1 fail
+
+Pass: quick settings solid, chat Details capital and no cache, no regressions on Home / Projects / Models. Fail: chat settings sheet opened as a bare header (enableDynamicSizing measured the ScrollView as 0); Project and Model settings unreachable from a chat. Fixed after: fixed 42% snap point. Partial: Model settings tabs (Image: example box touching Image steps, "Image Size", Video generation outside the card; Voice: two cards with no gap, dropdown shadow; Text Advanced copy technical).
+Top 3: (1) chat settings sheet rows visible (fixed); (2) Image & video and Voice tabs: one card per section, gaps, no dropdown shadow, inline example; (3) Tools count font matches Pro tools.
