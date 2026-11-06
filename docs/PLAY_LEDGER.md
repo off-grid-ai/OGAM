@@ -514,3 +514,10 @@ Sent message in view at once, reply stays in view, stale Whisper row gone, Downl
 1. Regression: a chat opened from Home Recent starts at the oldest message.
 2. Weakest screen is the project Knowledge base: red Mono error with "OGAD" jargon and no next step; four emerald switches; a trash per row.
 3. Models rows 80 pt; Downloads badge "1 in progress" while the only download is paused.
+
+## Supervisor 14:25 (hand test 52, build 53)
+
+Warm opens land at the newest message from Home, Chats and a project; scroll-up stays; "New chat" titles: pass. Top 3:
+1. The FIRST chat opened after launch still lands at an older message (cold, ~5 s to open).
+2. A failed transfer line is still red; the incoming-transfer row turns the name red on one line.
+3. Knowledge base switch: dark thumb (kept on purpose; noted again).
