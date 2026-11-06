@@ -189,27 +189,26 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     borderRadius: 6,
     overflow: 'hidden' as const,
   },
+  // Four tiers as hairline rows, not a grid of boxes inside a box (hand tests 61-63). This phone's
+  // tier is the grey row.
   tierInfo: {
-    flexDirection: 'row' as const,
-    gap: SPACING.sm,
+    flexDirection: 'column' as const,
   },
-  // Three tiers side by side on the card's surface; this phone's tier has desktop's chosen state.
   tierItem: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    borderRadius: 8,
-    padding: SPACING.md,
+    flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'transparent',
+    gap: SPACING.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: 6,
   },
   tierItemActive: {
-    backgroundColor: colors.selectedFill,
+    backgroundColor: colors.surfaceLight,
   },
   tierName: {
     ...TYPOGRAPHY.body,
     color: colors.text,
-    marginBottom: SPACING.xs,
+    width: 84,
   },
   // Chosen is the grey fill; the name stays ink (hand test 60: an emerald "Flagship").
   tierNameActive: {
@@ -217,12 +216,13 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   tierDesc: {
     ...TYPOGRAPHY.meta,
+    fontFamily: FONTS.mono,
     color: colors.textMuted,
-    marginBottom: SPACING.xs,
+    width: 84,
   },
   tierModels: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
-    textAlign: 'center' as const,
+    flex: 1,
   },
 });
