@@ -6,6 +6,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { Message } from '../../../types';
 import { useAccordionExpanded } from '../../../stores';
 import { useTheme } from '../../../theme';
+import { toolDisplayName } from '../../../services/tools/toolDisplayName';
 
 interface GenerationMetaProps {
   messageId: string;
@@ -121,7 +122,7 @@ export function TurnDetailsToggle({ messageId, styles, colors }: Readonly<{ mess
   );
 }
 
-/** What the time row's "Details" opens: how the reply was made, then the tools it was offered. */
+/** What the time row's "Details" opens, on a quiet surface: how the reply was made, then the tools it was offered. */
 export function TurnDetails({ messageId, generationMeta, toolNames, styles }: Readonly<{
   messageId: string;
   generationMeta?: Message['generationMeta'];
@@ -141,7 +142,7 @@ export function TurnDetails({ messageId, generationMeta, toolNames, styles }: Re
       )}
       {toolNames?.length ? (
         <Text testID="tools-sent-list" style={styles.generationMetaText}>
-          {`Tools it could use: ${toolNames.join(', ')}`}
+          {`Tools it could use: ${toolNames.map(toolDisplayName).join(', ')}`}
         </Text>
       ) : null}
     </Animated.View>

@@ -1,6 +1,7 @@
 import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING, FONTS } from '../../constants';
+import { cardSurface } from '../../theme/surface';
 
 /**
  * How wide a message is allowed to be, as ONE number.
@@ -398,10 +399,14 @@ const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     minHeight: 44,
     marginVertical: -10,
   },
+  // A quiet surface, so the dot lattice does not run through the Mono line (hand test 66).
   turnDetails: {
+    ...cardSurface(colors),
     width: MESSAGE_MAX_WIDTH,
     alignSelf: 'flex-start' as const,
     gap: 4,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
     marginBottom: SPACING.sm,
   },
   generationMetaContainer: {
