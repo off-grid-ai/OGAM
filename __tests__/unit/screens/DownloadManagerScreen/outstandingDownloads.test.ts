@@ -91,5 +91,19 @@ describe('outstandingDownloadItems', () => {
     // Not told (an older caller): rows show, as before.
     expect(outstandingDownloadItems({ downloads, completed: [] })).toHaveLength(3);
   });
+
+  it('drops a stale failed Whisper row for a model on the phone, whatever kind the old row gave it (hand test 50)', () => {
+    const downloads = {
+      'ggerganov/whisper.cpp/ggml-tiny.en.bin': entry('ggerganov/whisper.cpp/ggml-tiny.en.bin', 'failed'),
+      'ggerganov/whisper.cpp/ggml-base.en.bin': entry('ggerganov/whisper.cpp/ggml-base.en.bin', 'failed'),
+    };
+    const items = outstandingDownloadItems({
+      downloads,
+      completed: [{ modelType: 'stt', modelId: 'tiny.en' }],
+      voiceKnown: true,
+    });
+    // Tiny is on the phone: its leftover row goes. Base is not: it stays, as a Speech row keyed by its Whisper id.
+    expect(ids(items)).toEqual(['stt:base.en']);
+  });
 });
 
