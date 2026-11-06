@@ -703,3 +703,8 @@ Bug to investigate: the paused "Wan 2.1 (1.3B), FP16" download is gone (Models >
 - Pass: pip matches the card after timer and swipes; pip taps jump; a tap on a moving card opens nothing; Talk sheet from a card has only Done, one hairline surface, servers grouped below; from Models, Back returns Models; text picker's remote groups are hairline groups. No lost behaviour.
 - Fail: the timer is not reset by a pip tap or by coming back to the app, so the card changes just before a tap (opened the Mac card three times); 2–4 s of bare Home between closing Models and the text picker; text picker gutter 12 pt vs 24 pt in the speech sheet; pip targets 32.7 pt; grey pips blend with the dot field.
 - Top 3: (1) restart the timer on any touch and on return, hold a few seconds; (2) remove the gap between Models and the text picker; (3) one gutter across pickers, bigger pip targets.
+
+## Supervisor 17:21 (hand test 89, hand test 88 fixes) — timer and gutters pass; text picker 2.5 s late
+- Pass: the card no longer swaps before a tap (two tries); after 16 s away the card holds ~8 s; next advance ~9 s after a swipe; pips read against the field; text, image and speech gutters 24/24 pt; Back from Speech returns Models. No lost behaviour.
+- Fail: text picker opens after ~2.5 s of bare Home (image and speech under 0.5 s); carousel keeps advancing behind an open sheet; clipped "Thinks" and "Sees image" tags; RAM estimate changes between opens (~6.7 GB then ~12.1 GB); image picker's red worded "Deselect"; pip targets 33 pt.
+- Top 3: (1) remove the text-picker gap; (2) pause the carousel behind sheets; (3) clipped tags, stable RAM estimate, plain Deselect.
