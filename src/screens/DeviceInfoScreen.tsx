@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  StyleSheet,
 } from 'react-native';
 import { AliveScreen } from '../components/AliveScreen';
 import { ScreenHeader } from '../components/ScreenHeader';
