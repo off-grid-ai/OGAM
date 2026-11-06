@@ -3,6 +3,7 @@ import {
   View,
   Text,
   ScrollView,
+  StyleSheet,
 } from 'react-native';
 import { AliveScreen } from '../components/AliveScreen';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -89,17 +90,17 @@ export const DeviceInfoScreen: React.FC = () => {
               <Text style={styles.tierDesc}>{'< 4GB RAM'}</Text>
               <Text style={styles.tierModels}>Small models only</Text>
             </View>
-            <View style={[styles.tierItem, deviceTier === 'medium' && styles.tierItemActive]}>
+            <View style={[styles.tierItem, styles.tierDivider, deviceTier === 'medium' && styles.tierItemActive]}>
               <Text style={[styles.tierName, deviceTier === 'medium' && styles.tierNameActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Medium</Text>
               <Text style={styles.tierDesc}>4-6GB RAM</Text>
               <Text style={styles.tierModels}>Most models</Text>
             </View>
-            <View style={[styles.tierItem, deviceTier === 'high' && styles.tierItemActive]}>
+            <View style={[styles.tierItem, styles.tierDivider, deviceTier === 'high' && styles.tierItemActive]}>
               <Text style={[styles.tierName, deviceTier === 'high' && styles.tierNameActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>High</Text>
               <Text style={styles.tierDesc}>6-8GB RAM</Text>
               <Text style={styles.tierModels}>All models</Text>
             </View>
-            <View style={[styles.tierItem, deviceTier === 'flagship' && styles.tierItemActive]}>
+            <View style={[styles.tierItem, styles.tierDivider, deviceTier === 'flagship' && styles.tierItemActive]}>
               <Text style={[styles.tierName, deviceTier === 'flagship' && styles.tierNameActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Flagship</Text>
               <Text style={styles.tierDesc}>{'8GB+ RAM'}</Text>
               <Text style={styles.tierModels}>All models + largest</Text>
@@ -195,7 +196,13 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     gap: SPACING.md,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
+    // Pulled out by its own padding so the names line up with the text above (hand test 65).
+    marginHorizontal: -SPACING.sm,
     borderRadius: 6,
+  },
+  tierDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderLight,
   },
   tierItemActive: {
     backgroundColor: colors.surfaceLight,
