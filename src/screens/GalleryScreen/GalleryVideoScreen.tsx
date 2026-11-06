@@ -40,7 +40,7 @@ export const GalleryVideoScreen: React.FC = () => {
         {video ? (
           <TouchableOpacity
             style={styles.headerButton}
-            onPress={() => { saveVideo(video, setAlertState); }}
+            onPress={() => { saveVideo(video, setAlertState).catch(() => { /* it shows its own alert */ }); }}
             accessibilityRole="button"
           >
             <Text style={styles.headerButtonText}>{Platform.OS === 'ios' ? 'Share' : 'Save'}</Text>

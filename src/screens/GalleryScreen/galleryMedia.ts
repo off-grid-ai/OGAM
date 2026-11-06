@@ -32,7 +32,7 @@ export function askDeleteImage(image: GeneratedImage, setAlertState: SetAlert, o
   };
   setAlertState(showAlert('Delete Image', 'Are you sure you want to delete this image?', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Delete', style: 'destructive', onPress: () => { doDelete(); } },
+    { text: 'Delete', style: 'destructive', onPress: () => { doDelete().catch(() => { /* it shows its own alert */ }); } },
   ]));
 }
 

@@ -113,7 +113,7 @@ export const GalleryImageScreen: React.FC = () => {
               style={styles.imageSheetAction}
               // Over the open sheet: iOS presents the share sheet from it. Closing it first left nothing to
               // present from, and the share sheet never showed (iPhone, 2026-11-06).
-              onPress={() => { saveImage(image, setAlertState); }}
+              onPress={() => { saveImage(image, setAlertState).catch(() => { /* it shows its own alert */ }); }}
               accessibilityRole="button"
               accessibilityLabel="Save"
             >
