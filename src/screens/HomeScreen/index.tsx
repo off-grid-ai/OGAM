@@ -282,7 +282,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </View>
           </View>
 
-          <FeatureShowcase features={showcase} active={isFocused} />
+          {/* Still while a sheet covers Home: nothing moves where you cannot see it (hand test 89). */}
+          <FeatureShowcase
+            features={showcase}
+            active={isFocused && pickerType === null && !modelsManagerOpen && !whisperOpen && !voiceOpen}
+          />
 
           {/* Collapsed Models summary — tap to open the manager sheet. Both the
               text (1) and image (13) tour steps anchor here now. */}
