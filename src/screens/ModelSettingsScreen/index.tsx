@@ -129,7 +129,7 @@ export const ModelSettingsScreen: React.FC = () => {
         {tab === 'image' && (
           <>
             <ImageGenerationSection />
-            {VideoSettings && <VideoSettings />}
+            {VideoSettings && <VideoSettings alwaysOpen />}
           </>
         )}
 
