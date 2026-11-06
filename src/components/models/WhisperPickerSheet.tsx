@@ -9,6 +9,7 @@ import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { WHISPER_MODELS } from '../../services/whisperService';
+import { whisperDisplayName } from '../../services/whisperModels';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { useSttDownloadState } from '../../hooks/useSttDownloadState';
@@ -102,7 +103,7 @@ export const WhisperPickerSheet: React.FC<Props> = ({
               key={m.id}
               compact
               style={GROUPED_CARD_ROW}
-              model={{ id: m.id, name: m.name, author: 'On device', description: m.description }}
+              model={{ id: m.id, name: whisperDisplayName(m), author: 'On device', description: m.description }}
               file={{ name: m.name, size: m.size * 1024 * 1024, quantization: '', downloadUrl: '' }}
               facts={[languagesFact(m), 'Transcription']}
               isActive={active}

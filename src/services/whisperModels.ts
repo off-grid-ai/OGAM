@@ -27,6 +27,12 @@ export const WHISPER_MODELS: MobileWhisperCatalogModel[] = [
   { id: 'large-v3-turbo', name: 'Large v3 Turbo',  size: 1550, lang: 'multi', url: `${GGML_BASE}/ggml-large-v3-turbo.bin`, description: 'Fast + accurate, distilled large, 99 languages' },
   { id: 'large-v3',       name: 'Large v3',         size: 2952, lang: 'multi', url: `${GGML_BASE}/ggml-large-v3.bin`,       description: 'Best quality, 99 languages, ~3 GB RAM' },
 ];
+/** The name a person sees. The English-only and the 99-language builds share names ("Small"), so the
+ *  English one says so; ids and files are unchanged (hand test 91: two "Small" rows disagreed). */
+export function whisperDisplayName(model: { name: string; lang: 'en' | 'multi' }): string {
+  return model.lang === 'en' && !/english/i.test(model.name) ? `${model.name} English` : model.name;
+}
+
 // The bundled fallback: read it merged with the remote catalog (withRemoteCatalog('transcription', …)).
 registerBundledCatalog('transcription', WHISPER_MODELS);
 

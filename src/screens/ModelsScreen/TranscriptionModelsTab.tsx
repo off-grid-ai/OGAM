@@ -34,7 +34,7 @@ import type { MobileWhisperCatalogModel } from '@offgrid/models';
 import { WHISPER_MODELS } from '../../services';
 import { addCatalogEntry, useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { searchWhisperModels } from '../../services/huggingFaceModelBrowser';
-import { findTranscriptionModel } from '../../services/whisperModels';
+import { findTranscriptionModel, whisperDisplayName } from '../../services/whisperModels';
 import { createStyles as createModelsScreenStyles } from './styles';
 import logger from '../../utils/logger';
 import { RemoteModelOptionsSection } from '../../components/models/RemoteModelOptionsSection';
@@ -115,7 +115,7 @@ const WhisperCard: React.FC<WhisperCardProps> = ({
       style={GROUPED_CARD_ROW}
       model={{
         id: model.id,
-        name: model.name,
+        name: whisperDisplayName(model),
         author: formatSize(model.size),
         description: model.description,
       }}
