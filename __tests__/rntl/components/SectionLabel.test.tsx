@@ -22,4 +22,11 @@ describe('SectionLabel', () => {
     expect(style.textTransform).toBe('uppercase');
     expect(style.color).toBe(muted);
   });
+
+  it('takes a style on top of its own, for a label that sits in a row with actions', () => {
+    render(<SectionLabel title="MCP servers" style={{ marginBottom: 0 }} />);
+    const style = StyleSheet.flatten(screen.getByText('MCP servers').props.style);
+    expect(style.marginBottom).toBe(0);
+    expect(style.textTransform).toBe('uppercase');
+  });
 });
