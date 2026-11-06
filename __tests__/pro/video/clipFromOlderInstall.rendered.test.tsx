@@ -63,6 +63,8 @@ it('after an update, Extend starts from the clip\'s last frame and Save saves th
   rtl.fireEvent.press(await view.findByTestId('home-gallery-card', {}, { timeout: 10_000 }));
   await view.findByTestId('gallery-screen');
   rtl.fireEvent.press(view.getByTestId('gallery-tab-videos'));
+  // Videos stay in Gallery; the Pro library is the row at the top of the tab.
+  rtl.fireEvent.press(await view.findByTestId('gallery-open-video-library', {}, { timeout: 10_000 }));
   await view.findByTestId('library-grid', {}, { timeout: 10_000 });
   rtl.fireEvent.press((await view.findAllByTestId(/^expand-library-item-/, {}, { timeout: 10_000 }))[0]);
   rtl.fireEvent.press(await view.findByTestId('viewer-save', {}, { timeout: 10_000 }));

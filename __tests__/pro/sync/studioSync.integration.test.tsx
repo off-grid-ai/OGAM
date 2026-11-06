@@ -200,6 +200,8 @@ describe('Video Studio over Sync', () => {
     fireEvent.press(await waitFor(() => ui!.getByTestId('home-tab')));
     fireEvent.press(await waitFor(() => ui!.getByText('Gallery')));
     fireEvent.press(await waitFor(() => ui!.getByText(/^Videos \(/)));
+    // Videos stay in Gallery; the Pro library is the row at the top of the tab.
+    fireEvent.press(await waitFor(() => ui!.getByTestId('gallery-open-video-library')));
     await waitFor(() => expect(ui!.getByTestId('library-grid')).toBeTruthy());
     const film = await waitFor(() => ui!.getByText('Fox in the snow'), { timeout: 15_000 });
     expect(film).toBeTruthy();
