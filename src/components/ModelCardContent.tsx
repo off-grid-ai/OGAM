@@ -189,27 +189,32 @@ const CapabilityBadges: React.FC<{ capabilities?: ModelCardCapabilities; isVisio
   const styles = useThemedStyles(createStyles);
   const vision = capabilities?.vision || isVisionModel;
   if (!vision && !capabilities?.tools && !capabilities?.thinking && !capabilities?.moeActiveB && !capabilities?.mtp) return null;
+  // Words while they fit; with three or more badges the row keeps one line by showing the icons alone,
+  // each still named for screen readers (hand test 90: "Thin" and "Tools ·" were cut off at the edge).
+  const count = [vision, capabilities?.tools, capabilities?.thinking, capabilities?.moeActiveB, capabilities?.mtp]
+    .filter(Boolean).length;
+  const words = count < 3;
   return (
     <View style={styles.capabilityRow}>
       {!!capabilities?.moeActiveB && <View style={styles.capabilityBadge} accessibilityLabel={speedDescriptions({ moeActiveB: capabilities.moeActiveB })[0]}>
         <Icon name="layers" size={13} color={colors.textSecondary} />
-        <Text style={styles.capabilityText}>{`MoE ${capabilities.moeActiveB}B`}</Text>
+        {words && <Text style={styles.capabilityText}>{`MoE ${capabilities.moeActiveB}B`}</Text>}
       </View>}
       {capabilities?.mtp && <View style={styles.capabilityBadge} accessibilityLabel={speedDescriptions({ mtp: true })[0]}>
         <Icon name="fast-forward" size={13} color={colors.textSecondary} />
-        <Text style={styles.capabilityText}>MTP</Text>
+        {words && <Text style={styles.capabilityText}>MTP</Text>}
       </View>}
       {vision && <View style={styles.capabilityBadge} accessibilityLabel="Vision">
         <Icon name="eye" size={13} color={colors.textSecondary} />
-        <Text style={styles.capabilityText}>Sees images</Text>
+        {words && <Text style={styles.capabilityText}>Sees images</Text>}
       </View>}
       {capabilities?.tools && <View style={styles.capabilityBadge} accessibilityLabel={capabilities.predicted ? 'Tool calling likely' : 'Tool calling'}>
         <Icon name="tool" size={13} color={colors.textSecondary} />
-        <Text style={styles.capabilityText}>Tools</Text>
+        {words && <Text style={styles.capabilityText}>Tools</Text>}
       </View>}
       {capabilities?.thinking && <View style={styles.capabilityBadge} accessibilityLabel={capabilities.predicted ? 'Thinking likely' : 'Thinking'}>
         <Icon name="zap" size={13} color={colors.textSecondary} />
-        <Text style={styles.capabilityText}>Thinks</Text>
+        {words && <Text style={styles.capabilityText}>Thinks</Text>}
       </View>}
     </View>
   );
