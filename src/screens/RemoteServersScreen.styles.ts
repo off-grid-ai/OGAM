@@ -176,12 +176,7 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
       color: colors.textMuted,
     },
 
-    // The row's actions sit on its right edge as icon buttons.
-    serverActions: {
-      flexDirection: 'row' as const,
-      alignItems: 'center' as const,
-    },
-    // 44pt boxes side by side: full touch targets with no overlap between neighbours.
+    // The row's one action: a 44 pt box on its right edge.
     serverAction: {
       width: 44,
       height: 44,
