@@ -14,7 +14,7 @@ export const WEDNESDAY_URL = 'https://wednesday.is';
 // Linked from Pro screens and from remote-server discovery alike.
 export const OFF_GRID_DESKTOP_URL = 'https://getoffgridai.co/desktop';
 export const OFF_GRID_DESKTOP_BENEFIT =
-  'More power, same privacy. Run bigger models on your computer, Windows, macOS or Linux, and keep every device in sync.';
+  'More power, same privacy. Run bigger models on your Windows, macOS or Linux computer and keep every device in sync.';
 
 export const PRO_AHA_FEATURES = [
   'Create images with the model active on your Desktop',
