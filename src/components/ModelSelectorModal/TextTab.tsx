@@ -228,8 +228,9 @@ export const TextTab: React.FC<TextTabProps> = ({
               trailing = <View style={styles.checkmark}><Icon name="check" size={16} color={colors.background} /></View>;
             } else if (row.isActive) {
               // Selected, loads on the first message. Inside a group a row has no border to show it, so
-              // it carries a check (hand test 90: the chosen model looked like every other row).
-              trailing = <Icon name="check" size={18} color={colors.primary} accessibilityLabel="Selected" />;
+              // it carries the same check as the loaded and the image picker's current model: one mark
+              // for "your model" (hand tests 90, 91).
+              trailing = <View style={styles.checkmark} accessibilityLabel="Selected"><Icon name="check" size={16} color={colors.background} /></View>;
             }
             return (
               <ModelCard
