@@ -91,14 +91,13 @@ export const KnowledgeTransferInfo: React.FC<{
   const failed = transfer.status === 'failed';
   return (
     <View testID={testID}>
-      <View style={styles.line}>
-        <Text style={[styles.name, failed && styles.metaFailed]} numberOfLines={1}>
-          {transfer.fileName}
-        </Text>
-        <Text style={[styles.meta, styles.metaTransfer, failed && styles.metaFailed]} numberOfLines={1}>
-          {knowledgeDocumentTransferLabel(transfer)}
-        </Text>
-      </View>
+      {/* The name stays in ink, and the transfer line sits under it, as on a document row. */}
+      <Text style={styles.name} numberOfLines={1}>
+        {transfer.fileName}
+      </Text>
+      <Text style={[styles.meta, styles.metaTransfer, failed && styles.metaFailed]} numberOfLines={2}>
+        {knowledgeDocumentTransferLabel(transfer)}
+      </Text>
       <ProgressLine fraction={failed ? null : knowledgeDocumentTransferFraction(transfer)} />
     </View>
   );
@@ -201,8 +200,9 @@ const createStyles = (colors: ThemeColors) => ({
     marginLeft: 0,
     marginTop: 2,
   },
+  // A failed transfer is news, not an alarm: the words say what happened, in the quiet grey.
   metaFailed: {
-    color: colors.error,
+    color: colors.textSecondary,
   },
   track: {
     height: 2,
