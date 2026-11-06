@@ -775,6 +775,23 @@ describe('ModelCard', () => {
       expect(getByTestId('card-downloaded')).toHaveTextContent('On phone');
     });
 
+    it('says "In use" where On phone sits, in the same Mono meta face, when the model is active and has no handlers', () => {
+      const { getByTestId, queryByTestId } = render(
+        <ModelCard
+          model={baseModel}
+          isDownloaded={true}
+          isActive={true}
+          testID="card"
+        />
+      );
+      const inUse = getByTestId('model-in-use');
+      expect(inUse).toHaveTextContent('In use');
+      expect(queryByTestId('card-downloaded')).toBeNull();
+      const { StyleSheet } = require('react-native');
+      const { FONTS } = require('../../../src/constants');
+      expect(StyleSheet.flatten(inUse.props.style).fontFamily).toBe(FONTS.mono);
+    });
+
     it('shows repair spinner instead of repair button while repairing downloaded vision model', () => {
       const { getByTestId, queryByTestId } = render(
         <ModelCard
