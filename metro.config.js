@@ -29,6 +29,13 @@ const uiPackagePath = path.resolve(sharedRoot, 'packages/ui');
 // Out-of-root like sync, so Metro must watch it and be pointed at its built entry.
 const speechPackagePath = path.resolve(sharedRoot, 'packages/speech');
 const sharedNodeModulesPath = path.resolve(sharedRoot, 'node_modules');
+// A git worktree links each package to the main checkout (scripts/link-worktree-deps.sh). Metro
+// indexes files by their real path, so it must also watch the folder those links point into.
+const linkedNodeModulesPaths = (() => {
+  const own = path.resolve(__dirname, 'node_modules');
+  const real = path.dirname(fs.realpathSync(path.resolve(own, 'react-native')));
+  return real === own ? [] : [real];
+})();
 const syncRuntimeModules = {
   '@noble/hashes/hkdf': path.resolve(sharedNodeModulesPath, '@noble/hashes/hkdf.js'),
   '@noble/hashes/hmac': path.resolve(sharedNodeModulesPath, '@noble/hashes/hmac.js'),
@@ -46,6 +53,7 @@ const config = {
     speechPackagePath,
     uiPackagePath,
     sharedNodeModulesPath,
+    ...linkedNodeModulesPaths,
   ],
   resolver: {
     // When resolving modules from outside the project root (i.e. @offgrid/pro),
