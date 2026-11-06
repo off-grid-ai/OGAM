@@ -92,7 +92,7 @@ export const BackendSelector: React.FC = () => {
           <SliderSetting
             testID="gpu-layers-stepper"
             label={layersLabel}
-            description="More on the GPU is faster, but too much can crash a phone short on memory. Reloads the model."
+            description="More is faster; too much can crash a full phone. Reloads the model."
             value={gpuLayersEffective}
             min={1} max={GPU_LAYERS_MAX} step={1}
             onChange={(value) => updateSettings({ gpuLayers: value })}
@@ -137,7 +137,7 @@ export const FlashAttentionToggle: React.FC = () => {
   return (
     <SegmentedRow<'off' | 'on'>
       label="Flash attention"
-      description="Faster inference and lower memory. Required for quantized KV cache (q8_0/q4_0). Requires model reload."
+      description="Faster and lighter on memory. Reloads the model."
       options={BOOL_OPTIONS}
       current={isFlashAttnOn ? 'on' : 'off'}
       onSelect={(id) => (id === 'on' ? updateSettings({ flashAttn: true }) : handleFlashAttnToggle(false))}
@@ -194,7 +194,7 @@ export const ModelLoadingModeSelector: React.FC = () => {
   return (
     <SegmentedRow<ModelLoadingMode>
       label="Model loading"
-      description="Applies to all chats. Lean keeps one model in memory at a time. Balanced keeps models loaded together when they fit and swaps when they do not. Aggressive commits a larger share of RAM so bigger models load. If a model is refused, you can still load it anyway."
+      description="How much memory models may use. Aggressive fits bigger models."
       options={MODE_OPTIONS}
       current={current}
       onSelect={(id) => updateSettings({ modelLoadingMode: id })}
@@ -229,7 +229,7 @@ export const ThinkingBudgetSelector: React.FC<{ compact?: boolean }> = ({ compac
         testID="thinking-budget"
         compact={compact}
         label="Thinking budget"
-        description="Auto thinks up to the max tokens. A cap ends thinking sooner, so the answer comes sooner. Applies when thinking is on."
+        description="A cap ends thinking sooner, so the answer comes sooner."
         value={Math.max(0, selectedStep)}
         min={0} max={steps.length - 1} step={1}
         formatValue={(step) => steps[Math.round(step)] === REASONING_BUDGET_AUTO
@@ -252,7 +252,7 @@ export const ShowGenerationDetailsToggle: React.FC = () => {
   return (
     <SegmentedRow<'off' | 'on'>
       label="Show generation details"
-      description="Applies to all chats. Show context use, model, speed, and image settings below each reply."
+      description="Show how each reply was made, under it."
       options={BOOL_OPTIONS}
       current={on ? 'on' : 'off'}
       onSelect={(id) => updateSettings({ showGenerationDetails: id === 'on' })}

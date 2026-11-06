@@ -20,7 +20,7 @@ export const SpeculativeDecodingToggle: React.FC = () => {
     <>
       <SegmentedRow<'off' | 'on'>
         label="Speculative decoding (MTP)"
-        description="Drafts several tokens per step and checks them together. Faster on models built with MTP layers; no effect on others. Requires model reload."
+        description="Faster replies on models built for it. Reloads the model."
         options={BOOL_OPTIONS}
         current={settings.speculativeDecoding ? 'on' : 'off'}
         onSelect={(id) => updateSettings({ speculativeDecoding: id === 'on' })}
