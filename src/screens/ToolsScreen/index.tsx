@@ -5,7 +5,6 @@ import { TouchableOpacity } from '../../components/Touchable';
 import { AliveScreen } from '../../components/AliveScreen';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTheme, useThemedStyles } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { cardSurface } from '../../theme/surface';
@@ -57,7 +56,7 @@ export const ToolsScreen: React.FC = () => {
           testID="tools-pro-tools"
         >
           <View style={styles.proToolsIcon}>
-            <IconMC name="crown" size={18} color={colors.textSecondary} />
+            <Icon name="package" size={18} color={colors.textSecondary} />
           </View>
           <View style={styles.toolInfo}>
             <Text style={styles.toolName}>Pro tools</Text>
