@@ -14,7 +14,9 @@ describe('chat list with the keyboard up', () => {
     const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'ios' });
     h.render();
     await h.send('[test] Count to five.', { text: '1 2 3 4 5' });
-    const list = await h.rtl.waitFor(() => h.view!.getByTestId('chat-message-list'));
+    // Keep-position switches on once the opening chat stops growing (at most 800 ms).
+    await h.rtl.act(() => new Promise(resolve => setTimeout(resolve, 900)));
+    const list = h.view!.getByTestId('chat-message-list');
     const keep = list.props.maintainVisibleContentPosition;
     // A reader who scrolled up keeps their place while the reply grows...
     expect(keep).toEqual({ minIndexForVisible: 0 });
