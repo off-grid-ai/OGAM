@@ -29,7 +29,7 @@ const createLayoutStyles = (colors: ThemeColors) => ({
   // A compact pill that sits level with the title, not a slab that outweighs it (Mac, 2026-11-06).
   newChatButton: { paddingVertical: 6, paddingHorizontal: SPACING.md },
   brand: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.sm },
-  appLogo: { width: 28, height: 28 },
+  appLogo: { width: 32, height: 32 },
   crownButton: {
     width: 44,
     height: 44,
@@ -48,8 +48,12 @@ const createLayoutStyles = (colors: ThemeColors) => ({
     gap: 2,
   },
   // Home is the app's front door, so its name is the large title (h1), as desktop's Home page header.
+  // h1 is 24 pt at weight 300, which read thin and small beside the pill (Mac, 2026-11-06). The app's
+  // name is larger and a regular weight, sized with the 32 pt mark beside it.
   title: {
     ...TYPOGRAPHY.h1,
+    fontSize: 30,
+    fontWeight: '400' as const,
     color: colors.text,
     flexShrink: 1,
   },
