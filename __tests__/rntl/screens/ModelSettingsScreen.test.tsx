@@ -207,11 +207,8 @@ describe('ModelSettingsScreen', () => {
     it('renders the toggle with label and description', () => {
       const { getByText } = renderTab('general');
       expect(getByText('Show generation details')).toBeTruthy();
-      expect(
-        getByText(
-          'Applies to all chats. Show context use, model, speed, and image settings below each reply.',
-        ),
-      ).toBeTruthy();
+      // One plain line under the control.
+      expect(getByText('Show how each reply was made, under it.')).toBeTruthy();
     });
 
     it('defaults to off', () => {
