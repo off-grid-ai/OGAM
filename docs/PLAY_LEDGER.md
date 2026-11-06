@@ -667,3 +667,8 @@ Top 3: (1) Desktop tools "Connecting…" never ends while Remote servers says No
 
 Pass: Chats titles at one edge with the media mark on line two; Home title weights; Desktop tools red "Not reachable" (line cut). Sync last seen untestable (no offline row). Gallery images: own screen, Back to grid, a bottom sheet with Animate / Save / Delete and the details. Gallery videos fail: the Videos tab leaves for "Your videos", tiles play inline, the player has boxed buttons, the tile sheet lacks Save and Info. JS now loads from Metro over Tailscale; POST /reload pushes edits in ~15 s.
 Top 3: (1) videos get the image viewer: own screen, one sheet with Save, Info, Extend, inside Gallery; (2) Not reachable line fits; (3) no boxed buttons or overlays on video tiles and player.
+
+## Supervisor 15:50 (hand test 82, Metro reloads) — gallery fixed
+
+Videos tab stays in Gallery with a Stories and clips row; Images / Videos switching no longer crashes (numColumns); the video viewer matches the image viewer: dark screen, More opens one sheet with Share, Delete and details; grey play marks; Desktop tools line fits. Fixed after: the video sits centred. Extend lives in Stories and clips.
+Top 3: (1) video centred (done); (2) video rows on one glass surface; (3) Pro's film input and Ready cards off the Videos tab.
