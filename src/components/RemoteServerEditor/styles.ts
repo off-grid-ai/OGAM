@@ -136,7 +136,7 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
       ...TYPOGRAPHY.label,
       textTransform: 'uppercase' as const,
       color: colors.textMuted,
-      marginTop: SPACING.md,
+      marginTop: SPACING.xl,
       marginBottom: SPACING.xs,
     },
     notesInput: {
