@@ -229,16 +229,18 @@ describe('Load demo data in a developer build (rendered, real App)', () => {
     rtl.fireEvent.press(view.getByTestId('projects-tab'));
     rtl.fireEvent.press(await view.findByText('Acme Corp pilot'));
     await view.findByTestId('project-detail-screen');
-    expect(await view.findByText(String(chats))).toBeTruthy();
-    await rtl.waitFor(() => expect(view.getByTestId('project-knowledge-base-count')).toHaveTextContent(String(documents)));
-    // The project opens on Chats; its documents are behind the Knowledge base tab.
-    rtl.fireEvent.press(view.getByTestId('project-tab-knowledge'));
-    expect(view.getByLabelText('Knowledge document Promises to Sam.txt')).toBeTruthy();
-    expect(view.getByLabelText('Knowledge document Acme pilot brief.txt')).toBeTruthy();
-    expect(view.getByLabelText('Knowledge document Acme_rollout_v3.pdf')).toBeTruthy();
+    await rtl.waitFor(() => expect(view.getByTestId('project-chats-count')).toHaveTextContent(`Chats · ${chats}`));
+    await rtl.waitFor(() => expect(view.getByTestId('project-knowledge-base-count')).toHaveTextContent(`${documents} files`));
+    // Its files open on their own screen from the page's files row.
+    rtl.fireEvent.press(view.getByTestId('project-files'));
+    await view.findByTestId('knowledge-base-screen');
+    await rtl.waitFor(() => expect(view.getByLabelText('File Promises to Sam.txt')).toBeTruthy());
+    expect(view.getByLabelText('File Acme pilot brief.txt')).toBeTruthy();
+    expect(view.getByLabelText('File Acme_rollout_v3.pdf')).toBeTruthy();
     // Every document reached the paired Mac: none says it could not sync.
     expect(view.queryByText(/Couldn't sync to/)).toBeNull();
-    rtl.fireEvent.press(view.getByTestId('project-tab-chats'));
+    rtl.fireEvent.press(view.getByTestId('knowledge-base-back'));
+    await rtl.waitFor(() => expect(view.queryByTestId('knowledge-base-screen')).toBeNull());
     // The chats are the demo's own conversations, newest first.
     expect(view.getByText('Pilot email draft ready')).toBeTruthy();
     expect(view.getByText('Pilot seat-days result')).toBeTruthy();

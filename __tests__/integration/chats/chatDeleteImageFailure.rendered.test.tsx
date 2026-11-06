@@ -130,14 +130,14 @@ describe.each<DeleteSurface>(['Home recents', 'project detail'])('Deleting a cha
       const form = await h.openScreen('ProjectEdit');
       rtl.fireEvent.changeText(form.getByTestId('project-edit-name'), 'Trip');
       rtl.fireEvent.changeText(
-        form.getByPlaceholderText('Enter the instructions or context for the AI...'),
+        form.getByPlaceholderText('How should chats here answer, and what should they know?'),
         'You help plan trips.',
       );
       rtl.fireEvent.press(form.getByTestId('project-edit-save'));
       const projects = await h.openTab('ProjectsTab');
       rtl.fireEvent.press(await rtl.waitFor(() => projects.getByText('Trip')));
       await rtl.waitFor(() => expect(h.currentRoute()).toBe('ProjectDetail'));
-      rtl.fireEvent.press(await rtl.waitFor(() => projects.getByTestId('project-start-chat')));
+      rtl.fireEvent.press(await rtl.waitFor(() => projects.getByTestId('project-new-chat')));
       await rtl.waitFor(() => expect(h.currentRoute()).toBe('Chat'));
     }
     h.render();

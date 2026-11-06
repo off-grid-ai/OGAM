@@ -31,7 +31,7 @@ describe('happy — create a project by tapping through the real form', () => {
     const form = render(withNavigator(React.createElement(ProjectEditScreen, {})));
     fireEvent.changeText(form.getByPlaceholderText('e.g., Spanish Learning, Code Review'), 'Q3 Research');
     // The form requires a system prompt too (Save alerts otherwise) — a real user fills it.
-    fireEvent.changeText(form.getByPlaceholderText('Enter the instructions or context for the AI...'), 'You are a research assistant.');
+    fireEvent.changeText(form.getByPlaceholderText('How should chats here answer, and what should they know?'), 'You are a research assistant.');
     fireEvent.press(form.getByText('Save'));
     form.unmount();
 

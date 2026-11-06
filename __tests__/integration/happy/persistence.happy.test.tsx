@@ -29,7 +29,7 @@ describe('happy — a user-created project survives a relaunch (real persist + r
 
       const form = render(withNavigator(React.createElement(ProjectEditScreen, {})));
       fireEvent.changeText(form.getByPlaceholderText('e.g., Spanish Learning, Code Review'), 'Persisted Project');
-      fireEvent.changeText(form.getByPlaceholderText('Enter the instructions or context for the AI...'), 'You are a helpful research assistant.');
+      fireEvent.changeText(form.getByPlaceholderText('How should chats here answer, and what should they know?'), 'You are a helpful research assistant.');
       fireEvent.press(form.getByText('Save'));
       form.unmount();
       await new Promise((r) => setTimeout(r, 0)); // let the persist middleware flush to AsyncStorage

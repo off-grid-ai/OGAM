@@ -32,7 +32,7 @@ describe('projects list search field', () => {
     for (const name of ['Trip Planning', 'Grocery Lists', 'Reading Notes']) {
       const form = rtl.render(withNavigator(React.createElement(ProjectEditScreen, {})));
       rtl.fireEvent.changeText(form.getByPlaceholderText('e.g., Spanish Learning, Code Review'), name);
-      rtl.fireEvent.changeText(form.getByPlaceholderText('Enter the instructions or context for the AI...'), `Instructions for ${name}.`);
+      rtl.fireEvent.changeText(form.getByPlaceholderText('How should chats here answer, and what should they know?'), `Instructions for ${name}.`);
       rtl.fireEvent.press(form.getByText('Save'));
       form.unmount();
     }
