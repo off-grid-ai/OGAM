@@ -148,7 +148,7 @@ export const StorageSettingsScreen: React.FC = () => {
         contentContainerStyle={styles.content}
       >
         <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>Storage Usage</Text>
+          <Text style={styles.sectionTitle}>Storage used</Text>
           <View style={styles.storageBar}>
             <View style={[styles.storageUsed, { width: `${Math.min(usedPercentage, 100)}%` }]} />
           </View>

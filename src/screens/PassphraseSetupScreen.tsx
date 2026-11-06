@@ -129,7 +129,7 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
           <Card style={styles.inputCard}>
             {isChanging && (
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Current Passphrase</Text>
+                <Text style={styles.inputLabel}>Current passphrase</Text>
                 <TextInput
                   style={styles.input}
                   value={currentPassphrase}
@@ -160,7 +160,7 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Confirm Passphrase</Text>
+              <Text style={styles.inputLabel}>Confirm passphrase</Text>
               <TextInput
                 style={styles.input}
                 value={confirmPassphrase}

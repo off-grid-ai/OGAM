@@ -67,7 +67,7 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({
             {showDetails && (
               <View style={styles.detailsSheet}>
                 <View style={styles.detailsSheetHeader}>
-                  <Text style={styles.detailsSheetTitle}>Image Details</Text>
+                  <Text style={styles.detailsSheetTitle}>Image details</Text>
                   <TouchableOpacity onPress={onToggleDetails}>
                     <Text style={styles.detailsSheetClose}>Done</Text>
                   </TouchableOpacity>

@@ -69,7 +69,7 @@ export const SecuritySettingsScreen: React.FC = () => {
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>App Lock</Text>
+          <Text style={styles.sectionTitle}>App lock</Text>
           <View style={styles.settingRow}>
             <View style={styles.settingInfo}>
               <Text style={styles.settingLabel}>Passphrase lock</Text>

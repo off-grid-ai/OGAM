@@ -393,14 +393,14 @@ export const SettingsScreen: React.FC = () => {
                 onPress={handleResetOnboarding}
               >
                 <Icon name="rotate-ccw" size={14} color={colors.textMuted} />
-                <Text style={styles.devButtonText}>Reset Onboarding</Text>
+                <Text style={styles.devButtonText}>Reset onboarding</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.devButton}
                 onPress={() => setShowDebugLogs(true)}
               >
                 <Icon name="terminal" size={14} color={colors.textMuted} />
-                <Text style={styles.devButtonText}>Debug Logs</Text>
+                <Text style={styles.devButtonText}>Debug logs</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.devButton}

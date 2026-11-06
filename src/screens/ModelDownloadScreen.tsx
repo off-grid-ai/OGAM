@@ -191,7 +191,7 @@ export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
       <View testID="model-download-screen" style={styles.container}>
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>Advanced Setup</Text>
+            <Text style={styles.title}>Advanced setup</Text>
             <Text style={styles.subtitle}>
               Run a model from your network or on this device.
             </Text>
@@ -210,11 +210,11 @@ export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
             colors={colors}
           />
 
-          <Text style={styles.sectionTitle}>On This Device</Text>
+          <Text style={styles.sectionTitle}>On this device</Text>
 
           <View style={styles.deviceCard}>
             <View style={styles.deviceInfo}>
-              <Text style={styles.deviceLabel}>Your Device</Text>
+              <Text style={styles.deviceLabel}>Your device</Text>
               <Text style={styles.deviceValue}>{deviceInfo?.deviceModel}</Text>
             </View>
             <View style={styles.deviceInfo}>
@@ -224,7 +224,7 @@ export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
                 * device reported a different number on every launch and the figure could not be
                 * compared with a model's size - which is the only reason it is on this screen. Total
                 * is a property of the device, so "12 GB" means the same thing tomorrow. */}
-              <Text style={styles.deviceLabel}>Total Memory</Text>
+              <Text style={styles.deviceLabel}>Total memory</Text>
               <Text style={styles.deviceValue}>{hardwareService.formatBytes(deviceInfo?.totalMemory || 0)}</Text>
             </View>
           </View>

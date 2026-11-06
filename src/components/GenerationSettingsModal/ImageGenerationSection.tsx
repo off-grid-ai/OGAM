@@ -217,7 +217,7 @@ export const ImageGenerationSection: React.FC = () => {
 
       <View style={[styles.modeToggleContainer, !hasTextModel && styles.dimmed]}>
         <View style={styles.modeToggleInfo}>
-          <Text style={styles.modeToggleLabel}>Enhance Image Prompts</Text>
+          <Text style={styles.modeToggleLabel}>Enhance image prompts</Text>
           <Text style={styles.modeToggleDesc}>
             {!hasTextModel
               ? 'Select a text model to enable prompt enhancement'

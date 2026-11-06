@@ -35,7 +35,7 @@ const EnhanceImageToggle: React.FC = () => {
   return (
     <View style={[styles.toggleRow, !hasTextModel && styles.dimmed]}>
       <View style={styles.toggleInfo}>
-        <Text style={styles.toggleLabel}>Enhance Image Prompts</Text>
+        <Text style={styles.toggleLabel}>Enhance image prompts</Text>
         <Text style={styles.toggleDesc}>{description}</Text>
       </View>
       <AppSwitch

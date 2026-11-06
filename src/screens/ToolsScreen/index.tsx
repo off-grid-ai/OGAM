@@ -59,7 +59,7 @@ export const ToolsScreen: React.FC = () => {
             <IconMC name="crown" size={20} color={colors.primary} />
           </View>
           <View style={styles.toolInfo}>
-            <Text style={styles.toolName}>Pro Tools</Text>
+            <Text style={styles.toolName}>Pro tools</Text>
             <Text style={styles.toolDescription}>Email, calendar and MCP servers</Text>
           </View>
           <Icon name="chevron-right" size={18} color={colors.textMuted} />

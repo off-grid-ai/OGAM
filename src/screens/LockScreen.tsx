@@ -132,7 +132,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
           <View style={styles.lockIconContainer}>
             <Icon name="lock" size={48} color={colors.primary} />
           </View>
-          <Text style={styles.title}>App Locked</Text>
+          <Text style={styles.title}>App locked</Text>
           <Text style={styles.subtitle}>
             Enter your passphrase to unlock
           </Text>
