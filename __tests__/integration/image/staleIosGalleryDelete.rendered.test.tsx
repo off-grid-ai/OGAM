@@ -34,7 +34,6 @@ describe('iOS Gallery deletion after an application-container change', () => {
       }),
     );
 
-    const React = require('react');
     const rtl = requireRTL();
     const { useAppStore } = require('../../../src/stores/appStore');
     await useAppStore.persist.rehydrate();
@@ -111,7 +110,6 @@ describe('iOS Gallery deletion after an application-container change', () => {
       }),
     );
 
-    const React = require('react');
     const rtl = requireRTL();
     const { useAppStore } = require('../../../src/stores/appStore');
     await useAppStore.persist.rehydrate();

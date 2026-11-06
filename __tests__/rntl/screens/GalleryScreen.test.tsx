@@ -552,7 +552,6 @@ describe('Gallery image, full screen on its own route', () => {
     const g = await openGallery({
       images: sampleImages,
       before: ({ boundary }) => {
-        // eslint-disable-next-line no-throw-literal
         boundary.fs!.module.copyFile.mockImplementation(async () => { throw undefined; });
       },
     });
@@ -626,7 +625,7 @@ describe('Gallery video, played on its own route', () => {
   it('on Android, Save puts the video in Downloads and says so; a failed save says why', async () => {
     const g = await openVideo();
     const { NativeModules } = require('react-native');
-    const downloads = `${g.boundary.fs!.ExternalStorageDirectoryPath}/Download`;
+    const downloads = `${require('react-native-fs').ExternalStorageDirectoryPath}/Download`;
     // The Downloads writer is the device boundary: it copies the file, or the OS refuses it.
     let refuse = false;
     NativeModules.SyncDownloadsModule = {

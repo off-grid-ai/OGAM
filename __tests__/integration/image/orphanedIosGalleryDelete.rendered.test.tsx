@@ -34,7 +34,6 @@ describe('iOS Gallery with an already-missing generated image', () => {
       }),
     );
 
-    const React = require('react');
     const rtl = requireRTL();
     const { useAppStore } = require('../../../src/stores/appStore');
     await useAppStore.persist.rehydrate();
