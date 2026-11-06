@@ -82,6 +82,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   emptySubtext: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,
+    textAlign: 'center' as const,
     marginTop: SPACING.xs,
     marginBottom: SPACING.lg,
   },
