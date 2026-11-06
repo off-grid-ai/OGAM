@@ -85,7 +85,8 @@ const QUESTION = 'Who killed Hector?';
 const ANSWER = 'Achilles killed Hector outside the walls of Troy [S1].';
 
 const WHISPER_ID = 'base.en';
-const WHISPER_NAME = 'Base';
+// The English-only build says so on screen; its stored name stays 'Base'.
+const WHISPER_NAME = 'Base English';
 const WHISPER_FILE = `${DOCS}/whisper-models/ggml-${WHISPER_ID}.bin`;
 const SPOKEN = 'remind me to reread book twenty two';
 
@@ -502,7 +503,7 @@ describe('an install upgraded from v0.0.119', () => {
     expect(view.getByTestId('model-summary-speech').props.accessibilityState).toEqual({ selected: true });
     fireEvent.press(view.getByTestId('model-summary-speech-open'));
     await view.findByText('TRANSCRIPTION MODEL', {}, WAIT);
-    // English-only Base is the chosen row (the multilingual one shares its name and is not).
+    // English-only Base is the chosen row (the multilingual Base is a different model and is not).
     await waitFor(() =>
       expect(
         view.getAllByLabelText(WHISPER_NAME).filter(card => card.props.accessibilityState?.selected),
