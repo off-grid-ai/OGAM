@@ -581,3 +581,8 @@ Newly passing: chat settings sheet, Delete at the end; white switch knobs in. Fa
 ## Supervisor 01:30 (hand test 64, build 65) — 16 of 26 pass (was 15)
 
 Newly passing: Tools, Settings (Pro in the list). Pro tools: each MCP server is still a card (logo tile, status pill, separate tools line). Still failing: chat meta rows, chat options count, pro tools, settings-lower, about, device info (tier grid fixed after this build), storage, remote servers, gallery + viewer.
+
+## Supervisor 09:30 (hand test 65, build 66) — 3 of 4 pass, 1 partial
+
+Pass: Remote servers (one chevron; server screen has Test, Update, Remove), Settings community group, Device information tier rows. Partial: Pro tools rows on one surface, but the meta line cuts at "~150 tokens · ht…" so the address never shows (switch not toggled: no [test] server).
+Top 3: (1) cards are see-through, the dot grid shows through on Remote servers, Device information, Pro tools; (2) section labels disagree (COMMUNITY uppercase vs "Tools", "MCP servers", "Hardware", "Compatibility"), tier rows indent 8 pt past their label, no hairlines; (3) server form and MCP tools screen off-brand (edge-to-edge fields, faint Update server, a card per tool, token pills, "Disable All" emerald outline).
