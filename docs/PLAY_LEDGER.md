@@ -535,3 +535,7 @@ Cold open lands at the newest message and holds; scroll-up stays with the jump-d
 1. At 1 s a cold open still shows old turns, then jumps to the end.
 2. KB switch thumb dark (kept on purpose) and a trash per row.
 3. Recent rows: first prompt as title, last reply as preview (Mac's call). Sync "5 saved" → "4 saved" mid-session (the projection settling).
+
+## Supervisor 16:10 (hand test 55, build 56 at 0495d7ae1)
+
+REGRESSION: two of three chat opens stayed blank (list kept opacity 0 after the style went to undefined; Fabric keeps the last prop). Reply in view and new-chat empty state pass. Fix: set opacity 1 explicitly when settled.

@@ -177,6 +177,9 @@ const CompactingNote: React.FC = () => {
 export const CHAT_LIST_KEEP_POSITION = { minIndexForVisible: 0 } as const;
 
 const OPENING_HIDDEN = { opacity: 0 };
+// Explicit, never undefined: a style that goes from opacity 0 to undefined keeps the 0 on Fabric,
+// and the chat stayed blank (hand test 55).
+const OPENING_SHOWN = { opacity: 1 };
 
 export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   assistantSelected,
@@ -338,7 +341,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           ref={flatListRef}
           // Drawn once it rests at the newest message, so an opening chat never shows old turns
           // and then jumps (hand test 54: at 1 s a cold open still showed 5:07).
-          style={settled ? undefined : OPENING_HIDDEN}
+          style={settled ? OPENING_SHOWN : OPENING_HIDDEN}
           data={chat.displayMessages}
           renderItem={renderItem}
           keyExtractor={item => item.id}
