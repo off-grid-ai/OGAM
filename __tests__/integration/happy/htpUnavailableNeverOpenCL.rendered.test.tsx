@@ -79,9 +79,9 @@ describe('NPU selected, Hexagon session unavailable → the reply runs on CPU, n
     await chooseNpuAndReply(h);
 
     const meta = await backendShown(h);
-    expect(meta).toHaveTextContent(/(^| · )ran on the CPU( · |$)/);
+    expect(meta).toHaveTextContent(/(^R| · r)an on the CPU( · |$)/);
     expect(h.rtl.within(meta).queryByText(/OpenCL/)).toBeNull();
-    expect(meta).not.toHaveTextContent(/ran on the GPU/);
+    expect(meta).not.toHaveTextContent(/[Rr]an on the GPU/);
     // The person asked for the NPU and got the CPU: the chat says so.
     await h.rtl.waitFor(() => { expect(h.view!.queryAllByText(/running on CPU/i).length).toBeGreaterThan(0); });
   }, 60000);
@@ -91,7 +91,7 @@ describe('NPU selected, Hexagon session unavailable → the reply runs on CPU, n
     await chooseNpuAndReply(h);
 
     const meta = await backendShown(h);
-    expect(meta).toHaveTextContent(/(^| · )ran on the GPU \(HTP0\)( · |$)/);
+    expect(meta).toHaveTextContent(/(^R| · r)an on the GPU \(HTP0\)( · |$)/);
     expect(h.rtl.within(meta).queryByText(/OpenCL/)).toBeNull();
     expect(h.view!.queryByText(/running on CPU/i)).toBeNull();
   }, 60000);

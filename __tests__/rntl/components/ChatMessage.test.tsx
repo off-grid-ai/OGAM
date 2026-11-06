@@ -28,9 +28,12 @@ import {
 
 // Mock the stripControlTokens utility
 
-/** One item of the Details line, which joins its items with " · ". */
-const metaItem = (item: string) =>
-  new RegExp(`(^| · )${item.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}( · |$)`);
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+/** One item of the Details line ("a · b"): the line reads as a sentence, so its first item starts with a capital. */
+const metaItem = (item: string) => {
+  const first = item.charAt(0).toUpperCase() + item.slice(1);
+  return new RegExp(`(^${escapeRegExp(first)}| · ${escapeRegExp(item)})( · |$)`);
+};
 
 describe('ChatMessage', () => {
   const _defaultProps = {
@@ -1590,7 +1593,7 @@ describe('ChatMessage', () => {
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByTestId('generation-meta')).toHaveTextContent('ran on the GPU');
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('ran on the GPU'));
     });
   });
 

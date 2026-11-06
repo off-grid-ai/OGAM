@@ -76,7 +76,7 @@ describe('T014 — GPU/OpenCL backend → GenerationMeta shows GPU layers offloa
     // — the layers reached the GPU, not a silent CPU fallback.
     await h.rtl.act(async () => { pressByWalkingUp(h.view!.getByTestId('generation-details-toggle')); });
     const meta = await h.rtl.waitFor(() => h.view!.getByTestId('generation-meta'));
-    expect(meta).toHaveTextContent(/(^| · )ran on the GPU \(OpenCL\)( · |$)/);
+    expect(meta).toHaveTextContent(/(^R| · r)an on the GPU \(OpenCL\)( · |$)/);
     // And it is NOT running on CPU.
     expect(meta).not.toHaveTextContent(/\bCPU\b/);
   }, 120000); // reload can queue behind the broad push-hook journeys — allow for it under load
@@ -97,9 +97,9 @@ describe('T014 — GPU/OpenCL backend → GenerationMeta shows GPU layers offloa
 
     await h.rtl.act(async () => { pressByWalkingUp(h.view!.getByTestId('generation-details-toggle')); });
     const meta = await h.rtl.waitFor(() => h.view!.getByTestId('generation-meta'));
-    expect(meta).toHaveTextContent(/(^| · )ran on the CPU( · |$)/);
+    expect(meta).toHaveTextContent(/(^R| · r)an on the CPU( · |$)/);
     expect(h.rtl.within(meta).queryByText(/OpenCL/)).toBeNull();
-    expect(meta).not.toHaveTextContent(/ran on the GPU/);
+    expect(meta).not.toHaveTextContent(/[Rr]an on the GPU/);
   });
 
   it('shows native prompt usage, not the reply token count, in generation details', async () => {

@@ -4,12 +4,13 @@
  * Covers the chat quick-settings menu rows that recently changed:
  * - The "Tools" row is a neutral utility count (its icon must NOT turn green/primary
  *   when tools are enabled).
- * - The "Pro Tools" row (formerly "MCP") uses a crown icon and shows a count badge
+ * - The "Pro Tools" row (formerly "MCP") uses a package icon and shows a count badge
  *   for whatever is active across pro tools + MCP, hidden when nothing is active.
+ * - Tools and Pro tools each end in a chevron: both open another screen.
  */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, within } from '@testing-library/react-native';
 import { QuickSettingsPopover } from '../../../src/components/ChatInput/Popovers';
 import { useAppStore } from '../../../src/stores';
 import { getTheme } from '../../../src/theme';
@@ -49,18 +50,28 @@ describe('QuickSettingsPopover', () => {
   it('keeps the Tools icon neutral (not green) even when tools are enabled', () => {
     const { getByTestId } = render(<QuickSettingsPopover {...baseProps} enabledToolCount={2} />);
     const toolIcon = getByTestId('feather-tool');
-    // Should be the neutral text color, never the primary/green accent.
-    expect(toolIcon.props.style.color).toBe(COLORS.text);
+    // The quiet secondary ink every row icon uses, never the primary/green accent.
+    expect(toolIcon.props.style.color).toBe(COLORS.textSecondary);
     expect(toolIcon.props.style.color).not.toBe(COLORS.primary);
   });
 
-  it('renders a Pro Tools row with a crown icon (and no MCP label)', () => {
-    const { getByText, queryByText, getByTestId } = render(
+  it('renders a Pro Tools row with a package icon and a chevron (no crown, no MCP label)', () => {
+    const { getByText, queryByText, getByTestId, queryByTestId } = render(
       <QuickSettingsPopover {...baseProps} mcpToolCount={0} />,
     );
     expect(getByText('Pro tools')).toBeTruthy();
     expect(queryByText('MCP')).toBeNull();
-    expect(getByTestId('mci-crown')).toBeTruthy();
+    const proRow = within(getByTestId('quick-pro-tools'));
+    expect(proRow.getByTestId('feather-package')).toBeTruthy();
+    expect(proRow.getByTestId('feather-chevron-right')).toBeTruthy();
+    expect(queryByTestId('mci-crown')).toBeNull();
+  });
+
+  it('ends the Tools row in its enabled count and a chevron', () => {
+    const { getByTestId } = render(<QuickSettingsPopover {...baseProps} enabledToolCount={2} />);
+    const toolsRow = within(getByTestId('quick-tools'));
+    expect(toolsRow.getByTestId('feather-chevron-right')).toBeTruthy();
+    expect(toolsRow.getByText('2')).toBeTruthy();
   });
 
   it('shows the active count badge on Pro Tools when something is active', () => {

@@ -764,14 +764,15 @@ describe('ModelCard', () => {
       expect(treeStr).toContain('In use'); // the In use badge is shown instead
     });
 
-    it('shows downloaded check icon when no action handlers are provided', () => {
-      const { toJSON } = render(
+    it('says "On phone" when downloaded and no action handlers are provided', () => {
+      const { getByTestId } = render(
         <ModelCard
           model={baseModel}
           isDownloaded={true}
+          testID="card"
         />
       );
-      expect(JSON.stringify(toJSON())).toContain('"check"');
+      expect(getByTestId('card-downloaded')).toHaveTextContent('On phone');
     });
 
     it('shows repair spinner instead of repair button while repairing downloaded vision model', () => {

@@ -65,7 +65,7 @@ describe('T016 (rendered) — GPU init timeout falls back to CPU gracefully (DEV
     // ...and the Generation Details reflect the CPU fallback, not a phantom GPU offload.
     await h.rtl.act(async () => { pressByWalkingUp(h.view!.getByTestId('generation-details-toggle')); });
     const meta = await h.rtl.waitFor(() => h.view!.getByTestId('generation-meta'));
-    expect(meta).toHaveTextContent(/(^| · )ran on the CPU( · |$)/);
+    expect(meta).toHaveTextContent(/(^R| · r)an on the CPU( · |$)/);
     expect(h.rtl.within(meta).queryByText(/OpenCL/)).toBeNull();
   }, 60000); // reload now includes the device-critical memory-reclaim wait — allow for it under load
 
@@ -82,6 +82,6 @@ describe('T016 (rendered) — GPU init timeout falls back to CPU gracefully (DEV
 
     await h.rtl.act(async () => { pressByWalkingUp(h.view!.getByTestId('generation-details-toggle')); });
     const meta = await h.rtl.waitFor(() => h.view!.getByTestId('generation-meta'));
-    expect(meta).toHaveTextContent(/(^| · )ran on the GPU \(OpenCL\)( · |$)/); // GPU offload kept
+    expect(meta).toHaveTextContent(/(^R| · r)an on the GPU \(OpenCL\)( · |$)/); // GPU offload kept
   }, 60000); // reload now includes the device-critical memory-reclaim wait — allow for it under load
 });

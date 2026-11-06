@@ -57,7 +57,8 @@ describe('QuickSettingsAudioRow', () => {
     );
 
     expect(getByText('Voice')).toBeTruthy();
-    expect(getByText('N/A')).toBeTruthy();
+    // QuickBadge reads every value as a word, so "N/A" shows as "N/a".
+    expect(getByText('N/a')).toBeTruthy();
     expect(getByTestId('tts-icon').props.children).toBe('volume-1');
   });
 
