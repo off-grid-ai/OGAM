@@ -637,3 +637,8 @@ Top 3: (1) knowledge base titled Files, one add; (2) one vocabulary (Instruction
 
 Project page: WHAT IT KNOWS label, CHATS · N (and · 0 with the line under it), "from it" for one file; Files titled with the project under it, one add (44 pt), file not document; Instructions on the edit screen; Video open under its label. No lost behaviour.
 Top 3: (1) count-aware empty copy (0 files: "Add a file and chats answer from it"; empty line drops "and files"); (2) one vocabulary: file in the VoiceOver label and Settings, Instructions for system prompt; (3) an IMAGE label to match VIDEO, style names on one line.
+
+## Supervisor 15:35 (hand test 76, build 77, standing hand-tester) — 7 of 8 pass
+
+Pass: Settings one-line rows, Home Sync and Clipboard one line, Downloads underline tabs, verified mark after the name, On phone, Tools package mark, Files add offers A file / Paste text (and empty state has both), project page labels, IMAGE / VIDEO labels, style names on two lines. Fail: IN USE ends 30 pt short of the row end, not in line with On phone. No lost behaviour.
+Top 3: (1) IN USE in the action column where On phone sits; (2) Tools count vs switches (explained: counts only with documents); (3) empty Files text centred, Paste sheet says Files not knowledge base.
