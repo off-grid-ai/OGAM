@@ -88,11 +88,8 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.metaSmall,
     color: colors.textSecondary,
   },
-  // In use: desktop's chosen state, an emerald hairline over a faint emerald fill (not a thick border).
-  cardActive: {
-    borderColor: colors.heroBorder,
-    backgroundColor: colors.selectedFill,
-  },
+  // In use is said once, in words on the row. A green fill as well marked it twice (screen review).
+  cardActive: {},
   cardIncompatible: {
     opacity: 0.6,
   },
