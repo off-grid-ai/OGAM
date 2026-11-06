@@ -608,3 +608,7 @@ Top 3: (1) disabled primary label grey, Test connection vs Update server weight;
 
 Fail: chat (Details still Metal/tok/s/q8_0, all Mono), chat options ("Tools 0" with Knowledge base on), models-text (sort shows a bolt), gallery (7 blank images, generation bug, own card), gallery viewer (overlay, routes card), settings-lower and about (emoji heart, purple logo: Mac's call), security and engine updates (labels inside cards), what we share (mixed-case labels). No lost behaviour.
 Top 3: (1) tool count agrees everywhere; Details sentence in Geist without engine jargon; (2) labels above cards on Security, Engine updates, What we share; heart and logo wait for Mac; (3) gallery viewer route and blank images (both proposed as their own sessions).
+
+## Supervisor 11:30 (hand test 70, build 71) — not run: iPhone disconnected
+
+Home and one [test] chat loaded, then WDA stopped answering after the Details tap; devicectl lists Mac's iPhone as unavailable and idevice_id finds nothing. Build 71 checks (Details sentence, Tools count copy, sort mark, labels on Security / Engine updates / What we share, Pro tools footnote) wait for the phone.
