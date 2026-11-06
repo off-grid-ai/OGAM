@@ -121,13 +121,11 @@ export const EngineUpdatesScreen: React.FC = () => {
         ) : null}
 
         {info && !overTheAir ? (
-          <Card style={styles.infoCard}>
-            <Icon name="info" size={18} color={colors.textMuted} />
-            <Text style={styles.infoText} testID="engine-updates-with-app">
+          // A footnote, not another box (hand test 60).
+          <Text style={styles.infoText} testID="engine-updates-with-app">
               On iPhone, engines update with Off Grid AI. Update the app from the App Store to get the newest engine
               and support for new models.
-            </Text>
-          </Card>
+          </Text>
         ) : null}
       </ScrollView>
     </AliveScreen>
@@ -164,13 +162,5 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   settingHint: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, marginTop: 2, lineHeight: 18 },
   status: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, marginTop: SPACING.md, lineHeight: 18 },
   checkButton: { alignSelf: 'flex-start' as const, marginTop: SPACING.lg },
-  infoCard: {
-    flexDirection: 'row' as const,
-    alignItems: 'flex-start' as const,
-    gap: SPACING.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  infoText: { ...TYPOGRAPHY.bodySmall, flex: 1, color: colors.textMuted, lineHeight: 18 },
+  infoText: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, lineHeight: 18, marginTop: SPACING.sm },
 });
