@@ -560,3 +560,8 @@ FlatList.scrollToEnd computes the end from rows measured so far; on a cold open 
 ## Supervisor 19:30 (hand test 59, cold-open fix build)
 
 Cold open: 1 of 2 runs showed older turns until ~8 s, then landed at the newest; the other run was at the newest by 2 s. History intact (scrolled to the 2:19 first prompt). Warm opens, scroll-up hold: pass. The remaining cold-open delay is the JS thread stalled by Sync after launch (6–22 s, debug agent); the scroll code corrects as soon as JS runs. Next: the Sync launch stall (deferred by Mac; asked).
+
+## Supervisor 20:30 (hand test 60, full screen sweep, build 61) — 18 of 26 fail
+
+Shots: docs/play/r14-sweep/. Pass: Home, Chats, Projects, Knowledge base, Models Text, Downloads. Fail: project page (bare field, folder in title), Models Documents and Document search (label mismatch, tinted first row), Settings lower half (5 cards), Model settings (no surface, emerald text button), Remote servers (cards, cluttered rows), Storage and Device info (cards, numbers not Mono, emerald "Flagship"), Security and Engine updates (box + info box), What we share (12 pt gutter, emerald labels), About (emoji heart, purple logo), Gallery blank tiles, image viewer a modal, every reply 3 meta rows, chat settings sheet flat grey with Delete among settings, chat options menu Title Case mono and gold Pro tools, Tools and Pro tools still the old design.
+Worst 5: Pro tools, Tools, What we share, Remote servers, Device info / Storage.
