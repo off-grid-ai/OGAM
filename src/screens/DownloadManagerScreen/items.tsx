@@ -70,15 +70,6 @@ export function getStatusText(status: string): string {
   return status;
 }
 
-function textCapabilities(item: DownloadItem) {
-  if (item.modelType !== 'text' || !item.fileName.toLowerCase().endsWith('.gguf')) return undefined;
-  const predicted = predictGgufCapabilities({
-    id: item.modelId,
-    name: item.name,
-    fileName: item.fileName,
-  });
-  return { ...predicted, vision: !!item.isVisionModel, predicted: true };
-}
 
 function getStatusLabel(item: DownloadItem): string {
   if (item.status === 'running') return '';
@@ -219,7 +210,6 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
       model={{ id: item.modelId, name: downloadDisplayName(item), author: item.author,
         modelType: item.isVisionModel ? 'vision' : item.modelType === 'text' ? 'text' : undefined }}
       file={{ name: splitGgufModelName(item.fileName), size: item.fileSize, quantization: item.quantization, downloadUrl: '' }}
-      capabilities={textCapabilities(item)}
       trailing={transferActions}
       facts={[
         item.modelType === 'tts'
@@ -349,7 +339,6 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({
         file={{ name: splitGgufModelName(item.fileName), size: item.fileSize, quantization: item.quantization, downloadUrl: '' }}
         // The date joins size and quant on the one Mono line, not a sentence line of its own.
         facts={item.downloadedAt ? [formatShortDate(item.downloadedAt)] : undefined}
-        capabilities={textCapabilities(item)}
         isDownloaded
         isDownloading={showRepairProgress && repairEntry.status !== 'paused'}
         isPaused={showRepairProgress && repairEntry.status === 'paused'}

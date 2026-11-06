@@ -81,7 +81,7 @@ export const BackendSelector: React.FC = () => {
   return (
     <SegmentedRow<InferenceBackend>
       label="Text model hardware"
-      description={`Text model default for all chats. ${backends.find(b => b.id === current)?.desc ?? ''} Image and video engines select their own hardware.`}
+      description={backends.find(b => b.id === current)?.desc ?? 'Where text models run.'}
       options={backends}
       current={current}
       onSelect={(id) => updateSettings({ inferenceBackend: id })}
@@ -116,7 +116,7 @@ export const LiteRTBackendSelector: React.FC = () => {
   return (
     <SegmentedRow<LiteRTBackend>
       label="Text model hardware"
-      description={`Text model default for all chats. ${LITERT_BACKENDS.find(b => b.id === current)?.desc ?? ''} Image and video engines select their own hardware.`}
+      description={LITERT_BACKENDS.find(b => b.id === current)?.desc ?? 'Where text models run.'}
       options={LITERT_BACKENDS}
       current={current}
       onSelect={(id) => updateSettings({ liteRTBackend: id })}
