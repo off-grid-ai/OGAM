@@ -250,10 +250,16 @@ describe('DownloadManagerScreen', () => {
     );
     const names = { 'dl-text': 'model-file', 'dl-video': 'wan-video', 'dl-tts': 'kokoro-voice.pte', 'dl-stt': 'Whisper Base (English)' };
     const shown = () => Object.entries(names).filter(([, name]) => view.queryByText(name)).map(([id]) => id);
-    expect(['All', 'Text', 'Vision', 'Image', 'Video', 'Voice', 'Speech'].every(label => view.queryByText(label))).toBe(true);
+    // The Models tabs, in the Models order; vision models live under Text there, so there is no Vision tab.
+    expect(['All', 'Text', 'Documents', 'Image', 'Video', 'Voice', 'Speech'].every(label => view.queryByText(label))).toBe(true);
+    expect(view.queryByText('Vision')).toBeNull();
     expect(view.queryByText('Voice Models')).toBeNull();
     expect(view.queryByText('Image Gen')).toBeNull();
 
+    rtl.fireEvent.press(view.getByText('Text'));
+    expect(shown()).toEqual(['dl-text']);
+    rtl.fireEvent.press(view.getByText('Documents'));
+    expect(shown()).toEqual([]);
     rtl.fireEvent.press(view.getByText('Video'));
     expect(shown()).toEqual(['dl-video']);
     rtl.fireEvent.press(view.getByText('Voice'));
