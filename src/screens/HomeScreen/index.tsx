@@ -1,7 +1,7 @@
 import { videoModelDisplayName } from '../../utils/modelHelpers';
 import { useAppStore } from '../../stores/appStore';
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, Image } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { TouchableOpacity } from '../../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -76,7 +76,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const focusTrigger = useFocusTrigger();
   const isFocused = useIsFocused();
   const scrollRef = useAliveScrollRef();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
   const SyncHomeCard = useSlot(SLOTS.homeSyncCard);
   const HomeNotificationsButton = useSlot(SLOTS.homeNotificationsButton);
@@ -224,7 +224,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               header's actions on the same row: the bell, Pro, and New chat as the one main action. */}
           <View style={styles.header}>
             <View style={styles.titleRow}>
-              <Text style={styles.title} accessibilityRole="header">Off Grid AI</Text>
+              {/* The brand mark beside its name, as on desktop's sidebar: the logo was lost in 5bed503e0. */}
+              <View style={styles.brand}>
+                <Image
+                  source={isDark ? require('../../assets/home-logo-dark.png') : require('../../assets/home-logo-light.png')}
+                  style={styles.appLogo}
+                  resizeMode="contain"
+                  accessible={false}
+                  testID="home-app-logo"
+                />
+                <Text style={styles.title} accessibilityRole="header" numberOfLines={1}>Off Grid AI</Text>
+              </View>
               <View style={styles.headerActions}>
                 {HomeNotificationsButton ? (
                   <HomeNotificationsButton onOpen={openSyncNotifications} />
