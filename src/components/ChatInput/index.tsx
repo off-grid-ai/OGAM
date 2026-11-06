@@ -645,7 +645,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   return (
     <View style={styles.container}>
       <View style={styles.aboveComposer}>
-        <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
         <QueueRow queue={queue} actions={queueActions} />
         {transcriptionNotice ? (
           <Text style={styles.transcriptionNotice} testID="transcription-notice">
@@ -656,6 +655,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       {/* One box across the full width, down to the screen's bottom edge; in image or video mode the styles
           are its top, the input and send below. */}
       <View style={[styles.composer, isFocused && styles.composerFocused, { marginBottom: bottomInset }]}>
+      {/* What you attach sits inside the box it goes with, on the same surface (brand Mobile profile;
+          Mac, 2026-11-06: a photo above the composer read as a separate white tile). */}
+      <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
       {styleKind && (stylesShown || chosenStyle) ? (
         <StyleRow
           attached
@@ -692,9 +694,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 icon={<GodIcon
                   size={16}
                   fill={assistantEnabled ? colors.primary : 'none'}
-                  stroke={assistantEnabled ? 'none' : colors.textDisabled}
+                  stroke={assistantEnabled ? 'none' : colors.textSecondary}
                   strokeWidth={1}
-                  color={assistantEnabled ? colors.primary : colors.textDisabled}
+                  color={assistantEnabled ? colors.primary : colors.textSecondary}
                 />}
               />
               <TextInput
