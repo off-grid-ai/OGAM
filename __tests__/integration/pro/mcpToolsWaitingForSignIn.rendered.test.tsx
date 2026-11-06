@@ -92,9 +92,9 @@ describe('tools screen while the server waits for sign-in', () => {
     expect(ui.getByTestId(`mcp-server-status-${DOCS.id}`)).toHaveTextContent('Inactive');
     fireEvent(ui.getByTestId(`mcp-server-toggle-${DOCS.id}`), 'valueChange', true);
     await waitFor(() => expect(ui.getByTestId(`mcp-server-status-${DOCS.id}`)).toHaveTextContent('Active'));
-    expect(ui.getByTestId(`mcp-server-tool-count-${DOCS.id}`)).toHaveTextContent('2/2 tools');
+    expect(ui.getByTestId(`mcp-server-tool-count-${DOCS.id}`)).toHaveTextContent(/\b2 of 2 tools$/);
 
-    fireEvent.press(ui.getByText('Edit tools'));
+    fireEvent.press(ui.getByLabelText(new RegExp(`^${DOCS.name}, Active, `)));
     expect(await ui.findByText('search')).toBeTruthy();
     expect(ui.queryByTestId('mcp-tools-empty')).toBeNull();
 

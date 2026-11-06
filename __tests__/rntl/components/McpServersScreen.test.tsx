@@ -1,18 +1,17 @@
 /**
  * McpServersScreen (Pro Tools page) Tests
  *
- * Covers the configured-server card behaviour:
+ * Covers the configured-server row behaviour:
  * - While a server is connecting OR authorizing, a loader replaces the toggle so the
  *   user knows work is in flight (OAuth opens a browser, which takes a moment).
  * - A connected server shows the on/off toggle.
- * - Known presets render their bundled brand mark; custom servers fall back to a
- *   monogram.
+ * - Each server is a row: its name, then one line of status, tools and address.
  *
  * Real McpServersScreen on a real native stack, with the real mcpService, McpClient, OAuth client
  * and stores, Pro activated the way boot does it (proHarness). Fakes sit only at the boundaries: the
- * network (XMLHttpRequest + fetch), the Keychain and the sign-in browser (harness/mcpOAuthFake), the
- * Sync sockets, and react-native-svg (so the bundled brand mark is queryable). A server's state is
- * reached by its own switch, with the network held so "Connecting" and "Authorizing" stay on screen.
+ * network (XMLHttpRequest + fetch), the Keychain and the sign-in browser (harness/mcpOAuthFake) and the
+ * Sync sockets. A server's state is reached by its own switch, with the network held so "Connecting"
+ * and "Authorizing" stay on screen.
  */
 jest.unmock('@react-navigation/native');
 jest.mock('react-native-tcp-socket', () => {
@@ -30,16 +29,6 @@ jest.mock('react-native-inappbrowser-reborn', () => ({
 }));
 // Node already provides crypto.getRandomValues; the RN polyfill's native module does not exist here.
 jest.mock('react-native-get-random-values', () => ({}), { virtual: true });
-// Render the bundled SVG mark as something queryable. The rest of react-native-svg stays real: the
-// screen sits on the living field, which draws with Svg, Defs and RadialGradient.
-jest.mock('react-native-svg', () => {
-  const { Text } = require('react-native');
-  return {
-    ...jest.requireActual('react-native-svg'),
-    __esModule: true,
-    SvgXml: () => <Text testID="preset-logo-svg">svg</Text>,
-  };
-});
 
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
@@ -122,22 +111,19 @@ describe('McpServersScreen', () => {
 
     await waitFor(() => expect(status(ui, ACME.id)).toHaveTextContent('Active'));
     expect(ui.getByTestId(`mcp-server-toggle-${ACME.id}`).props.value).toBe(true);
-    expect(ui.getByTestId(`mcp-server-tool-count-${ACME.id}`)).toHaveTextContent('2/2 tools');
+    expect(ui.getByTestId(`mcp-server-tool-count-${ACME.id}`)).toHaveTextContent(/2 of 2 tools/);
   });
 
-  it('renders the bundled logo for a known preset server', () => {
+  it('lists a preset and a custom server as rows: the name, then one line of status and tools', () => {
     useMcpStore.getState().addServer({ ...NOTION, authMode: 'oauth' });
-    const ui = mount();
-
-    expect(ui.getAllByTestId('preset-logo-svg').length).toBeGreaterThan(0);
-    expect(ui.getByText('Notion')).toBeTruthy();
-  });
-
-  it('falls back to a monogram for a custom server', () => {
     useMcpStore.getState().addServer({ ...ACME, authMode: 'none' });
     const ui = mount();
 
-    expect(ui.queryByTestId('preset-logo-svg')).toBeNull();
-    expect(ui.getByText('A')).toBeTruthy();
+    expect(ui.getByText('Notion')).toBeTruthy();
+    expect(ui.getByText('Acme')).toBeTruthy();
+    // Neither server is connected yet, so neither offers any tools.
+    expect(status(ui, ACME.id)).toHaveTextContent('Inactive');
+    expect(ui.getByLabelText('Acme, Inactive, 0 of 0 tools')).toBeTruthy();
+    expect(ui.getByLabelText('Notion, Inactive, 0 of 0 tools')).toBeTruthy();
   });
 });
