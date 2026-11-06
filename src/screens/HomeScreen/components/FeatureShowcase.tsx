@@ -56,18 +56,18 @@ export function showcaseFeatures(use: FeatureUse, open: FeatureOpeners, isPro: b
   // comes first, so the row reads as discovery before any Pro or Mac card (hand test 82). Copy in
   // Mac's voice: the outcome first, nothing to unlock (Mac, 2026-11-06).
   const all: Array<ShowcaseFeature & { tried: boolean }> = [
-    { key: 'image', icon: 'image', tried: use.imagesMade > 0, title: 'Describe it, and see it.', line: 'Pictures made on this phone, offline.', onPress: open.image },
+    { key: 'image', icon: 'image', tried: use.imagesMade > 0, title: 'Describe a picture and watch it appear.', line: 'Made on this phone, with no internet.', onPress: open.image },
     { key: 'speech', icon: 'mic', tried: use.hasSpeech, title: 'Talk instead of typing.', line: 'Your words turn to text right here.', onPress: open.speech },
     { key: 'documents', icon: 'file-text', tried: false, title: 'Ask your own files.', line: 'Add a PDF to a project, then ask it.', onPress: open.documents },
     { key: 'video', icon: 'film', pro: true, tried: use.videosMade > 0, title: 'Turn a line into a clip.', line: 'Short videos, made on this phone.', onPress: open.video },
-    { key: 'mac-models', icon: 'monitor', mac: true, tried: false, title: 'Run the big models on your Mac.', line: 'Your phone uses them over Wi-Fi.', onPress: open.desktop },
+    { key: 'mac-models', icon: 'monitor', mac: true, tried: false, title: 'Smarter answers from your Mac.', line: 'Your phone borrows its bigger models over Wi-Fi.', onPress: open.desktop },
     { key: 'voice', icon: 'volume-2', pro: true, tried: use.hasVoice, title: 'Hear every answer.', line: 'Replies read aloud in a voice you pick.', onPress: open.voice },
     { key: 'mac-dictation', icon: 'type', mac: true, pro: true, tried: false, title: 'Talk, and it types where you are.', line: 'Hold Option and Space in any app on your Mac.', onPress: open.desktop },
-    { key: 'tools', icon: 'calendar', pro: true, tried: false, title: 'Let it do the small jobs.', line: 'It drafts the email and adds the meeting.', onPress: open.tools },
-    { key: 'mac-recall', icon: 'search', mac: true, pro: true, tried: false, title: 'Search what you saw on your Mac.', line: 'Screens, meetings and notes, all searchable.', onPress: open.desktop },
+    { key: 'tools', icon: 'calendar', pro: true, tried: false, title: 'Have it draft your emails.', line: 'It writes the email and adds the meeting. You send it.', onPress: open.tools },
+    { key: 'mac-recall', icon: 'search', mac: true, pro: true, tried: false, title: 'Find anything that was on your screen.', line: 'Search what your Mac saw, meetings included.', onPress: open.desktop },
     { key: 'sync', icon: 'refresh-cw', pro: true, tried: false, title: 'Your chats, on every device.', line: 'Start on your Mac, finish here.', onPress: open.sync },
     { key: 'mac-meetings', icon: 'users', mac: true, pro: true, tried: false, title: 'Meetings, written up for you.', line: 'Recorded and transcribed on your Mac.', onPress: open.desktop },
-    { key: 'mac-clipboard', icon: 'clipboard', mac: true, pro: true, tried: false, title: 'Your copies, kept.', line: 'Two keys paste any of them back.', onPress: open.desktop },
+    { key: 'mac-clipboard', icon: 'clipboard', mac: true, pro: true, tried: false, title: 'Everything you copy, saved.', line: 'Paste any of it back with two keys on your Mac.', onPress: open.desktop },
   ];
   // Free phone features lead, then Pro and Mac; inside each group, what has not been tried yet first.
   const isFree = (f: { pro?: boolean; mac?: boolean }) => !f.pro && !f.mac;
