@@ -569,3 +569,7 @@ Worst 5: Pro tools, Tools, What we share, Remote servers, Device info / Storage.
 ## Supervisor 21:40 (hand test 61, build 62 at 8e7931687) — 9 of 26 pass (was 8)
 
 Pass: Home, Chats, Projects, Knowledge base, Models Text and Documents, Downloads, Settings, Document search, What we share. Worst 5: Pro tools (still old: icon tiles, Active pill, red trash, info box), Chat (3 meta rows per reply, emerald user border), chat settings sheet (Delete among settings), Tools (Title Case names, model-facing descriptions), Project / Model settings / Security / Engine updates (rows without a surface, info boxes; Security and Engine fixed after this build). Review page: https://claude.ai/artifact/RmSC5fdjd8KrRjAoCVKkJp
+
+## Supervisor 23:00 (hand test 62, build 63 at df7de502c) — 13 of 26 pass (was 9)
+
+Newly passing: project, settings-model, security, engine updates. Fail: settings-lower (5 cards), remote servers, storage, device info, about, gallery + viewer, chat (3 meta rows, emerald user border), chat settings sheet (Delete fixed after this build), chat options (gold Pro crown), tools and pro tools. Worst 5: Pro tools layout (sticky info box, one card per tool, model-facing text), chat meta rows, chat settings sheet, gallery, black switch thumbs on 4 screens. Screens take ~2 s to settle.
