@@ -360,6 +360,7 @@ export const FIXED_ACTION_IDS: readonly string[] = [
   "recording-starting-hint",
   "reload-model-banner",
   "remote-image-model-loading",
+  "remote-models-show-all",
   "remote-text-model-loading",
   "remove-download-button",
   "remove-server",
