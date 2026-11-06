@@ -8,7 +8,7 @@ import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import type { DocumentPage } from '@offgrid/rag/documents';
 import { LoadingDots } from '../components/LoadingDots';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../components/AliveScreen';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
@@ -245,7 +245,7 @@ export const DocumentPreviewScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <AliveScreen style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} testID="document-preview-back">
           <Icon name="arrow-left" size={20} color={colors.text} />
@@ -301,6 +301,6 @@ export const DocumentPreviewScreen: React.FC = () => {
           <Text style={styles.emptyText}>No content available</Text>
         </View>
       )}
-    </SafeAreaView>
+    </AliveScreen>
   );
 };

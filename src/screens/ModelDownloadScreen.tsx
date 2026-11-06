@@ -6,7 +6,6 @@ import {
   Linking,
 } from 'react-native';
 import { LoadingDots } from '../components/LoadingDots';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button } from '../components';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
@@ -25,6 +24,7 @@ import { RootStackParamList } from '../navigation/types';
 import { NetworkSection } from './ModelDownloadHelpers';
 import logger from '../utils/logger';
 import { ModelsScreen } from './ModelsScreen';
+import { AliveScreen } from '../components/AliveScreen';
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, 'AdvancedSetup'> };
 
@@ -178,16 +178,16 @@ export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
   const liveServers = servers.filter((s) => reachableServerIds.has(s.id));
 
   if (isLoading) return (
-    <SafeAreaView style={styles.container}>
+    <AliveScreen style={styles.container} edges={['top', 'bottom']}>
       <View testID="model-download-loading" style={styles.loadingContainer}>
         <LoadingDots color={colors.primary} size={8} />
         <Text style={styles.loadingText}>Analyzing your device...</Text>
       </View>
-    </SafeAreaView>
+    </AliveScreen>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <AliveScreen style={styles.container} edges={['top', 'bottom']}>
       <View testID="model-download-screen" style={styles.container}>
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
           <View style={styles.header}>
@@ -237,7 +237,7 @@ export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
 
         <CustomAlert visible={alertState.visible} title={alertState.title} message={alertState.message} buttons={alertState.buttons} onClose={() => setAlertState(hideAlert())} />
       </View>
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 

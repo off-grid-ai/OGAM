@@ -8,7 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../components/AliveScreen';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button, Card } from '../components';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
@@ -98,7 +98,7 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <AliveScreen style={styles.container} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
@@ -199,7 +199,7 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
         buttons={alertState.buttons}
         onClose={() => setAlertState(hideAlert())}
       />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 

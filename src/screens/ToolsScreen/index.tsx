@@ -2,7 +2,7 @@ import React from 'react';
 import { AppSwitch } from '../../components/AppSwitch';
 import { View, Text, ScrollView } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../../components/AliveScreen';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -43,7 +43,7 @@ export const ToolsScreen: React.FC = () => {
   const showHint = enabledTools.length > 3 && !toolCountHintDismissed;
 
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+    <AliveScreen style={styles.root} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -117,7 +117,7 @@ export const ToolsScreen: React.FC = () => {
           Enabling more tools can confuse the model and increases latency on first response.
         </Text>
       </ScrollView>
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 

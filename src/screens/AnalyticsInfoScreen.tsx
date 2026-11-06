@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../components/AliveScreen';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
@@ -57,7 +57,7 @@ export const AnalyticsInfoScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <AliveScreen style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -79,7 +79,7 @@ export const AnalyticsInfoScreen: React.FC = () => {
         <ListBlock title="We share" icon="check" items={WE_SHARE} testID="analytics-we-share" />
         <ListBlock title="We never share" icon="x" items={WE_NEVER_SHARE} testID="analytics-we-never-share" />
       </ScrollView>
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 

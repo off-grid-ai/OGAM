@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { AppSwitch } from '../components/AppSwitch';
 import { View, Text, ScrollView } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../components/AliveScreen';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '../components/Button';
@@ -63,7 +63,7 @@ export const EngineUpdatesScreen: React.FC = () => {
   const packInUse = info?.source === 'pack';
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <AliveScreen style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -140,7 +140,7 @@ export const EngineUpdatesScreen: React.FC = () => {
           </Card>
         ) : null}
       </ScrollView>
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 

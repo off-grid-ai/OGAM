@@ -6,7 +6,7 @@ import {
   View,
 } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../components/AliveScreen';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -51,7 +51,7 @@ export const RemoteServerEditorScreen: React.FC = () => {
   }, [navigation, needsKey]);
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
+    <AliveScreen style={styles.screen} edges={['top']}>
       <ScreenHeader
         title={server ? 'Edit server' : 'Add a server'}
         onBack={close}
@@ -242,6 +242,6 @@ export const RemoteServerEditorScreen: React.FC = () => {
         </View>
       </ScrollView>
       <CustomAlert {...form.alertState} onClose={form.dismissAlert} />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
