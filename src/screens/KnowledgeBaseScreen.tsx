@@ -163,7 +163,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
   // One add, two ways in: a file from the phone, or text you paste.
   const chooseAdd = () =>
     Alert.alert('Add to Files', undefined, [
-      { text: 'A file', onPress: () => { handleAddDocument(); } },
+      { text: 'A file', onPress: () => { handleAddDocument().catch(() => { /* it shows its own error */ }); } },
       { text: 'Paste text', onPress: () => setPasting(true) },
       { text: 'Cancel', style: 'cancel' },
     ]);
