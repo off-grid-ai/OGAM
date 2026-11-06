@@ -116,7 +116,7 @@ button, textarea { font: inherit; color: inherit; }
       </div>
     </div>
     <div class="canvas"><div class="shot" id="shot"></div></div>
-    <div class="hint">Click anywhere on the screen to pin a note there. ← and → change screens.</div>
+    <div class="hint">Click anywhere on the screen to pin a note there. Arrow keys change screens · ⌘ Enter pins the note · Esc clears.</div>
   </main>
 
   <aside class="notes">
@@ -269,6 +269,7 @@ function go(i) {
   try { localStorage.setItem("goc-review-screen", screenId()); } catch (_) {}
   if (location.hash.slice(1) !== screenId()) history.replaceState(null, "", "#" + screenId());
   renderList(); renderStage(); renderThread(); renderCompose();
+  $("screens").children[current]?.scrollIntoView({ block: "nearest" });
 }
 
 function status(msg) {
@@ -306,11 +307,23 @@ $("compose").addEventListener("submit", async (e) => {
 $("cancel").onclick = () => { draft = null; renderPins(); renderCompose(); };
 $("prev").onclick = () => go(current - 1);
 $("next").onclick = () => go(current + 1);
+// Arrows move between screens from anywhere, including the note box while it's empty.
+// Once a note has text, arrows edit it; Cmd/Ctrl+Enter pins it, Esc lets go of the box.
+const step = { ArrowLeft: -1, ArrowUp: -1, k: -1, ArrowRight: 1, ArrowDown: 1, j: 1 };
 document.addEventListener("keydown", (e) => {
-  if (e.target.tagName === "TEXTAREA") return;
-  if (e.key === "ArrowLeft") go(current - 1);
-  if (e.key === "ArrowRight") go(current + 1);
-  if (e.key === "Escape") { draft = null; lit = null; renderPins(); renderThread(); renderCompose(); }
+  if (e.metaKey || e.ctrlKey || e.altKey) {
+    if (e.key === "Enter" && e.target.id === "text") { e.preventDefault(); $("compose").requestSubmit(); }
+    return;
+  }
+  if (e.key === "Escape") {
+    e.target.blur?.();
+    draft = null; lit = null; renderPins(); renderThread(); renderCompose();
+    return;
+  }
+  if (e.target.id === "text" && (e.target.value !== "" || e.key === "j" || e.key === "k")) return;
+  if (e.key in step) { e.preventDefault(); go(current + step[e.key]); }
+  else if (e.key === "Home") { e.preventDefault(); go(0); }
+  else if (e.key === "End") { e.preventDefault(); go(screens.length - 1); }
 });
 
 async function boot() {
