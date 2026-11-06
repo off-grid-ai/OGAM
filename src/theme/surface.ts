@@ -1,23 +1,18 @@
 import { StyleSheet } from 'react-native';
 import type { ThemeColors } from './palettes';
 
-// Desktop blurs what sits behind a card, so its glass hides the dot lattice. React Native has no
-// cheap backdrop blur, so a 4% glass showed every dot through the text (hand test 65). Mostly
-// opaque surface keeps the breathing light faintly and drops the dots.
-const CARD_OPACITY = 0.9;
-
-function withAlpha(hex: string, alpha: number): string {
-  const [r, g, b] = [1, 3, 5].map(i => Number.parseInt(hex.slice(i, i + 2), 16));
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
-/** The card's fill alone, for a row or chip that draws its own surface without the card's edge. */
+/**
+ * The card's fill alone, for a row or chip that draws its own surface without the card's edge.
+ * Glass: the living field shows through (Mac, 2026-11-06: "the transparent glass thing much much
+ * better ... more modern"). An opaque fill tried after hand test 65 read as flat; it was undone.
+ */
 export function cardFill(colors: ThemeColors): string {
-  return colors.surface.startsWith('#') ? withAlpha(colors.surface, CARD_OPACITY) : colors.surface;
+  return colors.surfaceGlass;
 }
 
 /**
- * The one card surface: a hairline edge and a faint top highlight over a mostly opaque surface.
+ * The one card surface, glass as desktop draws it: the living field shows through, a hairline edge
+ * and a faint top highlight.
  * Card, ListGroup and Home's cards all use it, so they change together.
  */
 export function cardSurface(colors: ThemeColors) {

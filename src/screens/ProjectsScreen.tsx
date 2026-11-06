@@ -275,7 +275,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   projectItem: {
     ...listRowStyle,
     paddingVertical: SPACING.sm,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceGlass,
   },
   projectContent: {
     flex: 1,
