@@ -102,7 +102,7 @@ async function addKeyedServerViaUI(ui: Ui) {
 
   await waitFor(() => expect(ui.queryByText('Add a server')).toBeNull());
   await waitFor(() => expect(ui.getByText(SERVER_NAME)).toBeTruthy());
-  await waitFor(() => expect(serverRow(ui).getByText('Connected')).toBeTruthy());
+  await waitFor(() => expect(serverRow(ui).getByText(/^Connected · /)).toBeTruthy());
   expect(ui.queryByText('No servers yet')).toBeNull();
 }
 
@@ -129,14 +129,14 @@ describe('a saved API key on the Remote Servers screen', () => {
     fireEvent.press(serverRow(ui).getByLabelText('Test'));
     await waitFor(() => expect(ui.getByText('Could not connect')).toBeTruthy());
     fireEvent.press(ui.getByText('OK'));
-    await waitFor(() => expect(serverRow(ui).getByText('Not answering')).toBeTruthy());
+    await waitFor(() => expect(serverRow(ui).getByText(/^Not answering · /)).toBeTruthy());
 
     // It comes back. Reopening the screen re-checks it; the server refuses any request without the
     // key, so the row only reads Connected if that check carried the saved key.
     server.failAll(null);
     await reopenRemoteServers(ui);
-    await waitFor(() => expect(serverRow(ui).getByText('Connected')).toBeTruthy());
-    expect(serverRow(ui).queryByText('Not answering')).toBeNull();
+    await waitFor(() => expect(serverRow(ui).getByText(/^Connected · /)).toBeTruthy());
+    expect(serverRow(ui).queryByText(/^Not answering · /)).toBeNull();
   });
 
   it('an LM Studio that refuses the key on its model probe reads as a refused key, not a healthy server', async () => {
@@ -151,8 +151,8 @@ describe('a saved API key on the Remote Servers screen', () => {
     await waitFor(() => expect(ui.getByText('Could not connect')).toBeTruthy());
     expect(ui.getByText(/rejected the saved API key \(HTTP 401\)/)).toBeTruthy();
     fireEvent.press(ui.getByText('OK'));
-    await waitFor(() => expect(serverRow(ui).getByText('Not answering')).toBeTruthy());
-    expect(serverRow(ui).queryByText('Connected')).toBeNull();
+    await waitFor(() => expect(serverRow(ui).getByText(/^Not answering · /)).toBeTruthy());
+    expect(serverRow(ui).queryByText(/^Connected · /)).toBeNull();
 
     // The editor's own check, run with the key it loads from the Keychain, says the same thing
     // rather than "Connected" with no models.
@@ -175,15 +175,15 @@ describe('a saved API key on the Remote Servers screen', () => {
 
     // Opening the screen runs its check, which cannot read the key: the earlier Connected must go.
     await reopenRemoteServers(ui);
-    await waitFor(() => expect(serverRow(ui).getByText('Not answering')).toBeTruthy());
-    expect(serverRow(ui).queryByText('Connected')).toBeNull();
+    await waitFor(() => expect(serverRow(ui).getByText(/^Not answering · /)).toBeTruthy());
+    expect(serverRow(ui).queryByText(/^Connected · /)).toBeNull();
 
     // Tapping Test says the check could not run.
     fireEvent.press(serverRow(ui).getByLabelText('Test'));
     await waitFor(() => expect(ui.getByText('Could not connect')).toBeTruthy());
     fireEvent.press(ui.getByText('OK'));
     await waitFor(() => expect(ui.queryByText('Could not connect')).toBeNull());
-    expect(serverRow(ui).getByText('Not answering')).toBeTruthy();
-    expect(serverRow(ui).queryByText('Connected')).toBeNull();
+    expect(serverRow(ui).getByText(/^Not answering · /)).toBeTruthy();
+    expect(serverRow(ui).queryByText(/^Connected · /)).toBeNull();
   });
 });

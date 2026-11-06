@@ -98,7 +98,7 @@ describe('saving an edited remote server', () => {
     await waitFor(() => expect(ui.getByText(/Connected \(\d+ms\)/)).toBeTruthy());
     fireEvent.press(ui.getByTestId('save-server'));
     fireEvent.press(await waitFor(() => ui.getByText('Continue')));
-    await waitFor(() => expect(serverRow(ui).getByText('Connected')).toBeTruthy());
+    await waitFor(() => expect(serverRow(ui).getByText(/^Connected · /)).toBeTruthy());
 
     // The key is rotated on the server: the old one is refused, and Test says so on the row.
     server.restore();
@@ -107,8 +107,8 @@ describe('saving an edited remote server', () => {
     await waitFor(() => expect(ui.getByText('Could not connect')).toBeTruthy());
     fireEvent.press(ui.getByText('OK'));
     // BEFORE: the row reads Not answering.
-    await waitFor(() => expect(serverRow(ui).getByText('Not answering')).toBeTruthy());
-    expect(serverRow(ui).queryByText('Connected')).toBeNull();
+    await waitFor(() => expect(serverRow(ui).getByText(/^Not answering · /)).toBeTruthy());
+    expect(serverRow(ui).queryByText(/^Connected · /)).toBeNull();
 
     // The person types the new key in the editor and saves.
     fireEvent.press(serverRow(ui).getByLabelText('Edit'));
@@ -122,8 +122,8 @@ describe('saving an edited remote server', () => {
     await waitFor(() => expect(ui.queryByText('Edit server')).toBeNull());
 
     // AFTER: back on the list, the row shows the status of the server as it is now.
-    await waitFor(() => expect(serverRow(ui).getByText('Connected')).toBeTruthy());
-    expect(serverRow(ui).queryByText('Not answering')).toBeNull();
+    await waitFor(() => expect(serverRow(ui).getByText(/^Connected · /)).toBeTruthy());
+    expect(serverRow(ui).queryByText(/^Not answering · /)).toBeNull();
     expect(ui.queryByText('Could not connect')).toBeNull();
   });
 });

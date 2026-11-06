@@ -127,7 +127,7 @@ async function addGatewayPickModelOpenChat({ view, rtl }: App) {
   expect(await view.findByText(/Connected \(\d+ms\)\s+1 model available/)).toBeTruthy();
   rtl.fireEvent.press(view.getByTestId('save-server'));
   expect(await view.findByText(SERVER_NAME)).toBeTruthy();
-  expect(await view.findByText('Connected')).toBeTruthy();
+  expect(await view.findByText(/^Connected · /)).toBeTruthy();
   rtl.fireEvent.press(view.getByLabelText('Back'));
 
   rtl.fireEvent.press(await view.findByTestId('browse-models-button'));

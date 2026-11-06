@@ -110,7 +110,7 @@ describe('a keyed server that refuses discovery', () => {
     expect(await view.findByText(/Connected \(\d+ms\)\s+1 model available/)).toBeTruthy();
     rtl.fireEvent.press(view.getByTestId('save-server'));
     expect(await view.findByText(SERVER_NAME)).toBeTruthy();
-    expect(await view.findByText('Connected')).toBeTruthy();
+    expect(await view.findByText(/^Connected · /)).toBeTruthy();
     rtl.fireEvent.press(view.getByLabelText('Back'));
 
     // The picker lists the server's model with Tool calling, learned from the keyed probes.

@@ -107,13 +107,13 @@ describe.each([
 
     rtl.fireEvent.press(view.getByTestId('save-server'));
     expect(await view.findByText(SERVER_NAME)).toBeTruthy();
-    expect(await view.findByText('Connected')).toBeTruthy();
-    expect(view.queryByText('Not answering')).toBeNull();
+    expect(await view.findByText(/^Connected · /)).toBeTruthy();
+    expect(view.queryByText(/^Not answering · /)).toBeNull();
 
     // Tapping Test on the saved row keeps it Connected, with no failure dialog.
     rtl.fireEvent.press(view.getByLabelText('Test'));
     await rtl.waitFor(() => expect(view.getByLabelText('Test')).not.toBeBusy());
-    expect(view.getByText('Connected')).toBeTruthy();
+    expect(view.getByText(/^Connected · /)).toBeTruthy();
     expect(view.queryByText('Could not connect')).toBeNull();
     rtl.fireEvent.press(view.getByLabelText('Back'));
 

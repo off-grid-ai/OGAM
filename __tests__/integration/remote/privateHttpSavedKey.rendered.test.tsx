@@ -34,11 +34,11 @@ it.each([200, 401, 403])('M7: the HTTP server response (%s) decides the connecti
     expect(await view.findByText(/Connected \(\d+ms\)/)).toBeTruthy();
     rtl.fireEvent.press(view.getByTestId('save-server'));
     expect(await view.findByText('Private studio')).toBeTruthy();
-    expect(await view.findByText('Connected')).toBeTruthy();
+    expect(await view.findByText(/^Connected · /)).toBeTruthy();
     if (status !== 200) server.failAll(status);
     rtl.fireEvent.press(view.getByLabelText('Test'));
     if (status === 200) {
-      expect(await view.findByText('Connected')).toBeTruthy();
+      expect(await view.findByText(/^Connected · /)).toBeTruthy();
       expect(view.queryByText('Could not connect')).toBeNull();
     } else {
       expect(await view.findByText(/rejected the API key/)).toBeTruthy();
