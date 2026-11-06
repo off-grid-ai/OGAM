@@ -31,6 +31,7 @@ import { PROJECT_DELETE_FALLBACK_REASON } from '../stores/projectDeleteOutcome';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
 import { useIsFocused } from '@react-navigation/native';
 import { LivingField } from '../components/LivingField';
+import { useProjectDocumentCounts } from '../hooks/useProjectDocumentCounts';
 
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'ProjectsTab'>,
@@ -69,6 +70,9 @@ export const ProjectsScreen: React.FC = () => {
     }
     return { chatCounts: counts, lastUsed: latest };
   }, [conversations]);
+
+  const projectIds = useMemo(() => projects.map(project => project.id), [projects]);
+  const documentCounts = useProjectDocumentCounts(projectIds, isFocused);
 
   const handleProjectPress = (project: Project) => {
     navigation.navigate('ProjectDetail', { projectId: project.id });
@@ -119,10 +123,8 @@ export const ProjectsScreen: React.FC = () => {
 
   const renderProject = ({ item, index }: { item: Project; index: number }) => {
     const chatCount = chatCounts[item.id] ?? 0;
-    const description =
-      item.description && item.description.trim().toLowerCase() !== item.name.trim().toLowerCase()
-        ? item.description
-        : null;
+    const documentCount = documentCounts[item.id] ?? 0;
+    const when = formatWhen(lastUsed[item.id] ?? item.updatedAt);
 
     return (
       <Swipeable
@@ -138,25 +140,22 @@ export const ProjectsScreen: React.FC = () => {
           testID={`project-row-${item.id}`}
           accessibilityRole="button"
           accessibilityLabel={item.name}
-          accessibilityHint={
-            item.description
-              ? `${chatCount} chats. ${item.description}`
-              : `${chatCount} chats`
-          }
+          accessibilityHint={`${chatCount} chats, ${documentCount} documents, last used ${when}`}
         >
-          {/* Name, then what it is for. The folder glyph repeated on every row said nothing, and a
-              description that only repeats the name is dropped (hand test 32). */}
+          {/* Every row the same two lines (screen review: one-line and two-line rows broke the
+              list's rhythm): the name, then what is in it and when it was last used. The
+              description lives on the project's own page. */}
           <View style={styles.projectContent}>
             <Text style={styles.projectName} numberOfLines={1}>{item.name}</Text>
-            {description ? (
-              <Text style={styles.projectDescription} numberOfLines={1}>
-                {description}
-              </Text>
-            ) : null}
+            <View style={styles.projectStats}>
+              <Icon name="message-circle" size={12} color={colors.textMuted} />
+              <Text style={styles.projectMeta} testID={`project-chats-${item.id}`}>{chatCount}</Text>
+              <Icon name="file-text" size={12} color={colors.textMuted} />
+              <Text style={styles.projectMeta} testID={`project-documents-${item.id}`}>{documentCount}</Text>
+              <Icon name="clock" size={12} color={colors.textMuted} />
+              <Text style={styles.projectMeta}>{when}</Text>
+            </View>
           </View>
-          <Text style={styles.projectMeta}>
-            {chatCount === 1 ? '1 chat' : `${chatCount} chats`} · {formatWhen(lastUsed[item.id] ?? item.updatedAt)}
-          </Text>
           <Icon name="chevron-right" size={14} color={colors.textMuted} />
         </AnimatedListItem>
       </Swipeable>
@@ -287,16 +286,17 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     fontWeight: '400' as const,
     flexShrink: 1,
   },
-  projectDescription: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.textSecondary,
-    marginTop: 1,
+  projectStats: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    marginTop: 2,
   },
   projectMeta: {
     ...TYPOGRAPHY.metaSmall,
     fontFamily: FONTS.mono,
     color: colors.textMuted,
-    marginHorizontal: SPACING.sm,
+    marginRight: SPACING.sm,
   },
   emptyState: {
     flex: 1,
