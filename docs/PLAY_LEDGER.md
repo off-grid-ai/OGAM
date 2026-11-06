@@ -539,3 +539,8 @@ Cold open lands at the newest message and holds; scroll-up stays with the jump-d
 ## Supervisor 16:10 (hand test 55, build 56 at 0495d7ae1)
 
 REGRESSION: two of three chat opens stayed blank (list kept opacity 0 after the style went to undefined; Fabric keeps the last prop). Reply in view and new-chat empty state pass. Fix: set opacity 1 explicitly when settled.
+
+## Supervisor 16:45 (hand test 56, build 57 at 63f1298fc) — milestone r13 (chat scroll)
+
+Blank-chat fixed. Cold open settles at the newest message; warm opens from Home, Chats and a project land at the newest; empty state shows; reply stays in view with the keyboard up. Watch: taps take >1 s while Sync runs; a 16 pt late settle after the cold open.
+Milestone shots: docs/play/r13-milestone/{chat-open-after,chat-sent-after}.png.
