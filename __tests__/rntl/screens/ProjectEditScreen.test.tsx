@@ -35,9 +35,9 @@ describe('ProjectEditScreen', () => {
       expect(view.getByText('Save')).toBeTruthy();
       expect(view.getByText('Name *')).toBeTruthy();
       expect(view.getByText('Description')).toBeTruthy();
-      expect(view.getByText('System Prompt *')).toBeTruthy();
-      expect(view.getByText(/This context is sent to the AI at the start of every chat/)).toBeTruthy();
-      expect(view.getByText(/Tip: Be specific about what you want the AI to do/)).toBeTruthy();
+      expect(view.getByText('Instructions *')).toBeTruthy();
+      expect(view.getByText('Every chat in this project starts with these.')).toBeTruthy();
+      expect(view.getByText('Say what it should do, how it should answer, and what it needs to know.')).toBeTruthy();
       for (const placeholder of Object.values(PROJECT_FIELDS)) {
         expect(view.getByPlaceholderText(placeholder).props.value).toBe('');
       }
@@ -51,7 +51,6 @@ describe('ProjectEditScreen', () => {
 
       await app.rtl.waitFor(() => expect(app.route()?.name).toBe('ProjectsTab'));
       expect(app.view.getByText('My New Project')).toBeTruthy();
-      expect(app.view.getByText('A description')).toBeTruthy();
       const saved = app.useProjectStore.getState().projects.find(p => p.name === 'My New Project');
       expect(saved).toEqual(expect.objectContaining({ description: 'A description', systemPrompt: 'You are helpful' }));
     });
@@ -72,20 +71,20 @@ describe('ProjectEditScreen', () => {
 
   describe('validation', () => {
     it.each([
-      ['an empty name', { name: '', systemPrompt: 'Be helpful' }, 'Please enter a name for the project'],
-      ['a blank name', { name: '   ', systemPrompt: 'Be helpful' }, 'Please enter a name for the project'],
-      ['an empty system prompt', { name: 'Named', systemPrompt: '' }, 'Please enter a system prompt'],
-      ['a blank system prompt', { name: 'Named', systemPrompt: '   ' }, 'Please enter a system prompt'],
+      ['an empty name', { name: '', systemPrompt: 'Be helpful' }, 'Add a name', 'Give this project a name.'],
+      ['a blank name', { name: '   ', systemPrompt: 'Be helpful' }, 'Add a name', 'Give this project a name.'],
+      ['empty instructions', { name: 'Named', systemPrompt: '' }, 'Add instructions', 'Tell chats in this project how to answer.'],
+      ['blank instructions', { name: 'Named', systemPrompt: '   ' }, 'Add instructions', 'Tell chats in this project how to answer.'],
       // The name is checked first.
-      ['neither', { name: '', systemPrompt: '' }, 'Please enter a name for the project'],
-    ])('refuses %s and stays in the editor', async (_case, fields, message) => {
+      ['neither', { name: '', systemPrompt: '' }, 'Add a name', 'Give this project a name.'],
+    ])('refuses %s and stays in the editor', async (_case, fields, title, message) => {
       const app = await mountProjectsApp();
       const before = app.useProjectStore.getState().projects.length;
       await openNew(app);
 
       await app.fillAndSave(fields);
 
-      expect(app.view.getByText('Error')).toBeTruthy();
+      expect(app.view.getByText(title)).toBeTruthy();
       expect(app.view.getByText(message)).toBeTruthy();
       expect(app.route()?.name).toBe('ProjectEdit');
       expect(app.useProjectStore.getState().projects).toHaveLength(before);

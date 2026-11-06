@@ -81,7 +81,7 @@ export const ProjectEditScreen: React.FC = () => {
 
   const handleSave = () => {
     if (!formData.name.trim()) {
-      setAlertState(showAlert('Error', 'Please enter a name for the project'));
+      setAlertState(showAlert('Add a name', 'Give this project a name.'));
       return;
     }
     if (!formData.systemPrompt.trim()) {

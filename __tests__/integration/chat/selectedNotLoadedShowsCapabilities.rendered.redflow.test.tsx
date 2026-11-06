@@ -2,7 +2,7 @@
  * DEVICE 2026-07-13 — a just-SELECTED Gemma 4 (GGUF) must show its Tools + Thinking settings
  * BEFORE it is loaded. Models load lazily (on first send), but the quick-settings popover derived
  * tools/thinking from the LOADED native context — so for a selected-but-not-loaded Gemma 4 the
- * Thinking toggle was hidden and Tools read "N/a", then both appeared the moment the first send
+ * Thinking toggle was hidden and Tools read "N/A", then both appeared the moment the first send
  * loaded the model. User: "even if the right model is selected like gemma 4, but it is not loaded,
  * it doesn't show me the appropriate settings… when the model was loaded it immediately showed it."
  *
@@ -13,8 +13,8 @@
  * Journey (real ChatScreen, real stores/services, fake only the native boundary): install a
  * Gemma-4-named GGUF selected-but-NOT-loaded (deferInitialLoad — the exact lazy-flow state) →
  * open the quick-settings popover via its real button → the Thinking toggle IS present and Tools
- * shows its count badge (not "N/a"). Falsifier: an unknown-named GGUF in the same unloaded state
- * still hides Thinking + reads "N/a" — proving the affordance is model-derived, not always-on.
+ * shows its count badge (not "N/A"). Falsifier: an unknown-named GGUF in the same unloaded state
+ * still hides Thinking + reads "N/A" — proving the affordance is model-derived, not always-on.
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
@@ -35,13 +35,13 @@ describe('selected-but-not-loaded GGUF shows its real capability settings (rende
     await rtl.act(async () => { rtl.fireEvent.press(btn); });
 
     // Terminal artifacts (pre-load): the Thinking toggle renders (RED: hidden until first send
-    // loads the model) and Tools shows its enabled count badge, not the unsupported "N/a".
+    // loads the model) and Tools shows its enabled count badge, not the unsupported "N/A".
     await rtl.waitFor(() => { expect(view.queryByTestId('quick-thinking-toggle')).not.toBeNull(); }, { timeout: 4000 });
     expect(view.getByTestId('quick-tools')).not.toHaveTextContent(/N\/a/i);
     expect(view.getByTestId('quick-tools')).toHaveTextContent(/Tools\s*\d+/);
   });
 
-  it('falsifier — an unknown-named GGUF in the same unloaded state promises nothing (no Thinking toggle, Tools N/a)', async () => {
+  it('falsifier — an unknown-named GGUF in the same unloaded state promises nothing (no Thinking toggle, Tools N/A)', async () => {
     const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android', deferInitialLoad: true });
     h.render();
     const { rtl } = h; const view = h.view!;
@@ -51,9 +51,9 @@ describe('selected-but-not-loaded GGUF shows its real capability settings (rende
 
     // The popover is open (Tools row renders)…
     await rtl.waitFor(() => { expect(view.queryByTestId('quick-tools')).not.toBeNull(); }, { timeout: 4000 });
-    // …but an unrecognized model gets no predicted promise: Thinking hidden, Tools reads N/a
+    // …but an unrecognized model gets no predicted promise: Thinking hidden, Tools reads N/A
     // (the quick-settings badge reads every value as a word).
     expect(view.queryByTestId('quick-thinking-toggle')).toBeNull();
-    expect(view.getByTestId('quick-tools')).toHaveTextContent(/N\/a/);
+    expect(view.getByTestId('quick-tools')).toHaveTextContent(/N\/A/);
   });
 });
