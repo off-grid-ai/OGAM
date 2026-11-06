@@ -1,3 +1,4 @@
+import { cardSurface } from '../theme/surface';
 import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
@@ -170,17 +171,49 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderLight,
   },
+  chatGroup: {
+    ...cardSurface(colors),
+    overflow: 'hidden' as const,
+    marginHorizontal: SPACING.xl,
+    marginBottom: SPACING.xl,
+  },
   chatItemWrapper: {
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
   },
   // A bare glyph, as on Chats: no grey disc behind it.
+  purposeRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.xl,
+    marginBottom: SPACING.lg,
+  },
   projectPurpose: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
-    paddingHorizontal: SPACING.xl,
-    marginBottom: SPACING.sm,
+    flex: 1,
   },
+  newChatButton: { paddingVertical: 6, paddingHorizontal: SPACING.md },
+  knowsGroup: {
+    ...cardSurface(colors),
+    overflow: 'hidden' as const,
+    marginHorizontal: SPACING.xl,
+    marginBottom: SPACING.lg,
+  },
+  knowsRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    minHeight: 56,
+  },
+  knowsRowDivided: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderLight },
+  knowsText: { flex: 1, gap: 2 },
+  knowsTitle: { ...TYPOGRAPHY.body, color: colors.text },
+  knowsDesc: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
+  chatsLabel: { marginLeft: SPACING.xl + SPACING.xs },
+  emptyChatsText: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, marginHorizontal: SPACING.xl + SPACING.xs },
   chatContent: {
     flex: 1,
   },

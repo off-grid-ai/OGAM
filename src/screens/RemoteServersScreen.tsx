@@ -38,6 +38,9 @@ import { createStyles } from './RemoteServersScreen.styles';
 import { AliveScreen } from '../components/AliveScreen';
 
 const DESKTOP_URL = withUtm(OFF_GRID_DESKTOP_URL, 'remote-servers');
+// Amber for a server not checked yet: the brand's palette has no amber, so it is named here.
+const STATUS_AMBER = '#F59E0B';
+
 const SCAN_KINDS: Array<{ kind: DiscoverableServerKind; label: string; port: number }> = [
   { kind: 'gateway', label: 'Off Grid AI Desktop', port: 7878 },
   { kind: 'ollama', label: 'Ollama', port: 11434 },
@@ -61,7 +64,6 @@ export const RemoteServersScreen: React.FC = () => {
   const savedScanKinds = useAppStore(s => s.settings.remoteScanKinds);
   // Unset means every kind; an empty list is a choice (all off), so it stays empty.
   const scanKinds = savedScanKinds ?? SCAN_KINDS.map(item => item.kind);
-  const [testingId, setTestingId] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanNote, setScanNote] = useState<string | null>(null);
   const [scanProgress, setScanProgress] = useState({ completed: 0, total: 0 });
@@ -77,22 +79,6 @@ export const RemoteServersScreen: React.FC = () => {
 
   // Status refresh belongs to this screen-open event, not every health projection update.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleTestServer = useCallback(async (serverId: string) => {
-    setTestingId(serverId);
-    try {
-      const result = await remoteServerManager.testConnection(serverId);
-      // The row's own status line already says Connected or Offline, so a success needs no
-      // dialog to dismiss. Only a failure earns one, because it carries the reason.
-      if (!result.success) {
-        setAlertState(showAlert('Could not connect', result.error || 'The server did not answer.'));
-      }
-    } catch (error) {
-      setAlertState(showAlert('Could not connect', error instanceof Error ? error.message : 'The server did not answer.'));
-    } finally {
-      setTestingId(null);
-    }
   }, []);
 
   const scanAbort = useRef<AbortController | null>(null);
@@ -165,29 +151,6 @@ export const RemoteServersScreen: React.FC = () => {
     }
   }, [scanKinds, navigation]);
 
-  const handleDeleteServer = useCallback(
-    (server: (typeof servers)[0]) => {
-      setAlertState(
-        showAlert(
-      'Remove this server',
-      `"${server.name}" will be removed from this phone. The server itself is not touched.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            if (activeServerId === server.id) setActiveServerId(null);
-            await remoteServerManager.removeServer(server.id);
-          },
-        },
-          ],
-        ),
-      );
-    },
-    [activeServerId, setActiveServerId],
-  );
-
   const handleUseServer = useCallback(
     async (server: (typeof servers)[0]) => {
       if (activeServerId === server.id) {
@@ -247,9 +210,8 @@ export const RemoteServersScreen: React.FC = () => {
               }
             />
           </View>
-        </View>
-
-        <View style={styles.card}>
+          {/* One surface for how servers are found (hand test 60: two stacked cards). */}
+          <View style={styles.cardDivider} />
           <Text style={styles.cardTitle}>Scan for</Text>
           {SCAN_KINDS.map(item => (
             <View key={item.kind} style={styles.scanKindRow}>
@@ -281,6 +243,7 @@ export const RemoteServersScreen: React.FC = () => {
           {isScanning ? (
             <Button
               title="Stop scan"
+              variant="secondary"
               onPress={handleStopScan}
               size="small"
               testID="stop-scan"
@@ -289,6 +252,7 @@ export const RemoteServersScreen: React.FC = () => {
           ) : (
             <Button
               title="Scan network"
+              variant="secondary"
               onPress={handleScanNetwork}
               disabled={scanKinds.length === 0}
               size="small"
@@ -347,21 +311,16 @@ export const RemoteServersScreen: React.FC = () => {
             <Text style={styles.sectionLabel}>Servers</Text>
             <ListGroup testID="server-list">
             {servers.map(server => {
-              const isTesting = testingId === server.id;
               const isActive = activeServerId === server.id;
               const health = serverHealth[server.id];
 
-              let statusColor = styles.statusDotUnknown;
-              if (health?.isHealthy === true)
-                statusColor = styles.statusDotActive;
-              else if (health?.isHealthy === false)
-                statusColor = styles.statusDotInactive;
-
-              let statusText = 'Not checked yet';
-              if (isTesting) statusText = 'Checking';
-              else if (health?.isHealthy === true) statusText = 'Connected';
-              else if (health?.isHealthy === false)
-                statusText = 'Not answering';
+              // The word says it; the dot lets a glance down the list find the one that works (Mac:
+              // green connected, amber not yet checked, red not answering).
+              // Every server is checked as this screen opens, so no answer yet means it is being checked.
+              let statusText = 'Checking';
+              let statusColor = STATUS_AMBER;
+              if (health?.isHealthy === true) { statusText = 'Connected'; statusColor = theme.colors.primary; }
+              else if (health?.isHealthy === false) { statusText = 'Not answering'; statusColor = theme.colors.error; }
 
               return (
                 <View
@@ -384,56 +343,37 @@ export const RemoteServersScreen: React.FC = () => {
                     accessibilityState={{ selected: isActive }}
                     testID={`server-use-${server.id}`}
                   >
-                    <View style={styles.serverTopRow}>
-                      {/* A radio, as on Models: tap a row to use that server. */}
-                      <Icon name={isActive ? 'check-circle' : 'circle'} size={16} color={isActive ? theme.colors.primary : theme.colors.textMuted} />
-                      <Text style={styles.serverName} numberOfLines={1}>
-                        {server.name}
-                      </Text>
-                      <View style={[styles.statusDot, statusColor]} />
-                      {/* Only the chosen server is marked; tapping any row chooses it (its label says so). */}
-                      {isActive && <Text style={styles.activeBadge}>In use</Text>}
+                    {/* A radio, as on Models: tap a row to use that server. It sits beside both lines,
+                        so the status lines up under the name, not under the circle. */}
+                    <Icon name={isActive ? 'check-circle' : 'circle'} size={16} color={isActive ? theme.colors.primary : theme.colors.textMuted} />
+                    <View style={styles.serverText}>
+                      <View style={styles.serverTopRow}>
+                        <Text style={styles.serverName} numberOfLines={1}>
+                          {server.name}
+                        </Text>
+                        {/* Only the chosen server is marked; tapping any row chooses it (its label says so). */}
+                        {isActive && <Text style={styles.activeBadge}>In use</Text>}
+                      </View>
+                      <View style={styles.serverTopRow}>
+                        <View style={[styles.statusDot, { backgroundColor: statusColor }]} testID={`server-status-dot-${server.id}`} />
+                        <Text style={styles.serverEndpoint} numberOfLines={1}>
+                          {statusText} · {server.endpoint}
+                        </Text>
+                      </View>
                     </View>
-                    <Text style={styles.serverEndpoint} numberOfLines={1}>
-                      {server.endpoint}
-                    </Text>
-                    <Text style={styles.serverStatus}>{statusText}</Text>
                   </TouchableOpacity>
 
-                  {/* Row actions as icon buttons (brand: one surface, actions at the row's end, never a
-                      bar of buttons under each item). Their words stay as accessible names. */}
-                  <View style={styles.serverActions}>
-                    <TouchableOpacity
-                      style={styles.serverAction}
-                      onPress={() => handleTestServer(server.id)}
-                      disabled={isTesting}
-                      accessibilityRole="button"
-                      accessibilityLabel="Test"
-                      accessibilityState={{ busy: isTesting, disabled: isTesting }}
-                    >
-                      <Icon name="activity" size={16} color={theme.colors.textSecondary} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.serverAction}
-                      onPress={() =>
-                        navigation.navigate('RemoteServerEditor', {
-                          serverId: server.id,
-                        })
-                      }
-                      accessibilityRole="button"
-                      accessibilityLabel="Edit"
-                    >
-                      <Icon name="edit-2" size={16} color={theme.colors.textSecondary} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.serverAction}
-                      onPress={() => handleDeleteServer(server)}
-                      accessibilityRole="button"
-                      accessibilityLabel="Remove"
-                    >
-                      <Icon name="trash-2" size={16} color={theme.colors.textSecondary} />
-                    </TouchableOpacity>
-                  </View>
+                  {/* One action at the row's end (hand test 64): open the server. Its screen tests the
+                      connection and removes it; this screen checks every server when it opens. */}
+                  <TouchableOpacity
+                    style={styles.serverAction}
+                    onPress={() => navigation.navigate('RemoteServerEditor', { serverId: server.id })}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit ${server.name}`}
+                    testID={`server-edit-${server.id}`}
+                  >
+                    <Icon name="chevron-right" size={18} color={theme.colors.textMuted} />
+                  </TouchableOpacity>
                 </View>
               );
             })}

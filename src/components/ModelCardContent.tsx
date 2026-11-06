@@ -95,7 +95,7 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
   credibilitySource,
   credibilityLabel,
   incompatibleReason,
-  isActive,
+  isActive: _isActive,
   facts: additionalFacts = [],
   capabilities,
   sourceBadge,
@@ -132,8 +132,9 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
     <>
       <View style={styles.denseTitleRow}>
         {credibilitySource === 'offgrid' && <MadeByOffGrid />}
+        {/* The verified mark sits right after the name, so it is in the same place on every row; at the
+            row's far edge it moved with whatever the row's action was (screen review). */}
         <Text style={styles.denseName} numberOfLines={1} testID={nameTestID}>{model.name}</Text>
-        {isActive ? <Text style={styles.denseInUse} testID="model-in-use">In use</Text> : null}
         <View style={styles.denseSourceGroup}>
           {sourceBadge === 'Remote' ? <Icon name="cloud" size={14} color={colors.textMuted} accessibilityLabel="Remote model" />
             : sourceBadge ? <Text style={styles.denseSource}>{sourceBadge}</Text> : null}
@@ -435,8 +436,14 @@ function DownloadedActions({ modelName, isActive, testID, colors, styles, onSele
   onSelect?: () => void; onDelete?: () => void; onRepairVision?: () => void; isRepairingVision?: boolean;
 }>) {
   const tid = (s: string) => testID ? `${testID}-${s}` : undefined;
-  // Downloaded is a fact, not the thing in use: a quiet tick. Emerald stays for "In use" (one accent).
-  if (!onSelect && !onDelete && !onRepairVision) return <Icon name="check" size={16} color={colors.textMuted} testID={tid('downloaded')} />;
+  // Downloaded is a fact, said in words: a tick beside the verified mark read as two checks on one
+  // row (screen review). Emerald stays for "In use" (one accent).
+  // In use or On phone, said in the one place at the row's end so the two line up (hand test 76).
+  if (!onSelect && !onDelete && !onRepairVision) {
+    return isActive
+      ? <Text style={styles.denseInUse} testID="model-in-use">In use</Text>
+      : <Text style={styles.downloadedLabel} testID={tid('downloaded')}>On phone</Text>;
+  }
   return (
     <>
       {isRepairingVision ? (

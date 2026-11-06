@@ -28,6 +28,13 @@ import {
 
 // Mock the stripControlTokens utility
 
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+/** One item of the Details line ("a · b"): the line reads as a sentence, so its first item starts with a capital. */
+const metaItem = (item: string) => {
+  const first = item.charAt(0).toUpperCase() + item.slice(1);
+  return new RegExp(`(^${escapeRegExp(first)}| · ${escapeRegExp(item)})( · |$)`);
+};
+
 describe('ChatMessage', () => {
   const _defaultProps = {
     message: createUserMessage('Hello world'),
@@ -808,13 +815,13 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByTestId, getByText } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
       expect(getByTestId('generation-meta')).toBeTruthy();
-      expect(getByText('Metal')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('ran on the GPU (Metal)'));
     });
 
     it('shows GPU backend when GPU was used', () => {
@@ -827,12 +834,14 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText(/Metal.*32L/)).toBeTruthy();
+      // Where it ran, in words; the layer count is no longer shown.
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('ran on the GPU (Metal)'));
+      expect(getByTestId('generation-meta')).not.toHaveTextContent(/32L/);
     });
 
     it('shows CPU when GPU was not used', () => {
@@ -844,12 +853,12 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('CPU')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('ran on the CPU'));
     });
 
     it('displays tokens per second', () => {
@@ -861,12 +870,12 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('22.3 tok/s')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('wrote 22.3 tokens a second'));
     });
 
     it('displays time to first token', () => {
@@ -882,7 +891,7 @@ describe('ChatMessage', () => {
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText(/TTFT.*0\.45s/)).toBeTruthy();
+      expect(getByText(/first word in 0\.45s/)).toBeTruthy();
     });
 
     it('displays model name', () => {
@@ -893,12 +902,12 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('Phi-3-mini-Q4_K_M')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('Phi-3-mini-Q4_K_M'));
     });
 
     it('displays image generation metadata', () => {
@@ -911,14 +920,14 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('20 steps')).toBeTruthy();
-      expect(getByText('cfg 7.5')).toBeTruthy();
-      expect(getByText('512x512')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('20 steps'));
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('cfg 7.5'));
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('512x512'));
     });
 
     it('hides metadata when showGenerationDetails is false', () => {
@@ -1090,12 +1099,12 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('150 tokens')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('150 tokens long'));
     });
 
     it('does not display token count when 0', () => {
@@ -1579,12 +1588,12 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('GPU')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('ran on the GPU'));
     });
   });
 

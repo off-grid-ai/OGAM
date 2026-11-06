@@ -21,12 +21,20 @@ const createLayoutStyles = (colors: ThemeColors) => ({
     marginBottom: SPACING.lg,
   },
   // The gap covers the crown's -4 pt pulled-back frame, so neighbours meet but never overlap.
+  // The icons centre on the title's line, and the crown's glyph ends where New chat ends below it, so
+  // the header's right edge is one line (screen review: the icons sat inset and high).
   headerActions: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: SPACING.sm,
+    alignSelf: 'center' as const,
+    gap: SPACING.xs,
+    marginRight: -9,
   },
-  newChatButton: { minHeight: 44 },
+  // A compact pill that sits level with the title, not a slab that outweighs it (Mac, 2026-11-06).
+  newChatButton: { paddingVertical: 6, paddingHorizontal: SPACING.md },
+  brand: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.sm },
+  appLogo: { width: 32, height: 32 },
+  promiseRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: SPACING.md },
   crownButton: {
     width: 44,
     height: 44,
@@ -44,15 +52,20 @@ const createLayoutStyles = (colors: ThemeColors) => ({
     flex: 1,
     gap: 2,
   },
-  // brand/DESIGN_PHILOSOPHY.md Mobile profile: one screen title is TYPOGRAPHY.h2 (h1 is for rare hero text).
+  // Home is the app's front door, so its name is the large title (h1), as desktop's Home page header.
+  // h1 is 24 pt at weight 300, which read thin and small beside the pill (Mac, 2026-11-06). The app's
+  // name is larger and a regular weight, sized with the 32 pt mark beside it.
   title: {
-    ...TYPOGRAPHY.h2,
+    ...TYPOGRAPHY.h1,
+    fontSize: 30,
+    fontWeight: '400' as const,
     color: colors.text,
-    flex: 1,
+    flexShrink: 1,
   },
   subtitle: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
+    flexShrink: 1,
   },
 });
 const createModelCardStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
@@ -139,9 +152,9 @@ const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   galleryCardInfo: {
     flex: 1,
   },
+  // The same weight as the Clipboard and Sync rows above it (brand: 400; hand test 80).
   galleryCardTitle: {
     ...TYPOGRAPHY.body,
-    fontWeight: '500' as const,
     color: colors.text,
   },
   galleryCardMeta: {
@@ -258,10 +271,10 @@ const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textMuted,
   },
   // A row in the Recent ListGroup: flat, the group draws the surface and the hairlines.
+  // Glass like every card: the row sits in a ListGroup, so it draws no fill of its own.
   conversationItem: {
     ...listRowStyle,
     paddingVertical: SPACING.sm + 2,
-    backgroundColor: colors.surface,
   },
   conversationInfo: {
     flex: 1,

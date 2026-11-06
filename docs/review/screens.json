@@ -1,0 +1,210 @@
+[
+  {
+    "id": "home",
+    "name": "Home",
+    "group": "Home",
+    "what": "The front door: name, promise, New chat, models, recent chats",
+    "file": "screens/home.jpg",
+    "before": "screens/before/home.jpg"
+  },
+  {
+    "id": "chats",
+    "name": "Chats",
+    "group": "Chats",
+    "what": "Every chat, searchable",
+    "file": "screens/chats.jpg",
+    "before": "screens/before/chats.jpg"
+  },
+  {
+    "id": "chat",
+    "name": "A chat",
+    "group": "Chat",
+    "what": "A conversation with a reply",
+    "file": "screens/chat.jpg",
+    "before": "screens/before/chat.jpg"
+  },
+  {
+    "id": "chat-options-menu",
+    "name": "Chat options",
+    "group": "Chat",
+    "what": "The + menu beside the composer",
+    "file": "screens/chat-options-menu.jpg",
+    "before": "screens/before/chat-options-menu.jpg"
+  },
+  {
+    "id": "chat-settings-sheet",
+    "name": "Chat settings",
+    "group": "Chat",
+    "what": "Settings for this chat",
+    "file": "screens/chat-settings-sheet.jpg",
+    "before": "screens/before/chat-settings-sheet.jpg"
+  },
+  {
+    "id": "projects",
+    "name": "Projects",
+    "group": "Projects",
+    "what": "All projects",
+    "file": "screens/projects.jpg",
+    "before": "screens/before/projects.jpg"
+  },
+  {
+    "id": "project",
+    "name": "A project",
+    "group": "Projects",
+    "what": "One project's chats",
+    "file": "screens/project.jpg",
+    "before": "screens/before/project.jpg"
+  },
+  {
+    "id": "project-knowledge",
+    "name": "Project knowledge base",
+    "group": "Projects",
+    "what": "Documents a project answers from",
+    "file": "screens/project-knowledge.jpg",
+    "before": "screens/before/project-knowledge.jpg"
+  },
+  {
+    "id": "models-text",
+    "name": "Models: Text",
+    "group": "Models",
+    "what": "Text models to download and use",
+    "file": "screens/models-text.jpg",
+    "before": "screens/before/models-text.jpg"
+  },
+  {
+    "id": "models-documents",
+    "name": "Models: Documents",
+    "group": "Models",
+    "what": "The document search model",
+    "file": "screens/models-documents.jpg",
+    "before": "screens/before/models-documents.jpg"
+  },
+  {
+    "id": "downloads",
+    "name": "Downloads",
+    "group": "Models",
+    "what": "Downloads in progress and on this phone",
+    "file": "screens/downloads.jpg",
+    "before": "screens/before/downloads.jpg"
+  },
+  {
+    "id": "gallery",
+    "name": "Gallery",
+    "group": "Gallery",
+    "what": "Generated images and videos",
+    "file": "screens/gallery.jpg",
+    "before": "screens/before/gallery.jpg"
+  },
+  {
+    "id": "gallery-viewer",
+    "name": "Image viewer",
+    "group": "Gallery",
+    "what": "One image, full screen",
+    "file": "screens/gallery-viewer.jpg",
+    "before": "screens/before/gallery-viewer.jpg"
+  },
+  {
+    "id": "settings",
+    "name": "Settings",
+    "group": "Settings",
+    "what": "Settings, top",
+    "file": "screens/settings.jpg",
+    "before": "screens/before/settings.jpg"
+  },
+  {
+    "id": "settings-lower",
+    "name": "Settings, lower",
+    "group": "Settings",
+    "what": "Settings, scrolled down",
+    "file": "screens/settings-lower.jpg",
+    "before": "screens/before/settings-lower.jpg"
+  },
+  {
+    "id": "settings-model",
+    "name": "Model settings",
+    "group": "Settings",
+    "what": "How the models run",
+    "file": "screens/settings-model.jpg",
+    "before": "screens/before/settings-model.jpg"
+  },
+  {
+    "id": "settings-document-search",
+    "name": "Document search",
+    "group": "Settings",
+    "what": "Which model finds passages in documents",
+    "file": "screens/settings-document-search.jpg",
+    "before": "screens/before/settings-document-search.jpg"
+  },
+  {
+    "id": "settings-remote-servers",
+    "name": "Remote servers",
+    "group": "Settings",
+    "what": "Use models running on another computer",
+    "file": "screens/settings-remote-servers.jpg",
+    "before": "screens/before/settings-remote-servers.jpg"
+  },
+  {
+    "id": "settings-storage",
+    "name": "Storage",
+    "group": "Settings",
+    "what": "What takes space",
+    "file": "screens/settings-storage.jpg",
+    "before": "screens/before/settings-storage.jpg"
+  },
+  {
+    "id": "settings-device-information",
+    "name": "Device information",
+    "group": "Settings",
+    "what": "This phone's hardware and what it can run",
+    "file": "screens/settings-device-information.jpg",
+    "before": "screens/before/settings-device-information.jpg"
+  },
+  {
+    "id": "settings-security",
+    "name": "Security",
+    "group": "Settings",
+    "what": "App lock",
+    "file": "screens/settings-security.jpg",
+    "before": "screens/before/settings-security.jpg"
+  },
+  {
+    "id": "settings-engine-updates",
+    "name": "Engine updates",
+    "group": "Settings",
+    "what": "How the engine stays current",
+    "file": "screens/settings-engine-updates.jpg",
+    "before": "screens/before/settings-engine-updates.jpg"
+  },
+  {
+    "id": "settings-what-we-share",
+    "name": "What we share",
+    "group": "Settings",
+    "what": "What analytics sends and never sends",
+    "file": "screens/settings-what-we-share.jpg",
+    "before": "screens/before/settings-what-we-share.jpg"
+  },
+  {
+    "id": "settings-about",
+    "name": "About",
+    "group": "Settings",
+    "what": "About Off Grid AI",
+    "file": "screens/settings-about.jpg",
+    "before": "screens/before/settings-about.jpg"
+  },
+  {
+    "id": "tools",
+    "name": "Tools",
+    "group": "Tools",
+    "what": "Tools the model can use",
+    "file": "screens/tools.jpg",
+    "before": "screens/before/tools.jpg"
+  },
+  {
+    "id": "pro-tools",
+    "name": "Pro tools",
+    "group": "Tools",
+    "what": "Email, calendar and MCP servers",
+    "file": "screens/pro-tools.jpg",
+    "before": "screens/before/pro-tools.jpg"
+  }
+]

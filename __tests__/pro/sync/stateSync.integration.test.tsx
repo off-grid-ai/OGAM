@@ -321,7 +321,7 @@ describe('Pro mobile state sync journey', () => {
     );
     fireEvent.press(ui.getByTestId('settings-tab'));
     fireEvent.press(ui.getByText('Model settings'));
-    fireEvent.press(ui.getByTestId('general-generation-accordion'));
+    fireEvent.press(ui.getByTestId('model-settings-tab-general'));
     fireEvent.press(ui.getByTestId('show-gen-details-on-button'));
     fireEvent.press(ui.getByLabelText('Back'));
     fireEvent.press(await waitFor(() => ui!.getByTestId('open-sync-settings')));
@@ -450,8 +450,8 @@ describe('Pro mobile state sync journey', () => {
     expect(
       ui.getByText('I should confirm the notes before searching.'),
     ).toBeTruthy();
-    fireEvent.press(ui.getByText('Generation details'));
-    expect(ui.getByText('42.5 tok/s')).toBeTruthy();
+    fireEvent.press(ui.getByTestId('generation-details-toggle'));
+    expect(ui.getByTestId('generation-meta')).toHaveTextContent(/(^| · )wrote 42\.5 tokens a second( · |$)/);
 
     // A returning desktop can send a full wire batch of tombstones. The phone must finish the
     // batch and leave navigation responsive after removing those turns from its chat projection.
@@ -505,8 +505,8 @@ describe('Pro mobile state sync journey', () => {
         ).length ?? 0;
     await waitFor(() => expect(visibleBurstCount()).toBeGreaterThan(0));
     expect(visibleBurstCount()).toBeLessThan(burstIds.length);
-    fireEvent.press(ui.getByText('Generation details'));
-    expect(ui.queryByText('42.5 tok/s')).toBeNull();
+    fireEvent.press(ui.getByTestId('generation-details-toggle'));
+    expect(ui.queryByTestId('generation-meta')).toBeNull();
     await waitFor(() =>
       expect(
         useChatStore
@@ -542,8 +542,8 @@ describe('Pro mobile state sync journey', () => {
           ),
       ).toHaveLength(0),
     );
-    fireEvent.press(ui.getByText('Generation details'));
-    expect(ui.getByText('42.5 tok/s')).toBeTruthy();
+    fireEvent.press(ui.getByTestId('generation-details-toggle'));
+    expect(ui.getByTestId('generation-meta')).toHaveTextContent(/(^| · )wrote 42\.5 tokens a second( · |$)/);
 
     remoteLog.record(CORE_SYNC_ENTITIES.message, 'older-gap-message', 'put', {
       conversation_id: 'remote-conversation',
@@ -618,7 +618,7 @@ describe('Pro mobile state sync journey', () => {
     );
     fireEvent.changeText(
       ui.getByPlaceholderText(
-        'Enter the instructions or context for the AI...',
+        'How should chats here answer, and what should they know?',
       ),
       'Keep these notes concise.',
     );
@@ -663,7 +663,7 @@ describe('Pro mobile state sync journey', () => {
     fireEvent.press(ui.getByTestId('settings-tab'));
     fireEvent.press(ui.getByText('Model settings'));
     fireEvent.press(
-      await waitFor(() => ui!.getByTestId('text-generation-accordion')),
+      await waitFor(() => ui!.getByTestId('model-settings-tab-text')),
     );
     await waitFor(() =>
       expect(ui!.getByTestId('llama-temperature-value').props.children).toBe(
@@ -792,7 +792,7 @@ describe('Pro mobile state sync journey', () => {
     fireEvent.press(ui.getByTestId('settings-tab'));
     fireEvent.press(ui.getByText('Model settings'));
     fireEvent.press(
-      await waitFor(() => ui!.getByTestId('text-generation-accordion')),
+      await waitFor(() => ui!.getByTestId('model-settings-tab-text')),
     );
     expect(ui.getByTestId('llama-temperature-value').props.children).toBe(
       winningTemperature.value,

@@ -1,3 +1,4 @@
+import { cardSurface } from '../../theme/surface';
 import { StyleSheet } from 'react-native';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import type { ThemeColors, ThemeShadows } from '../../theme';
@@ -55,15 +56,13 @@ const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingVertical: 12,
     color: colors.text,
   },
+  // Glass like every card.
   importProgressCard: {
+    ...cardSurface(colors),
     marginHorizontal: SPACING.md,
     marginTop: 12,
     marginBottom: 8,
     padding: 16,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
     gap: 10,
   },
   importProgressHeader: {
@@ -148,6 +147,8 @@ const createFilterStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   // Toolbar actions are bare glyphs with a 44px target; the chosen one shows by its emerald glyph.
   filterToggle: { width: 44, height: 44, margin: -3, alignItems: 'center' as const, justifyContent: 'center' as const },
   filterToggleActive: {},
+  // Bars of three lengths turned on their side: the usual sort mark.
+  sortGlyph: { transform: [{ rotate: '90deg' }, { scaleX: -1 }] },
   filterDot: {
     position: 'absolute' as const,
     top: 6,

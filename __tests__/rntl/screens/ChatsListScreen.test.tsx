@@ -100,7 +100,7 @@ describe('ChatsListScreen', () => {
 
       expect(view.getByText('Chats')).toBeTruthy();
       expect(view.getByText('New')).toBeTruthy();
-      expect(view.getByText('No Chats Yet')).toBeTruthy();
+      expect(view.getByText('No chats yet')).toBeTruthy();
       expect(view.getByText('Download a model from the Models tab to start chatting.')).toBeTruthy();
       expect(view.queryByText('New chat')).toBeNull();
     });
@@ -169,7 +169,7 @@ describe('ChatsListScreen', () => {
       const { view } = app.render();
 
       expect(view.getByTestId('conversation-list')).toBeTruthy();
-      expect(view.queryByText('No Chats Yet')).toBeNull();
+      expect(view.queryByText('No chats yet')).toBeNull();
       expect(app.rtl.within(view.getByTestId('conversation-item-0')).getByText('Newer Chat')).toBeTruthy();
       expect(app.rtl.within(view.getByTestId('conversation-item-1')).getByText('Older Chat')).toBeTruthy();
     });
@@ -204,10 +204,14 @@ describe('ChatsListScreen', () => {
       expect(rowOf(app, view, 'Orphan Chat').queryByText('Code Review')).toBeNull();
     });
 
-    it('dates a chat under its day heading: the clock time today and yesterday, the weekday this week, else the date', () => {
+    it('dates a chat under its day heading: the clock time today and yesterday, the weekday this week, Last week, N weeks ago, else the date', () => {
       const app = boot();
-      jest.useFakeTimers({ now: new Date(2026, 9, 16, 9, 30) });
+      jest.useFakeTimers({ now: new Date(2026, 8, 1, 9, 30) });
       app.chat('Old Chat');
+      jest.setSystemTime(new Date(2026, 9, 16, 9, 30));
+      app.chat('Two Weeks Chat');
+      jest.setSystemTime(new Date(2026, 9, 22, 9, 30));
+      app.chat('Last Week Chat');
       jest.setSystemTime(new Date(2026, 9, 27, 9, 30));
       app.chat('Recent Chat');
       jest.setSystemTime(new Date(2026, 9, 29, 9, 30));
@@ -225,7 +229,9 @@ describe('ChatsListScreen', () => {
       expect(dateOf(1)).toMatch(/9:30/);
       expect(view.getByText('Yesterday')).toBeTruthy();
       expect(dateOf(2)).toMatch(/^Tue/);
-      expect(dateOf(3)).toMatch(/Oct\s*16|16\s*Oct/);
+      expect(dateOf(3)).toBe('Last week');
+      expect(dateOf(4)).toBe('2 weeks ago');
+      expect(dateOf(5)).toMatch(/Sep\s*1\b|\b1\s*Sep/);
     });
 
     it('opening a chat makes it the active one and shows it', async () => {
@@ -267,7 +273,7 @@ describe('ChatsListScreen', () => {
       await app.rtl.act(async () => { app.rtl.fireEvent.press(view.getByText('Delete')); });
 
       await app.rtl.waitFor(() => expect(view.queryByText('To Delete')).toBeNull());
-      expect(view.getByText('No Chats Yet')).toBeTruthy();
+      expect(view.getByText('No chats yet')).toBeTruthy();
       expect(app.stores.chat.getState().conversations).toHaveLength(0);
     });
   });

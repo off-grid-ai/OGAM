@@ -5,6 +5,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
+import { cardFill } from '../../theme/surface';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import type { ModelRowLabels, ModelRowType } from './ModelsManagerSheet';
 
@@ -136,7 +137,7 @@ const createStyles = (colors: ThemeColors) => ({
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
-    backgroundColor: colors.surfaceGlass,
+    backgroundColor: cardFill(colors),
   },
   // In use: desktop's selected chip, an emerald outline and text on a faint emerald fill.
   chipInUse: {

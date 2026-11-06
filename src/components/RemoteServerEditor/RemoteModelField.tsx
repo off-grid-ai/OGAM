@@ -120,7 +120,8 @@ export const RemoteModelField: React.FC<Props> = ({
 };
 
 const createStyles = (colors: ThemeColors) => ({
-  field: { gap: SPACING.xs as number },
+  // Room above each field so its label does not touch the field before it (hand test 67).
+  field: { gap: SPACING.sm as number, marginTop: SPACING.lg },
   label: {
     ...TYPOGRAPHY.label,
     color: colors.textMuted,

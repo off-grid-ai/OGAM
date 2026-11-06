@@ -125,7 +125,7 @@ async function mount(opts: {
 /** Mount and wait for the device analysis to finish. */
 async function mountLoaded(opts: Parameters<typeof mount>[0] = {}): Promise<Setup> {
   const setup = await mount(opts);
-  await setup.rtl.waitFor(() => expect(setup.view.getByText('Advanced Setup')).toBeTruthy());
+  await setup.rtl.waitFor(() => expect(setup.view.getByText('Advanced setup')).toBeTruthy());
   return setup;
 }
 
@@ -146,13 +146,13 @@ describe('Advanced Setup', () => {
 
     await rtl.waitFor(() => expect(view.getByTestId('model-download-screen')).toBeTruthy());
     expect(view.queryByText(/Analyzing your device/)).toBeNull();
-    expect(view.getByText('Advanced Setup')).toBeTruthy();
+    expect(view.getByText('Advanced setup')).toBeTruthy();
     expect(view.getByText('Run a model from your network or on this device.')).toBeTruthy();
-    expect(view.getByText('Network Models')).toBeTruthy();
-    expect(view.getByText('On This Device')).toBeTruthy();
-    expect(view.getByText('Your Device')).toBeTruthy();
+    expect(view.getByText('Network models')).toBeTruthy();
+    expect(view.getByText('On this device')).toBeTruthy();
+    expect(view.getByText('Your device')).toBeTruthy();
     // Total, not available: an "available" number moves with whatever else the phone is doing.
-    expect(view.getByText('Total Memory')).toBeTruthy();
+    expect(view.getByText('Total memory')).toBeTruthy();
     expect(view.getByText('8.00 GB')).toBeTruthy();
   });
 
@@ -175,7 +175,7 @@ describe('Advanced Setup', () => {
   it('Add Server opens the server editor', async () => {
     const { rtl, view, route } = await mountLoaded();
 
-    rtl.fireEvent.press(view.getByText('Add Server'));
+    rtl.fireEvent.press(view.getByText('Add server'));
 
     await rtl.waitFor(() => expect(route()).toBe('RemoteServerEditor'));
   });
@@ -206,7 +206,10 @@ describe('Advanced Setup', () => {
 
       await rtl.act(async () => { await device.finishDownload(row.downloadId, 4 * GB); });
 
-      await rtl.waitFor(() => expect(view.getByTestId('model-card-0-downloaded')).toBeTruthy());
+      // The downloaded model is picked for chats, so its row says In use where On phone would sit.
+      await rtl.waitFor(() =>
+        expect(rtl.within(view.getByTestId('model-card-0')).getByTestId('model-in-use')).toHaveTextContent('In use'),
+      );
       expect(await device.fs.module.exists(`${device.modelsDir}/${QWEN_08B_FILE}`)).toBe(true);
       // Success is the tick on the card, not a sheet.
       expect(view.queryByText('Download Complete!')).toBeNull();
@@ -222,6 +225,7 @@ describe('Advanced Setup', () => {
       await rtl.waitFor(() => expect(view.getByText('Download Failed')).toBeTruthy());
       expect(view.getByText(/Not enough storage on the phone/)).toBeTruthy();
       expect(view.queryByTestId('model-card-0-downloaded')).toBeNull();
+      expect(view.queryByTestId('model-in-use')).toBeNull();
     });
 
     it('shows Download Failed when the downloader refuses to start', async () => {
@@ -293,7 +297,7 @@ describe('Advanced Setup', () => {
       const { rtl, view } = await mountLoaded({ lan: {} });
       expect(view.queryByText('No Servers Found')).toBeNull();
 
-      await rtl.act(async () => { rtl.fireEvent.press(view.getByText('Scan Network')); });
+      await rtl.act(async () => { rtl.fireEvent.press(view.getByText('Scan network')); });
 
       await rtl.waitFor(() => expect(view.getByText('No Servers Found')).toBeTruthy());
       expect(view.getByText(/same WiFi network/)).toBeTruthy();
@@ -305,7 +309,7 @@ describe('Advanced Setup', () => {
       const Keychain = require('react-native-keychain');
       Keychain.getGenericPassword.mockRejectedValue(new Error('User interaction is not allowed'));
       try {
-        await rtl.act(async () => { rtl.fireEvent.press(view.getByText('Scan Network')); });
+        await rtl.act(async () => { rtl.fireEvent.press(view.getByText('Scan network')); });
 
         await rtl.waitFor(() => expect(view.getByText('Scan Failed')).toBeTruthy());
         expect(view.getByText(/Could not scan your network/)).toBeTruthy();

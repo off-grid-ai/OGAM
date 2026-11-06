@@ -100,9 +100,10 @@ describe.each([
     // Relaunch: a fresh app over the same disk, databases and saved settings. Nothing is seeded again.
     const next = await launchProjectChatApp({ ...options, relaunchFrom: disk });
     await next.openProject(PROJECT);
-    next.rtl.fireEvent.press(next.view.getByTestId('project-tab-knowledge'));
+    await next.openFiles();
     expect(next.view.getByText(ORCHARD.name)).toBeTruthy();
     expect(next.view.getByText(LIGHTHOUSE.name)).toBeTruthy();
+    await next.closeFiles();
     await next.newProjectChat();
     {
       const { page, view, rtl } = await askAndOpenCitation(next);

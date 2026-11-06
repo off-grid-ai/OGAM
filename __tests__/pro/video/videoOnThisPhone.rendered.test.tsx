@@ -20,6 +20,7 @@ jest.unmock('@react-navigation/native');
 import { GB } from '../../harness/nativeBoundary';
 import { launchApp, passOnboarding, restoreBuildFlavor, type AnalyticsApp } from '../../harness/analyticsApp';
 import { installNativeVideoEngine, phoneDownloads, type NativeVideoEngine, type PhoneDownloads } from '../../harness/nativeVideoEngine';
+import { pressModelSettingsBack } from '../../harness/modelSettingsBack';
 
 /** Wan 2.1 (1.3B), FP16: the catalog build Android runs whose files carry no published checksum. */
 const MODEL = { id: 'Comfy-Org/Wan_2.1_ComfyUI_repackaged', name: 'Wan 2.1 (1.3B), FP16', files: 3 };
@@ -622,13 +623,15 @@ it('a phone judged too small can still ask for the full size in settings, and th
   rtl.fireEvent.press(await view.findByTestId(`video-model-row-${MODEL.id}`, {}, { timeout: 5000 }));
   rtl.fireEvent.press(await view.findByTestId('new-chat-button', {}, { timeout: 5000 }));
   await view.findByTestId('chat-input');
+  // The chat's settings → Model settings → the "Image & video" tab.
   rtl.fireEvent.press(view.getByTestId('chat-settings-icon'));
-  rtl.fireEvent.press(await view.findByText('Video generation'));
+  rtl.fireEvent.press(await view.findByTestId('chat-settings-open-model-settings'));
+  rtl.fireEvent.press(await view.findByTestId('model-settings-tab-image'));
   rtl.fireEvent.press(await view.findByTestId('video-settings-try-full-size'));
   await view.findByTestId('video-settings-use-recommended');
   expect(view.queryByTestId('video-settings-try-full-size')).toBeNull();
-  const close = view.queryAllByTestId('app-sheet-close');
-  if (close.length) rtl.fireEvent.press(close[close.length - 1]);
+  // Back to the chat.
+  pressModelSettingsBack(view, rtl);
   current.engine.hold();
   rtl.fireEvent.press(view.getByTestId('quick-settings-button'));
   rtl.fireEvent.press(await view.findByTestId('quick-video-mode'));

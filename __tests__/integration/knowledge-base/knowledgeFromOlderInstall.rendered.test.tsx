@@ -89,8 +89,9 @@ describe('a knowledge-base PDF from before an iOS update', () => {
     const next = await launchProjectChatApp({ ...options, relaunchFrom: disk });
     const { view, rtl } = next;
     await next.openProject(PROJECT);
-    rtl.fireEvent.press(view.getByTestId('project-tab-knowledge'));
+    await next.openFiles();
     expect(view.getByText(PDF.name)).toBeTruthy();
+    await next.closeFiles();
     await next.newProjectChat();
     expect(view.queryAllByRole('link')).toHaveLength(0);
 

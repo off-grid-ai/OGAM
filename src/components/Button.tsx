@@ -154,8 +154,10 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.xl,
   },
+  // A disabled button dims once and its label turns neutral: a faded emerald on a faded pill read
+  // about 2:1 (hand test 67), and grey text under 40% opacity was worse (hand test 65).
   button_disabled: {
-    opacity: 0.4,
+    opacity: 0.6,
   },
   text: {
     ...TYPOGRAPHY.body,
@@ -183,6 +185,9 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   text_active: {
     color: colors.primary,
   },
+  text_disabled: {
+    color: colors.textSecondary,
+  },
   text_small: {
     fontSize: TYPOGRAPHY.h3.fontSize,
   },
@@ -191,9 +196,6 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   text_large: {
     fontSize: TYPOGRAPHY.h2.fontSize,
-  },
-  text_disabled: {
-    color: colors.textDisabled,
   },
   // A 6pt row of dots is shorter than the label it replaces, so a button would shrink the
   // instant it started working. The loader claims the same line box as the text it stands in

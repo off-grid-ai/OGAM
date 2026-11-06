@@ -21,7 +21,7 @@ import { createStyles } from './styles';
 import { MessageAttachments } from './components/MessageAttachments';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { MessageContent } from './components/MessageContent';
-import { GenerationMeta } from './components/GenerationMeta';
+import { TurnDetails, TurnDetailsToggle } from './components/GenerationMeta';
 import { MessageOverlays } from './components/MessageOverlays';
 import { MarkdownText } from '../MarkdownText';
 import { formatTime, formatDuration, buildMessageData } from './utils';
@@ -33,7 +33,6 @@ import {
   ToolResultMessage,
   ToolCallMessage,
   SystemInfoMessage,
-  RoutedToolsRow,
   SyncedToolArtifacts,
 } from './components/ToolMessages';
 import type { ChatMessageProps } from './types';
@@ -314,6 +313,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const showTurnFooter =
     !hideProse && !isUser && !isStreaming && hasVisibleAnswer;
   const cutoffNote = cutoffNoteFor(message.generationMeta);
+  const routedToolNames = message.generationMeta?.routedToolNames;
+  // How the reply was made and the tools it was offered are developer detail: one "Details" in the
+  // time row opens both, instead of two rows under every reply (hand test 64).
+  const hasTurnDetails = showTurnFooter && showGenerationDetails && Boolean(generationMeta || routedToolNames?.length);
   return (
     <TouchableOpacity
       testID={isUser ? 'user-message' : 'assistant-message'}
@@ -440,18 +443,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           isStreaming={isStreaming}
           showActions={showActions}
           onMenuOpen={onMenuOpen}
-          metaExtra={metaExtra}
-        />
-      )}
-
-      {/* The tools offered to the model are developer detail: they ride with generation details. */}
-      {showTurnFooter && showGenerationDetails && (
-        <RoutedToolsRow
-          message={message}
-          isUser={isUser}
-          isStreaming={isStreaming}
-          styles={styles}
-          colors={colors}
+          metaExtra={hasTurnDetails ? (
+            <>
+              {metaExtra}
+              <TurnDetailsToggle messageId={message.id} styles={styles} colors={colors} />
+            </>
+          ) : metaExtra}
         />
       )}
 
@@ -462,12 +459,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         </View>
       )}
 
-      {showTurnFooter && showGenerationDetails && generationMeta && (
-        <GenerationMeta
+      {hasTurnDetails && (
+        <TurnDetails
           messageId={message.id}
           generationMeta={generationMeta}
+          toolNames={routedToolNames}
           styles={styles}
-          colors={colors}
         />
       )}
     </TouchableOpacity>

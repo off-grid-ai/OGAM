@@ -52,7 +52,7 @@ export const FastestSettingsButton: React.FC = () => {
       {running ? (
         <Button testID="fastest-settings-cancel" title="Measuring… Cancel" variant="outline" size="small" onPress={() => abort.current?.abort()} style={SIZED_TO_TEXT} />
       ) : (
-        <Button testID="fastest-settings-button" title="Use fastest settings" variant="primary" size="small" onPress={run} style={SIZED_TO_TEXT} />
+        <Button testID="fastest-settings-button" title="Use fastest settings" variant="secondary" size="small" onPress={run} style={SIZED_TO_TEXT} />
       )}
       {summary && !running ? (
         <Text style={{ color: colors.textSecondary }} accessibilityLiveRegion="polite" testID="fastest-settings-summary">

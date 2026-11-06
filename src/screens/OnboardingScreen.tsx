@@ -17,7 +17,7 @@ import ReanimatedAnimated, {
   withDelay,
   Easing,
 } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../components/AliveScreen';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button } from '../components';
 import { useTheme, useThemedStyles } from '../theme';
@@ -246,7 +246,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
   const isLastSlide = currentIndex === slides.length - 1;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <AliveScreen style={styles.container} edges={['top', 'bottom']}>
       <View testID="onboarding-screen" style={styles.container}>
         <View style={styles.header}>
           {!isLastSlide && (
@@ -309,7 +309,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
           </TouchableOpacity>
         </View>
       </View>
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 

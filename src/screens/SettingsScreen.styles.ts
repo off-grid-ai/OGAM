@@ -71,36 +71,6 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.textMuted,
     marginTop: 2,
   },
-  followSection: {
-    ...cardSurface(colors),
-    marginBottom: SPACING.lg,
-    overflow: 'hidden' as const,
-  },
-  followHeader: {
-    padding: SPACING.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
-  },
-  followHeaderTitle: {
-    ...TYPOGRAPHY.body,
-    fontWeight: '400' as const,
-    color: colors.text,
-  },
-  followHeaderDesc: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.textMuted,
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  followItemIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: 'transparent',
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    marginRight: SPACING.md,
-  },
   section: { marginBottom: SPACING.lg },
   aboutRow: {
     flexDirection: 'row' as const,
@@ -118,15 +88,6 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,
     lineHeight: 18,
-  },
-  sectionLabel: {
-    ...TYPOGRAPHY.label,
-    // brand/DESIGN_PHILOSOPHY.md: labels are quiet uppercase whispers.
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.3,
-    color: colors.textMuted,
-    marginBottom: SPACING.sm,
-    marginLeft: SPACING.xs,
   },
   devButton: {
     flexDirection: 'row' as const,

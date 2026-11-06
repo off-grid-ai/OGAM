@@ -76,7 +76,8 @@ export const ListGroupSeparator: React.FC = () => {
 };
 
 const createSeparatorStyles = (colors: ThemeColors) => ({
-  track: { backgroundColor: colors.surfaceGlass },
+  // Inside the card already, so the card's own surface shows through.
+  track: { backgroundColor: 'transparent' },
   line: {
     height: StyleSheet.hairlineWidth,
     marginLeft: SPACING.md,

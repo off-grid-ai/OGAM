@@ -488,8 +488,9 @@ describe('synced assistant tool timeline', () => {
     expect(view.queryByTestId('thinking-block')).toBeNull();
     expect(view.getByText('The answer is ready.')).toBeTruthy();
     expect(view.getByTestId('message-meta-row')).toBeTruthy();
-    expect(view.getByTestId('tools-sent-collapsible')).toBeTruthy();
     expect(view.getByTestId('generation-details-toggle')).toBeTruthy();
+    // The tools it was offered stay inside Details until it opens.
+    expect(view.queryByTestId('tools-sent-list')).toBeNull();
 
     fireEvent.press(view.getByTestId('assistant-work-toggle'));
     expect(view.getByTestId('thinking-block')).toBeTruthy();
@@ -497,9 +498,8 @@ describe('synced assistant tool timeline', () => {
 
     fireEvent.press(view.getAllByText('Searched the web')[0]);
     expect(view.getByText('First source.')).toBeTruthy();
-    fireEvent.press(view.getByText('Tools it could use (1)'));
-    expect(view.getByText('• web_search')).toBeTruthy();
-    fireEvent.press(view.getByText('Generation details'));
+    fireEvent.press(view.getByTestId('generation-details-toggle'));
     expect(view.getByTestId('generation-meta')).toBeTruthy();
+    expect(view.getByTestId('tools-sent-list')).toHaveTextContent('Tools it had for this reply: Web search');
   });
 });

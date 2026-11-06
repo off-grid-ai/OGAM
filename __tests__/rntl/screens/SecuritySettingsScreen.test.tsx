@@ -58,7 +58,7 @@ describe('SecuritySettingsScreen', () => {
     const { view } = mount();
 
     expect(view.getByText('Security')).toBeTruthy();
-    expect(view.getByText('App Lock')).toBeTruthy();
+    expect(view.getByText('App lock')).toBeTruthy();
     expect(view.getByText('Passphrase lock')).toBeTruthy();
     expect(view.getByText('Ask for your passphrase when the app opens.')).toBeTruthy();
     expect(view.getByText(/The app locks when you leave it/)).toBeTruthy();

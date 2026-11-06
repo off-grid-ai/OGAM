@@ -1,6 +1,6 @@
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { cardSurface } from '../theme/surface';
-import { SPACING, TYPOGRAPHY } from '../constants';
+import { FONTS, SPACING, TYPOGRAPHY } from '../constants';
 
 export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   // The one card surface (brand: translucent over the field, hairline edge), not its own shadowed box.
@@ -28,12 +28,14 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   denseName: {
     ...TYPOGRAPHY.body,
     color: colors.text,
-    flex: 1,
+    flexShrink: 1,
   },
+  downloadedLabel: { ...TYPOGRAPHY.metaSmall, fontFamily: FONTS.mono, color: colors.textMuted },
   // In use, in words: the one emerald on the row.
+  // The same face and case as On phone beside it; emerald is the one accent for the model in use.
   denseInUse: {
-    ...TYPOGRAPHY.label,
-    textTransform: 'uppercase' as const,
+    ...TYPOGRAPHY.metaSmall,
+    fontFamily: FONTS.mono,
     color: colors.primary,
   },
   denseSourceGroup: {
@@ -87,11 +89,8 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.metaSmall,
     color: colors.textSecondary,
   },
-  // In use: desktop's chosen state, an emerald hairline over a faint emerald fill (not a thick border).
-  cardActive: {
-    borderColor: colors.heroBorder,
-    backgroundColor: colors.selectedFill,
-  },
+  // In use is said once, in words on the row. A green fill as well marked it twice (screen review).
+  cardActive: {},
   cardIncompatible: {
     opacity: 0.6,
   },

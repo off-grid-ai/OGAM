@@ -16,7 +16,8 @@ type Props = {
   onToggle: (doc: KnowledgeDocument, enabled: boolean) => void;
   onRemove: (doc: KnowledgeDocument) => void;
   /** Keeps each screen's existing test ids ("knowledge-document" or "kb-document"). */
-  testIDPrefix: string;
+  /** @deprecated The ids are fixed (`knowledge-document-*`) so analytics can name them; kept for old callers. */
+  testIDPrefix?: string;
 };
 
 /**
@@ -26,7 +27,7 @@ type Props = {
  * wrapped the switch in its own touchable merged everything into one element, and a screen reader
  * could neither read nor flip the switch (hand test 49 found the project tab still did that).
  */
-export const KnowledgeDocumentRow: React.FC<Props> = ({ doc, transfer, onOpen, onToggle, onRemove, testIDPrefix }) => {
+export const KnowledgeDocumentRow: React.FC<Props> = ({ doc, transfer, onOpen, onToggle, onRemove }) => {
   const { colors } = useTheme();
   const documentId = doc.document_id;
   return (
@@ -39,8 +40,8 @@ export const KnowledgeDocumentRow: React.FC<Props> = ({ doc, transfer, onOpen, o
         disabled={!documentId}
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel={`Knowledge document ${doc.name}`}
-        testID={`${testIDPrefix}-row-${doc.sync_id}`}
+        accessibilityLabel={`File ${doc.name}`}
+        testID={`knowledge-document-row-${doc.sync_id}`}
       >
         <KnowledgeDocumentInfo name={doc.name} size={doc.size} documentId={documentId} transfer={transfer} />
       </TouchableOpacity>
@@ -50,14 +51,14 @@ export const KnowledgeDocumentRow: React.FC<Props> = ({ doc, transfer, onOpen, o
         // A switch reads its own on/off; the label says what it does.
         accessibilityRole="switch"
         accessibilityLabel={`Use in answers: ${doc.name}`}
-        testID={`${testIDPrefix}-toggle-${doc.sync_id}`}
+        testID={`knowledge-document-toggle-${doc.sync_id}`}
       />
       <TouchableOpacity
         style={styles.remove}
         onPress={() => onRemove(doc)}
         accessibilityRole="button"
         accessibilityLabel={`Remove ${doc.name}`}
-        testID={`${testIDPrefix}-remove-${doc.sync_id}`}
+        testID={`knowledge-document-remove-${doc.sync_id}`}
       >
         <Icon name="trash-2" size={16} color={colors.textMuted} />
       </TouchableOpacity>

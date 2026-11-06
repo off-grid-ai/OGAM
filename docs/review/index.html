@@ -1,0 +1,422 @@
+<title>Off Grid AI Mobile</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: the game's own chrome. A screen list on the left, the screen itself
+   in the middle with pins where people clicked, its notes on the right. One
+   dark look on purpose: the screenshots are a dark, warm game. */
+:root {
+  color-scheme: dark;
+  --bg: #15120e;          /* the hall at night */
+  --glass: #221d17;       /* warm smoked glass, the game's panels */
+  --glass-2: #2b251d;
+  --line: #3a3228;
+  --fg: #ece4d4;          /* parchment */
+  --muted: #a39782;
+  --gold: #c9a45c;        /* the game's one accent */
+  --gold-ink: #1b150c;
+  --done: #7d9a6a;        /* a settled note */
+  --font: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.45 var(--font); }
+button, textarea { font: inherit; color: inherit; }
+.app {
+  height: 100%; display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px;
+  gap: 0; padding-left: max(0px, env(safe-area-inset-left, 0px)); padding-right: max(0px, env(safe-area-inset-right, 0px));
+}
+/* --- screen list --- */
+.list { border-right: 1px solid var(--line); overflow-y: auto; padding-block: 14px; }
+.brand { padding: 0 16px 12px; }
+.brand h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: 0.01em; }
+.brand p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+.screens { list-style: none; margin: 0; padding: 0; }
+.screens button {
+  width: 100%; display: grid; grid-template-columns: 64px minmax(0,1fr) auto; gap: 10px; align-items: center;
+  padding: 7px 16px; background: none; border: 0; text-align: left; cursor: pointer;
+}
+.screens button:hover { background: var(--glass); }
+.screens button[aria-current="true"] { background: var(--glass-2); box-shadow: inset 2px 0 0 var(--gold); }
+.screens img { width: 64px; aspect-ratio: 16/9; object-fit: cover; border-radius: 3px; display: block; background: var(--glass); }
+.screens .name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.screens .group { display: block; color: var(--muted); font-size: 11px; }
+.count { font: 500 11px/1 var(--mono); color: var(--gold-ink); background: var(--gold); border-radius: 9px; padding: 3px 6px; font-variant-numeric: tabular-nums; }
+.count:empty { display: none; }
+/* --- stage --- */
+.stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.bar { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+.bar h2 { margin: 0; font-size: 16px; font-weight: 600; text-wrap: balance; }
+.bar .what { color: var(--muted); font-size: 12px; flex: 1; min-width: 0; }
+.nav { display: flex; gap: 6px; }
+.btn {
+  background: var(--glass); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer;
+}
+.btn:hover { border-color: var(--gold); }
+.btn:focus-visible, .screens button:focus-visible, .pin:focus-visible, textarea:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.canvas { flex: 1; min-height: 0; overflow: auto; display: grid; place-items: center; padding: 18px; }
+.shots { display: flex; gap: 18px; align-items: flex-start; justify-content: center; max-width: 100%; }
+.pane { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 0 1 auto; }
+.pane .cap { color: var(--muted); font: 11px/1.4 var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+.shots.split .pane { flex: 1 1 0; }
+.shots.split .shot img { max-height: calc(100vh - 150px); }
+.shot { position: relative; max-width: 100%; max-height: 100%; cursor: crosshair; line-height: 0; }
+.shot img { max-width: 100%; max-height: calc(100vh - 120px); border-radius: 6px; display: block; user-select: none; -webkit-user-drag: none; }
+.hint { color: var(--muted); font-size: 12px; padding: 0 18px 12px; }
+.empty { color: var(--muted); padding: 40px; text-align: center; line-height: 1.5; }
+/* pins: a numbered gold drop, tip on the clicked point */
+.pin {
+  position: absolute; min-width: 26px; height: 26px; margin: -26px 0 0 0; transform-origin: 0 100%;
+  border-radius: 13px 13px 13px 2px; background: var(--gold); color: var(--gold-ink); border: 2px solid var(--gold-ink);
+  font: 600 11px/22px var(--mono); text-align: center; cursor: pointer; padding: 0 4px; box-shadow: 0 2px 6px rgba(0,0,0,.5);
+}
+.pin.done { background: var(--done); }
+.pin.draft { background: var(--fg); }
+.pin.lit { transform: scale(1.25); z-index: 2; }
+/* --- notes --- */
+.notes { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.notes header { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+.notes h3 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.thread { flex: 1; overflow-y: auto; padding: 8px 0; }
+.note { padding: 10px 16px; display: grid; grid-template-columns: 26px minmax(0,1fr); gap: 10px; border-left: 2px solid transparent; }
+.note.lit { background: var(--glass); border-left-color: var(--gold); }
+.note .num { font: 600 11px/22px var(--mono); text-align: center; min-width: 22px; padding: 0 3px; height: 22px; border-radius: 11px; background: var(--gold); color: var(--gold-ink); }
+.note.done .num { background: var(--done); }
+.note.done .text { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
+.note .text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.note .reply { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 6px; padding: 6px 8px; border-left: 2px solid var(--line); color: var(--muted); }
+.note .reply b { color: inherit; font-weight: 600; }
+.note.done .reply { text-decoration: none; }
+.views { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-right: 8px; }
+.views button { background: transparent; border: 0; padding: 6px 12px; color: var(--muted); font: inherit; cursor: pointer; }
+.views button[aria-pressed="true"] { background: var(--line); color: inherit; }
+.views[hidden] { display: none; }
+.note .meta { color: var(--muted); font: 11px/1.4 var(--mono); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
+.note .meta button { background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.note .meta button:hover { color: var(--fg); }
+.compose { border-top: 1px solid var(--line); padding: 12px 16px 16px; display: grid; gap: 8px; }
+.compose .where { font: 11px/1.4 var(--mono); color: var(--muted); }
+.compose textarea { width: 100%; min-height: 76px; resize: vertical; background: var(--glass); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; box-sizing: border-box; }
+.compose .row { display: flex; gap: 8px; justify-content: flex-end; }
+.btn.primary { background: var(--gold); color: var(--gold-ink); border-color: var(--gold); font-weight: 600; }
+.btn:disabled { opacity: .5; cursor: default; }
+.status { font-size: 12px; color: var(--muted); padding: 0 16px 10px; }
+@media (max-width: 900px) {
+  .app { grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto auto; height: auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .list { border-right: 0; border-bottom: 1px solid var(--line); max-height: 220px; }
+  .notes { border-left: 0; }
+  .canvas { padding: 12px 0; }
+  .shot img { max-height: none; }
+}
+@media (prefers-reduced-motion: no-preference) { .pin { transition: transform .12s ease; } }
+</style>
+
+<div class="app">
+  <nav class="list" aria-label="Screens">
+    <div class="brand"><h1>Off Grid AI Mobile</h1><p id="tally">Every screen, for review</p></div>
+    <ul class="screens" id="screens"></ul>
+  </nav>
+
+  <main class="stage">
+    <div class="bar">
+      <h2 id="title">Loading screens…</h2>
+      <span class="what" id="what"></span>
+      <div class="nav">
+        <div class="views" id="views" role="group" aria-label="Before or after">
+          <button type="button" id="view-before" aria-pressed="false">Before</button>
+          <button type="button" id="view-after" aria-pressed="true">After</button>
+          <button type="button" id="view-both" aria-pressed="false">Side by side</button>
+        </div>
+        <button class="btn" id="prev" aria-label="Previous screen">←</button>
+        <button class="btn" id="next" aria-label="Next screen">→</button>
+      </div>
+    </div>
+    <div class="canvas"><div class="shots" id="shot"></div></div>
+    <div class="hint">Click anywhere on the screen to pin a note there. Arrow keys change screens · ⌘ Enter pins the note · Esc clears.</div>
+  </main>
+
+  <aside class="notes">
+    <header><h3>Notes on this screen</h3></header>
+    <div class="thread" id="thread"></div>
+    <div class="status" id="status" hidden></div>
+    <form class="compose" id="compose">
+      <div class="where" id="where">Click the screen to choose where this note points.</div>
+      <textarea id="text" placeholder="What should change here?" aria-label="Note"></textarea>
+      <div class="row">
+        <button type="button" class="btn" id="cancel">Clear pin</button>
+        <button type="submit" class="btn primary" id="save">Pin note</button>
+      </div>
+    </form>
+  </aside>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let screens = [];      // [{id, name, group, what, file}]
+let notes = [];        // every note, all screens
+let current = 0;
+let draft = null;      // {x, y} in 0..1 of the screenshot
+let lit = null;        // id of the highlighted note
+let view = "after";   // which shot of a screen with a before: "before" or "after"
+let db = null, user = null, me = null;
+const names = {};
+
+function screenId() { return screens[current]?.id; }
+// A note made before a screen had a before/after pair was pinned on the old shot, so it lives on Before.
+function noteView(n) {
+  if (n.on) return n.on;
+  return screens.find((s) => s.id === n.screen)?.before ? "before" : "after";
+}
+function shownView(s) { return s?.before ? view : "after"; }
+// The shots on the stage: one, or Before and After side by side.
+function panes(s) { const v = shownView(s); return v === "both" ? ["before", "after"] : [v]; }
+function fileFor(s, v) { return v === "before" ? s.before : s.file; }
+function inView(id, v) {
+  return notes.filter((n) => n.screen === id && noteView(n) === v).sort((a, b) => a.created - b.created);
+}
+function onScreen(id) {
+  const s = screens.find((x) => x.id === id);
+  return panes(s).flatMap((v) => inView(id, v));
+}
+// A note's number on its shot; side by side, B1 / A1 say which shot.
+function label(n) {
+  const s = screens.find((x) => x.id === n.screen);
+  const v = noteView(n);
+  const i = inView(n.screen, v).findIndex((x) => x.id === n.id) + 1;
+  return panes(s).length > 1 ? (v === "before" ? "B" : "A") + i : String(i);
+}
+function allOnScreen(id) { return notes.filter((n) => n.screen === id); }
+
+function renderList() {
+  const ul = $("screens");
+  ul.textContent = "";
+  screens.forEach((s, i) => {
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.setAttribute("aria-current", i === current ? "true" : "false");
+    const img = document.createElement("img");
+    img.src = s.file; img.alt = ""; img.loading = "lazy";
+    const label = document.createElement("span");
+    const nm = document.createElement("span"); nm.className = "name"; nm.textContent = s.name;
+    const gp = document.createElement("span"); gp.className = "group"; gp.textContent = s.group || "";
+    label.append(nm, gp);
+    const c = document.createElement("span"); c.className = "count";
+    const open = allOnScreen(s.id).filter((n) => !n.done).length;
+    c.textContent = open ? String(open) : "";
+    b.append(img, label, c);
+    b.onclick = () => go(i);
+    li.append(b);
+    ul.append(li);
+  });
+  const all = notes.filter((n) => !n.done).length;
+  $("tally").textContent = `${screens.length} screens · ${all} open note${all === 1 ? "" : "s"}`;
+}
+
+function renderStage() {
+  const s = screens[current];
+  const stage = $("shot");
+  stage.textContent = "";
+  if (!s) { $("title").textContent = "No screens yet"; return; }
+  $("title").textContent = s.name;
+  $("what").textContent = s.what || "";
+  $("views").hidden = !s.before;
+  for (const v of ["before", "after", "both"]) $("view-" + v).setAttribute("aria-pressed", String(shownView(s) === v));
+  const list = panes(s);
+  stage.classList.toggle("split", list.length > 1);
+  for (const v of list) {
+    const pane = document.createElement("div"); pane.className = "pane";
+    if (list.length > 1) { const c = document.createElement("div"); c.className = "cap"; c.textContent = v === "before" ? "Before" : "After"; pane.append(c); }
+    const shot = document.createElement("div"); shot.className = "shot"; shot.dataset.view = v;
+    const img = document.createElement("img");
+    img.src = fileFor(s, v); img.alt = `${s.name} (${v})`; img.draggable = false;
+    shot.append(img);
+    img.addEventListener("click", (e) => {
+      const r = img.getBoundingClientRect();
+      draft = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height, on: v };
+      lit = null;
+      renderPins(); renderCompose();
+      $("text").focus();
+    });
+    pane.append(shot);
+    stage.append(pane);
+  }
+  renderPins();
+}
+
+function pinAt(x, y, label, cls, onclick) {
+  const p = document.createElement("button");
+  p.className = "pin " + cls;
+  p.style.left = (x * 100) + "%";
+  p.style.top = (y * 100) + "%";
+  p.textContent = label;
+  p.type = "button";
+  if (onclick) p.onclick = (e) => { e.stopPropagation(); onclick(); };
+  return p;
+}
+
+function renderPins() {
+  $("shot").querySelectorAll(".shot").forEach((shot) => {
+    const v = shot.dataset.view;
+    shot.querySelectorAll(".pin").forEach((p) => p.remove());
+    inView(screenId(), v).forEach((n) => {
+      const p = pinAt(n.x, n.y, label(n), (n.done ? "done" : "") + (lit === n.id ? " lit" : ""), () => { lit = n.id; renderPins(); renderThread(); });
+      p.setAttribute("aria-label", `Note ${label(n)}`);
+      shot.append(p);
+    });
+    if (draft && draft.on === v) shot.append(pinAt(draft.x, draft.y, "+", "draft"));
+  });
+}
+
+function when(t) {
+  const d = new Date(t);
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+async function renderThread() {
+  const box = $("thread");
+  const list = onScreen(screenId());
+  box.textContent = "";
+  if (!list.length) {
+    const e = document.createElement("div"); e.className = "empty";
+    e.textContent = db ? "No notes here yet. Click the screen where something should change, then write what you want." : "Notes need you signed in to claude.ai.";
+    box.append(e);
+    return;
+  }
+  if (user && list.length) {
+    try { Object.assign(names, await user.profiles([...new Set(list.map((n) => n.author).filter((a) => a && a !== "claude"))])); } catch (_) {}
+  }
+  list.forEach((n) => {
+    const row = document.createElement("div");
+    row.className = "note" + (n.done ? " done" : "") + (lit === n.id ? " lit" : "");
+    const num = document.createElement("div"); num.className = "num"; num.textContent = label(n);
+    const body = document.createElement("div");
+    const t = document.createElement("div"); t.className = "text"; t.textContent = n.text;
+    const parts = [t];
+    if (n.reply) {
+      const r = document.createElement("div"); r.className = "reply";
+      const b = document.createElement("b"); b.textContent = "Claude: ";
+      r.append(b, document.createTextNode(n.reply));
+      parts.push(r);
+    }
+    const meta = document.createElement("div"); meta.className = "meta";
+    const who = document.createElement("span"); who.textContent = n.author === "claude" ? "Claude" : ((names[n.author]?.name) || "Someone");
+    const at = document.createElement("span"); at.textContent = `${Math.round(n.x * 100)}%, ${Math.round(n.y * 100)}% · ${when(n.created)}`;
+    const toggle = document.createElement("button"); toggle.type = "button"; toggle.textContent = n.done ? "Reopen" : "Mark done";
+    toggle.onclick = () => write(n.id, { done: !n.done });
+    const del = document.createElement("button"); del.type = "button"; del.textContent = "Delete";
+    del.onclick = () => remove(n.id);
+    meta.append(who, at, toggle, del);
+    body.append(...parts, meta);
+    row.append(num, body);
+    row.onclick = (e) => { if (e.target.tagName === "BUTTON") return; lit = n.id; renderPins(); renderThread(); };
+    box.append(row);
+  });
+}
+
+function renderCompose() {
+  $("where").textContent = draft
+    ? `Pinned at ${Math.round(draft.x * 100)}% across, ${Math.round(draft.y * 100)}% down`
+    : "Click the screen to choose where this note points.";
+  $("save").disabled = !db;
+}
+
+function go(i) {
+  if (!screens.length) return;
+  current = (i + screens.length) % screens.length;
+  draft = null; lit = null;
+  try { localStorage.setItem("goc-review-screen", screenId()); } catch (_) {}
+  if (location.hash.slice(1) !== screenId()) history.replaceState(null, "", "#" + screenId());
+  renderList(); renderStage(); renderThread(); renderCompose();
+  $("screens").children[current]?.scrollIntoView({ block: "nearest" });
+}
+
+function status(msg) {
+  const s = $("status");
+  s.hidden = !msg; s.textContent = msg || "";
+}
+
+async function write(id, patch) {
+  try { await db.collection("comments").doc(id).update(patch); }
+  catch (e) { status("That change didn't save: " + (e?.message || "try again.")); }
+}
+async function remove(id) {
+  try { await db.collection("comments").doc(id).delete(); }
+  catch (e) { status("That note couldn't be deleted: " + (e?.message || "try again.")); }
+}
+
+$("compose").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = $("text").value.trim();
+  if (!db) return;
+  if (!draft) { status("Click the screen first to show where the note points."); return; }
+  if (!text) { status("Write the note first."); return; }
+  const s = screens[current];
+  const doc = { screen: s.id, screenName: s.name, x: +draft.x.toFixed(4), y: +draft.y.toFixed(4), text, created: Date.now(), done: false, on: s.before ? draft.on : "after" };
+  if (me) doc.author = me;
+  $("save").disabled = true;
+  try {
+    await db.collection("comments").add(doc);
+    $("text").value = ""; draft = null; status("");
+  } catch (err) {
+    status("The note didn't save: " + (err?.message || "try again."));
+  }
+  renderPins(); renderCompose();
+});
+$("cancel").onclick = () => { draft = null; renderPins(); renderCompose(); };
+function setView(v) {
+  view = v; draft = null; lit = null;
+  try { localStorage.setItem("goc-review-view", v); } catch (_) {}
+  renderStage(); renderThread(); renderCompose();
+}
+$("view-before").onclick = () => setView("before");
+$("view-after").onclick = () => setView("after");
+$("view-both").onclick = () => setView("both");
+$("prev").onclick = () => go(current - 1);
+$("next").onclick = () => go(current + 1);
+// Arrows move between screens from anywhere, including the note box while it's empty.
+// Once a note has text, arrows edit it; Cmd/Ctrl+Enter pins it, Esc lets go of the box.
+const step = { ArrowLeft: -1, ArrowUp: -1, k: -1, ArrowRight: 1, ArrowDown: 1, j: 1 };
+document.addEventListener("keydown", (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) {
+    if (e.key === "Enter" && e.target.id === "text") { e.preventDefault(); $("compose").requestSubmit(); }
+    return;
+  }
+  if (e.key === "Escape") {
+    e.target.blur?.();
+    draft = null; lit = null; renderPins(); renderThread(); renderCompose();
+    return;
+  }
+  if (e.target.id === "text" && (e.target.value !== "" || e.key === "j" || e.key === "k")) return;
+  if (e.key in step) { e.preventDefault(); go(current + step[e.key]); }
+  else if (e.key === "Home") { e.preventDefault(); go(0); }
+  else if (e.key === "End") { e.preventDefault(); go(screens.length - 1); }
+});
+
+async function boot() {
+  try {
+    const r = await fetch("screens.json");
+    screens = await r.json();
+  } catch (_) { screens = []; }
+  try { const v = localStorage.getItem("goc-review-view"); view = v === "before" || v === "both" ? v : "after"; } catch (_) {}
+  let start = 0;
+  const want = location.hash.slice(1) || (() => { try { return localStorage.getItem("goc-review-screen"); } catch (_) { return null; } })();
+  const k = screens.findIndex((s) => s.id === want);
+  if (k >= 0) start = k;
+  go(start);
+
+  if (!window.claude?.use) { renderThread(); return; }
+  db = await window.claude.use("db");
+  user = await window.claude.use("user");
+  if (user) { try { me = await user.id(); } catch (_) {} }
+  renderCompose();
+  if (!db) { renderThread(); return; }
+  const slow = setTimeout(() => status("Notes can't be reached yet. They'll appear when the connection returns."), 10000);
+  db.collection("comments").onSnapshot((snap) => {
+    if (!snap.metadata.fromCache) { clearTimeout(slow); status(""); }
+    notes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderList(); renderPins(); renderThread();
+  }, (err) => { clearTimeout(slow); status("Notes stopped updating: " + (err?.message || "reload the page.")); });
+}
+boot();
+</script>

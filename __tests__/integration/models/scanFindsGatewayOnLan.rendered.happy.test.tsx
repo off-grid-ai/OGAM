@@ -34,6 +34,8 @@ import { withNavigator } from '../../harness/realNavigation';
 const PHONE_IP = '192.168.1.10';
 const MAC_IP = '192.168.1.30';
 const GATEWAY_PORT = 7878;
+// A server row reads "<status> · <address>" on one line.
+const MAC_ROW_ADDRESS = new RegExp(` · http://${MAC_IP.replaceAll('.', '\\.')}:${GATEWAY_PORT}$`);
 
 describe('scanning a network that has an Off Grid AI Desktop on it', () => {
   let lan: LanProbeHandle;
@@ -63,14 +65,14 @@ describe('scanning a network that has an Off Grid AI Desktop on it', () => {
     // BEFORE — the list is genuinely empty, so a row appearing later cannot be something that was
     // always on screen.
     expect(ui.queryByText('No servers yet')).not.toBeNull();
-    expect(ui.queryByText(`http://${MAC_IP}:${GATEWAY_PORT}`)).toBeNull();
+    expect(ui.queryByText(MAC_ROW_ADDRESS)).toBeNull();
 
     // The real gesture.
     fireEvent.press(ui.getByText('Scan network'));
 
     // AFTER — the server the user actually has is in the list, at the address they can check.
     await waitFor(
-      () => { expect(ui.queryByText(`http://${MAC_IP}:${GATEWAY_PORT}`)).not.toBeNull(); },
+      () => { expect(ui.queryByText(MAC_ROW_ADDRESS)).not.toBeNull(); },
       { timeout: 8000 },
     );
 
@@ -87,7 +89,7 @@ describe('scanning a network that has an Off Grid AI Desktop on it', () => {
     fireEvent.press(ui.getByText('Scan network'));
 
     await waitFor(
-      () => { expect(ui.queryByText(`http://${MAC_IP}:${GATEWAY_PORT}`)).not.toBeNull(); },
+      () => { expect(ui.queryByText(MAC_ROW_ADDRESS)).not.toBeNull(); },
       { timeout: 8000 },
     );
 

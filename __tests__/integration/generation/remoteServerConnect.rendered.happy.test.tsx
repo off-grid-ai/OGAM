@@ -54,6 +54,6 @@ describe('T046 (rendered) — add a remote server → it connects (connected sta
     ui.unmount();
     const list = render(withNavigator(<RemoteServersScreen />));
     await waitFor(() => { expect(list.queryByText('My LM Studio')).not.toBeNull(); }, { timeout: 4000 });
-    await waitFor(() => { expect(list.queryByText('Connected')).not.toBeNull(); }, { timeout: 4000 });
+    await waitFor(() => { expect(list.queryByText(/^Connected · /)).not.toBeNull(); }, { timeout: 4000 });
   });
 });

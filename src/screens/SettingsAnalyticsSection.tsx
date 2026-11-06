@@ -4,6 +4,7 @@ import { Text, View } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedEntry } from '../components/AnimatedEntry';
+import { SectionLabel } from '../components/SectionLabel';
 import { DebugLogsScreen } from '../components/DebugLogsScreen';
 import { useAppStore } from '../stores/appStore';
 import { setAnalyticsConsent } from '../services/analytics/analytics';
@@ -50,7 +51,7 @@ export const SettingsAnalyticsSection: React.FC<SettingsAnalyticsSectionProps> =
 
   return (
     <AnimatedEntry index={10} staggerMs={40} trigger={focusTrigger}>
-      <Text style={styles.sectionLabel}>Analytics</Text>
+      <SectionLabel title="Analytics" />
       <View style={styles.navSection} testID="settings-analytics">
         {toggle('Anonymous stats', 'bar-chart-2', usage, next => {
           setAnalyticsConsent({ usage: next }, 'settings').catch(ignore);

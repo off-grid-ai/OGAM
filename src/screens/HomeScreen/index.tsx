@@ -1,7 +1,7 @@
 import { videoModelDisplayName } from '../../utils/modelHelpers';
 import { useAppStore } from '../../stores/appStore';
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, Image } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { TouchableOpacity } from '../../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,7 +27,9 @@ import { useHomeScreen, HomeScreenNavigationProp } from './hooks/useHomeScreen';
 import { RecentConversations } from './components/RecentConversations';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { DesktopPromoCard } from './components/DesktopPromoCard';
-import { FeatureShowcase, featuresToTry } from './components/FeatureShowcase';
+import { FeatureShowcase, showcaseFeatures } from './components/FeatureShowcase';
+import { useIsProActive } from '../../hooks/useIsProActive';
+import { useOpenProTools } from '../../hooks/useOpenProTools';
 import { ModelsSummaryRow } from '../../components/models/ModelsSummaryRow';
 import {
   ModelsManagerSheet,
@@ -76,11 +78,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const focusTrigger = useFocusTrigger();
   const isFocused = useIsFocused();
   const scrollRef = useAliveScrollRef();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
   const SyncHomeCard = useSlot(SLOTS.homeSyncCard);
   const HomeNotificationsButton = useSlot(SLOTS.homeNotificationsButton);
   const { isSyncUnlocked, openSync, openSyncNotifications } = useOpenSync();
+  const isProActive = useIsProActive();
+  const openProTools = useOpenProTools();
 
   const {
     pickerType,
@@ -158,8 +162,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     voice: voiceSummary ? 1 : 0,
   };
 
-  // The top of Home: what this person has not tried yet, each a tap that starts it.
-  const showcase = featuresToTry(
+  // The top of Home: everything it does, free and Pro, what this person has not tried first.
+  const showcase = showcaseFeatures(
     {
       imagesMade: generatedImages.length,
       videosMade: generatedVideos.length,
@@ -171,7 +175,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       video: () => ((modelCounts.video ?? 0) > 0 ? startNewChat() : presentModelSheet('video')),
       voice: () => presentModelSheet('voice'),
       speech: () => presentModelSheet('speech'),
+      documents: () => navigation.navigate('Main', { screen: 'ProjectsTab' }),
+      sync: openSync,
+      tools: openProTools,
+      pro: () => navigation.navigate('ProDetail'),
     },
+    isProActive,
   );
 
   // Stash an action and close the manager; the action runs from the manager's
@@ -220,11 +229,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           style={styles.scrollView}
           contentContainerStyle={styles.content}
         >
-          {/* One title and the promise that matters (brand Mobile profile: one h2 screen title), with the
-              header's actions on the same row: the bell, Pro, and New chat as the one main action. */}
+          {/* The app's name and mark, its promise, and New chat as the one main action. */}
           <View style={styles.header}>
             <View style={styles.titleRow}>
-              <Text style={styles.title} accessibilityRole="header">Off Grid AI</Text>
+              {/* The brand mark beside its name, as on desktop's sidebar: the logo was lost in 5bed503e0. */}
+              <View style={styles.brand}>
+                <Image
+                  source={isDark ? require('../../assets/home-logo-dark.png') : require('../../assets/home-logo-light.png')}
+                  style={styles.appLogo}
+                  resizeMode="contain"
+                  accessible={false}
+                  testID="home-app-logo"
+                />
+                <Text style={styles.title} accessibilityRole="header" numberOfLines={1}>Off Grid AI</Text>
+              </View>
               <View style={styles.headerActions}>
                 {HomeNotificationsButton ? (
                   <HomeNotificationsButton onOpen={openSyncNotifications} />
@@ -237,21 +255,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 >
                   <IconMC name="crown" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
-                {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? (
-                  <Button
-                    title="New chat"
-                    variant="hero"
-                    size="small"
-                    icon={<Icon name="plus" size={16} color={colors.onHero} />}
-                    onPress={startNewChat}
-                    style={styles.newChatButton}
-                    testID="new-chat-button"
-                  />
-                ) : null}
               </View>
             </View>
-            {/* The promise gets its own line, never squeezed by the actions beside the title. */}
-            <Text style={styles.subtitle}>Nothing you type leaves this phone.</Text>
+            {/* Two rows (hand check 2026-11-06: one row cut the name to "Off Grid AI…"): the name with
+                its icons above, the promise with the one main action below. */}
+            <View style={styles.promiseRow}>
+              <Text style={styles.subtitle}>Nothing you type leaves this phone.</Text>
+              {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? (
+                <Button
+                  title="New chat"
+                  variant="hero"
+                  size="small"
+                  icon={<Icon name="plus" size={16} color={colors.onHero} />}
+                  onPress={startNewChat}
+                  style={styles.newChatButton}
+                  testID="new-chat-button"
+                />
+              ) : null}
+            </View>
           </View>
 
           <FeatureShowcase features={showcase} active={isFocused} />
@@ -350,27 +371,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 </View>
                 <Icon name="chevron-right" size={16} color={colors.textMuted} />
               </AnimatedPressable>
-              <View style={styles.supportCard} testID="home-support-card">
+              {/* A row like its neighbours, not a row with a button in it (design philosophy: rhythm). */}
+              <AnimatedPressable
+                style={styles.galleryCard}
+                onPress={() =>
+                  openSupportEmail({
+                    subject: '[Idea] Off Grid AI Mobile',
+                    body: 'Hi,\n\nI would like to see this in Off Grid AI Mobile:\n\n',
+                  })
+                }
+                hapticType="selection"
+                testID="home-support-email"
+                accessibilityRole="button"
+                accessibilityLabel="What should we build next? Write to us."
+              >
                 <Icon name="message-square" size={18} color={colors.textSecondary} />
                 <View style={styles.galleryCardInfo}>
-                  <Text style={styles.supportTitle}>What should we build next?</Text>
-                  <Text style={styles.supportDescription}>
-                    Tell us what you would like to see in Off Grid AI Mobile.
-                  </Text>
+                  <Text style={styles.galleryCardTitle}>What should we build next?</Text>
+                  <Text style={styles.galleryCardMeta} numberOfLines={1}>Tell us, and it may be in the next update.</Text>
                 </View>
-                <Button
-                  title="Write to us"
-                  variant="outline"
-                  size="small"
-                  onPress={() =>
-                    openSupportEmail({
-                      subject: '[Idea] Off Grid AI Mobile',
-                      body: 'Hi,\n\nI would like to see this in Off Grid AI Mobile:\n\n',
-                    })
-                  }
-                  testID="home-support-email"
-                />
-              </View>
+                <Icon name="mail" size={16} color={colors.textMuted} />
+              </AnimatedPressable>
             </ListGroup>
           </AnimatedEntry>
 

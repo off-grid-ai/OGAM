@@ -75,7 +75,7 @@ describe('Ollama over HTTPS with a saved key', () => {
     fireEvent.press(ui.getByTestId('save-server'));
     fireEvent.press(await waitFor(() => ui.getByText('Continue')));
     await waitFor(() => expect(ui.getByText('Home Ollama')).toBeTruthy());
-    await waitFor(() => expect(ui.getByText('Connected')).toBeTruthy());
+    await waitFor(() => expect(ui.getByText(/^Connected · /)).toBeTruthy());
 
     // Back on Home, the picker lists the Ollama's model.
     fireEvent.press(ui.getByLabelText('Back'));

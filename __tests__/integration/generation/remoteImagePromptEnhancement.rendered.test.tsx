@@ -1,8 +1,37 @@
+import type { ReactTestInstance } from 'react-test-renderer';
 import { setupChatScreen } from '../../harness/chatHarness';
 import { installRemoteStream } from '../../harness/remoteHarness';
+import { pressModelSettingsBack } from '../../harness/modelSettingsBack';
 
 // Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
 jest.unmock('@react-navigation/native');
+
+type Harness = Awaited<ReturnType<typeof setupChatScreen>>;
+
+/**
+ * From the chat: settings → Model settings → Image → Advanced → "Enhance image prompts" on, then Back
+ * to the chat.
+ */
+async function turnOnPromptEnhancement(h: Harness) {
+  const { fireEvent, waitFor } = h.rtl;
+  fireEvent.press(await waitFor(() => h.view!.getByTestId('chat-settings-icon')));
+  fireEvent.press(await waitFor(() => h.view!.getByTestId('chat-settings-open-model-settings')));
+  await waitFor(() => expect(h.currentRoute()).toBe('ModelSettings'));
+  fireEvent.press(h.view!.getByTestId('model-settings-tab-image'));
+  fireEvent.press(h.view!.getByTestId('image-advanced-toggle'));
+  // The switch on the "Enhance image prompts" row: the nearest ancestor of its label holding a switch.
+  const switchesIn = (node: ReactTestInstance) =>
+    node.findAll(n => typeof n.props.onValueChange === 'function' && typeof n.props.value === 'boolean');
+  let row = h.view!.getByText('Enhance image prompts').parent;
+  while (row && switchesIn(row).length === 0) row = row.parent;
+  const toggle = () => switchesIn(row!)[0];
+  expect(toggle().props.value).toBe(false);
+  fireEvent(toggle(), 'valueChange', true);
+  await waitFor(() => expect(toggle().props.value).toBe(true));
+  expect(h.useAppStore.getState().settings.enhanceImagePrompts).toBe(true);
+  pressModelSettingsBack(h.view!, h.rtl);
+  await waitFor(() => expect(h.currentRoute()).toBe('Chat'));
+}
 
 describe('Remote image prompt enhancement in Chat', () => {
   const originalFetch = globalThis.fetch;
@@ -38,10 +67,7 @@ describe('Remote image prompt enhancement in Chat', () => {
     }) as typeof fetch;
 
     h.render();
-    h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByTestId('chat-settings-icon')));
-    h.rtl.fireEvent.press(h.view!.getByText('Image generation'));
-    h.rtl.fireEvent.press(h.view!.getByTestId('image-enhance-on'));
-    h.rtl.fireEvent.press(h.view!.getByText('Done'));
+    await turnOnPromptEnhancement(h);
 
     h.boundary.llama!.scriptCompletion({
       text: 'A green Ferrari on a coast road at sunset',
@@ -90,10 +116,7 @@ describe('Remote image prompt enhancement in Chat', () => {
     );
 
     h.render();
-    h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByTestId('chat-settings-icon')));
-    h.rtl.fireEvent.press(h.view!.getByText('Image generation'));
-    h.rtl.fireEvent.press(h.view!.getByTestId('image-enhance-on'));
-    h.rtl.fireEvent.press(h.view!.getByText('Done'));
+    await turnOnPromptEnhancement(h);
     await h.cycleImageMode();
     await h.tapSend('Draw a green Ferrari');
 

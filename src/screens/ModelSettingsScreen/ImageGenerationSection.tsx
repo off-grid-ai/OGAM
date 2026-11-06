@@ -35,7 +35,7 @@ const EnhanceImageToggle: React.FC = () => {
   return (
     <View style={[styles.toggleRow, !hasTextModel && styles.dimmed]}>
       <View style={styles.toggleInfo}>
-        <Text style={styles.toggleLabel}>Enhance Image Prompts</Text>
+        <Text style={styles.toggleLabel}>Enhance image prompts</Text>
         <Text style={styles.toggleDesc}>{description}</Text>
       </View>
       <AppSwitch
@@ -172,11 +172,11 @@ export const ImageGenerationSection: React.FC = () => {
 
       <View style={styles.toggleRow}>
         <View style={styles.toggleInfo}>
-          <Text style={styles.toggleLabel}>Automatic Detection</Text>
+          <Text style={styles.toggleLabel}>Notice when you want a picture</Text>
           <Text style={styles.toggleDesc}>
             {isAutoMode
-              ? 'LLM will classify if your message is asking for an image'
-              : 'Only generate images when you tap the image button'}
+              ? 'Ask for a picture in plain words and it makes one.'
+              : 'Pictures only when you turn on Image in the chat.'}
           </Text>
         </View>
         <AppSwitch
@@ -188,14 +188,14 @@ export const ImageGenerationSection: React.FC = () => {
       </View>
       <Text style={styles.toggleNote}>
         {isAutoMode
-          ? 'In Auto mode, messages like "Draw me a sunset" will automatically generate an image when an image model is loaded.'
-          : 'In Manual mode, you must tap the IMG button in chat to generate images.'}
+          ? '"Draw me a sunset" makes a picture when an image model is ready.'
+          : 'Turn on Image in the chat menu when you want one.'}
       </Text>
 
       <SliderSetting
         testID="image-steps"
-        label="Image Steps"
-        description="More steps = better quality but slower (4-8 fast, 20-50 high quality)"
+        label="Image steps"
+        description="More steps look better and take longer. 4 to 8 is quick, 20 or more is detailed."
         value={parameters.steps}
         min={4} max={MAX_IMAGE_STEPS} step={1}
         onChange={(value) => setParameter('steps', value)}
@@ -203,7 +203,7 @@ export const ImageGenerationSection: React.FC = () => {
 
       <SliderSetting
         testID="image-size"
-        label="Image Size"
+        label="Image size"
         description={`Output resolution. Recommended: ${defaults.size}x${defaults.size}.`}
         value={parameters.size}
         min={SWEET_SPOT_SIZE} max={maxSize} step={64}

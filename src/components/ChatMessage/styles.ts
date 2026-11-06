@@ -1,5 +1,7 @@
+import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING, FONTS } from '../../constants';
+import { cardSurface } from '../../theme/surface';
 
 /**
  * How wide a message is allowed to be, as ONE number.
@@ -150,10 +152,11 @@ const createBubbleStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   // Your message is a quiet raised surface with a faint emerald edge; emerald stays the light source,
   // not a block on every message.
+  // A quiet tile with a hairline: emerald is for what is in use, not for your own words.
   userBubble: {
     backgroundColor: colors.surfaceLight,
-    borderWidth: 1,
-    borderColor: `${colors.primary}40`,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
     borderBottomRightRadius: 4,
   },
   // The answer sits on the surface, like text on a page, not in a box.
@@ -387,6 +390,31 @@ const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexWrap: 'wrap' as const,
     alignItems: 'center' as const,
     gap: 3,
+  },
+  // Details in the time row: a 44 pt target that sits in the row's line height.
+  detailsToggle: {
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    minWidth: 44,
+    minHeight: 44,
+    marginVertical: -10,
+    marginHorizontal: -10,
+  },
+  // A quiet surface, so the dot lattice does not run through the Mono line (hand test 66).
+  turnDetails: {
+    ...cardSurface(colors),
+    width: MESSAGE_MAX_WIDTH,
+    alignSelf: 'flex-start' as const,
+    gap: 4,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  // Details reads as a sentence, so Geist, not the Mono of a data cell (hand test 69).
+  turnDetailsText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textMuted,
+    lineHeight: 18,
   },
   generationMetaContainer: {
     alignSelf: 'stretch' as const,

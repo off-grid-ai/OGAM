@@ -560,3 +560,105 @@ FlatList.scrollToEnd computes the end from rows measured so far; on a cold open 
 ## Supervisor 19:30 (hand test 59, cold-open fix build)
 
 Cold open: 1 of 2 runs showed older turns until ~8 s, then landed at the newest; the other run was at the newest by 2 s. History intact (scrolled to the 2:19 first prompt). Warm opens, scroll-up hold: pass. The remaining cold-open delay is the JS thread stalled by Sync after launch (6–22 s, debug agent); the scroll code corrects as soon as JS runs. Next: the Sync launch stall (deferred by Mac; asked).
+
+## Supervisor 20:30 (hand test 60, full screen sweep, build 61) — 18 of 26 fail
+
+Shots: docs/play/r14-sweep/. Pass: Home, Chats, Projects, Knowledge base, Models Text, Downloads. Fail: project page (bare field, folder in title), Models Documents and Document search (label mismatch, tinted first row), Settings lower half (5 cards), Model settings (no surface, emerald text button), Remote servers (cards, cluttered rows), Storage and Device info (cards, numbers not Mono, emerald "Flagship"), Security and Engine updates (box + info box), What we share (12 pt gutter, emerald labels), About (emoji heart, purple logo), Gallery blank tiles, image viewer a modal, every reply 3 meta rows, chat settings sheet flat grey with Delete among settings, chat options menu Title Case mono and gold Pro tools, Tools and Pro tools still the old design.
+Worst 5: Pro tools, Tools, What we share, Remote servers, Device info / Storage.
+
+## Supervisor 21:40 (hand test 61, build 62 at 8e7931687) — 9 of 26 pass (was 8)
+
+Pass: Home, Chats, Projects, Knowledge base, Models Text and Documents, Downloads, Settings, Document search, What we share. Worst 5: Pro tools (still old: icon tiles, Active pill, red trash, info box), Chat (3 meta rows per reply, emerald user border), chat settings sheet (Delete among settings), Tools (Title Case names, model-facing descriptions), Project / Model settings / Security / Engine updates (rows without a surface, info boxes; Security and Engine fixed after this build). Review page: https://claude.ai/artifact/RmSC5fdjd8KrRjAoCVKkJp
+
+## Supervisor 23:00 (hand test 62, build 63 at df7de502c) — 13 of 26 pass (was 9)
+
+Newly passing: project, settings-model, security, engine updates. Fail: settings-lower (5 cards), remote servers, storage, device info, about, gallery + viewer, chat (3 meta rows, emerald user border), chat settings sheet (Delete fixed after this build), chat options (gold Pro crown), tools and pro tools. Worst 5: Pro tools layout (sticky info box, one card per tool, model-facing text), chat meta rows, chat settings sheet, gallery, black switch thumbs on 4 screens. Screens take ~2 s to settle.
+
+## Supervisor 00:20 (hand test 63, build 64) — 15 of 26 pass (was 13)
+
+Newly passing: chat settings sheet, Delete at the end; white switch knobs in. Fail: chat (3 meta rows), chat options (gold Pro crown and pill), Pro tools (MCP server cards: letter tile, Active pill, trash), Tools (model-facing footer, "Tools 0" with Knowledge base on), settings-lower (6 unlabelled cards), remote servers (3 icons + radio), device info (tier boxes), storage (4 cards, empty Leftover files), about, gallery + viewer.
+
+## Supervisor 01:30 (hand test 64, build 65) — 16 of 26 pass (was 15)
+
+Newly passing: Tools, Settings (Pro in the list). Pro tools: each MCP server is still a card (logo tile, status pill, separate tools line). Still failing: chat meta rows, chat options count, pro tools, settings-lower, about, device info (tier grid fixed after this build), storage, remote servers, gallery + viewer.
+
+## Supervisor 09:30 (hand test 65, build 66) — 3 of 4 pass, 1 partial
+
+Pass: Remote servers (one chevron; server screen has Test, Update, Remove), Settings community group, Device information tier rows. Partial: Pro tools rows on one surface, but the meta line cuts at "~150 tokens · ht…" so the address never shows (switch not toggled: no [test] server).
+Top 3: (1) cards are see-through, the dot grid shows through on Remote servers, Device information, Pro tools; (2) section labels disagree (COMMUNITY uppercase vs "Tools", "MCP servers", "Hardware", "Compatibility"), tier rows indent 8 pt past their label, no hairlines; (3) server form and MCP tools screen off-brand (edge-to-edge fields, faint Update server, a card per tool, token pills, "Disable All" emerald outline).
+
+## Supervisor 09:45 (hand test 66, build 67) — 4 of 6 pass, 1 partial, 1 not in build
+
+Pass: Settings lower (opaque cards, labels above), Device information (tier rows aligned, hairlines), Remote servers, Chat (one time row with Details; panel opens and closes). Partial: Pro tools ("Desktop tools" a black label, its two servers separate cards, host cut on Parallel, info box, trash per row). MCP tools still the old screen (commit landed after build 67). No lost behaviour.
+Also: Chats list card still see-through; Pro page labels inside cards.
+Gallery blank tiles, root cause: seven generated_images are real 5 KB pure-white 512x512 PNGs from 2026-11-02. Generation saved a failed (blank) output as a success; the gallery draws them correctly.
+Top 3: (1) ship the new MCP tools screen; (2) Pro tools: Desktop tools as a quiet label over one surface, full host, trash into the server screen; (3) Details panel on a quiet surface, tool names in words not snake_case.
+
+## Supervisor 10:05 (hand test 67, build 68) — 5 of 7 pass, 2 partial
+
+Pass: MCP tools (rows, Find a tool, one Turn all off), Pro tools (Desktop tools label over one surface, host wraps), chat Details (surface, names in words), Chats list (no dots), Home and Models (no regression). Partial: Storage (Unfinished downloads and Leftover files labels inside cards; raw file name, no size), server form (disabled Update server is pale emerald, about 2:1; Remote media model labels touch the field above). No lost behaviour.
+Top 3: (1) server form: room above Remote media labels, readable disabled primary; (2) MCP tool names through toolDisplayName, a backing under the summary line; (3) Storage and Pro page labels above their cards (Pro page fixed after this build).
+
+## Supervisor 10:25 (hand test 68, build 69) — 4 of 5 fixes pass
+
+Pass: MCP tools names in words, Pro tools (no trash; Remove server in its edit sheet, Cancel kept it), Storage labels above, Pro page labels above, Home, Chats, chat, Settings top. Partial: server form (disabled Update server still emerald), Models (three unlabelled icons by search). Fail: Settings lower (emoji heart footer, Anonymous stats card unlabelled). No lost behaviour.
+Top 3: (1) disabled primary label grey, Test connection vs Update server weight; (2) MCP tool descriptions for people, tokens to detail, summary backing; (3) drop the emoji heart, label the stats card, label the Models search icons.
+
+## Supervisor 10:50 (hand test 69, full sweep, build 70) — 16 of 26 pass
+
+Fail: chat (Details still Metal/tok/s/q8_0, all Mono), chat options ("Tools 0" with Knowledge base on), models-text (sort shows a bolt), gallery (7 blank images, generation bug, own card), gallery viewer (overlay, routes card), settings-lower and about (emoji heart, purple logo: Mac's call), security and engine updates (labels inside cards), what we share (mixed-case labels). No lost behaviour.
+Top 3: (1) tool count agrees everywhere; Details sentence in Geist without engine jargon; (2) labels above cards on Security, Engine updates, What we share; heart and logo wait for Mac; (3) gallery viewer route and blank images (both proposed as their own sessions).
+
+## Supervisor 11:30 (hand test 70, build 71) — not run: iPhone disconnected
+
+Home and one [test] chat loaded, then WDA stopped answering after the Details tap; devicectl lists Mac's iPhone as unavailable and idevice_id finds nothing. Build 71 checks (Details sentence, Tools count copy, sort mark, labels on Security / Engine updates / What we share, Pro tools footnote) wait for the phone.
+
+## Supervisor 12:40 (hand test 71, build 72) — Mac's review notes: 6 of 7 pass, 1 partial
+
+Pass: Home header (icons on the title line), Home carousel (free and Pro, swipes, moves on), chat meta one line with an info icon, chat settings sheet (Project, Model settings, Delete chat; Model settings tabs), Projects (one height, chats / documents / last used), Models (three tiles, On phone, sort mark). Partial: quick settings (see-through menu, Tools 0 while Details lists 5). No lost behaviour.
+Top 3: (1) Model settings tabs: one flat surface, no cards in cards, no accordions inside, old copy rewritten; (2) quick settings solid surface, Tools count agrees with Details; (3) chat settings sheet sized to its rows, verified mark aligned on Models, Details sentence capitalised without q8_0.
+
+## Supervisor 13:20 (hand test 72, build 73) — 3 of 5 pass, 1 partial, 1 fail
+
+Pass: quick settings solid, chat Details capital and no cache, no regressions on Home / Projects / Models. Fail: chat settings sheet opened as a bare header (enableDynamicSizing measured the ScrollView as 0); Project and Model settings unreachable from a chat. Fixed after: fixed 42% snap point. Partial: Model settings tabs (Image: example box touching Image steps, "Image Size", Video generation outside the card; Voice: two cards with no gap, dropdown shadow; Text Advanced copy technical).
+Top 3: (1) chat settings sheet rows visible (fixed); (2) Image & video and Voice tabs: one card per section, gaps, no dropdown shadow, inline example; (3) Tools count font matches Pro tools.
+
+## Supervisor 13:55 (hand test 73, build 74) — 4 of 4 pass
+
+Chat settings sheet shows Project, Model settings, Delete chat (half empty below); image example inline and "Image size"; a gap between the Voice cards; one face for the quick-settings counts. Watch: a Home recent-chat row did not respond to two taps (Chats tab worked), cause not found.
+Top 3: (1) Video generation inside the Image & video card; (2) no dropdown shadows on Voice, a clear state for Read replies aloud; (3) the chat settings sheet sized to its rows without the bare-header bug.
+
+## Supervisor 14:20 (hand test 74, build 75) — project page: 4 pass, 2 partial
+
+Pass: header with New chat beside the purpose, chats under CHATS · 8 at one height with "Last week" / "2 weeks ago", shorter chat settings sheet, Home recent row opens its chat. Partial: "What it knows" card has no label; words differ (file / document, Instructions / SYSTEM PROMPT); 1 file says "from these"; empty project text floats 330 pt below with no CHATS · 0; knowledge base titled with the project name and a duplicate 36 pt "+".
+Top 3: (1) knowledge base titled Files, one add; (2) one vocabulary (Instructions, files), "from it" for one; (3) a label on the card, CHATS · 0 above the empty text.
+
+## Supervisor 14:50 (hand test 75, build 76) — 7 of 7 pass
+
+Project page: WHAT IT KNOWS label, CHATS · N (and · 0 with the line under it), "from it" for one file; Files titled with the project under it, one add (44 pt), file not document; Instructions on the edit screen; Video open under its label. No lost behaviour.
+Top 3: (1) count-aware empty copy (0 files: "Add a file and chats answer from it"; empty line drops "and files"); (2) one vocabulary: file in the VoiceOver label and Settings, Instructions for system prompt; (3) an IMAGE label to match VIDEO, style names on one line.
+
+## Supervisor 15:35 (hand test 76, build 77, standing hand-tester) — 7 of 8 pass
+
+Pass: Settings one-line rows, Home Sync and Clipboard one line, Downloads underline tabs, verified mark after the name, On phone, Tools package mark, Files add offers A file / Paste text (and empty state has both), project page labels, IMAGE / VIDEO labels, style names on two lines. Fail: IN USE ends 30 pt short of the row end, not in line with On phone. No lost behaviour.
+Top 3: (1) IN USE in the action column where On phone sits; (2) Tools count vs switches (explained: counts only with documents); (3) empty Files text centred, Paste sheet says Files not knowledge base.
+
+## Supervisor 16:10 (hand test 77, build 78) — 4 of 5 pass
+
+Pass: IN USE in the action column with On phone, no fill; Documents active row In use at its end; Home feedback a plain row; Files empty text centred, Save to Files. Fail: video style names still mono (the Geist commit came after this build).
+Top 3: (1) style names in Geist (in the next build); (2) In use in one case with On phone; (3) Documents: no "download" on a model already on the phone, the arrow says what it does.
+
+## Supervisor 16:45 (hand test 78, build 79) — glass back; 3 of 4 pass
+
+Pass: In use in On phone's face, Documents sizes and marks, style names in Geist. Glass reads well on Settings, Remote servers, Pro tools, Projects, project page, Home lower list and hero. Fail: Home Recent card and the Video settings card are still opaque. Note: field dots can sit inside text lines; Pro tools count 5 (was 7: a server's tools differ with connection state).
+Top 3: (1) Recent and Video cards glass; (2) dots near text (accepted with glass, Mac's call); (3) emerald In use contrast at 9 pt.
+
+## Supervisor 17:20 (hand test 79, build 80) — 5 of 5 pass
+
+Remote servers: circle beside both lines, status under the name, amber then red / green dots; Pro tools green dots; Sync " · " and dots; Home Recent and the Video card glass. No lost behaviour.
+Top 3: (1) Sync rows: a state icon and a dot say one thing twice; keep the dot; (2) Desktop tools "Connecting…" without a dot; (3) Remote servers read "Not checked yet" for ~15 s while the check runs.
+
+## Supervisor 13:40 (hand test 80, build 81) — 5 of 5 pass, banner gone
+
+No Metro banner on any screen; Sync device-type icons with the state as the dot; Desktop tools amber dot; Remote servers "Checking" then red / green. Glass reads well on the six main screens. No lost behaviour.
+Top 3: (1) Desktop tools "Connecting…" never ends while Remote servers says Not answering: one fact, one state; (2) Sync "last seen" a bare timestamp with seconds, wraps to three lines; (3) header hairline only on Projects; Chats first row indented by an image icon.

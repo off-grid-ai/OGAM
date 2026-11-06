@@ -124,8 +124,12 @@ export const OrphanedFilesSection: React.FC<Props> = ({ onStorageChange }) => {
   return (
     <>
       <Card style={styles.section}>
-        <View style={styles.sectionHeader}>
+        <View style={[styles.sectionHeader, orphanedFiles.length === 0 && styles.headerOnly]}>
           <Text style={styles.sectionTitle}>Leftover files</Text>
+          {/* Empty, the card is one line: what it is, None, and the check-again control (hand test 64). */}
+          {orphanedFiles.length === 0 && (
+            <Text style={styles.emptyInline}>{isScanning ? 'Looking' : 'None'}</Text>
+          )}
           <TouchableOpacity
             style={styles.scanButton}
             onPress={scanForOrphanedFiles}
@@ -139,11 +143,7 @@ export const OrphanedFilesSection: React.FC<Props> = ({ onStorageChange }) => {
           </TouchableOpacity>
         </View>
 
-        {orphanedFiles.length === 0 ? (
-          <Text style={styles.emptyText}>
-            {isScanning ? 'Looking…' : 'No leftover files.'}
-          </Text>
-        ) : (
+        {orphanedFiles.length === 0 ? null : (
           <>
             <Text style={styles.warningText}>
               No model uses these. They come from downloads that stopped.
@@ -199,11 +199,10 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   section: {
     marginBottom: SPACING.lg,
   },
+  // A row's name, not a label inside the card (hand test 67).
   sectionTitle: {
-    ...TYPOGRAPHY.label,
-    textTransform: 'uppercase' as const,
-    color: colors.textMuted,
-    letterSpacing: 0.3,
+    ...TYPOGRAPHY.body,
+    color: colors.text,
   },
   sectionHeader: {
     flexDirection: 'row' as const,
@@ -220,11 +219,11 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginBottom: SPACING.md,
     lineHeight: 18,
   },
-  emptyText: {
-    ...TYPOGRAPHY.body,
+  headerOnly: { marginBottom: 0 },
+  emptyInline: {
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,
-    textAlign: 'center' as const,
-    paddingVertical: SPACING.lg,
+    marginLeft: 'auto' as const,
   },
   orphanedRow: {
     flexDirection: 'row' as const,

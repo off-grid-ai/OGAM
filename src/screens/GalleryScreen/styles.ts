@@ -1,3 +1,4 @@
+import { cardSurface } from '../../theme/surface';
 import { StyleSheet, Dimensions } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
@@ -217,13 +218,13 @@ const createViewerStyles = (colors: ThemeColors) => ({
 
 const createVideoStyles = (colors: ThemeColors) => ({
   videoList: { padding: SPACING.md },
+  // Glass like every card.
   videoRow: {
+    ...cardSurface(colors),
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     padding: SPACING.lg,
     marginBottom: SPACING.sm,
-    backgroundColor: colors.surface,
-    borderRadius: 8,
     gap: SPACING.md,
   },
   videoRowBody: { flex: 1 },

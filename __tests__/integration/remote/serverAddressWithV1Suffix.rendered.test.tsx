@@ -107,14 +107,16 @@ describe.each([
 
     rtl.fireEvent.press(view.getByTestId('save-server'));
     expect(await view.findByText(SERVER_NAME)).toBeTruthy();
-    expect(await view.findByText('Connected')).toBeTruthy();
-    expect(view.queryByText('Not answering')).toBeNull();
+    expect(await view.findByText(/^Connected · /)).toBeTruthy();
+    expect(view.queryByText(/^Not answering · /)).toBeNull();
 
-    // Tapping Test on the saved row keeps it Connected, with no failure dialog.
-    rtl.fireEvent.press(view.getByLabelText('Test'));
-    await rtl.waitFor(() => expect(view.getByLabelText('Test')).not.toBeBusy());
-    expect(view.getByText('Connected')).toBeTruthy();
+    // Opening the saved server and checking it there keeps it Connected, with no failure.
+    rtl.fireEvent.press(view.getByLabelText(`Edit ${SERVER_NAME}`));
+    rtl.fireEvent.press(await view.findByTestId('test-connection'));
+    expect(await view.findByText(/Connected \(\d+ms\)/)).toBeTruthy();
     expect(view.queryByText('Could not connect')).toBeNull();
+    rtl.fireEvent.press(view.getByLabelText('Back'));
+    expect(await view.findByText(/^Connected · /)).toBeTruthy();
     rtl.fireEvent.press(view.getByLabelText('Back'));
 
     // The picker lists the model with Tool calling - learned from LM Studio's own model list.

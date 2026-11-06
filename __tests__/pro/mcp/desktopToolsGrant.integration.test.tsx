@@ -169,7 +169,7 @@ describe('Desktop tools in Pro tools', () => {
     // The desktop grants: the switch reflects the grant, and its tools connect here.
     desktop.engine.sendApp(phone.id, MCP_TOOL_GRANT_CHANNEL, GRANT);
     await waitFor(() => expect(toggle().props.value).toBe(true), { timeout: 10_000 });
-    await waitFor(() => expect(ui!.getByText(/^\d\/2 tools enabled$/)).toBeTruthy(), { timeout: 15_000 });
+    await waitFor(() => expect(ui!.getByText(/^\d of 2 tools$/)).toBeTruthy(), { timeout: 15_000 });
 
     // Off: the desktop is asked to take them back; when it revokes, the switch is off.
     fireEvent(toggle(), 'valueChange', false);
@@ -178,6 +178,6 @@ describe('Desktop tools in Pro tools', () => {
     );
     desktop.engine.sendApp(phone.id, MCP_TOOL_REVOKE_CHANNEL, { url: DESKTOP_MCP_URL });
     await waitFor(() => expect(toggle().props.value).toBe(false), { timeout: 10_000 });
-    expect(ui.queryByText(/^\d\/2 tools enabled$/)).toBeNull();
+    expect(ui.queryByText(/^\d of 2 tools$/)).toBeNull();
   }, 60_000);
 });

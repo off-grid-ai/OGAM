@@ -76,9 +76,9 @@ describe('T014 — GPU/OpenCL backend → GenerationMeta shows GPU layers offloa
     // — the layers reached the GPU, not a silent CPU fallback.
     await h.rtl.act(async () => { pressByWalkingUp(h.view!.getByTestId('generation-details-toggle')); });
     const meta = await h.rtl.waitFor(() => h.view!.getByTestId('generation-meta'));
-    expect(h.rtl.within(meta).queryByText(/OpenCL \(\d+L\)/)).not.toBeNull();
+    expect(meta).toHaveTextContent(/(^R| · r)an on the GPU \(OpenCL\)( · |$)/);
     // And it is NOT running on CPU.
-    expect(h.rtl.within(meta).queryByText('CPU')).toBeNull();
+    expect(meta).not.toHaveTextContent(/\bCPU\b/);
   }, 120000); // reload can queue behind the broad push-hook journeys — allow for it under load
 
   it('falsify: CPU backend renders "CPU" with no offloaded layers', async () => {
@@ -97,9 +97,9 @@ describe('T014 — GPU/OpenCL backend → GenerationMeta shows GPU layers offloa
 
     await h.rtl.act(async () => { pressByWalkingUp(h.view!.getByTestId('generation-details-toggle')); });
     const meta = await h.rtl.waitFor(() => h.view!.getByTestId('generation-meta'));
-    expect(h.rtl.within(meta).queryByText('CPU')).not.toBeNull();
+    expect(meta).toHaveTextContent(/(^R| · r)an on the CPU( · |$)/);
     expect(h.rtl.within(meta).queryByText(/OpenCL/)).toBeNull();
-    expect(h.rtl.within(meta).queryByText(/\(\d+L\)/)).toBeNull();
+    expect(meta).not.toHaveTextContent(/[Rr]an on the GPU/);
   });
 
   it('shows native prompt usage, not the reply token count, in generation details', async () => {
@@ -111,8 +111,10 @@ describe('T014 — GPU/OpenCL backend → GenerationMeta shows GPU layers offloa
 
     await h.send('Hi', { text: 'Hello.', completionMeta: { tokens_evaluated: 410 } });
     await h.rtl.waitFor(() => expect(h.view!.queryByText('Hello.')).not.toBeNull());
-    expect(h.view!.queryByText(/Tools it could use/)).not.toBeNull();
+    // The reply's Details hold how it was made and the tools it was offered; closed, neither shows.
+    expect(h.view!.queryByText(/Tools it had for this reply/)).toBeNull();
     await h.rtl.act(async () => { pressByWalkingUp(h.view!.getByTestId('generation-details-toggle')); });
-    expect(h.view!.queryByText('Context: 10% used')).not.toBeNull();
+    expect(h.view!.getByTestId('tools-sent-list')).toHaveTextContent(/^Tools it had for this reply: .*Calculator/);
+    expect(h.view!.getByTestId('generation-meta')).toHaveTextContent(/(^| · )10% of its memory used( · |$)/);
   });
 });

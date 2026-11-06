@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
-import { ScrollView, Text, TextInput, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button, ModelCard } from '../../components';
 import { CustomAlert, initialAlertState, showAlert, hideAlert } from '../../components/CustomAlert';
@@ -11,12 +11,22 @@ import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { SPACING, TYPOGRAPHY } from '../../constants';
 import { createStyles } from './styles';
+import { SearchField } from '../../components/SearchField';
+import { GROUPED_CARD_ROW, ListGroup } from '../../components/ListGroup';
 
 type Candidate = Awaited<ReturnType<typeof searchEmbeddingModels>>[number];
 
 const createEmbeddingStyles = (colors: ThemeColors) => ({
+  intro: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
+    marginBottom: SPACING.md,
+  },
+  // The same section label as the Text tab ("FOR THIS PHONE"): Mono, upper case, grey.
   sectionLabel: {
     ...TYPOGRAPHY.label,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.3,
     color: colors.textMuted,
     marginTop: SPACING.sm,
     marginBottom: SPACING.sm,
@@ -125,10 +135,16 @@ export const EmbeddingModelsTab: React.FC = () => {
 
   return (
     <ScrollView contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled" testID="embedding-models-tab">
-      <TextInput
-        style={embeddingStyles.searchInput} value={query} onChangeText={setQuery}
-        placeholder="Search embedding models" placeholderTextColor={colors.textMuted}
-        accessibilityLabel="Search Hugging Face embedding models" autoCapitalize="none" autoCorrect={false}
+      {/* What this is for, before any model name: the reader gets the outcome first. */}
+      <Text style={embeddingStyles.intro}>
+        When you add documents to a project, chat finds the passages that answer you. This model does
+        the finding, on this phone. The built-in one needs no download.
+      </Text>
+      <SearchField
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search models"
+        clearLabel="Clear model search"
         testID="embedding-search-input"
       />
       {!!status.message && <Text style={embeddingStyles.status} accessibilityLiveRegion="polite" testID="embedding-index-progress">{status.message}</Text>}
@@ -136,27 +152,31 @@ export const EmbeddingModelsTab: React.FC = () => {
       {status.busy && <Button title="Cancel model change" onPress={embeddingModelChanger.cancel} />}
       {loading && <Text style={embeddingStyles.status} aria-busy>Searching...</Text>}
       {!loading && query.trim() !== '' && !error && results.length === 0 && <Text style={embeddingStyles.status}>No models found. Try another name.</Text>}
-      <Text style={embeddingStyles.sectionLabel}>{query.trim() ? 'MODELS' : 'RECOMMENDED MODELS'}</Text>
-      <ModelCard compact
+      <Text style={embeddingStyles.sectionLabel}>{query.trim() ? 'Models' : 'Recommended'}</Text>
+      {/* One surface with hairlines, as every model list. */}
+      <ListGroup>
+      <ModelCard compact style={GROUPED_CARD_ROW}
         model={{ id: 'bundled', name: 'MiniLM (built-in)', author: '' }}
         facts={['Offline']}
         isDownloaded isActive={!active}
         disabled={status.busy || !ready || !active}
         onPress={() => select(null)}
-        trailing={active ? <View style={embeddingStyles.rowAction}><Icon name="arrow-right" size={18} color={colors.primary} /></View> : undefined}
+        // An empty circle picks it, as on the Text tab; a bare arrow did not say what it would do.
+        trailing={active ? <View style={embeddingStyles.rowAction}><Icon name="circle" size={16} color={colors.textMuted} /></View> : undefined}
       />
-      {active && !activeInCandidates && <ModelCard compact
+      {active && !activeInCandidates && <ModelCard compact style={GROUPED_CARD_ROW}
         model={{ id: active.id, name: active.name, author: '' }}
         facts={[`${Math.round(active.size / 1024 / 1024)} MB`]}
         isDownloaded isActive
       />}
       {candidates.map(candidate => (
-        <ModelCard key={candidate.id} compact
+        <ModelCard key={candidate.id} compact style={GROUPED_CARD_ROW}
           model={{ id: candidate.id, name: candidate.name, author: '' }}
           facts={[
             candidate.name.toLowerCase().includes('multilingual') ? 'Multilingual' :
               'description' in candidate && candidate.description?.includes('English') ? 'English' : undefined,
-            `${Math.round(candidate.size / 1024 / 1024)} MB download`,
+            // A model already here has a size, not a download.
+            `${Math.round(candidate.size / 1024 / 1024)} MB${downloaded.has(candidate.id) ? '' : ' download'}`,
           ].filter((fact): fact is string => !!fact)}
           isActive={active?.id === candidate.id}
           isDownloaded={downloaded.has(candidate.id)}
@@ -165,9 +185,10 @@ export const EmbeddingModelsTab: React.FC = () => {
           onDelete={downloaded.has(candidate.id) && active?.id !== candidate.id && !status.busy ? () => remove(candidate) : undefined}
           disabled={status.busy || !ready || active?.id === candidate.id}
           onPress={() => select(candidate)}
-          trailing={active?.id === candidate.id ? undefined : <View style={embeddingStyles.rowAction}><Icon name="arrow-right" size={18} color={colors.primary} /></View>}
+          trailing={active?.id === candidate.id ? undefined : <View style={embeddingStyles.rowAction}><Icon name={downloaded.has(candidate.id) ? 'circle' : 'download'} size={16} color={colors.textMuted} /></View>}
         />
       ))}
+      </ListGroup>
       <CustomAlert {...alert} onClose={() => setAlert(hideAlert())} />
     </ScrollView>
   );

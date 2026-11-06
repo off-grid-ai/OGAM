@@ -53,14 +53,14 @@ describe('LockScreen', () => {
   it('shows the lock, the passphrase field and a disabled Unlock until something is typed', () => {
     const view = render(<AppShell />);
 
-    expect(view.getByText('App Locked')).toBeTruthy();
+    expect(view.getByText('App locked')).toBeTruthy();
     expect(view.getByText('Enter your passphrase to unlock')).toBeTruthy();
     expect(view.getByText('Your data is protected and stored locally')).toBeTruthy();
     expect(view.getByPlaceholderText('Enter passphrase')).toBeTruthy();
     expect(view.queryByText(/attempts? remaining/)).toBeNull();
 
     fireEvent.press(view.getByText('Unlock'));
-    expect(view.getByText('App Locked')).toBeTruthy();
+    expect(view.getByText('App locked')).toBeTruthy();
     expect(view.queryByText('Incorrect Passphrase')).toBeNull();
   });
 
@@ -70,7 +70,7 @@ describe('LockScreen', () => {
     await act(async () => { fireEvent(view.getByPlaceholderText('Enter passphrase'), 'submitEditing'); });
 
     expect(view.getByText('Please enter your passphrase')).toBeTruthy();
-    expect(view.getByText('App Locked')).toBeTruthy();
+    expect(view.getByText('App locked')).toBeTruthy();
   });
 
   it('opens the app on the right passphrase, and the keyboard\'s Done works like Unlock', async () => {
@@ -81,7 +81,7 @@ describe('LockScreen', () => {
     await act(async () => { fireEvent(view.getByPlaceholderText('Enter passphrase'), 'submitEditing'); });
 
     await waitFor(() => expect(view.getByText('App content')).toBeTruthy());
-    expect(view.queryByText('App Locked')).toBeNull();
+    expect(view.queryByText('App locked')).toBeNull();
   });
 
   it('refuses a wrong passphrase, clears the field and counts down the attempts left', async () => {

@@ -20,6 +20,7 @@ import { useHasRegisteredScreen } from '../../navigation/screenRegistry';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { SPACING, TYPOGRAPHY } from '../../constants';
 import { cardSurface } from '../../theme/surface';
+import { SectionLabel } from '../../components/SectionLabel';
 
 interface IncludedRow {
   screen: string;
@@ -64,8 +65,10 @@ export const ProIncludedSection: React.FC = () => {
   if (rows.length === 0) return null;
 
   return (
+    <>
+    {/* The label above the card, as every other group (hand test 66 found it inside). */}
+    <SectionLabel title="Included with Pro" style={styles.cardLabel} />
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Included with Pro</Text>
       {rows.map((row, index) => (
         <TouchableOpacity
           key={row.screen}
@@ -85,6 +88,7 @@ export const ProIncludedSection: React.FC = () => {
         </TouchableOpacity>
       ))}
     </View>
+    </>
   );
 };
 
@@ -96,14 +100,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginHorizontal: SPACING.xl,
     marginBottom: SPACING.xl,
   },
-  cardTitle: {
-    ...TYPOGRAPHY.label,
-    color: colors.textMuted,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.3,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.xs,
-  },
+  cardLabel: { marginLeft: SPACING.xl + SPACING.xs },
   row: {
     minHeight: 44,
     flexDirection: 'row' as const,

@@ -26,11 +26,19 @@ import {
   NO_TRANSCRIPTION_MODEL_LABEL,
   useTranscriptionModelSetting,
 } from '../../hooks/useTranscriptionModelSetting';
-import { SettingsSectionHeader } from '../../components/settings/SettingsSectionHeader';
-import { useSectionSummaries } from '../../components/settings/sectionSummaries';
+import { UnderlineTabs, type UnderlineTab } from '../../components/UnderlineTabs';
+import { TranscriptionLanguageSelect } from '../../components/TranscriptionLanguageSelect';
+import { useRemoteServerStore } from '../../stores';
 import { AliveScreen } from '../../components/AliveScreen';
+import { SectionLabel } from '../../components/SectionLabel';
 import { ScreenHeader } from '../../components/ScreenHeader';
 
+type SettingsTab = 'general' | 'text' | 'image' | 'voice';
+
+/**
+ * Every model setting, in one place (the chat's settings sheet links here rather than copying them).
+ * Tabs, not a stack of accordions (screen review): each tab shows its settings open.
+ */
 export const ModelSettingsScreen: React.FC = () => {
   const navigation = useNavigation();
   const { colors } = useTheme();
@@ -38,21 +46,21 @@ export const ModelSettingsScreen: React.FC = () => {
   const resetSettings = useAppStore(s => s.resetSettings);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
-  const [promptOpen, setPromptOpen] = useState(false);
-  const [generalOpen, setGeneralOpen] = useState(false);
-  const [imageOpen, setImageOpen] = useState(false);
-  const [textOpen, setTextOpen] = useState(false);
-  const [ttsOpen, setTtsOpen] = useState(false);
-  const [sttOpen, setSttOpen] = useState(false);
+  const [tab, setTab] = useState<SettingsTab>('general');
   const [whisperOpen, setWhisperOpen] = useState(false);
+  const textIsRemote = useRemoteServerStore(s => s.activeServerId != null);
   // TTS is a pro feature injected via a slot (same as the in-chat generation settings). Free builds have no
   // slot → the section is not shown at all.
   const TtsSection = getSlot(SLOTS.generationSettingsTts);
-  const TtsSummary = getSlot(SLOTS.generationSettingsTtsSummary);
   const VideoSettings = getSlot(SLOTS.generationSettingsVideo);
   const { modelName: sttModelName, isRemote: isRemoteTranscription } =
     useTranscriptionModelSetting();
-  const summaries = useSectionSummaries();
+  const tabs: UnderlineTab<SettingsTab>[] = [
+    { key: 'general', label: 'General', testID: 'model-settings-tab-general' },
+    { key: 'text', label: 'Text', testID: 'model-settings-tab-text' },
+    { key: 'image', label: VideoSettings ? 'Image & video' : 'Image', testID: 'model-settings-tab-image' },
+    { key: 'voice', label: 'Voice', testID: 'model-settings-tab-voice' },
+  ];
 
   const handleReset = () => {
     setAlertState(
@@ -91,97 +99,80 @@ export const ModelSettingsScreen: React.FC = () => {
           />
         }
       />
+      <UnderlineTabs tabs={tabs} active={tab} onChange={setTab} />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
       >
-        {/* It places every modality (text, image, video, speech, voice, search), so it leads the screen. */}
-        <FastestSettingsButton />
-        <SettingsSectionHeader
-          title="General"
-          summary={summaries.general}
-          open={generalOpen}
-          onToggle={() => setGeneralOpen(!generalOpen)}
-          testID="general-generation-accordion"
-        />
-        {generalOpen && <View style={styles.settingSection}><GeneralGenerationControls /></View>}
-          <SettingsSectionHeader
-            title="Default system prompt"
-            summary={summaries.prompt}
-            open={promptOpen}
-            onToggle={() => setPromptOpen(!promptOpen)}
-            testID="system-prompt-accordion"
-          />
-        {promptOpen && <SystemPromptSection />}
-
-        <SettingsSectionHeader
-          title="Image generation"
-          summary={summaries.image}
-          open={imageOpen}
-          onToggle={() => setImageOpen(!imageOpen)}
-          testID="image-generation-accordion"
-        />
-        {imageOpen && <ImageGenerationSection />}
-        {VideoSettings && <VideoSettings />}
-
-        <SettingsSectionHeader
-          title="Text generation"
-          summary={summaries.text}
-          open={textOpen}
-          onToggle={() => setTextOpen(!textOpen)}
-          testID="text-generation-accordion"
-        />
-        {textOpen && <TextGenerationSection />}
-
-        {/* Transcription (STT/whisper) — core. Reuses the same picker sheet Home/Chat open, and the same
-            whisper store as its single source, so the active model shown here is always consistent. */}
-        <SettingsSectionHeader
-          title="Transcription"
-          summary={summaries.transcription}
-          open={sttOpen}
-          onToggle={() => setSttOpen(!sttOpen)}
-          testID="transcription-accordion"
-        />
-        {sttOpen && (
-          <View style={styles.settingSection}>
-            <Text style={styles.settingDesc}>
-              {isRemoteTranscription
-                ? 'Your active remote server transcribes dictation and voice chat.'
-                : 'The on-device model used to transcribe your voice for dictation and voice chat.'}
-            </Text>
-            <TouchableOpacity
-              style={styles.toggleRow}
-              onPress={() => setWhisperOpen(true)}
-              activeOpacity={0.7}
-              testID="stt-open-picker"
-            >
-              <View style={styles.toggleInfo}>
-                <Text style={styles.toggleLabel}>Transcription model</Text>
-                <Text style={styles.toggleDesc}>
-                  {sttModelName ?? NO_TRANSCRIPTION_MODEL_LABEL}
-                </Text>
-              </View>
-              <Icon name="chevron-right" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-            {/* Voice mode ends a turn on silence. Lives with STT because it is about listening. */}
-            <VoiceTurnSettings />
-          </View>
-        )}
-
-        {/* Text to Speech — pro feature via slot; free builds render nothing (no accordion). */}
-        {TtsSection && (
+        {tab === 'general' && (
           <>
-            <SettingsSectionHeader
-              title="Text to speech"
-              summary={TtsSummary ? <TtsSummary /> : null}
-              open={ttsOpen}
-              onToggle={() => setTtsOpen(!ttsOpen)}
-              testID="tts-accordion"
-            />
-            {ttsOpen && <TtsSection />}
+            {/* It places every modality (text, image, video, speech, voice, search), so it leads. */}
+            <FastestSettingsButton />
+            <View style={styles.sectionsGroup}>
+              <View style={styles.settingSection}><GeneralGenerationControls /></View>
+              <SystemPromptSection />
+            </View>
           </>
         )}
 
+        {tab === 'text' && (
+          <>
+            {/* The section draws its own card: wrapping it made a card inside a card (hand test 71). */}
+            <TextGenerationSection />
+            {textIsRemote ? (
+              <Text style={styles.footnote} testID="model-settings-remote-note">
+                These apply to models on this phone. A remote server uses its own.
+              </Text>
+            ) : null}
+          </>
+        )}
+
+        {tab === 'image' && (
+          <>
+            {/* Labelled like the Video card under it, so the tab reads as two named groups. */}
+            {VideoSettings ? <SectionLabel title="Image" /> : null}
+            <ImageGenerationSection />
+            {VideoSettings && <VideoSettings alwaysOpen />}
+          </>
+        )}
+
+        {tab === 'voice' && (
+          <>
+            {/* Transcription: the same picker sheet Home and Chat open, on the same whisper store. */}
+            <View style={styles.sectionsGroup}>
+              <View style={styles.settingSection}>
+                <Text style={styles.settingDesc}>
+                  {isRemoteTranscription
+                    ? 'Your active remote server transcribes dictation and voice chat.'
+                    : 'The on-device model used to transcribe your voice for dictation and voice chat.'}
+                </Text>
+                <TouchableOpacity
+                  style={styles.toggleRow}
+                  onPress={() => setWhisperOpen(true)}
+                  activeOpacity={0.7}
+                  testID="stt-open-picker"
+                >
+                  <View style={styles.toggleInfo}>
+                    <Text style={styles.toggleLabel}>Transcription model</Text>
+                    <Text style={styles.toggleDesc}>
+                      {sttModelName ?? NO_TRANSCRIPTION_MODEL_LABEL}
+                    </Text>
+                  </View>
+                  <Icon name="chevron-right" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+                <TranscriptionLanguageSelect testID="settings-transcription-language" />
+                {/* Voice mode ends a turn on silence. Lives with listening. */}
+                <VoiceTurnSettings />
+              </View>
+            </View>
+            {/* Text to speech is Pro, through a slot; free builds show none. */}
+            {TtsSection && (
+              <View style={styles.sectionGap}>
+                <TtsSection />
+              </View>
+            )}
+          </>
+        )}
       </ScrollView>
       {whisperOpen ? (
         <WhisperPickerSheet visible onClose={() => setWhisperOpen(false)} />

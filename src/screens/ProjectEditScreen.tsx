@@ -81,11 +81,11 @@ export const ProjectEditScreen: React.FC = () => {
 
   const handleSave = () => {
     if (!formData.name.trim()) {
-      setAlertState(showAlert('Error', 'Please enter a name for the project'));
+      setAlertState(showAlert('Add a name', 'Give this project a name.'));
       return;
     }
     if (!formData.systemPrompt.trim()) {
-      setAlertState(showAlert('Error', 'Please enter a system prompt'));
+      setAlertState(showAlert('Add instructions', 'Tell chats in this project how to answer.'));
       return;
     }
 
@@ -152,16 +152,16 @@ export const ProjectEditScreen: React.FC = () => {
             testID="project-edit-description"
           />
 
-          {/* System Prompt */}
-          <Text style={styles.label}>System Prompt *</Text>
+          {/* Instructions: the same word the project page uses. */}
+          <Text style={styles.label}>Instructions *</Text>
           <Text style={styles.hint}>
-            This context is sent to the AI at the start of every chat in this project.
+            Every chat in this project starts with these.
           </Text>
           <TextInput
             style={[styles.input, styles.textArea]}
             value={formData.systemPrompt}
             onChangeText={(text) => setFormData({ ...formData, systemPrompt: text })}
-            placeholder="Enter the instructions or context for the AI..."
+            placeholder="How should chats here answer, and what should they know?"
             placeholderTextColor={colors.textMuted}
             multiline
             textAlignVertical="top"
@@ -169,7 +169,7 @@ export const ProjectEditScreen: React.FC = () => {
           />
 
           <Text style={styles.tip}>
-            Tip: Be specific about what you want the AI to do, how it should respond, and any context it needs.
+            Say what it should do, how it should answer, and what it needs to know.
           </Text>
 
           {existingProject && (

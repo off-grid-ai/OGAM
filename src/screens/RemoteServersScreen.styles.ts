@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native';
 import { listRowStyle } from '../components/ListGroup';
 import { cardSurface } from '../theme/surface';
 import type { ThemeColors, ThemeShadows } from '../theme/palettes';
@@ -40,6 +41,11 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
     },
 
     card,
+    cardDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderLight,
+      marginVertical: SPACING.md,
+    },
     cardRow: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
@@ -123,8 +129,11 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
     },
     serverIdentity: {
       flex: 1,
-      gap: SPACING.xs,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: SPACING.md,
     },
+    serverText: { flex: 1, gap: 2 },
     serverTopRow: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
@@ -164,18 +173,14 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
     serverEndpoint: {
       ...TYPOGRAPHY.meta,
       color: colors.textSecondary,
+      flexShrink: 1,
     },
     serverStatus: {
       ...TYPOGRAPHY.meta,
       color: colors.textMuted,
     },
 
-    // The row's actions sit on its right edge as icon buttons.
-    serverActions: {
-      flexDirection: 'row' as const,
-      alignItems: 'center' as const,
-    },
-    // 44pt boxes side by side: full touch targets with no overlap between neighbours.
+    // The row's one action: a 44 pt box on its right edge.
     serverAction: {
       width: 44,
       height: 44,

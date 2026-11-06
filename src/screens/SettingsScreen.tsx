@@ -196,7 +196,7 @@ export const SettingsScreen: React.FC = () => {
               {
                 icon: 'sliders',
                 title: 'Model settings',
-                desc: 'System prompt, generation, and performance',
+                desc: 'Instructions, replies, and speed',
                 screen: 'ModelSettings' as const,
                 testID: 'open-model-settings',
               },
@@ -205,14 +205,14 @@ export const SettingsScreen: React.FC = () => {
                 icon: 'search',
                 title: 'Document search',
                 // What it does for you; the model's name is one tap in, on its own screen.
-                desc: 'How chat finds the right part of your documents',
+                desc: 'How chats find the right part of a file',
                 screen: 'SearchModel' as const,
                 testID: 'open-search-model',
               },
               {
                 icon: 'wifi',
                 title: 'Remote servers',
-                desc: 'Connect to Off Grid AI Desktop, Ollama, LM Studio, and more',
+                desc: 'Your Mac, Ollama or LM Studio',
                 screen: 'RemoteServers' as const,
               },
               ...(hasSync
@@ -221,8 +221,8 @@ export const SettingsScreen: React.FC = () => {
                       icon: 'refresh-cw',
                       title: isSyncUnlocked ? 'Sync' : 'Sync with Pro',
                       desc: isSyncUnlocked
-                        ? 'Chats, projects, files, and copied text across your devices'
-                        : 'Get Pro to set up encrypted Sync across your devices',
+                        ? 'Chats and files on all your devices'
+                        : 'Chats and files on all your devices, with Pro',
                       screen: 'Sync' as const,
                       testID: 'open-sync-settings',
                     },
@@ -250,20 +250,17 @@ export const SettingsScreen: React.FC = () => {
               {
                 icon: 'cpu',
                 title: 'Engine updates',
-                desc: 'The engine that runs your models, and how it stays current',
+                desc: 'What runs your models',
                 screen: 'EngineUpdates' as const,
                 testID: 'open-engine-updates',
               },
-            ].map((item, index, arr) => (
+            ].map((item, index) => (
               <AnimatedListItem
                 key={item.screen}
                 index={index + 1}
                 staggerMs={40}
                 trigger={focusTrigger}
-                style={[
-                  styles.navItem,
-                  index === arr.length - 1 && styles.navItemLast,
-                ]}
+                style={styles.navItem}
                 onPress={() =>
                   item.screen === 'Sync'
                     ? openSync()
@@ -284,41 +281,46 @@ export const SettingsScreen: React.FC = () => {
                 </View>
                 <View style={styles.navItemContent}>
                   <Text style={styles.navItemTitle}>{item.title}</Text>
-                  <Text style={styles.navItemDesc}>{item.desc}</Text>
+                  {/* One line, so every row in the list keeps one height (design philosophy: rhythm). */}
+                  <Text style={styles.navItemDesc} numberOfLines={1}>{item.desc}</Text>
                 </View>
                 <Icon name="chevron-right" size={16} color={colors.textMuted} />
               </AnimatedListItem>
             ))}
+            {/* Pro is the last row of this list, not a card on its own (hand tests 60-62). */}
+            <TouchableOpacity
+              style={[styles.navItem, styles.navItemLast]}
+              onPress={() => navigation.navigate('ProDetail')}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel={`Off Grid AI Pro. ${proStatusLabel}`}
+            >
+              <View style={styles.navItemIcon}>
+                <IconMC name="crown" size={16} color={colors.textSecondary} />
+              </View>
+              <View style={styles.navItemContent}>
+                <Text style={styles.navItemTitle}>Off Grid AI Pro</Text>
+                <Text style={styles.navItemDesc}>{proStatusLabel}</Text>
+              </View>
+              <Icon name="chevron-right" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
           </View>
 
-        {/* PRO Button */}
-        <AnimatedEntry index={6} staggerMs={40} trigger={focusTrigger}>
-          <TouchableOpacity
-            style={styles.proNavButton}
-            onPress={() => navigation.navigate('ProDetail')}
-            activeOpacity={0.75}
-            accessibilityRole="button"
-            accessibilityLabel={`Off Grid AI Pro. ${proStatusLabel}`}
-          >
-            <View style={styles.proIconContainer}>
-              <IconMC name="crown" size={18} color={colors.textSecondary} />
-            </View>
-            <View style={styles.proCardText}>
-              <View style={styles.proTitleRow}>
-                {/* Named once: "Off Grid AI PRO" beside a second PRO badge said it twice (hand test 36). */}
-                <Text style={styles.proNavTitle}>Off Grid AI Pro</Text>
-              </View>
-              <Text style={styles.proDesc}>{proStatusLabel}</Text>
-            </View>
-            <Icon name="chevron-right" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
-        </AnimatedEntry>
 
         <SettingsCommunitySections
           focusTrigger={focusTrigger}
           styles={styles}
           colors={colors}
           onSendFeedback={handleSendFeedback}
+        />
+
+
+        {/* Analytics: opt-in consent, what is shared, Report a problem */}
+        <SettingsAnalyticsSection
+          focusTrigger={focusTrigger}
+          styles={styles}
+          colors={colors}
+          onWhatWeShare={() => navigation.navigate('AnalyticsInfo')}
         />
 
         {/* About */}
@@ -343,14 +345,6 @@ export const SettingsScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         </AnimatedEntry>
-
-        {/* Analytics: opt-in consent, what is shared, Report a problem */}
-        <SettingsAnalyticsSection
-          focusTrigger={focusTrigger}
-          styles={styles}
-          colors={colors}
-          onWhatWeShare={() => navigation.navigate('AnalyticsInfo')}
-        />
 
         {/* Pro feature sections registered at runtime by @offgrid/pro */}
         {settingsSections.map((Section, i) => (
@@ -393,14 +387,14 @@ export const SettingsScreen: React.FC = () => {
                 onPress={handleResetOnboarding}
               >
                 <Icon name="rotate-ccw" size={14} color={colors.textMuted} />
-                <Text style={styles.devButtonText}>Reset Onboarding</Text>
+                <Text style={styles.devButtonText}>Reset onboarding</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.devButton}
                 onPress={() => setShowDebugLogs(true)}
               >
                 <Icon name="terminal" size={14} color={colors.textMuted} />
-                <Text style={styles.devButtonText}>Debug Logs</Text>
+                <Text style={styles.devButtonText}>Debug logs</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.devButton}

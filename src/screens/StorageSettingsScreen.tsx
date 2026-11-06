@@ -31,6 +31,8 @@ import { useWhisperStore } from '../stores/whisperStore';
 import { useModelDownloads } from '../services/modelDownloadService/useModelDownloads';
 import type { RootStackParamList } from '../navigation/types';
 import { AliveScreen } from '../components/AliveScreen';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { SectionLabel } from '../components/SectionLabel';
 
 export const StorageSettingsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -140,22 +142,14 @@ export const StorageSettingsScreen: React.FC = () => {
 
   return (
     <AliveScreen style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Storage</Text>
-      </View>
+      <ScreenHeader title="Storage" onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
       >
+        <SectionLabel title="Space on this phone" />
         <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>Storage Usage</Text>
           <View style={styles.storageBar}>
             <View style={[styles.storageUsed, { width: `${Math.min(usedPercentage, 100)}%` }]} />
           </View>
@@ -182,27 +176,18 @@ export const StorageSettingsScreen: React.FC = () => {
           </View>
         </Card>
 
+        <SectionLabel title="What uses it" />
         <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>Breakdown</Text>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="cpu" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Chat models</Text>
-            </View>
+            <Text style={styles.infoLabel}>Chat models</Text>
             <Text style={styles.infoValue}>{chatModelCount}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="image" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Image models</Text>
-            </View>
+            <Text style={styles.infoLabel}>Image models</Text>
             <Text style={styles.infoValue}>{downloadedImageModels.length}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="video" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Video models</Text>
-            </View>
+            <Text style={styles.infoLabel}>Video models</Text>
             <Text style={styles.infoValue}>{downloadedVideoModels.length}</Text>
           </View>
           {downloadedVideoModels.map(model => (
@@ -222,54 +207,33 @@ export const StorageSettingsScreen: React.FC = () => {
             </View>
           ))}
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="search" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Document search model</Text>
-            </View>
+            <Text style={styles.infoLabel}>Document search model</Text>
             <Text style={styles.infoValue}>{size(extra.search)}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="mic" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Speech-to-text models</Text>
-            </View>
+            <Text style={styles.infoLabel}>Speech-to-text models</Text>
             <Text style={styles.infoValue}>{transcriptionModelCount}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="volume-2" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Voices</Text>
-            </View>
+            <Text style={styles.infoLabel}>Voices</Text>
             <Text style={styles.infoValue}>{speechModelCount}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="hard-drive" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Chat, image, video and search models</Text>
-            </View>
+            <Text style={styles.infoLabel}>All models</Text>
             <Text style={styles.infoValue}>{size(storageUsed)}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="film" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Videos and films</Text>
-            </View>
+            <Text style={styles.infoLabel}>Videos and films</Text>
             <Text style={styles.infoValue}>
               {generatedVideoCount} · {size(extra.videos)}
             </Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="file-text" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Document search index</Text>
-            </View>
+            <Text style={styles.infoLabel}>Document search index</Text>
             <Text style={styles.infoValue}>{size(extra.index)}</Text>
           </View>
           <View style={[styles.infoRow, styles.lastRow]}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="message-circle" size={18} color={colors.textSecondary} />
-              <Text style={styles.infoLabel}>Conversations</Text>
-            </View>
+            <Text style={styles.infoLabel}>Conversations</Text>
             <Text style={styles.infoValue}>{conversations.length}</Text>
           </View>
         </Card>
@@ -286,16 +250,19 @@ export const StorageSettingsScreen: React.FC = () => {
         </View>
 
         {staleDownloads.length > 0 && (
+          <>
+          {/* The label above its card with its one action beside it, as the other groups (hand test 67). */}
+          <View style={styles.labelRow}>
+            <SectionLabel title="Unfinished downloads" style={styles.labelInRow} />
+            <TouchableOpacity
+              style={styles.clearAllButton}
+              onPress={handleClearAllStaleDownloads}
+              accessibilityRole="button"
+            >
+              <Text style={styles.clearAllText}>Clear all</Text>
+            </TouchableOpacity>
+          </View>
           <Card style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Unfinished downloads</Text>
-              <TouchableOpacity
-                style={styles.clearAllButton}
-                onPress={handleClearAllStaleDownloads}
-              >
-                <Text style={styles.clearAllText}>Clear all</Text>
-              </TouchableOpacity>
-            </View>
             <Text
               style={[
                 styles.hint,
@@ -318,6 +285,7 @@ export const StorageSettingsScreen: React.FC = () => {
               </View>
             ))}
           </Card>
+          </>
         )}
 
         <OrphanedFilesSection onStorageChange={loadStorageInfo} />

@@ -1,17 +1,22 @@
 import React from 'react';
-import { Text, View } from 'react-native';
+import { Text } from 'react-native';
 import { useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
-import { FONTS } from '../../constants';
+import { TYPOGRAPHY } from '../../constants';
 
 /** What a quick-settings row reports: on, off or automatic, a count, or a count that needs a look. */
 export type QuickBadgeTone = 'on' | 'off' | 'count' | 'warn';
 
 const WARNING = '#F59E0B';
 
+/** "ON", "OFF" and "AUTO" read as words: "On", "Off", "Auto". Anything else (a count, N/A) is shown as given. */
+const WORDS: Record<string, string> = { ON: 'On', OFF: 'Off', AUTO: 'Auto' };
+const asWord = (label: string | number): string =>
+  typeof label === 'number' ? String(label) : WORDS[label.toUpperCase()] ?? label;
+
 /**
- * The state at the end of a quick-settings row. One shape for every row; only "on" carries the emerald
- * accent (brand/DESIGN_PHILOSOPHY.md: a single accent for the active state, no multi-colour badges).
+ * The value at the end of a quick-settings row, as plain text: a boxed uppercase Mono pill on every
+ * row made the menu read as a form (screen review). "On" reads in ink, "Off" quiet, every value in the same face.
  */
 export const QuickBadge: React.FC<{ tone: QuickBadgeTone; label: string | number; testID?: string }> = ({
   tone,
@@ -20,28 +25,14 @@ export const QuickBadge: React.FC<{ tone: QuickBadgeTone; label: string | number
 }) => {
   const styles = useThemedStyles(createStyles);
   return (
-    <View testID={testID} style={[styles.badge, styles[tone]]}>
-      <Text style={[styles.text, styles[`${tone}Text`]]}>{label}</Text>
-    </View>
+    <Text testID={testID} style={[styles.text, styles[tone]]}>{asWord(label)}</Text>
   );
 };
 
 const createStyles = (colors: ThemeColors) => ({
-  badge: {
-    minWidth: 40,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-    alignItems: 'center' as const,
-  },
-  text: { fontSize: 10, fontFamily: FONTS.mono, fontWeight: '500' as const, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
-  on: { borderColor: colors.primary, backgroundColor: `${colors.primary}1F` },
-  onText: { color: colors.primary },
-  off: { borderColor: colors.border },
-  offText: { color: colors.textMuted },
-  count: { borderColor: colors.border },
-  countText: { color: colors.textSecondary },
-  warn: { borderColor: WARNING },
-  warnText: { color: WARNING },
+  text: { ...TYPOGRAPHY.bodySmall, minWidth: 32, textAlign: 'right' as const },
+  on: { color: colors.text },
+  off: { color: colors.textMuted },
+  count: { color: colors.textSecondary },
+  warn: { color: WARNING },
 });

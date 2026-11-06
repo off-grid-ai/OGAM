@@ -196,7 +196,7 @@ describe('happy — a tool runs and its result renders (heavy entry point)', () 
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/160500 and 25/)).not.toBeNull(); });
   });
 
-  it('places time below the answer, then tools, and opens generation details on tap', async () => {
+  it('places the time row below the answer with Details in it, and Details opens how it was made, then the tools', async () => {
     const h = await setupChatScreen({ navigation: 'real', engine: 'litert' });
     h.enableGenerationDetailsViaUI();
     h.enableToolViaUI('calculator');
@@ -205,19 +205,25 @@ describe('happy — a tool runs and its result renders (heavy entry point)', () 
     await h.send('hello', { content: 'Hi there.' });
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/Hi there\./)).not.toBeNull(); });
 
-    const answer = h.view!.getAllByTestId('assistant-message').at(-1)!;
-    const visibleOrder = answer.findAll(node => [
-      'message-bubble', 'message-meta-row', 'tools-sent-collapsible', 'generation-details-toggle',
-    ].includes(node.props.testID)).map(node => node.props.testID);
-    expect([...new Set(visibleOrder)]).toEqual([
-      'message-bubble', 'message-meta-row', 'tools-sent-collapsible', 'generation-details-toggle',
-    ]);
-    expect(h.rtl.within(answer).getByTestId('message-meta-row').children.length).toBeGreaterThan(0);
-    expect(h.view!.queryByTestId('generation-meta')).toBeNull();
+    const answer = () => h.view!.getAllByTestId('assistant-message').at(-1)!;
+    const order = () => [...new Set(answer().findAll(node => [
+      'message-bubble', 'message-meta-row', 'generation-meta', 'tools-sent-list',
+    ].includes(node.props.testID)).map(node => node.props.testID))];
 
-    h.rtl.fireEvent.press(h.view!.getByText('Generation details'));
-    expect(h.rtl.within(h.view!.getAllByTestId('generation-meta').at(-1)!).queryByText(/Test Model/)).not.toBeNull();
-    h.rtl.fireEvent.press(h.view!.getByText('Generation details'));
+    // Closed: the answer, then its time row, which carries Details. Nothing else under the answer.
+    expect(order()).toEqual(['message-bubble', 'message-meta-row']);
+    const metaRow = h.rtl.within(answer()).getByTestId('message-meta-row');
+    expect(h.rtl.within(metaRow).getByTestId('generation-details-toggle')).toBeTruthy();
+
+    // Open: how the reply was made, then the tools it could use.
+    h.rtl.fireEvent.press(h.view!.getByTestId('generation-details-toggle'));
+    expect(order()).toEqual(['message-bubble', 'message-meta-row', 'generation-meta', 'tools-sent-list']);
+    expect(h.rtl.within(answer()).getByTestId('generation-meta')).toHaveTextContent(/Test Model/);
+    expect(h.rtl.within(answer()).getByTestId('tools-sent-list')).toHaveTextContent(/^Tools it had for this reply: .*Calculator/);
+
+    // Closed again: both go.
+    h.rtl.fireEvent.press(h.view!.getByTestId('generation-details-toggle'));
     expect(h.view!.queryByTestId('generation-meta')).toBeNull();
+    expect(h.view!.queryByTestId('tools-sent-list')).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigation } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../components/AliveScreen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { EmbeddingModelsTab } from './ModelsScreen/EmbeddingModelsTab';
 import { useThemedStyles } from '../theme';
@@ -15,10 +15,10 @@ export const SearchModelScreen: React.FC = () => {
   const navigation = useNavigation();
   const styles = useThemedStyles(createStyles);
   return (
-    <SafeAreaView style={styles.container} edges={['top']} testID="search-model-screen">
+    <AliveScreen style={styles.container} testID="search-model-screen">
       <ScreenHeader title="Document search" onBack={() => navigation.goBack()} />
       <EmbeddingModelsTab />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 

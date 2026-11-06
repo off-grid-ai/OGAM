@@ -1,3 +1,4 @@
+import { cardSurface } from '../../theme/surface';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { createAccordionStyles } from '../../components/GenerationSettingsModal/styles';
@@ -67,13 +68,12 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginTop: 2,
     lineHeight: 18,
   },
+  // An example under its switch, inline: a grey box here read as a card inside the card (hand test 72).
   toggleNote: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,
     lineHeight: 18,
-    backgroundColor: colors.surfaceLight,
-    padding: SPACING.md,
-    borderRadius: 8,
+    marginBottom: SPACING.lg,
   },
   sliderSection: {
     marginTop: SPACING.lg,
@@ -108,6 +108,9 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginTop: SPACING.md,
   },
   settingSection: { marginTop: SPACING.lg },
+  // Space between two cards on one tab, so they do not stack as one (hand test 72).
+  sectionGap: { marginTop: SPACING.md },
+  footnote: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, lineHeight: 18, marginTop: SPACING.sm, marginHorizontal: SPACING.xs },
   settingLabel: { ...TYPOGRAPHY.body, color: colors.text, marginBottom: SPACING.xs },
   settingDesc: {
     ...TYPOGRAPHY.bodySmall,
@@ -120,6 +123,11 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginBottom: SPACING.md,
   },
   // The same section header as chat settings, so a section shared by both (Video) lines up in each.
+  sectionsGroup: {
+    ...cardSurface(colors),
+    paddingHorizontal: SPACING.lg,
+    marginTop: SPACING.md,
+  },
   accordionHeader: createAccordionStyles(colors).accordionHeader,
   accordionTitle: createAccordionStyles(colors).accordionTitle,
   advancedToggle: {

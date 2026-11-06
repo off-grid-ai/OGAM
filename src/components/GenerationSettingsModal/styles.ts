@@ -1,3 +1,4 @@
+import { cardSurface } from '../../theme/surface';
 import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
@@ -64,12 +65,10 @@ export const createAccordionStyles = (colors: ThemeColors) => ({
     textTransform: 'uppercase' as const,
     letterSpacing: 1,
   },
+  // Glass like every card (Mac, 2026-11-06).
   sectionCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
+    ...cardSurface(colors),
     padding: SPACING.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     marginBottom: SPACING.sm,
   },
   sectionLabel: {
@@ -177,6 +176,10 @@ const createActionStyles = (colors: ThemeColors) => ({
   resetButtonText: {
     ...TYPOGRAPHY.body,
     color: colors.textSecondary,
+  },
+  deleteChatText: {
+    ...TYPOGRAPHY.body,
+    color: colors.error,
   },
   remoteNotice: {
     flexDirection: 'row' as const,
