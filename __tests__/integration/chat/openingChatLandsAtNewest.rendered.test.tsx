@@ -59,6 +59,12 @@ describe('an opening chat lands at its newest message', () => {
       h.rtl.fireEvent(list, 'contentSizeChange', 440, 1959);
 
       expect(native.offset).toBe(1959 - 747);
+
+      // A bar appears above the composer while the chat opens: the list shrinks, and the end stays
+      // in view at once (on the cold start the timer that re-pinned waited seconds).
+      native.listHeight = 685;
+      h.rtl.fireEvent(list, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 440, height: 685 } } });
+      expect(native.offset).toBe(1959 - 685);
     } finally {
       jest.useRealTimers();
       scrollTo.mockRestore();

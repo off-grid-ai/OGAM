@@ -407,7 +407,11 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
             const newHeight = e.nativeEvent.layout.height;
             const prevHeight = flatListHeightRef.current;
             flatListHeightRef.current = newHeight;
-            if (prevHeight > 0 && newHeight < prevHeight) {
+            // An opening chat stays at its end when the list changes height (a bar appears above the
+            // composer), at once: on a cold start the timer below waited seconds (device, iPhone).
+            if (openingRef.current && contentHeightRef.current > 0) {
+              scrollToContentEnd(flatListRef.current, false, contentExtent());
+            } else if (prevHeight > 0 && newHeight < prevHeight) {
               setTimeout(
                 () => scrollToContentEnd(flatListRef.current, true),
                 50,
