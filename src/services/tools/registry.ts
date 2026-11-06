@@ -96,7 +96,7 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
     id: 'search_knowledge_base',
     name: 'search_knowledge_base',
     displayName: 'Knowledge base',
-    summary: 'Answers from the documents in your project.',
+    summary: 'Answers from your project documents. Counts only in a chat that has some.',
     description: 'Search uploaded project documents',
     icon: 'book-open',
     parameters: {
