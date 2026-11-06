@@ -254,7 +254,7 @@ export const ProjectDetailScreen: React.FC = () => {
               {fileCount === 0 ? 'Add a file' : fileCount === 1 ? '1 file' : `${fileCount} files`}
             </Text>
             <Text style={styles.knowsDesc} numberOfLines={1}>
-              {fileCount <= 1 ? 'Chats here answer from it.' : 'Chats here answer from these.'}
+              {fileCount === 0 ? 'Chats here then answer from it.' : fileCount === 1 ? 'Chats here answer from it.' : 'Chats here answer from these.'}
             </Text>
           </View>
           <Icon name="chevron-right" size={16} color={colors.textMuted} />
@@ -264,7 +264,7 @@ export const ProjectDetailScreen: React.FC = () => {
       <SectionLabel title={`Chats · ${projectChats.length}`} style={styles.chatsLabel} testID="project-chats-count" />
       {projectChats.length === 0 ? (
         // Under its label, right below the card: centred in the page it floated 330 pt away (hand test 74).
-        <Text style={styles.emptyChatsText}>Start a chat. It uses these instructions and files.</Text>
+        <Text style={styles.emptyChatsText}>Start a chat. It follows this project's instructions.</Text>
       ) : (
         <>
           <FlatList
