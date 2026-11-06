@@ -321,7 +321,7 @@ describe('Pro mobile state sync journey', () => {
     );
     fireEvent.press(ui.getByTestId('settings-tab'));
     fireEvent.press(ui.getByText('Model settings'));
-    fireEvent.press(ui.getByTestId('general-generation-accordion'));
+    fireEvent.press(ui.getByTestId('model-settings-tab-general'));
     fireEvent.press(ui.getByTestId('show-gen-details-on-button'));
     fireEvent.press(ui.getByLabelText('Back'));
     fireEvent.press(await waitFor(() => ui!.getByTestId('open-sync-settings')));
@@ -618,7 +618,7 @@ describe('Pro mobile state sync journey', () => {
     );
     fireEvent.changeText(
       ui.getByPlaceholderText(
-        'Enter the instructions or context for the AI...',
+        'How should chats here answer, and what should they know?',
       ),
       'Keep these notes concise.',
     );
@@ -663,7 +663,7 @@ describe('Pro mobile state sync journey', () => {
     fireEvent.press(ui.getByTestId('settings-tab'));
     fireEvent.press(ui.getByText('Model settings'));
     fireEvent.press(
-      await waitFor(() => ui!.getByTestId('text-generation-accordion')),
+      await waitFor(() => ui!.getByTestId('model-settings-tab-text')),
     );
     await waitFor(() =>
       expect(ui!.getByTestId('llama-temperature-value').props.children).toBe(
@@ -792,7 +792,7 @@ describe('Pro mobile state sync journey', () => {
     fireEvent.press(ui.getByTestId('settings-tab'));
     fireEvent.press(ui.getByText('Model settings'));
     fireEvent.press(
-      await waitFor(() => ui!.getByTestId('text-generation-accordion')),
+      await waitFor(() => ui!.getByTestId('model-settings-tab-text')),
     );
     expect(ui.getByTestId('llama-temperature-value').props.children).toBe(
       winningTemperature.value,
