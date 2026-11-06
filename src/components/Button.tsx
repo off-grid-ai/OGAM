@@ -62,7 +62,6 @@ export const Button: React.FC<ButtonProps> = ({
     styles[`text_${variant}`],
     styles[`text_${size}`],
     active && styles.text_active,
-    disabled && styles.text_disabled,
     textStyle,
   ];
 
@@ -154,8 +153,10 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.xl,
   },
+  // One fade, not two: 40% opacity over a grey disabled text left "Update server" unreadable
+  // (hand test 65). The label keeps its colour and the whole button dims.
   button_disabled: {
-    opacity: 0.4,
+    opacity: 0.45,
   },
   text: {
     ...TYPOGRAPHY.body,
@@ -191,9 +192,6 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   text_large: {
     fontSize: TYPOGRAPHY.h2.fontSize,
-  },
-  text_disabled: {
-    color: colors.textDisabled,
   },
   // A 6pt row of dots is shorter than the label it replaces, so a button would shrink the
   // instant it started working. The loader claims the same line box as the text it stands in
