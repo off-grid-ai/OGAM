@@ -28,10 +28,10 @@ function formatOptionalMeta(meta: NonNullable<Message['generationMeta']>, tps: n
     ['context', contextLabel],
     ['model', m.modelName, 1],
     ['load', m.modelLoadTimeSeconds != null && m.modelLoadTimeSeconds > 0 ? `loaded in ${m.modelLoadTimeSeconds.toFixed(1)}s` : undefined],
-    ['prefill', m.prefillTokensPerSecond != null && m.prefillTokensPerSecond > 0 ? `read your message at ${m.prefillTokensPerSecond.toFixed(0)} tok/s` : undefined],
-    ['tps', tps != null && tps > 0 ? `wrote at ${tps.toFixed(1)} tok/s` : undefined],
+    ['prefill', m.prefillTokensPerSecond != null && m.prefillTokensPerSecond > 0 ? `read your message at ${m.prefillTokensPerSecond.toFixed(0)} tokens a second` : undefined],
+    ['tps', tps != null && tps > 0 ? `wrote ${tps.toFixed(1)} tokens a second` : undefined],
     ['ttft', m.timeToFirstToken != null && m.timeToFirstToken > 0 ? `first word in ${m.timeToFirstToken.toFixed(2)}s` : undefined],
-    ['tokens', m.tokenCount != null && m.tokenCount > 0 ? `${m.tokenCount} tokens` : undefined],
+    ['tokens', m.tokenCount != null && m.tokenCount > 0 ? `${m.tokenCount} tokens long` : undefined],
     ['steps', m.steps == null ? undefined : `${m.steps} steps`],
     ['cfg', m.guidanceScale == null ? undefined : `cfg ${m.guidanceScale}`],
     ['res', m.resolution],
@@ -49,10 +49,13 @@ function buildMetaItems(
   meta: NonNullable<Message['generationMeta']>,
   tps: number | null | undefined,
 ): MetaItem[] {
-  const layers = meta.gpuLayers != null && meta.gpuLayers > 0 ? ` (${meta.gpuLayers}L)` : '';
-  const backend = meta.gpuBackend || (meta.gpu === undefined ? undefined : meta.gpu ? 'GPU' : 'CPU');
+  // Where it ran, in words: "ran on the GPU (Metal)", not "Metal (99L)" (hand test 69).
+  const onGpu = meta.gpu ?? Boolean(meta.gpuBackend);
+  const engine = meta.gpuBackend && onGpu ? ' (' + meta.gpuBackend + ')' : '';
+  const where = meta.gpu === undefined && !meta.gpuBackend ? undefined
+    : `ran on the ${onGpu ? 'GPU' : 'CPU'}${engine}`;
   return [
-    ...(backend ? [{ key: 'backend', label: `${backend}${layers}` }] : []),
+    ...(where ? [{ key: 'backend', label: where }] : []),
     ...formatOptionalMeta(meta, tps),
   ];
 }
@@ -136,12 +139,12 @@ export function TurnDetails({ messageId, generationMeta, toolNames, styles }: Re
   return (
     <Animated.View entering={FadeIn.duration(200)} style={styles.turnDetails}>
       {items.length > 0 && (
-        <Text testID="generation-meta" style={styles.generationMetaText}>
+        <Text testID="generation-meta" style={styles.turnDetailsText}>
           {items.map(item => item.label).join(' · ')}
         </Text>
       )}
       {toolNames?.length ? (
-        <Text testID="tools-sent-list" style={styles.generationMetaText}>
+        <Text testID="tools-sent-list" style={styles.turnDetailsText}>
           {`Tools it had for this reply: ${toolNames.map(toolDisplayName).join(', ')}`}
         </Text>
       ) : null}

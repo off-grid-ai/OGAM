@@ -409,6 +409,12 @@ const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingVertical: SPACING.sm,
     marginBottom: SPACING.sm,
   },
+  // Details reads as a sentence, so Geist, not the Mono of a data cell (hand test 69).
+  turnDetailsText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textMuted,
+    lineHeight: 18,
+  },
   generationMetaContainer: {
     alignSelf: 'stretch' as const,
     marginTop: 0,
