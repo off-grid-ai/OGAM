@@ -180,7 +180,7 @@ const CompactingNote: React.FC = () => {
  * Sync ran (device log, hand test 58), so rows the first render leaves out can stay missing that
  * long. Starting the first render at the newest rows puts the newest message on screen with no timer.
  */
-export const OPENING_ROWS = 15;
+const OPENING_ROWS = 15;
 const ignoreScrollToIndexFailure = () => undefined;
 
 /** The chat list's position rule: keep the first visible row in place; never auto-scroll to the start. */
