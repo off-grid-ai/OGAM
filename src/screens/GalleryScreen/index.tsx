@@ -222,6 +222,8 @@ export const GalleryScreen: React.FC = () => {
           </View>
         ) : (
           <FlatList
+            // Its own key: the image grid has 3 columns, and a FlatList cannot change columns in place.
+            key="gallery-videos"
             {...SCROLL_DEPTH_PROPS}
             data={displayVideos}
             keyExtractor={item => item.id}
@@ -276,6 +278,7 @@ export const GalleryScreen: React.FC = () => {
         </View>
       ) : (
         <FlatList
+          key="gallery-images"
           data={displayImages}
           renderItem={renderGridItem}
           keyExtractor={item => item.id}
