@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { guessStyle } from '../../services/huggingFaceModelBrowser';
 import { TouchableOpacity } from '../Touchable';
 import { LoadingDots } from '../LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
@@ -83,10 +84,10 @@ export const ImageTab: React.FC<ImageTabProps> = ({
             factsTestID="currently-loaded-image-model-ram"
             model={{ id: activeModel?.id ?? activeRemoteModelInfo?.model.id ?? 'selected-image',
               name: activeModel?.name ?? activeRemoteModelInfo?.model.name ?? 'Unknown',
-              author: activeRemoteModelInfo?.serverName ?? 'On device', modelType: 'vision' }}
+              author: activeRemoteModelInfo?.serverName ?? 'On device' }}
             file={activeModel ? { name: activeModel.name, size: activeModel.size, quantization: '', downloadUrl: '' } : undefined}
             sourceBadge={activeRemoteModelInfo ? 'Remote' : undefined}
-            facts={activeModel ? [activeModel.style || 'Image',
+            facts={activeModel ? [guessStyle(activeModel.name) || 'Image',
               `${hardwareService.formatBytes(hardwareService.estimateImageModelRam(activeModel))} RAM`] : []}
             isActive
             trailing={<TouchableOpacity
@@ -155,10 +156,11 @@ export const ImageTab: React.FC<ImageTabProps> = ({
                 compact
                 style={GROUPED_CARD_ROW}
                 testID={`image-model-row-${model.id}`}
-                model={{ id: model.id, name: model.name, author: 'On device', modelType: 'vision' }}
+                model={{ id: model.id, name: model.name, author: 'On device' }}
                 file={{ name: model.name, size: model.size, quantization: '', downloadUrl: '' }}
                 facts={[
-                  model.style || 'Image',
+                  // From the name, not the stored guess, so models saved under the old guess read right.
+                  guessStyle(model.name) || 'Image',
                   `~${(estimatedMemory / (1024 * 1024 * 1024)).toFixed(1)} GB RAM${memoryFits ? '' : ' (may not fit)'}`,
                 ]}
                 isActive={isCurrent}
@@ -184,7 +186,7 @@ export const ImageTab: React.FC<ImageTabProps> = ({
           rows={models.map(model => ({
             id: model.id,
             testID: `remote-image-model-${serverId}-${model.id}`,
-            model: { id: model.id, name: model.name, author: '', modelType: 'vision' },
+            model: { id: model.id, name: model.name, author: '' },
             isCurrent: activeRemoteImageServerId === serverId && activeRemoteImageModelId === model.id,
             isLoading: loadingRemoteModelKey === `${serverId}:${model.id}`,
             onPress: () => onSelectRemoteVisionModel(model, serverId),

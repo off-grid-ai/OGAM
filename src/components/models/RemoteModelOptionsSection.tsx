@@ -95,7 +95,6 @@ export const RemoteModelOptionsSection: React.FC<Props> = ({
                 id: option.id,
                 name: option.name,
                 author: '',
-                modelType: category === 'image' ? 'vision' : undefined,
               },
               facts: [KIND[category], `Runs on ${option.serverName}`],
               isCurrent: option.serverId === activeServerId && option.id === activeModelId,
