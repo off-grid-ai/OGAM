@@ -521,3 +521,10 @@ Warm opens land at the newest message from Home, Chats and a project; scroll-up 
 1. The FIRST chat opened after launch still lands at an older message (cold, ~5 s to open).
 2. A failed transfer line is still red; the incoming-transfer row turns the name red on one line.
 3. Knowledge base switch: dark thumb (kept on purpose; noted again).
+
+## Supervisor 15:00 (hand test 53, build 54)
+
+Warm opens land at the newest message; KB failed line grey under an ink name: pass. Top 3:
+1. COLD open still lands ~two turns above the newest message (the 250 ms retry is not enough).
+2. The transfer line reads "Couldn't send to OGAD: Mac (Debug): transfer failed": the device name carries the app's prefix and debug suffix; no next step.
+3. Chats and Recent rows: title is the first prompt, preview is the last reply, so they look mismatched.
