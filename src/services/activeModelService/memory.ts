@@ -4,7 +4,7 @@
  */
 
 import { DownloadedModel, ONNXImageModel } from '../../types';
-import { loadLlamaModelInfo } from 'llama.rn';
+import { readModelHeader } from '../modelHeader';
 import { buildModelParams } from '../llmHelpers';
 import { hardwareService } from '../hardware';
 import { llmService } from '../llm';
@@ -49,7 +49,9 @@ export async function estimateTextModelMemoryMB(model: DownloadedModel): Promise
   );
   if (model.engine !== 'llama') return Math.ceil(fallback / (1024 * 1024));
   try {
-    const metadata = await loadLlamaModelInfo(model.filePath) as Record<string, unknown>;
+    // The header is read once per file and shared (modelHeader). Reading it fresh here for every
+    // downloaded model held the JS thread for ~2.5 s each time the text picker opened (hand test 89).
+    const metadata = (await readModelHeader(model.filePath)) ?? {};
     const architecture = metadata['general.architecture'];
     if (typeof architecture !== 'string') return Math.ceil(fallback / (1024 * 1024));
     const number = (field: string): number | undefined => {
