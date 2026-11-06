@@ -62,6 +62,7 @@ export const Button: React.FC<ButtonProps> = ({
     styles[`text_${variant}`],
     styles[`text_${size}`],
     active && styles.text_active,
+    disabled && styles.text_disabled,
     textStyle,
   ];
 
@@ -153,10 +154,10 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.xl,
   },
-  // One fade, not two: 40% opacity over a grey disabled text left "Update server" unreadable
-  // (hand test 65). The label keeps its colour and the whole button dims.
+  // A disabled button dims once and its label turns neutral: a faded emerald on a faded pill read
+  // about 2:1 (hand test 67), and grey text under 40% opacity was worse (hand test 65).
   button_disabled: {
-    opacity: 0.45,
+    opacity: 0.6,
   },
   text: {
     ...TYPOGRAPHY.body,
@@ -183,6 +184,9 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   text_active: {
     color: colors.primary,
+  },
+  text_disabled: {
+    color: colors.textSecondary,
   },
   text_small: {
     fontSize: TYPOGRAPHY.h3.fontSize,
