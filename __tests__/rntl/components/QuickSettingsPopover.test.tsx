@@ -58,7 +58,7 @@ describe('QuickSettingsPopover', () => {
     const { getByText, queryByText, getByTestId } = render(
       <QuickSettingsPopover {...baseProps} mcpToolCount={0} />,
     );
-    expect(getByText('Pro Tools')).toBeTruthy();
+    expect(getByText('Pro tools')).toBeTruthy();
     expect(queryByText('MCP')).toBeNull();
     expect(getByTestId('mci-crown')).toBeTruthy();
   });

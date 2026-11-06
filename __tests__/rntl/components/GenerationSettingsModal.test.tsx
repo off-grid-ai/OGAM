@@ -456,7 +456,7 @@ describe('GenerationSettingsModal', () => {
     fireEvent.press(getByText('Image generation'));
     fireEvent.press(getByTestId('modal-image-advanced-toggle'));
 
-    expect(getByText('Enhance Image Prompts')).toBeTruthy();
+    expect(getByText('Enhance image prompts')).toBeTruthy();
   });
 
   it('calls updateSettings to enable enhance image prompts', () => {

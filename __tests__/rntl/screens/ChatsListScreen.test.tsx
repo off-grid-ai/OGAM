@@ -100,7 +100,7 @@ describe('ChatsListScreen', () => {
 
       expect(view.getByText('Chats')).toBeTruthy();
       expect(view.getByText('New')).toBeTruthy();
-      expect(view.getByText('No Chats Yet')).toBeTruthy();
+      expect(view.getByText('No chats yet')).toBeTruthy();
       expect(view.getByText('Download a model from the Models tab to start chatting.')).toBeTruthy();
       expect(view.queryByText('New chat')).toBeNull();
     });
@@ -169,7 +169,7 @@ describe('ChatsListScreen', () => {
       const { view } = app.render();
 
       expect(view.getByTestId('conversation-list')).toBeTruthy();
-      expect(view.queryByText('No Chats Yet')).toBeNull();
+      expect(view.queryByText('No chats yet')).toBeNull();
       expect(app.rtl.within(view.getByTestId('conversation-item-0')).getByText('Newer Chat')).toBeTruthy();
       expect(app.rtl.within(view.getByTestId('conversation-item-1')).getByText('Older Chat')).toBeTruthy();
     });
@@ -267,7 +267,7 @@ describe('ChatsListScreen', () => {
       await app.rtl.act(async () => { app.rtl.fireEvent.press(view.getByText('Delete')); });
 
       await app.rtl.waitFor(() => expect(view.queryByText('To Delete')).toBeNull());
-      expect(view.getByText('No Chats Yet')).toBeTruthy();
+      expect(view.getByText('No chats yet')).toBeTruthy();
       expect(app.stores.chat.getState().conversations).toHaveLength(0);
     });
   });

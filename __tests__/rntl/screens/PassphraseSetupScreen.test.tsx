@@ -137,7 +137,7 @@ describe('PassphraseSetupScreen', () => {
 
       expect(view.getAllByText('Change Passphrase')).toHaveLength(2);
       expect(view.getByText(/Enter your current passphrase/)).toBeTruthy();
-      expect(view.getByText('Current Passphrase')).toBeTruthy();
+      expect(view.getByText('Current passphrase')).toBeTruthy();
       expect(view.getByText('New Passphrase')).toBeTruthy();
       expect(view.getByPlaceholderText(PASSPHRASE_PLACEHOLDERS.current)).toBeTruthy();
       expect(view.queryByText('Enable Lock')).toBeNull();

@@ -73,7 +73,7 @@ describe('developer tooling release gate (rendered, real App)', () => {
     expect(view.queryByText('Load demo data')).toBeNull();
     expect(view.queryByLabelText('Show sync status bar')).toBeNull();
     expect(view.queryByText('Show sync status bar')).toBeNull();
-    expect(view.queryByText('Reset Onboarding')).toBeNull();
+    expect(view.queryByText('Reset onboarding')).toBeNull();
     expect(view.queryByTestId('dev-sync-strip')).toBeNull();
 
     view.unmount();

@@ -143,7 +143,7 @@ describe('batch2 ChatsListScreen — sort, timestamp format, delete, empty', () 
     app.rtl.fireEvent.press(view.getByLabelText('Delete Only Chat'));
     await app.rtl.act(async () => { app.rtl.fireEvent.press(view.getByText('Delete')); });
 
-    await app.rtl.waitFor(() => expect(view.getByText('No Chats Yet')).toBeTruthy());
+    await app.rtl.waitFor(() => expect(view.getByText('No chats yet')).toBeTruthy());
     expect(view.queryByTestId('conversation-list')).toBeNull();
   });
 });

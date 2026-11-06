@@ -71,12 +71,12 @@ describe('StorageSettingsScreen', () => {
   it('back button returns to the screen it was opened from', async () => {
     const view = renderStorage();
     fireEvent.press(view.UNSAFE_getByProps({ name: 'arrow-left' }));
-    await waitFor(() => expect(view.queryByText('Storage Usage')).toBeNull());
+    await waitFor(() => expect(view.queryByText('Storage used')).toBeNull());
   });
 
   it('shows storage info sections', () => {
     const { getByText } = renderStorage();
-    expect(getByText('Storage Usage')).toBeTruthy();
+    expect(getByText('Storage used')).toBeTruthy();
     expect(getByText('Breakdown')).toBeTruthy();
   });
 

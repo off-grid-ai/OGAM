@@ -161,7 +161,7 @@ describe('GalleryScreen', () => {
     const { view, rtl } = await openGallery({ images: sampleImages });
     rtl.fireEvent.press(view.getByTestId('gallery-image-img-1'));
     rtl.fireEvent.press(view.getByText('Info'));
-    expect(view.getByText('Image Details')).toBeTruthy();
+    expect(view.getByText('Image details')).toBeTruthy();
     expect(view.getByText('PROMPT')).toBeTruthy();
     // The prompt shows in the grid item's label and in the details sheet.
     expect(view.getByText('A sunset over mountains')).toBeTruthy();
@@ -395,9 +395,9 @@ describe('GalleryScreen', () => {
     const { view, rtl } = await openGallery({ images: sampleImages });
     rtl.fireEvent.press(view.getByTestId('gallery-image-img-1'));
     rtl.fireEvent.press(view.getByText('Info'));
-    expect(view.getByText('Image Details')).toBeTruthy();
+    expect(view.getByText('Image details')).toBeTruthy();
     rtl.fireEvent.press(view.getByText('Done'));
-    expect(view.queryByText('Image Details')).toBeNull();
+    expect(view.queryByText('Image details')).toBeNull();
   });
 
   it('cancelling the delete alert closes it and keeps the image', async () => {

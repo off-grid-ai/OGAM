@@ -488,14 +488,14 @@ describe('an install upgraded from v0.0.119', () => {
 
     // ── Settings → Storage opens.
     fireEvent.press(await waitFor(() => view.getByText('Storage'), WAIT));
-    await view.findByText('Storage Usage', {}, WAIT);
+    await view.findByText('Storage used', {}, WAIT);
     noCrash();
     // Its header's arrow (the button carries no label): the pressable beside the screen's title.
     const title = view.getAllByText('Storage').at(-1)!;
     let header = title.parent;
     while (header && !header.findAll(node => typeof node.props.onPress === 'function').length) header = header.parent;
     fireEvent.press(header!.findAll(node => typeof node.props.onPress === 'function')[0]!);
-    await waitFor(() => expect(view.queryByText('Storage Usage')).toBeNull(), WAIT);
+    await waitFor(() => expect(view.queryByText('Storage used')).toBeNull(), WAIT);
 
     // ── Home → Models: the speech-to-text model v0.0.119 downloaded is the one chosen.
     fireEvent.press(await waitFor(() => view.getByTestId('home-tab'), WAIT));

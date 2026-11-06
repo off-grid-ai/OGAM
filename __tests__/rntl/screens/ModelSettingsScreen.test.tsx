@@ -364,7 +364,7 @@ describe('ModelSettingsScreen', () => {
 
     it('shows Enhance Image Prompts toggle', () => {
       const { getByText } = renderWithSections('image');
-      expect(getByText('Enhance Image Prompts')).toBeTruthy();
+      expect(getByText('Enhance image prompts')).toBeTruthy();
     });
 
     it('toggles enhance image prompts', () => {

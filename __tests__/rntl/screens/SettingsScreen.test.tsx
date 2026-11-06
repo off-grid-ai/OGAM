@@ -177,18 +177,18 @@ describe('SettingsScreen', () => {
   it('no longer renders the removed Pro Tools row', () => {
     const { queryByText } = renderSettings();
     // Pro Tools was removed from Settings — it must not surface (mirrors the Voice/TTS removal guard).
-    expect(queryByText('Pro Tools')).toBeNull();
+    expect(queryByText('Pro tools')).toBeNull();
   });
 
   it('keeps Reset Onboarding in development mode without the removed checklist reset', () => {
     const { getByText, queryByText } = renderSettings();
-    expect(getByText('Reset Onboarding')).toBeTruthy();
+    expect(getByText('Reset onboarding')).toBeTruthy();
     expect(queryByText('Reset Onboarding Checklist')).toBeNull();
   });
 
   it('resets onboarding and returns the root stack to Onboarding on Reset Onboarding press', async () => {
     const { getByText, findByTestId } = renderSettings();
-    fireEvent.press(getByText('Reset Onboarding'));
+    fireEvent.press(getByText('Reset onboarding'));
 
     expect(useAppStore.getState().hasCompletedOnboarding).toBe(false);
     expect(await findByTestId('route-Onboarding')).toBeTruthy();
