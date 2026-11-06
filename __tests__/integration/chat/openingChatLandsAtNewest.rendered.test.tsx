@@ -66,3 +66,34 @@ describe('an opening chat lands at its newest message', () => {
     }
   });
 });
+
+/**
+ * The same cold open, a longer chat: the list renders rows past its first batch on a timer, and the
+ * JS timers waited 6 to 22 s while Sync ran. A chat longer than one batch therefore showed its older
+ * rows, pinned to their end, until the timers ran. The invariant: the newest message is rendered by
+ * the first render of an opening chat, with no timer run.
+ */
+describe('an opening chat renders its newest message first', () => {
+  it('has the newest reply on screen with every timer and frame held', async () => {
+    const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'ios' });
+    h.render();
+    const turns = 12;
+    for (let turn = 1; turn <= turns; turn += 1) {
+      await h.send(`[test] Turn ${turn}.`, { text: `Reply number ${turn}.` });
+    }
+
+    h.rtl.fireEvent.press(h.view!.getByLabelText('Back'));
+    await h.rtl.waitFor(() => expect(h.view!.queryByTestId('chat-screen')).toBeNull());
+    const chats = await h.openChatList();
+    const row = await h.rtl.waitFor(() => chats.getByText('[test] Turn 1.'));
+
+    jest.useFakeTimers();
+    try {
+      h.rtl.fireEvent.press(row);
+      const reopened = h.render();
+      expect(reopened.getByText(`Reply number ${turns}.`)).toBeVisible();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});

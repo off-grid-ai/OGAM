@@ -174,6 +174,15 @@ const CompactingNote: React.FC = () => {
   );
 };
 
+/**
+ * How many rows an opening chat renders first, counted back from its newest message. The list
+ * renders further rows on a timer batch, and on a cold start the JS timers waited 6 to 22 s while
+ * Sync ran (device log, hand test 58), so rows the first render leaves out can stay missing that
+ * long. Starting the first render at the newest rows puts the newest message on screen with no timer.
+ */
+export const OPENING_ROWS = 15;
+const ignoreScrollToIndexFailure = () => undefined;
+
 /** The chat list's position rule: keep the first visible row in place; never auto-scroll to the start. */
 const CHAT_LIST_KEEP_POSITION = { minIndexForVisible: 0 } as const;
 
@@ -344,8 +353,15 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
       ) : (
         <FlatList
           testID="chat-message-list"
+          // Each chat opens in a new list, so its first render starts at its newest rows.
+          key={chat.activeConversationId ?? 'new-chat'}
           ref={flatListRef}
           data={chat.displayMessages}
+          initialNumToRender={OPENING_ROWS}
+          initialScrollIndex={Math.max(0, chat.displayMessages.length - OPENING_ROWS)}
+          // The rows are not measured yet, so the list cannot scroll to that index itself; the
+          // content-size pin below brings it to the end instead.
+          onScrollToIndexFailed={ignoreScrollToIndexFailure}
           renderItem={renderItem}
           keyExtractor={item => item.id}
           extraData={interfaceMode}
