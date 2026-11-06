@@ -96,7 +96,7 @@ export const ToolsScreen: React.FC = () => {
                     <Icon name="wifi" size={12} color={colors.textMuted} style={styles.networkIcon} />
                   )}
                 </View>
-                <Text style={styles.toolDescription}>{tool.description}</Text>
+                <Text style={styles.toolDescription}>{tool.summary ?? tool.description}</Text>
               </View>
               <AppSwitch
                 value={isEnabled}
