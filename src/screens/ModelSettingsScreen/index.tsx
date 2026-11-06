@@ -30,6 +30,7 @@ import { UnderlineTabs, type UnderlineTab } from '../../components/UnderlineTabs
 import { TranscriptionLanguageSelect } from '../../components/TranscriptionLanguageSelect';
 import { useRemoteServerStore } from '../../stores';
 import { AliveScreen } from '../../components/AliveScreen';
+import { SectionLabel } from '../../components/SectionLabel';
 import { ScreenHeader } from '../../components/ScreenHeader';
 
 type SettingsTab = 'general' | 'text' | 'image' | 'voice';
@@ -128,6 +129,8 @@ export const ModelSettingsScreen: React.FC = () => {
 
         {tab === 'image' && (
           <>
+            {/* Labelled like the Video card under it, so the tab reads as two named groups. */}
+            {VideoSettings ? <SectionLabel title="Image" /> : null}
             <ImageGenerationSection />
             {VideoSettings && <VideoSettings alwaysOpen />}
           </>
