@@ -141,7 +141,9 @@ describe('a keyed server that refuses discovery', () => {
     next.rtl.fireEvent.press(next.view.getByTestId('app-sheet-close'));
     await next.rtl.waitFor(() => expect(next.view.queryByTestId('app-sheet-close')).toBeNull());
     next.rtl.fireEvent.press(next.view.getByTestId('add-server-button'));
-    next.rtl.fireEvent.press(await next.view.findByLabelText('Test'));
-    expect(await next.view.findByText(/rejected the API key \(HTTP 401\)/)).toBeTruthy();
+    // The row's one action opens the server's screen, which checks it with the saved key.
+    next.rtl.fireEvent.press(await next.view.findByLabelText(`Edit ${SERVER_NAME}`));
+    next.rtl.fireEvent.press(await next.view.findByTestId('test-connection'));
+    expect(await next.view.findByText(/rejected the (saved )?API key \(HTTP 401\)/)).toBeTruthy();
   });
 });

@@ -36,9 +36,11 @@ it.each([200, 401, 403])('M7: the HTTP server response (%s) decides the connecti
     expect(await view.findByText('Private studio')).toBeTruthy();
     expect(await view.findByText(/^Connected · /)).toBeTruthy();
     if (status !== 200) server.failAll(status);
-    rtl.fireEvent.press(view.getByLabelText('Test'));
+    // The saved server's own screen checks it with the saved key.
+    rtl.fireEvent.press(view.getByLabelText('Edit Private studio'));
+    rtl.fireEvent.press(await view.findByTestId('test-connection'));
     if (status === 200) {
-      expect(await view.findByText(/^Connected · /)).toBeTruthy();
+      expect(await view.findByText(/Connected \(\d+ms\)/)).toBeTruthy();
       expect(view.queryByText('Could not connect')).toBeNull();
     } else {
       expect(await view.findByText(/rejected the API key/)).toBeTruthy();
