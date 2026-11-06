@@ -1,3 +1,4 @@
+import { cardSurface } from '../../theme/surface';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { createAccordionStyles } from '../../components/GenerationSettingsModal/styles';
@@ -120,6 +121,11 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginBottom: SPACING.md,
   },
   // The same section header as chat settings, so a section shared by both (Video) lines up in each.
+  sectionsGroup: {
+    ...cardSurface(colors),
+    paddingHorizontal: SPACING.lg,
+    marginTop: SPACING.md,
+  },
   accordionHeader: createAccordionStyles(colors).accordionHeader,
   accordionTitle: createAccordionStyles(colors).accordionTitle,
   advancedToggle: {

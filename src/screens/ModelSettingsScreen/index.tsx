@@ -97,6 +97,8 @@ export const ModelSettingsScreen: React.FC = () => {
       >
         {/* It places every modality (text, image, video, speech, voice, search), so it leads the screen. */}
         <FastestSettingsButton />
+        {/* The sections on one surface with hairlines, as every list (hand test 61: rows on the bare field). */}
+        <View style={styles.sectionsGroup}>
         <SettingsSectionHeader
           title="General"
           summary={summaries.general}
@@ -182,6 +184,7 @@ export const ModelSettingsScreen: React.FC = () => {
           </>
         )}
 
+        </View>
       </ScrollView>
       {whisperOpen ? (
         <WhisperPickerSheet visible onClose={() => setWhisperOpen(false)} />
