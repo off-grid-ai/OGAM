@@ -8,7 +8,6 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { SPACING, TYPOGRAPHY } from '../constants';
-import { MadeWithLove } from '../components/MadeWithLove';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { GITHUB_URL } from '../utils/sharePrompt';
@@ -77,8 +76,7 @@ export const AboutScreen: React.FC = () => {
         </View>
       </ScrollView>
 
-      {/* Pinned footer */}
-      <MadeWithLove />
+      {/* No footer credit here: the Built by Wednesday row above is its one home (hand test 86). */}
     </AliveScreen>
   );
 };
