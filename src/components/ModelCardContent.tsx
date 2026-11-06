@@ -132,8 +132,9 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
     <>
       <View style={styles.denseTitleRow}>
         {credibilitySource === 'offgrid' && <MadeByOffGrid />}
+        {/* The verified mark sits right after the name, so it is in the same place on every row; at the
+            row's far edge it moved with whatever the row's action was (screen review). */}
         <Text style={styles.denseName} numberOfLines={1} testID={nameTestID}>{model.name}</Text>
-        {isActive ? <Text style={styles.denseInUse} testID="model-in-use">In use</Text> : null}
         <View style={styles.denseSourceGroup}>
           {sourceBadge === 'Remote' ? <Icon name="cloud" size={14} color={colors.textMuted} accessibilityLabel="Remote model" />
             : sourceBadge ? <Text style={styles.denseSource}>{sourceBadge}</Text> : null}
@@ -150,6 +151,8 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
           </Text>}
 
         </View>
+        <View style={styles.denseSpacer} />
+        {isActive ? <Text style={styles.denseInUse} testID="model-in-use">In use</Text> : null}
       </View>
       {!!description && (
         <Text style={styles.denseDescription} numberOfLines={1}>{description}</Text>
