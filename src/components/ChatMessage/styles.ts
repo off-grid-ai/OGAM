@@ -390,6 +390,20 @@ const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     gap: 3,
   },
+  // "Details" in the time row: a 44 pt target that sits in the row's line height.
+  detailsToggle: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 2,
+    minHeight: 44,
+    marginVertical: -10,
+  },
+  turnDetails: {
+    width: MESSAGE_MAX_WIDTH,
+    alignSelf: 'flex-start' as const,
+    gap: 4,
+    marginBottom: SPACING.sm,
+  },
   generationMetaContainer: {
     alignSelf: 'stretch' as const,
     marginTop: 0,

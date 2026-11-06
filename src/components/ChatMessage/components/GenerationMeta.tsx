@@ -96,3 +96,54 @@ export function GenerationMeta({ messageId, generationMeta, styles, colors }: Re
     </Animated.View>
   );
 }
+
+const turnDetailsKey = (messageId: string) => `turn-details:${messageId}`;
+
+/**
+ * "Details" in the time row. One quiet word instead of two full-width rows under every reply
+ * ("Tools it could use", "Generation details"; hand test 64). Its panel is TurnDetails below.
+ */
+export function TurnDetailsToggle({ messageId, styles, colors }: Readonly<{ messageId: string; styles: any; colors: ReturnType<typeof useTheme>['colors'] }>) {
+  const [expanded, toggle] = useAccordionExpanded(turnDetailsKey(messageId));
+  return (
+    <TouchableOpacity
+      testID="generation-details-toggle"
+      accessibilityRole="button"
+      accessibilityLabel="Details"
+      accessibilityState={{ expanded }}
+      style={styles.detailsToggle}
+      onPress={toggle}
+      activeOpacity={0.6}
+    >
+      <Text style={styles.timestamp}>Details</Text>
+      <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={12} color={colors.textMuted} />
+    </TouchableOpacity>
+  );
+}
+
+/** What the time row's "Details" opens: how the reply was made, then the tools it was offered. */
+export function TurnDetails({ messageId, generationMeta, toolNames, styles }: Readonly<{
+  messageId: string;
+  generationMeta?: Message['generationMeta'];
+  toolNames?: string[];
+  styles: any;
+}>) {
+  const [expanded] = useAccordionExpanded(turnDetailsKey(messageId));
+  if (!expanded) return null;
+  const rawTps = generationMeta?.decodeTokensPerSecond ?? generationMeta?.tokensPerSecond;
+  const items = generationMeta ? buildMetaItems(generationMeta, rawTps && rawTps > 0 ? rawTps : undefined) : [];
+  return (
+    <Animated.View entering={FadeIn.duration(200)} style={styles.turnDetails}>
+      {items.length > 0 && (
+        <Text testID="generation-meta" style={styles.generationMetaText}>
+          {items.map(item => item.label).join(' · ')}
+        </Text>
+      )}
+      {toolNames?.length ? (
+        <Text testID="tools-sent-list" style={styles.generationMetaText}>
+          {`Tools it could use: ${toolNames.join(', ')}`}
+        </Text>
+      ) : null}
+    </Animated.View>
+  );
+}
