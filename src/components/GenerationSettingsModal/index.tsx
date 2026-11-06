@@ -52,7 +52,8 @@ export const GenerationSettingsModal: React.FC<
       sheet="generation-settings"
       visible={visible}
       onClose={onClose}
-      snapPoints={['50%', '90%']}
+      // Three rows now, so the sheet fits them instead of opening half the screen (hand test 71).
+      enableDynamicSizing
       title="Chat settings"
     >
       {performanceStats.lastTokensPerSecond > 0 && (
