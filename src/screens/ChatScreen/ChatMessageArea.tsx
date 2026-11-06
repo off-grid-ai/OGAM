@@ -334,6 +334,11 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           onContentSizeChange={(_w, h) => {
             if (openingRef.current && h > 0) {
               flatListRef.current?.scrollToEnd({ animated: false });
+              // On a cold open the scroll can land before the new rows are laid out, so ask again
+              // once layout settles (hand test 52: the first chat after launch sat higher up).
+              setTimeout(() => {
+                if (openingRef.current) flatListRef.current?.scrollToEnd({ animated: false });
+              }, 250);
               hasScrolledRef.current = true;
             } else if (!hasScrolledRef.current && h > 0) {
               // Initial layout: force scroll to bottom regardless of isNearBottom
