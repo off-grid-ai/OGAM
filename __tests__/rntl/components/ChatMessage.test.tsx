@@ -870,7 +870,7 @@ describe('ChatMessage', () => {
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('22.3 tok/s'));
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('wrote at 22.3 tok/s'));
     });
 
     it('displays time to first token', () => {
@@ -886,7 +886,7 @@ describe('ChatMessage', () => {
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText(/TTFT.*0\.45s/)).toBeTruthy();
+      expect(getByText(/first word in 0\.45s/)).toBeTruthy();
     });
 
     it('displays model name', () => {

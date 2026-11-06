@@ -115,6 +115,6 @@ describe('T014 — GPU/OpenCL backend → GenerationMeta shows GPU layers offloa
     expect(h.view!.queryByText(/Tools it could use/)).toBeNull();
     await h.rtl.act(async () => { pressByWalkingUp(h.view!.getByTestId('generation-details-toggle')); });
     expect(h.view!.getByTestId('tools-sent-list')).toHaveTextContent(/^Tools it could use: .*Calculator/);
-    expect(h.view!.getByTestId('generation-meta')).toHaveTextContent(/(^| · )Context: 10% used( · |$)/);
+    expect(h.view!.getByTestId('generation-meta')).toHaveTextContent(/(^| · )10% of its memory used( · |$)/);
   });
 });
