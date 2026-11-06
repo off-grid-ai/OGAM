@@ -36,6 +36,7 @@ import { openDocumentPage } from '../components/ChatDocumentsSheet';
 import { isPickerStuck } from '../utils/pickerErrorUtils';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { PasteNoteSheet } from '../components/knowledge/PasteNoteSheet';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'KnowledgeBase'>;
@@ -52,6 +53,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isPicking, setIsPicking] = useState(false);
   const [indexError, setIndexError] = useState<{ fileName: string; message: string } | null>(null);
+  const [pasting, setPasting] = useState(false);
   const isPickingRef = useRef(false);
 
   const project = useProjectStore((s) => s.getProject(projectId));
@@ -147,6 +149,25 @@ export const KnowledgeBaseScreen: React.FC = () => {
     }
   };
 
+  // Pasted text is a file too. This screen is its one home now that the project page links here.
+  const handleSavePastedNote = async (title: string, text: string): Promise<void> => {
+    setAddingFile(title.trim() || 'pasted text');
+    try {
+      await knowledgeBase.addPastedText({ projectId, title, text });
+      await loadKbDocs();
+    } finally {
+      setAddingFile(null);
+    }
+  };
+
+  // One add, two ways in: a file from the phone, or text you paste.
+  const chooseAdd = () =>
+    Alert.alert('Add to Files', undefined, [
+      { text: 'A file', onPress: () => { handleAddDocument(); } },
+      { text: 'Paste text', onPress: () => setPasting(true) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+
   const handleToggleDocument = async (docId: number, enabled: boolean) => {
     try {
       await knowledgeBase.toggleDocument(docId, enabled);
@@ -236,7 +257,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
         // One add: while the list is empty, its own Add a file button is the add (hand test 74).
         right={kbDocs.length === 0 && !addingFile ? undefined : (
           <TouchableOpacity
-            onPress={handleAddDocument}
+            onPress={chooseAdd}
             style={styles.addButton}
             disabled={isPicking || !!addingFile}
             accessibilityRole="button"
@@ -285,6 +306,13 @@ export const KnowledgeBaseScreen: React.FC = () => {
             disabled={isPicking}
             testID="kb-add-first"
           />
+          <Button
+            title="Paste text"
+            variant="ghost"
+            size="small"
+            onPress={() => setPasting(true)}
+            testID="kb-paste-first"
+          />
         </View>
       ) : (
         <FlatList
@@ -299,6 +327,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
           showsVerticalScrollIndicator={false}
         />
       )}
+      <PasteNoteSheet visible={pasting} onClose={() => setPasting(false)} onSave={handleSavePastedNote} />
     </AliveScreen>
   );
 };
