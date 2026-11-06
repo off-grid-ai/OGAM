@@ -72,12 +72,61 @@
     "before": "screens/before/models-text.jpg"
   },
   {
+    "id": "text-picker",
+    "name": "Text model sheet",
+    "group": "Models",
+    "what": "The text model sheet from the Home chip: this phone's models, then other devices'",
+    "file": "screens/text-picker.jpg"
+  },
+  {
+    "id": "image-picker",
+    "name": "Image model sheet",
+    "group": "Models",
+    "what": "The image model sheet from the Home chip",
+    "file": "screens/image-picker.jpg"
+  },
+  {
+    "id": "talk-sheet",
+    "name": "Talk sheet",
+    "group": "Models",
+    "what": "What the Talk card opens: speech-to-text models, this phone first",
+    "file": "screens/talk-sheet.jpg"
+  },
+  {
     "id": "models-documents",
     "name": "Models: Documents",
     "group": "Models",
     "what": "The document search model",
     "file": "screens/models-documents.jpg",
     "before": "screens/before/models-documents.jpg"
+  },
+  {
+    "id": "models-image",
+    "name": "Models: Image",
+    "group": "Models",
+    "what": "Picks for this phone, then every image model",
+    "file": "screens/models-image.jpg"
+  },
+  {
+    "id": "models-video",
+    "name": "Models: Video",
+    "group": "Models",
+    "what": "Video models; the one in use is marked",
+    "file": "screens/models-video.jpg"
+  },
+  {
+    "id": "models-voice",
+    "name": "Models: Voice",
+    "group": "Models",
+    "what": "Voices that read replies aloud",
+    "file": "screens/models-voice.jpg"
+  },
+  {
+    "id": "models-speech",
+    "name": "Models: Speech",
+    "group": "Models",
+    "what": "Speech-to-text picks, then English-only and multilingual",
+    "file": "screens/models-speech.jpg"
   },
   {
     "id": "downloads",
@@ -94,6 +143,20 @@
     "what": "Generated images and videos",
     "file": "screens/gallery.jpg",
     "before": "screens/before/gallery.jpg"
+  },
+  {
+    "id": "gallery-videos",
+    "name": "Gallery: Videos",
+    "group": "Gallery",
+    "what": "Start a film, your cast, then every clip",
+    "file": "screens/gallery-videos.jpg"
+  },
+  {
+    "id": "video-library",
+    "name": "Your videos",
+    "group": "Gallery",
+    "what": "Every film and clip in a grid",
+    "file": "screens/video-library.jpg"
   },
   {
     "id": "gallery-viewer",
