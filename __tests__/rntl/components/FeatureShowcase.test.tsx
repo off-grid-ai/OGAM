@@ -25,43 +25,67 @@ const openers = (): FeatureOpeners => ({
   sync: opener(),
   tools: opener(),
   pro: opener(),
+  desktop: opener(),
 });
 const fresh: FeatureUse = { imagesMade: 0, videosMade: 0, hasVoice: false, hasSpeech: false };
 const keys = (features: ShowcaseFeature[]) => features.map(f => f.key);
-const PRO_KEYS = ['video', 'voice', 'sync', 'tools'] as const;
+const MAC_KEYS = ['mac-clipboard', 'mac-dictation', 'mac-meetings', 'mac-models', 'mac-recall'];
+/** Pro features on this phone: without Pro their cards open Pro. */
+const PHONE_PRO_KEYS = ['sync', 'tools', 'video', 'voice'];
+const FREE_PHONE_KEYS = ['documents', 'image', 'speech'];
+const sorted = (list: string[]) => [...list].sort();
 
 describe('showcaseFeatures', () => {
-  it('lists every feature, free then Pro, when nothing has been tried', () => {
+  it('lists all twelve, free phone features first, when nothing has been tried', () => {
     const features = showcaseFeatures(fresh, openers(), true);
-    expect(keys(features)).toEqual(['image', 'speech', 'documents', 'video', 'voice', 'sync', 'tools']);
-    expect(features.filter(f => f.pro).map(f => f.key)).toEqual([...PRO_KEYS]);
+    expect(sorted(keys(features))).toEqual(sorted([...FREE_PHONE_KEYS, ...PHONE_PRO_KEYS, ...MAC_KEYS]));
+    expect(sorted(features.filter(f => f.mac).map(f => f.key))).toEqual(MAC_KEYS);
+    expect(sorted(features.filter(f => f.pro && !f.mac).map(f => f.key))).toEqual(PHONE_PRO_KEYS);
+    expect(sorted(keys(features).slice(0, FREE_PHONE_KEYS.length))).toEqual(FREE_PHONE_KEYS);
+    // Every card says what you get and the first step.
+    for (const feature of features) {
+      expect(feature.title.length).toBeGreaterThan(0);
+      expect(feature.line.length).toBeGreaterThan(0);
+    }
   });
 
   it('puts what you have tried last, keeping the order within each group', () => {
+    const order = keys(showcaseFeatures(fresh, openers(), true));
     const features = showcaseFeatures(
       { imagesMade: 2, videosMade: 1, hasVoice: true, hasSpeech: true },
       openers(),
       true,
     );
-    expect(keys(features)).toEqual(['documents', 'sync', 'tools', 'image', 'speech', 'video', 'voice']);
+    const tried = ['image', 'video', 'voice', 'speech'];
+    const free = (key: string) => FREE_PHONE_KEYS.includes(key);
+    const inOrder = (test: (key: string) => boolean) => order.filter(test);
+    // Free phone features lead, then Pro and Mac; inside each group, what has not been tried first.
+    expect(keys(features)).toEqual([
+      ...inOrder(key => free(key) && !tried.includes(key)),
+      ...inOrder(key => free(key) && tried.includes(key)),
+      ...inOrder(key => !free(key) && !tried.includes(key)),
+      ...inOrder(key => !free(key) && tried.includes(key)),
+    ]);
   });
 
-  it('with Pro: every card opens its own feature', () => {
+  it('with Pro: a phone card opens its own feature, a Mac card opens the Desktop page', () => {
     const open = openers();
     const features = showcaseFeatures(fresh, open, true);
     for (const feature of features) {
-      expect(feature.onPress).toBe(open[feature.key as keyof FeatureOpeners]);
-    }
-  });
-
-  it('without Pro: Pro cards open Pro, free cards still open their feature', () => {
-    const open = openers();
-    const features = showcaseFeatures(fresh, open, false);
-    for (const feature of features) {
-      const expected = feature.pro ? open.pro : open[feature.key as keyof FeatureOpeners];
+      const expected = feature.mac ? open.desktop : open[feature.key as keyof FeatureOpeners];
       expect(feature.onPress).toBe(expected);
     }
-    expect(features.filter(f => f.onPress === open.pro).map(f => f.key)).toEqual([...PRO_KEYS]);
+    expect(features.filter(f => f.onPress === open.pro)).toHaveLength(0);
+  });
+
+  it('without Pro: phone Pro cards open Pro; Mac cards, Pro or not, still open the Desktop page', () => {
+    const open = openers();
+    const features = showcaseFeatures(fresh, open, false);
+    expect(sorted(features.filter(f => f.onPress === open.pro).map(f => f.key))).toEqual(PHONE_PRO_KEYS);
+    expect(sorted(features.filter(f => f.onPress === open.desktop).map(f => f.key))).toEqual(MAC_KEYS);
+    for (const key of ['image', 'speech', 'documents'] as const) {
+      expect(features.find(f => f.key === key)!.onPress).toBe(open[key]);
+    }
   });
 
   it('returns cards without the internal tried flag', () => {
@@ -87,16 +111,27 @@ describe('FeatureShowcase', () => {
     expect(view.queryByTestId('feature-showcase')).toBeNull();
   });
 
-  it('shows the kicker, a card per feature with its words, the Pro tag and a pip per card', () => {
-    const features = sample();
+  it('shows the kicker, a card per feature with its words and tag, and a pip per card', () => {
+    const features = showcaseFeatures(fresh, openers(), true);
     const view = render(<FeatureShowcase features={features} active={false} />);
     expect(view.getByText('What you can do')).toBeTruthy();
-    expect(view.getByTestId('feature-showcase-image')).toHaveTextContent(/Describe it, and see it\.\s*Make a picture on this phone\./);
-    const video = view.getByTestId('feature-showcase-video');
-    expect(video).toHaveTextContent(/Pro/);
-    expect(video.props.accessibilityLabel).toBe('Turn words into a clip. Make a short video. Pro.');
-    expect(view.getByTestId('feature-showcase-image').props.accessibilityLabel).toBe('Describe it, and see it. Make a picture on this phone.');
-    expect(view.getAllByRole('tab')).toHaveLength(4);
+    const card = (key: string) => view.getByTestId(`feature-showcase-${key}`);
+    const of = (key: string) => features.find(f => f.key === key)!;
+    // A free phone card: its words, no tag.
+    expect(card('image')).toHaveTextContent(`${of('image').title}${of('image').line}`);
+    expect(card('image').props.accessibilityLabel).toBe(`${of('image').title} ${of('image').line}`);
+    // A phone Pro card says Pro; a Mac card says On your Mac; a Mac Pro card says both.
+    const tagOf = (key: string) => view.getAllByText(/^(Pro|On your Mac|On your Mac · Pro)$/).find(tag => card(key).findAll(n => n === tag).length > 0);
+    expect(tagOf('image')).toBeUndefined();
+    expect(tagOf('video')).toHaveTextContent('Pro');
+    expect(card('video').props.accessibilityLabel).toBe(`${of('video').title} ${of('video').line} Pro.`);
+    expect(tagOf('mac-models')).toHaveTextContent('On your Mac');
+    expect(card('mac-models').props.accessibilityLabel).toBe(`${of('mac-models').title} ${of('mac-models').line} On your Mac.`);
+    expect(tagOf('mac-recall')).toHaveTextContent('On your Mac · Pro');
+    expect(card('mac-recall').props.accessibilityLabel).toMatch(/ On your Mac\. Pro\.$/);
+    // A title may run to two lines, not be cut at one.
+    expect(view.getByText(of('mac-dictation').title).props.numberOfLines).toBe(2);
+    expect(view.getAllByRole('tab')).toHaveLength(12);
     expect(selectedPip(view)).toBe(0);
   });
 
@@ -124,16 +159,16 @@ describe('FeatureShowcase', () => {
     jest.useFakeTimers();
     const view = render(<FeatureShowcase features={sample()} active />);
     expect(selectedPip(view)).toBe(0);
-    act(() => { jest.advanceTimersByTime(4500); });
+    act(() => { jest.advanceTimersToNextTimer(); });
     expect(selectedPip(view)).toBe(1);
-    act(() => { jest.advanceTimersByTime(4500 * 3); });
+    act(() => { jest.advanceTimersToNextTimer(3); });
     expect(selectedPip(view)).toBe(0);
   });
 
   it('stays put while Home is not in view', () => {
     jest.useFakeTimers();
     const view = render(<FeatureShowcase features={sample()} active={false} />);
-    act(() => { jest.advanceTimersByTime(4500 * 2); });
+    act(() => { jest.advanceTimersToNextTimer(2); });
     expect(selectedPip(view)).toBe(0);
   });
 
@@ -142,14 +177,14 @@ describe('FeatureShowcase', () => {
     const view = render(<FeatureShowcase features={sample()} active />);
     const scroller = view.UNSAFE_getByProps({ horizontal: true });
     act(() => { fireEvent(scroller, 'scrollBeginDrag'); });
-    act(() => { jest.advanceTimersByTime(4500 * 2); });
+    act(() => { jest.advanceTimersToNextTimer(2); });
     expect(selectedPip(view)).toBe(0);
 
     // Land on the third card: its offset is two steps of the snap interval.
     const step = scroller.props.snapToInterval as number;
     act(() => { fireEvent(scroller, 'momentumScrollEnd', { nativeEvent: { contentOffset: { x: step * 2, y: 0 } } }); });
     expect(selectedPip(view)).toBe(2);
-    act(() => { jest.advanceTimersByTime(4500); });
+    act(() => { jest.advanceTimersToNextTimer(); });
     expect(selectedPip(view)).toBe(3);
   });
 });
