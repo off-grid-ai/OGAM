@@ -676,3 +676,8 @@ Top 3: (1) video centred (done); (2) video rows on one glass surface; (3) Pro's 
 ## Supervisor 16:30 (hand test 83, Home carousel) — layout pass, read as an ad
 
 Twelve cards across the phone, Pro and Mac (Mac's ask: discovery of every feature, outcome copy). Fit and tags pass. Fail: 9 of 12 tagged Pro or Mac and a fast auto-turn read as a rotating ad; three lines rang false. Fixed after: free phone cards lead (untried first within each group), 8 s turn, lines rewritten plain ("Your copies, kept." / "Search what you saw on your Mac." / "Start on your Mac, finish here.").
+
+## Supervisor 17:10 (hand test 84, final sweep, today's JS) — 18 of 26 pass
+
+Fail: project-knowledge (file row bare, not glass; unlabelled switch), downloads (a 3-line row, "Q1_", look-alike Bonsai rows), settings-model (paragraphs under every control), settings-document-search (a copy of Models > Documents), settings-storage (counts and sizes in one column), settings-about (copies Settings' X and Slack rows; blue logo, red heart: Mac's call), settings-lower (stats rows with no line), device information (internal tier values). No lost behaviour.
+Top 3: (1) one home per thing: Document search links to Models > Documents, About drops the copied community rows; (2) Storage sizes only, Files on glass; (3) one line per Model settings control, Downloads rows two lines.
