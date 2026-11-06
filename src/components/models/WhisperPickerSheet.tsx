@@ -84,11 +84,9 @@ export const WhisperPickerSheet: React.FC<Props> = ({
         style={styles.scrollView}
         contentContainerStyle={styles.content}
       >
-        <RemoteModelOptionsSection
-          category="transcription"
-          onSelect={onClose}
-        />
-        <Text style={styles.sectionLabel}>On-device models</Text>
+        {/* This phone's models first, then other devices', the same order as the text and image pickers
+            (hand test 86: the Talk card opened on a list of Mac servers). */}
+        <Text style={styles.sectionLabel}>On this phone</Text>
         {models.map(m => {
           const active = downloadedModelId === m.id;
           const present = presentModelIds.includes(m.id);
@@ -175,6 +173,10 @@ export const WhisperPickerSheet: React.FC<Props> = ({
             />
           );
         })}
+        <RemoteModelOptionsSection
+          category="transcription"
+          onSelect={onClose}
+        />
       </ScrollView>
     </AppSheet>
     <CustomAlert
