@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
-import { ScrollView, StyleSheet } from 'react-native';
+import { AppState, ScrollView, StyleSheet } from 'react-native';
 import {
   FeatureShowcase,
   showcaseFeatures,
@@ -108,9 +108,22 @@ describe('FeatureShowcase', () => {
 
   // The row on a phone answers scrollTo with scroll events at the new offset, and the pip follows
   // those. Jest's ScrollView stands still, so here it reports the offset it was asked to reach.
-  let scrollTo: jest.SpyInstance;
+  // The app is in front, as when Home is on screen. Jest's AppState has no state of its own, so the
+  // test holds it and hands each change to whoever listens, as the phone does.
+  let appListeners: Array<(state: string) => void>;
+  const appGoes = (state: 'active' | 'background') =>
+    act(() => {
+      Object.defineProperty(AppState, 'currentState', { value: state, configurable: true, writable: true });
+      appListeners.forEach(listener => listener(state));
+    });
   beforeEach(() => {
-    scrollTo = jest
+    appListeners = [];
+    Object.defineProperty(AppState, 'currentState', { value: 'active', configurable: true, writable: true });
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(((_type: string, listener: (state: string) => void) => {
+      appListeners.push(listener);
+      return { remove: () => { appListeners = appListeners.filter(l => l !== listener); } };
+    }) as never);
+    jest
       .spyOn(ScrollView.prototype, 'scrollTo')
       .mockImplementation(function (this: ScrollView, options?: { x?: number } | number) {
         const x = typeof options === 'object' ? options?.x ?? 0 : 0;
@@ -119,7 +132,7 @@ describe('FeatureShowcase', () => {
   });
 
   afterEach(() => {
-    scrollTo.mockRestore();
+    jest.restoreAllMocks();
     jest.useRealTimers();
   });
 
@@ -205,6 +218,22 @@ describe('FeatureShowcase', () => {
     expect(selectedPip(view)).toBe(1);
     act(() => { jest.advanceTimersToNextTimer(3); });
     expect(selectedPip(view)).toBe(0);
+  });
+
+  it('holds still while the app is away, and waits a full turn after you come back', () => {
+    jest.useFakeTimers();
+    const view = render(<FeatureShowcase features={sample()} active />);
+    appGoes('background');
+    act(() => { jest.advanceTimersByTime(60_000); });
+    expect(selectedPip(view)).toBe(0);
+    appGoes('active');
+    // No card change the moment you return: the wait starts again.
+    act(() => { jest.advanceTimersByTime(100); });
+    expect(selectedPip(view)).toBe(0);
+    act(() => { jest.advanceTimersToNextTimer(); });
+    expect(selectedPip(view)).toBe(1);
+    view.unmount();
+    expect(appListeners).toHaveLength(0);
   });
 
   it('stays put while Home is not in view', () => {
