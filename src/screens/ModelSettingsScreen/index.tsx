@@ -164,7 +164,9 @@ export const ModelSettingsScreen: React.FC = () => {
             </View>
             {/* Text to speech is Pro, through a slot; free builds show none. */}
             {TtsSection && (
-              <TtsSection />
+              <View style={styles.sectionGap}>
+                <TtsSection />
+              </View>
             )}
           </>
         )}

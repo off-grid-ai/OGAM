@@ -203,7 +203,7 @@ export const ImageGenerationSection: React.FC = () => {
 
       <SliderSetting
         testID="image-size"
-        label="Image Size"
+        label="Image size"
         description={`Output resolution. Recommended: ${defaults.size}x${defaults.size}.`}
         value={parameters.size}
         min={SWEET_SPOT_SIZE} max={maxSize} step={64}
