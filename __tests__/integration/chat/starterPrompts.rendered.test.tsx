@@ -32,7 +32,7 @@ describe('a new chat offers starter prompts', () => {
     const { activeModelService } = require('../../../src/services/activeModelService');
     await h.rtl.act(() => activeModelService.unloadTextModel(false));
 
-    await h.rtl.waitFor(() => expect(view.getByPlaceholderText('Describe an image...')).toBeTruthy());
+    await h.rtl.waitFor(() => expect(view.getByPlaceholderText('Describe a picture')).toBeTruthy());
     expect(view.queryByTestId('chat-starters')).toBeNull();
   });
 });

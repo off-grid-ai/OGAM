@@ -568,13 +568,13 @@ type PlaceholderTextOptions = {
 export function getPlaceholderText({
   hasModel,
   isModelLoading,
-  supportsVision,
+  supportsVision: _supportsVision,
   imageOnly,
 }: PlaceholderTextOptions): string {
   if (!hasModel)
     return isModelLoading ? 'Loading model...' : 'Load a model to use chat';
-  if (imageOnly) return 'Describe an image...';
-  return supportsVision
-    ? 'Type a message or add an image...'
-    : 'Type a message...';
+  // One line, one wording for every model (brand: a placeholder fits on one line). Whether a model
+  // sees images is said by the attach menu, not the placeholder.
+  if (imageOnly) return 'Describe a picture';
+  return 'Ask anything';
 }
