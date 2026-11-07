@@ -46,7 +46,14 @@ export function SegmentedRow<T extends string>(props: {
               disabled={isDisabled?.(o.id)}
               onPress={() => onSelect(o.id)}
             >
-              <Text style={[styles.buttonText, active && styles.buttonTextActive]}>{o.label}</Text>
+              <Text
+                style={[styles.buttonText, active && styles.buttonTextActive]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
+                {o.label}
+              </Text>
             </TouchableOpacity>
           );
         })}
