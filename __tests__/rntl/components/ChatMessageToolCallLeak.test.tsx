@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 import { ChatMessage } from '../../../src/components/ChatMessage';
 import { createMessage } from '../../utils/factories';
 
@@ -14,9 +14,8 @@ describe('ChatMessage — tool-call markup never renders as visible text', () =>
     const m = createMessage({ role: 'assistant', content: rawBlock,
       reasoningContent: 'The user wants to know about Achilles.',
       toolCalls: [{ id: 't1', name: 'search_knowledge_base', arguments: '{"query":"Achilles of Troy"}' }] } as any);
-    const { queryByText, getByText, getByTestId } = render(<ChatMessage message={m} />);
+    const { queryByText, getByText } = render(<ChatMessage message={m} />);
     expect(queryByText(/<function=|<parameter=|<tool_call>/)).toBeNull();
-    fireEvent.press(getByTestId('thinking-block-toggle'));
     expect(getByText(/The user wants to know about Achilles\./)).toBeTruthy();
   });
 

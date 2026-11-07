@@ -162,7 +162,6 @@ describe('ChatMessage — Tool message rendering', () => {
       expect(getByTestId('tool-call-message')).toBeTruthy();
       // Assert the ACTUAL reasoning text reaches the screen once the thinking row is opened, not
       // merely that a block mounted: the user must be able to SEE the pre-tool-call thinking.
-      fireEvent.press(getByTestId('thinking-block-toggle'));
       expect(getByText(/I should search the knowledge base first\./)).toBeTruthy();
     });
 
@@ -175,10 +174,9 @@ describe('ChatMessage — Tool message rendering', () => {
         toolCalls: [{ id: 'tc-1', name: 'read_url', arguments: '{"url":"x"}' }],
       });
 
-      const { getByText, getByTestId } = render(<ChatMessage message={message} />);
+      const { getByText } = render(<ChatMessage message={message} />);
 
       // The inline <think> reasoning text must actually render, not just a container.
-      fireEvent.press(getByTestId('thinking-block-toggle'));
       expect(getByText(/Let me check the docs\./)).toBeTruthy();
     });
 

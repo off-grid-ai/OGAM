@@ -271,7 +271,7 @@ describe('ChatMessage', () => {
       expect(getByText('Thought')).toBeTruthy();
     });
 
-    it('shows no reasoning until the thinking row is opened, as on Desktop', () => {
+    it('shows the reasoning once the work row is open, and the Thinking row folds it, as on Desktop', () => {
       const message = createAssistantMessage(
         '<think>**Drafting Email Response**\nI am composing a direct reply.</think>Done.',
       );
@@ -282,29 +282,33 @@ describe('ChatMessage', () => {
       fireEvent.press(getByTestId('assistant-work-toggle'));
 
       expect(queryByTestId('thinking-block-preview')).toBeNull();
-      expect(queryByTestId('thinking-block-content')).toBeNull();
-      fireEvent.press(getByTestId('thinking-block-toggle'));
       expect(getByTestId('thinking-block-content')).toBeTruthy();
+      fireEvent.press(getByTestId('thinking-block-toggle'));
+      expect(queryByTestId('thinking-block-content')).toBeNull();
     });
 
-    it('expands thinking block when toggle is pressed', () => {
+    it('folds and unfolds the reasoning when the Thinking row is pressed', () => {
       const message = createAssistantMessage(
         '<think>Step 1: Check input\nStep 2: Process</think>Done!',
       );
 
-      const { getByTestId, queryByTestId } = render(
+      const { getByTestId, queryByTestId, queryByText } = render(
         <ChatMessage message={message} />,
       );
       fireEvent.press(getByTestId('assistant-work-toggle'));
 
-      // Initially collapsed
-      expect(queryByTestId('thinking-block-content')).toBeNull();
-
-      // Press toggle
-      fireEvent.press(getByTestId('thinking-block-toggle'));
-
-      // Content should be visible
+      // Open by default once the work row is open, as on Desktop.
       expect(getByTestId('thinking-block-content')).toBeTruthy();
+      expect(queryByText(/Step 1: Check input/)).not.toBeNull();
+
+      // Press the row: the reasoning folds away.
+      fireEvent.press(getByTestId('thinking-block-toggle'));
+      expect(queryByTestId('thinking-block-content')).toBeNull();
+      expect(queryByText(/Step 1: Check input/)).toBeNull();
+
+      // Press again: it comes back.
+      fireEvent.press(getByTestId('thinking-block-toggle'));
+      expect(queryByText(/Step 1: Check input/)).not.toBeNull();
     });
 
     it('shows the Thinking header when thinking is incomplete', () => {
@@ -1681,7 +1685,7 @@ describe('ChatMessage', () => {
       expect(getByText(/\*\*not bold\*\*/)).toBeTruthy();
     });
 
-    it('renders markdown in thinking block content when expanded', () => {
+    it('renders markdown in thinking block content when the work row is open', () => {
       const message = createAssistantMessage(
         '<think>Step 1: Check the `input` value\nStep 2: **Process** it</think>Done!',
       );
@@ -1690,9 +1694,6 @@ describe('ChatMessage', () => {
         <ChatMessage message={message} />,
       );
       fireEvent.press(getByTestId('assistant-work-toggle'));
-
-      // Expand thinking block
-      fireEvent.press(getByTestId('thinking-block-toggle'));
 
       expect(getByTestId('thinking-block-content')).toBeTruthy();
       expect(getByText(/input/)).toBeTruthy();
@@ -1726,7 +1727,6 @@ describe('ChatMessage', () => {
       );
       fireEvent.press(getByTestId('assistant-work-toggle'));
 
-      fireEvent.press(getByTestId('thinking-block-toggle'));
       expect(getByTestId('thinking-block-content')).toBeTruthy();
       expect(getByText(longThinking)).toBeTruthy();
     });
@@ -1740,7 +1740,6 @@ describe('ChatMessage', () => {
       const { getByText, getByTestId } = render(<ChatMessage message={message} />);
       fireEvent.press(getByTestId('assistant-work-toggle'));
 
-      fireEvent.press(getByTestId('thinking-block-toggle'));
       expect(getByText(shortThinking)).toBeTruthy();
     });
   });

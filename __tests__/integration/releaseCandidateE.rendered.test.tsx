@@ -247,12 +247,12 @@ it('M9: the opened reasoning keeps inline code, fenced code, and identifiers', a
   await send(app, 'Explain the variable.', '<think># Plan\n**Keep** _this_ my_var_x and `some_code`.\n```python\nmy_var_x = some_code + 1\n```\nDone.</think>The code is ready.');
   const { view, rtl } = app;
   if (view.queryByTestId('assistant-work-toggle')) rtl.fireEvent.press(view.getByTestId('assistant-work-toggle'));
-  const toggle = await view.findByTestId('thinking-block-toggle');
-  // The thinking row has no collapsed preview any more (Desktop's row): opening it shows the reasoning,
-  // code and identifiers intact.
-  if (!view.queryByTestId('thinking-block-content')) rtl.fireEvent.press(toggle);
+  expect(await view.findByTestId('thinking-block-toggle')).toBeTruthy();
+  // Opening the work row shows the reasoning at once (Desktop's row, no collapsed preview), with
+  // code and identifiers intact: my_var_x appears in the prose AND in the fenced code.
   const content = view.getByTestId('thinking-block-content');
-  expect(rtl.within(content).getByText(/my_var_x/)).toBeTruthy();
+  expect(rtl.within(content).getAllByText(/my_var_x/).length).toBeGreaterThanOrEqual(2);
+  expect(rtl.within(content).getByText(/my_var_x = some_code \+ 1/)).toBeTruthy();
   expect(rtl.within(content).getAllByText(/some_code/).length).toBeGreaterThan(0);
   view.unmount();
 });
