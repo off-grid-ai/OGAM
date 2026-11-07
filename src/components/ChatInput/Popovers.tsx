@@ -303,14 +303,20 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
 
 // ─── Attach Picker Popover ──────────────────────────────────────────────────
 
+/** One thing the + can add. The same list feeds the iOS action sheet and this popover. */
+export interface AttachChoice {
+  key: 'camera' | 'library' | 'photo' | 'document';
+  label: string;
+  icon: string;
+  onPress: () => void;
+}
+
 interface AttachPickerPopoverProps {
   visible: boolean;
   onClose: () => void;
   anchorY: number;
   anchorX: number;
-  supportsVision: boolean;
-  onPhoto: () => void;
-  onDocument: () => void;
+  choices: AttachChoice[];
 }
 
 export const AttachPickerPopover: React.FC<AttachPickerPopoverProps> = ({
@@ -318,9 +324,7 @@ export const AttachPickerPopover: React.FC<AttachPickerPopoverProps> = ({
   onClose,
   anchorY,
   anchorX,
-  supportsVision,
-  onPhoto,
-  onDocument,
+  choices,
 }) => {
   const { colors, shadows } = useTheme();
 
@@ -360,34 +364,20 @@ export const AttachPickerPopover: React.FC<AttachPickerPopoverProps> = ({
                 },
               ]}
             >
-              <TouchableOpacity
-                testID="attach-photo"
-                style={popoverStyles.row}
-                onPress={() => {
-                  onClose();
-                  onPhoto();
-                }}
-              >
-                <Icon
-                  name="camera"
-                  size={16}
-                  color={supportsVision ? colors.primary : colors.textMuted}
-                />
-                <Text style={[popoverStyles.rowLabel, { color: colors.text }]}>
-                  Photo
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                testID="attach-document"
-                style={popoverStyles.row}
-                onPress={() => {
-                  onClose();
-                  onDocument();
-                }}
-              >
-                <Icon name="file" size={16} color={colors.text} />
-                <Text style={[popoverStyles.rowLabel, { color: colors.text }]}>Document</Text>
-              </TouchableOpacity>
+              {choices.map(choice => (
+                <TouchableOpacity
+                  key={choice.key}
+                  testID={`attach-${choice.key}`}
+                  style={popoverStyles.row}
+                  onPress={() => {
+                    onClose();
+                    choice.onPress();
+                  }}
+                >
+                  <Icon name={choice.icon} size={16} color={colors.text} />
+                  <Text style={[popoverStyles.rowLabel, { color: colors.text }]}>{choice.label}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </TouchableWithoutFeedback>
         </View>
