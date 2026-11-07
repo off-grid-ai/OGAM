@@ -664,7 +664,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       </View>
       {/* One box across the full width, down to the screen's bottom edge; in image or video mode the styles
           are its top, the input and send below. */}
-      <View style={[styles.composer, isFocused && styles.composerFocused, { marginBottom: bottomInset }]}>
+      {/* Full width down to the screen's bottom edge: the home-indicator inset is padding inside it. */}
+      <View style={[styles.composer, isFocused && styles.composerFocused, { paddingBottom: 8 + bottomInset }]}>
       {/* What you attach sits inside the box it goes with, on the same surface (brand Mobile profile;
           Mac, 2026-11-06: a photo above the composer read as a separate white tile). */}
       <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
