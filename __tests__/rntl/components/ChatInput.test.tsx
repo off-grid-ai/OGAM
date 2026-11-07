@@ -20,7 +20,7 @@
 import React from 'react';
 import { voiceSession } from '../../../src/services/voiceSession';
 import { recordingController } from '../../../src/services/recordingController';
-import { Keyboard, PermissionsAndroid, Platform } from 'react-native';
+import { ActionSheetIOS, Keyboard, PermissionsAndroid, Platform } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { ChatInput } from '../../../src/components/ChatInput';
 import { useAppStore } from '../../../src/stores/appStore';
@@ -590,7 +590,6 @@ describe('ChatInput', () => {
     // iPhone: one sheet, one step (Mac, 2026-11-07). The native sheet is the platform's, so the test
     // reads what the composer asks it to show and answers the way a tap on a row does.
     describe('on iPhone', () => {
-      const { Platform, ActionSheetIOS } = require('react-native');
       const realOS = Platform.OS;
       let sheet: jest.SpyInstance;
       beforeEach(() => {
