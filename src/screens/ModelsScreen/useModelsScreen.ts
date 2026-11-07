@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import RNFS from 'react-native-fs';
@@ -7,8 +7,10 @@ import { pick, types, isErrorWithCode, errorCodes } from '@react-native-document
 import { showAlert, AlertState } from '../../components/CustomAlert';
 import { useFocusTrigger } from '../../hooks/useFocusTrigger';
 import { useAlertQueue } from '../../hooks/useAlertQueue';
-import { useAppStore } from '../../stores';
-import { useDownloadStore, isActiveStatus, isFailedStatus } from '../../stores/downloadStore';
+import { useAppStore, useWhisperStore } from '../../stores';
+import { useDownloadStore, isActiveStatus } from '../../stores/downloadStore';
+import { outstandingDownloadItems } from '../DownloadManagerScreen/outstandingDownloads';
+import { modelStoreCompletedItems, videoCompletedItems } from '../DownloadManagerScreen/downloadItemMapping';
 import { modelManager } from '../../services';
 import { isLiteRTAvailable } from '../../services/engines';
 import { resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
@@ -200,12 +202,24 @@ export function useModelsScreen() {
       d => isActiveStatus(d.status),
     ).length,
   );
-  // The icon badge answers "is there download work outstanding?" — so it counts active AND
-  // failed/retriable (a failed download needs a retry or remove and must not be invisible).
-  const downloadBadgeCount = useDownloadStore(state =>
-    Object.values(state.downloads).filter(
-      d => isActiveStatus(d.status) || isFailedStatus(d.status) || d.status === 'paused',
-    ).length,
+  // The icon badge answers "is there download work outstanding?" — active, paused AND
+  // failed (a failed download needs a retry or remove and must not be invisible). It counts
+  // by the Download Manager's own rule, so a stale failed row for a model that is already
+  // downloaded counts 0 here exactly as it lists 0 there.
+  const downloads = useDownloadStore(state => state.downloads);
+  const downloadedVideoModels = useAppStore(state => state.downloadedVideoModels);
+  const presentSttIds = useWhisperStore(state => state.presentModelIds);
+  const downloadBadgeCount = useMemo(
+    () =>
+      outstandingDownloadItems({
+        downloads,
+        completed: [
+          ...modelStoreCompletedItems(text.downloadedModels, image.downloadedImageModels),
+          ...videoCompletedItems(downloadedVideoModels),
+          ...presentSttIds.map(modelId => ({ modelType: 'stt' as const, modelId })),
+        ],
+      }).length,
+    [downloads, text.downloadedModels, image.downloadedImageModels, downloadedVideoModels, presentSttIds],
   );
   const totalModelCount =
     text.downloadedModels.length +

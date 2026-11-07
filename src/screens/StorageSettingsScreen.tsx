@@ -13,8 +13,8 @@ import {
   Text,
   ScrollView,
 } from 'react-native';
+import { isClassifierModel } from '../services/classifierModel';
 import { TouchableOpacity } from '../components/Touchable';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -30,6 +30,12 @@ import { createStyles } from './StorageSettingsScreen.styles';
 import { useWhisperStore } from '../stores/whisperStore';
 import { useModelDownloads } from '../services/modelDownloadService/useModelDownloads';
 import type { RootStackParamList } from '../navigation/types';
+import { AliveScreen } from '../components/AliveScreen';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { SectionLabel } from '../components/SectionLabel';
+
+/** A number with what it counts ("15 models", "1 chat"): bare counts beside sizes read as one unit (hand test 84). */
+const count = (n: number, noun: string): string => `${n.toLocaleString()} ${noun}${n === 1 ? '' : 's'}`;
 
 export const StorageSettingsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -38,11 +44,16 @@ export const StorageSettingsScreen: React.FC = () => {
   const [storageUsed, setStorageUsed] = useState(0);
   const [availableStorage, setAvailableStorage] = useState(0);
   const [extra, setExtra] = useState({ videos: 0, search: 0, index: 0 });
+  // Until the first measurement lands, sizes read "Measuring…", never a false "0 B".
+  const [measured, setMeasured] = useState(false);
+  const size = (bytes: number) => (measured ? hardwareService.formatBytes(bytes) : 'Measuring…');
   const generatedVideoCount = useAppStore(s => s.generatedVideos.length);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
-  const { downloadedModels, downloadedImageModels, downloadedVideoModels } =
+  const { downloadedModels, downloadedImageModels, downloadedVideoModels, settings } =
     useAppStore();
+  // The intent classifier is a utility model, not one of your chat models.
+  const chatModelCount = downloadedModels.filter(m => !isClassifierModel(m.id, settings.classifierModelId)).length;
   const { conversations } = useChatStore();
   const transcriptionModelCount = useWhisperStore(s => s.presentModelIds.length);
   const speechModelCount = useModelDownloads().filter(
@@ -69,13 +80,14 @@ export const StorageSettingsScreen: React.FC = () => {
         return facts?.isFile ? facts.size : 0;
       }),
     ));
-    const videoStorageUsed = videoSizes.reduce((total, size) => total + size, 0);
+    const videoStorageUsed = videoSizes.reduce((total, bytes) => total + bytes, 0);
     const used = await modelManager.getStorageUsed();
     const available = await modelManager.getAvailableStorage();
     const [videos, search, index] = await Promise.all([generatedVideoBytes(), searchModelBytes(), documentIndexBytes()]);
     setExtra({ videos, search, index });
     setStorageUsed(used + imageStorageUsed + videoStorageUsed + search);
     setAvailableStorage(available);
+    setMeasured(true);
   }, [imageStorageUsed, downloadedVideoModels]);
 
   const confirmDeleteVideoPack = (id: string, name: string) => {
@@ -109,12 +121,12 @@ export const StorageSettingsScreen: React.FC = () => {
   const handleClearAllStaleDownloads = useCallback(() => {
     setAlertState(
       showAlert(
-        'Clear Stale Downloads',
-        `Clear ${staleDownloads.length} stale download entry(s)?`,
+        'Clear unfinished downloads',
+        `Clear ${staleDownloads.length} ${staleDownloads.length === 1 ? 'download' : 'downloads'}?`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
-            text: 'Clear All',
+            text: 'Clear all',
             style: 'destructive',
             onPress: () => {
               setAlertState(hideAlert());
@@ -132,33 +144,25 @@ export const StorageSettingsScreen: React.FC = () => {
   const usedPercentage = totalStorage > 0 ? (storageUsed / totalStorage) * 100 : 0;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Storage</Text>
-      </View>
+    <AliveScreen style={styles.container}>
+      <ScreenHeader title="Storage" onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
       >
+        <SectionLabel title="Space on this phone" />
         <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>Storage Usage</Text>
           <View style={styles.storageBar}>
             <View style={[styles.storageUsed, { width: `${Math.min(usedPercentage, 100)}%` }]} />
           </View>
           <View style={styles.storageLegend}>
             <View style={styles.legendItem}>
               <View
-                style={[styles.legendDot, { backgroundColor: colors.primary }]}
+                style={[styles.legendDot, { backgroundColor: colors.textSecondary }]}
               />
               <Text style={styles.legendText}>
-                Used: {hardwareService.formatBytes(storageUsed)}
+                Used: {size(storageUsed)}
               </Text>
             </View>
             <View style={styles.legendItem}>
@@ -169,34 +173,25 @@ export const StorageSettingsScreen: React.FC = () => {
                 ]}
               />
               <Text style={styles.legendText}>
-                Free: {hardwareService.formatBytes(availableStorage)}
+                Free: {size(availableStorage)}
               </Text>
             </View>
           </View>
         </Card>
 
+        <SectionLabel title="What uses it" />
         <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>Breakdown</Text>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="cpu" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>LLM Models</Text>
-            </View>
-            <Text style={styles.infoValue}>{downloadedModels.length}</Text>
+            <Text style={styles.infoLabel}>Chat models</Text>
+            <Text style={styles.infoValue}>{count(chatModelCount, 'model')}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="image" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Image Models</Text>
-            </View>
-            <Text style={styles.infoValue}>{downloadedImageModels.length}</Text>
+            <Text style={styles.infoLabel}>Image models</Text>
+            <Text style={styles.infoValue}>{count(downloadedImageModels.length, 'model')}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="video" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Video Models</Text>
-            </View>
-            <Text style={styles.infoValue}>{downloadedVideoModels.length}</Text>
+            <Text style={styles.infoLabel}>Video models</Text>
+            <Text style={styles.infoValue}>{count(downloadedVideoModels.length, 'model')}</Text>
           </View>
           {downloadedVideoModels.map(model => (
             <View key={model.id} style={styles.infoRow}>
@@ -208,117 +203,98 @@ export const StorageSettingsScreen: React.FC = () => {
                 accessibilityRole="button"
                 accessibilityLabel={`Delete ${videoModelDisplayName(model.id, model.name)}`}
                 testID={`storage-delete-video-${model.id}`}
+                hitSlop={14}
               >
-                <Icon name="trash-2" size={16} color={colors.error} />
+                <Icon name="trash-2" size={16} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
           ))}
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="search" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Search Models</Text>
-            </View>
-            <Text style={styles.infoValue}>{hardwareService.formatBytes(extra.search)}</Text>
+            <Text style={styles.infoLabel}>Document search model</Text>
+            <Text style={styles.infoValue}>{size(extra.search)}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="mic" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Transcription Models</Text>
-            </View>
-            <Text style={styles.infoValue}>{transcriptionModelCount}</Text>
+            <Text style={styles.infoLabel}>Speech-to-text models</Text>
+            <Text style={styles.infoValue}>{count(transcriptionModelCount, 'model')}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="volume-2" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Speech Models</Text>
-            </View>
-            <Text style={styles.infoValue}>{speechModelCount}</Text>
+            <Text style={styles.infoLabel}>Voices</Text>
+            <Text style={styles.infoValue}>{count(speechModelCount, 'voice')}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="hard-drive" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Model Storage</Text>
-            </View>
-            <Text style={styles.infoValue}>{hardwareService.formatBytes(storageUsed)}</Text>
+            <Text style={styles.infoLabel}>All models</Text>
+            <Text style={styles.infoValue}>{size(storageUsed)}</Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="film" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Videos and Films</Text>
-            </View>
+            <Text style={styles.infoLabel}>Videos and films</Text>
             <Text style={styles.infoValue}>
-              {generatedVideoCount} · {hardwareService.formatBytes(extra.videos)}
+              {count(generatedVideoCount, 'video')} · {size(extra.videos)}
             </Text>
           </View>
           <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="file-text" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Document Index</Text>
-            </View>
-            <Text style={styles.infoValue}>{hardwareService.formatBytes(extra.index)}</Text>
+            <Text style={styles.infoLabel}>Document search index</Text>
+            <Text style={styles.infoValue}>{size(extra.index)}</Text>
           </View>
           <View style={[styles.infoRow, styles.lastRow]}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="message-circle" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Conversations</Text>
-            </View>
-            <Text style={styles.infoValue}>{conversations.length}</Text>
+            <Text style={styles.infoLabel}>Conversations</Text>
+            <Text style={styles.infoValue}>{count(conversations.length, 'chat')}</Text>
           </View>
         </Card>
 
         <View style={styles.section}>
           <Button
-            title="Auto Setup"
+            title="Choose models for this phone"
             variant="outline"
+            size="small"
+            style={styles.sizedToText}
             onPress={() => navigation.navigate('AutoSetup')}
             testID="storage-auto-setup"
           />
         </View>
 
         {staleDownloads.length > 0 && (
+          <>
+          {/* The label above its card with its one action beside it, as the other groups (hand test 67). */}
+          <View style={styles.labelRow}>
+            <SectionLabel title="Unfinished downloads" style={styles.labelInRow} />
+            <TouchableOpacity
+              style={styles.clearAllButton}
+              onPress={handleClearAllStaleDownloads}
+              accessibilityRole="button"
+            >
+              <Text style={styles.clearAllText}>Clear all</Text>
+            </TouchableOpacity>
+          </View>
           <Card style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Stale Downloads</Text>
-              <TouchableOpacity
-                style={styles.clearAllButton}
-                onPress={handleClearAllStaleDownloads}
-              >
-                <Text style={styles.clearAllText}>Clear All</Text>
-              </TouchableOpacity>
-            </View>
             <Text
               style={[
                 styles.hint,
                 { textAlign: 'left' as const, marginBottom: SPACING.md },
               ]}
             >
-              These download entries have invalid or missing data and can be
-              safely cleared.
+              These stopped before they finished. Clearing them is safe.
             </Text>
             {staleDownloads.map(entry => (
               <View key={entry.modelKey} style={styles.orphanedRow}>
                 <View style={styles.orphanedInfo}>
-                  <Text style={styles.orphanedName}>Download #{entry.downloadId}</Text>
-                  <Text style={styles.orphanedMeta}>
-                    {entry.fileName || 'Unknown file'} •{' '}
-                    {entry.modelId || 'Unknown model'}
-                  </Text>
+                  <Text style={styles.orphanedName} numberOfLines={1}>{entry.fileName || 'Unnamed file'}</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.deleteButton}
                   onPress={() => handleClearStaleDownload(entry.modelKey)}
                 >
-                  <Icon name="x" size={18} color={colors.error} />
+                  <Icon name="x" size={18} color={colors.textMuted} />
                 </TouchableOpacity>
               </View>
             ))}
           </Card>
+          </>
         )}
 
         <OrphanedFilesSection onStorageChange={loadStorageInfo} />
 
         <Text style={styles.hint}>
-          To free up space, you can delete models from the Models tab.
+          To get more space back, delete models you no longer use in Models.
         </Text>
       </ScrollView>
 
@@ -329,6 +305,6 @@ export const StorageSettingsScreen: React.FC = () => {
         buttons={alertState.buttons}
         onClose={() => setAlertState(hideAlert())}
       />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };

@@ -355,6 +355,7 @@ describe('huggingFaceModelBrowser', () => {
       ['ChilloutMix', 'photorealistic'],
       ['Photon', 'photorealistic'],
       ['PHOTO_MODEL', 'photorealistic'],
+      ['RealVisXL V5.0 Lightning', 'photorealistic'],
     ])('returns "photorealistic" for %s', (name, expected) => {
       expect(guessStyle(name)).toBe(expected);
     });
@@ -363,9 +364,12 @@ describe('huggingFaceModelBrowser', () => {
       ['AnythingV5', 'anime'],
       ['MeinaMix', 'anime'],
       ['CounterfeitV3', 'anime'],
-      ['DreamShaper', 'anime'],
     ])('returns "anime" for %s', (name, expected) => {
       expect(guessStyle(name)).toBe(expected);
+    });
+
+    it.each(['DreamShaper', 'SDXL Turbo'])('claims no style for %s, whose name says none', name => {
+      expect(guessStyle(name)).toBe('');
     });
   });
 });

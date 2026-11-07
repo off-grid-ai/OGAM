@@ -49,7 +49,8 @@ export function formatShortDate(value: Date | number | string): string {
 
 /**
  * How a list shows when something last happened: the time today, Yesterday, the weekday this week,
- * then the date. The rule lives here so every list answers the same way.
+ * Last week or N weeks ago this month, then the date. A row of "Oct 22" said nothing about how long
+ * ago that was (screen review). The rule lives here so every list answers the same way.
  */
 export function formatWhen(value: Date | number | string): string {
   const date = asDate(value);
@@ -57,6 +58,8 @@ export function formatWhen(value: Date | number | string): string {
   if (days <= 0) return formatClockTime(date);
   if (days === 1) return 'Yesterday';
   if (days < 7) return formatWeekday(date);
+  if (days < 14) return 'Last week';
+  if (days < 28) return `${Math.floor(days / 7)} weeks ago`;
   return formatShortDate(date);
 }
 

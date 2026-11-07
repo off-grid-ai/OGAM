@@ -320,8 +320,8 @@ describe('Pro mobile state sync journey', () => {
       </>,
     );
     fireEvent.press(ui.getByTestId('settings-tab'));
-    fireEvent.press(ui.getByText('Model Settings'));
-    fireEvent.press(ui.getByTestId('general-generation-accordion'));
+    fireEvent.press(ui.getByText('Model settings'));
+    fireEvent.press(ui.getByTestId('model-settings-tab-general'));
     fireEvent.press(ui.getByTestId('show-gen-details-on-button'));
     fireEvent.press(ui.getByLabelText('Back'));
     fireEvent.press(await waitFor(() => ui!.getByTestId('open-sync-settings')));
@@ -438,18 +438,20 @@ describe('Pro mobile state sync journey', () => {
       expect(ui!.getByText('The field notes are ready.')).toBeTruthy(),
     );
     fireEvent.press(ui.getByTestId('assistant-work-toggle'));
-    expect(ui.getByText('contacts_search')).toBeTruthy();
+    // A synced step from a tool this phone does not know reads in plain words, never its raw name.
+    expect(ui.getByText('Looked that up')).toBeTruthy();
+    expect(ui.queryByText('contacts_search')).toBeNull();
     expect(
       ui
-        .getAllByText(/^(Thought process|Web search result)$/)
+        .getAllByText(/^(Thought process|Searched the web)$/)
         .map(node => React.Children.toArray(node.props.children).join('')),
-    ).toEqual(['Thought process', 'Web search result', 'Thought process']);
+    ).toEqual(['Thought process', 'Searched the web', 'Thought process']);
     fireEvent.press(ui.getAllByTestId('thinking-block-toggle')[0]);
     expect(
       ui.getByText('I should confirm the notes before searching.'),
     ).toBeTruthy();
-    fireEvent.press(ui.getByText('Generation details'));
-    expect(ui.getByText('42.5 tok/s')).toBeTruthy();
+    fireEvent.press(ui.getByTestId('generation-details-toggle'));
+    expect(ui.getByTestId('generation-meta')).toHaveTextContent(/(^| · )wrote 42\.5 tokens a second( · |$)/);
 
     // A returning desktop can send a full wire batch of tombstones. The phone must finish the
     // batch and leave navigation responsive after removing those turns from its chat projection.
@@ -503,8 +505,8 @@ describe('Pro mobile state sync journey', () => {
         ).length ?? 0;
     await waitFor(() => expect(visibleBurstCount()).toBeGreaterThan(0));
     expect(visibleBurstCount()).toBeLessThan(burstIds.length);
-    fireEvent.press(ui.getByText('Generation details'));
-    expect(ui.queryByText('42.5 tok/s')).toBeNull();
+    fireEvent.press(ui.getByTestId('generation-details-toggle'));
+    expect(ui.queryByTestId('generation-meta')).toBeNull();
     await waitFor(() =>
       expect(
         useChatStore
@@ -540,8 +542,8 @@ describe('Pro mobile state sync journey', () => {
           ),
       ).toHaveLength(0),
     );
-    fireEvent.press(ui.getByText('Generation details'));
-    expect(ui.getByText('42.5 tok/s')).toBeTruthy();
+    fireEvent.press(ui.getByTestId('generation-details-toggle'));
+    expect(ui.getByTestId('generation-meta')).toHaveTextContent(/(^| · )wrote 42\.5 tokens a second( · |$)/);
 
     remoteLog.record(CORE_SYNC_ENTITIES.message, 'older-gap-message', 'put', {
       conversation_id: 'remote-conversation',
@@ -616,7 +618,7 @@ describe('Pro mobile state sync journey', () => {
     );
     fireEvent.changeText(
       ui.getByPlaceholderText(
-        'Enter the instructions or context for the AI...',
+        'How should chats here answer, and what should they know?',
       ),
       'Keep these notes concise.',
     );
@@ -635,7 +637,9 @@ describe('Pro mobile state sync journey', () => {
     );
 
     fireEvent.press(ui.getByText('Desktop Research'));
-    fireEvent.press(await waitFor(() => ui!.getByText('Delete Project')));
+    // Delete lives behind Edit project.
+    fireEvent.press(await waitFor(() => ui!.UNSAFE_getByProps({ name: 'edit-2' })));
+    fireEvent.press(await waitFor(() => ui!.getByTestId('project-edit-delete')));
     fireEvent.press(await waitFor(() => ui!.getByText('Delete')));
     await waitFor(() =>
       expect(
@@ -657,9 +661,9 @@ describe('Pro mobile state sync journey', () => {
     expect(ui.getByText('The phone checked the notes.')).toBeTruthy();
 
     fireEvent.press(ui.getByTestId('settings-tab'));
-    fireEvent.press(ui.getByText('Model Settings'));
+    fireEvent.press(ui.getByText('Model settings'));
     fireEvent.press(
-      await waitFor(() => ui!.getByTestId('text-generation-accordion')),
+      await waitFor(() => ui!.getByTestId('model-settings-tab-text')),
     );
     await waitFor(() =>
       expect(ui!.getByTestId('llama-temperature-value').props.children).toBe(
@@ -786,9 +790,9 @@ describe('Pro mobile state sync journey', () => {
       </NavigationContainer>,
     );
     fireEvent.press(ui.getByTestId('settings-tab'));
-    fireEvent.press(ui.getByText('Model Settings'));
+    fireEvent.press(ui.getByText('Model settings'));
     fireEvent.press(
-      await waitFor(() => ui!.getByTestId('text-generation-accordion')),
+      await waitFor(() => ui!.getByTestId('model-settings-tab-text')),
     );
     expect(ui.getByTestId('llama-temperature-value').props.children).toBe(
       winningTemperature.value,

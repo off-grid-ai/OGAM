@@ -1,7 +1,7 @@
 import { useAppStore } from '../../stores';
 import { videoGenerationMeta } from '../../utils/modelHelpers';
 import React, { useEffect, useState } from 'react';
-import { View, Text, Clipboard } from 'react-native';
+import { View, Text, Clipboard, Keyboard } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -21,7 +21,7 @@ import { createStyles } from './styles';
 import { MessageAttachments } from './components/MessageAttachments';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { MessageContent } from './components/MessageContent';
-import { GenerationMeta } from './components/GenerationMeta';
+import { TurnDetails, TurnDetailsToggle } from './components/GenerationMeta';
 import { MessageOverlays } from './components/MessageOverlays';
 import { MarkdownText } from '../MarkdownText';
 import { formatTime, formatDuration, buildMessageData } from './utils';
@@ -33,7 +33,6 @@ import {
   ToolResultMessage,
   ToolCallMessage,
   SystemInfoMessage,
-  RoutedToolsRow,
   SyncedToolArtifacts,
 } from './components/ToolMessages';
 import type { ChatMessageProps } from './types';
@@ -92,7 +91,12 @@ const MessageMetaRow: React.FC<MetaRowProps> = ({
     )}
     {metaExtra}
     {showActions && !isStreaming && (
-      <TouchableOpacity style={styles.actionHint} onPress={onMenuOpen}>
+      <TouchableOpacity
+        style={styles.actionHint}
+        onPress={onMenuOpen}
+        accessibilityRole="button"
+        accessibilityLabel="Message actions"
+      >
         <Text style={styles.actionHintText}>•••</Text>
       </TouchableOpacity>
     )}
@@ -309,14 +313,25 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const showTurnFooter =
     !hideProse && !isUser && !isStreaming && hasVisibleAnswer;
   const cutoffNote = cutoffNoteFor(message.generationMeta);
+  const routedToolNames = message.generationMeta?.routedToolNames;
+  // How the reply was made and the tools it was offered are developer detail: one "Details" in the
+  // time row opens both, instead of two rows under every reply (hand test 64).
+  const hasTurnDetails = showTurnFooter && showGenerationDetails && Boolean(generationMeta || routedToolNames?.length);
   return (
     <TouchableOpacity
       testID={isUser ? 'user-message' : 'assistant-message'}
+      // Not one accessible block: that folded "Message actions" into the message's label, so a
+      // screen reader could not reach it as a button (hand test 39). The parts are read in order.
+      accessible={false}
       style={[
         styles.container,
         isUser ? styles.userContainer : styles.assistantContainer,
       ]}
       activeOpacity={0.8}
+      // The row fills the list's width, so it catches most taps on the list. With the list's
+      // keyboardShouldPersistTaps="handled" a tap the row swallows kept the keyboard up; a tap on
+      // the message closes it, as a tap on the empty list does. Controls inside take their own taps.
+      onPress={() => Keyboard.dismiss()}
       onLongPress={onLongPress}
       delayLongPress={300}
     >
@@ -326,12 +341,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             key={isStreaming ? 'live' : 'done'}
             title={
               isStreaming
-                ? 'Working'
+                ? 'Finding your answer'
                 : message.turnStatus === 'failed'
-                  ? 'Work failed'
+                  ? 'Could not finish'
                 : message.turnStatus === 'cancelled'
-                  ? 'Work stopped'
-                  : 'Work done'
+                  ? 'Stopped'
+                  : 'How I got this'
             }
             defaultOpen={Boolean(isStreaming)}
             variant="plain"
@@ -428,17 +443,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           isStreaming={isStreaming}
           showActions={showActions}
           onMenuOpen={onMenuOpen}
-          metaExtra={metaExtra}
-        />
-      )}
-
-      {showTurnFooter && (
-        <RoutedToolsRow
-          message={message}
-          isUser={isUser}
-          isStreaming={isStreaming}
-          styles={styles}
-          colors={colors}
+          metaExtra={hasTurnDetails ? (
+            <>
+              {metaExtra}
+              <TurnDetailsToggle messageId={message.id} styles={styles} colors={colors} />
+            </>
+          ) : metaExtra}
         />
       )}
 
@@ -449,12 +459,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         </View>
       )}
 
-      {showTurnFooter && showGenerationDetails && generationMeta && (
-        <GenerationMeta
+      {hasTurnDetails && (
+        <TurnDetails
           messageId={message.id}
           generationMeta={generationMeta}
+          toolNames={routedToolNames}
           styles={styles}
-          colors={colors}
         />
       )}
     </TouchableOpacity>
@@ -614,10 +624,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           <Accordion
             title={
               message.turnStatus === 'cancelled'
-                ? 'Work stopped'
+                ? 'Stopped'
                 : message.turnStatus === 'failed'
-                  ? 'Work failed'
-                  : 'Work done'
+                  ? 'Could not finish'
+                  : 'How I got this'
             }
             variant="plain"
             testID="assistant-work-toggle"

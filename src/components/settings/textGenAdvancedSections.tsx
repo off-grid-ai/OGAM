@@ -39,20 +39,21 @@ const isAndroid = Platform.OS === 'android';
 type BackendOption = { id: InferenceBackend; label: string; desc: string };
 
 const IOS_BACKENDS: BackendOption[] = [
-  { id: INFERENCE_BACKENDS.CPU, label: 'CPU', desc: 'Always available. Stable, predictable performance.' },
-  { id: INFERENCE_BACKENDS.METAL, label: 'Metal', desc: 'Offload layers to GPU via Metal. Faster for larger models. Requires model reload.' },
+  { id: INFERENCE_BACKENDS.CPU, label: 'CPU', desc: 'Always works, at a steady speed.' },
+  // Display label 'GPU' as on Android (few people know Metal); id stays METAL.
+  { id: INFERENCE_BACKENDS.METAL, label: 'GPU', desc: 'Faster answers from larger models. Reloads the model.' },
 ];
 
 const ANDROID_BASE_BACKENDS: BackendOption[] = [
-  { id: INFERENCE_BACKENDS.CPU, label: 'CPU', desc: 'Always available. Stable, predictable performance.' },
+  { id: INFERENCE_BACKENDS.CPU, label: 'CPU', desc: 'Always works, at a steady speed.' },
   // Display label 'GPU' (users don't know OpenCL); id stays OPENCL.
-  { id: INFERENCE_BACKENDS.OPENCL, label: 'GPU', desc: 'Offload layers to GPU via OpenCL. Fast decode on Adreno GPUs. Requires model reload.' },
+  { id: INFERENCE_BACKENDS.OPENCL, label: 'GPU', desc: 'Faster answers on most phones. Reloads the model.' },
 ];
 
 const HTP_BACKEND: BackendOption = {
   id: INFERENCE_BACKENDS.HTP,
   label: 'NPU (Beta)',
-  desc: 'Experimental — works best with Llama- and Qwen-style models. Some models (e.g. Gemma) fall back to CPU or produce invalid output. Requires model reload.',
+  desc: 'Experimental. Fastest with Llama and Qwen models; Gemma can fail. Reloads the model.',
 };
 
 export const BackendSelector: React.FC = () => {
@@ -74,13 +75,13 @@ export const BackendSelector: React.FC = () => {
   const current = settings.inferenceBackend ?? defaultBackend;
   const showLayers = current !== INFERENCE_BACKENDS.CPU;
   const layersLabel = current === INFERENCE_BACKENDS.HTP
-    ? 'Text NPU Layers'
-    : current === INFERENCE_BACKENDS.METAL ? 'Text GPU Layers (Metal)' : 'Text GPU Layers (OpenCL)';
+    ? 'NPU layers'
+    : 'GPU layers';
 
   return (
     <SegmentedRow<InferenceBackend>
-      label="Text Model Backend"
-      description={`Text model default for all chats. ${backends.find(b => b.id === current)?.desc ?? ''} Image and video engines select their own hardware.`}
+      label="Text model hardware"
+      description={backends.find(b => b.id === current)?.desc ?? 'Where text models run.'}
       options={backends}
       current={current}
       onSelect={(id) => updateSettings({ inferenceBackend: id })}
@@ -91,7 +92,7 @@ export const BackendSelector: React.FC = () => {
           <SliderSetting
             testID="gpu-layers-stepper"
             label={layersLabel}
-            description="Layers offloaded to GPU. Higher = faster but may crash on low-VRAM devices. Requires model reload."
+            description="More is faster; too much can crash a full phone. Reloads the model."
             value={gpuLayersEffective}
             min={1} max={GPU_LAYERS_MAX} step={1}
             onChange={(value) => updateSettings({ gpuLayers: value })}
@@ -105,8 +106,8 @@ export const BackendSelector: React.FC = () => {
 // ─── LiteRT Acceleration ─────────────────────────────────────────────────────
 
 const LITERT_BACKENDS: { id: LiteRTBackend; label: string; desc: string }[] = [
-  { id: 'gpu', label: 'GPU', desc: 'Run on GPU via OpenCL. Best performance on most devices.' },
-  { id: 'cpu', label: 'CPU', desc: 'Always available. Use for battery savings or thermal relief.' },
+  { id: 'gpu', label: 'GPU', desc: 'Faster answers on most phones.' },
+  { id: 'cpu', label: 'CPU', desc: 'Always works. Easier on battery and heat.' },
 ];
 
 export const LiteRTBackendSelector: React.FC = () => {
@@ -114,8 +115,8 @@ export const LiteRTBackendSelector: React.FC = () => {
   const current = settings.liteRTBackend === 'cpu' ? 'cpu' : 'gpu';
   return (
     <SegmentedRow<LiteRTBackend>
-      label="Text Model Acceleration"
-      description={`Text model default for all chats. ${LITERT_BACKENDS.find(b => b.id === current)?.desc ?? ''} Image and video engines select their own hardware.`}
+      label="Text model hardware"
+      description={LITERT_BACKENDS.find(b => b.id === current)?.desc ?? 'Where text models run.'}
       options={LITERT_BACKENDS}
       current={current}
       onSelect={(id) => updateSettings({ liteRTBackend: id })}
@@ -135,8 +136,8 @@ export const FlashAttentionToggle: React.FC = () => {
   const { isFlashAttnOn, handleFlashAttnToggle } = useTextGenerationAdvanced();
   return (
     <SegmentedRow<'off' | 'on'>
-      label="Flash Attention"
-      description="Faster inference and lower memory. Required for quantized KV cache (q8_0/q4_0). Requires model reload."
+      label="Flash attention"
+      description="Faster and lighter on memory. Reloads the model."
       options={BOOL_OPTIONS}
       current={isFlashAttnOn ? 'on' : 'off'}
       onSelect={(id) => (id === 'on' ? updateSettings({ flashAttn: true }) : handleFlashAttnToggle(false))}
@@ -152,7 +153,7 @@ export const KvCacheTypeToggle: React.FC = () => {
   const { isFlashAttnOn, cacheDisabled, displayCacheType, handleCacheTypeChange } = useTextGenerationAdvanced();
   return (
     <SegmentedRow<CacheType>
-      label="KV Cache Type"
+      label="KV cache type"
       description={CACHE_TYPE_DESCRIPTIONS[displayCacheType]}
       options={CACHE_TYPE_OPTIONS.map((ct: CacheType) => ({ id: ct, label: ct }))}
       current={displayCacheType}
@@ -192,8 +193,8 @@ export const ModelLoadingModeSelector: React.FC = () => {
     settings.modelLoadingMode ?? (settings.aggressiveModelLoading ? 'aggressive' : 'balanced');
   return (
     <SegmentedRow<ModelLoadingMode>
-      label="Model Loading"
-      description="Applies to all chats. Lean keeps ONE model in memory at a time. Balanced keeps models loaded together when they fit and swaps when they do not. Aggressive commits a larger share of RAM so bigger models load. You can always Load Anyway if a model is refused."
+      label="Model loading"
+      description="How much memory models may use. Aggressive fits bigger models."
       options={MODE_OPTIONS}
       current={current}
       onSelect={(id) => updateSettings({ modelLoadingMode: id })}
@@ -227,12 +228,12 @@ export const ThinkingBudgetSelector: React.FC<{ compact?: boolean }> = ({ compac
       <SliderSetting
         testID="thinking-budget"
         compact={compact}
-        label="Thinking Budget"
-        description="Auto uses up to Max Tokens. A cap ends thinking earlier so the answer arrives sooner. Applies when Thinking is on."
+        label="Thinking budget"
+        description="A cap ends thinking sooner, so the answer comes sooner."
         value={Math.max(0, selectedStep)}
         min={0} max={steps.length - 1} step={1}
         formatValue={(step) => steps[Math.round(step)] === REASONING_BUDGET_AUTO
-          ? 'Auto (up to Max Tokens)'
+          ? 'Auto (up to max tokens)'
           : steps[Math.round(step)] % 1024 !== 0 && steps[Math.round(step)] >= 1024
             ? `${steps[Math.round(step)]} tokens`
             : reasoningBudgetLabel(steps[Math.round(step)] ?? REASONING_BUDGET_AUTO)}
@@ -250,8 +251,8 @@ export const ShowGenerationDetailsToggle: React.FC = () => {
   const on = !!settings.showGenerationDetails;
   return (
     <SegmentedRow<'off' | 'on'>
-      label="Show Generation Details"
-      description="Applies to all chats. Show context use, model, speed, and image settings below each reply."
+      label="Show generation details"
+      description="Show how each reply was made, under it."
       options={BOOL_OPTIONS}
       current={on ? 'on' : 'off'}
       onSelect={(id) => updateSettings({ showGenerationDetails: id === 'on' })}
@@ -270,7 +271,7 @@ export const CpuThreadsSlider: React.FC = () => {
     <View style={styles.container}>
       <SliderSetting
         testID="cpu-threads-stepper"
-        label="CPU Threads"
+        label="CPU threads"
         description="Parallel threads for inference"
         value={cpuThreadsSliderValue}
         // Unset means AUTO, and the slider's own minimum is 1 — so the screen read "1" while the
@@ -292,7 +293,7 @@ export const BatchSizeSlider: React.FC = () => {
     <View style={styles.container}>
       <SliderSetting
         testID="batch-size-stepper"
-        label="Batch Size"
+        label="Batch size"
         description="Tokens processed per batch"
         value={batchForBackend(settings.nBatch, settings.inferenceBackend)}
         // 0 means auto: show the batch the engine will actually use.

@@ -66,6 +66,8 @@ module.exports = {
     // @offgrid/sync: test against SOURCE (jest transforms the TS) rather than the tsup dist,
     // which references @babel/runtime helpers not resolvable from the out-of-root package. Keep
     // these subpaths in step with metro.config.js's aliases and the package's exports map.
+    // @offgrid/design: the one token source, tested from source like sync.
+    '^@offgrid/design$': '<rootDir>/../shared/packages/design/src/index.ts',
     '^@offgrid/sync$': '<rootDir>/../shared/packages/sync/src/index.ts',
     '^@offgrid/sync/rn$': '<rootDir>/../shared/packages/sync/src/adapters/rn-tcp.ts',
     '^@offgrid/sync/rn-discovery$': '<rootDir>/../shared/packages/sync/src/adapters/rn-discovery.ts',

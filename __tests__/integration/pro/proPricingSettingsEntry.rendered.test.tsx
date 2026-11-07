@@ -7,7 +7,7 @@
  *
  * Journey: the REAL App boots over the native boundary as a returning user (onboarding done on an
  * earlier launch, persisted on disk), skips model setup, taps the real Settings tab, then opens Pro
- * through each of Settings' two Pro entry points: the "Off Grid AI PRO" row and the upsell banner's
+ * through each of Settings' two Pro entry points: the "Off Grid AI Pro" row and the upsell banner's
  * "Get Pro" button.
  */
 import {
@@ -55,7 +55,7 @@ async function openSettingsAsReturningUser() {
   rtl.fireEvent.press(view.getByTestId('auto-setup-skip'));
   await rtl.waitFor(() => expect(view.getByTestId('settings-tab')).toBeTruthy());
   rtl.fireEvent.press(view.getByTestId('settings-tab'));
-  await rtl.waitFor(() => expect(view.getByText('Off Grid AI PRO')).toBeTruthy());
+  await rtl.waitFor(() => expect(view.getByLabelText(/^Off Grid AI Pro\. /)).toBeTruthy());
   return { view, rtl };
 }
 
@@ -70,14 +70,14 @@ function expectCurrentPricingOnly(view: View) {
 }
 
 describe('Pro pricing reached from Settings (rendered, real App)', () => {
-  it('the "Off Grid AI PRO" row opens Pro showing $119 lifetime and $7.99 a month, no yearly or old tier', async () => {
+  it('the "Off Grid AI Pro" row opens Pro showing $119 lifetime and $7.99 a month, no yearly or old tier', async () => {
     const { view, rtl } = await openSettingsAsReturningUser();
 
     // BEFORE: on Settings, no price is shown yet.
     expect(view.queryByText(/\$119/)).toBeNull();
     expect(view.queryByText(/\$7\.99/)).toBeNull();
 
-    rtl.fireEvent.press(view.getByText('Off Grid AI PRO'));
+    rtl.fireEvent.press(view.getByLabelText(/^Off Grid AI Pro\. /));
     await rtl.waitFor(() => expect(view.getByText('Intelligence, democratized.')).toBeTruthy());
 
     expectCurrentPricingOnly(view);

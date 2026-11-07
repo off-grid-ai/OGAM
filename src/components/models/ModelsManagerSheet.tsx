@@ -5,6 +5,7 @@ import { LoadingDots } from '../LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../../components/AppSheet';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
+import { ListGroup } from '../ListGroup';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
@@ -124,10 +125,11 @@ export const ModelsManagerSheet: React.FC<Props> = ({
       visible={visible}
       onClose={onClose}
       onClosed={onClosed}
-      title="MODELS"
+      title="Models"
       enableDynamicSizing
     >
       <View style={styles.content}>
+        <ListGroup>
         {ROWS.map(row => {
           const isLoading =
             loadingState.isLoading && loadingState.type === row.type;
@@ -148,15 +150,16 @@ export const ModelsManagerSheet: React.FC<Props> = ({
               <View style={styles.ejectSlot}>
                 {resident &&
                   (ejectingRow === row.type ? (
-                    <LoadingDots color={colors.error} />
+                    <LoadingDots color={colors.textMuted} />
                   ) : (
                     <TouchableOpacity
                       testID={`models-row-${row.type}-eject`}
+                      accessibilityRole="button"
                       accessibilityLabel={`Eject ${row.label} model from memory`}
-                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      style={styles.ejectButton}
                       onPress={() => ejectRow(row.type)}
                     >
-                      <Icon name="power" size={14} color={colors.error} style={styles.ejectGlyph} />
+                      <Icon name="power" size={14} color={colors.textSecondary} style={styles.ejectGlyph} />
                     </TouchableOpacity>
                   ))}
               </View>
@@ -178,15 +181,16 @@ export const ModelsManagerSheet: React.FC<Props> = ({
                   {isLoading ? 'Loading…' : value}
                 </Text>
                 {!!remote?.[row.type] && isSet && (
-                  <Icon name="cloud" size={12} color={colors.primary} testID={`models-row-${row.type}-remote`} />
+                  <Icon name="cloud" size={12} color={colors.textMuted} testID={`models-row-${row.type}-remote`} />
                 )}
               </View>
               {isLoading
-                ? <LoadingDots color={colors.primary} />
+                ? <LoadingDots color={colors.textMuted} />
                 : <Icon name="chevron-right" size={16} color={colors.textMuted} />}
             </AnimatedPressable>
           );
         })}
+        </ListGroup>
 
         <View style={styles.actions}>
           {hasActiveModel && (
@@ -199,9 +203,9 @@ export const ModelsManagerSheet: React.FC<Props> = ({
               accessibilityLabel="Eject all models"
             >
               {isEjecting
-                ? <LoadingDots color={colors.error} />
-                : <Icon name="power" size={14} color={colors.error} />}
-              <Text style={styles.ejectText}>Eject All Models</Text>
+                ? <LoadingDots color={colors.textMuted} />
+                : <Icon name="power" size={14} color={colors.textSecondary} />}
+              <Text style={styles.ejectText}>Eject all models</Text>
             </AnimatedPressable>
           )}
           {!hasActiveModel && <View style={styles.actionButton} />}
@@ -211,13 +215,13 @@ export const ModelsManagerSheet: React.FC<Props> = ({
             disabled={isRefreshing || isEjecting}
             onPress={refreshModels}
             accessibilityRole="button"
-            accessibilityLabel="Refresh remote models"
+            accessibilityLabel="Refresh models"
             testID="models-refresh-remote"
           >
             {isRefreshing
-              ? <LoadingDots color={colors.primary} />
-              : <Icon name="refresh-cw" size={14} color={colors.primary} />}
-            <Text style={styles.refreshText}>Refresh Models</Text>
+              ? <LoadingDots color={colors.textMuted} />
+              : <Icon name="refresh-cw" size={14} color={colors.textSecondary} />}
+            <Text style={styles.refreshText}>Refresh models</Text>
           </AnimatedPressable>
         </View>
         {refreshError && <Text style={styles.refreshError}>{refreshError}</Text>}
@@ -228,7 +232,7 @@ export const ModelsManagerSheet: React.FC<Props> = ({
 
 const createStyles = (colors: ThemeColors) => ({
   content: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.md,
     gap: SPACING.sm as number,
@@ -237,12 +241,9 @@ const createStyles = (colors: ThemeColors) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: SPACING.md,
+    // A row of the one grouped surface (ListGroup draws the hairlines).
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
   },
   label: {
     ...TYPOGRAPHY.label,
@@ -251,6 +252,8 @@ const createStyles = (colors: ThemeColors) => ({
     width: 64,
   },
   // Fixed-width control column right of the label — all four rows align whether or not resident.
+  // A 44 pt frame in the fixed column, pulled back so the rows keep their height.
+  ejectButton: { width: 44, height: 44, marginHorizontal: -11, marginVertical: -15, alignItems: 'center' as const, justifyContent: 'center' as const },
   ejectSlot: {
     width: 22,
     alignItems: 'center' as const,
@@ -294,7 +297,7 @@ const createStyles = (colors: ThemeColors) => ({
     gap: SPACING.sm,
     paddingVertical: SPACING.md,
   },
-  ejectText: { ...TYPOGRAPHY.bodySmall, color: colors.error },
-  refreshText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
+  ejectText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
+  refreshText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
   refreshError: { ...TYPOGRAPHY.bodySmall, color: colors.error },
 });

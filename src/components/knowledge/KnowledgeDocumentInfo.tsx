@@ -91,14 +91,13 @@ export const KnowledgeTransferInfo: React.FC<{
   const failed = transfer.status === 'failed';
   return (
     <View testID={testID}>
-      <View style={styles.line}>
-        <Text style={[styles.name, failed && styles.metaFailed]} numberOfLines={1}>
-          {transfer.fileName}
-        </Text>
-        <Text style={[styles.meta, styles.metaTransfer, failed && styles.metaFailed]} numberOfLines={1}>
-          {knowledgeDocumentTransferLabel(transfer)}
-        </Text>
-      </View>
+      {/* The name stays in ink, and the transfer line sits under it, as on a document row. */}
+      <Text style={styles.name} numberOfLines={1}>
+        {transfer.fileName}
+      </Text>
+      <Text style={[styles.meta, styles.metaTransfer, failed && styles.metaFailed]} numberOfLines={2}>
+        {knowledgeDocumentTransferLabel(transfer)}
+      </Text>
       <ProgressLine fraction={failed ? null : knowledgeDocumentTransferFraction(transfer)} />
     </View>
   );
@@ -134,9 +133,10 @@ export const KnowledgeDocumentInfo: React.FC<{
   const status = readingStatus(live, stored, !!documentId);
   // The file's own reading speaks first; a transfer only once the file is ready here.
   const shownTransfer = status.failed || status.fraction !== null ? undefined : transfer;
-  const label = shownTransfer
-    ? knowledgeDocumentTransferLabel(shownTransfer)
-    : `${formatFileSize(size)} · ${status.label}`;
+  // The file's own facts always show; a transfer adds its own line under the name instead of
+  // replacing them (hand test 49: a failed row lost its size).
+  const fileLabel = `${formatFileSize(size)} · ${status.label}`;
+  const label = shownTransfer ? knowledgeDocumentTransferLabel(shownTransfer) : fileLabel;
   const failed = shownTransfer ? shownTransfer.status === 'failed' : status.failed;
   const fraction = shownTransfer
     ? shownTransfer.status === 'active'
@@ -144,20 +144,34 @@ export const KnowledgeDocumentInfo: React.FC<{
       : null
     : status.fraction;
 
+  const statusText = (
+    <Text
+      style={[styles.meta, shownTransfer && styles.metaTransfer, failed && styles.metaFailed]}
+      // A sync line is a sentence on its own line: two lines, so its reason is not cut off.
+      numberOfLines={shownTransfer ? 2 : 1}
+      testID={documentId ? `knowledge-document-status-${documentId}` : undefined}
+    >
+      {label}
+    </Text>
+  );
+
   return (
     <View testID={testID}>
+      {/* A transfer line ("Couldn't sync to Mac") is a sentence: it gets its own line under the
+          name, so it never cuts the file's name short (hand test 48: "deskto…"). */}
       <View style={styles.line}>
         <Text style={styles.name} numberOfLines={1}>
           {name}
         </Text>
-        <Text
-          style={[styles.meta, shownTransfer && styles.metaTransfer, failed && styles.metaFailed]}
-          numberOfLines={1}
-          testID={documentId ? `knowledge-document-status-${documentId}` : undefined}
-        >
-          {label}
-        </Text>
+        {shownTransfer ? (
+          <Text style={styles.meta} numberOfLines={1}>
+            {fileLabel}
+          </Text>
+        ) : (
+          statusText
+        )}
       </View>
+      {shownTransfer ? statusText : null}
       <ProgressLine fraction={fraction} />
     </View>
   );
@@ -180,11 +194,15 @@ const createStyles = (colors: ThemeColors) => ({
     marginLeft: 'auto' as const,
   },
   /** A transfer line can be long ("Couldn't sync to iPhone: file too large"); it shares the row. */
+  // A sentence, so Geist, not the Mono of a size label.
   metaTransfer: {
-    flexShrink: 1,
+    ...TYPOGRAPHY.bodySmall,
+    marginLeft: 0,
+    marginTop: 2,
   },
+  // A failed transfer is news, not an alarm: the words say what happened, in the quiet grey.
   metaFailed: {
-    color: colors.error,
+    color: colors.textSecondary,
   },
   track: {
     height: 2,

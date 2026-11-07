@@ -68,7 +68,7 @@ function openPlan(ui: ReturnType<typeof render>, tier: string): void {
 }
 
 test('Auto Setup shows Absolute Reality when the device catalog would choose NAI Anime', async () => {
-  const navigation = { push() {}, replace() {} } as never;
+  const navigation = { push() {}, replace() {}, canGoBack: () => false } as never;
   const ui = render(
     <AutoSetupScreen
       navigation={navigation}
@@ -88,7 +88,7 @@ test('Auto Setup shows Absolute Reality when the device catalog would choose NAI
 });
 
 test('Auto Setup offers the GPU model when the device recommends GPU', async () => {
-  const navigation = { push() {}, replace() {} } as never;
+  const navigation = { push() {}, replace() {}, canGoBack: () => false } as never;
   const ui = render(
     <AutoSetupScreen
       navigation={navigation}
@@ -116,7 +116,7 @@ test('Auto Setup offers the GPU model when the device recommends GPU', async () 
 });
 
 test('Android Auto Setup presents complementary image models across its three plans', async () => {
-  const navigation = { push() {}, replace() {} } as never;
+  const navigation = { push() {}, replace() {}, canGoBack: () => false } as never;
   const ui = render(
     <AutoSetupScreen
       navigation={navigation}
@@ -152,4 +152,30 @@ test('Android Auto Setup presents complementary image models across its three pl
     openPlan(ui, tier);
     expect(ui.getByText(name)).toBeTruthy();
   }
+});
+
+describe('Choose models opened from Storage (hand test 13)', () => {
+  it('has Back, says Not now, and returns there instead of going Home', async () => {
+    const navigation = { push: jest.fn(), replace: jest.fn(), goBack: jest.fn(), canGoBack: () => true };
+    const ui = render(
+      <AutoSetupScreen navigation={navigation as never} sessionFactory={() => createAutoSetupSession({ catalog })} />,
+    );
+    await waitFor(() => expect(ui.getByTestId('auto-setup-plan-lean')).toBeTruthy());
+    expect(ui.getByText('Choose models')).toBeTruthy();
+    expect(ui.queryByText('Skip for Now')).toBeNull();
+    fireEvent.press(ui.getByText('Not now'));
+    expect(navigation.goBack).toHaveBeenCalled();
+    expect(navigation.replace).not.toHaveBeenCalled();
+  });
+
+  it('on first launch keeps Skip for Now and goes Home', async () => {
+    const navigation = { push: jest.fn(), replace: jest.fn(), goBack: jest.fn(), canGoBack: () => false };
+    const ui = render(
+      <AutoSetupScreen navigation={navigation as never} sessionFactory={() => createAutoSetupSession({ catalog })} />,
+    );
+    await waitFor(() => expect(ui.getByTestId('auto-setup-plan-lean')).toBeTruthy());
+    expect(ui.queryByText('Choose models')).toBeNull();
+    fireEvent.press(ui.getByText('Skip for Now'));
+    expect(navigation.replace).toHaveBeenCalledWith('Main');
+  });
 });

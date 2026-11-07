@@ -40,7 +40,7 @@ describe('LiteRT A → LiteRT B from the chat model sheet', () => {
       return rtl.waitFor(() => view().getByTestId('text-model-row-b'));
     };
 
-    await rtl.waitFor(() => expect(view().queryByText(/chatting with Model A/)).not.toBeNull());
+    await rtl.waitFor(() => expect(view().queryByText(/Model A answers/)).not.toBeNull());
 
     // GESTURE: the first message loads Model A and it answers.
     await h.send('Hi', { content: 'Hello from A.' });

@@ -5,6 +5,7 @@
  * downloads.listVoiceModels hook (absent in free builds).
  */
 import { useState, useEffect, useCallback } from 'react';
+import RNFS from 'react-native-fs';
 import { AlertState, showAlert } from '../../components/CustomAlert';
 import { whisperService } from '../../services';
 import { useWhisperStore } from '../../stores';
@@ -12,6 +13,7 @@ import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import { modelDownloadService } from '../../services/modelDownloadService';
 import { isModelDownloadInProgress } from '../../services/modelDownloadService/storeStatus';
 import { DownloadItem, formatBytes } from './items';
+import { transcriptionModelName } from '../../services/whisperModels';
 
 async function loadItems(): Promise<DownloadItem[]> {
   const items: DownloadItem[] = [];
@@ -19,11 +21,17 @@ async function loadItems(): Promise<DownloadItem[]> {
   try {
     const stt = await whisperService.listDownloadedModels();
     for (const m of stt) {
+      // The file's own time is when it arrived; these models have no store row that records it.
+      const downloadedAt = await RNFS.stat(m.filePath)
+        .then(stat => new Date(stat.mtime).toISOString())
+        .catch(() => undefined);
       items.push({
         type: 'completed', modelType: 'stt', modelId: m.modelId, fileName: m.fileName,
-        author: 'Transcription', quantization: '', fileSize: m.sizeBytes,
+        // "Speech", the Models tab and Downloads chip it sits under.
+        author: 'Speech', quantization: '', fileSize: m.sizeBytes,
         bytesDownloaded: m.sizeBytes, progress: 1, status: 'completed',
-        filePath: m.filePath, name: m.modelId,
+        filePath: m.filePath, name: transcriptionModelName(m.modelId),
+        ...(downloadedAt ? { downloadedAt } : {}),
       });
     }
   } catch {
@@ -93,6 +101,8 @@ async function deleteItem(item: DownloadItem): Promise<void> {
 
 export interface VoiceDownloadItems {
   voiceItems: DownloadItem[];
+  /** True once the voice and transcription models on disk have been read. */
+  voiceLoaded: boolean;
   refreshVoiceItems: () => Promise<void>;
   /** Build the confirm-delete alert for a tts/stt item; deletes + refreshes on confirm. */
   buildDeleteAlert: (item: DownloadItem) => AlertState;
@@ -100,6 +110,8 @@ export interface VoiceDownloadItems {
 
 export function useVoiceDownloadItems(onAlertClose: () => void): VoiceDownloadItems {
   const [voiceItems, setVoiceItems] = useState<DownloadItem[]>([]);
+  // False until the disk has been read once: before that, "no Whisper models" is unknown, not true.
+  const [voiceLoaded, setVoiceLoaded] = useState(false);
   // Re-derives a new array reference whenever a Whisper model finishes
   // downloading or is deleted (downloadModel/deleteModelById/refreshPresentModels
   // all replace it). Subscribing here keeps the Download Manager in sync within
@@ -108,6 +120,7 @@ export function useVoiceDownloadItems(onAlertClose: () => void): VoiceDownloadIt
 
   const refreshVoiceItems = useCallback(async () => {
     setVoiceItems(await loadItems());
+    setVoiceLoaded(true);
   }, []);
 
   useEffect(() => { refreshVoiceItems(); }, [refreshVoiceItems, presentModelIds]);
@@ -143,5 +156,5 @@ export function useVoiceDownloadItems(onAlertClose: () => void): VoiceDownloadIt
     );
   }, [onAlertClose, refreshVoiceItems]);
 
-  return { voiceItems, refreshVoiceItems, buildDeleteAlert };
+  return { voiceItems, voiceLoaded, refreshVoiceItems, buildDeleteAlert };
 }

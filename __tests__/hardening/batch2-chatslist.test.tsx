@@ -90,15 +90,35 @@ describe('batch2 ChatsListScreen — sort, timestamp format, delete, empty', () 
     expect(expectedWeekday).not.toMatch(/^\d{1,2}:\d{2}/);
   });
 
-  // Case 27 (older bucket): a >1-week-old conversation shows month/day.
-  it('case27: shows month/day for a conversation 14 days ago', () => {
+  // Case 27 (older buckets): a week or more reads as weeks ago, and from four weeks on as month/day.
+  it('case27: shows "Last week" for a conversation 10 days ago', () => {
     const app = boot();
     const now = new Date(2026, 9, 30, 14, 5);
     jest.useFakeTimers({ now });
-    const twoWeeksAgo = chatDaysAgo(app, 'Old Chat', now, 14);
+    chatDaysAgo(app, 'Last Week Chat', now, 10);
 
     const { getByText } = app.render();
-    expect(getByText(formatShortDate(twoWeeksAgo))).toBeTruthy();
+    expect(getByText('Last week')).toBeTruthy();
+  });
+
+  it('case27: shows "2 weeks ago" for a conversation 14 days ago', () => {
+    const app = boot();
+    const now = new Date(2026, 9, 30, 14, 5);
+    jest.useFakeTimers({ now });
+    chatDaysAgo(app, 'Old Chat', now, 14);
+
+    const { getByText } = app.render();
+    expect(getByText('2 weeks ago')).toBeTruthy();
+  });
+
+  it('case27: shows month/day for a conversation 30 days ago', () => {
+    const app = boot();
+    const now = new Date(2026, 9, 30, 14, 5);
+    jest.useFakeTimers({ now });
+    const monthAgo = chatDaysAgo(app, 'Older Chat', now, 30);
+
+    const { getByText } = app.render();
+    expect(getByText(formatShortDate(monthAgo))).toBeTruthy();
   });
 
   // Cases 25/30: most-recently-active conversation is at position 1 (row index 0).
@@ -143,7 +163,7 @@ describe('batch2 ChatsListScreen — sort, timestamp format, delete, empty', () 
     app.rtl.fireEvent.press(view.getByLabelText('Delete Only Chat'));
     await app.rtl.act(async () => { app.rtl.fireEvent.press(view.getByText('Delete')); });
 
-    await app.rtl.waitFor(() => expect(view.getByText('No Chats Yet')).toBeTruthy());
+    await app.rtl.waitFor(() => expect(view.getByText('No chats yet')).toBeTruthy());
     expect(view.queryByTestId('conversation-list')).toBeNull();
   });
 });

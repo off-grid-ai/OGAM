@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, ViewStyle, TextStyle } from 'react-native';
+import { StyleSheet, Text, ViewStyle, TextStyle } from 'react-native';
 import { TouchableOpacity } from './Touchable';
 import type { AccessibilityRole, AccessibilityState } from 'react-native';
 import { useTheme, useThemedStyles } from '../theme';
@@ -13,7 +13,8 @@ const LOADER_LINE_BOX = 1.4;
 interface ButtonProps {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+  /** `hero`: the one main action on a screen, desktop's emerald pill. */
+  variant?: 'primary' | 'hero' | 'secondary' | 'outline' | 'ghost' | 'danger';
   size?: 'small' | 'medium' | 'large';
   /** Highlighted state for toggle buttons */
   active?: boolean;
@@ -80,7 +81,7 @@ export const Button: React.FC<ButtonProps> = ({
         // The dots, not a ring spinner: a rotating ring on a button reads as a retry glyph, so
         // "Pair" and "Share" both looked like they had failed the moment they started working.
         <LoadingDots
-          color={variant === 'primary' ? colors.primary : colors.textSecondary}
+          color={variant === 'hero' ? colors.onHero : variant === 'primary' ? colors.primary : colors.textSecondary}
           style={styles[`loader_${size}`]}
         />
       ) : (
@@ -93,7 +94,7 @@ export const Button: React.FC<ButtonProps> = ({
   );
 };
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   button: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -102,12 +103,23 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     gap: SPACING.sm,
   },
   // The screen's main action: lifted on the surface layer with the brand's soft emerald halo
-  // (DESIGN_PHILOSOPHY: "Primary actions carry a soft emerald halo"), not a flat bright outline.
+  // (brand/DESIGN_PHILOSOPHY.md: "Primary actions carry a soft emerald halo"), not a flat bright outline.
+  // A quiet action on the field: the card surface and a hairline, no glow (the slab look on Model
+  // settings and Storage). The one main action uses `hero`.
   button_primary: {
     backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
+  },
+  // As desktop's candy accent button: a pill of emerald blended into the page, a light top edge and a
+  // faint glow, not a bright block.
+  button_hero: {
+    backgroundColor: colors.heroFill,
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.glow,
+    borderColor: colors.heroBorder,
+    // brand Mobile profile: buttons use an 8px radius.
+    borderRadius: 8,
+    boxShadow: 'inset 0px 1px 0px rgba(255,255,255,0.22), 0px 0px 22px rgba(52,211,153,0.14)',
   },
   button_secondary: {
     backgroundColor: 'transparent',
@@ -142,8 +154,10 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.xl,
   },
+  // A disabled button dims once and its label turns neutral: a faded emerald on a faded pill read
+  // about 2:1 (hand test 67), and grey text under 40% opacity was worse (hand test 65).
   button_disabled: {
-    opacity: 0.4,
+    opacity: 0.6,
   },
   text: {
     ...TYPOGRAPHY.body,
@@ -151,6 +165,10 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   text_primary: {
     color: colors.primary,
+  },
+  text_hero: {
+    color: colors.onHero,
+    fontWeight: '500' as const,
   },
   text_secondary: {
     color: colors.text,
@@ -167,6 +185,9 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   text_active: {
     color: colors.primary,
   },
+  text_disabled: {
+    color: colors.textSecondary,
+  },
   text_small: {
     fontSize: TYPOGRAPHY.h3.fontSize,
   },
@@ -175,9 +196,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   text_large: {
     fontSize: TYPOGRAPHY.h2.fontSize,
-  },
-  text_disabled: {
-    color: colors.textDisabled,
   },
   // A 6pt row of dots is shorter than the label it replaces, so a button would shrink the
   // instant it started working. The loader claims the same line box as the text it stands in

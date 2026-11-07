@@ -26,6 +26,8 @@ async function openLibrary(app: StudioApp): Promise<void> {
   rtl.fireEvent.press(await view.findByTestId('home-gallery-card', {}, { timeout: 10_000 }));
   await view.findByTestId('gallery-screen');
   rtl.fireEvent.press(view.getByTestId('gallery-tab-videos'));
+  // Videos stay in Gallery; the Pro library is the row at the top of the tab.
+  rtl.fireEvent.press(await view.findByTestId('gallery-open-video-library', {}, { timeout: 10_000 }));
   await view.findByTestId('library-grid', {}, { timeout: 10_000 });
 }
 

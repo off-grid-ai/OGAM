@@ -77,11 +77,11 @@ describe('NetworkSection', () => {
   it('with nothing found, says so and offers Off Grid AI Desktop, Scan Network and Add Server', () => {
     const view = render(<Section />);
 
-    expect(view.getByText('Network Models')).toBeTruthy();
+    expect(view.getByText('Network models')).toBeTruthy();
     expect(view.getByText('No Off Grid AI Desktop, Ollama, or LM Studio server found. Scan again or add one.')).toBeTruthy();
     expect(view.getByTestId('onboarding-get-desktop')).toBeTruthy();
-    expect(view.getByText('Scan Network')).toBeTruthy();
-    expect(view.getByText('Add Server')).toBeTruthy();
+    expect(view.getByText('Scan network')).toBeTruthy();
+    expect(view.getByText('Add server')).toBeTruthy();
     expect(view.queryByText('Scanning your network...')).toBeNull();
   });
 
@@ -89,8 +89,8 @@ describe('NetworkSection', () => {
     const view = render(<Section isCheckingNetwork />);
 
     expect(view.getByText('Scanning your network...')).toBeTruthy();
-    expect(view.queryByText('Scan Network')).toBeNull();
-    expect(view.getByText('Add Server')).toBeTruthy();
+    expect(view.queryByText('Scan network')).toBeNull();
+    expect(view.getByText('Add server')).toBeTruthy();
   });
 
   it('lists each server found, and a recheck does not hide them behind the scanning line', () => {
@@ -99,14 +99,14 @@ describe('NetworkSection', () => {
     expect(view.getByTestId('discovered-server-server-1')).toBeTruthy();
     expect(view.getByTestId('discovered-server-server-2')).toBeTruthy();
     expect(view.queryByText('Scanning your network...')).toBeNull();
-    expect(view.queryByText('Scan Network')).toBeNull();
+    expect(view.queryByText('Scan network')).toBeNull();
   });
 
   it('while a scan runs, the Scan button shows it is busy', () => {
     const view = render(<Section isScanning />);
 
-    expect(view.queryByText('Scan Network')).toBeNull();
-    expect(view.getByText('Add Server')).toBeTruthy();
+    expect(view.queryByText('Scan network')).toBeNull();
+    expect(view.getByText('Add server')).toBeTruthy();
   });
 
   it('marks the connected server, and only that one', () => {

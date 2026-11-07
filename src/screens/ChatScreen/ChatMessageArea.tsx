@@ -40,6 +40,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { SPACING } from '../../constants';
 import { proGateShown } from '../../services/analytics/analytics';
+import { toolsForTurn, useHasSearchableKnowledge } from '../../services/documents/searchableKnowledge';
+import { scrollToContentEnd } from './scrollToContentEnd';
 
 export type ChatMessageAreaProps = {
   assistantSelected: boolean;
@@ -155,6 +157,36 @@ const ModelStatusBar: React.FC<{
   return null;
 };
 
+/**
+ * Compacting can take a minute on a phone (the model summarises the older turns). Say what it is for
+ * and how long it has run, so the wait never looks stuck (hand test 23: 90 s of bare dots).
+ */
+const CompactingNote: React.FC = () => {
+  const [seconds, setSeconds] = React.useState(0);
+  React.useEffect(() => {
+    const timer = setInterval(() => setSeconds(s => s + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <ThinkingIndicator
+      text={`Making room for your answer by summarising earlier messages${seconds >= 5 ? ` · ${seconds} s` : '…'}`}
+    />
+  );
+};
+
+/**
+ * How many rows an opening chat renders first, counted back from its newest message. The list
+ * renders further rows on a timer batch, and on a cold start the JS timers waited 6 to 22 s while
+ * Sync ran (device log, hand test 58), so rows the first render leaves out can stay missing that
+ * long. Starting the first render at the newest rows puts the newest message on screen with no timer.
+ */
+const OPENING_ROWS = 15;
+const ignoreScrollToIndexFailure = () => undefined;
+
+/** The chat list's position rule: keep the first visible row in place; never auto-scroll to the start. */
+const CHAT_LIST_KEEP_POSITION = { minIndexForVisible: 0 } as const;
+
+
 export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   assistantSelected,
   onAssistantSelectedChange,
@@ -167,6 +199,26 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   renderItem,
 }) => {
   const hasScrolledRef = React.useRef(false);
+  // A chat opens at its newest message. The list renders in batches, so one scroll on the first
+  // layout lands at the end of the first batch only; until you touch the list, every growth pins
+  // it to the end again (hand test 51: a long chat opened from Home sat at its oldest message).
+  const openingRef = React.useRef(true);
+  // While a chat opens, rows above the end are still measuring. Keeping the first visible row in
+  // place (maintainVisibleContentPosition) then pushes the end out of view, so it is switched on
+  // only once the content has stopped growing (hand test 53: a cold open sat two turns short).
+  const [settled, setSettled] = useState(false);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => {
+    openingRef.current = true;
+    hasScrolledRef.current = false;
+    setSettled(false);
+    // Never hidden for long: whatever the content does, the list shows within 800 ms.
+    const fallback = setTimeout(() => setSettled(true), 800);
+    return () => {
+      clearTimeout(fallback);
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    };
+  }, [chat.activeConversationId]);
   const interfaceMode = useUiModeStore(s => s.interfaceMode);
   const tabNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const toolCountHintDismissed = useAppStore(state => state.toolCountHintDismissed);
@@ -193,6 +245,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   const extToolCount = useExtensionToolCount();
   // Pro tools (email/calendar) are toggled through settings.enabledTools, so count
   // how many of them are on and fold MCP in — this is the "Pro Tools" badge.
+  const searchableKnowledge = useHasSearchableKnowledge(chat.activeConversation);
   const proToolIds = getToolExtensions().flatMap(e =>
     (e.getToolDefinitions?.() ?? []).map(t => t.id),
   );
@@ -204,7 +257,8 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   // (pro email/calendar ids are surfaced under Pro Tools instead, not double-counted; the video
   // tool counts only while Pro video is on).
   const freeToolIds = new Set(offeredTools().map(t => t.id));
-  const freeToolsCount = chat.enabledTools.filter(id =>
+  // The same rule the turn sends by: knowledge search counts only when there is something to search.
+  const freeToolsCount = toolsForTurn(chat.enabledTools, searchableKnowledge).filter(id =>
     freeToolIds.has(id),
   ).length;
   const totalToolCount = freeToolsCount + proToolsCount;
@@ -212,8 +266,27 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   const showSettingsDot = totalToolCount > 3 && !toolCountHintDismissed;
   const [inputHeight, setInputHeight] = useState(84);
   const flatListHeightRef = useRef(0);
+  const contentHeightRef = useRef(0);
+  // Where the list ends, from the latest layout: the scroll does not wait for the native mount.
+  const contentExtent = () => ({ contentHeight: contentHeightRef.current, listHeight: flatListHeightRef.current });
   const generationWasActiveRef = useRef(false);
   const userScrolledDuringGenerationRef = useRef(false);
+
+  // Your own message comes into view the moment you send it: a sent message is the one thing you
+  // always want to see, whatever the list was doing (hand test 50: out of view ~5 s, keyboard up).
+  // Keyed on the newest USER message, not the last row: a thinking row lands in the same render as
+  // the sent message, so the sent one is never last (hygiene found this; the scroll never ran).
+  const lastSentId = useMemo(() => {
+    for (let i = chat.displayMessages.length - 1; i >= 0; i -= 1) {
+      if (chat.displayMessages[i].role === 'user') return chat.displayMessages[i].id;
+    }
+    return undefined;
+  }, [chat.displayMessages]);
+  useEffect(() => {
+    if (!lastSentId) return;
+    userScrolledDuringGenerationRef.current = false;
+    requestAnimationFrame(() => scrollToContentEnd(flatListRef.current, true));
+  }, [lastSentId, flatListRef]);
 
   // Bottom safe-area for the input footer. We own it here (rather than on the
   // screen's SafeAreaView) so the inset replaces — not stacks on top of — the
@@ -272,14 +345,23 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
               activeProject={chat.activeProject}
               setShowProjectSelector={chat.setShowProjectSelector}
               isRemote={chat.activeModelInfo?.isRemote}
+              // Starters are text prompts, so they need a text model: with only an image model a tap drew a picture.
+              onStarter={chat.hasTextModel && !chat.isModelLoading ? prompt => chat.handleSend(prompt) : undefined}
             />
           );
         })()
       ) : (
         <FlatList
           testID="chat-message-list"
+          // Each chat opens in a new list, so its first render starts at its newest rows.
+          key={chat.activeConversationId ?? 'new-chat'}
           ref={flatListRef}
           data={chat.displayMessages}
+          initialNumToRender={OPENING_ROWS}
+          initialScrollIndex={Math.max(0, chat.displayMessages.length - OPENING_ROWS)}
+          // The rows are not measured yet, so the list cannot scroll to that index itself; the
+          // content-size pin below brings it to the end instead.
+          onScrollToIndexFailed={ignoreScrollToIndexFailure}
           renderItem={renderItem}
           keyExtractor={item => item.id}
           extraData={interfaceMode}
@@ -289,19 +371,34 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           contentContainerStyle={styles.messageList}
           onScroll={handleScroll}
           onContentSizeChange={(_w, h) => {
-            if (!hasScrolledRef.current && h > 0) {
+            contentHeightRef.current = h;
+            // Every pin goes to the end this layout reports. This first change arrives before any row
+            // has reported its height, so FlatList.scrollToEnd would scroll to 0, the oldest message,
+            // and on a cold start the timers that pin again wait for seconds (hand test 58).
+            if (openingRef.current && h > 0) {
+              scrollToContentEnd(flatListRef.current, false, contentExtent());
+              // Settled once the content has not grown for 400 ms: one last scroll, then the list
+              // keeps a reader's place as usual.
+              if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+              settleTimerRef.current = setTimeout(() => {
+                if (openingRef.current) scrollToContentEnd(flatListRef.current, false, contentExtent());
+                setSettled(true);
+              }, 400);
+              hasScrolledRef.current = true;
+            } else if (!hasScrolledRef.current && h > 0) {
               // Initial layout: force scroll to bottom regardless of isNearBottom
-              flatListRef.current?.scrollToEnd({ animated: false });
+              scrollToContentEnd(flatListRef.current, false, contentExtent());
               hasScrolledRef.current = true;
             } else if (
               isNearBottomRef.current ||
               (chat.isGeneratingForThisConversation &&
                 !userScrolledDuringGenerationRef.current)
             ) {
-              flatListRef.current?.scrollToEnd({ animated: false });
+              scrollToContentEnd(flatListRef.current, false, contentExtent());
             }
           }}
           onScrollBeginDrag={() => {
+            openingRef.current = false;
             if (chat.isGeneratingForThisConversation) {
               userScrolledDuringGenerationRef.current = true;
             }
@@ -310,9 +407,13 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
             const newHeight = e.nativeEvent.layout.height;
             const prevHeight = flatListHeightRef.current;
             flatListHeightRef.current = newHeight;
-            if (prevHeight > 0 && newHeight < prevHeight) {
+            // An opening chat stays at its end when the list changes height (a bar appears above the
+            // composer), at once: on a cold start the timer below waited seconds (device, iPhone).
+            if (openingRef.current && contentHeightRef.current > 0) {
+              scrollToContentEnd(flatListRef.current, false, contentExtent());
+            } else if (prevHeight > 0 && newHeight < prevHeight) {
               setTimeout(
-                () => flatListRef.current?.scrollToEnd({ animated: true }),
+                () => scrollToContentEnd(flatListRef.current, true),
                 50,
               );
             }
@@ -320,10 +421,13 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           scrollEventThrottle={16}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
-          maintainVisibleContentPosition={{
-            minIndexForVisible: 0,
-            autoscrollToTopThreshold: 100,
-          }}
+          // Keep the reader's place when rows above them change, and nothing more. No
+          // autoscrollToTopThreshold: that option is for inverted lists, where the top is the
+          // newest message. In this list the top is the OLDEST message, so whenever the offset sat
+          // within 100 pt of the start (a short chat, or any chat once the keyboard shrinks the
+          // list) iOS jumped to the first message on each content change, against scrollToEnd,
+          // and a streaming reply stayed out of view (hand test, iPhone, keyboard up).
+          maintainVisibleContentPosition={settled ? CHAT_LIST_KEEP_POSITION : undefined}
           {...LIST_CLIPPING_PROPS}
         />
       )}
@@ -335,7 +439,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           <AnimatedPressable
             hapticType="impactLight"
             style={styles.scrollToBottomButton}
-            onPress={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            onPress={() => scrollToContentEnd(flatListRef.current, true)}
           >
             <Icon name="chevron-down" size={20} color={colors.textSecondary} />
           </AnimatedPressable>
@@ -364,7 +468,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           entering={FadeIn.duration(200)}
           style={styles.classifyingBar}
         >
-          <ThinkingIndicator text="Compacting your conversation..." />
+          <CompactingNote />
         </Animated.View>
       )}
       {/* Everything between the list and the composer is one stack, ordered by SHAPE, not by

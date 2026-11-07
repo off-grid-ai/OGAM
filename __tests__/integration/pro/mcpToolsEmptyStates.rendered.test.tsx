@@ -71,7 +71,8 @@ describe('tools screen empty states', () => {
     const ui = mountSettings();
     await connectFromList(ui, EMPTY.id);
 
-    fireEvent.press(ui.getByText('Edit Tools'));
+    // A connected server's line opens its tools.
+    fireEvent.press(ui.getByLabelText(new RegExp(`^${EMPTY.name}, Active, `)));
     expect(await ui.findByText('Blank Server is connected but has no tools to offer.')).toBeTruthy();
     expect(ui.queryByText(/connect the server first/)).toBeNull();
     expect(ui.queryByTestId('mcp-tools-connect')).toBeNull();
@@ -85,14 +86,14 @@ describe('tools screen empty states', () => {
     useMcpStore.getState().addServer(DOCS);
     const ui = mountSettings();
     await connectFromList(ui, DOCS.id);
-    fireEvent.press(ui.getByText('Edit Tools'));
-    expect(await ui.findByText('search')).toBeTruthy();
+    fireEvent.press(ui.getByLabelText(new RegExp(`^${DOCS.name}, Active, `)));
+    expect(await ui.findByText('Search')).toBeTruthy();
     expect(ui.queryByTestId('mcp-tools-empty')).toBeNull();
 
     // The connection drops while the user is on the screen (the app disconnects it, as when Pro ends).
     await act(async () => { disconnectServer(DOCS.id); });
     expect(ui.getByText('Team Docs is not connected. Connect it to see its tools.')).toBeTruthy();
-    expect(ui.queryByText('search')).toBeNull();
+    expect(ui.queryByText('Search')).toBeNull();
 
     // Connect while the server is unreachable: the screen says it failed and offers Try again.
     fake.setDown(DOCS.url, true);
@@ -108,8 +109,8 @@ describe('tools screen empty states', () => {
     expect(ui.queryByTestId('mcp-tools-retry')).toBeNull();
 
     await act(async () => { slow.release(); });
-    expect(await ui.findByText('search')).toBeTruthy();
-    expect(ui.getByText('fetch')).toBeTruthy();
+    expect(await ui.findByText('Search')).toBeTruthy();
+    expect(ui.getByText('Fetch')).toBeTruthy();
     expect(ui.queryByTestId('mcp-tools-empty')).toBeNull();
   });
 
@@ -117,8 +118,8 @@ describe('tools screen empty states', () => {
     useMcpStore.getState().addServer(DOCS);
     const ui = mountSettings();
     await connectFromList(ui, DOCS.id);
-    fireEvent.press(ui.getByText('Edit Tools'));
-    expect(await ui.findByText('search')).toBeTruthy();
+    fireEvent.press(ui.getByLabelText(new RegExp(`^${DOCS.name}, Active, `)));
+    expect(await ui.findByText('Search')).toBeTruthy();
 
     // A paired device's tool route, for example, goes away when the device is unpaired.
     await act(async () => {

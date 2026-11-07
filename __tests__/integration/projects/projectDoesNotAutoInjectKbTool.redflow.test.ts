@@ -1,6 +1,6 @@
 /**
  * RED-FLOW (integration) — device 2026-07-14: the quick-settings Tools count showed 0, but a project
- * chat reported "Tools sent in request (1)". resolveToolsAndPrompt auto-injected search_knowledge_base
+ * chat reported "Tools it could use (1)". resolveToolsAndPrompt auto-injected search_knowledge_base
  * for any project chat, so the tools SENT diverged from the tools the user had toggled (the count SHOWS).
  *
  * SPEC (user's decision): never auto-add tools — only the user's toggled set is sent. A project chat with
@@ -15,6 +15,8 @@
 import { installNativeBoundary, GB } from '../../harness/nativeBoundary';
 import { makeGenDeps } from '../../harness/genDeps';
 import { createProject } from '../../utils/factories';
+
+
 
 describe('project chat does NOT auto-inject search_knowledge_base (red-flow)', () => {
   it('with tools toggled OFF, a chat in a real project sends NO tools to the model', async () => {

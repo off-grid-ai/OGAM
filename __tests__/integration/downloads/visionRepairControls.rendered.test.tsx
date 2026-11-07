@@ -57,6 +57,6 @@ describe('vision repair controls in Download Manager', () => {
     expect(await waitFor(() => screen.getByText('Remove Download'))).toBeTruthy();
     expect(screen.getByText('Yes')).toBeTruthy();
     expect(boundary.download!.active()).toHaveLength(1);
-    expect(screen.getByText('vision-Q4_K_M.gguf')).toBeTruthy();
+    expect(screen.getAllByText('Vision').length).toBeGreaterThan(0);
   });
 });

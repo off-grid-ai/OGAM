@@ -52,12 +52,12 @@ function getToolLabel(toolName?: string, content?: string): string {
       const queryMatch = content
         ? /^No results found for "([^"]+)"/.exec(content)
         : null;
-      if (queryMatch) return `Searched: "${queryMatch[1]}" (no results)`;
-      return 'Web search result';
+      if (queryMatch) return `Searched the web for "${queryMatch[1]}": nothing found`;
+      return 'Searched the web';
     }
     case 'search_knowledge_base': {
       const passages = content ? parseSearchBlock(content) : [];
-      if (!passages.length) return 'Searched documents (no passages)';
+      if (!passages.length) return 'Searched your documents: nothing matched';
       const documents = new Set(passages.map(passage => passage.document)).size;
       return `Found ${passages.length} passage${passages.length === 1 ? '' : 's'} in ${documents} document${documents === 1 ? '' : 's'}`;
     }
@@ -68,9 +68,12 @@ function getToolLabel(toolName?: string, content?: string): string {
     case 'get_device_info':
       return 'Retrieved device info';
     case 'web_use':
-      return 'Web Use';
     case 'computer_use':
-      return 'Computer Use';
+      return 'Worked on your task';
+    case 'read_url':
+    case 'web_fetch':
+    case 'read_wiki_contents':
+      return 'Read the page';
     case 'model_fallback':
       return 'Model changed';
     case 'generate_image':
@@ -80,8 +83,98 @@ function getToolLabel(toolName?: string, content?: string): string {
     case 'make_film':
       return 'Film started';
     default:
-      return toolName || 'Tool result';
+      // A tool this list does not know (an MCP server's own, e.g. ask_wiki_question) reads as plain
+      // words, never its raw name; the name stays in the step's details.
+      return 'Looked that up';
   }
+}
+
+/**
+ * What a tool is doing while it runs, in plain words (callers add the trailing ellipsis). A tool this
+ * list does not know reads as "Looking that up", never its raw name (which is developer detail).
+ */
+function getRunningLabel(toolName?: string): string {
+  switch (toolName) {
+    case 'web_search':
+      return 'Searching the web';
+    case 'read_url':
+    case 'web_fetch':
+    case 'read_wiki_contents':
+      return 'Reading the page';
+    case 'search_knowledge_base':
+      return 'Searching your documents';
+    case 'send_email':
+    case 'draft_email':
+      return 'Writing the email';
+    case 'calculator':
+      return 'Calculating';
+    case 'get_current_datetime':
+      return 'Checking the time';
+    case 'get_device_info':
+      return 'Checking this phone';
+    case 'web_use':
+    case 'computer_use':
+      return 'Working on your task';
+    case 'generate_image':
+      return 'Making the picture';
+    case 'generate_video':
+    case 'make_film':
+      return 'Making the video';
+    default:
+      return 'Looking that up';
+  }
+}
+
+type SearchHit = { title?: unknown; url?: unknown; excerpts?: unknown; snippet?: unknown; description?: unknown };
+
+/**
+ * A tool result as a person reads it. A search result some tools return as JSON (results with a
+ * title, a link and excerpts) becomes a short list of sources; other JSON is laid out with its
+ * line breaks; plain text is shown as it came.
+ */
+export function readableToolResult(content: string): string {
+  const trimmed = content.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return content;
+  let data: unknown;
+  try {
+    data = JSON.parse(trimmed);
+  } catch {
+    // The model gets a result cut to fit its context, which is no longer valid JSON. Its sources
+    // are still there: read each title and link in order.
+    return sourcesFromCutJson(trimmed) ?? content;
+  }
+  const hits = Array.isArray(data) ? data : (data as { results?: unknown }).results;
+  if (Array.isArray(hits) && hits.length > 0 && hits.every(hit => hit && typeof hit === 'object')) {
+    return (hits as SearchHit[])
+      .slice(0, 5)
+      .map((hit, i) => {
+        const title = typeof hit.title === 'string' && hit.title ? hit.title : 'Source';
+        const heading = typeof hit.url === 'string' ? `[${title}](${hit.url})` : title;
+        const raw = Array.isArray(hit.excerpts) ? hit.excerpts[0] : hit.snippet ?? hit.description;
+        const excerpt = typeof raw === 'string' ? raw.replace(/\s+/g, ' ').trim().slice(0, 180) : '';
+        return `${i + 1}. ${heading}${excerpt ? `\n   ${excerpt}${excerpt.length === 180 ? '…' : ''}` : ''}`;
+      })
+      .join('\n\n');
+  }
+  return JSON.stringify(data, null, 2);
+}
+
+function sourcesFromCutJson(text: string): string | null {
+  const field = (name: string) =>
+    [...text.matchAll(new RegExp(`"${name}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`, 'g'))].map(match => {
+      try {
+        return JSON.parse(`"${match[1]}"`) as string;
+      } catch {
+        return match[1];
+      }
+    });
+  const urls = field('url');
+  if (urls.length === 0) return null;
+  const titles = field('title');
+  return urls
+    .slice(0, 5)
+    .map((url, i) => `${i + 1}. [${titles[i] || 'Source'}](${url})`)
+    .join('\n');
 }
 
 function isTaskToolName(toolName?: string): boolean {
@@ -178,7 +271,7 @@ const ToolResultBubbleInner: React.FC<ToolResultBubbleProps> = ({
       </TouchableOpacity>
       {expanded && hasDetails && (
         <View style={styles.toolDetailContainer}>
-          {detail ?? <MarkdownText dimmed>{content}</MarkdownText>}
+          {detail ?? <MarkdownText dimmed>{readableToolResult(content)}</MarkdownText>}
         </View>
       )}
     </View>
@@ -292,7 +385,7 @@ export const SyncedToolArtifacts: React.FC<{
             toolIcon={getToolIcon(artifact.name)}
             toolLabel={
               running
-                ? `Using ${getToolLabel(artifact.name)}...`
+                ? `${getRunningLabel(artifact.name)}…`
                 : getToolLabel(artifact.name, artifact.result)
             }
             toolName={artifact.name}
@@ -371,7 +464,7 @@ function toolCallRows(message: Message): readonly ToolCallRow[] {
       stableKey: `${messageKey}:call:${callKey}`,
       name: call.name,
       icon: getToolIcon(call.name),
-      label: `Using ${call.name}${toolArgumentsLabel(call.arguments)}`,
+      label: `${getRunningLabel(call.name)}${toolArgumentsLabel(call.arguments)}…`,
     };
   });
   toolCallRowsByMessage.set(message, { calls, rows });
@@ -431,7 +524,9 @@ export const SystemInfoMessage: React.FC<{
 }> = ({ content, styles, alertState, onCloseAlert }) => (
   <>
     <View testID="system-info-message" style={styles.systemInfoContainer}>
-      <Text style={styles.systemInfoText}>{content}</Text>
+      {/* A note is shown as plain text, never markdown, so notes saved as "_…_" by older builds
+          (or another device) lose the underscores here rather than showing them. */}
+      <Text style={styles.systemInfoText}>{content.replace(/^_(.+)_$/s, '$1')}</Text>
     </View>
     <CustomAlert
       visible={alertState.visible}

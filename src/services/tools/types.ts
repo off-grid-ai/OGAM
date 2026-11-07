@@ -2,7 +2,10 @@ export interface ToolDefinition {
   id: string;
   name: string;
   displayName: string;
+  /** Written for the model: when and how to call the tool. Never shown to people. */
   description: string;
+  /** Written for people: what the tool does for you, in one short line. Shown in Tools. */
+  summary?: string;
   icon: string;
   parameters: Record<string, ToolParameter>;
   requiresNetwork?: boolean;

@@ -69,7 +69,7 @@ describe('text pre-load gate reads reclaim-aware available (rendered, red-flow)'
 
     // Precondition: no reply and no refusal surface yet.
     expect(h.view!.queryByText(/Paris\./)).toBeNull();
-    expect(h.view!.queryByText(/it needs ~/)).toBeNull();
+    expect(h.view!.queryByText(/needs about [\d.]+ GB of memory/)).toBeNull();
 
     // GESTURE: the real first-send lazy load → residency admits → the pre-load gate decides.
     await h.send('what is the capital of France', { text: 'Paris.' });
@@ -81,7 +81,7 @@ describe('text pre-load gate reads reclaim-aware available (rendered, red-flow)'
       expect(h.view!.queryByText(/Paris\./)).not.toBeNull();
     }, { timeout: 8000 });
     // And the raw-snapshot refusal must NOT appear (it would on HEAD).
-    expect(h.view!.queryByText(/it needs ~/)).toBeNull();
+    expect(h.view!.queryByText(/needs about [\d.]+ GB of memory/)).toBeNull();
 
     stopSync();
   }, 30000);
@@ -114,7 +114,7 @@ describe('text pre-load gate reads reclaim-aware available (rendered, red-flow)'
     await h.rtl.waitFor(() => { expect(require('../../../src/services/modelResidency').modelResidencyManager.getLoadPolicy()).toBe('aggressive'); });
     toggle.unmount();
 
-    expect(h.view!.queryByText(/it needs ~/)).toBeNull();
+    expect(h.view!.queryByText(/needs about [\d.]+ GB of memory/)).toBeNull();
 
     await h.send('what is the capital of France', { text: 'Paris.' });
 
@@ -122,7 +122,7 @@ describe('text pre-load gate reads reclaim-aware available (rendered, red-flow)'
     await h.rtl.waitFor(() => {
       expect(h.view!.queryByText(/Paris\./)).not.toBeNull();
     }, { timeout: 8000 });
-    expect(h.view!.queryByText(/it needs ~/)).toBeNull();
+    expect(h.view!.queryByText(/needs about [\d.]+ GB of memory/)).toBeNull();
 
     stopSync();
   }, 30000);
@@ -153,13 +153,13 @@ describe('text pre-load gate reads reclaim-aware available (rendered, red-flow)'
     await h.rtl.waitFor(() => { expect(require('../../../src/services/modelResidency').modelResidencyManager.getLoadPolicy()).toBe('aggressive'); });
     toggle.unmount();
 
-    expect(h.view!.queryByText(/it needs ~/)).toBeNull();
+    expect(h.view!.queryByText(/needs about [\d.]+ GB of memory/)).toBeNull();
 
     await h.send('what is the capital of France', { text: 'Paris.' });
 
     // TERMINAL ARTIFACT: the refusal renders and the reply does not.
     await h.rtl.waitFor(() => {
-      expect(h.view!.queryByText(/it needs ~/)).not.toBeNull();
+      expect(h.view!.queryByText(/needs about [\d.]+ GB of memory/)).not.toBeNull();
     }, { timeout: 8000 });
     expect(h.view!.queryByText(/Paris\./)).toBeNull();
 

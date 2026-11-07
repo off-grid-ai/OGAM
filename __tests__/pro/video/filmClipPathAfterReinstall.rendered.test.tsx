@@ -51,7 +51,7 @@ it('a clip saved before an update still joins into a film that plays', async () 
       finished += await downloads.finishRunning();
       expect(finished).toBe(VIDEO.files);
     }, { timeout: 15_000 });
-    await rtl.waitFor(() => expect(view.getAllByLabelText('Delete model').length).toBeGreaterThan(0), { timeout: 10_000 });
+    await rtl.waitFor(() => expect(view.getAllByLabelText(/^Delete /).length).toBeGreaterThan(0), { timeout: 10_000 });
     rtl.fireEvent.press(await view.findByTestId('home-tab'));
     rtl.fireEvent.press(await view.findByTestId('model-summary-video-open'));
     rtl.fireEvent.press(await view.findByTestId(`video-model-row-${VIDEO.id}`, {}, { timeout: 5000 }));

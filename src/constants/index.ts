@@ -14,7 +14,7 @@ export const WEDNESDAY_URL = 'https://wednesday.is';
 // Linked from Pro screens and from remote-server discovery alike.
 export const OFF_GRID_DESKTOP_URL = 'https://getoffgridai.co/desktop';
 export const OFF_GRID_DESKTOP_BENEFIT =
-  'More power, same privacy. Run bigger models on Mac or Windows and keep every device in sync.';
+  'More power, same privacy. Run bigger models on your Windows, macOS or Linux computer and keep every device in sync.';
 
 export const PRO_AHA_FEATURES = [
   'Create images with the model active on your Desktop',
@@ -112,17 +112,45 @@ export const CREDIBILITY_LABELS = {
 };
 
 // App configuration
-export const APP_CONFIG = {
-  modelStorageDir: 'models',
-  whisperStorageDir: 'whisper-models',
-  maxConcurrentDownloads: 1,
-  defaultSystemPrompt: `You are a helpful AI assistant running locally on the user's device. Your responses should be:
+/** Built-in prompts earlier builds stored as the user's own. Read as the current built-in one. */
+export const PREVIOUS_DEFAULT_SYSTEM_PROMPTS: readonly string[] = [
+  `You are a helpful AI assistant running locally on the user's device. Your responses should be:
 - Accurate and factual - never make up information
 - Concise but complete - answer the question fully without unnecessary elaboration
 - Helpful and friendly - focus on solving the user's actual need
 - Honest about limitations - if you don't know something, say so
 
 If asked about yourself, you can mention you're a local AI assistant that prioritizes user privacy.`,
+  `You are Off Grid AI, an assistant that runs entirely on this phone. Nothing the user types leaves the device, and you work with no internet connection. You are not in a browser and not on a server.
+
+In this app the user can chat with you, make images, attach documents and photos for you to read, and keep related chats together in projects.
+
+Your answers should be:
+- Accurate: never make up information
+- Concise but complete: answer the question fully, without padding
+- Helpful and friendly: solve the user's actual need
+- Honest about limits: if you don't know, say so
+
+If asked about yourself, say you are Off Grid AI, running privately on this phone.`,
+];
+
+export const APP_CONFIG = {
+  modelStorageDir: 'models',
+  whisperStorageDir: 'whisper-models',
+  maxConcurrentDownloads: 1,
+  defaultSystemPrompt: `You are Off Grid AI, an assistant that runs entirely on this phone. Nothing the user types leaves the device, and you work with no internet connection. You are not in a browser and not on a server.
+
+Answer everyday questions straight from what you know: colours, facts, words, maths, ideas. You need nothing else for those, so never say you lack access or a tool for them.
+
+In this app the user can chat with you, make images, attach documents and photos for you to read, and keep related chats together in projects.
+
+Your answers should be:
+- Accurate: never make up information
+- Concise but complete: answer the question fully, without padding
+- Helpful and friendly: solve the user's actual need
+- Honest about limits: if you don't know, say so
+
+If asked about yourself, say you are Off Grid AI, running privately on this phone.`,
   streamingEnabled: true,
   maxContextLength: 4096, // Default context window; eliminates double-init on models that support ≥4096
 };
@@ -168,92 +196,7 @@ export const ONBOARDING_SLIDES: readonly OnboardingSlide[] = [
   },
 ];
 
-// Fonts
-export const FONTS = {
-  mono: 'Menlo',
-};
+// Fonts, type, spacing, radius and the living field come from @offgrid/design (the one token source).
+import { FONTS, TYPOGRAPHY, SPACING, RADIUS, LIVING_FIELD, ALIVE } from '@offgrid/design';
 
-// Typography Scale - Centralized font sizes and styles
-export const TYPOGRAPHY = {
-  // Display / Hero numbers
-  display: {
-    fontSize: 22,
-    fontFamily: FONTS.mono,
-    fontWeight: '200' as const,
-    letterSpacing: -0.5,
-  },
-
-  // Headings
-  h1: {
-    fontSize: 24,
-    fontFamily: FONTS.mono,
-    fontWeight: '300' as const,
-    letterSpacing: -0.5,
-  },
-  h2: {
-    fontSize: 16,
-    fontFamily: FONTS.mono,
-    fontWeight: '400' as const,
-    letterSpacing: -0.2,
-  },
-  h3: {
-    fontSize: 13,
-    fontFamily: FONTS.mono,
-    fontWeight: '400' as const,
-    letterSpacing: -0.2,
-  },
-
-  // Body text
-  body: {
-    fontSize: 14,
-    fontFamily: FONTS.mono,
-    fontWeight: '400' as const,
-  },
-  bodySmall: {
-    fontSize: 13,
-    fontFamily: FONTS.mono,
-    fontWeight: '400' as const,
-  },
-
-  // Labels (whispers)
-  label: {
-    fontSize: 10,
-    fontFamily: FONTS.mono,
-    fontWeight: '400' as const,
-    letterSpacing: 0.3,
-  },
-  labelSmall: {
-    fontSize: 9,
-    fontFamily: FONTS.mono,
-    fontWeight: '400' as const,
-    letterSpacing: 0.3,
-  },
-
-  // Metadata / Details
-  meta: {
-    fontSize: 10,
-    fontFamily: FONTS.mono,
-    fontWeight: '300' as const,
-  },
-  metaSmall: {
-    fontSize: 9,
-    fontFamily: FONTS.mono,
-    fontWeight: '300' as const,
-  },
-};
-
-// Spacing Scale - Consistent whitespace
-export const SPACING = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
-  xxl: 32,
-};
-
-// Corner radius (@offgrid/design RADIUS): md for cards and controls, sm for hairline tracks.
-export const RADIUS = {
-  sm: 2,
-  md: 8,
-};
+export { FONTS, TYPOGRAPHY, SPACING, RADIUS, LIVING_FIELD, ALIVE };

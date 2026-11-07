@@ -54,7 +54,7 @@ describe('iOS text retry (rendered, red-flow)', () => {
     useDownloadStore.getState().add(failedTextEntry({ downloadId: '' }));
 
     const view = render(React.createElement(DownloadManagerScreen, {}));
-    await waitFor(() => { expect(view.queryByText(/model\.gguf/)).not.toBeNull(); });
+    await waitFor(() => { expect(view.queryAllByText(/model/).length).toBeGreaterThan(0); });
 
     // Pre-condition: nothing is downloading at the native boundary yet (so a false green can't hide).
     expect(boundary.download!.active().length).toBe(0);

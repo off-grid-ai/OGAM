@@ -187,7 +187,7 @@ describe('Video Studio over Sync', () => {
     );
     // Settings › Sync, and the Mac pairs with the code on screen.
     fireEvent.press(ui.getByTestId('settings-tab'));
-    await waitFor(() => expect(ui!.getByText('Model Settings')).toBeTruthy());
+    await waitFor(() => expect(ui!.getByText('Model settings')).toBeTruthy());
     fireEvent.press(ui.getByTestId('open-sync-settings'));
     await waitFor(() => expect(ui!.getByTestId('sync-pairing-code-value')).toBeTruthy());
     const phone = useSyncStore.getState().thisDevice;
@@ -198,8 +198,10 @@ describe('Video Studio over Sync', () => {
     // Home › Image Gallery › Videos: Your videos.
     fireEvent.press(ui.getAllByLabelText('Back').pop()!);
     fireEvent.press(await waitFor(() => ui!.getByTestId('home-tab')));
-    fireEvent.press(await waitFor(() => ui!.getByText('Image Gallery')));
+    fireEvent.press(await waitFor(() => ui!.getByText('Gallery')));
     fireEvent.press(await waitFor(() => ui!.getByText(/^Videos \(/)));
+    // Videos stay in Gallery; the Pro library is the row at the top of the tab.
+    fireEvent.press(await waitFor(() => ui!.getByTestId('gallery-open-video-library')));
     await waitFor(() => expect(ui!.getByTestId('library-grid')).toBeTruthy());
     const film = await waitFor(() => ui!.getByText('Fox in the snow'), { timeout: 15_000 });
     expect(film).toBeTruthy();

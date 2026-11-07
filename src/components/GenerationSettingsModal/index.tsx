@@ -1,25 +1,19 @@
-import { FastestSettingsButton } from '../settings/FastestSettingsButton';
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../AppSheet';
 import { useTheme, useThemedStyles } from '../../theme';
-import { useAppStore } from '../../stores';
 import { llmService } from '../../services';
 import { createStyles } from './styles';
-import { VoiceTurnSettings } from '../settings/voiceSections';
-import { GeneralGenerationControls } from '../settings/GeneralGenerationControls';
 import { ConversationActionsSection } from './ConversationActionsSection';
-import { ImageGenerationSection } from './ImageGenerationSection';
-import { TextGenerationSection } from './TextGenerationSection';
-import { TranscriptionLanguageSelect } from '../TranscriptionLanguageSelect';
-import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 
 interface GenerationSettingsModalProps {
   visible: boolean;
   onClose: () => void;
   onOpenProject?: () => void;
+  /** Opens Settings > Model settings. The screen navigates: a component does not import navigation. */
+  onOpenModelSettings?: () => void;
   onOpenGallery?: () => void;
   onDeleteConversation?: () => void;
   onOpenTTSSettings?: () => void;
@@ -34,49 +28,38 @@ export const GenerationSettingsModal: React.FC<
   visible,
   onClose,
   onOpenProject,
+  onOpenModelSettings,
   onOpenGallery,
   onDeleteConversation,
-  onOpenTTSSettings,
   conversationImageCount = 0,
   activeProjectName,
-  isRemote,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const resetSettings = useAppStore((state) => state.resetSettings);
 
   const [performanceStats, setPerformanceStats] = useState(llmService.getPerformanceStats());
-  const [imageSettingsOpen, setImageSettingsOpen] = useState(false);
-  const [generalSettingsOpen, setGeneralSettingsOpen] = useState(false);
-  const [textSettingsOpen, setTextSettingsOpen] = useState(false);
-  const [sttSettingsOpen, setSttSettingsOpen] = useState(false);
-  const [ttsSettingsOpen, setTtsSettingsOpen] = useState(false);
-  // TTS settings come from the pro audio feature via a slot. Free builds have
-  // no TTS section.
-  const TtsSection = getSlot(SLOTS.generationSettingsTts);
-  const VideoSettings = getSlot(SLOTS.generationSettingsVideo);
-
   useEffect(() => {
     if (visible) {
       setPerformanceStats(llmService.getPerformanceStats());
     }
   }, [visible]);
 
-  const hasConversationActions = !!(onOpenProject || onOpenGallery || onDeleteConversation);
 
   return (
     <AppSheet
       sheet="generation-settings"
       visible={visible}
       onClose={onClose}
-      snapPoints={['50%', '90%']}
-      title="Chat Settings"
+      // A fixed short height for its few rows. Dynamic sizing measured the scroll view as zero and
+      // opened the sheet as a bare header (hand test 72).
+      snapPoints={['34%']}
+      title="Chat settings"
     >
       {performanceStats.lastTokensPerSecond > 0 && (
         <View style={styles.statsBar}>
-          <Text style={styles.statsLabel}>Last Generation:</Text>
+          <Text style={styles.statsLabel}>Last reply</Text>
           <Text style={styles.statsValue}>
-            {performanceStats.lastTokensPerSecond.toFixed(1)} tok/s
+            {performanceStats.lastTokensPerSecond.toFixed(1)} tokens a second
           </Text>
           <Text style={styles.statsSeparator}>•</Text>
           <Text style={styles.statsValue}>
@@ -98,117 +81,42 @@ export const GenerationSettingsModal: React.FC<
           onClose={onClose}
           onOpenProject={onOpenProject}
           onOpenGallery={onOpenGallery}
-          onDeleteConversation={onDeleteConversation}
           conversationImageCount={conversationImageCount}
           activeProjectName={activeProjectName}
         />
 
-        {/* It places every modality (text, image, video, speech, voice, search), so it leads the settings. */}
-        <FastestSettingsButton />
+        {/* The model settings live in one place, Settings > Model settings, and this row opens it.
+            The sheet used to copy every section (screen review). */}
+        {onOpenModelSettings ? (
         <TouchableOpacity
-          style={[styles.accordionHeader, !hasConversationActions && styles.accordionHeaderNoMargin]}
-          onPress={() => setGeneralSettingsOpen(!generalSettingsOpen)}
-          activeOpacity={0.7}
-          testID="modal-general-accordion"
+          style={styles.actionRow}
+          onPress={() => {
+            onClose();
+            setTimeout(onOpenModelSettings, 200);
+          }}
           accessibilityRole="button"
-          accessibilityState={{ expanded: generalSettingsOpen }}
+          testID="chat-settings-open-model-settings"
         >
-          <Text style={styles.accordionTitle}>GENERAL</Text>
-          <Icon name={generalSettingsOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+          <Icon name="sliders" size={16} color={colors.textSecondary} />
+          <Text style={styles.actionText}>Model settings</Text>
+          <Icon name="chevron-right" size={16} color={colors.textMuted} />
         </TouchableOpacity>
-        {generalSettingsOpen && <View style={styles.sectionCard}><GeneralGenerationControls /></View>}
+        ) : null}
 
-        {/* IMAGE GENERATION SETTINGS */}
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setImageSettingsOpen(!imageSettingsOpen)}
-          activeOpacity={0.7}
-          testID="modal-image-accordion"
-        >
-          <Text style={styles.accordionTitle}>IMAGE GENERATION</Text>
-          <Icon
-            name={imageSettingsOpen ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={colors.textMuted}
-          />
-        </TouchableOpacity>
-        {imageSettingsOpen && <ImageGenerationSection />}
-        {VideoSettings && <VideoSettings />}
-
-        {/* TEXT GENERATION SETTINGS */}
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setTextSettingsOpen(!textSettingsOpen)}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.accordionTitle}>TEXT GENERATION</Text>
-          <Icon
-            name={textSettingsOpen ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={colors.textMuted}
-          />
-        </TouchableOpacity>
-        {textSettingsOpen && (
-          <>
-            {isRemote && (
-              <View style={styles.remoteNotice}>
-                <Icon name="info" size={13} color={colors.textMuted} />
-                <Text style={styles.remoteNoticeText}>
-                  These settings only apply to local models and won't affect the
-                  current remote session.
-                </Text>
-              </View>
-            )}
-            <TextGenerationSection />
-          </>
-        )}
-
-        {/* SPEECH TO TEXT SETTINGS */}
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setSttSettingsOpen(!sttSettingsOpen)}
-          activeOpacity={0.7}
-          testID="modal-transcription-accordion"
-        >
-          <Text style={styles.accordionTitle}>SPEECH TO TEXT</Text>
-          <Icon
-            name={sttSettingsOpen ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={colors.textMuted}
-          />
-        </TouchableOpacity>
-        {sttSettingsOpen && (
-          <View style={styles.sectionCard}>
-            <TranscriptionLanguageSelect testID="chat-transcription-language" />
-            {/* Voice mode ends a turn on silence. Lives with STT because it is about listening. */}
-            <VoiceTurnSettings />
-          </View>
-        )}
-
-        {/* TTS SETTINGS (pro audio feature) */}
-        {TtsSection && (
-          <>
-            <TouchableOpacity
-              style={styles.accordionHeader}
-              onPress={() => setTtsSettingsOpen(!ttsSettingsOpen)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.accordionTitle}>TEXT TO SPEECH</Text>
-              <Icon
-                name={ttsSettingsOpen ? 'chevron-up' : 'chevron-down'}
-                size={16}
-                color={colors.textMuted}
-              />
-            </TouchableOpacity>
-            {ttsSettingsOpen && (
-              <TtsSection onNavigateToTTSSettings={onOpenTTSSettings} />
-            )}
-          </>
-        )}
-
-        <TouchableOpacity style={styles.resetButton} onPress={resetSettings}>
-          <Text style={styles.resetButtonText}>Reset to Defaults</Text>
-        </TouchableOpacity>
+        {/* Deleting the chat is not a setting: it sits last, apart from them (hand test 61). */}
+        {onDeleteConversation ? (
+          <TouchableOpacity
+            style={styles.resetButton}
+            onPress={() => {
+              onClose();
+              setTimeout(onDeleteConversation, 200);
+            }}
+            accessibilityRole="button"
+            testID="chat-settings-delete-chat"
+          >
+            <Text style={styles.deleteChatText}>Delete chat</Text>
+          </TouchableOpacity>
+        ) : null}
 
         <View style={styles.bottomPadding} />
       </ScrollView>

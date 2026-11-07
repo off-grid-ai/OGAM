@@ -423,8 +423,6 @@ OffgridMobile/
 │   ├── standards/
 │   │   └── CODEBASE_GUIDE.md            # This file — comprehensive architecture guide
 │   ├── design/
-│   │   ├── DESIGN_PHILOSOPHY_SYSTEM.md  # Design system reference
-│   │   └── VISUAL_HIERARCHY_STANDARD.md # Visual hierarchy guidelines
 │   ├── onboarding/
 │   │   └── ONBOARDING_FLOWS.md          # Onboarding spotlight flow documentation
 │   └── test/

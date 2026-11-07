@@ -72,6 +72,8 @@ interface DenseModelCardContentProps {
   isTrending?: boolean;
   credibilitySource?: ModelCredibility['source'];
   credibilityLabel?: string;
+  /** The model you talk to: its row says "In use" in words, not only a tint. */
+  isActive?: boolean;
   incompatibleReason?: string;
   facts?: string[];
   capabilities?: ModelCardCapabilities;
@@ -93,6 +95,7 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
   credibilitySource,
   credibilityLabel,
   incompatibleReason,
+  isActive: _isActive,
   facts: additionalFacts = [],
   capabilities,
   sourceBadge,
@@ -129,6 +132,8 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
     <>
       <View style={styles.denseTitleRow}>
         {credibilitySource === 'offgrid' && <MadeByOffGrid />}
+        {/* The verified mark sits right after the name, so it is in the same place on every row; at the
+            row's far edge it moved with whatever the row's action was (screen review). */}
         <Text style={styles.denseName} numberOfLines={1} testID={nameTestID}>{model.name}</Text>
         <View style={styles.denseSourceGroup}>
           {sourceBadge === 'Remote' ? <Icon name="cloud" size={14} color={colors.textMuted} accessibilityLabel="Remote model" />
@@ -137,7 +142,7 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
             <MaterialIcon
               name="verified"
               size={12}
-              color={colors.primary}
+              color={colors.textMuted}
               accessibilityLabel={credibilitySource === 'official' ? 'Official' : 'Verified'}
             />
           )}
@@ -150,10 +155,13 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
       {!!description && (
         <Text style={styles.denseDescription} numberOfLines={1}>{description}</Text>
       )}
-      {facts.length > 0 && (
-        <Text style={styles.denseMeta} numberOfLines={2} testID={factsTestID}>{facts.join(' · ')}</Text>
-      )}
-      <CapabilityBadges capabilities={capabilities} isVisionModel={isVisionModel} />
+      {/* Facts and what it can do share one line, so a row is three short lines, not four. */}
+      <View style={styles.denseMetaRow}>
+        {facts.length > 0 && (
+          <Text style={styles.denseMeta} numberOfLines={1} testID={factsTestID}>{facts.join(' · ')}</Text>
+        )}
+        <CapabilityBadges capabilities={capabilities} isVisionModel={isVisionModel} />
+      </View>
     </>
   );
 };
@@ -173,30 +181,40 @@ export function speedHint(capabilities?: ModelCardCapabilities): string | undefi
   return speedDescriptions(capabilities).join('. ') || undefined;
 }
 
-/** The badge row: what makes a model fast for its size first, then what it can do. */
+/** The badge row: what makes a model fast for its size first, then what it can do. Each badge names
+ *  itself in a word: an eye, a wrench and a bolt alone meant nothing to a new user. One tone, no
+ *  colour-coding (brand: emerald is the only accent). */
 const CapabilityBadges: React.FC<{ capabilities?: ModelCardCapabilities; isVisionModel: boolean }> = ({ capabilities, isVisionModel }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const vision = capabilities?.vision || isVisionModel;
   if (!vision && !capabilities?.tools && !capabilities?.thinking && !capabilities?.moeActiveB && !capabilities?.mtp) return null;
+  // Words while they fit; with three or more badges the row keeps one line by showing the icons alone,
+  // each still named for screen readers (hand test 90: "Thin" and "Tools ·" were cut off at the edge).
+  const count = [vision, capabilities?.tools, capabilities?.thinking, capabilities?.moeActiveB, capabilities?.mtp]
+    .filter(Boolean).length;
+  const words = count < 3;
   return (
     <View style={styles.capabilityRow}>
       {!!capabilities?.moeActiveB && <View style={styles.capabilityBadge} accessibilityLabel={speedDescriptions({ moeActiveB: capabilities.moeActiveB })[0]}>
-        <Icon name="layers" size={13} color={colors.primary} />
-        <Text style={styles.capabilityText}>{`MoE ${capabilities.moeActiveB}B`}</Text>
+        <Icon name="layers" size={13} color={colors.textSecondary} />
+        {words && <Text style={styles.capabilityText}>{`MoE ${capabilities.moeActiveB}B`}</Text>}
       </View>}
       {capabilities?.mtp && <View style={styles.capabilityBadge} accessibilityLabel={speedDescriptions({ mtp: true })[0]}>
-        <Icon name="fast-forward" size={13} color={colors.primary} />
-        <Text style={styles.capabilityText}>MTP</Text>
+        <Icon name="fast-forward" size={13} color={colors.textSecondary} />
+        {words && <Text style={styles.capabilityText}>MTP</Text>}
       </View>}
       {vision && <View style={styles.capabilityBadge} accessibilityLabel="Vision">
-        <Icon name="eye" size={13} color={colors.info} />
+        <Icon name="eye" size={13} color={colors.textSecondary} />
+        {words && <Text style={styles.capabilityText}>Sees images</Text>}
       </View>}
       {capabilities?.tools && <View style={styles.capabilityBadge} accessibilityLabel={capabilities.predicted ? 'Tool calling likely' : 'Tool calling'}>
-        <Icon name="tool" size={13} color={colors.warning} />
+        <Icon name="tool" size={13} color={colors.textSecondary} />
+        {words && <Text style={styles.capabilityText}>Tools</Text>}
       </View>}
       {capabilities?.thinking && <View style={styles.capabilityBadge} accessibilityLabel={capabilities.predicted ? 'Thinking likely' : 'Thinking'}>
-        <Icon name="zap" size={13} color={colors.primary} />
+        <Icon name="zap" size={13} color={colors.textSecondary} />
+        {words && <Text style={styles.capabilityText}>Thinks</Text>}
       </View>}
     </View>
   );
@@ -251,7 +269,7 @@ export const StandardModelCardContent: React.FC<StandardModelCardContentProps> =
         </View>}
         {credibility?.source === 'offgrid' && <MadeByOffGrid />}
         {credibilityInfo && (credibility?.source === 'official' || credibility?.source === 'verified-quantizer') && (
-          <MaterialIcon name="verified" size={14} color={colors.primary} accessibilityLabel={credibilityInfo.label} />
+          <MaterialIcon name="verified" size={14} color={colors.textMuted} accessibilityLabel={credibilityInfo.label} />
         )}
         {credibilityInfo && credibility?.source === 'lmstudio' && (
           <View style={[styles.credibilityBadge, { backgroundColor: `${credibilityInfo.color}25` }]}>
@@ -265,7 +283,7 @@ export const StandardModelCardContent: React.FC<StandardModelCardContentProps> =
         )}
         {isActive && (
           <View style={styles.activeBadge}>
-            <Text style={styles.activeBadgeText}>Active</Text>
+            <Text style={styles.activeBadgeText}>In use</Text>
           </View>
         )}
         {recommended && <MaterialIcon name="whatshot" size={14} color={colors.trending} accessibilityLabel="Recommended" />}
@@ -418,12 +436,19 @@ function ActionButton({ icon, color, haptic, onPress, disabled, testID, accessib
   );
 }
 
-function DownloadedActions({ isActive, testID, colors, styles, onSelect, onDelete, onRepairVision, isRepairingVision }: Readonly<{
-  isActive?: boolean; testID?: string; colors: ThemeColors; styles: any;
+function DownloadedActions({ modelName, isActive, testID, colors, styles, onSelect, onDelete, onRepairVision, isRepairingVision }: Readonly<{
+  modelName?: string; isActive?: boolean; testID?: string; colors: ThemeColors; styles: any;
   onSelect?: () => void; onDelete?: () => void; onRepairVision?: () => void; isRepairingVision?: boolean;
 }>) {
   const tid = (s: string) => testID ? `${testID}-${s}` : undefined;
-  if (!onSelect && !onDelete && !onRepairVision) return <Icon name="check-circle" size={16} color={colors.primary} testID={tid('downloaded')} />;
+  // Downloaded is a fact, said in words: a tick beside the verified mark read as two checks on one
+  // row (screen review). Emerald stays for "In use" (one accent).
+  // In use or On phone, said in the one place at the row's end so the two line up (hand test 76).
+  if (!onSelect && !onDelete && !onRepairVision) {
+    return isActive
+      ? <Text style={styles.denseInUse} testID="model-in-use">In use</Text>
+      : <Text style={styles.downloadedLabel} testID={tid('downloaded')}>On phone</Text>;
+  }
   return (
     <>
       {isRepairingVision ? (
@@ -431,12 +456,13 @@ function DownloadedActions({ isActive, testID, colors, styles, onSelect, onDelet
           <LoadingDots color={colors.warning} />
         </View>
       ) : (
-        onRepairVision && <ActionButton icon="tool" color={colors.warning} haptic="impactLight" onPress={onRepairVision} testID={tid('repair-vision')} styles={styles} />
+        onRepairVision && <ActionButton icon="tool" color={colors.warning} haptic="impactLight" onPress={onRepairVision} testID={tid('repair-vision')} accessibilityLabel={modelName ? `Repair image support for ${modelName}` : 'Repair image support'} styles={styles} />
       )}
       {/* A radio: the model in use shows a check; any other shows an empty circle that picks it. */}
-      {isActive && onSelect && <View style={styles.iconButton} accessibilityLabel="In use" testID={tid('in-use')}><Icon name="check-circle" size={16} color={colors.primary} /></View>}
-      {!isActive && onSelect && <ActionButton icon="circle" color={colors.textMuted} haptic="selection" onPress={onSelect} testID={tid('select')} accessibilityLabel="Use this model" styles={styles} />}
-      {onDelete && <ActionButton icon="trash-2" color={colors.error} haptic="notificationWarning" onPress={onDelete} testID={tid('delete') ?? 'delete-model-button'} accessibilityLabel="Delete model" styles={styles} />}
+      {/* "In use" in words, as every other Models row says it (hand tests 76, 93); not a second mark. */}
+      {isActive && onSelect && <Text style={styles.denseInUse} testID={tid('in-use')}>In use</Text>}
+      {!isActive && onSelect && <ActionButton icon="circle" color={colors.textMuted} haptic="selection" onPress={onSelect} testID={tid('select')} accessibilityLabel={modelName ? `Use ${modelName}` : 'Use this model'} styles={styles} />}
+      {onDelete && <ActionButton icon="trash-2" color={colors.textMuted} haptic="notificationWarning" onPress={onDelete} testID={tid('delete') ?? 'delete-model-button'} accessibilityLabel={modelName ? `Delete ${modelName}` : 'Delete model'} styles={styles} />}
     </>
   );
 }
@@ -451,16 +477,16 @@ export const ModelCardActions: React.FC<ModelCardActionsProps> = ({
 
   if (isDownloading || isQueued || isPaused) {
     return <>
-      {isPaused && onResume && <ActionButton icon="play" color={colors.primary} haptic="impactLight" onPress={onResume} testID={tid('resume')} accessibilityLabel="Resume download" styles={styles} />}
-      {isDownloading && onPause && <ActionButton icon="pause" color={colors.primary} haptic="impactLight" onPress={onPause} testID={tid('pause')} accessibilityLabel="Pause download" styles={styles} />}
-      {onCancel && <ActionButton icon="x" color={colors.error} haptic="notificationWarning" onPress={onCancel} testID={tid('cancel')} accessibilityLabel="Cancel download" styles={styles} />}
+      {isPaused && onResume && <ActionButton icon="play" color={colors.textSecondary} haptic="impactLight" onPress={onResume} testID={tid('resume')} accessibilityLabel="Resume download" styles={styles} />}
+      {isDownloading && onPause && <ActionButton icon="pause" color={colors.textSecondary} haptic="impactLight" onPress={onPause} testID={tid('pause')} accessibilityLabel="Pause download" styles={styles} />}
+      {onCancel && <ActionButton icon="x" color={colors.textMuted} haptic="notificationWarning" onPress={onCancel} testID={tid('cancel')} accessibilityLabel="Cancel download" styles={styles} />}
     </>;
   }
   if (!isDownloaded && onDownload) {
-    return <ActionButton icon="download" color={colors.primary} haptic="impactLight" onPress={onDownload} disabled={!isCompatible} testID={tid('download')} accessibilityLabel={modelName ? `Download ${modelName}` : 'Download model'} styles={styles} />;
+    return <ActionButton icon="download" color={colors.textSecondary} haptic="impactLight" onPress={onDownload} disabled={!isCompatible} testID={tid('download')} accessibilityLabel={modelName ? `Download ${modelName}` : 'Download model'} styles={styles} />;
   }
   if (isDownloaded) {
-    return <DownloadedActions isActive={isActive} testID={testID} colors={colors} styles={styles} onSelect={onSelect} onDelete={onDelete} onRepairVision={onRepairVision} isRepairingVision={isRepairingVision} />;
+    return <DownloadedActions modelName={modelName} isActive={isActive} testID={testID} colors={colors} styles={styles} onSelect={onSelect} onDelete={onDelete} onRepairVision={onRepairVision} isRepairingVision={isRepairingVision} />;
   }
   return null;
 };

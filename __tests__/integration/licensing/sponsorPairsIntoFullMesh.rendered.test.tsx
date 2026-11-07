@@ -41,7 +41,7 @@ const NEW_IPAD = { id: 'new-ipad', name: 'New iPad', platform: 'ios' };
 async function openProScreen(app: App) {
   const { view, rtl } = app;
   rtl.fireEvent.press(view.getByTestId('settings-tab'));
-  rtl.fireEvent.press(await view.findByText('Off Grid AI PRO'));
+  rtl.fireEvent.press(await view.findByText('Off Grid AI Pro'));
   await view.findByText('Off Grid AI Pro');
 }
 

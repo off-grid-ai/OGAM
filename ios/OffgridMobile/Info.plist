@@ -84,6 +84,13 @@
 	<true/>
 	<key>UIAppFonts</key>
 	<array>
+		<string>Geist-UltraLight.ttf</string>
+		<string>Geist-Light.ttf</string>
+		<string>Geist-Regular.ttf</string>
+		<string>Geist-Medium.ttf</string>
+		<string>GeistMono-Light.ttf</string>
+		<string>GeistMono-Regular.ttf</string>
+		<string>GeistMono-Medium.ttf</string>
 		<string>Feather.ttf</string>
 		<string>MaterialIcons.ttf</string>
 		<string>MaterialCommunityIcons.ttf</string>

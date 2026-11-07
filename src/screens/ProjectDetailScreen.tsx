@@ -3,8 +3,8 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, FlatList } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { AliveScreen } from '../components/AliveScreen';
+import { useNavigation, useRoute, RouteProp, useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import Icon from 'react-native-vector-icons/Feather';
@@ -21,13 +21,13 @@ import { createStyles } from './ProjectDetailScreen.styles';
 import { useChatStore, useProjectStore, useAppStore, useRemoteServerStore } from '../stores';
 import { Conversation } from '../types';
 import { RootStackParamList } from '../navigation/types';
-import { KnowledgeBaseSection } from './ProjectDetailKnowledgeBaseSection';
-import { openDocumentPage } from '../components/ChatDocumentsSheet';
+import { SectionLabel } from '../components/SectionLabel';
+import { useProjectDocumentCounts } from '../hooks/useProjectDocumentCounts';
 import { formatWhen } from '../utils/localTime';
 import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
-import { PROJECT_DELETE_FALLBACK_REASON } from '../stores/projectDeleteOutcome';
 import { byRecentActivity } from '../utils/conversationOrdering';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
+import { chatTitle } from '../utils/chatTitle';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProjectDetail'>;
@@ -38,15 +38,13 @@ export const ProjectDetailScreen: React.FC = () => {
   const route = useRoute<RouteProps>();
   const { projectId } = route.params;
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
-  // People open a project to chat, so Chats comes first; the knowledge base is one tap away.
-  const [tab, setTab] = useState<'chats' | 'knowledge'>('chats');
-  const [kbAddRequest, setKbAddRequest] = useState(0);
-  const [kbCount, setKbCount] = useState(0);
+  const isFocused = useIsFocused();
+  const projectIds = useMemo(() => [projectId], [projectId]);
+  const fileCount = useProjectDocumentCounts(projectIds, isFocused)[projectId] ?? 0;
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
   const project = useProjectStore(state => state.projects.find(p => p.id === projectId));
-  const deleteProject = useProjectStore(state => state.deleteProject);
   const conversations = useChatStore(state => state.conversations);
   const deleteConversation = useChatStore(state => state.deleteConversation);
   const setActiveConversation = useChatStore(state => state.setActiveConversation);
@@ -98,35 +96,6 @@ export const ProjectDetailScreen: React.FC = () => {
     }
   };
 
-  const handleDeleteProject = () => {
-    setAlertState(
-      showAlert(
-        'Delete Project',
-        `Delete "${project?.name}"? This will not delete the chats associated with this project.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: async () => {
-              const outcome = await deleteProject(projectId);
-              if (outcome.ok) {
-                navigation.goBack();
-                return;
-              }
-              setAlertState(
-                showAlert(
-                  'Project Not Deleted',
-                  outcome.reason || PROJECT_DELETE_FALLBACK_REASON,
-                ),
-              );
-            },
-          },
-        ],
-      ),
-    );
-  };
-
   const handleDeleteChat = (conversation: Conversation) => {
     setAlertState(
       showAlert('Delete Chat', `Delete "${conversation.title}"?`, [
@@ -171,23 +140,20 @@ export const ProjectDetailScreen: React.FC = () => {
           style={styles.chatItem}
           onPress={() => handleChatPress(item)}
         >
-          <View style={styles.chatIcon}>
-            <Icon name="message-circle" size={14} color={colors.textMuted} />
-          </View>
+          {/* Title, date, preview: as the Chats list. A chat glyph on every row and a chevron under
+              the date said nothing the row did not (hand test 33). */}
           <View style={styles.chatContent}>
             <View style={styles.chatHeader}>
               <Text style={styles.chatTitle} numberOfLines={1}>
-                {item.title}
+                {chatTitle(item.title)}
               </Text>
               <Text style={styles.chatDate}>{formatDate(item.updatedAt)}</Text>
             </View>
-            {preview ? (
-              <Text style={styles.chatPreview} numberOfLines={1}>
-                {preview}
-              </Text>
-            ) : null}
+            {/* Always the second line, empty or not, so every row is the same height. */}
+            <Text style={styles.chatPreview} numberOfLines={1}>
+              {preview || ' '}
+            </Text>
           </View>
-          <Icon name="chevron-right" size={14} color={colors.textMuted} />
         </TouchableOpacity>
       </Swipeable>
     );
@@ -195,20 +161,24 @@ export const ProjectDetailScreen: React.FC = () => {
 
   if (!project) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <AliveScreen style={styles.container}>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Project not found</Text>
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text style={styles.errorLink}>Go back</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </AliveScreen>
     );
   }
 
+  const instructionsLine = project.systemPrompt?.trim().split('\n')[0] ?? '';
+  const hasPurpose = !!project.description?.trim()
+    && project.description.trim().toLowerCase() !== project.name.trim().toLowerCase();
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']} testID="project-detail-screen">
-      {/* Header */}
+    <AliveScreen style={styles.container} testID="project-detail-screen">
+      {/* Header: back, the name, edit. */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -219,11 +189,6 @@ export const ProjectDetailScreen: React.FC = () => {
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <View style={styles.projectIcon}>
-            <Text style={styles.projectIconText}>
-              {project.name.charAt(0).toUpperCase()}
-            </Text>
-          </View>
           <Text style={styles.headerTitle} numberOfLines={1}>
             {project.name}
           </Text>
@@ -231,130 +196,93 @@ export const ProjectDetailScreen: React.FC = () => {
         <TouchableOpacity
           onPress={() => navigation.navigate('ProjectEdit', { projectId })}
           style={styles.editButton}
+          accessibilityRole="button"
+          accessibilityLabel="Edit project"
         >
           <Icon name="edit-2" size={16} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.tabRow}>
-        <View style={styles.tabs} accessibilityRole="tablist">
-          {(['chats', 'knowledge'] as const).map(id => (
-            <TouchableOpacity
-              key={id}
-              onPress={() => setTab(id)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: tab === id }}
-              testID={id === 'chats' ? 'project-tab-chats' : 'project-tab-knowledge'}
-              style={styles.tab}
-            >
-              <Text style={[styles.tabText, tab === id && styles.tabTextActive]}>
-                {id === 'chats' ? 'Chats' : 'Knowledge base'}{' '}
-                <Text
-                  style={styles.tabCount}
-                  testID={id === 'chats' ? 'project-chats-count' : 'project-knowledge-base-count'}
-                  accessibilityLabel={
-                    id === 'chats'
-                      ? `${projectChats.length} chats`
-                      : `Knowledge Base has ${kbCount} documents`
-                  }
-                >
-                  {id === 'chats' ? projectChats.length : kbCount}
-                </Text>
-              </Text>
-              <View style={[styles.tabIndicator, tab !== id && styles.tabIndicatorOff]} />
-            </TouchableOpacity>
-          ))}
-        </View>
-        {/* One add for the open tab: a new chat, or a file or text for the knowledge base. */}
-        <TouchableOpacity
-          onPress={tab === 'chats' ? handleNewChat : () => setKbAddRequest(n => n + 1)}
-          disabled={tab === 'chats' && !hasModels}
-          accessibilityRole="button"
-          accessibilityLabel={tab === 'chats' ? 'New chat' : 'Add to knowledge base'}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={styles.tabAdd}
-          testID={tab === 'chats' ? 'project-new-chat' : 'kb-add'}
-        >
-          <Icon
-            name="plus"
-            size={20}
-            color={tab === 'chats' && !hasModels ? colors.textDisabled : colors.primary}
+      {/* What it is for, beside the page's one main action, as on Home. */}
+      <View style={styles.purposeRow}>
+        <Text style={styles.projectPurpose} numberOfLines={2}>
+          {hasPurpose ? project.description.trim() : 'Chats here share these instructions and files.'}
+        </Text>
+        {hasModels ? (
+          <Button
+            title="New chat"
+            variant="hero"
+            size="small"
+            icon={<Icon name="plus" size={16} color={colors.onHero} />}
+            onPress={handleNewChat}
+            style={styles.newChatButton}
+            testID="project-new-chat"
           />
+        ) : null}
+      </View>
+
+      {/* What makes this a project: its instructions and its files, in view rather than behind a tab
+          (screen review). Each row opens its own screen. */}
+      <SectionLabel title="What it knows" style={styles.chatsLabel} />
+      <View style={styles.knowsGroup}>
+        <TouchableOpacity
+          style={styles.knowsRow}
+          onPress={() => navigation.navigate('ProjectEdit', { projectId })}
+          accessibilityRole="button"
+          accessibilityLabel={instructionsLine ? `Instructions: ${instructionsLine}` : 'Add instructions'}
+          testID="project-instructions"
+        >
+          <Icon name="align-left" size={16} color={colors.textSecondary} />
+          <View style={styles.knowsText}>
+            <Text style={styles.knowsTitle}>{instructionsLine ? 'Instructions' : 'Add instructions'}</Text>
+            <Text style={styles.knowsDesc} numberOfLines={1}>
+              {instructionsLine || 'Tell every chat here how to answer.'}
+            </Text>
+          </View>
+          <Icon name="chevron-right" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.knowsRow, styles.knowsRowDivided]}
+          onPress={() => navigation.navigate('KnowledgeBase', { projectId })}
+          accessibilityRole="button"
+          accessibilityLabel={fileCount === 0 ? 'Add a file' : fileCount === 1 ? '1 file' : `${fileCount} files`}
+          testID="project-files"
+        >
+          <Icon name="file-text" size={16} color={colors.textSecondary} />
+          <View style={styles.knowsText}>
+            <Text style={styles.knowsTitle} testID="project-knowledge-base-count">
+              {fileCount === 0 ? 'Add a file' : fileCount === 1 ? '1 file' : `${fileCount} files`}
+            </Text>
+            <Text style={styles.knowsDesc} numberOfLines={1}>
+              {fileCount === 0 ? 'Chats here then answer from it.' : fileCount === 1 ? 'Chats here answer from it.' : 'Chats here answer from these.'}
+            </Text>
+          </View>
+          <Icon name="chevron-right" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.sectionsContainer}>
-        {/* Both stay mounted so the knowledge base's count shows on its tab before it is opened. */}
-        <View style={[styles.sectionContent, tab !== 'knowledge' && styles.hidden]}>
-          <KnowledgeBaseSection
-            projectId={projectId}
-            colors={colors}
-            styles={styles}
-            setAlertState={setAlertState}
-            inTab
-            addRequest={kbAddRequest}
-            onCountChange={setKbCount}
-            onNavigateToKb={() =>
-              navigation.navigate('KnowledgeBase', { projectId })
-            }
-            onDocumentPress={doc =>
-              openDocumentPage(navigation, {
-                documentId: doc.document_id,
-                name: doc.name,
-              })
-            }
+      <SectionLabel title={`Chats · ${projectChats.length}`} style={styles.chatsLabel} testID="project-chats-count" />
+      {projectChats.length === 0 ? (
+        // Under its label, right below the card: centred in the page it floated 330 pt away (hand test 74).
+        <Text style={styles.emptyChatsText}>Start a chat. It follows this project's instructions.</Text>
+      ) : (
+        <>
+          <FlatList
+            {...SCROLL_DEPTH_PROPS}
+            style={styles.sectionList}
+            // The chats on one surface with hairlines, as on Chats (hand test 61: bare rows on the field).
+            contentContainerStyle={styles.chatGroup}
+            data={projectChats}
+            keyExtractor={item => item.id}
+            renderItem={({ item }) => (
+              <View style={styles.chatItemWrapper}>{renderChat({ item })}</View>
+            )}
+            {...LIST_CLIPPING_PROPS}
           />
-        </View>
+        </>
+      )}
 
-        <View style={[styles.sectionContent, tab !== 'chats' && styles.hidden]}>
-          {projectChats.length === 0 ? (
-            <View style={styles.sectionList}>
-              <View style={styles.emptyState}>
-                <Icon
-                  name="message-circle"
-                  size={24}
-                  color={colors.textMuted}
-                />
-                <Text style={styles.emptyStateText}>No chats yet</Text>
-                {hasModels && (
-                  <Button
-                    title="Start a Chat"
-                    variant="primary"
-                    size="small"
-                    onPress={handleNewChat}
-                    style={styles.emptyStateButton}
-                    testID="project-start-chat"
-                  />
-                )}
-              </View>
-            </View>
-          ) : (
-            <FlatList
-              {...SCROLL_DEPTH_PROPS}
-              style={styles.sectionList}
-              data={projectChats}
-              keyExtractor={item => item.id}
-              renderItem={({ item }) => (
-                <View style={styles.chatItemWrapper}>{renderChat({ item })}</View>
-              )}
-              {...LIST_CLIPPING_PROPS}
-            />
-          )}
-        </View>
-      </View>
-
-      {/* Delete Project Button */}
-      <View style={styles.footer}>
-        <Button
-          title="Delete Project"
-          variant="ghost"
-          size="medium"
-          onPress={handleDeleteProject}
-          icon={<Icon name="trash-2" size={16} color={colors.error} />}
-          textStyle={{ color: colors.error }}
-        />
-      </View>
       <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };

@@ -28,6 +28,7 @@ export type RootStackParamList = {
   RemoteServerEditor: { serverId?: string; needsKey?: boolean } | undefined;
   DeviceInfo: undefined;
   StorageSettings: undefined;
+  SearchModel: undefined;
   SecuritySettings: undefined;
   EngineUpdates: undefined;
   Sync: undefined;
@@ -35,6 +36,8 @@ export type RootStackParamList = {
   // Already in RootStack
   DownloadManager: undefined;
   Gallery: { conversationId?: string } | undefined;
+  GalleryImage: { imageId: string };
+  GalleryVideo: { videoId: string };
   ProDetail: undefined;
   About: undefined;
   Tools: undefined;

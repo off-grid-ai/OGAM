@@ -73,7 +73,7 @@ describe('developer tooling release gate (rendered, real App)', () => {
     expect(view.queryByText('Load demo data')).toBeNull();
     expect(view.queryByLabelText('Show sync status bar')).toBeNull();
     expect(view.queryByText('Show sync status bar')).toBeNull();
-    expect(view.queryByText('Reset Onboarding')).toBeNull();
+    expect(view.queryByText('Reset onboarding')).toBeNull();
     expect(view.queryByTestId('dev-sync-strip')).toBeNull();
 
     view.unmount();
@@ -229,16 +229,18 @@ describe('Load demo data in a developer build (rendered, real App)', () => {
     rtl.fireEvent.press(view.getByTestId('projects-tab'));
     rtl.fireEvent.press(await view.findByText('Acme Corp pilot'));
     await view.findByTestId('project-detail-screen');
-    expect(await view.findByText(String(chats))).toBeTruthy();
-    await rtl.waitFor(() => expect(view.getByTestId('project-knowledge-base-count')).toHaveTextContent(String(documents)));
-    // The project opens on Chats; its documents are behind the Knowledge base tab.
-    rtl.fireEvent.press(view.getByTestId('project-tab-knowledge'));
-    expect(view.getByLabelText('Knowledge document Promises to Sam.txt')).toBeTruthy();
-    expect(view.getByLabelText('Knowledge document Acme pilot brief.txt')).toBeTruthy();
-    expect(view.getByLabelText('Knowledge document Acme_rollout_v3.pdf')).toBeTruthy();
+    await rtl.waitFor(() => expect(view.getByTestId('project-chats-count')).toHaveTextContent(`Chats · ${chats}`));
+    await rtl.waitFor(() => expect(view.getByTestId('project-knowledge-base-count')).toHaveTextContent(`${documents} files`));
+    // Its files open on their own screen from the page's files row.
+    rtl.fireEvent.press(view.getByTestId('project-files'));
+    await view.findByTestId('knowledge-base-screen');
+    await rtl.waitFor(() => expect(view.getByLabelText('File Promises to Sam.txt')).toBeTruthy());
+    expect(view.getByLabelText('File Acme pilot brief.txt')).toBeTruthy();
+    expect(view.getByLabelText('File Acme_rollout_v3.pdf')).toBeTruthy();
     // Every document reached the paired Mac: none says it could not sync.
     expect(view.queryByText(/Couldn't sync to/)).toBeNull();
-    rtl.fireEvent.press(view.getByTestId('project-tab-chats'));
+    rtl.fireEvent.press(view.getByTestId('knowledge-base-back'));
+    await rtl.waitFor(() => expect(view.queryByTestId('knowledge-base-screen')).toBeNull());
     // The chats are the demo's own conversations, newest first.
     expect(view.getByText('Pilot email draft ready')).toBeTruthy();
     expect(view.getByText('Pilot seat-days result')).toBeTruthy();
@@ -257,10 +259,10 @@ describe('Load demo data in a developer build (rendered, real App)', () => {
     await rtl.waitFor(() => expect(titleColour('Pilot email draft ready')).toBe(getTheme('dark').colors.text));
     expect(titleColour('Pilot seat-days result')).toBe(getTheme('dark').colors.text);
     expect(getTheme('dark').colors.text).not.toBe(getTheme('light').colors.text);
-    // So does the New Project header.
+    // So does the New project header.
     back();
     rtl.fireEvent.press(await view.findByTestId('new-project-button'));
-    await rtl.waitFor(() => expect(titleColour('New Project')).toBe(getTheme('dark').colors.text));
+    await rtl.waitFor(() => expect(titleColour('New project')).toBe(getTheme('dark').colors.text));
     rtl.fireEvent.press(view.getByTestId('project-edit-cancel'));
 
     // Two Desktop transfers, listed under the paired Mac.

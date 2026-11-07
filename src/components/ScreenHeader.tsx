@@ -1,8 +1,8 @@
 import React, { type ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { Text, View, StyleSheet } from 'react-native';
 import { TouchableOpacity } from './Touchable';
 import Icon from 'react-native-vector-icons/Feather';
-import { SPACING, TYPOGRAPHY } from '../constants';
+import { FONTS, SPACING, TYPOGRAPHY } from '../constants';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 
@@ -13,6 +13,10 @@ interface ScreenHeaderProps {
   /** A status or action at the trailing edge, e.g. the Pro badge. */
   right?: ReactNode;
   testID?: string;
+  /** Kept for screens whose Back already had a test id before they moved to this header. */
+  backTestID?: string;
+  /** A second line under the title, e.g. a file's size. */
+  subtitle?: string;
   variant?: 'screen' | 'tab';
 }
 
@@ -24,14 +28,16 @@ interface ScreenHeaderProps {
  * Sync lost the shadow and used a chevron in a 44px box, the Pro screen had no header at all - and
  * "make it match" meant editing each one. Now it means editing this.
  *
- * The touch target comes from hitSlop rather than padding, so the arrow can sit beside the title at
- * the standard inset while staying comfortably tappable.
+ * The back target is a 44 pt frame pulled back by negative margins, so the arrow sits beside the
+ * title at the standard inset while the frame a thumb and a screen reader measure stays 44 pt.
  */
 export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   title,
   onBack,
   right,
   testID,
+  backTestID,
+  subtitle,
   variant = 'screen',
 }) => {
   const { colors } = useTheme();
@@ -45,41 +51,56 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
       {onBack ? (
         <TouchableOpacity
           style={styles.backButton}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           onPress={onBack}
           accessibilityRole="button"
           accessibilityLabel="Back"
+          testID={backTestID}
         >
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
       ) : null}
-      <Text style={styles.title} numberOfLines={1}>
-        {title}
-      </Text>
+      {subtitle ? (
+        <View style={styles.titleBlock}>
+          <Text style={styles.title} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={styles.subtitle} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        </View>
+      ) : (
+        <Text style={styles.title} numberOfLines={1}>
+          {title}
+        </Text>
+      )}
       {right}
     </View>
   );
 };
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+  // The header sits on the living field like the rest of the screen: no slab, no shadow, a hairline
+  // under it, and the screen's 24px gutter (brand Mobile profile).
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: SPACING.md,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
     minHeight: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-    ...shadows.small,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
     zIndex: 1,
   },
   tabHeader: {
-    paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     minHeight: 52,
+    borderBottomWidth: 0,
   },
-  backButton: { padding: SPACING.xs },
+  // A 44 pt frame pulled back 8 pt, so the arrow still sits beside the title and the header keeps
+  // its height. A screen reader measures the frame, not hitSlop (hand test 44: 28 pt).
+  backButton: { width: 44, height: 44, margin: -8, alignItems: 'center' as const, justifyContent: 'center' as const },
   title: { ...TYPOGRAPHY.h2, color: colors.text, flex: 1 },
+  titleBlock: { flex: 1 },
+  subtitle: { ...TYPOGRAPHY.meta, fontFamily: FONTS.mono, color: colors.textMuted },
 });

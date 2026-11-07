@@ -8,7 +8,6 @@ import {
 import { TouchableOpacity } from '../../components/Touchable';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../../components';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -31,6 +30,7 @@ import { ProIncludedSection } from './ProIncludedSection';
 import { ProUnlockModal } from './ProUnlockModal';
 import type { RootStackParamList } from '../../navigation/types';
 import { proPaywallViewed, proPurchased } from '../../services/analytics/analytics';
+import { AliveScreen } from '../../components/AliveScreen';
 
 // Off Grid AI Pro is the ambient intelligence layer across desktop + phone, not a
 // mobile feature list. These pillars mirror the early-access page framing.
@@ -109,7 +109,7 @@ export const ProDetailScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <AliveScreen style={styles.container} edges={['top', 'bottom']}>
       {/* The app's one header, like every other screen: a back arrow, the title, and this device's
           entitlement state where a screen's actions go. */}
       <ScreenHeader
@@ -207,7 +207,7 @@ export const ProDetailScreen: React.FC = () => {
               {PILLARS.map(p => (
                 <View key={p.title} style={styles.pillarRow}>
                   <View style={styles.pillarIconWrap}>
-                    <Icon name={p.icon} size={18} color={colors.primary} />
+                    <Icon name={p.icon} size={18} color={colors.textSecondary} />
                   </View>
                   <View style={styles.pillarText}>
                     <Text style={styles.pillarTitle}>{p.title}</Text>
@@ -258,7 +258,7 @@ export const ProDetailScreen: React.FC = () => {
         onClose={() => setVerifyModalVisible(false)}
         onUnlocked={handleUnlocked}
       />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 
@@ -316,15 +316,11 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: SPACING.xs,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.primary,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 8,
+    // A status, not a button: a tick and words, no outline to tap at.
+    paddingVertical: SPACING.xs,
   },
   proActiveBadgeText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
-  proInactiveBadge: { borderColor: colors.border },
+  proInactiveBadge: {},
   proInactiveBadgeText: { color: colors.textMuted },
 
   // Hero

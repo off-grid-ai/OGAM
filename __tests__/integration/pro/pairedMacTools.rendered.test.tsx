@@ -63,13 +63,13 @@ describe('paired Mac tools in Pro settings', () => {
     );
 
     expect(ui.getAllByText('Mac tools')).toHaveLength(1);
-    expect(ui.getByText('0/3 tools enabled')).toBeTruthy();
-    expect(ui.getByText('Edit Tools')).toBeTruthy();
-    expect(ui.queryByText('3/3 tools')).toBeNull();
-    expect(ui.queryByText('2/2 tools')).toBeNull();
-    fireEvent.press(ui.getByText('Edit Tools'));
-    expect(await ui.findByText('web_use')).toBeTruthy();
-    expect(ui.getByText('calendar_list')).toBeTruthy();
+    expect(ui.getByText('0 of 3 tools')).toBeTruthy();
+    // The Mac's routes do not also show as MCP server rows with their own tool counts.
+    expect(ui.queryAllByTestId(/^mcp-server-tool-count-/)).toHaveLength(0);
+    // The Desktop row opens its tools.
+    fireEvent.press(ui.getByLabelText(/ Desktop tools$/));
+    expect(await ui.findByText('Web use')).toBeTruthy();
+    expect(ui.getByText('Calendar list')).toBeTruthy();
     const { Switch } = require('react-native');
     const switches = ui.UNSAFE_getAllByType(Switch);
     expect(switches.map(item => item.props.value)).toEqual([true, false, false, false]);
@@ -96,9 +96,9 @@ describe('paired Mac tools in Pro settings', () => {
     );
 
     expect(ui.getAllByText('Mac tools')).toHaveLength(1);
-    expect(ui.getByText('0/2 tools enabled')).toBeTruthy();
+    expect(ui.getByText('0 of 2 tools')).toBeTruthy();
     expect(ui.queryByText(`sync://${macId}`)).toBeNull();
-    expect(ui.queryByText('2/2 tools')).toBeNull();
+    expect(ui.queryAllByTestId(/^mcp-server-tool-count-/)).toHaveLength(0);
     expect(ui.queryByText('http://mac.local/mcp')).toBeNull();
   });
 });

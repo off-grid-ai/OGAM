@@ -68,7 +68,7 @@ describe('ModelCard', () => {
         />
       );
       // Both the size caption and the percent render (full-width bar + left/right row).
-      expect(getByText('2.0 GB / 4.0 GB · Rate unavailable')).toBeTruthy();
+      expect(getByText('2.0 GB / 4.0 GB')).toBeTruthy();
       expect(getByText('50%')).toBeTruthy();
     });
 
@@ -277,7 +277,7 @@ describe('ModelCard', () => {
           downloadCount={2}
         />
       );
-      expect(getByText('1.5 GB / 10.0 GB · Rate unavailable · 2 downloads')).toBeTruthy();
+      expect(getByText('1.5 GB / 10.0 GB · 2 downloads')).toBeTruthy();
     });
 
     it('omits the "N downloads" note for a single download', () => {
@@ -291,7 +291,7 @@ describe('ModelCard', () => {
           downloadCount={1}
         />
       );
-      expect(getByText('2.0 GB / 4.0 GB · Rate unavailable')).toBeTruthy();
+      expect(getByText('2.0 GB / 4.0 GB')).toBeTruthy();
       expect(queryByText(/downloads/)).toBeNull();
     });
 
@@ -761,17 +761,35 @@ describe('ModelCard', () => {
       );
       // Active models should not show the select button
       const treeStr = JSON.stringify(toJSON());
-      expect(treeStr).toContain('Active'); // Active badge is shown instead
+      expect(treeStr).toContain('In use'); // the In use badge is shown instead
     });
 
-    it('shows downloaded check icon when no action handlers are provided', () => {
-      const { toJSON } = render(
+    it('says "On phone" when downloaded and no action handlers are provided', () => {
+      const { getByTestId } = render(
         <ModelCard
           model={baseModel}
           isDownloaded={true}
+          testID="card"
         />
       );
-      expect(JSON.stringify(toJSON())).toContain('check-circle');
+      expect(getByTestId('card-downloaded')).toHaveTextContent('On phone');
+    });
+
+    it('says "In use" where On phone sits, in the same Mono meta face, when the model is active and has no handlers', () => {
+      const { getByTestId, queryByTestId } = render(
+        <ModelCard
+          model={baseModel}
+          isDownloaded={true}
+          isActive={true}
+          testID="card"
+        />
+      );
+      const inUse = getByTestId('model-in-use');
+      expect(inUse).toHaveTextContent('In use');
+      expect(queryByTestId('card-downloaded')).toBeNull();
+      const { StyleSheet } = require('react-native');
+      const { FONTS } = require('../../../src/constants');
+      expect(StyleSheet.flatten(inUse.props.style).fontFamily).toBe(FONTS.mono);
     });
 
     it('shows repair spinner instead of repair button while repairing downloaded vision model', () => {
@@ -807,11 +825,11 @@ describe('ModelCard', () => {
   // Active State
   // ============================================================================
   describe('active state', () => {
-    it('shows Active badge when model is active', () => {
+    it('shows the In use badge when model is active', () => {
       const { getByText } = render(
         <ModelCard model={baseModel} isActive={true} />
       );
-      expect(getByText('Active')).toBeTruthy();
+      expect(getByText('In use')).toBeTruthy();
     });
 
     it('does not show Active badge when model is not active', () => {

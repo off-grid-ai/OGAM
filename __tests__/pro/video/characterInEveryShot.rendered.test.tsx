@@ -119,6 +119,7 @@ it('deleting a person asks first; Cancel keeps them, Delete removes them', async
   rtl.fireEvent.press(await view.findByTestId('home-gallery-card', {}, { timeout: 10_000 }));
   await view.findByTestId('gallery-screen');
   rtl.fireEvent.press(view.getByTestId('gallery-tab-videos'));
+  rtl.fireEvent.press(await view.findByTestId('gallery-open-video-library', {}, { timeout: 10_000 }));
   rtl.fireEvent.press(await view.findByLabelText('Character Leo', {}, { timeout: 10_000 }));
   const remove = await view.findByLabelText('Delete character', {}, { timeout: 10_000 });
 

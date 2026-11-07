@@ -135,7 +135,7 @@ describe('paired Desktop model names', () => {
       // The chat started with it.
       fireEvent.press(await waitFor(() => ui.getByTestId('new-chat-button'), RENDER_WAIT));
       await waitFor(
-        () => expect(ui.getByText(new RegExp(`begin chatting with ${CLEAN_NAME.replace('.', '\\.')}\\.`))).toBeTruthy(),
+        () => expect(ui.getByText(new RegExp(`Ask anything\\. ${CLEAN_NAME.replace('.', '\\.')} answers\\.`))).toBeTruthy(),
         RENDER_WAIT,
       );
       expectNoPath(ui);

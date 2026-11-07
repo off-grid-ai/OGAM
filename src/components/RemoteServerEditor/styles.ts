@@ -20,7 +20,8 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
       flex: 1,
     },
     content: {
-      paddingHorizontal: SPACING.lg,
+      // The 24 pt gutter every pushed screen uses; 16 put the fields almost at the glass edge.
+      paddingHorizontal: SPACING.xl,
       paddingVertical: SPACING.lg,
       paddingBottom: SPACING.xxl,
     },
@@ -30,8 +31,9 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
       ...TYPOGRAPHY.label,
       textTransform: 'uppercase' as const,
       color: colors.textMuted,
-      marginBottom: SPACING.xs,
-      marginTop: SPACING.lg,
+      marginBottom: SPACING.sm,
+      // Room above each label so it does not read as the end of the help text before it.
+      marginTop: SPACING.xl,
     },
     input: {
       ...TYPOGRAPHY.body,
@@ -66,17 +68,17 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
       marginTop: 1,
     },
     warningText: {
-      ...TYPOGRAPHY.meta,
+      ...TYPOGRAPHY.bodySmall,
       color: colors.error,
       flex: 1,
-      lineHeight: 16,
+      lineHeight: 18,
     },
 
     helperText: {
-      ...TYPOGRAPHY.meta,
+      ...TYPOGRAPHY.bodySmall,
       color: colors.textMuted,
-      marginTop: SPACING.xs,
-      lineHeight: 15,
+      marginTop: SPACING.sm,
+      lineHeight: 18,
     },
 
     buttonRow: {
@@ -134,7 +136,7 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
       ...TYPOGRAPHY.label,
       textTransform: 'uppercase' as const,
       color: colors.textMuted,
-      marginTop: SPACING.md,
+      marginTop: SPACING.xl,
       marginBottom: SPACING.xs,
     },
     notesInput: {

@@ -15,6 +15,9 @@ import { cancelSyntheticImageDownload } from '../../services/imageDownloadAction
 import { startImageModelDownload as downloadImageModel, type ImageDownloadDeps } from '../../services/imageModelDownloadOwner';
 import { resumeImageDownload } from './imageDownloadResume';
 
+/** How long an image model search may take before it gives up with a message. */
+export const SD_SEARCH_DEADLINE_MS = 15_000;
+
 export function useImageModels(setAlertState: (s: AlertState) => void) {
   const [availableHFModels, setAvailableHFModels] = useState<HFImageModel[]>([]);
   const [hfModelsLoading, setHfModelsLoading] = useState(false);
@@ -37,13 +40,21 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
     const query = imageSearchQuery.trim();
     if (!query) { setSDSearchLoading(false); return; }
     setSDSearchLoading(true);
+    // A search that never answers must not spin forever (hand test 19): it ends at a deadline with a line.
+    let timedOut = false;
+    const deadline = setTimeout(() => { timedOut = true; controller.abort(); }, SD_SEARCH_DEADLINE_MS);
     const timer = setTimeout(() => {
       searchSDImageModels(query, controller.signal)
         .then(models => { if (current) setSDSearchModels(models); })
-        .catch(error => { if (current) setSDSearchError(error.message ?? 'Image search failed. Try again.'); })
-        .finally(() => { if (current) setSDSearchLoading(false); });
+        .catch(error => {
+          if (!current) return;
+          setSDSearchError(timedOut
+            ? 'Search took too long. Check your connection and try again.'
+            : error.message ?? 'Image search failed. Try again.');
+        })
+        .finally(() => { clearTimeout(deadline); if (current) setSDSearchLoading(false); });
     }, 300);
-    return () => { current = false; controller.abort(); clearTimeout(timer); };
+    return () => { current = false; controller.abort(); clearTimeout(timer); clearTimeout(deadline); };
   }, [imageSearchQuery, sdSearchRevision]);
 
   const [imageRec, setImageRec] = useState<ImageModelRecommendation | null>(null);

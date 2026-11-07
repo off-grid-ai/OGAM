@@ -123,13 +123,13 @@ describe('Scan Network — alert matches the rendered list (device state-mismatc
 
     // Wait for the "Analyzing your device..." init to finish and the network section to render. With an
     // empty store the mount auto-check settles immediately, so "Scan Network" is pressable.
-    await waitFor(() => { expect(ui.queryByText('Scan Network')).not.toBeNull(); }, { timeout: 5000 });
+    await waitFor(() => { expect(ui.queryByText('Scan network')).not.toBeNull(); }, { timeout: 5000 });
 
     // Real gesture: tap "Scan Network". The real discoverLANServers finds the gateway and adds it; the
     // scan's own health check flaps (finds nothing reachable this instant); the servers-changed auto-check
     // then marks the gateway reachable so its row renders.
     await act(async () => {
-      fireEvent.press(ui.getByText('Scan Network'));
+      fireEvent.press(ui.getByText('Scan network'));
       await new Promise((r) => setTimeout(r, 0));
     });
 
@@ -146,9 +146,9 @@ describe('Scan Network — alert matches the rendered list (device state-mismatc
     installFetch({ serverReachable: false });
 
     const ui = render(<AdvancedSetupScreen navigation={navigation} />);
-    await waitFor(() => { expect(ui.queryByText('Network Models')).not.toBeNull(); }, { timeout: 5000 });
+    await waitFor(() => { expect(ui.queryByText('Network models')).not.toBeNull(); }, { timeout: 5000 });
 
-    fireEvent.press(ui.getByText('Scan Network'));
+    fireEvent.press(ui.getByText('Scan network'));
 
     // The helpful "No Servers Found" alert appears — and no server row exists.
     await waitFor(() => {

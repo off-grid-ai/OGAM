@@ -97,9 +97,9 @@ describe('BATCH7 new-conversation model selection (real app+chat stores)', () =>
     const convId = useChatStore.getState().createConversation('m1', undefined, 'proj-x');
     const conv = useChatStore.getState().conversations.find((c) => c.id === convId);
     // The only thing that scopes it to a project is projectId; title falls back
-    // to 'New Conversation' since none was passed.
+    // to 'New chat' since none was passed.
     expect(conv?.projectId).toBe('proj-x');
-    expect(conv?.title).toBe('New Conversation');
+    expect(conv?.title).toBe('New chat');
   });
 
   it('a non-project conversation carries no projectId (undefined, not a stray value)', () => {

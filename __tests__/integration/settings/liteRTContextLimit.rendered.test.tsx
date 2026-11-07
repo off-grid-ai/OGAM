@@ -3,8 +3,9 @@ import { createDownloadedModel } from '../../utils/factories';
 import { liteRTModelFile } from '../../utils/liteRTModelFile';
 
 it.each([
-  ['gemma-4-E2B-it.litertlm', 2588147712, 'chat'],
-  ['gemma-4-E4B-it.litertlm', 3659530240, 'settings'],
+  // Model settings, as the chat sheet's "Model settings" row opens it, and its Text section alone.
+  ['gemma-4-E2B-it.litertlm', 2588147712, 'model settings'],
+  ['gemma-4-E4B-it.litertlm', 3659530240, 'text section'],
 ])('allows 32000 tokens before loading %s (%s bytes) in %s', async (fileName, fileSize, surface) => {
   const boundary = installNativeBoundary({ fs: true });
   const React = require('react');
@@ -12,7 +13,7 @@ it.each([
   const { useAppStore } = require('../../../src/stores');
   await useAppStore.persist.rehydrate();
   const { liteRTService } = require('../../../src/services/litert');
-  const { GenerationSettingsModal } = require('../../../src/components/GenerationSettingsModal');
+  const { ModelSettingsScreen } = require('../../../src/screens/ModelSettingsScreen');
   const { TextGenerationSection } = require('../../../src/screens/ModelSettingsScreen/TextGenerationSection');
   const model = createDownloadedModel({
     id: `offgrid/litert-recommended/${fileName}`, engine: 'litert',
@@ -21,13 +22,13 @@ it.each([
   await boundary.fs!.module.writeFile(model.filePath!, liteRTModelFile([10, 2, 1, 2]).toString('base64'), 'base64');
   useAppStore.getState().setDownloadedModels([model]);
   useAppStore.getState().setActiveModelId(model.id);
-  const chat = surface === 'chat';
-  const screen = render(chat
-    ? React.createElement(GenerationSettingsModal, { visible: true, onClose: () => {} })
+  const fullScreen = surface === 'model settings';
+  const screen = render(fullScreen
+    ? React.createElement(ModelSettingsScreen)
     : React.createElement(TextGenerationSection));
-  if (chat) fireEvent.press(screen.getByText('TEXT GENERATION'));
+  if (fullScreen) fireEvent.press(screen.getByTestId('model-settings-tab-text'));
   await waitFor(() => expect(screen.getByText(/Model limit: 32000 tokens/)).toBeTruthy());
-  const control = chat ? 'setting-liteRTMaxTokens' : 'litert-max-tokens';
+  const control = 'litert-max-tokens';
   fireEvent.press(screen.getByTestId(`${control}-value-button`));
   fireEvent.changeText(screen.getByTestId(`${control}-input`), '32768');
   fireEvent(screen.getByTestId(`${control}-input`), 'submitEditing');

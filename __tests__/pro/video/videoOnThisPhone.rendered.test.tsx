@@ -20,6 +20,7 @@ jest.unmock('@react-navigation/native');
 import { GB } from '../../harness/nativeBoundary';
 import { launchApp, passOnboarding, restoreBuildFlavor, type AnalyticsApp } from '../../harness/analyticsApp';
 import { installNativeVideoEngine, phoneDownloads, type NativeVideoEngine, type PhoneDownloads } from '../../harness/nativeVideoEngine';
+import { pressModelSettingsBack } from '../../harness/modelSettingsBack';
 
 /** Wan 2.1 (1.3B), FP16: the catalog build Android runs whose files carry no published checksum. */
 const MODEL = { id: 'Comfy-Org/Wan_2.1_ComfyUI_repackaged', name: 'Wan 2.1 (1.3B), FP16', files: 3 };
@@ -107,7 +108,7 @@ async function downloadVideoModel(current: PhoneVideoApp): Promise<void> {
     expect(finished).toBe(MODEL.files);
   }, { timeout: 15_000 });
   await rtl.waitFor(() => expect(view.queryByLabelText(`Download ${MODEL.name}`)).toBeNull());
-  await rtl.waitFor(() => expect(view.getAllByLabelText('Delete model').length).toBeGreaterThan(0), { timeout: 10_000 });
+  await rtl.waitFor(() => expect(view.getAllByLabelText(/^Delete /).length).toBeGreaterThan(0), { timeout: 10_000 });
 }
 
 /** Home's video summary › the downloaded model, then a new chat in video mode, and Send. */
@@ -192,7 +193,7 @@ it('pauses, resumes and cancels a video model download, and deletes an installed
   expect(view.queryByLabelText('Cancel download')).toBeNull();
 
   await downloadVideoModel(current);
-  rtl.fireEvent.press(view.getAllByLabelText('Delete model')[0]);
+  rtl.fireEvent.press(view.getAllByLabelText(/^Delete /)[0]);
   await view.findByLabelText(`Download ${MODEL.name}`, {}, { timeout: 10_000 });
 }, 90_000);
 
@@ -287,7 +288,7 @@ it('a video model download the network drops says so; Retry finishes it, and Rem
   let finished = 0;
   await rtl.waitFor(async () => {
     finished += await current.downloads.finishRunning();
-    expect(view.queryAllByLabelText('Delete model').length).toBeGreaterThan(0);
+    expect(view.queryAllByLabelText(/^Delete /).length).toBeGreaterThan(0);
   }, { timeout: 15_000 });
   // The retry really downloaded the files, not just cleared the error.
   expect(finished).toBeGreaterThan(0);
@@ -341,7 +342,7 @@ it('a video model download cut off by the app closing says so, and Retry finishe
   rtl.fireEvent.press(view.getByLabelText('Retry download'));
   await rtl.waitFor(async () => {
     await current.downloads.finishRunning();
-    expect(view.queryAllByLabelText('Delete model').length).toBeGreaterThan(0);
+    expect(view.queryAllByLabelText(/^Delete /).length).toBeGreaterThan(0);
   }, { timeout: 15_000 });
   expect(view.queryByLabelText('Retry download')).toBeNull();
 }, 90_000);
@@ -355,7 +356,7 @@ it('a video model whose files are on the phone with no record of them is offered
   rtl.fireEvent.press(await view.findByTestId('video-models-tab'));
   await view.findByText(MODEL.name, {}, { timeout: 10_000 });
   rtl.fireEvent.press(await view.findByLabelText('Resume download', {}, { timeout: 10_000 }));
-  await rtl.waitFor(() => expect(view.queryAllByLabelText('Delete model').length).toBeGreaterThan(0), { timeout: 15_000 });
+  await rtl.waitFor(() => expect(view.queryAllByLabelText(/^Delete /).length).toBeGreaterThan(0), { timeout: 15_000 });
   expect(view.queryByLabelText(`Download ${MODEL.name}`)).toBeNull();
   // Every file was already on the phone: nothing was fetched.
   expect(boundary.download!.module.startDownload).not.toHaveBeenCalled();
@@ -482,7 +483,7 @@ it('a video model download carries on after the app restarts while Android keeps
 
   await rtl.waitFor(async () => {
     await current.downloads.finishRunning();
-    expect(view.queryAllByLabelText('Delete model').length).toBeGreaterThan(0);
+    expect(view.queryAllByLabelText(/^Delete /).length).toBeGreaterThan(0);
   }, { timeout: 15_000 });
   // After the restart only the file never started was fetched: the running one was followed, not restarted.
   expect(boundary.download!.module.startDownload).toHaveBeenCalledTimes(MODEL.files - 2);
@@ -523,7 +524,7 @@ it('Retry after a dropped download keeps the files already on the phone', async 
   let finished = 0;
   await rtl.waitFor(async () => {
     finished += await current.downloads.finishRunning();
-    expect(view.queryAllByLabelText('Delete model').length).toBeGreaterThan(0);
+    expect(view.queryAllByLabelText(/^Delete /).length).toBeGreaterThan(0);
   }, { timeout: 15_000 });
   // The retry really finished downloads, and only the two files not yet on the phone were fetched again.
   expect(finished).toBeGreaterThan(0);
@@ -622,13 +623,15 @@ it('a phone judged too small can still ask for the full size in settings, and th
   rtl.fireEvent.press(await view.findByTestId(`video-model-row-${MODEL.id}`, {}, { timeout: 5000 }));
   rtl.fireEvent.press(await view.findByTestId('new-chat-button', {}, { timeout: 5000 }));
   await view.findByTestId('chat-input');
+  // The chat's settings → Model settings → the "Image & video" tab.
   rtl.fireEvent.press(view.getByTestId('chat-settings-icon'));
-  rtl.fireEvent.press(await view.findByLabelText('Video generation'));
+  rtl.fireEvent.press(await view.findByTestId('chat-settings-open-model-settings'));
+  rtl.fireEvent.press(await view.findByTestId('model-settings-tab-image'));
   rtl.fireEvent.press(await view.findByTestId('video-settings-try-full-size'));
   await view.findByTestId('video-settings-use-recommended');
   expect(view.queryByTestId('video-settings-try-full-size')).toBeNull();
-  const close = view.queryAllByTestId('app-sheet-close');
-  if (close.length) rtl.fireEvent.press(close[close.length - 1]);
+  // Back to the chat.
+  pressModelSettingsBack(view, rtl);
   current.engine.hold();
   rtl.fireEvent.press(view.getByTestId('quick-settings-button'));
   rtl.fireEvent.press(await view.findByTestId('quick-video-mode'));

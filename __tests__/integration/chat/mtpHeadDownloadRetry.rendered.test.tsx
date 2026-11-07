@@ -3,15 +3,16 @@
  * person sees it failed, retries with one tap, and the retry gets MTP ready.
  *
  * Product-correct outcome (the person's view): Gemma 4 E4B is on the phone. In a chat, the person opens
- * the settings sheet, expands Advanced under Text Generation and turns Speculative Decoding (MTP) on.
+ * the settings sheet, opens Model settings, goes to the Text tab, expands Advanced and turns Speculative
+ * decoding (MTP) on.
  * The app fetches the model's published MTP head by itself and shows its progress under the switch.
  * The network drops and the download fails: the progress goes away and a single retry icon appears in
  * its place. One tap on it starts the download again with progress; this time it finishes, the retry
- * icon and the progress go away, and MTP stays on with its Draft Tokens control. Reopening the sheet
+ * icon and the progress go away, and MTP stays on with its Draft Tokens control. Reopening the Text tab
  * later starts nothing again: the head is installed.
  *
  * Entry point: the REAL App (boot, NavigationContainer, AppNavigator). Every step is a gesture: Home →
- * New Chat → the chat's settings icon → TEXT GENERATION → Advanced → MTP "On" → the retry icon.
+ * New Chat → the chat's settings icon → Model settings → Text → Advanced → MTP "On" → the retry icon.
  *
  * Fakes (device boundary only): the in-memory filesystem (the model weights, and the head bytes the
  * native downloader writes), AsyncStorage (what an earlier run saved), the RAM sensor, llama.rn, the
@@ -88,12 +89,13 @@ describe('MTP head download that fails', () => {
     const ui = render(React.createElement(App));
     await waitFor(() => expect(ui.queryByTestId('app-loading')).toBeNull(), RENDER_WAIT);
 
-    // Home → New Chat → the chat's settings → Text Generation → Advanced.
+    // Home → New Chat → the chat's settings → Model settings → Text → Advanced.
     fireEvent.press(await waitFor(() => ui.getByTestId('home-tab'), RENDER_WAIT));
     fireEvent.press(await waitFor(() => ui.getByTestId('new-chat-button'), RENDER_WAIT));
     fireEvent.press(await waitFor(() => ui.getByTestId('chat-settings-icon'), RENDER_WAIT));
-    fireEvent.press(await waitFor(() => ui.getByText('TEXT GENERATION'), RENDER_WAIT));
-    fireEvent.press(await waitFor(() => ui.getByTestId('modal-text-advanced-toggle'), RENDER_WAIT));
+    fireEvent.press(await waitFor(() => ui.getByTestId('chat-settings-open-model-settings'), RENDER_WAIT));
+    fireEvent.press(await waitFor(() => ui.getByTestId('model-settings-tab-text'), RENDER_WAIT));
+    fireEvent.press(await waitFor(() => ui.getByTestId('text-advanced-toggle'), RENDER_WAIT));
 
     // BEFORE: MTP off, no Draft Tokens, no download status, no retry, nothing downloading.
     await waitFor(() => expect(ui.getByTestId('speculative-off-button')).toBeTruthy(), RENDER_WAIT);
@@ -168,11 +170,12 @@ describe('MTP head download that fails', () => {
     expect(ui.queryByLabelText('Retry MTP head download')).toBeNull();
     expect(ui.getByTestId('speculative-draft-stepper-value')).toBeTruthy();
 
-    // Reopening the settings later starts nothing: the head is installed.
+    // Reopening the Text tab later starts nothing: the head is installed.
     const downloadsSoFar = boundary.download!.module.startDownload.mock.calls.length;
-    fireEvent.press(ui.getByTestId('modal-text-advanced-toggle'));
+    fireEvent.press(ui.getByTestId('model-settings-tab-general'));
     await waitFor(() => expect(ui.queryByTestId('speculative-on-button')).toBeNull(), RENDER_WAIT);
-    fireEvent.press(ui.getByTestId('modal-text-advanced-toggle'));
+    fireEvent.press(ui.getByTestId('model-settings-tab-text'));
+    fireEvent.press(await waitFor(() => ui.getByTestId('text-advanced-toggle'), RENDER_WAIT));
     await waitFor(() => expect(ui.getByTestId('speculative-draft-stepper-value')).toBeTruthy(), RENDER_WAIT);
     await act(async () => { await new Promise(r => setTimeout(r, 50)); });
     expect(ui.queryByTestId('mtp-head-status')).toBeNull();

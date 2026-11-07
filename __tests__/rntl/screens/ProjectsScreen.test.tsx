@@ -12,7 +12,7 @@ import { mountProjectsApp, type ProjectsApp } from '../../harness/projectsApp';
 
 async function makeProject(app: ProjectsApp, name: string, description = '') {
   app.rtl.fireEvent.press(app.view.getByTestId(app.view.queryByTestId('new-project-empty-button') ? 'new-project-empty-button' : 'new-project-button'));
-  await app.rtl.waitFor(() => expect(app.view.getByText('New Project')).toBeTruthy());
+  await app.rtl.waitFor(() => expect(app.route()?.name).toBe('ProjectEdit'));
   await app.fillAndSave({ name, description, systemPrompt: 'Be helpful' });
   await app.rtl.waitFor(() => expect(app.route()?.name).toBe('ProjectsTab'));
   return app.useProjectStore.getState().projects.find(p => p.name === name)!.id;
@@ -31,42 +31,37 @@ describe('ProjectsScreen', () => {
   });
 
   describe('with no projects', () => {
-    it('says there are none yet and offers Create Project', async () => {
+    it('says there are none yet and offers New project', async () => {
       const app = await mountProjectsApp({ noStarterProjects: true });
 
-      expect(app.view.getByText('No Projects Yet')).toBeTruthy();
-      expect(app.view.getByText(/Create a project to organize your chats by topic/)).toBeTruthy();
-      expect(app.view.getByText('Create Project')).toBeTruthy();
+      expect(app.view.getByText('No projects yet')).toBeTruthy();
+      expect(app.view.getByText(/Keep related chats together/)).toBeTruthy();
+      expect(app.view.getByText('New project')).toBeTruthy();
     });
 
-    it('Create Project opens an empty editor, and the saved project replaces the empty state', async () => {
+    it('New project opens an empty editor, and the saved project replaces the empty state', async () => {
       const app = await mountProjectsApp({ noStarterProjects: true });
 
-      app.rtl.fireEvent.press(app.view.getByText('Create Project'));
+      app.rtl.fireEvent.press(app.view.getByText('New project'));
       await app.rtl.waitFor(() => expect(app.route()).toEqual(expect.objectContaining({ name: 'ProjectEdit', params: {} })));
       await app.fillAndSave({ name: 'Code Review', systemPrompt: 'Review code' });
 
       await app.rtl.waitFor(() => expect(app.route()?.name).toBe('ProjectsTab'));
       expect(app.view.getByText('Code Review')).toBeTruthy();
-      expect(app.view.queryByText('No Projects Yet')).toBeNull();
+      expect(app.view.queryByText('No projects yet')).toBeNull();
     });
   });
 
   describe('the list', () => {
-    it('lists each project with its initial, and its description only when it has one', async () => {
+    it('lists each project by name; what it is for stays on its own page', async () => {
       const app = await mountProjectsApp({ noStarterProjects: true });
       const alpha = await makeProject(app, 'Project Alpha', 'A detailed project description');
-      const beta = await makeProject(app, 'Sample Beta');
 
       expect(rowOf(app, alpha).getByText('Project Alpha')).toBeTruthy();
-      expect(rowOf(app, alpha).getByText('A detailed project description')).toBeTruthy();
-      expect(rowOf(app, alpha).getByText('P')).toBeTruthy();
-      expect(rowOf(app, beta).getByText('Sample Beta')).toBeTruthy();
-      expect(rowOf(app, beta).getByText('S')).toBeTruthy();
-      expect(rowOf(app, beta).queryByText('A detailed project description')).toBeNull();
+      expect(app.view.queryByText('A detailed project description')).toBeNull();
     });
 
-    it('counts the chats filed in each project', async () => {
+    it('says how many chats each project holds', async () => {
       const app = await mountProjectsApp({ noStarterProjects: true });
       const busy = await makeProject(app, 'Busy');
       const quiet = await makeProject(app, 'Quiet');
@@ -80,9 +75,46 @@ describe('ProjectsScreen', () => {
         chats.createConversation('model-1', 'Loose');
       });
 
-      expect(rowOf(app, busy).getByText('2')).toBeTruthy();
-      expect(rowOf(app, quiet).getByText('1')).toBeTruthy();
-      expect(rowOf(app, empty).getByText('0')).toBeTruthy();
+      expect(app.view.getByTestId(`project-chats-${busy}`)).toHaveTextContent('2');
+      expect(app.view.getByTestId(`project-chats-${quiet}`)).toHaveTextContent('1');
+      expect(app.view.getByTestId(`project-chats-${empty}`)).toHaveTextContent('0');
+      expect(app.view.getByTestId(`project-row-${busy}`).props.accessibilityHint).toMatch(/^2 chats, 0 documents, last used /);
+    });
+
+    it('says how many files each project holds', async () => {
+      const ids: Record<string, string> = {};
+      const app = await mountProjectsApp({
+        noStarterProjects: true,
+        files: true,
+        seed: async ({ useProjectStore, knowledgeBase }) => {
+          for (const name of ['Manuals', 'Bare']) {
+            ids[name] = useProjectStore.getState().createProject({ name, description: '', systemPrompt: 'Help' }).id;
+          }
+          await knowledgeBase.addPastedText({ projectId: ids.Manuals, title: 'Pump', text: 'Prime the pump first.' });
+          await knowledgeBase.addPastedText({ projectId: ids.Manuals, title: 'Valve', text: 'Close the valve after.' });
+        },
+      });
+
+      await app.rtl.waitFor(() => expect(app.view.getByTestId(`project-documents-${ids.Manuals}`)).toHaveTextContent('2'));
+      expect(app.view.getByTestId(`project-documents-${ids.Bare}`)).toHaveTextContent('0');
+    });
+
+    it('dates a project by its most recent chat', async () => {
+      const app = await mountProjectsApp({ noStarterProjects: true });
+      const id = await makeProject(app, 'Dated');
+      const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+
+      app.rtl.act(() => {
+        const chats = app.useChatStore.getState();
+        chats.createConversation('model-1', 'Old', id);
+        chats.createConversation('model-1', 'Newer', id);
+        const at = { Old: daysAgo(60), Newer: daysAgo(10) } as Record<string, string>;
+        app.useChatStore.setState({
+          conversations: app.useChatStore.getState().conversations.map(c => ({ ...c, updatedAt: at[c.title] ?? c.updatedAt })),
+        });
+      });
+
+      expect(rowOf(app, id).getByText('Last week')).toBeTruthy();
     });
 
     it('opening a project shows that project', async () => {
@@ -101,7 +133,7 @@ describe('ProjectsScreen', () => {
       app.rtl.fireEvent.press(app.view.getByText('New'));
 
       await app.rtl.waitFor(() => expect(app.route()).toEqual(expect.objectContaining({ name: 'ProjectEdit', params: {} })));
-      expect(app.view.getByText('New Project')).toBeTruthy();
+      expect(app.view.getByText('New project')).toBeTruthy();
     });
   });
 });

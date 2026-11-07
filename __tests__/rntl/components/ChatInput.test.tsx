@@ -20,7 +20,7 @@
 import React from 'react';
 import { voiceSession } from '../../../src/services/voiceSession';
 import { recordingController } from '../../../src/services/recordingController';
-import { Keyboard, PermissionsAndroid, Platform } from 'react-native';
+import { ActionSheetIOS, Keyboard, PermissionsAndroid, Platform } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { ChatInput } from '../../../src/components/ChatInput';
 import { useAppStore } from '../../../src/stores/appStore';
@@ -587,6 +587,61 @@ describe('ChatInput', () => {
   // Attachments
   // ============================================================================
   describe('attachments', () => {
+    // iPhone: one sheet, one step (Mac, 2026-11-07). The native sheet is the platform's, so the test
+    // reads what the composer asks it to show and answers the way a tap on a row does.
+    describe('on iPhone', () => {
+      const realOS = Platform.OS;
+      let sheet: jest.SpyInstance;
+      beforeEach(() => {
+        Platform.OS = 'ios';
+        sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions').mockImplementation(() => undefined);
+      });
+      afterEach(() => {
+        Platform.OS = realOS;
+        sheet.mockRestore();
+      });
+      const shown = () => sheet.mock.calls[0][0];
+      const tapRow = (label: string) => sheet.mock.calls[0][1](shown().options.indexOf(label));
+
+      it('a model that sees photos offers Take photo, Choose photo and Document in one sheet', async () => {
+        const { launchImageLibrary } = require('react-native-image-picker');
+        launchImageLibrary.mockResolvedValue({
+          assets: [{ uri: 'file:///chosen.jpg', type: 'image/jpeg', width: 800, height: 600 }],
+        });
+        const result = render(<ChatInput {...defaultProps} supportsVision={true} />);
+        fireEvent.press(result.getByTestId('attach-button'));
+
+        expect(shown().options).toEqual(['Take photo', 'Choose photo', 'Document', 'Cancel']);
+        expect(shown().message).toBeUndefined();
+        await act(async () => { tapRow('Choose photo'); });
+        await waitFor(() => expect(result.queryByTestId('attachments-container')).toBeTruthy());
+        expect(sheet).toHaveBeenCalledTimes(1);
+      });
+
+      it('Take photo opens the camera and Document opens the file picker, each straight from the sheet', async () => {
+        const { launchCamera } = require('react-native-image-picker');
+        launchCamera.mockResolvedValue({ assets: [{ uri: 'file:///taken.jpg', type: 'image/jpeg', width: 800, height: 600 }] });
+        mockPick.mockResolvedValue([]);
+        const result = render(<ChatInput {...defaultProps} supportsVision={true} />);
+        fireEvent.press(result.getByTestId('attach-button'));
+        await act(async () => { tapRow('Take photo'); });
+        await waitFor(() => expect(result.queryByTestId('attachments-container')).toBeTruthy());
+
+        sheet.mockClear();
+        fireEvent.press(result.getByTestId('attach-button'));
+        await act(async () => { tapRow('Document'); });
+        expect(mockPick).toHaveBeenCalled();
+      });
+
+      it("a model that can't see photos offers Document and says why there is no photo", () => {
+        const result = render(<ChatInput {...defaultProps} supportsVision={false} />);
+        fireEvent.press(result.getByTestId('attach-button'));
+
+        expect(shown().options).toEqual(['Document', 'Cancel']);
+        expect(shown().message).toBe("This model can't see photos. Choose one that can to add a photo.");
+      });
+    });
+
     it('shows custom alert when photo is pressed via attach picker', async () => {
       const result = render(
         <ChatInput {...defaultProps} supportsVision={true} />

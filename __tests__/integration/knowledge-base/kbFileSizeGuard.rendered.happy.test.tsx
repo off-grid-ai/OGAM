@@ -9,7 +9,7 @@
  * fakes are device leaves: the document picker and the filesystem's reported size.
  *
  * The refusal's user-visible artifact is the on-screen index-error card; the list staying empty
- * ("No documents yet") corroborates that nothing was added.
+ * ("No files yet") corroborates that nothing was added.
  */
 import { openKnowledgeBase } from '../../harness/knowledgeBaseApp';
 
@@ -28,7 +28,7 @@ describe('T011 (rendered) — a document over 1 GB is refused by the knowledge b
     expect(kb.view.getByTestId('kb-index-error-card')).toBeTruthy();
     expect(kb.view.getByText('Couldn\'t add "archive.txt"')).toBeTruthy();
     expect(kb.view.getByText(/Maximum size is 1 GB/)).toBeTruthy();
-    expect(kb.view.getByText('No documents yet')).toBeTruthy();
+    expect(kb.view.getByText('No files yet')).toBeTruthy();
   });
 
   it('adds a 50 MB file (ten times the old limit) with no error', async () => {

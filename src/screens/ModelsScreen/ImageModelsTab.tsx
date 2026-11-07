@@ -1,11 +1,13 @@
 import React from 'react';
-import { View, Text, TextInput, ScrollView } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
 import { LoadingDots } from '../../components/LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 import { determineCredibility } from '@offgrid/models';
 import { ModelCard } from '../../components';
+import { GROUPED_CARD_ROW, ListGroup } from '../../components/ListGroup';
+import { SearchField } from '../../components/SearchField';
 import { useTheme, useThemedStyles } from '../../theme';
 import { HFImageModel, getVariantLabel } from '../../services/huggingFaceModelBrowser';
 import { ImageModelRecommendation } from '../../types';
@@ -119,6 +121,7 @@ export const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
         } : undefined}
         isCompatible={isCompatible}
         incompatibleReason={incompatibleReason}
+        style={GROUPED_CARD_ROW}
         testID={`image-model-card-${index}`}
         onDownload={isDownloaded || isActive || isPaused ? undefined : () => handleDownloadImageModel(hfModelToDescriptor(model))}
         onCancel={isActive || isPaused ? () => handleCancelImageDownload(model.id) : undefined}
@@ -203,19 +206,23 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
       <View style={styles.imageModelsList}>
         {showRecHint && showRecommendedOnly && (
           <TouchableOpacity style={styles.recHint} onPress={() => setShowRecHint(false)} activeOpacity={0.7}>
-            <Icon name="info" size={11} color={colors.primary} />
+            <Icon name="info" size={11} color={colors.textMuted} />
             <Text style={styles.recHintText}>
-              Showing recommended models only. Tap{' '}<Text style={{ color: colors.primary }}>★</Text>{' '}to see all.
+              Showing the best fits for this phone. Tap{' '}★{' '}to see all.
             </Text>
           </TouchableOpacity>
         )}
 
-        <ImagePicksRow
-          models={compatible}
-          ramGB={ramGB}
-          isRecommended={isRecommendedModel}
-          onDownload={handleDownloadImageModel}
-        />
+        {/* The picks wait for the device check and the model list, so the three cards never change
+            under you a second after the tab opens (hand test 91). */}
+        {imageRec && !hfModelsLoading ? (
+          <ImagePicksRow
+            models={compatible}
+            ramGB={ramGB}
+            isRecommended={isRecommendedModel}
+            onDownload={handleDownloadImageModel}
+          />
+        ) : null}
         {imageRec?.warning && (
           <View style={styles.deviceBanner}>
             <Text style={[styles.deviceBannerText, styles.deviceBannerWarning]}>{imageRec.warning}</Text>
@@ -254,9 +261,9 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
           </View>
         )}
 
-        {!hfModelsLoading && !hfModelsError && listedModels.map(
-          (model, index) => {
-            const card = (
+        {!hfModelsLoading && !hfModelsError && listedModels.length > 0 && (
+          <ListGroup>
+            {listedModels.map((model, index) => (
               <ImageModelCardItem
                 key={model.id}
                 model={model}
@@ -266,12 +273,8 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
                 handleDownloadImageModel={handleDownloadImageModel}
                 handleCancelImageDownload={handleCancelImageDownload}
               />
-            );
-            if (index === 0) {
-              return card;
-            }
-            return card;
-          }
+            ))}
+          </ListGroup>
         )}
 
         {shouldShowEmptyMessage({ loading: hfModelsLoading, error: hfModelsError, filtered: filteredHFModels, available: availableHFModels }) && (
@@ -306,13 +309,11 @@ export const ImageModelsTab: React.FC<Props> = ({
     <View style={styles.imageTabContent}>
       <View style={styles.imageModelsSection}>
         <View style={[styles.searchContainer, styles.searchContainerNoPadding]}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search models..."
-            placeholderTextColor={colors.textMuted}
+          <SearchField
+            style={styles.searchField}
+            placeholder="Search models"
             value={imageSearchQuery}
             onChangeText={setImageSearchQuery}
-            returnKeyType="search"
           />
           <TouchableOpacity
             style={[styles.recToggle, showRecommendedOnly && styles.recToggleActive]}

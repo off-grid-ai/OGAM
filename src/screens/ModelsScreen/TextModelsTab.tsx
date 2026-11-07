@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
-import { View, Text, FlatList, TextInput, RefreshControl, Platform } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Platform, type StyleProp, type ViewStyle } from 'react-native';
+import { GROUPED_CARD_ROW, ListGroupSeparator, listGroupRowEnds } from '../../components/ListGroup';
+import { SearchField } from '../../components/SearchField';
 import { TouchableOpacity } from '../../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import { LoadingDots } from '../../components/LoadingDots';
@@ -22,6 +24,7 @@ import { ModelInfo, ModelFile } from '../../types';
 import { createStyles } from './styles';
 import { ModelsScreenViewModel } from './useModelsScreen';
 import { useDownloadStore, isActiveStatus, isQueuedStatus } from '../../stores/downloadStore';
+import { useAppStore } from '../../stores/appStore';
 import { jobBytesDownloaded } from '../../utils/downloadStatus';
 import { makeModelKey } from '../../utils/modelKey';
 import { modelSupportsNpuGpu, isAccelerableQuant } from '../../utils/acceleration';
@@ -328,10 +331,13 @@ const downloadBytes = (file: ModelFile): number => file.size + (file.mmProjFile?
 
 interface ModelListItemProps {
   item: ModelInfo; index: number; focusTrigger: number;
-  isDownloaded: boolean; isTrending: boolean; onPress: () => void;
+  isDownloaded: boolean; isActive?: boolean; isTrending: boolean; onPress: () => void;
   onDownload?: () => void;
+  /** The row's place in the grouped list: flat, with the group's corners on the end rows. */
+  rowStyle?: StyleProp<ViewStyle>;
 }
-const ModelListItem: React.FC<ModelListItemProps> = ({ item, index, focusTrigger, isDownloaded, isTrending, onPress, onDownload }) => {
+/** A model card as a row of the grouped list: no box of its own (the group draws the surface). */
+const ModelListItem: React.FC<ModelListItemProps> = ({ item, index, focusTrigger, isDownloaded, isActive, isTrending, onPress, onDownload, rowStyle }) => {
   const { isCompatible, incompatibleReason } = getTextModelCompatibility(item);
   const isLiteRTParent = item.id === LITERT_PARENT_ID;
   const recommended = isLiteRTParent ? LITERT_PARENT_RECOMMENDED : undefined;
@@ -348,7 +354,7 @@ const ModelListItem: React.FC<ModelListItemProps> = ({ item, index, focusTrigger
     predicted: true,
     ...modelSpeedBadges(item),
   };
-  return <AnimatedEntry index={index} staggerMs={30} trigger={focusTrigger}><ModelCard model={cardModel} isDownloaded={isDownloaded} isDownloading={agg.downloading} isQueued={agg.queued} downloadProgress={agg.progress} downloadBytes={agg.bytes} downloadCount={agg.count} isCompatible={isCompatible} incompatibleReason={incompatibleReason} onPress={isCompatible ? onPress : undefined} onDownload={isCompatible ? onDownload : undefined} testID={`model-card-${index}`} compact facts={modelFactChips(item)} isTrending={isTrending} recommended={recommended} supportsAcceleration={!isLiteRTParent && modelSupportsNpuGpu(item)} capabilities={capabilities} /></AnimatedEntry>;
+  return <AnimatedEntry index={index} staggerMs={30} trigger={focusTrigger}><ModelCard model={cardModel} isDownloaded={isDownloaded} isActive={isActive} isDownloading={agg.downloading} isQueued={agg.queued} downloadProgress={agg.progress} downloadBytes={agg.bytes} downloadCount={agg.count} isCompatible={isCompatible} incompatibleReason={incompatibleReason} onPress={isCompatible ? onPress : undefined} onDownload={isCompatible ? onDownload : undefined} testID={`model-card-${index}`} compact facts={modelFactChips(item)} isTrending={isTrending} recommended={recommended} supportsAcceleration={!isLiteRTParent && modelSupportsNpuGpu(item)} capabilities={capabilities} style={rowStyle} /></AnimatedEntry>;
 };
 
 function applyBackNavigation(setSelectedModel: (m: ModelInfo | null) => void, setModelFiles: (f: ModelFile[]) => void): void {
@@ -393,12 +399,12 @@ export const TextModelsTab: React.FC<Props> = (props) => {
   const liteRTModel = useMemo(() => liteRTRecommendedModel(liteRTEntries), [liteRTEntries]);
   const catalog = useWithRemoteCatalog('models', CATALOG);
   // The picks are shown once, above; the list below holds the other models.
+  const activeTextModelId = useAppStore(state => state.activeModelId);
   const moreModels = React.useMemo(() => {
     const pickIds = new Set(devicePicks(ramGB, catalog).map(pick => pick.model.id));
     return recommendedAsModelInfo.filter(model => !pickIds.has(model.id));
   }, [recommendedAsModelInfo, ramGB, catalog]);
   const hasNonSortActiveFilters = hasNonSortFilters(filterState);
-  const currentSort = SORT_OPTIONS.find(o => o.key === filterState.sort) ?? SORT_OPTIONS[0];
   const isSortActive = filterState.sort !== 'recommended';
   const sortToggleActive = isSortActive || filterState.expandedDimension === 'sort';
   const filterToggleActive = textFiltersVisible || hasNonSortActiveFilters;
@@ -416,18 +422,20 @@ export const TextModelsTab: React.FC<Props> = (props) => {
     await handleDownload(item, file);
   };
 
+  const listData = hasSearched ? filteredResults : [...(!onboarding && Platform.OS === 'android' ? [liteRTModel] : []), ...moreModels];
   const renderModelItem = ({ item, index }: { item: ModelInfo; index: number }) => {
     const directDownload = onboarding
       ? () => { downloadRecommendedFile(item).catch(() => undefined); }
       : undefined;
     // A disk scan can restore a file under a recovered_ id. The detail rows
     // recognize it by filename, so the family row must use those same files.
-    const isDownloaded = downloadedModels.some(model =>
-      model.id.startsWith(`${item.id}/`) ||
-      item.files.some(file => file.name === model.fileName),
-    );
+    const isFamilyFile = (model: { id: string; fileName: string }) =>
+      model.id.startsWith(`${item.id}/`) || item.files.some(file => file.name === model.fileName);
+    const isDownloaded = downloadedModels.some(isFamilyFile);
+    // The model you talk to is marked "In use" on its row, the same way every other kind marks it.
+    const isActive = downloadedModels.some(model => model.id === activeTextModelId && isFamilyFile(model));
     return (
-      <ModelListItem item={item} index={index} focusTrigger={focusTrigger} isDownloaded={isDownloaded} isTrending={trendingAsModelInfo.some(t => t.id === item.id)} onPress={directDownload ?? (() => handleSelectModel(item))} onDownload={directDownload} />
+      <ModelListItem item={item} index={index} focusTrigger={focusTrigger} isDownloaded={isDownloaded} isActive={isActive} isTrending={trendingAsModelInfo.some(t => t.id === item.id)} onPress={directDownload ?? (() => handleSelectModel(item))} onDownload={directDownload} rowStyle={[GROUPED_CARD_ROW, listGroupRowEnds(index, listData.length)]} />
     );
   };
 
@@ -486,14 +494,12 @@ export const TextModelsTab: React.FC<Props> = (props) => {
   return (
     <>
       <View style={[styles.searchContainer, styles.searchContainerRaised]} testID="text-model-search-row">
-        <TextInput
-          style={styles.searchInput}
+        <SearchField
+          style={styles.searchField}
           placeholder="Search models"
-          placeholderTextColor={colors.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
           onSubmitEditing={handleSearch}
-          returnKeyType="search"
           testID="search-input"
         />
         <TouchableOpacity
@@ -501,8 +507,11 @@ export const TextModelsTab: React.FC<Props> = (props) => {
           onPress={() => toggleFilterDimension('sort')}
           hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           testID="sort-pill"
+          accessibilityRole="button"
+          accessibilityLabel="Sort models"
         >
-          <Icon name={currentSort.icon} size={14} color={sortToggleActive ? colors.primary : colors.textMuted} />
+          {/* One sort glyph: the chosen option's own icon (a bolt for Fastest) read as "fast", not "sort" (hand test 69). */}
+          <Icon name="bar-chart-2" size={14} color={sortToggleActive ? colors.primary : colors.textMuted} style={styles.sortGlyph} />
           {isSortActive && <View style={styles.filterDot} />}
         </TouchableOpacity>
         <TouchableOpacity
@@ -510,6 +519,9 @@ export const TextModelsTab: React.FC<Props> = (props) => {
           onPress={() => setTextFiltersVisible(v => !v)}
           hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           testID="text-filter-toggle"
+          accessibilityRole="button"
+          accessibilityLabel="Filter models"
+          accessibilityState={{ expanded: filterToggleActive }}
         >
           <Icon name="sliders" size={14} color={filterToggleActive ? colors.primary : colors.textMuted} />
           {hasNonSortActiveFilters && <View style={styles.filterDot} />}
@@ -552,8 +564,9 @@ export const TextModelsTab: React.FC<Props> = (props) => {
       ) : (
         <FlatList
           {...LIST_CLIPPING_PROPS}
-          data={hasSearched ? filteredResults : [...(!onboarding && Platform.OS === 'android' ? [liteRTModel] : []), ...moreModels]}
+          data={listData}
           renderItem={renderModelItem}
+          ItemSeparatorComponent={ListGroupSeparator}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
           testID="models-list"

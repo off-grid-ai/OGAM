@@ -3,7 +3,7 @@ import { View, Text, TextInput } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { useAppStore } from '../../stores';
-import { TYPOGRAPHY, SPACING } from '../../constants';
+import { APP_CONFIG, TYPOGRAPHY, SPACING } from '../../constants';
 
 const createStyles = (colors: ThemeColors) => ({
   systemPromptContainer: {
@@ -32,22 +32,24 @@ export const SystemPromptSection: React.FC = () => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
-  const systemPrompt = settings?.systemPrompt ?? 'You are a helpful AI assistant.';
+  // Empty means chat uses the built-in prompt, so show that one as the placeholder rather than a
+  // shorter stand-in that is never sent (hand test 31).
+  const systemPrompt = settings?.systemPrompt?.trim() ? settings.systemPrompt : '';
 
   return (
     <View style={styles.systemPromptContainer}>
       <Text style={styles.settingHelp}>
-        Instructions given to the model before each conversation. Used when chatting without a project selected.
+        What the model is told before every chat outside a project. Leave it empty to use the built-in prompt.
       </Text>
       <TextInput
         testID="default-system-prompt-input"
-        accessibilityLabel="Default system prompt"
+        accessibilityLabel="Default instructions"
         style={styles.textArea}
         value={systemPrompt}
-        onChangeText={(text) => updateSettings({ systemPrompt: text })}
+        onChangeText={(text) => updateSettings({ systemPrompt: text.trim() ? text : '' })}
         multiline
         numberOfLines={4}
-        placeholder="Enter system prompt..."
+        placeholder={APP_CONFIG.defaultSystemPrompt}
         placeholderTextColor={colors.textMuted}
       />
     </View>

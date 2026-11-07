@@ -131,6 +131,46 @@ describe('getOrphanedTextFiles', () => {
     expect(result).toHaveLength(0);
   });
 
+  it('never calls an in-use vision projector orphaned when its stored path or engine field is stale', async () => {
+    // On device: a reinstall moves the app container, so the stored mmProjPath names an old path,
+    // and older entries carry no engine field. The projector is still the model's: deleting it
+    // would break image reading.
+    mockedRNFS.exists.mockResolvedValue(true);
+    mockedRNFS.readDir.mockResolvedValue([
+      makeRNFSFile('qwen3.5-0.8b.gguf', `${MODELS_DIR}/qwen3.5-0.8b.gguf`),
+      makeRNFSFile('qwen3.5-0.8b-mmproj.gguf', `${MODELS_DIR}/qwen3.5-0.8b-mmproj.gguf`),
+    ]);
+    const stale = '/var/mobile/Containers/Data/Application/OLD-UUID/Documents/models';
+    const result = await getOrphanedTextFiles(MODELS_DIR, async () => [{
+      id: 'qwen', name: 'Qwen 3.5 0.8B', author: 'qwen', fileName: 'qwen3.5-0.8b.gguf',
+      filePath: `${stale}/qwen3.5-0.8b.gguf`, mmProjPath: `${stale}/qwen3.5-0.8b-mmproj.gguf`,
+      fileSize: 1, quantization: 'Q4', downloadedAt: '',
+    } as never]);
+
+    expect(result).toEqual([]);
+  });
+
+  it('never calls a model\'s later split parts or its MTP head orphaned (hand test 7)', async () => {
+    mockedRNFS.exists.mockResolvedValue(true);
+    mockedRNFS.readDir.mockResolvedValue([
+      makeRNFSFile('qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf', `${MODELS_DIR}/qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf`),
+      makeRNFSFile('qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf', `${MODELS_DIR}/qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf`),
+      makeRNFSFile('gemma-4-E4B-it-Q4_K_M.gguf', `${MODELS_DIR}/gemma-4-E4B-it-Q4_K_M.gguf`),
+      makeRNFSFile('mtp-gemma-4-E4B-it-Q8_0.gguf', `${MODELS_DIR}/mtp-gemma-4-E4B-it-Q8_0.gguf`),
+      makeRNFSFile('left-behind.gguf', `${MODELS_DIR}/left-behind.gguf`),
+    ]);
+    const model = (fileName: string) => ({
+      id: fileName, name: fileName, author: 'x', fileName, filePath: `${MODELS_DIR}/${fileName}`,
+      fileSize: 1, quantization: 'Q4', downloadedAt: '',
+    });
+    const result = await getOrphanedTextFiles(MODELS_DIR, async () => [
+      model('qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf'),
+      model('gemma-4-E4B-it-Q4_K_M.gguf'),
+    ] as never);
+
+    expect(result.map(file => file.name)).toEqual(['left-behind.gguf']);
+  });
+
   it('correctly identifies mix of tracked and untracked files', async () => {
     mockedRNFS.exists.mockResolvedValue(true);
     mockedRNFS.readDir.mockResolvedValue([
@@ -164,6 +204,20 @@ describe('getOrphanedTextFiles', () => {
 describe('getOrphanedImageDirs', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('never calls the image model in use orphaned when its stored path names an old app container (hand test 8)', async () => {
+    mockedRNFS.exists.mockResolvedValue(true);
+    mockedRNFS.readDir.mockResolvedValue([
+      makeRNFSDir('sd-offgrid-ai--realvisxl-v5.0-lightning-GGUF-Q4', `${IMAGE_MODELS_DIR}/sd-offgrid-ai--realvisxl-v5.0-lightning-GGUF-Q4`),
+      makeRNFSDir('left-behind', `${IMAGE_MODELS_DIR}/left-behind`),
+    ]);
+    const stale = '/var/mobile/Containers/Data/Application/OLD-UUID/Documents/image_models';
+    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, async () => [
+      makeImageModel({ id: 'realvis', modelPath: `${stale}/sd-offgrid-ai--realvisxl-v5.0-lightning-GGUF-Q4/model.gguf` }),
+    ]);
+
+    expect(result.map(dir => dir.name)).toEqual(['left-behind']);
   });
 
   it('returns empty array when image models directory does not exist', async () => {

@@ -142,7 +142,7 @@ describe('Desktop tools in Pro tools', () => {
     );
     // Settings › Sync, and the desktop pairs with the code on screen.
     fireEvent.press(ui.getByTestId('settings-tab'));
-    await waitFor(() => expect(ui!.getByText('Model Settings')).toBeTruthy());
+    await waitFor(() => expect(ui!.getByText('Model settings')).toBeTruthy());
     fireEvent.press(ui.getByTestId('open-sync-settings'));
     await waitFor(() => expect(ui!.getByTestId('sync-pairing-code-value')).toBeTruthy());
     const phone = useSyncStore.getState().thisDevice;
@@ -150,9 +150,9 @@ describe('Desktop tools in Pro tools', () => {
     if (!phone || !discovery?.publishedPort) throw new Error('Sync did not publish this phone');
     await desktop.engine.pair({ ...phone, host: '127.0.0.1', port: discovery.publishedPort }, await pairingCodeOnScreen(ui));
 
-    // Back to Settings › Off Grid AI PRO › Your own tools, in your chats.
+    // Back to Settings › Off Grid AI Pro › Your own tools, in your chats.
     fireEvent.press(ui.getAllByLabelText('Back').pop()!);
-    fireEvent.press(await waitFor(() => ui!.getByText('Off Grid AI PRO')));
+    fireEvent.press(await waitFor(() => ui!.getByText('Off Grid AI Pro')));
     fireEvent.press(await waitFor(() => ui!.getByText('Your own tools, in your chats')));
     const row = await waitFor(() => ui!.getByTestId(`companion-tools-${desktopDevice.id}`), { timeout: 10_000 });
     expect(row).toBeTruthy();
@@ -169,7 +169,7 @@ describe('Desktop tools in Pro tools', () => {
     // The desktop grants: the switch reflects the grant, and its tools connect here.
     desktop.engine.sendApp(phone.id, MCP_TOOL_GRANT_CHANNEL, GRANT);
     await waitFor(() => expect(toggle().props.value).toBe(true), { timeout: 10_000 });
-    await waitFor(() => expect(ui!.getByText(/^\d\/2 tools enabled$/)).toBeTruthy(), { timeout: 15_000 });
+    await waitFor(() => expect(ui!.getByText(/^\d of 2 tools$/)).toBeTruthy(), { timeout: 15_000 });
 
     // Off: the desktop is asked to take them back; when it revokes, the switch is off.
     fireEvent(toggle(), 'valueChange', false);
@@ -178,6 +178,6 @@ describe('Desktop tools in Pro tools', () => {
     );
     desktop.engine.sendApp(phone.id, MCP_TOOL_REVOKE_CHANNEL, { url: DESKTOP_MCP_URL });
     await waitFor(() => expect(toggle().props.value).toBe(false), { timeout: 10_000 });
-    expect(ui.queryByText(/^\d\/2 tools enabled$/)).toBeNull();
+    expect(ui.queryByText(/^\d of 2 tools$/)).toBeNull();
   }, 60_000);
 });

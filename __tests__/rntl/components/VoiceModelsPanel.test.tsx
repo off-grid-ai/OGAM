@@ -64,7 +64,7 @@ describe('VoiceModelsPanel', () => {
   it('shows the RAM privacy banner with the device RAM', async () => {
     const { getByText } = await app.renderPanel();
     await app.rtl.waitFor(() =>
-      expect(getByText('8.0GB RAM - speech runs on your phone and your voice never leaves it')).toBeTruthy(),
+      expect(getByText('8.0 GB RAM. Replies are read aloud on this phone, and your voice never leaves it.')).toBeTruthy(),
     );
   });
 
@@ -108,8 +108,8 @@ describe('VoiceModelsPanel', () => {
     await app.rtl.act(async () => { download = app.store().downloadModels(); });
     const { getByText, queryByText } = await app.renderPanel();
     await app.rtl.waitFor(() => expect(getByText('40%')).toBeTruthy());
-    // ExecuTorch's fetcher reports a fraction only, so there is no byte rate to show.
-    expect(getByText('Rate unavailable')).toBeTruthy();
+    // ExecuTorch's fetcher reports a fraction only, so no byte rate shows.
+    expect(queryByText('Rate unavailable')).toBeNull();
     expect(queryByText(/NaN/)).toBeNull();
     expect(queryByText('Download voice model')).toBeNull();
     await app.rtl.act(async () => { finish(); await download; });

@@ -1,14 +1,21 @@
+import { cardSurface } from '../../theme/surface';
+import { StyleSheet } from 'react-native';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { createImageModelsStyles } from './imageStyles';
 
-const createBaseStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   flex1: { flex: 1 },
   backButton: { padding: 4, marginRight: 8 },
   searchContainerNoPadding: { paddingHorizontal: 0 },
   container: { flex: 1, backgroundColor: colors.background },
+  // 44 pt frames (they were 28), pulled back so the header keeps its height.
   downloadManagerButton: {
-    padding: SPACING.xs,
+    width: 44,
+    height: 44,
+    margin: -8,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
     position: 'relative' as const,
   },
   downloadBadge: {
@@ -24,59 +31,38 @@ const createBaseStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingHorizontal: 4,
   },
   downloadBadgeText: { ...TYPOGRAPHY.label, color: colors.text },
-  tabScroller: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    marginBottom: 12,
-  },
-  tabBar: {
-    flexDirection: 'row' as const,
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.sm,
-    gap: SPACING.md,
-  },
-  tabItem: { paddingVertical: 10, alignItems: 'center' as const },
-  tabText: { ...TYPOGRAPHY.body, color: colors.textMuted },
-  tabTextActive: { color: colors.text, fontWeight: '700' as const },
-  tabIndicator: {
-    height: 2,
-    backgroundColor: colors.primary,
-    borderRadius: 1,
-    marginTop: 4,
-    alignSelf: 'stretch' as const,
-  },
   imageTabContent: { flex: 1 },
   searchContainer: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     paddingBottom: 16,
     gap: 8,
   },
   // The Text tab's search row stays put with a shadow along its bottom edge; the list scrolls under it.
+  // It stays put above the list, over the living field: no slab, no shadow edge across the screen.
   searchContainerRaised: {
-    backgroundColor: colors.background,
     zIndex: 1,
-    ...shadows.edge,
   },
+  searchField: { flex: 1 },
   searchInput: {
     ...TYPOGRAPHY.body,
     flex: 1,
     backgroundColor: colors.surface,
     borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
     paddingHorizontal: 16,
     paddingVertical: 12,
     color: colors.text,
   },
+  // Glass like every card.
   importProgressCard: {
+    ...cardSurface(colors),
     marginHorizontal: SPACING.md,
     marginTop: 12,
     marginBottom: 8,
     padding: 16,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
     gap: 10,
   },
   importProgressHeader: {
@@ -94,20 +80,16 @@ const createBaseStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   loadingText: { ...TYPOGRAPHY.body, color: colors.textSecondary },
   // Top padding keeps the first card off the list's clip edge, under the search row.
-  listContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, paddingBottom: 32 },
+  listContent: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.sm, paddingBottom: 32 },
+  // A quiet line, not an amber box: what runs where, said once in the page's own voice.
   deviceBanner: {
-    backgroundColor: `${colors.trending}15`,
-    borderRadius: 8,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    marginBottom: SPACING.lg,
-    borderWidth: 1,
-    borderColor: `${colors.trending}40`,
+    paddingVertical: SPACING.xs,
+    marginBottom: SPACING.md,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: SPACING.xs,
   },
-  deviceBannerText: { ...TYPOGRAPHY.meta, color: colors.trending, flex: 1 },
+  deviceBannerText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, flex: 1 },
   deviceBannerWarning: { color: colors.error, marginTop: 2 },
   emptyCard: { alignItems: 'center' as const, padding: 32 },
   emptyText: { color: colors.textSecondary, textAlign: 'center' as const },
@@ -116,7 +98,7 @@ const createBaseStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
 const createFilterStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   filterBar: { marginBottom: 4, paddingBottom: 4 },
   filterPillRow: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     gap: 8,
     alignItems: 'center' as const,
   },
@@ -143,10 +125,10 @@ const createFilterStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     justifyContent: 'center' as const,
     paddingHorizontal: 4,
   },
-  filterCountText: { ...TYPOGRAPHY.labelSmall, color: colors.background, fontWeight: '700' as const },
+  filterCountText: { ...TYPOGRAPHY.labelSmall, color: colors.background, fontWeight: '500' as const },
   clearFiltersButton: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
   clearFiltersText: { ...TYPOGRAPHY.bodySmall, color: colors.error },
-  filterExpandedContent: { paddingHorizontal: SPACING.md, paddingTop: 8, paddingBottom: 4 },
+  filterExpandedContent: { paddingHorizontal: SPACING.xl, paddingTop: 8, paddingBottom: 4 },
   filterChipWrap: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
   filterChip: {
     flexDirection: 'row' as const,
@@ -162,8 +144,11 @@ const createFilterStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   filterChipActive: { backgroundColor: `${colors.primary}25`, borderColor: colors.primary },
   filterChipText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
   filterChipTextActive: { color: colors.primary },
-  filterToggle: { padding: 12, borderRadius: 12, backgroundColor: colors.surface },
-  filterToggleActive: { backgroundColor: `${colors.primary}15` },
+  // Toolbar actions are bare glyphs with a 44px target; the chosen one shows by its emerald glyph.
+  filterToggle: { width: 44, height: 44, margin: -3, alignItems: 'center' as const, justifyContent: 'center' as const },
+  filterToggleActive: {},
+  // Bars of three lengths turned on their side: the usual sort mark.
+  sortGlyph: { transform: [{ rotate: '90deg' }, { scaleX: -1 }] },
   filterDot: {
     position: 'absolute' as const,
     top: 6,
@@ -206,15 +191,16 @@ const createTextModelsStyles = (colors: ThemeColors, _shadows: ThemeShadows) => 
   credibilityText: { ...TYPOGRAPHY.meta },
   modelDescription: { ...TYPOGRAPHY.bodySmall, color: colors.text, marginBottom: SPACING.xs },
   modelStats: { flexDirection: 'row' as const, gap: 16 },
-  statText: { ...TYPOGRAPHY.meta, color: colors.textMuted },
-  sectionTitle: { ...TYPOGRAPHY.h3, color: colors.text, paddingHorizontal: SPACING.md, marginBottom: 4 },
+  statText: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
+  sectionTitle: { ...TYPOGRAPHY.h3, color: colors.text, paddingHorizontal: SPACING.xl, marginBottom: 4 },
   sectionSubtitle: {
     ...TYPOGRAPHY.body,
     color: colors.textSecondary,
     paddingHorizontal: SPACING.md,
     marginBottom: 16,
   },
-  recommendedTitle: { ...TYPOGRAPHY.meta, color: colors.textMuted, marginBottom: SPACING.md },
+  // The same kicker as "For this phone" above it: one section-label style on the tab.
+  recommendedTitle: { ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, letterSpacing: 0.3, color: colors.textMuted, marginBottom: SPACING.sm },
 });
 
 export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({

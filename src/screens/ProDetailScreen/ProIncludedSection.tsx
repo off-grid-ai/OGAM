@@ -19,6 +19,8 @@ import { useTheme, useThemedStyles } from '../../theme';
 import { useHasRegisteredScreen } from '../../navigation/screenRegistry';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { SPACING, TYPOGRAPHY } from '../../constants';
+import { cardSurface } from '../../theme/surface';
+import { SectionLabel } from '../../components/SectionLabel';
 
 interface IncludedRow {
   screen: string;
@@ -63,8 +65,10 @@ export const ProIncludedSection: React.FC = () => {
   if (rows.length === 0) return null;
 
   return (
+    <>
+    {/* The label above the card, as every other group (hand test 66 found it inside). */}
+    <SectionLabel title="Included with Pro" style={styles.cardLabel} />
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Included with Pro</Text>
       {rows.map((row, index) => (
         <TouchableOpacity
           key={row.screen}
@@ -75,7 +79,7 @@ export const ProIncludedSection: React.FC = () => {
           onPress={() => navigation.navigate(row.screen)}
           testID={`pro-included-${row.screen}`}
         >
-          <Icon name={row.icon} size={18} color={colors.primary} />
+          <Icon name={row.icon} size={18} color={colors.textSecondary} />
           <View style={styles.rowText}>
             <Text style={styles.rowTitle}>{row.title}</Text>
             <Text style={styles.rowDescription}>{row.description}</Text>
@@ -84,27 +88,19 @@ export const ProIncludedSection: React.FC = () => {
         </TouchableOpacity>
       ))}
     </View>
+    </>
   );
 };
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
+    ...cardSurface(colors),
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     marginHorizontal: SPACING.xl,
     marginBottom: SPACING.xl,
-    ...shadows.small,
   },
-  cardTitle: {
-    ...TYPOGRAPHY.label,
-    color: colors.textMuted,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.3,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.xs,
-  },
+  cardLabel: { marginLeft: SPACING.xl + SPACING.xs },
   row: {
     minHeight: 44,
     flexDirection: 'row' as const,
@@ -117,5 +113,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   lastRow: { borderBottomWidth: 0 },
   rowText: { flex: 1, gap: SPACING.xs },
   rowTitle: { ...TYPOGRAPHY.body, color: colors.text },
-  rowDescription: { ...TYPOGRAPHY.meta, color: colors.textSecondary },
+  // A sentence, so Geist (reading text), not the Mono kept for labels and numbers.
+  rowDescription: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
 });

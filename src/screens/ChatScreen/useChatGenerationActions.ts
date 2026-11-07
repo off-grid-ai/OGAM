@@ -63,6 +63,8 @@ import {
 } from '../../services/documents/chatTurn';
 import { useDocumentTurnStatusStore } from '../../services/documents/progressStore';
 import { shownMessages } from '../../utils/chatThread';
+import { hasSearchableKnowledge, toolsForTurn } from '../../services/documents/searchableKnowledge';
+import { resolveSystemPrompt } from '../../utils/systemPrompt';
 type SetState<T> = Dispatch<SetStateAction<T>>;
 const FALLBACK_RECENT_MESSAGE_COUNT = 2;
 
@@ -177,7 +179,7 @@ function blockedImageForNonVisionModel(
     showAlert(
       repair ? 'Vision File Missing' : 'Vision Not Supported',
       repair
-        ? 'This model supports vision, but its vision file has not been installed.\n\nOpen Download Manager and tap the wrench next to the model to download it.'
+        ? 'This model supports vision, but its vision file has not been installed.\n\nOpen Downloads and tap the wrench next to the model to download it.'
         : 'This model does not support image input.\n\nSwitch to a vision-capable model to send images.',
     ),
   );
@@ -764,10 +766,7 @@ function resolveToolsAndPrompt(
   // The user enables KB search explicitly when they want it.
   const enabledTools = canUseTools ? deps.settings.enabledTools || [] : [];
 
-  const rawPrompt =
-    project?.systemPrompt ||
-    deps.settings.systemPrompt ||
-    APP_CONFIG.defaultSystemPrompt;
+  const rawPrompt = resolveSystemPrompt(project?.systemPrompt, deps.settings.systemPrompt);
   return { enabledTools, rawPrompt, localToolSupport };
 }
 export async function startGenerationFn(
@@ -780,7 +779,7 @@ export async function startGenerationFn(
   const { setDebugInfo, targetConversationId, messageText, assistantEnabled } = call;
   if (!deps.hasActiveModel) return;
   // Pure text executor — image-vs-text routing happens upstream in dispatchGenerationFn.
-  generationSession.begin(targetConversationId);
+  const turn = generationSession.begin(targetConversationId);
   // For remote models, skip local model loading
   if (
     !deps.activeModelInfo?.isRemote &&
@@ -790,6 +789,11 @@ export async function startGenerationFn(
     }))
   ) {
     generationSession.end('not-ready');
+    return;
+  }
+  // Stop pressed while the model loaded ends the turn; the reply it was waiting to start never runs.
+  if (!generationSession.isCurrent(turn)) {
+    logger.log('[GEN-SM] turn stopped during model load; not generating');
     return;
   }
   const conversation = useChatStore
@@ -808,7 +812,8 @@ export async function startGenerationFn(
     callHook<string>(HOOKS.audioAugmentPrompt, basePrompt) ?? basePrompt;
 
   const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;
-  const activeTools = enabledTools;
+  // Knowledge search only when this chat or its project holds something to search.
+  const activeTools = toolsForTurn(enabledTools, await hasSearchableKnowledge(targetConversationId));
   // Text hint only when the LOCAL engine lacks native tool-calling (llama without Jinja); LiteRT
   // and remote pass tools natively, so injecting a hint would double-inject. localToolSupport is
   // the engine-registry answer — no engine === 'litert' branch here.
@@ -925,7 +930,7 @@ export async function startGenerationFn(
         ),
       );
     }
-    generationSession.end('error');
+    generationSession.end('error', turn);
     return;
   }
   // The model produced NO output (0 tokens) — finalizeStreamingMessage only appends an
@@ -953,7 +958,7 @@ export async function startGenerationFn(
       },
     });
   }
-  generationSession.end();
+  generationSession.end('done', turn);
 }
 let _msgIdSeq = 0;
 const nextMsgId = () => `${Date.now()}-${(++_msgIdSeq).toString(36)}`;
@@ -1315,7 +1320,7 @@ export async function regenerateResponseFn(
   const targetConversationId = deps.activeConversationId;
   // Resend starts before memory reclaim, routing, and remote preparation. Publish that fact now so
   // the existing thinking loader covers the full wait instead of appearing only when generation starts.
-  generationSession.begin(targetConversationId);
+  const resendTurn = generationSession.begin(targetConversationId);
   await modelResidencyManager.reclaimSttForGeneration(); // free idle Whisper before the LLM reload (memory-tight)
   const messageTextForRoute = userMessage.content;
   // Same decision seam as dispatch (resolveTurnKind): a replay passes the RECORDED kind, which wins
@@ -1365,6 +1370,10 @@ export async function regenerateResponseFn(
     generationSession.end('not-ready');
     return;
   }
+  if (!generationSession.isCurrent(resendTurn)) {
+    logger.log('[RESEND-SM] turn stopped during model load; not generating');
+    return;
+  }
   logger.log('[RESEND-SM] regenerate → reached LLM generate path');
   track('reply_regenerated');
   // LiteRT: native history must be rewound to match the JS messages we're about to replay.
@@ -1385,7 +1394,8 @@ export async function regenerateResponseFn(
     messageText,
   );
   const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;
-  const activeTools = enabledTools;
+  // Knowledge search only when this chat or its project holds something to search.
+  const activeTools = toolsForTurn(enabledTools, await hasSearchableKnowledge(targetConversationId));
   const useTextHint = !isRemote && !localToolSupport && activeTools.length > 0;
   // MCP/extension hints come solely from augmentSystemPromptForTools in the tool loop
   // (see the send path above) — adding them here too would double-inject.
@@ -1489,7 +1499,7 @@ export async function regenerateResponseFn(
       deps.setAlertState(showAlert('Generation Error', msg));
     }
   }
-  generationSession.end();
+  generationSession.end('done', resendTurn);
 }
 export type SelectProjectDeps = {
   activeConversationId: string | null | undefined;

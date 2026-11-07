@@ -18,7 +18,7 @@ describe('failed download removal', () => {
     await hydrateDownloadStore();
 
     const screen = render(React.createElement(DownloadManagerScreen));
-    fireEvent.press(await waitFor(() => screen.getByLabelText('Remove 0-gemma-4-E2B-it.litertlm')));
+    fireEvent.press(await waitFor(() => screen.getByLabelText(/^Remove /)));
     fireEvent.press(await waitFor(() => screen.getByText('Yes')));
 
     await waitFor(() => expect(screen.queryByText('0-gemma-4-E2B-it.litertlm')).toBeNull(), { timeout: 5000 });

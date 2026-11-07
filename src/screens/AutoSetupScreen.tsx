@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Pressable, TouchableOpacity } from '../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button, Card } from '../components';
 import { LoadingDots } from '../components/LoadingDots';
+import { AliveScreen } from '../components/AliveScreen';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { cardSurface } from '../theme/surface';
 import { SLOTS, useSlot } from '../bootstrap/slotRegistry';
 import { SPACING, TYPOGRAPHY } from '../constants';
 import type { RootStackParamList } from '../navigation/types';
@@ -50,6 +52,9 @@ export const AutoSetupScreen: React.FC<Props> = ({
   sessionFactory = productionSessionFactory,
 }) => {
   const session = useMemo(() => sessionFactory(), [sessionFactory]);
+  // Opened from the app (Storage), not first launch: Back and Not now return there, never to Home.
+  const [openedFromApp] = useState(() => navigation.canGoBack());
+  const leave = () => (openedFromApp ? navigation.goBack() : navigation.replace('Main'));
   const snapshot = useSyncExternalStore(
     session.subscribe,
     session.snapshot,
@@ -114,18 +119,20 @@ export const AutoSetupScreen: React.FC<Props> = ({
 
   if (snapshot.phase === 'loading_catalog')
     return (
-      <SafeAreaView style={styles.container}>
+      <AliveScreen style={styles.container}>
+        {openedFromApp && <ScreenHeader title="Choose models" onBack={navigation.goBack} />}
         <View style={styles.center}>
           <LoadingDots color={colors.primary} />
           <Text style={styles.secondary}>
             Finding model choices...
           </Text>
         </View>
-      </SafeAreaView>
+      </AliveScreen>
     );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <AliveScreen style={styles.container}>
+      {openedFromApp && <ScreenHeader title="Choose models" onBack={navigation.goBack} />}
       <ScrollView
         contentContainerStyle={styles.content}
         testID="auto-setup-screen"
@@ -163,7 +170,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
             <Icon
               name={shareAnalytics ? 'check-square' : 'square'}
               size={20}
-              color={shareAnalytics ? colors.primary : colors.textSecondary}
+              color={shareAnalytics ? colors.text : colors.textSecondary}
             />
             <View style={styles.consentText}>
               <Text style={styles.consentLabel}>
@@ -241,7 +248,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
                           {needsAction ? (
                             <Button
                               title=""
-                              icon={<Icon name={checked ? 'check-square' : 'square'} size={20} color={checked ? colors.primary : colors.textSecondary} />}
+                              icon={<Icon name={checked ? 'check-square' : 'square'} size={20} color={checked ? colors.text : colors.textSecondary} />}
                               variant="ghost"
                               size="small"
                               active={checked}
@@ -313,7 +320,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
                       title="Continue"
                       onPress={() => {
                         session.complete();
-                        navigation.replace('Main');
+                        leave();
                       }}
                       testID="auto-setup-continue"
                     />
@@ -377,18 +384,18 @@ export const AutoSetupScreen: React.FC<Props> = ({
           testID="auto-setup-advanced"
         />
         <Button
-          title="Skip for Now"
+          title={openedFromApp ? 'Not now' : 'Skip for Now'}
           variant="ghost"
           style={styles.textAction}
           onPress={() => {
             markConsentAsked();
-            flowFinished('onboarding', 'cancelled');
-            navigation.replace('Main');
+            if (!openedFromApp) flowFinished('onboarding', 'cancelled');
+            leave();
           }}
           testID="auto-setup-skip"
         />
       </ScrollView>
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 
@@ -415,10 +422,10 @@ function outcomeLabel(
 const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   container: { flex: 1, backgroundColor: colors.background },
   content: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.xl,
     paddingBottom: SPACING.xxl,
-    gap: SPACING.sm,
+    gap: SPACING.md,
   },
   center: {
     flex: 1,
@@ -429,15 +436,14 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   title: { ...TYPOGRAPHY.h2, color: colors.text, textAlign: 'left' as const },
   secondary: { ...TYPOGRAPHY.body, color: colors.textSecondary, textAlign: 'left' as const },
-  planGrid: { gap: SPACING.xs },
+  planGrid: { gap: SPACING.sm },
   planCard: {
-    borderWidth: 1,
-    borderColor: colors.border,
+    ...cardSurface(colors),
     gap: SPACING.xs,
     padding: SPACING.sm,
-    borderRadius: SPACING.sm,
   },
-  selectedCard: { borderColor: colors.primary },
+  // The chosen plan: desktop's chosen state, a faint emerald fill under an emerald hairline.
+  selectedCard: { backgroundColor: colors.selectedFill, borderColor: colors.heroBorder },
   planHeader: {
     gap: SPACING.xs,
     minHeight: 44,
@@ -450,8 +456,8 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   planTitle: { ...TYPOGRAPHY.h3, color: colors.text, textAlign: 'left' as const },
   expandedPlan: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderLight,
     marginTop: SPACING.xs,
     paddingTop: SPACING.xs,
     gap: SPACING.xs,
@@ -462,8 +468,8 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     gap: SPACING.sm,
     minHeight: 44,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
   },
   unavailableItem: {
     padding: SPACING.sm,
@@ -503,7 +509,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textSecondary,
     flexShrink: 0,
   },
-  total: { ...TYPOGRAPHY.meta, color: colors.primary, textAlign: 'left' as const },
+  total: { ...TYPOGRAPHY.meta, color: colors.textSecondary, textAlign: 'left' as const },
   itemKind: {
     ...TYPOGRAPHY.labelSmall,
     color: colors.textMuted,
@@ -516,7 +522,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     overflow: 'hidden' as const,
   },
   progressFill: { height: SPACING.xs, backgroundColor: colors.primary },
-  errorCard: { gap: SPACING.md, borderWidth: 1, borderColor: colors.error },
+  errorCard: { gap: SPACING.md },
   consentRow: { gap: SPACING.xs },
   consentToggle: {
     flexDirection: 'row' as const,
@@ -525,9 +531,9 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   consentText: { flex: 1, gap: SPACING.xs },
   consentLabel: { ...TYPOGRAPHY.body, color: colors.text },
-  consentHint: { ...TYPOGRAPHY.meta, color: colors.textSecondary },
+  consentHint: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
   consentLink: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.primary,
     marginLeft: 20 + SPACING.sm,
   },

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Geist Mono (OFL), for labels, numbers and code. -->
+<font-family xmlns:app="http://schemas.android.com/apk/res-auto">
+    <font app:fontStyle="normal" app:fontWeight="300" app:font="@font/geist_mono_light" />
+    <font app:fontStyle="normal" app:fontWeight="400" app:font="@font/geist_mono_regular" />
+    <font app:fontStyle="normal" app:fontWeight="500" app:font="@font/geist_mono_medium" />
+</font-family>

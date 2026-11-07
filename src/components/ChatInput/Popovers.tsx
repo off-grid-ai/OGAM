@@ -2,12 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableWithoutFeedback, Dimensions } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
-import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../theme';
 import { ImageModeState } from '../../types';
 import { useAppStore } from '../../stores';
 import { triggerHaptic } from '../../utils/haptics';
-import { FONTS } from '../../constants';
+import { TYPOGRAPHY } from '../../constants';
+import Animated, { Easing, withTiming } from 'react-native-reanimated';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { QuickBadge, type QuickBadgeTone } from './QuickBadge';
 
@@ -34,23 +34,41 @@ export const popoverStyles = StyleSheet.create({
     position: 'absolute',
     // The width the edge clamp assumes; content-sized, a row's flex label shrinks and wraps under its badge.
     width: POPOVER_WIDTH,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 4,
+    overflow: 'hidden',
+    // Grows out of the settings control it opens from (bottom right), not a fade in mid-air.
+    transformOrigin: 'bottom right',
   },
+  // Every row the same 44 pt, so the menu reads as one column of controls.
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    minHeight: 44,
     paddingHorizontal: 14,
-    gap: 10,
+    gap: 12,
   },
+  // Modes above, the tool screens below.
+  divider: { height: StyleSheet.hairlineWidth, marginVertical: 4 },
+  // A menu item is words: Geist, sentence case (hand test 60: Title Case in Mono).
   rowLabel: {
     flex: 1,
-    fontSize: 14,
-    fontFamily: FONTS.mono,
+    ...TYPOGRAPHY.body,
   },
 });
+
+// Grows from the control it opens from: a short scale and fade (~200 ms), never a full-screen fade.
+const growIn = () => {
+  'worklet';
+  return {
+    initialValues: { opacity: 0, transform: [{ scale: 0.9 }] },
+    animations: {
+      opacity: withTiming(1, { duration: 160 }),
+      transform: [{ scale: withTiming(1, { duration: 200, easing: Easing.out(Easing.cubic) }) }],
+    },
+  };
+};
 
 // ─── Quick Settings Popover ─────────────────────────────────────────────────
 
@@ -125,15 +143,14 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
 
   // Tools and MCP warnings are independent — each turns amber at 3+
   const showToolsWarning = supportsToolCalling && enabledToolCount >= 3 && !toolCountHintDismissed;
-  const showMcpWarning = mcpToolCount >= 3;
 
-  const toolIconColor = showToolsWarning ? TOOL_WARNING_COLOR : tools.iconColor;
+  const toolIconColor = showToolsWarning ? TOOL_WARNING_COLOR : colors.textSecondary;
 
   return (
     <Modal
       transparent
       visible={visible}
-      animationType="fade"
+      animationType="none"
       onRequestClose={onClose}
     >
       {/* accessible={false} on the SCRIM too. The inner wrapper was fixed first, but this outer
@@ -151,12 +168,13 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
               reach one setting. Android exposes the rows individually; this is what made iOS
               differ. */}
           <TouchableWithoutFeedback accessible={false}>
-            <View
+            <Animated.View
+              entering={growIn}
               style={[
                 popoverStyles.popover,
                 {
                   backgroundColor: colors.surface,
-                  borderColor: colors.border,
+                  borderColor: colors.borderLight,
                   ...shadows.medium,
                   bottom: anchorY + 8,
                   right: clampPopoverRight(anchorX),
@@ -174,10 +192,10 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
                 <Icon
                   name="image"
                   size={16}
-                  color={imageMode === 'force' ? colors.primary : imageModelLoaded ? colors.text : colors.textMuted}
+                  color={imageModelLoaded || imageMode === 'force' ? colors.textSecondary : colors.textMuted}
                 />
                 <Text style={[popoverStyles.rowLabel, { color: colors.text }]}>
-                  Image Gen
+                  Image
                 </Text>
                 <QuickBadge
                   testID={imageMode === 'force' ? 'image-mode-force-badge' : undefined}
@@ -203,10 +221,10 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
                 <Icon
                   name="video"
                   size={16}
-                  color={imageMode === 'video' ? colors.primary : colors.textMuted}
+                  color={colors.textSecondary}
                 />
                 <Text style={[popoverStyles.rowLabel, { color: colors.text }]}>
-                  Video Gen
+                  Video
                 </Text>
                 <QuickBadge tone={imageMode === 'video' ? 'on' : 'off'} label={imageMode === 'video' ? 'ON' : 'OFF'} />
               </TouchableOpacity>
@@ -223,7 +241,7 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
                   <Icon
                     name="zap"
                     size={16}
-                    color={thinkingEnabled ? colors.primary : colors.textMuted}
+                    color={colors.textSecondary}
                   />
                   <Text
                     style={[popoverStyles.rowLabel, { color: colors.text }]}
@@ -235,6 +253,8 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
               )}
 
               {AudioRow && <AudioRow styles={popoverStyles} onClose={onClose} />}
+
+              <View style={[popoverStyles.divider, { backgroundColor: colors.borderLight }]} />
 
               <TouchableOpacity
                 testID="quick-tools"
@@ -252,6 +272,7 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
                   Tools
                 </Text>
                 <QuickBadge tone={showToolsWarning ? 'warn' : 'count'} label={tools.badgeLabel} />
+                <Icon name="chevron-right" size={14} color={colors.textMuted} />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -263,19 +284,16 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
                   onMcpPress?.();
                 }}
               >
-                <IconMC
-                  name="crown"
-                  size={16}
-                  color={showMcpWarning ? TOOL_WARNING_COLOR : colors.text}
-                />
+                <Icon name="package" size={16} color={colors.textSecondary} />
                 <Text style={[popoverStyles.rowLabel, { color: colors.text }]}>
-                  Pro Tools
+                  Pro tools
                 </Text>
                 {mcpToolCount > 0 && (
-                  <QuickBadge tone={showMcpWarning ? 'warn' : 'count'} label={mcpToolCount} />
+                  <QuickBadge tone="count" label={mcpToolCount} />
                 )}
+                <Icon name="chevron-right" size={14} color={colors.textMuted} />
               </TouchableOpacity>
-            </View>
+            </Animated.View>
           </TouchableWithoutFeedback>
         </View>
       </TouchableWithoutFeedback>

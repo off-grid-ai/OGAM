@@ -1,31 +1,43 @@
+import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { FONTS, TYPOGRAPHY, SPACING } from '../../constants';
 import { Platform } from 'react-native';
 
-export const PILL_ICON_SIZE = 32;
+// 44 pt: the frame is what a screen reader and a thumb measure, not hitSlop (hand test 37).
+export const PILL_ICON_SIZE = 44;
 export const ANIM_DURATION_IN = 180;
 export const ANIM_DURATION_OUT = 200;
-const TOOL_WARNING_COLOR = '#F59E0B';
 
 export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   // The bar holds one box, edge to edge: anything queued or attached above it keeps the side inset.
+  // Transparent: the living field shows around the floating composer.
   container: {
-    backgroundColor: colors.background,
+    backgroundColor: 'transparent',
   },
-  aboveComposer: { paddingHorizontal: 12 },
+  aboveComposer: { paddingHorizontal: SPACING.xl },
   // Attachment previews row
+  // Inside the composer, above the text: room on top and right for each remove control.
   attachmentsContainer: {
-    marginBottom: 6,
+    flexGrow: 0,
   },
   attachmentsContent: {
-    gap: 8,
+    gap: 14,
+    paddingTop: 14,
+    paddingLeft: 12,
+    paddingRight: 14,
   },
   attachmentPreview: {
     position: 'relative' as const,
-    width: 60,
-    height: 60,
-    borderRadius: 8,
+    width: 56,
+    height: 56,
+  },
+  // The picture's own corners. A photo with no background shows the composer's glass, never white.
+  attachmentClip: {
+    width: '100%' as const,
+    height: '100%' as const,
+    borderRadius: 12,
     overflow: 'hidden' as const,
+    backgroundColor: colors.surfaceGlass,
   },
   attachmentImage: {
     width: '100%' as const,
@@ -53,22 +65,23 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     textAlign: 'center' as const,
     marginTop: 2,
   },
+  // A quiet ×: a small dark disc on the corner, in a 44 pt frame (remove loses nothing; never red).
   removeAttachment: {
     position: 'absolute' as const,
-    top: 2,
-    right: 2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.error,
+    top: -14,
+    right: -14,
+    width: 44,
+    height: 44,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
-  removeAttachmentText: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: 'bold' as const,
-    marginTop: -2,
+  removeAttachmentDisc: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   // Queued messages (above input)
   queueList: {
@@ -156,25 +169,43 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingRight: 4,
     paddingVertical: 6,
     minHeight: 56,
+    borderWidth: 1,
+    borderColor: 'transparent',
     ...shadows.small,
+  },
+  pillFocused: {
+    borderColor: `${colors.primary}80`,
+    ...shadows.glow,
   },
   // One box, edge to edge, in every mode: image or video mode adds the styles at its top, and nothing else moves.
   // Only the top corners are rounded; the input inside draws no edge of its own (the theme shadow is a boxShadow,
   // so it is cleared as one). Its bottom padding (with the home-indicator inset) is set where it is drawn.
+  // Desktop's composer: a floating rounded box with a hairline edge over the living field, not a slab
+  // edge to edge. Image or video mode still adds its style row at the top, inside the box.
   composer: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
+    // The screen's 24 pt gutter, so the composer lines up with the messages above it.
+    marginHorizontal: SPACING.xl,
     overflow: 'hidden' as const,
     paddingTop: 4,
+    paddingBottom: 8,
     ...shadows.small,
+  },
+  // Focus draws light to the field: the edge turns emerald with a soft emerald ring (desktop's composer).
+  composerFocused: {
+    borderColor: colors.heroBorder,
+    boxShadow: `0px 0px 0px 4px ${colors.selectedFill}, 0px 0px 24px ${colors.selectedFill}`,
   },
   pillInComposer: { backgroundColor: 'transparent', borderRadius: 0, boxShadow: [] },
   pillInput: {
     flex: 1,
     color: colors.text,
     fontSize: 15,
-    fontFamily: FONTS.mono,
+    // What you type is reading text: Geist, not the Mono kept for labels and numbers.
+    fontFamily: FONTS.sans,
     minHeight: 36,
     maxHeight: 150,
     textAlignVertical: 'top' as const,
@@ -255,7 +286,8 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: TOOL_WARNING_COLOR,
+    // One accent only (brand): the hint dot is emerald, not orange.
+    backgroundColor: colors.primary,
   },
   // Small badge on image gen icon
   iconBadge: {
@@ -281,7 +313,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   iconBadgeText: {
     fontSize: 7,
     fontFamily: FONTS.mono,
-    fontWeight: '700' as const,
+    fontWeight: '500' as const,
     color: colors.background,
     lineHeight: 10,
   },
@@ -293,10 +325,13 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     backgroundColor: colors.primary,
-    ...shadows.small,
   },
+  // Stop is a quiet control (no shadow): red is kept for errors, and a full-contrast disc would outshine
+  // the emerald that marks the one important thing on screen.
   circleButtonStop: {
-    backgroundColor: `${colors.error}`,
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   // Stop control sized to match the audio-mode mic (AUDIO_MIC_SIZE), so the
   // center slot keeps one footprint across mic / loading / stop — no layout jump
@@ -307,7 +342,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     borderRadius: 28,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    backgroundColor: colors.error,
+    backgroundColor: colors.surfaceLight,
   },
   circleButtonIdle: {
     backgroundColor: colors.surface,
@@ -343,7 +378,6 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   audioControlButton: {
     backgroundColor: colors.surface,
-    ...shadows.small,
   },
   audioVoiceLabel: {
     ...TYPOGRAPHY.meta,

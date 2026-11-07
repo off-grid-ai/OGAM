@@ -26,14 +26,19 @@ export const SettingsAppearanceRow: React.FC<SettingsAppearanceRowProps> = ({
   onSelect
 }) => (
         <AnimatedEntry index={0} staggerMs={40} trigger={focusTrigger}>
-          <View style={styles.themeToggleRow}>
-            <Text style={styles.themeToggleLabel}>Appearance</Text>
+          <View style={styles.navItem}>
+            <View style={styles.navItemIcon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <Icon name="aperture" size={16} color={colors.textSecondary} />
+            </View>
+            <View style={styles.navItemContent}>
+              <Text style={styles.navItemTitle}>Appearance</Text>
+            </View>
             <View style={styles.themeSelector}>
               {[
-                { mode: 'system' as const, icon: 'monitor' },
-                { mode: 'light' as const, icon: 'sun' },
-                { mode: 'dark' as const, icon: 'moon' },
-              ].map(({ mode, icon }) => (
+                { mode: 'system' as const, icon: 'monitor', label: 'System' },
+                { mode: 'light' as const, icon: 'sun', label: 'Light' },
+                { mode: 'dark' as const, icon: 'moon', label: 'Dark' },
+              ].map(({ mode, icon, label }) => (
                 <TouchableOpacity
                   key={mode}
                   style={[
@@ -42,12 +47,15 @@ export const SettingsAppearanceRow: React.FC<SettingsAppearanceRowProps> = ({
                   ]}
                   onPress={() => onSelect(mode)}
                   testID={`theme-option-${mode}`}
+                  accessibilityRole="radio"
+                  accessibilityLabel={label}
+                  accessibilityState={{ selected: themeMode === mode }}
                 >
                   <Icon
                     name={icon}
                     size={16}
                     color={
-                      themeMode === mode ? colors.background : colors.textMuted
+                      themeMode === mode ? colors.text : colors.textMuted
                     }
                   />
                 </TouchableOpacity>

@@ -58,7 +58,7 @@ describe('llama → llama switch to a model too big for the phone', () => {
     };
     const initsFor = (file: string) => llama.calls.initLlama.filter(p => String(p.model).endsWith(file)).length;
 
-    await rtl.waitFor(() => expect(view().queryByText(/chatting with Model A/)).not.toBeNull());
+    await rtl.waitFor(() => expect(view().queryByText(/Model A answers/)).not.toBeNull());
 
     // GESTURE: the first message loads Model A and it answers.
     await h.send('Hi', { text: 'Hello from A.' });

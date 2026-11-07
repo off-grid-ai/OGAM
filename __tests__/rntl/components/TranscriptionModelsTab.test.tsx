@@ -93,7 +93,7 @@ describe('TranscriptionModelsTab', () => {
   it('shows the speech catalogue, this phone\'s picks and the privacy banner', async () => {
     const { rtl, view } = await mount();
 
-    expect(rtl.within(view.getByTestId('transcription-model-card-0')).getByText('Tiny')).toBeTruthy();
+    expect(rtl.within(view.getByTestId('transcription-model-card-0')).getByText('Tiny English')).toBeTruthy();
     expect(rtl.within(view.getByTestId('pick-fast')).getByText('Tiny')).toBeTruthy();
     expect(rtl.within(view.getByTestId('pick-balanced')).getByText('Small')).toBeTruthy();
     expect(rtl.within(view.getByTestId('pick-best')).getByText('Large v3')).toBeTruthy();

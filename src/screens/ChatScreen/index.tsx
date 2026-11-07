@@ -1,11 +1,12 @@
 import { videoModelDisplayName } from '../../utils/modelHelpers';
 import { useAppStore } from '../../stores/appStore';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Keyboard, Platform } from 'react-native';
 // Edge-to-edge-aware KeyboardAvoidingView. RN's own version leaves a residual
 // padding band on Android under edge-to-edge (adjustResize is a no-op there);
 // this one reconciles the keyboard frame against the navigation-bar inset.
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { scrollToContentEnd } from './scrollToContentEnd';
 import { useUiModeStore } from '../../stores/uiModeStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -21,11 +22,12 @@ import {
 import { useEjectAllModels } from '../../hooks/useEjectAllModels';
 import { subscribeSharePrompt } from '../../utils/sharePrompt';
 import { subscribeProPrompt } from '../../services/proPrompt';
-import type { Conversation, Message } from '../../types';
+import type { Message } from '../../types';
 import { useTheme, useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
 import { useChatScreen } from './useChatScreen';
 import { MessageRenderer } from './MessageRenderer';
+import { unansweredQuestionId } from '../../utils/unansweredQuestion';
 import { NoModelScreen, ChatHeader } from './ChatScreenComponents';
 import { openDocumentPage, useChatDocumentsSheet } from '../../components/ChatDocumentsSheet';
 import { ChatModalSection } from './ChatModalSection';
@@ -40,13 +42,15 @@ import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { WHISPER_MODELS } from '../../services';
-import { findTranscriptionModel } from '../../services/whisperModels';
+import { transcriptionModelName } from '../../services/whisperModels';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabels';
 import { useChatStore } from '../../stores';
+import { useIsFocused } from '@react-navigation/native';
+import { LivingField } from '../../components/LivingField';
 
-function countConversationImages(conv: Conversation | undefined): number {
-  return (conv?.messages || []).reduce(
+function countConversationImages(messages: Message[] | undefined): number {
+  return (messages || []).reduce(
     (n: number, m: Message) =>
       n + (m.attachments?.filter(a => a.type === 'image').length || 0),
     0,
@@ -59,7 +63,11 @@ export const ChatScreen: React.FC = () => {
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const isFocused = useIsFocused();
   const chat = useChatScreen();
+  // Counted once per change to the chat, not on every render: opening a sheet re-renders this screen.
+  const activeMessages = chat.activeConversation?.messages;
+  const imageCount = useMemo(() => countConversationImages(activeMessages), [activeMessages]);
   const [assistantSelected, setAssistantSelected] = useState(false);
   // Historical message rows are memoized. Their Retry callback must read the latest composer
   // selection even when the row itself has not re-rendered since Assistant was tapped.
@@ -84,7 +92,8 @@ export const ChatScreen: React.FC = () => {
   };
   const voiceSummary = useUiModeStore(s => s.voiceSummary);
   const whisperModelId = useWhisperStore(s => s.downloadedModelId);
-  const whisperModels = useWithRemoteCatalog('transcription', WHISPER_MODELS);
+  // Re-render when the remote catalog renames a speech model.
+  useWithRemoteCatalog('transcription', WHISPER_MODELS);
   const remoteLabels = useActiveRemoteModelLabels();
   const videoLabel = useAppStore(s => {
     const model = s.downloadedVideoModels.find(m => m.id === s.activeVideoModelId);
@@ -99,7 +108,7 @@ export const ChatScreen: React.FC = () => {
     voice: remoteLabels.voice ?? voiceSummary ?? '—',
     speech:
       remoteLabels.transcription ??
-      findTranscriptionModel(whisperModels, whisperModelId)?.name ??
+      (whisperModelId ? transcriptionModelName(whisperModelId) : undefined) ??
       '—',
   };
   const pendingModelRowRef = useRef<ModelRowType | null>(null);
@@ -115,7 +124,7 @@ export const ChatScreen: React.FC = () => {
   const confirmEjectAll = () => {
     chat.setAlertState(
       showAlert(
-        'Eject All Models',
+        'Eject all models',
         'Unload all active models to free up memory?',
         [
           { text: 'Cancel', style: 'cancel' },
@@ -182,7 +191,7 @@ export const ChatScreen: React.FC = () => {
   React.useEffect(() => {
     if (chat.activeConversation?.messages.length && isNearBottomRef.current) {
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
+        scrollToContentEnd(flatListRef.current, true);
       }, 100);
     }
   }, [chat.activeConversation?.messages.length]);
@@ -191,7 +200,7 @@ export const ChatScreen: React.FC = () => {
     const event =
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const sub = Keyboard.addListener(event, () => {
-      flatListRef.current?.scrollToEnd({ animated: true });
+      scrollToContentEnd(flatListRef.current, true);
     });
     return () => sub.remove();
   }, []);
@@ -207,7 +216,7 @@ export const ChatScreen: React.FC = () => {
       // FlatList re-renders via extraData; onContentSizeChange fires and scrolls.
       // Backup: scroll after items have had time to re-measure.
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: false });
+        scrollToContentEnd(flatListRef.current, false);
       }, 300);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -258,6 +267,7 @@ export const ChatScreen: React.FC = () => {
     chat.setShowScrollToBottom(!isNearBottomRef.current);
   };
 
+  const unansweredId = unansweredQuestionId(chat.displayMessages as Message[]);
   const renderItem = ({ item, index }: { item: any; index: number }) => (
     <MessageRenderer
       item={item}
@@ -267,6 +277,8 @@ export const ChatScreen: React.FC = () => {
       imageModelLoaded={chat.imageModelLoaded}
       isStreaming={chat.isStreaming}
       isGeneratingImage={chat.isGeneratingImage}
+      isBusy={chat.isThinking || chat.isCompacting || chat.isGeneratingForThisConversation}
+      showTryAgain={item.id === unansweredId}
       showGenerationDetails={chat.settings.showGenerationDetails}
       onCopy={chat.handleCopyMessage}
       onRetry={message => {
@@ -287,13 +299,13 @@ export const ChatScreen: React.FC = () => {
     />
   );
 
-  const imageCount = countConversationImages(chat.activeConversation);
-
   // Bottom safe-area is applied on the input footer (ChatMessageArea), not here
   // — otherwise the inset stacks on top of the input's own padding and leaves a
   // gap below the bar.
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* The living field behind the conversation: it answers touch and breathes, as on every tab. */}
+      <LivingField active={isFocused} />
       <KeyboardAvoidingView
         testID="chat-screen"
         style={styles.keyboardView}
@@ -310,6 +322,7 @@ export const ChatScreen: React.FC = () => {
           setShowSettingsPanel={chat.setShowSettingsPanel}
           setShowProjectSelector={chat.setShowProjectSelector}
           isRemote={chat.activeModelInfo?.isRemote}
+          modelName={chat.activeModelName || chat.activeModel?.name}
           documentCount={documents.count}
           onOpenDocuments={documents.open}
         />

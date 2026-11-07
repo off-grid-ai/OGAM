@@ -33,9 +33,9 @@ describe('T086 (rendered) — voice-mode reasoning belongs to one completed Work
       return node!;
     }, { timeout: 8000 });
     await h.rtl.waitFor(() => {
-      expect(h.view!.getByTestId('assistant-work-toggle').props.accessibilityLabel).toBe('Work done');
+      expect(h.view!.getByTestId('assistant-work-toggle').props.accessibilityLabel).toBe('How I got this');
     });
-    h.rtl.fireEvent.press(h.view!.getByLabelText('Work done'));
+    h.rtl.fireEvent.press(h.view!.getByLabelText('How I got this'));
     const thinkingBlock = await h.rtl.waitFor(() => {
       const node = h.view!.queryByTestId('thinking-block');
       expect(node).not.toBeNull();
@@ -43,6 +43,6 @@ describe('T086 (rendered) — voice-mode reasoning belongs to one completed Work
     }, { timeout: 8000 });
     expect(thinkingBlock).toBeTruthy();
     expect(audioBubble).toBeTruthy();
-    expect(h.view!.getAllByLabelText('Work done')).toHaveLength(1);
+    expect(h.view!.getAllByLabelText('How I got this')).toHaveLength(1);
   });
 });

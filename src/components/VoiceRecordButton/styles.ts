@@ -1,6 +1,7 @@
+import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 
-export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
@@ -24,15 +25,14 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     backgroundColor: colors.surfaceLight,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    ...shadows.small,
   },
+  // The mic in Send's place: a quiet circle with a hairline, not a raised white button.
   buttonAsSend: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
   },
   // Audio (voice) mode: a larger, clearly-circular bordered mic so it reads as
   // the primary "press to speak" action.

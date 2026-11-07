@@ -38,7 +38,8 @@ describe('image model picker selection', () => {
       onUnloadModel: () => {},
       isLoading: false,
     }));
-    const localRow = view.getByRole('button', { name: 'Local Image' });
+    // The rows fill in a frame after the sheet opens.
+    const localRow = await view.findByRole('button', { name: 'Local Image' });
     const remoteRow = view.getByRole('button', { name: 'Remote Dreamshaper' });
 
     rtl.fireEvent.press(localRow);

@@ -19,6 +19,10 @@ type Listener = () => void;
  */
 class GenerationSessionService {
   private conversationId: string | null = null;
+  /** Counts turns, so a caller that awaited (a model load) can tell whether Stop ended its turn. */
+  private turn = 0;
+  /** When the last turn ended (ms epoch), for the composer's late-Stop grace; survives any remount. */
+  private endedAt: number | null = null;
   private readonly listeners = new Set<Listener>();
 
   /** The conversation a turn is currently generating for, or null. */
@@ -31,20 +35,42 @@ class GenerationSessionService {
     return this.conversationId != null && this.conversationId === conversationId;
   }
 
-  /** Mark a turn as generating for a conversation. Idempotent for the same id. */
-  begin(conversationId: string): void {
-    if (this.conversationId === conversationId) return;
+  /**
+   * Mark a turn as generating for a conversation. Idempotent for the same id. Returns the turn, for
+   * `isCurrent` after an await.
+   */
+  begin(conversationId: string): number {
+    if (this.conversationId === conversationId) return this.turn;
     logger.log(`[GEN-SM] session begin conv=${conversationId} (was ${this.conversationId ?? 'none'})`);
     this.conversationId = conversationId;
+    this.turn += 1;
     this.notify();
+    return this.turn;
+  }
+
+  /** Whether this turn is still the one generating: false once Stop (or anything) ended it. */
+  isCurrent(turn: number): boolean {
+    return this.conversationId != null && this.turn === turn;
   }
 
   /** Clear the generating session (turn finished / failed / aborted / switched). */
-  end(reason = 'done'): void {
+  end(reason = 'done', turn?: number): void {
     if (this.conversationId == null) return;
+    // A turn that finishes late (its reply was stopped and a new turn began) must not end the newer
+    // turn's session: when the ending turn is named, only that turn can end.
+    if (turn !== undefined && turn !== this.turn) {
+      logger.log(`[GEN-SM] session end ignored: turn ${turn} is not current (${this.turn})`);
+      return;
+    }
     logger.log(`[GEN-SM] session end conv=${this.conversationId} reason=${reason}`);
     this.conversationId = null;
+    this.endedAt = Date.now();
     this.notify();
+  }
+
+  /** When the last turn ended (ms epoch), or null if none has ended yet. */
+  lastEndedAt(): number | null {
+    return this.endedAt;
   }
 
   /** Subscribe to session changes (for the View projection). Returns unsubscribe. */
@@ -60,6 +86,7 @@ class GenerationSessionService {
   /** Test helper. */
   _reset(): void {
     this.conversationId = null;
+    this.endedAt = null;
     this.listeners.clear();
   }
 }

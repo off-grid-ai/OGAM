@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Geist (OFL), the brand's reading face. One family so fontFamily "Geist" + fontWeight picks the file. -->
+<font-family xmlns:app="http://schemas.android.com/apk/res-auto">
+    <font app:fontStyle="normal" app:fontWeight="200" app:font="@font/geist_ultralight" />
+    <font app:fontStyle="normal" app:fontWeight="300" app:font="@font/geist_light" />
+    <font app:fontStyle="normal" app:fontWeight="400" app:font="@font/geist_regular" />
+    <font app:fontStyle="normal" app:fontWeight="500" app:font="@font/geist_medium" />
+</font-family>

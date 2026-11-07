@@ -60,8 +60,23 @@ class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
        let metroURL = provider.jsBundleURL(forBundleRoot: "index") {
       return metroURL
     }
+    // A host saved from an older "Configure Bundler" outlives the network it was set on and hid the
+    // address this build was made for (ip.txt, e.g. the Mac's Tailscale address). Try that one too,
+    // and keep it once it answers.
+    if let bundled = Self.bundledMetroLocation(),
+       case let (bundledHost, bundledPort) = Self.resolveMetroHostAndPort(configuredLocation: nil, bundledLocation: bundled),
+       bundledHost != host,
+       Self.metroAnswers(host: bundledHost, port: bundledPort, within: 2.0) {
+      provider.jsLocation = "\(bundledHost):\(bundledPort)"
+      if let metroURL = provider.jsBundleURL(forBundleRoot: "index") {
+        return metroURL
+      }
+    }
 
     let embeddedURL = Bundle.main.url(forResource: "main", withExtension: "jsbundle")
+    // Running the embedded bundle, the "Connect to Metro" banner has nothing to connect to; it sat
+    // over the top of every screen and every hand-test screenshot. Metro-served loads keep it.
+    if embeddedURL != nil { RCTDevLoadingViewSetEnabled(false) }
     NSLog(
       "[bundle] Metro at %@:%d did not answer within 2s; %@",
       host,
@@ -94,12 +109,15 @@ class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
     }
   }
 
-  private static func metroHostAndPort(_ provider: RCTBundleURLProvider) -> (String, Int) {
-    let bundledLocation = Bundle.main.url(forResource: "ip", withExtension: "txt")
+  private static func bundledMetroLocation() -> String? {
+    Bundle.main.url(forResource: "ip", withExtension: "txt")
       .flatMap { try? String(contentsOf: $0, encoding: .utf8) }
-    return resolveMetroHostAndPort(
+  }
+
+  private static func metroHostAndPort(_ provider: RCTBundleURLProvider) -> (String, Int) {
+    resolveMetroHostAndPort(
       configuredLocation: provider.jsLocation,
-      bundledLocation: bundledLocation)
+      bundledLocation: bundledMetroLocation())
   }
 
   static func resolveMetroHostAndPort(

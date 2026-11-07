@@ -1,55 +1,54 @@
+import { StyleSheet } from 'react-native';
 import { SPACING, TYPOGRAPHY } from '../constants';
 import type { ThemeColors, ThemeShadows } from '../theme';
+import { cardSurface } from '../theme/surface';
 
 // Split out of SettingsScreen, which was 723 lines against a 500-line cap: two hundred of them were
 // this style sheet. Same pattern the Storage and Remote Servers screens already use.
-export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+// Settings follows brand's Mobile profile: 24px screen padding, groups on the one card surface with
+// hairlines between rows, and emerald only for what is chosen (desktop's selected state).
+export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: { flex: 1, backgroundColor: colors.background },
   scrollView: { flex: 1 },
   content: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.xxl,
   },
-  themeToggleRow: {
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    alignItems: 'center' as const,
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
-    ...shadows.small,
-  },
-  themeToggleLabel: { ...TYPOGRAPHY.body, color: colors.text },
+  // No track: three glyphs on the row, the chosen one marked in grey (hand test 42: a grey track
+  // with an emerald cell read as a second main action).
+  // Pulled back so the 44 pt choices sit in a normal-height row.
   themeSelector: {
     flexDirection: 'row' as const,
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 8,
-    padding: 3,
     gap: 2,
+    marginVertical: -8,
+    // The last glyph lands on the chevron column of the rows below (its 44 pt frame centres it 14 pt in).
+    marginRight: -14,
   },
+  // 44 pt choices (they were 34 x 30): each is a target on its own.
   themeSelectorOption: {
-    width: 34,
-    height: 30,
+    width: 44,
+    height: 44,
     borderRadius: 6,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
-  themeSelectorOptionActive: { backgroundColor: colors.primary },
+  themeSelectorOptionActive: {
+    backgroundColor: colors.surfaceLight,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
   navSection: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
+    ...cardSurface(colors),
     marginBottom: SPACING.lg,
     overflow: 'hidden' as const,
-    ...shadows.small,
   },
   navItem: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     padding: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
   },
   navItemLast: { borderBottomWidth: 0 },
   navItemIcon: {
@@ -72,40 +71,6 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textMuted,
     marginTop: 2,
   },
-  followSection: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    marginBottom: SPACING.lg,
-    overflow: 'hidden' as const,
-    borderWidth: 1,
-    borderColor: `${colors.primary}40`, // emerald accent so it stands out above About
-    ...shadows.small,
-  },
-  followHeader: {
-    padding: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  followHeaderTitle: {
-    ...TYPOGRAPHY.body,
-    fontWeight: '400' as const,
-    color: colors.primary,
-  },
-  followHeaderDesc: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.textMuted,
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  followItemIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: `${colors.primary}1A`,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    marginRight: SPACING.md,
-  },
   section: { marginBottom: SPACING.lg },
   aboutRow: {
     flexDirection: 'row' as const,
@@ -123,15 +88,6 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,
     lineHeight: 18,
-  },
-  sectionLabel: {
-    ...TYPOGRAPHY.label,
-    // DESIGN_PHILOSOPHY_SYSTEM.md, Labels & Headers: uppercase, +0.3 spacing.
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.3,
-    color: colors.textMuted,
-    marginBottom: SPACING.sm,
-    marginLeft: SPACING.xs,
   },
   devButton: {
     flexDirection: 'row' as const,
@@ -154,35 +110,31 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     gap: SPACING.sm,
     marginBottom: 2,
   },
-  proBadge: {
-    backgroundColor: colors.primary,
-    borderRadius: 20,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 2,
-  },
+  // "PRO" is a label beside the row's name, not a pill.
+  proBadge: {},
   proBadgeText: {
     ...TYPOGRAPHY.labelSmall,
-    color: '#FFFFFF',
+    color: colors.textSecondary,
     letterSpacing: 0.5,
   },
   proDesc: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
+  // The same 28 pt icon column and 12 pt gap as every other Settings row, so the Pro row lines up.
   proIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: `${colors.primary}1A`,
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: 'transparent',
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
   proNavButton: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    backgroundColor: colors.surface,
-    borderRadius: 8,
+    ...cardSurface(colors),
     padding: SPACING.md,
     gap: SPACING.md,
     marginBottom: SPACING.lg,
-    ...shadows.small,
+    minHeight: 44,
   },
   proNavTitle: {
     ...TYPOGRAPHY.body,

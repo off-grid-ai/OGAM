@@ -1,3 +1,4 @@
+import { isClassifierModel } from './classifierModel';
 import { modelManager } from './modelManager';
 import RNFS from 'react-native-fs';
 import { mtpHeadForPrimaryFile } from '@offgrid/models';
@@ -169,10 +170,14 @@ export async function startModelDownload(
       // "downloaded" from downloadedModels, not a lingering 100% store entry.
       useAppStore.getState().addDownloadedModel(model);
       const app = useAppStore.getState();
-      if (mayAutoSelect && app.activeModelId === null) {
+      // The intent classifier is never made the chat model, even when its download comes back
+      // through a path that asks for auto-select (a queued download restored after a restart).
+      if (mayAutoSelect && app.activeModelId === null && !isClassifierModel(model.id, app.settings.classifierModelId)) {
+        // Your last pick if it is still here, else the model you just downloaded. The first entry
+        // of the list could be any older file, the intent classifier included.
         const selected =
           app.downloadedModels.find(item => item.id === app.lastTextModelId) ??
-          app.downloadedModels[0];
+          app.downloadedModels.find(item => item.id === model.id);
         if (selected) activeModelService.selectTextModel(selected.id);
       }
       useDownloadStore.getState().remove(modelKey);

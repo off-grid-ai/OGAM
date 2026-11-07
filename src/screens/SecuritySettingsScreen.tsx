@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
+import { AppSwitch } from '../components/AppSwitch';
 import {
   View,
   Text,
   ScrollView,
   Modal,
 } from 'react-native';
-import { TouchableOpacity, Switch } from '../components/Touchable';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../components/Button';
 import { useNavigation } from '@react-navigation/native';
 import { Card } from '../components';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { SectionLabel } from '../components/SectionLabel';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
@@ -18,6 +19,7 @@ import { TYPOGRAPHY, SPACING } from '../constants';
 import { useAuthStore } from '../stores';
 import { authService } from '../services';
 import { PassphraseSetupScreen } from './PassphraseSetupScreen';
+import { AliveScreen } from '../components/AliveScreen';
 
 export const SecuritySettingsScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -63,53 +65,39 @@ export const SecuritySettingsScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Security</Text>
-      </View>
+    <AliveScreen style={styles.container}>
+      <ScreenHeader title="Security" onBack={() => navigation.goBack()} />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+        <SectionLabel title="App lock" />
         <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>App Lock</Text>
           <View style={styles.settingRow}>
             <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Passphrase Lock</Text>
-              <Text style={styles.settingHint}>Require passphrase to open app</Text>
+              <Text style={styles.settingLabel}>Passphrase lock</Text>
+              <Text style={styles.settingHint}>Ask for your passphrase when the app opens.</Text>
             </View>
-            <Switch
+            <AppSwitch
               value={authEnabled}
               onValueChange={handleTogglePassphrase}
-              trackColor={{ false: colors.surfaceLight, true: `${colors.primary  }80` }}
-              thumbColor={authEnabled ? colors.primary : colors.textMuted}
             />
           </View>
 
           {authEnabled && (
             <Button
-              title="Change Passphrase"
-              variant="primary"
-              size="medium"
+              title="Change passphrase"
+              variant="secondary"
+              size="small"
               onPress={handleChangePassphrase}
-              icon={<Icon name="edit-2" size={16} color={colors.primary} />}
+              icon={<Icon name="edit-2" size={14} color={colors.textSecondary} />}
               style={{ alignSelf: 'flex-start' as const, marginTop: SPACING.lg }}
             />
           )}
         </Card>
 
-        <Card style={styles.infoCard}>
-          <Icon name="info" size={18} color={colors.textMuted} />
-          <Text style={styles.infoText}>
-            When enabled, the app will lock automatically when you switch away or close it. Your passphrase is stored securely on device and never transmitted.
-          </Text>
-        </Card>
+        {/* A footnote under the one card, not a second box (hand test 60). */}
+        <Text style={styles.footnote}>
+          The app locks when you leave it. Your passphrase stays on this phone.
+        </Text>
       </ScrollView>
 
       <Modal
@@ -130,40 +118,21 @@ export const SecuritySettingsScreen: React.FC = () => {
         buttons={alertState.buttons}
         onClose={() => setAlertState(hideAlert())}
       />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-    ...shadows.small,
-    zIndex: 1,
-    gap: SPACING.md,
-  },
-  backButton: {
-    padding: SPACING.xs,
-  },
-  title: {
-    ...TYPOGRAPHY.h2,
-    flex: 1,
-    color: colors.text,
-  },
   scrollView: {
     flex: 1,
   },
+  // brand Mobile profile: 24px screen padding; the cards are the shared Card surface.
   content: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.xxl,
   },
@@ -195,18 +164,9 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     marginTop: 2,
     lineHeight: 18,
   },
-  infoCard: {
-    flexDirection: 'row' as const,
-    alignItems: 'flex-start' as const,
-    gap: SPACING.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  infoText: {
+  footnote: {
     ...TYPOGRAPHY.bodySmall,
-    flex: 1,
     color: colors.textMuted,
-    lineHeight: 18,
+    marginTop: SPACING.sm,
   },
 });

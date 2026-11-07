@@ -1,6 +1,7 @@
 import React from 'react';
+import { AppSwitch } from '../../components/AppSwitch';
 import { View, Text, Platform } from 'react-native';
-import { Switch, TouchableOpacity } from '../Touchable';
+import { TouchableOpacity } from '../Touchable';
 import { Button } from '../Button';
 import { SliderSetting } from '../SliderSetting';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -39,7 +40,7 @@ export const ImageQualityBasicSliders: React.FC = () => {
       <SliderSetting
         testID="image-steps"
         compact
-        label="Image Steps"
+        label="Image steps"
         description="4-8 steps for speed, 20-50 for quality"
         value={parameters.steps}
         min={4} max={MAX_IMAGE_STEPS} step={1}
@@ -49,7 +50,7 @@ export const ImageQualityBasicSliders: React.FC = () => {
       <SliderSetting
         testID="image-size"
         compact
-        label="Image Size"
+        label="Image size"
         description={`Output resolution. Recommended: ${defaults.size}x${defaults.size}.`}
         value={parameters.size}
         min={SWEET_SPOT_SIZE} max={maxSize} step={64}
@@ -64,7 +65,6 @@ export const ImageQualityBasicSliders: React.FC = () => {
 /** Advanced controls: Guidance Scale, Image Threads, GPU Acceleration */
 export const ImageQualityAdvancedSliders: React.FC = () => {
   const { parameters, setParameter } = useImageParameterSettings();
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
 
@@ -94,15 +94,13 @@ export const ImageQualityAdvancedSliders: React.FC = () => {
         <View style={styles.settingGroup}>
           <View style={styles.settingHeader}>
             <Text style={styles.settingLabel}>GPU Acceleration</Text>
-            <Switch
+            <AppSwitch
               testID="image-gpu-acceleration"
               accessibilityLabel={`GPU Acceleration, ${
                 (settings.imageUseOpenCL ?? true) ? 'ON' : 'OFF'
               }`}
               value={settings.imageUseOpenCL ?? true}
               onValueChange={(value) => updateSettings({ imageUseOpenCL: value })}
-              trackColor={{ false: colors.surfaceLight, true: colors.primary }}
-              thumbColor={colors.surface}
             />
           </View>
           <Text style={styles.settingDescription}>

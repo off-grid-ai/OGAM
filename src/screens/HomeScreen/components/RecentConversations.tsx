@@ -4,11 +4,14 @@ import { TouchableOpacity } from '../../../components/Touchable';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedListItem } from '../../../components/AnimatedListItem';
+import { ListGroup } from '../../../components/ListGroup';
 import { useTheme, useThemedStyles } from '../../../theme';
 import { createStyles } from '../styles';
 import { Conversation } from '../../../types';
 import { formatWhen } from '../../../utils/localTime';
 import { useConversationPreviewLine } from '../../../hooks/useConversationPreviewLine';
+import { rowPreview } from '../../../utils/chatRow';
+import { chatTitle } from '../../../utils/chatTitle';
 
 const formatDate = (dateStr: string): string => formatWhen(dateStr);
 
@@ -39,6 +42,8 @@ export const RecentConversations: React.FC<Props> = ({
       style={styles.deleteAction}
       onPress={() => onDeleteConversation(conversation)}
       testID="delete-conversation-button"
+      accessibilityRole="button"
+      accessibilityLabel={`Delete ${conversation.title}`}
     >
       <Icon name="trash-2" size={16} color={colors.error} />
     </TouchableOpacity>
@@ -54,6 +59,7 @@ export const RecentConversations: React.FC<Props> = ({
           </Text>
         </TouchableOpacity>
       </View>
+      <ListGroup testID="recent-conversations">
       {conversations.map((conv, index) => (
         <Swipeable
           key={conv.id}
@@ -68,18 +74,22 @@ export const RecentConversations: React.FC<Props> = ({
             style={styles.conversationItem}
             onPress={() => onContinueChat(conv.id)}
             testID={`conversation-item-${index}`}
+            // In words: grouped, the row also read its chevron glyph aloud (hand test 41).
+            accessibilityRole="button"
+            accessibilityLabel={`${chatTitle(conv.title)}, ${formatDate(conv.updatedAt)}`}
           >
             <View style={styles.conversationInfo}>
               <View style={styles.conversationHeader}>
                 <Text style={styles.conversationTitle} numberOfLines={1}>
-                  {conv.title}
+                  {chatTitle(conv.title)}
                 </Text>
                 <Text style={styles.conversationMeta}>
                   {formatDate(conv.updatedAt)}
                 </Text>
               </View>
               {(() => {
-                const preview = previewLine(conv.messages);
+                // Same rule as Chats: no preview that only repeats the title.
+                const preview = rowPreview(previewLine(conv.messages), conv.title);
                 return preview ? (
                   <Text style={styles.conversationPreview} numberOfLines={1}>
                     {preview}
@@ -91,6 +101,7 @@ export const RecentConversations: React.FC<Props> = ({
           </AnimatedListItem>
         </Swipeable>
       ))}
+      </ListGroup>
     </View>
   );
 };

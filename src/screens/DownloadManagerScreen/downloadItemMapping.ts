@@ -2,9 +2,15 @@ import { DownloadEntry } from '../../stores/downloadStore';
 import { jobBytesDownloaded } from '../../utils/downloadStatus';
 import { hardwareService } from '../../services';
 import { DownloadedModel, ONNXImageModel } from '../../types';
+import type { VideoModel } from '../../services/videoModelFiles';
+import { videoModelDisplayName } from '../../utils/modelHelpers';
 import { DownloadItem } from './items';
 import { parseEntryMetadata } from './retryHandlers';
 import { imageBackendLabel } from '../../utils/imageBackend';
+import { transcriptionModelName } from '../../services/whisperModels';
+
+/** whisper.cpp's file contract: `ggml-<model id>.bin` (ggml-tiny.en.bin is Whisper tiny.en). */
+const WHISPER_FILE = /^ggml-([\w.-]+)\.bin$/;
 
 /**
  * How a download store row, a queued start, or a finished model becomes one Download Manager row.
@@ -92,12 +98,19 @@ export function entryToActiveItem(entry: DownloadEntry): DownloadItem {
   const metadata = parseEntryMetadata(entry);
   const isImage = entry.modelType === 'image';
 
+  // A Whisper file is a speech model whatever kind an older record gave it, and goes by its name.
+  const whisperId = WHISPER_FILE.exec(entry.fileName)?.[1];
+
   return {
     type: 'active',
-    modelType: entry.modelType,
+    modelType: whisperId ? 'stt' : entry.modelType,
+    ...(whisperId ? { name: transcriptionModelName(whisperId) } : {}),
     downloadId: entry.downloadId,
     modelKey: entry.modelKey,
-    modelId: getActiveItemModelId(entry, isImage),
+    // A Whisper row goes by the Whisper id, the id its downloaded model carries, so a leftover row
+    // for a model already on the phone is recognised and dropped (hand test 50: a failed
+    // "Whisper Tiny" row stayed beside the downloaded one, keyed by its old text-model key).
+    modelId: whisperId ?? getActiveItemModelId(entry, isImage),
     fileName: getActiveItemFileName(entry, isImage, metadata),
     author: getActiveItemAuthor(entry, isImage, metadata),
     quantization: getActiveItemQuantization(entry, isImage, metadata),
@@ -161,4 +174,22 @@ export function modelStoreCompletedItems(
       }),
     ),
   ];
+}
+
+/** Map the downloaded video models into completed Download Manager items. */
+export function videoCompletedItems(downloadedVideoModels: VideoModel[]): DownloadItem[] {
+  return downloadedVideoModels.map(model => ({
+    type: 'completed' as const,
+    modelType: 'video' as const,
+    modelId: model.id,
+    fileName: videoModelDisplayName(model.id, model.name),
+    name: videoModelDisplayName(model.id, model.name),
+    author: model.org ?? '',
+    quantization: model.quant ?? '',
+    fileSize: model.files.reduce((sum, file) => sum + (file.sizeBytes ?? 0), 0),
+    bytesDownloaded: 0,
+    progress: 1,
+    status: 'completed',
+    downloadedAt: model.downloadedAt,
+  }));
 }

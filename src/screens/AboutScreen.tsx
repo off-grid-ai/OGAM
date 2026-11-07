@@ -1,17 +1,16 @@
 import React from 'react';
 import { View, Text, Linking, ScrollView, Image, StyleSheet } from 'react-native';
-import { TouchableOpacity } from '../components/Touchable';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../components/AliveScreen';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { cardSurface } from '../theme/surface';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { SPACING, TYPOGRAPHY } from '../constants';
-import { MadeWithLove } from '../components/MadeWithLove';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
-import { GITHUB_URL, FOLLOW_X_URL, SLACK_INVITE_URL } from '../utils/sharePrompt';
+import { GITHUB_URL } from '../utils/sharePrompt';
 import { withUtm } from '../utils/utm';
 import { appVersion } from '../utils/appVersion';
 
@@ -24,14 +23,8 @@ export const AboutScreen: React.FC = () => {
   const focusTrigger = useFocusTrigger();
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>About</Text>
-        <View style={styles.backButton} />
-      </View>
+    <AliveScreen style={styles.container} edges={['top', 'bottom']}>
+      <ScreenHeader title="About" onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content}>
         {/* App identity */}
@@ -50,69 +43,29 @@ export const AboutScreen: React.FC = () => {
             index={0}
             staggerMs={40}
             trigger={focusTrigger}
-            style={[styles.navItem, styles.navItemLast]}
+            style={styles.navItem}
             onPress={() => Linking.openURL(GITHUB_URL)}
           >
             <View style={styles.navItemIcon}>
               <Icon name="github" size={16} color={colors.textSecondary} />
             </View>
             <View style={styles.navItemContent}>
-              <Text style={styles.navItemTitle}>Open Source</Text>
+              <Text style={styles.navItemTitle}>Open source</Text>
               <Text style={styles.navItemDesc}>View the source on GitHub</Text>
             </View>
             <Icon name="external-link" size={14} color={colors.textMuted} />
           </AnimatedListItem>
-        </View>
-
-        {/* Follow / Community */}
-        <View style={styles.navSection}>
+        {/* X and Slack live once, in Settings > Community (one home per thing; hand test 84). */}
+        {/* Built by Wednesday row */}
           <AnimatedListItem
             index={1}
-            staggerMs={40}
-            trigger={focusTrigger}
-            style={styles.navItem}
-            testID="about-follow-on-x"
-            onPress={() => Linking.openURL(FOLLOW_X_URL)}
-          >
-            <View style={styles.navItemIcon}>
-              <Icon name="twitter" size={16} color={colors.primary} />
-            </View>
-            <View style={styles.navItemContent}>
-              <Text style={styles.navItemTitle}>Follow @alichherawalla on X</Text>
-              <Text style={styles.navItemDesc}>New features first, promo discounts, roadmap</Text>
-            </View>
-            <Icon name="external-link" size={14} color={colors.textMuted} />
-          </AnimatedListItem>
-          <AnimatedListItem
-            index={2}
-            staggerMs={40}
-            trigger={focusTrigger}
-            style={[styles.navItem, styles.navItemLast]}
-            testID="about-join-slack"
-            onPress={() => Linking.openURL(SLACK_INVITE_URL)}
-          >
-            <View style={styles.navItemIcon}>
-              <IconMC name="slack" size={16} color={colors.primary} />
-            </View>
-            <View style={styles.navItemContent}>
-              <Text style={styles.navItemTitle}>Join the Slack community</Text>
-              <Text style={styles.navItemDesc}>Issues fixed fast, debug together, early access</Text>
-            </View>
-            <Icon name="external-link" size={14} color={colors.textMuted} />
-          </AnimatedListItem>
-        </View>
-
-        {/* Built by Wednesday row */}
-        <View style={styles.navSection}>
-          <AnimatedListItem
-            index={3}
             staggerMs={40}
             trigger={focusTrigger}
             style={[styles.navItem, styles.navItemLast]}
             onPress={() => Linking.openURL(WEDNESDAY_MOBILE_URL)}
           >
             <View style={styles.navItemIcon}>
-              <Image source={require('../assets/wednesday_logo.png')} style={styles.wednesdayLogo} />
+              <Image source={require('../assets/wednesday_logo.png')} style={[styles.wednesdayLogo, { tintColor: colors.textSecondary }]} />
             </View>
             <View style={styles.navItemContent}>
               <Text style={styles.navItemTitle}>Built by Wednesday</Text>
@@ -123,9 +76,8 @@ export const AboutScreen: React.FC = () => {
         </View>
       </ScrollView>
 
-      {/* Pinned footer */}
-      <MadeWithLove />
-    </SafeAreaView>
+      {/* No footer credit here: the Built by Wednesday row above is its one home (hand test 86). */}
+    </AliveScreen>
   );
 };
 
@@ -133,25 +85,23 @@ const staticStyles = StyleSheet.create({
   appIcon: { width: 72, height: 72, borderRadius: 16, marginBottom: SPACING.md },
 });
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
     minHeight: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-    ...shadows.small,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
     zIndex: 1,
   },
   backButton: { width: 36, padding: SPACING.xs },
   headerTitle: { ...TYPOGRAPHY.h2, color: colors.text },
   content: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.xxl,
   },
@@ -177,19 +127,18 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     lineHeight: 22,
     paddingHorizontal: SPACING.md,
   },
+  // One surface with hairlines (theme/surface), like every list.
   navSection: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
+    ...cardSurface(colors),
     marginBottom: SPACING.lg,
     overflow: 'hidden' as const,
-    ...shadows.small,
   },
   navItem: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     padding: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
   },
   navItemLast: { borderBottomWidth: 0 },
   navItemIcon: {

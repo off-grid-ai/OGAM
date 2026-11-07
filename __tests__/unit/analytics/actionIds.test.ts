@@ -15,7 +15,7 @@ describe('action ids', () => {
   });
 
   it.each([
-    ['kb-document-remove-My Diary 2024.pdf', 'kb-document-remove'],
+    ['knowledge-document-remove-My Diary 2024.pdf', 'knowledge-document-remove'],
     ['project-row-3f2a9c1e-uuid', 'project-row'],
     ['text-model-row-local_import/secret notes.gguf', 'text-model-row'],
     ['backend-gpu-button', 'backend-button'],

@@ -14,6 +14,7 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
 import { DebugSheet } from '../../../src/components/DebugSheet';
+import { APP_CONFIG } from '../../../src/constants';
 import { DebugInfo, Project, Conversation } from '../../../src/types';
 
 // Mock AppSheet to render children directly
@@ -272,8 +273,8 @@ describe('DebugSheet', () => {
           settings={{ systemPrompt: undefined }}
         />
       );
-      // Falls back to APP_CONFIG.defaultSystemPrompt
-      expect(getByText(/helpful AI assistant/)).toBeTruthy();
+      // Falls back to the built-in prompt, the one chat sends.
+      expect(getByText(APP_CONFIG.defaultSystemPrompt)).toBeTruthy();
     });
   });
 

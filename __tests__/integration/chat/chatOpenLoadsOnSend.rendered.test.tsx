@@ -9,7 +9,7 @@ describe('opening a new chat with a selected local model', () => {
     h.render();
 
     await h.settle(500);
-    expect(h.view!.queryByText('Start a Conversation')).not.toBeNull();
+    expect(h.view!.queryByText("What's on your mind?")).not.toBeNull();
     expect(h.view!.queryByText('Loading Model')).toBeNull();
     expect(h.boundary.llama!.module.initLlama).not.toHaveBeenCalled();
     expect(h.view!.queryByText('Load Anyway')).toBeNull();

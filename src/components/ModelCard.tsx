@@ -1,3 +1,4 @@
+import type { StyleProp, ViewStyle } from 'react-native';
 import React from 'react';
 import { View, Text } from 'react-native';
 import { TouchableOpacity } from './Touchable';
@@ -55,6 +56,8 @@ interface ModelCardProps {
   /** A size in words ("Smaller", "Recommended", "Best") shown instead of the quantization name. */
   sizeLabel?: string;
   testID?: string;
+  /** Extra container style: a list that groups its rows (ListGroup look) flattens the card into a row. */
+  style?: StyleProp<ViewStyle>;
   onPress?: () => void;
   onDownload?: () => void;
   onDelete?: () => void;
@@ -135,6 +138,7 @@ const ModelCardHeading: React.FC<ModelCardHeadingProps> = ({
   facts, capabilities, sourceBadge, nameTestID, factsTestID,
 }) => dense ? (
   <DenseModelCardContent
+    isActive={isActive}
     model={model}
     fileSize={fileSize}
     quantization={quantization}
@@ -294,6 +298,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   incompatibleReason,
   sizeLabel,
   testID,
+  style,
   onPress,
   onDownload,
   onDelete,
@@ -371,18 +376,23 @@ export const ModelCard: React.FC<ModelCardProps> = ({
         styles.card,
         useDenseLayout && styles.cardDense,
         isActive && styles.cardActive,
-        !isCompatible && styles.cardIncompatible,
+        style,
       ]}
       onPress={onPress}
       activeOpacity={0.7}
       disabled={disabled || !onPress}
+      // A row with nothing to tap on its own is not one block: grouping it hid its own buttons
+      // (Resume, Repair) from a screen reader (hand test 39).
+      accessible={!!onPress}
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={model.name}
       accessibilityHint={speedHint(capabilities)}
       accessibilityState={{ selected: !!isActive, disabled: !!disabled }}
       testID={testID}
     >
-      <View style={[styles.cardRow, useDenseLayout && styles.cardRowDense]}>
+      {/* An incompatible model fades its content, not its surface: in a grouped list a faded row
+          surface left a patchy strip in the group. */}
+      <View style={[styles.cardRow, useDenseLayout && styles.cardRowDense, !isCompatible && styles.cardIncompatible]}>
         <View style={styles.cardContent}>
           <ModelCardHeading
             dense={!!useDenseLayout}

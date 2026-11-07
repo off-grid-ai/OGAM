@@ -27,6 +27,12 @@ export const WHISPER_MODELS: MobileWhisperCatalogModel[] = [
   { id: 'large-v3-turbo', name: 'Large v3 Turbo',  size: 1550, lang: 'multi', url: `${GGML_BASE}/ggml-large-v3-turbo.bin`, description: 'Fast + accurate, distilled large, 99 languages' },
   { id: 'large-v3',       name: 'Large v3',         size: 2952, lang: 'multi', url: `${GGML_BASE}/ggml-large-v3.bin`,       description: 'Best quality, 99 languages, ~3 GB RAM' },
 ];
+/** The name a person sees. The English-only and the 99-language builds share names ("Small"), so the
+ *  English one says so; ids and files are unchanged (hand test 91: two "Small" rows disagreed). */
+export function whisperDisplayName(model: { name: string; lang: 'en' | 'multi' }): string {
+  return model.lang === 'en' && !/english/i.test(model.name) ? `${model.name} English` : model.name;
+}
+
 // The bundled fallback: read it merged with the remote catalog (withRemoteCatalog('transcription', …)).
 registerBundledCatalog('transcription', WHISPER_MODELS);
 
@@ -36,6 +42,15 @@ export function findTranscriptionModel(
   modelId: string | null | undefined,
 ): MobileWhisperCatalogModel | undefined {
   return whisperModels.find(model => model.id === modelId) ?? qwenAsrCardFor(modelId);
+}
+
+/** The name a person knows a transcription model by: "Whisper Tiny (English)", "Qwen3 ASR 0.6B". */
+export function transcriptionModelName(modelId: string): string {
+  const asr = qwenAsrCardFor(modelId);
+  if (asr) return asr.name;
+  const whisper = withRemoteCatalog('transcription', WHISPER_MODELS).find(model => model.id === modelId);
+  if (!whisper) return modelId;
+  return `Whisper ${whisper.name}${whisper.lang === 'en' ? ' (English)' : ''}`;
 }
 
 /** Qwen3-ASR's KV cache and compute buffers beside its weights (4096-token context). */

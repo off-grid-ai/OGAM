@@ -53,7 +53,7 @@ describe('Curated LiteRT onboarding — an over-budget model that HAS a warning 
     const view = rtl.render(withNavigator(React.createElement(AdvancedSetupScreen, { navigation: nav })));
 
     // Wait for the async init effect to settle (loading → loaded).
-    await rtl.waitFor(() => { expect(view.getByText('Advanced Setup')).toBeTruthy(); }, { timeout: 10000 });
+    await rtl.waitFor(() => { expect(view.getByText('Advanced setup')).toBeTruthy(); }, { timeout: 10000 });
 
     // The over-budget-but-warnable E4B card IS offered. RED on HEAD: pre-filter dropped it → the
     // curated LiteRT list was empty (both files over budget). Assert on the LiteRT card specifically

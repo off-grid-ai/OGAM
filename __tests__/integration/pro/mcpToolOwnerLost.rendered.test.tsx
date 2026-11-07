@@ -81,17 +81,17 @@ describe('a tool never switches on for another server by itself', () => {
 
     // Alpha connects first: its search is discovered and on.
     await setActive(ui, ALPHA.id, true);
-    expect(toolCount(ui, ALPHA.id)).toHaveTextContent('1/1 tools');
+    expect(toolCount(ui, ALPHA.id)).toHaveTextContent(/\b1 of 1 tools$/);
 
     // Alpha stops listing search while Beta is offline. A reconnect picks up the new list.
     alpha.tools = [];
     await setActive(ui, ALPHA.id, false);
     await setActive(ui, ALPHA.id, true);
-    await waitFor(() => expect(toolCount(ui, ALPHA.id)).toHaveTextContent('0/0 tools'));
+    await waitFor(() => expect(toolCount(ui, ALPHA.id)).toHaveTextContent(/\b0 of 0 tools$/));
 
     // Beta comes online with its own search. The user never chose it, so it is off.
     await setActive(ui, BETA.id, true);
-    await waitFor(() => expect(toolCount(ui, BETA.id)).toHaveTextContent('0/1 tools'));
+    await waitFor(() => expect(toolCount(ui, BETA.id)).toHaveTextContent(/\b0 of 1 tools$/));
 
     // And the tool loop cannot reach Beta's account.
     await act(async () => {
@@ -105,23 +105,24 @@ describe('a tool never switches on for another server by itself', () => {
     await setActive(ui, ALPHA.id, true);
     await setActive(ui, BETA.id, true);
     // Alpha connected first, so search is on there and off on Beta.
-    expect(toolCount(ui, ALPHA.id)).toHaveTextContent('1/1 tools');
-    expect(toolCount(ui, BETA.id)).toHaveTextContent('0/1 tools');
+    expect(toolCount(ui, ALPHA.id)).toHaveTextContent(/\b1 of 1 tools$/);
+    expect(toolCount(ui, BETA.id)).toHaveTextContent(/\b0 of 1 tools$/);
 
-    // Remove Alpha through its delete control and confirm.
+    // Remove Alpha from its edit screen (tap its name, then Remove server) and confirm.
     let confirmRemove: (() => void) | undefined;
     jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
       confirmRemove = buttons?.find(b => b.style === 'destructive')?.onPress as () => void;
     });
-    fireEvent.press(ui.getByLabelText(`Remove ${ALPHA.name}`));
+    fireEvent.press(ui.getByText(ALPHA.name));
+    fireEvent.press(await ui.findByTestId('mcp-server-remove'));
     await act(async () => { confirmRemove?.(); });
     await waitFor(() => expect(ui.queryByTestId(`mcp-server-card-${ALPHA.id}`)).toBeNull());
-    expect(toolCount(ui, BETA.id)).toHaveTextContent('0/1 tools');
+    expect(toolCount(ui, BETA.id)).toHaveTextContent(/\b0 of 1 tools$/);
 
     // Beta refreshes. Its search is the one the user left off, not a new tool.
     await setActive(ui, BETA.id, false);
     await setActive(ui, BETA.id, true);
-    await waitFor(() => expect(toolCount(ui, BETA.id)).toHaveTextContent('0/1 tools'));
+    await waitFor(() => expect(toolCount(ui, BETA.id)).toHaveTextContent(/\b0 of 1 tools$/));
 
     await act(async () => {
       await McpToolExtension.execute({ id: 'call-1', name: 'search', arguments: {} });

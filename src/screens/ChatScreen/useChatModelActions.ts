@@ -11,7 +11,7 @@ import { DownloadedModel, RemoteModel, ONNXImageModel, isLiteRTModel } from '../
 import logger from '../../utils/logger';
 import { ModelReadyOutcome, reasonFromLoadError } from './modelReadiness';
 import { isOverridableMemoryError } from '../../services/modelLoadErrors';
-import { loadModelWithOverride } from '../../services/loadModelWithOverride';
+import { loadModelWithOverride, memoryRefusalAlert } from '../../services/loadModelWithOverride';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
 
@@ -63,7 +63,7 @@ function addSystemMsg(
   if (!deps.activeConversationId || !deps.settings.showGenerationDetails) return;
   deps.addMessage(deps.activeConversationId, {
     role: 'assistant',
-    content: `_${content}_`,
+    content,
     isSystemInfo: true,
   });
 }
@@ -79,7 +79,7 @@ function addBackendFallbackMsg(deps: Pick<ModelActionDeps, 'activeModel' | 'acti
   if (!notice || !deps.activeConversationId) return;
   deps.addMessage(deps.activeConversationId, {
     role: 'assistant',
-    content: `_${notice}_`,
+    content: notice,
     isSystemInfo: true,
   });
 }
@@ -150,32 +150,29 @@ export async function initiateModelLoad(
       // That is overridable — offer "Load Anyway" (force the load) rather than a
       // dead-end "Failed to load model" the user can only dismiss.
       if (isOverridableMemoryError(error)) {
-        deps.setAlertState(showAlert(
-          'Insufficient Memory',
-          `${detail}\n\nWould you like to override these safeguards and load it anyway?`,
-          [
-            {
-              text: 'Cancel', style: 'cancel', onPress: () => {
-                deps.setAlertState(hideAlert());
-                activeModelService.keepLoadedTextModelSelected();
-              },
-            },
-            {
-              text: 'Load Anyway', style: 'destructive', onPress: () => {
-                deps.setAlertState(hideAlert());
-                deps.setIsModelLoading(true);
-                deps.setLoadingModel(activeModel);
-                deps.modelLoadStartTimeRef.current = Date.now();
-                waitForRenderFrame()
-                  .then(() => doLoadTextModel(deps, { override: true }))
-                  // Resume once the load resolves — don't gate on isModelLoaded() (races
-                  // false after a multimodal load, dropping the resume). See the sibling path.
-                  .then(loaded => { if (loaded) onLoadedResume?.(); })
-                  .catch((e) => logger.error('[ModelLoad] Load Anyway resume failed:', e));
-              },
-            },
-          ],
-        ));
+        deps.setAlertState(memoryRefusalAlert(detail, {
+          onCancel: () => {
+            deps.setAlertState(hideAlert());
+            activeModelService.keepLoadedTextModelSelected();
+          },
+          onChooseModel: () => {
+            deps.setAlertState(hideAlert());
+            activeModelService.keepLoadedTextModelSelected();
+            deps.setShowModelSelector(true);
+          },
+          onTryAnyway: () => {
+            deps.setAlertState(hideAlert());
+            deps.setIsModelLoading(true);
+            deps.setLoadingModel(activeModel);
+            deps.modelLoadStartTimeRef.current = Date.now();
+            waitForRenderFrame()
+              .then(() => doLoadTextModel(deps, { override: true }))
+              // Resume once the load resolves — don't gate on isModelLoaded() (races
+              // false after a multimodal load, dropping the resume). See the sibling path.
+              .then(loaded => { if (loaded) onLoadedResume?.(); })
+              .catch((e) => logger.error('[ModelLoad] Load Anyway resume failed:', e));
+          },
+        }));
         return { ok: false, reason: 'insufficient-memory', detail, alerted: true };
       }
       deps.setAlertState(showAlert('Error', `Failed to load model: ${detail}`));
@@ -230,6 +227,12 @@ export async function ensureTextModelForChatFn(deps: {
       onSuccess: () => {
         if (retrying) deps.resumePendingMessage();
         else loadedNow = true;
+      },
+      // The way forward from a refusal: pick a model that fits. The waiting turn goes out after the pick.
+      onChooseModel: () => {
+        deps.setAlertState(hideAlert());
+        activeModelService.keepLoadedTextModelSelected();
+        deps.setShowModelSelector(true);
       },
     },
   );

@@ -60,3 +60,48 @@ describe('generationSession', () => {
     expect(generationSession.isGeneratingFor('c1')).toBe(false);
   });
 });
+
+describe('generationSession turns', () => {
+  const { generationSession: session } = require('../../../src/services/generationSession');
+  beforeEach(() => session._reset());
+
+  it('a turn is current until it ends', () => {
+    const turn = session.begin('c1');
+    expect(session.isCurrent(turn)).toBe(true);
+    session.end('stopped');
+    expect(session.isCurrent(turn)).toBe(false);
+  });
+
+  it('a new turn after Stop is not the old one', () => {
+    const first = session.begin('c1');
+    session.end('stopped');
+    const second = session.begin('c1');
+    expect(session.isCurrent(first)).toBe(false);
+    expect(session.isCurrent(second)).toBe(true);
+  });
+
+  it('begin again for the same chat keeps the same turn', () => {
+    const turn = session.begin('c1');
+    expect(session.begin('c1')).toBe(turn);
+  });
+});
+
+describe('generationSession: a late turn cannot end a newer one', () => {
+  const { generationSession: session } = require('../../../src/services/generationSession');
+  beforeEach(() => session._reset());
+
+  it('ignores an end from a turn that is no longer current', () => {
+    const first = session.begin('c1');
+    session.end('stopped');
+    const second = session.begin('c2');
+    session.end('done', first);
+    expect(session.isCurrent(second)).toBe(true);
+    expect(session.isGeneratingFor('c2')).toBe(true);
+  });
+
+  it('ends when the current turn finishes', () => {
+    const turn = session.begin('c1');
+    session.end('done', turn);
+    expect(session.isGeneratingFor('c1')).toBe(false);
+  });
+});

@@ -137,13 +137,13 @@ const runningText = (overrides: Partial<DownloadRow> = {}): DownloadRow => ({
 describe('DownloadManagerScreen', () => {
   it('renders screen title', async () => {
     const { view } = await openManager();
-    expect(view.getByText('Download Manager')).toBeTruthy();
+    expect(view.getByText('Downloads')).toBeTruthy();
   });
 
   it('shows empty state when no downloads', async () => {
     const { view } = await openManager();
     // Active Downloads section is hidden when there are no active items
-    expect(view.queryByText('Active Downloads')).toBeNull();
+    expect(view.queryByText('Downloading')).toBeNull();
     expect(view.getByText('No models downloaded yet')).toBeTruthy();
   });
 
@@ -160,9 +160,34 @@ describe('DownloadManagerScreen', () => {
         status: 'failed', reason: 'http_416',
       })]),
     );
-    expect(view.getByText('model.gguf')).toBeTruthy();
+    expect(view.getByText('model')).toBeTruthy();
     expect(view.getByText('The server could not resume this download. Please retry it.')).toBeTruthy();
     expect(view.queryByText('No active downloads')).toBeNull();
+    // Nothing is moving: no "0" beside Downloading (hand test 15), the words say why.
+    expect(view.queryByTestId('dm-active-downloading-count')).toBeNull();
+    expect(view.getByTestId('dm-active-failed-count')).toBeTruthy();
+  });
+
+  it('a failed download that received nothing shows no empty bar or byte count; one that got halfway keeps both', async () => {
+    const { StyleSheet } = require('react-native');
+    const bars = (view: Manager['view']) =>
+      view.UNSAFE_root.findAll((node: any) => typeof node.type === 'string' && /%$/.test(String(StyleSheet.flatten(node.props.style)?.width ?? '')))
+        .map((node: any) => StyleSheet.flatten(node.props.style).width);
+
+    const none = await openManager(ctx =>
+      nativeDownloads(ctx, [runningText({ status: 'failed', reason: 'unknown_error', bytesDownloaded: 0 })]),
+    );
+    expect(none.view.getByText('model-file')).toBeTruthy();
+    expect(bars(none.view)).toEqual([]);
+    // Nor an empty "0 B / 4 KB" line: nothing arrived, so there is nothing to count.
+    expect(none.view.queryByText(/ \/ 4 KB$/)).toBeNull();
+    none.view.unmount();
+
+    const half = await openManager(ctx =>
+      nativeDownloads(ctx, [runningText({ status: 'failed', reason: 'unknown_error', bytesDownloaded: 2048, totalBytes: 4096, combinedTotalBytes: 4096 })]),
+    );
+    expect(bars(half.view)).toEqual(['50%']);
+    expect(half.view.getByText(/ \/ 4 KB$/)).toBeTruthy();
   });
 
   it('surfaces a start held behind the three-download cap as queued (clock icon, no "Queued" word)', async () => {
@@ -176,7 +201,7 @@ describe('DownloadManagerScreen', () => {
       start('waiting.gguf').catch(() => {}); // resolves only when a slot frees
     });
     expect(boundary.download!.active().map(r => r.fileName)).toEqual(['one.gguf', 'two.gguf', 'three.gguf']);
-    expect(view.getByText('waiting.gguf')).toBeTruthy();
+    expect(view.getByText('waiting')).toBeTruthy();
     // The word "Queued" was dropped in favor of the clock icon (a11y label "Queued").
     expect(view.queryByText('Queued')).toBeNull();
     expect(view.getByLabelText('Queued')).toBeTruthy();
@@ -184,17 +209,21 @@ describe('DownloadManagerScreen', () => {
 
   it('shows section headers for active and completed', async () => {
     const { view } = await openManager();
-    expect(view.queryByText('Active Downloads')).toBeNull();
-    expect(view.getByText('Downloaded Models')).toBeTruthy();
+    expect(view.queryByText('Downloading')).toBeNull();
+    expect(view.getByText('On this phone')).toBeTruthy();
   });
 
   it('renders completed text model with details', async () => {
-    const { view } = await openManager(async ctx => {
+    const { view, useAppStore } = await openManager(async ctx => {
       await placeTextModel(ctx, { repo: 'test-author/test-model', fileName: 'test-model-q4.gguf', bytes: 4 * GB });
     });
-    expect(view.getByText('test-model-q4.gguf')).toBeTruthy();
+    // The model's own name, as on Models, never its file name.
+    expect(view.getByText(useAppStore.getState().downloadedModels[0].name)).toBeTruthy();
+    expect(view.queryByText('test-model-q4.gguf')).toBeNull();
     // Cards say only what helps a choice: size and quant, no publisher name, no type label.
-    expect(view.getByText('4.00 GB · Q4_K_M')).toBeTruthy();
+    // The download date joins size and quant on the one facts line ("Jan 15"), not a line of its own.
+    expect(view.getByText(/^4\.00 GB · Q4_K_M · [A-Z][a-z]{2} \d{1,2}$/)).toBeTruthy();
+    expect(view.queryByText(/\d{1,2}\/\d{1,2}\/\d{2,4}/)).toBeNull();
     expect(view.queryByText('test-author')).toBeNull();
     expect(view.queryByText(/· Text/)).toBeNull();
     expect(view.queryByText('No models downloaded yet')).toBeNull();
@@ -210,12 +239,43 @@ describe('DownloadManagerScreen', () => {
     expect(view.queryByText('Image Generation')).toBeNull();
   });
 
+  it('filters by the Models tab names: Video holds video models, Voice text to speech, Speech transcription', async () => {
+    const { view, rtl } = await openManager(ctx =>
+      nativeDownloads(ctx, [
+        runningText({ downloadId: 'dl-text' }),
+        runningText({ downloadId: 'dl-video', modelKey: 'v/wan/wan-video.bin', modelId: 'v/wan', fileName: 'wan-video.bin', modelType: 'video' as never }),
+        runningText({ downloadId: 'dl-tts', modelKey: 't/kokoro/kokoro-voice.pte', modelId: 't/kokoro', fileName: 'kokoro-voice.pte', modelType: 'tts' as never }),
+        runningText({ downloadId: 'dl-stt', modelKey: 'w/whisper/ggml-base.en.bin', modelId: 'w/whisper', fileName: 'ggml-base.en.bin', modelType: 'stt' as never }),
+      ]),
+    );
+    const names = { 'dl-text': 'model-file', 'dl-video': 'wan-video', 'dl-tts': 'kokoro-voice.pte', 'dl-stt': 'Whisper Base (English)' };
+    const shown = () => Object.entries(names).filter(([, name]) => view.queryByText(name)).map(([id]) => id);
+    // The Models tabs, in the Models order; vision models live under Text there, so there is no Vision tab.
+    expect(['All', 'Text', 'Documents', 'Image', 'Video', 'Voice', 'Speech'].every(label => view.queryByText(label))).toBe(true);
+    expect(view.queryByText('Vision')).toBeNull();
+    expect(view.queryByText('Voice Models')).toBeNull();
+    expect(view.queryByText('Image Gen')).toBeNull();
+
+    rtl.fireEvent.press(view.getByText('Text'));
+    expect(shown()).toEqual(['dl-text']);
+    rtl.fireEvent.press(view.getByText('Documents'));
+    expect(shown()).toEqual([]);
+    rtl.fireEvent.press(view.getByText('Video'));
+    expect(shown()).toEqual(['dl-video']);
+    rtl.fireEvent.press(view.getByText('Voice'));
+    expect(shown()).toEqual(['dl-tts']);
+    rtl.fireEvent.press(view.getByText('Speech'));
+    expect(shown()).toEqual(['dl-stt']);
+    rtl.fireEvent.press(view.getByText('All'));
+    expect(shown()).toEqual(['dl-text', 'dl-video', 'dl-tts', 'dl-stt']);
+  });
+
   it('renders active download with progress info', async () => {
     const { view } = await openManager(ctx =>
       nativeDownloads(ctx, [runningText({ bytesDownloaded: 2 * GB, totalBytes: 4 * GB, combinedTotalBytes: 4 * GB })]),
     );
-    expect(view.getByText('model-file.gguf')).toBeTruthy();
-    expect(view.getByText('Active Downloads')).toBeTruthy();
+    expect(view.getByText('model-file')).toBeTruthy();
+    expect(view.getByText('Downloading')).toBeTruthy();
     expect(view.getByText('50%')).toBeTruthy();
   });
 
@@ -223,7 +283,7 @@ describe('DownloadManagerScreen', () => {
     const { view } = await openManager(async ctx => {
       await placeTextModel(ctx, { fileName: 'model.gguf', bytes: GB });
     });
-    expect(view.getByText('Total storage used: 1.0 GB')).toBeTruthy();
+    expect(view.getByText('1.0 GB used on this phone')).toBeTruthy();
   });
 
   it('shows count badge for completed section', async () => {
@@ -257,12 +317,11 @@ describe('DownloadManagerScreen', () => {
   });
 
   it('renders multiple completed models', async () => {
-    const { view } = await openManager(async ctx => {
+    const { view, useAppStore } = await openManager(async ctx => {
       await placeTextModel(ctx, { repo: 'author-a/a', fileName: 'model-a.gguf', bytes: KB });
       await placeTextModel(ctx, { repo: 'author-b/b', fileName: 'model-b.gguf', quantization: 'Q8_0', bytes: 2 * KB });
     });
-    expect(view.getByText('model-a.gguf')).toBeTruthy();
-    expect(view.getByText('model-b.gguf')).toBeTruthy();
+    for (const model of useAppStore.getState().downloadedModels) expect(view.getAllByText(model.name).length).toBeGreaterThan(0);
     expect(view.getByText('2')).toBeTruthy();
   });
 
@@ -270,7 +329,7 @@ describe('DownloadManagerScreen', () => {
     const { view } = await openManager(ctx =>
       nativeDownloads(ctx, [runningText({ fileName: 'active-model.gguf', bytesDownloaded: 256, totalBytes: 1024, combinedTotalBytes: 1024 })]),
     );
-    expect(view.getByText('256 B / 1 KB · Rate unavailable')).toBeTruthy();
+    expect(view.getByText('256 B / 1 KB')).toBeTruthy();
     expect(view.getByText('25%')).toBeTruthy();
   });
 
@@ -335,7 +394,7 @@ describe('DownloadManagerScreen', () => {
     await confirm(m, 'Delete');
 
     expect(await m.view.findByText("Couldn't remove the model files. Try again.")).toBeTruthy();
-    expect(m.view.getByText('model.gguf')).toBeTruthy();
+    expect(m.view.getByText('model')).toBeTruthy();
     expect(m.useAppStore.getState().downloadedModels).toHaveLength(1);
     expect(await m.boundary.fs!.exists(path)).toBe(true);
 
@@ -394,7 +453,7 @@ describe('DownloadManagerScreen', () => {
     await m.view.findByText('Remove Download');
     await confirm(m, 'Yes');
 
-    await m.rtl.waitFor(() => expect(m.view.queryByText('model-file.gguf')).toBeNull());
+    await m.rtl.waitFor(() => expect(m.view.queryByText('model-file')).toBeNull());
     expect(m.boundary.download!.active()).toEqual([]);
     expect(m.useDownloadStore.getState().downloads).toEqual({});
   });
@@ -422,7 +481,7 @@ describe('DownloadManagerScreen', () => {
         fileName: 'bg-model.gguf', bytesDownloaded: 500, totalBytes: 2000, combinedTotalBytes: 2000,
       })]),
     );
-    expect(view.getByText('bg-model.gguf')).toBeTruthy();
+    expect(view.getByText('bg-model')).toBeTruthy();
     expect(view.getByText(/Q4_K_M · Text/)).toBeTruthy();
     // The publisher name is not repeated on the card.
     expect(view.queryByText('author')).toBeNull();
@@ -438,7 +497,7 @@ describe('DownloadManagerScreen', () => {
     await confirm(m, 'Cancel');
 
     await m.rtl.waitFor(() => expect(m.view.queryByText('Delete Model')).toBeNull());
-    expect(m.view.getByText('model.gguf')).toBeTruthy();
+    expect(m.view.getByText('model')).toBeTruthy();
     expect(m.useAppStore.getState().downloadedModels).toHaveLength(1);
     expect(await m.boundary.fs!.exists(path)).toBe(true);
   });
@@ -461,10 +520,10 @@ describe('DownloadManagerScreen', () => {
   });
 
   it('does not invent a file size when the completed model size is unknown', async () => {
-    const { view } = await openManager(async ctx => {
+    const { view, useAppStore } = await openManager(async ctx => {
       await placeTextModel(ctx, { fileName: 'zero-model.gguf', bytes: 0 });
     });
-    expect(view.getByText('zero-model.gguf')).toBeTruthy();
+    expect(view.getByText(useAppStore.getState().downloadedModels[0].name)).toBeTruthy();
     expect(view.queryByText(/0 B · Q4_K_M/)).toBeNull();
   });
 

@@ -83,7 +83,7 @@ export const NetworkSection: React.FC<{
 
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Network Models</Text>
+      <Text style={styles.sectionTitle}>Network models</Text>
 
       {isCheckingNetwork && !hasServers && (
         <View style={styles.scanningRow}>
@@ -126,13 +126,13 @@ export const NetworkSection: React.FC<{
         >
           {busy
             ? <LoadingDots color={colors.primary} />
-            : <Text style={[styles.actionButtonText, { color: colors.primary }]}>Scan Network</Text>}
+            : <Text style={[styles.actionButtonText, { color: colors.primary }]}>Scan network</Text>}
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionButton, { borderColor: colors.primary }]}
           onPress={onAddManually}
         >
-          <Text style={[styles.actionButtonText, { color: colors.primary }]}>Add Server</Text>
+          <Text style={[styles.actionButtonText, { color: colors.primary }]}>Add server</Text>
         </TouchableOpacity>
       </View>
     </View>

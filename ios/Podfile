@@ -20,6 +20,8 @@ end
 
 target 'OffgridMobile' do
   config = use_native_modules!
+  # Brand fonts (Geist, Geist Mono) copied into the bundle as resources.
+  pod 'OffgridFonts', :path => '../assets/fonts'
   # The script reuses a framework only when its pinned revision and headers match.
   video_builder = File.expand_path('../scripts/build-video-ios.sh', __dir__)
   raise 'Video runtime build failed' unless system('bash', video_builder)

@@ -1,13 +1,13 @@
 import type { ThemeColors, ThemeShadows } from '../theme';
-import { SPACING, TYPOGRAPHY } from '../constants';
+import { cardSurface } from '../theme/surface';
+import { FONTS, SPACING, TYPOGRAPHY } from '../constants';
 
-export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+  // The one card surface (brand: translucent over the field, hairline edge), not its own shadowed box.
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
+    ...cardSurface(colors),
     padding: 16,
     marginBottom: 16,
-    ...shadows.small,
   },
   cardDense: {
     paddingHorizontal: SPACING.md,
@@ -28,7 +28,15 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   denseName: {
     ...TYPOGRAPHY.body,
     color: colors.text,
-    flex: 1,
+    flexShrink: 1,
+  },
+  downloadedLabel: { ...TYPOGRAPHY.metaSmall, fontFamily: FONTS.mono, color: colors.textMuted },
+  // In use, in words: the one emerald on the row.
+  // The same face and case as On phone beside it; emerald is the one accent for the model in use.
+  denseInUse: {
+    ...TYPOGRAPHY.metaSmall,
+    fontFamily: FONTS.mono,
+    color: colors.primary,
   },
   denseSourceGroup: {
     flexDirection: 'row' as const,
@@ -38,53 +46,54 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   denseSource: {
     ...TYPOGRAPHY.labelSmall,
-    color: colors.primary,
+    color: colors.textMuted,
     flexShrink: 1,
   },
   denseDescription: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
     marginTop: SPACING.xs,
   },
   denseMeta: {
     ...TYPOGRAPHY.meta,
     color: colors.textMuted,
-    marginTop: SPACING.xs,
   },
   capabilityRow: {
     flexDirection: 'row' as const,
     flexWrap: 'wrap' as const,
     gap: SPACING.xs,
+  },
+  // One line: facts then what it can do. Wrapping made one row three lines among two-line rows
+  // (hand test 84); what does not fit is clipped at the row's end.
+  denseMetaRow: {
+    flexDirection: 'row' as const,
+    flexWrap: 'nowrap' as const,
+    overflow: 'hidden' as const,
+    alignItems: 'center' as const,
+    columnGap: SPACING.sm,
     marginTop: SPACING.xs,
   },
   capabilityText: {
     ...TYPOGRAPHY.meta,
-    color: colors.primary,
+    color: colors.textSecondary,
   },
+  // What a model can do, as a glyph and a word: labels on the row, not boxes on it.
   capabilityBadge: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 4,
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 6,
-    paddingHorizontal: 6,
     paddingVertical: 2,
   },
   authorTag: {
-    backgroundColor: colors.surfaceLight,
-    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 6,
     flexShrink: 0,
   },
   authorTagText: {
     ...TYPOGRAPHY.metaSmall,
     color: colors.textSecondary,
   },
-  cardActive: {
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
+  // In use is said once, in words on the row. A green fill as well marked it twice (screen review).
+  cardActive: {},
   cardIncompatible: {
     opacity: 0.6,
   },
@@ -210,7 +219,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     borderRadius: 8,
   },
   warningText: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.warning,
   },
   visionBadge: {
@@ -298,8 +307,13 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textMuted,
     flexShrink: 1,
   },
+  // A 44 pt frame (it was 36), pulled back 4 pt each side so the row keeps its height.
   iconButton: {
-    padding: 10,
+    width: 44,
+    height: 44,
+    margin: -4,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
     flexShrink: 0,
   },
   failedSection: {
@@ -331,7 +345,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     marginBottom: 10,
   },
   failedMessageText: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.error,
     flex: 1,
   },

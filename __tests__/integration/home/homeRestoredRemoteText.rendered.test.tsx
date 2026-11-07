@@ -41,7 +41,9 @@ describe('Home with a saved remote Text selection', () => {
     });
 
     rtl.fireEvent.press(home.getByTestId('models-summary'));
-    expect(await home.findByText('qwen/qwen3-8b')).toBeTruthy();
+    // Home names the restored remote model twice now: on its chip and in the manager sheet.
+    expect(home.getByTestId('model-summary-text')).toBeTruthy();
+    expect((await home.findAllByText('qwen/qwen3-8b')).length).toBeGreaterThanOrEqual(2);
     rtl.fireEvent.press(home.getByTestId('models-row-text'));
     expect(await home.findByTestId('currently-loaded-model')).toBeTruthy();
     home.unmount();

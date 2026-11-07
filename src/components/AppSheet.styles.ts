@@ -34,7 +34,8 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     justifyContent: 'space-between' as const,
     alignItems: 'center' as const,
     paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
+    // The 24 pt gutter every screen uses, so a sheet's title lines up with its rows.
+    paddingHorizontal: SPACING.xl,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -52,8 +53,10 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   headerBackIcon: {
     color: colors.primary,
   },
+  // Done closes the sheet; it is not the sheet's main action, so it is not emerald (hand test 38).
   headerClose: {
     ...TYPOGRAPHY.body,
-    color: colors.primary,
+    color: colors.text,
   },
+  headerCloseButton: { minWidth: 44, minHeight: 44, marginVertical: -14, alignItems: 'flex-end' as const, justifyContent: 'center' as const },
 });

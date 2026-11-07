@@ -39,7 +39,7 @@ describe('T035 (rendered) — thinking-box header while reasoning still streams 
 
     // Mid-stream (paused): live work stays open and names the active reasoning state.
     await h.rtl.waitFor(() => {
-      expect(h.view!.getByTestId('assistant-work-toggle').props.accessibilityLabel).toBe('Working');
+      expect(h.view!.getByTestId('assistant-work-toggle').props.accessibilityLabel).toBe('Finding your answer');
       expect(h.view!.queryByTestId('thinking-block')).not.toBeNull();
     }, { timeout: 6000 });
     expect(String(h.view!.getByTestId('thinking-block-title').props.children)).toMatch(/Thinking/);

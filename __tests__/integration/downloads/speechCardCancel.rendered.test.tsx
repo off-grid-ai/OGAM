@@ -73,7 +73,7 @@ describe('Speech model card download controls', () => {
 
       const chatPicker = render(React.createElement(WhisperPickerSheet, { visible: true, onClose: () => {} }));
       expect(chatPicker.queryByText('Language')).toBeNull();
-      expect(chatPicker.getByText('On-device models')).toBeTruthy();
+      expect(chatPicker.getByText('On this phone')).toBeTruthy();
       chatPicker.unmount();
     } finally {
       global.fetch = originalFetch;

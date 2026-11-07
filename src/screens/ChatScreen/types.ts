@@ -133,6 +133,8 @@ function groupAssistantTurnWork(
         .find(
           message =>
             message.role === 'assistant' &&
+            // A notice (the compaction line) is never the answer: it would own a live turn and hide it.
+            !message.isSystemInfo &&
             !isSupportingContextMessage(message) &&
             !message.toolCalls?.length &&
             Boolean(message.content.trim() || message.attachments?.length),
@@ -197,10 +199,21 @@ function groupAssistantTurnWork(
         }
         continue;
       }
-      const matchingIndex = message.toolCallId
+      // A result pairs with its call by id; with no id match (small models reuse or drop ids),
+      // with the oldest call of the same tool still waiting, so one search is one row.
+      const byId = message.toolCallId
         ? artifactByCallId.get(message.toolCallId)
         : undefined;
-      if (matchingIndex !== undefined) {
+      const openById = byId !== undefined && !artifacts[byId]!.result ? byId : undefined;
+      const matchingIndex =
+        openById ??
+        artifacts.findIndex(
+          artifact =>
+            artifact.name === message.toolName &&
+            !artifact.result &&
+            artifact.arguments !== undefined,
+        );
+      if (matchingIndex !== -1) {
         artifacts[matchingIndex] = {
           ...artifacts[matchingIndex]!,
           result: message.content,
@@ -555,13 +568,13 @@ type PlaceholderTextOptions = {
 export function getPlaceholderText({
   hasModel,
   isModelLoading,
-  supportsVision,
+  supportsVision: _supportsVision,
   imageOnly,
 }: PlaceholderTextOptions): string {
   if (!hasModel)
     return isModelLoading ? 'Loading model...' : 'Load a model to use chat';
-  if (imageOnly) return 'Describe an image...';
-  return supportsVision
-    ? 'Type a message or add an image...'
-    : 'Type a message...';
+  // One line, one wording for every model (brand: a placeholder fits on one line). Whether a model
+  // sees images is said by the attach menu, not the placeholder.
+  if (imageOnly) return 'Describe a picture';
+  return 'Ask anything';
 }

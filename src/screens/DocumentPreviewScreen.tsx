@@ -4,21 +4,21 @@ import {
   Text,
   FlatList,
 } from 'react-native';
-import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import type { DocumentPage } from '@offgrid/rag/documents';
 import { LoadingDots } from '../components/LoadingDots';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../components/AliveScreen';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
 import RNFS from 'react-native-fs';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
-import { TYPOGRAPHY, SPACING } from '../constants';
+import { TYPOGRAPHY, SPACING, FONTS } from '../constants';
 import { documentStore } from '../services/documents/store';
 import { RootStackParamList } from '../navigation/types';
 import logger from '../utils/logger';
+import { ScreenHeader } from '../components/ScreenHeader';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'DocumentPreview'>;
@@ -64,7 +64,7 @@ async function waitForPages(
   }
 }
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -72,12 +72,10 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-    ...shadows.small,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.borderLight,
   },
   backButton: {
     padding: SPACING.xs,
@@ -99,7 +97,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   contentText: {
     ...TYPOGRAPHY.body,
     color: colors.text,
-    fontFamily: 'Menlo',
+    fontFamily: FONTS.mono,
     fontSize: 13,
     lineHeight: 20,
   },
@@ -247,20 +245,13 @@ export const DocumentPreviewScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} testID="document-preview-back">
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {fileName || 'Document'}
-          </Text>
-          {fileSize > 0 && (
-            <Text style={styles.headerSubtitle}>{formatFileSize(fileSize)}</Text>
-          )}
-        </View>
-      </View>
+    <AliveScreen style={styles.container} edges={['top']}>
+      <ScreenHeader
+        title={fileName || 'Document'}
+        subtitle={fileSize > 0 ? formatFileSize(fileSize) : undefined}
+        onBack={() => navigation.goBack()}
+        backTestID="document-preview-back"
+      />
 
       {isLoading ? (
         <View style={styles.centered}>
@@ -303,6 +294,6 @@ export const DocumentPreviewScreen: React.FC = () => {
           <Text style={styles.emptyText}>No content available</Text>
         </View>
       )}
-    </SafeAreaView>
+    </AliveScreen>
   );
 };

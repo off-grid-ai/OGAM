@@ -22,9 +22,7 @@ export const TextGenerationSection: React.FC = () => {
   return (
     <Card style={styles.section}>
       <Text style={styles.settingHelp}>
-        {isLiteRT
-          ? 'Configure LiteRT model behavior.'
-          : 'Configure LLM behavior for text responses.'}
+        How replies sound and how long they run.
       </Text>
 
       {isLiteRT ? (

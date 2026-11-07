@@ -1,20 +1,18 @@
 /**
  * AboutScreen — Follow / Community links.
  *
- * The About screen carries the same Follow-on-X + Join-Slack affordances as Settings (the user asked for
- * them in BOTH places). The real screen runs on a real stack navigator with its real animated rows; the
+ * Follow-on-X and Join-Slack live once, in Settings > Community (SettingsScreen.test covers them there);
+ * About no longer repeats them. The real screen runs on a real stack navigator with its real animated rows; the
  * OS link handler (Linking.openURL) is the device boundary, faked to record the URL it is handed.
  */
 jest.unmock('@react-navigation/native');
 
 import React from 'react';
 import { Linking } from 'react-native';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AboutScreen } from '../../../src/screens/AboutScreen';
-// Same shared constant the screen uses: the single source of truth, not a re-hardcoded string.
-import { FOLLOW_X_URL } from '../../../src/utils/sharePrompt';
 
 const Stack = createNativeStackNavigator();
 
@@ -34,30 +32,12 @@ function mount() {
 describe('AboutScreen — Follow / Community', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it('shows the Follow-on-X and Join-Slack items', () => {
+  it('carries no X or Slack rows: they live once, in Settings > Community', () => {
     const { view, opened } = mount();
 
-    expect(view.getByText('Follow @alichherawalla on X')).toBeTruthy();
-    expect(view.getByTestId('about-follow-on-x')).toBeTruthy();
-    expect(view.getByTestId('about-join-slack')).toBeTruthy();
+    expect(view.queryByText('Follow @alichherawalla on X')).toBeNull();
+    expect(view.queryByTestId('about-follow-on-x')).toBeNull();
+    expect(view.queryByTestId('about-join-slack')).toBeNull();
     expect(opened).toEqual([]);
-  });
-
-  it('Follow-on-X opens the X profile', () => {
-    const { view, opened } = mount();
-
-    fireEvent.press(view.getByTestId('about-follow-on-x'));
-
-    expect(opened).toEqual([FOLLOW_X_URL]);
-  });
-
-  it('Join-Slack opens the Slack invite', () => {
-    const { view, opened } = mount();
-
-    fireEvent.press(view.getByTestId('about-join-slack'));
-
-    expect(opened).toEqual([
-      'https://join.slack.com/t/off-grid-mobile/shared_invite/zt-494gbuv5c-kj9tT7U0AS8Kq8UUO63_jw',
-    ]);
   });
 });

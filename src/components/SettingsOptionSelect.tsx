@@ -83,7 +83,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     ...shadows.small,
   },
   value: { ...TYPOGRAPHY.body, color: colors.text, flex: 1 },
-  description: { ...TYPOGRAPHY.meta, color: colors.textMuted },
+  description: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
   disabled: { opacity: 0.6 },
   options: { padding: SPACING.lg, paddingBottom: SPACING.xxl },
   option: {

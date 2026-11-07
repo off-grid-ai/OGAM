@@ -556,7 +556,7 @@ describe('mobile clipboard Sync journey', () => {
     fireEvent.press(ui.getByTestId('settings-tab'));
     // Settings has to be the visible screen before its rows can be pressed: a press delivered while the
     // tab is still transitioning is dropped, and the journey then reads as a screen that never arrived.
-    await waitFor(() => expect(ui!.getByText('Model Settings')).toBeTruthy());
+    await waitFor(() => expect(ui!.getByText('Model settings')).toBeTruthy());
     fireEvent.press(ui.getByTestId('open-sync-settings'));
     // Wait for the Sync screen itself before reading anything off it: asking for its contents while
     // still on Settings reports missing elements rather than a screen that has not arrived.

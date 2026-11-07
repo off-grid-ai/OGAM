@@ -6,6 +6,7 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.common.JavascriptException
+import com.facebook.react.common.assets.ReactFontManager
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import ai.offgridmobile.crash.JsCrashFrames
 import ai.offgridmobile.download.DownloadManagerPackage
@@ -60,6 +61,9 @@ class MainApplication : Application(), ReactApplication {
     super.onCreate()
     // Before React Native: llama.rn reads the engine-pack folder when it first loads its libraries.
     EnginePackBoot.apply(this)
+    // The brand faces as font families, so fontFamily "Geist" + fontWeight picks the right file, as on iOS.
+    ReactFontManager.getInstance().addCustomFont(this, "Geist", R.font.geist)
+    ReactFontManager.getInstance().addCustomFont(this, "Geist Mono", R.font.geist_mono)
     loadReactNative(this)
   }
 }

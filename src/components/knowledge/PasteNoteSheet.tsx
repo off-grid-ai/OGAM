@@ -42,7 +42,7 @@ export const PasteNoteSheet: React.FC<PasteNoteSheetProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  // The sheet grows by exactly what the keyboard covers, so "Save to knowledge base" is always
+  // The sheet grows by exactly what the keyboard covers, so "Save to Files" is always
   // reachable. Without this it sits UNDER the keyboard, and this sheet gives no way out: the text
   // field is multiline so the return key inserts a newline instead of dismissing, and the backdrop
   // is the sheet's own close gesture. The note could be typed and then never saved.
@@ -155,7 +155,7 @@ export const PasteNoteSheet: React.FC<PasteNoteSheetProps> = ({
           </Text>
         ) : null}
         <Button
-          title="Save to knowledge base"
+          title="Save to Files"
           variant="primary"
           loading={saving}
           disabled={!text.trim()}
@@ -169,7 +169,7 @@ export const PasteNoteSheet: React.FC<PasteNoteSheetProps> = ({
 
 const createStyles = (colors: ThemeColors) => ({
   content: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingBottom: SPACING.lg,
     gap: SPACING.md,
   },
