@@ -339,14 +339,15 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         <View style={styles.toolCallReplyContent}>
           <Accordion
             key={isStreaming ? 'live' : 'done'}
+            // Desktop's words for the work behind a reply (ChatToolRows STATE_LABELS).
             title={
               isStreaming
-                ? 'Finding your answer'
+                ? 'Working'
                 : message.turnStatus === 'failed'
-                  ? 'Could not finish'
+                  ? 'Work failed'
                 : message.turnStatus === 'cancelled'
-                  ? 'Stopped'
-                  : 'How I got this'
+                  ? 'Work stopped'
+                  : 'Work done'
             }
             defaultOpen={Boolean(isStreaming)}
             variant="plain"
@@ -624,10 +625,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           <Accordion
             title={
               message.turnStatus === 'cancelled'
-                ? 'Stopped'
+                ? 'Work stopped'
                 : message.turnStatus === 'failed'
-                  ? 'Could not finish'
-                  : 'How I got this'
+                  ? 'Work failed'
+                  : 'Work done'
             }
             variant="plain"
             testID="assistant-work-toggle"
