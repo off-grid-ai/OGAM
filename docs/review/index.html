@@ -322,7 +322,11 @@ function when(t) {
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
+// Each render takes a ticket; one that finishes after a newer one started draws nothing, so a slow
+// profile lookup never adds a second copy of the notes, or the last screen's notes, to the panel.
+let threadTicket = 0;
 async function renderThread() {
+  const ticket = ++threadTicket;
   const box = $("thread");
   const list = onScreen(screenId());
   box.textContent = "";
@@ -335,6 +339,7 @@ async function renderThread() {
   if (user && list.length) {
     try { Object.assign(names, await user.profiles([...new Set(list.map((n) => n.author).filter((a) => a && a !== "claude"))])); } catch (_) {}
   }
+  if (ticket !== threadTicket) return;
   list.forEach((n) => {
     const row = document.createElement("div");
     row.className = "note" + (n.done ? " done" : "") + (lit === n.id ? " lit" : "");
@@ -404,10 +409,13 @@ $("compose").addEventListener("submit", async (e) => {
   const doc = { screen: s.id, screenName: s.name, x: +draft.x.toFixed(4), y: +draft.y.toFixed(4), text, created: Date.now(), done: false, on: s.before ? draft.on : "after" };
   if (draft.t != null) doc.t = draft.t;
   if (me) doc.author = me;
+  const sent = draft;
   $("save").disabled = true;
   try {
     await db.collection("comments").add(doc);
-    $("text").value = ""; draft = null; status("");
+    // Clear only what was sent: a pin or words chosen while the save ran stay put.
+    if (draft === sent && $("text").value.trim() === text) { $("text").value = ""; draft = null; }
+    status("");
   } catch (err) {
     status("The note didn't save: " + (err?.message || "try again."));
   }
