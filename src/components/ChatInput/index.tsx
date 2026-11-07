@@ -249,7 +249,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, []);
 
-  const { attachments, removeAttachment, clearAttachments, handlePickImage, handlePickDocument, addAudioAttachment } = useAttachments(setAlertState);
+  const { attachments, removeAttachment, clearAttachments, handlePickImage, pickFromCamera, pickFromLibrary, handlePickDocument, addAudioAttachment } = useAttachments(setAlertState);
   attachmentsRef.current = attachments;
   const interfaceMode = useUiModeStore((s) => s.interfaceMode);
   const isAudioMode = interfaceMode === 'audio';
@@ -508,8 +508,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleAttachPress = () => {
     logger.log(`[COMPOSER-SM] attach pressed platform=${Platform.OS} supportsVision=${supportsVision}`);
     if (Platform.OS === 'ios') {
+      // One sheet, one step: a photo is taken or chosen right here, not behind a second sheet
+      // (Mac, 2026-11-07: Photo, then Camera or Photo Library, asked twice).
       const options = supportsVision
-        ? ['Photo', 'Document', 'Cancel']
+        ? ['Take photo', 'Choose photo', 'Document', 'Cancel']
         : ['Document', 'Cancel'];
       ActionSheetIOS.showActionSheetWithOptions(
         {
@@ -520,8 +522,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         },
         index => {
           if (supportsVision) {
-            if (index === 0) handleVisionPress();
-            else if (index === 1) handlePickDocument();
+            if (index === 0) pickFromCamera();
+            else if (index === 1) pickFromLibrary();
+            else if (index === 2) handlePickDocument();
           } else {
             if (index === 0) handlePickDocument();
           }

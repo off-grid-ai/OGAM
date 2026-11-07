@@ -214,6 +214,8 @@ export function useAttachments(setAlertState: (state: AlertState) => void) {
     removeAttachment,
     clearAttachments,
     handlePickImage,
+    pickFromCamera,
+    pickFromLibrary,
     handlePickDocument,
     addAudioAttachment,
   };
