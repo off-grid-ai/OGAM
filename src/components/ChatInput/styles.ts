@@ -180,12 +180,11 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   // One box, edge to edge, in every mode: image or video mode adds the styles at its top, and nothing else moves.
   // Only the top corners are rounded; the input inside draws no edge of its own (the theme shadow is a boxShadow,
   // so it is cleared as one). Its bottom padding (with the home-indicator inset) is set where it is drawn.
-  // Full width, edge to edge (Mac, 2026-11-07: the floating box read small and cramped). Rounded top
-  // corners and a hairline along the top, like a sheet; image or video mode adds its style row inside.
+  // Full width, edge to edge (Mac, 2026-11-07: the floating box read small and cramped). A straight top
+  // edge with a hairline, like a system bar: rounded top corners left notches of the field showing
+  // beside the screen's own curved corners. Image or video mode adds its style row inside.
   composer: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
     marginHorizontal: 0,
@@ -196,11 +195,9 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     ...shadows.small,
   },
   // Focus draws light to the field: the edge turns emerald with a soft emerald ring (desktop's composer).
-  // Edge to edge, a ring would run off the screen: focus lights the top edge instead.
-  composerFocused: {
-    borderColor: colors.heroBorder,
-    boxShadow: `0px -6px 24px ${colors.selectedFill}`,
-  },
+  // Focus changes nothing: the keyboard coming up says it already (Mac, 2026-11-07: a line lit up
+  // along the top while typing).
+  composerFocused: {},
   pillInComposer: { backgroundColor: 'transparent', borderRadius: 0, boxShadow: [] },
   pillInput: {
     flex: 1,
