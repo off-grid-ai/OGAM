@@ -267,7 +267,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             {/* Two rows (hand check 2026-11-06: one row cut the name to "Off Grid AI…"): the name with
                 its icons above, the promise with the one main action below. */}
             <View style={styles.promiseRow}>
-              <Text style={styles.subtitle}>Nothing you type leaves this phone.</Text>
+              {/* The brand's promise, word for word (brand_tone_voice: never "nothing leaves your device"). Balanced
+                  breaks keep a last word from sitting alone on Android. */}
+              <Text style={styles.subtitle} textBreakStrategy="balanced">
+                Your chats and files never leave your device.
+              </Text>
               {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? (
                 <Button
                   title="New chat"
