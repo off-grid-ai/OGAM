@@ -85,7 +85,8 @@
     "name": "Text model sheet",
     "group": "Models",
     "what": "The text model sheet from the Home chip: this phone's models, then other devices'",
-    "file": "screens/text-picker.jpg"
+    "file": "screens/text-picker.jpg",
+    "clip": "screens/text-picker.mp4"
   },
   {
     "id": "image-picker",

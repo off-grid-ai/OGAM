@@ -66,6 +66,20 @@ button, textarea { font: inherit; color: inherit; }
 .shot img, .shot video { max-width: 100%; max-height: calc(100vh - 150px); border-radius: 6px; display: block; user-select: none; -webkit-user-drag: none; }
 .shots.split .shot video { max-height: calc(100vh - 180px); }
 .play { display: flex; align-items: center; gap: 10px; font: 11px/1.4 var(--mono); color: var(--muted); }
+/* Clip controls: play, time, a seek bar with a frame preview on hover, and speed. */
+.play { flex-wrap: wrap; margin-top: 8px; width: 100%; min-width: 380px; box-sizing: border-box; }
+/* Room under a clip for its controls. */
+.shot video { max-height: calc(100vh - 240px); }
+.shots.split .shot video { max-height: calc(100vh - 270px); }
+.seek { position: relative; flex: 1; min-width: 160px; display: flex; align-items: center; }
+.seek input[type=range] { width: 100%; accent-color: var(--gold); cursor: pointer; }
+.seek .ticks { position: absolute; left: 0; right: 0; top: -6px; height: 4px; pointer-events: none; }
+.seek .ticks i { position: absolute; width: 3px; height: 4px; margin-left: -1px; background: var(--gold); border-radius: 1px; }
+.seek .peek { position: absolute; bottom: 26px; transform: translateX(-50%); display: none; pointer-events: none;
+  background: var(--panel, #111); border: 1px solid var(--line); border-radius: 6px; padding: 3px; z-index: 5; }
+.seek .peek canvas { display: block; width: 120px; border-radius: 4px; }
+.seek .peek span { display: block; text-align: center; font: 10px/1.4 var(--mono); color: var(--fg); }
+.play select { background: var(--glass); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; color: var(--fg); font: 11px var(--mono); }
 .play button { background: var(--glass); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; color: var(--fg); }
 .play button:hover { border-color: var(--gold); }
 .screens .clipmark { font: 10px/1 var(--mono); color: var(--gold); }
@@ -272,8 +286,48 @@ function renderStage() {
       b.onclick = () => { media.paused ? media.play() : media.pause(); draft = null; renderPins(); renderCompose(); };
       const time = document.createElement("span"); time.className = "time";
       media.addEventListener("play", playLabel); media.addEventListener("pause", playLabel);
-      media.addEventListener("timeupdate", () => { time.textContent = `${fmt(media.currentTime)} of ${fmt(media.duration || 0)}`; });
-      bar.append(b, time);
+      const showTime = () => { time.textContent = `${fmt(media.currentTime)} / ${fmt(media.duration || 0)}`; };
+      media.addEventListener("timeupdate", showTime); media.addEventListener("loadedmetadata", showTime);
+      // Seek bar: drag to any moment (it pauses there); notes on this clip show as ticks above it.
+      const seekWrap = document.createElement("div"); seekWrap.className = "seek";
+      const range = document.createElement("input"); range.type = "range"; range.min = 0; range.step = 0.01; range.value = 0;
+      range.setAttribute("aria-label", "Seek");
+      const ticks = document.createElement("div"); ticks.className = "ticks";
+      const drawTicks = () => {
+        ticks.textContent = "";
+        const d = media.duration || 0; if (!d) return;
+        onScreen(s.id).filter((n) => n.t != null && (n.on || (s.before ? "before" : "after")) === v).forEach((n) => {
+          const i = document.createElement("i"); i.style.left = (n.t / d * 100) + "%"; ticks.append(i);
+        });
+      };
+      media.addEventListener("loadedmetadata", () => { range.max = media.duration || 0; drawTicks(); });
+      media.addEventListener("timeupdate", () => { if (document.activeElement !== range) range.value = media.currentTime; });
+      range.addEventListener("input", () => { media.pause(); media.currentTime = +range.value; showTime(); renderPins(); });
+      // Hover preview: a small frame of the moment under the pointer, drawn from a second copy of the clip.
+      const peek = document.createElement("div"); peek.className = "peek";
+      const cv = document.createElement("canvas"); const pt = document.createElement("span"); peek.append(cv, pt);
+      const ghost = document.createElement("video"); ghost.src = clip; ghost.muted = true; ghost.preload = "auto"; ghost.playsInline = true;
+      ghost.addEventListener("seeked", () => {
+        const w = 240, h = Math.round(w * (ghost.videoHeight || 16) / (ghost.videoWidth || 9));
+        cv.width = w; cv.height = h; cv.getContext("2d").drawImage(ghost, 0, 0, w, h);
+      });
+      // The copy may still be loading on the first hover: remember the moment and draw it once it can.
+      let wanted = 0;
+      ghost.addEventListener("loadeddata", () => { ghost.currentTime = wanted; });
+      range.addEventListener("mousemove", (e) => {
+        const r = range.getBoundingClientRect(), f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+        const t = f * (media.duration || 0);
+        peek.style.display = "block"; peek.style.left = (f * 100) + "%"; pt.textContent = fmt(t);
+        wanted = t;
+        if (ghost.readyState >= 2 && Math.abs((ghost.currentTime || 0) - t) > 0.05) ghost.currentTime = t;
+      });
+      range.addEventListener("mouseleave", () => { peek.style.display = "none"; });
+      seekWrap.append(ticks, range, peek);
+      // Speed: watch the whole clip fast, or slow a moment down.
+      const speed = document.createElement("select"); speed.setAttribute("aria-label", "Playback speed");
+      [0.25, 0.5, 1, 1.5, 2, 4].forEach((r) => { const o = document.createElement("option"); o.value = r; o.textContent = r + "×"; if (r === 1) o.selected = true; speed.append(o); });
+      speed.onchange = () => { media.playbackRate = +speed.value; };
+      bar.append(b, time, seekWrap, speed);
       pane.append(bar);
     }
     stage.append(pane);
