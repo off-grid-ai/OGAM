@@ -5,7 +5,8 @@
     "group": "Home",
     "what": "The front door: name, promise, New chat, models, recent chats",
     "file": "screens/home.jpg",
-    "before": "screens/before/home.jpg"
+    "before": "screens/before/home.jpg",
+    "clip": "screens/home.mp4"
   },
   {
     "id": "chats",
