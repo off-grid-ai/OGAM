@@ -219,8 +219,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
-  // The value as a figure on its own (no box) until you tap to type one.
-  valueBare: { borderWidth: 0 },
+  // The value as a figure on its own (no box) until you tap to type one. It ends on the card's right
+  // edge, so "50" and "512x512" line up (centred in the 72 pt box, a short value sat inside it).
+  valueBare: { borderWidth: 0, textAlign: 'right', paddingHorizontal: 0 },
   description: {
     ...TYPOGRAPHY.bodySmall,
     marginBottom: SPACING.md,
