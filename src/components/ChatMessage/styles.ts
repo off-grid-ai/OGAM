@@ -235,7 +235,7 @@ const createBubbleStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
 });
 
-const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createThinkingStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   text: {
     ...TYPOGRAPHY.body,
     lineHeight: 20,
@@ -274,15 +274,12 @@ const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textSecondary,
     fontStyle: 'italic' as const,
   },
+  // A plain row, as on Desktop: no card. The reasoning, when open, hangs off a hairline on its left.
   thinkingBlock: {
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.small,
     marginBottom: 8,
     width: '100%' as const,
   },
+  thinkingSpinner: { transform: [{ scale: 0.7 }] },
   /** Full-width ThinkingBlock when rendered outside a message bubble (e.g. ToolCallWithThinking).
    *  Uses alignSelf:'stretch' (NOT a percentage width) because the parent systemInfoContainer
    *  centers its children (alignItems:'center'); a percentage width + alignSelf there fails to
@@ -296,8 +293,9 @@ const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   thinkingHeader: {
     flexDirection: 'row' as const,
-    alignItems: 'flex-start' as const,
-    padding: 8,
+    alignItems: 'center' as const,
+    alignSelf: 'flex-start' as const,
+    minHeight: 32,
     gap: 6,
   },
   thinkingHeaderIconBox: {
@@ -343,8 +341,11 @@ const createThinkingStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     fontStyle: 'italic' as const,
   },
   thinkingBlockContent: {
-    padding: SPACING.sm,
-    paddingTop: 0,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: colors.border,
+    paddingLeft: SPACING.md,
+    marginLeft: 4,
+    marginTop: 2,
   },
   streamingThinkingHint: {
     marginTop: 8,
