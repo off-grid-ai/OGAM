@@ -95,8 +95,8 @@ android {
         applicationId "ai.offgridmobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1793794452
-        versionName "0.0.122"
+        versionCode 1794070946
+        versionName "0.0.123"
         // An engine pack fits only the llama.rn Java/JS bridge this APK carries (see enginepack/).
         def llamaRn = new groovy.json.JsonSlurper().parse(file("../../node_modules/llama.rn/package.json"))
         buildConfigField "String", "LLAMA_ENGINE_BRIDGE", "\"${llamaRn.offgrid?.engineBridge ?: ''}\""
