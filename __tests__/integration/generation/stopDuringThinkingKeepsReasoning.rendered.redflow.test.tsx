@@ -43,7 +43,7 @@ describe('Stop during LiteRT thinking keeps the reasoning (device 2026-07-14)', 
     // THE FIX — the reasoning-only partial is kept inside the stopped turn, not discarded.
     // RED on HEAD: the message was cleared (streamingMessage was empty during thinking) → no thinking block.
     const stoppedWork = view.getByTestId('assistant-work-toggle');
-    expect(stoppedWork.props.accessibilityLabel).toBe('Stopped');
+    expect(stoppedWork.props.accessibilityLabel).toBe('Work stopped');
     rtl.fireEvent.press(stoppedWork);
     await rtl.waitFor(() => {
       expect(view.queryAllByTestId('thinking-block').length).toBeGreaterThan(0);

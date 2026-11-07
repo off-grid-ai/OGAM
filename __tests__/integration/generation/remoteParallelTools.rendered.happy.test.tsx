@@ -57,7 +57,7 @@ describe('T048 (rendered) — remote parallel tool_calls render as bubbles + fin
     await h.rtl.waitFor(() => {
       expect(
         h.view!.getByTestId('assistant-work-toggle').props.accessibilityLabel,
-      ).toBe('Finding your answer');
+      ).toBe('Working');
       expect(h.view!.queryByTestId('streaming-thinking-hint')).not.toBeNull();
       expect(h.view!.queryAllByTestId('thinking-indicator')).toHaveLength(1);
     }, { timeout: 6000 });

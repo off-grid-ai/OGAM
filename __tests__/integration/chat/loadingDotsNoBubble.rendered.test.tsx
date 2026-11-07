@@ -20,7 +20,7 @@ it('shows bare loading dots, then an answer bubble when the reply arrives', () =
 
   const view = render(<ChatMessage message={waiting} isStreaming />);
   expect(view.getByTestId('thinking-indicator')).toBeTruthy();
-  expect(view.getByLabelText('Working')).toBeTruthy();
+  expect(view.getByLabelText('Thinking')).toBeTruthy();
   expect(view.queryByTestId('message-bubble')).toBeNull();
   expect(view.queryByTestId('message-meta-row')).toBeNull();
 
@@ -48,7 +48,7 @@ it('shows only dots beneath reasoning while the answer is still loading', () => 
     />,
   );
   const loader = view.getByTestId('streaming-thinking-hint');
-  expect(within(loader).getByLabelText('Working')).toBeTruthy();
-  expect(within(loader).queryByText('Thinking...')).toBeNull();
+  expect(within(loader).getByLabelText('Thinking')).toBeTruthy();
+  expect(within(loader).queryByText('Thinking')).toBeNull();
   expect(view.queryByTestId('message-meta-row')).toBeNull();
 });

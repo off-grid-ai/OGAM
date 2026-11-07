@@ -443,9 +443,9 @@ describe('Pro mobile state sync journey', () => {
     expect(ui.queryByText('contacts_search')).toBeNull();
     expect(
       ui
-        .getAllByText(/^(Thought process|Searched the web)$/)
+        .getAllByText(/^(Thought|Searched the web)$/)
         .map(node => React.Children.toArray(node.props.children).join('')),
-    ).toEqual(['Thought process', 'Searched the web', 'Thought process']);
+    ).toEqual(['Thought', 'Searched the web', 'Thought']);
     fireEvent.press(ui.getAllByTestId('thinking-block-toggle')[0]);
     expect(
       ui.getByText('I should confirm the notes before searching.'),

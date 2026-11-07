@@ -41,7 +41,7 @@ describe('synced assistant tool timeline', () => {
     });
     const view = render(<View>{display.map(item => <ChatMessage key={item.id} message={item} isStreaming={item.isStreaming} />)}</View>);
     expect(view.getByText('The first answer.')).toBeTruthy();
-    expect(view.getByText('How I got this')).toBeTruthy();
+    expect(view.getByText('Work done')).toBeTruthy();
     expect(view.getByTestId('thinking-indicator')).toBeTruthy();
     const audioView = render(<View>{display.map(item => <MessageAudioMode
       key={item.id} msg={item} isStreamingThis={item.isStreaming === true}
@@ -67,12 +67,12 @@ describe('synced assistant tool timeline', () => {
     expect(display[1].timeline).toHaveLength(5);
     const view = render(<View>{display.map(item => <ChatMessage key={item.id} message={item} />)}</View>);
     expect(view.getAllByTestId('assistant-work-toggle')).toHaveLength(1);
-    expect(view.getByText('Stopped')).toBeTruthy();
+    expect(view.getByText('Work stopped')).toBeTruthy();
     fireEvent.press(view.getByTestId('assistant-work-toggle'));
     expect(view.getByText('Plan the search')).toBeTruthy();
     expect(view.getByText('Check another source')).toBeTruthy();
     expect(view.getByText('Summarize findings')).toBeTruthy();
-    expect(view.getAllByText('Thought process')).toHaveLength(3);
+    expect(view.getAllByText('Thought')).toHaveLength(3);
     expect(view.getByText('Searched the web')).toBeTruthy();
     expect(view.getByTestId('tool-result-label-read_page')).toBeTruthy();
     const audioView = render(<MessageAudioMode
@@ -80,9 +80,9 @@ describe('synced assistant tool timeline', () => {
       showGenerationDetails={false} onCopy={() => {}} onRetry={() => {}}
       onEdit={() => {}} onGenerateImage={() => {}} onImagePress={() => {}}
     />);
-    expect(audioView.getByText('Stopped')).toBeTruthy();
+    expect(audioView.getByText('Work stopped')).toBeTruthy();
     fireEvent.press(audioView.getByTestId('assistant-work-toggle'));
-    expect(audioView.getAllByText('Thought process')).toHaveLength(3);
+    expect(audioView.getAllByText('Thought')).toHaveLength(3);
     expect(audioView.getByText('Searched the web')).toBeTruthy();
     expect(audioView.getByTestId('tool-result-label-read_page')).toBeTruthy();
   });
@@ -140,9 +140,9 @@ describe('synced assistant tool timeline', () => {
     );
 
     expect(view.getAllByTestId('assistant-work-toggle')).toHaveLength(1);
-    expect(view.getByText('Finding your answer')).toBeTruthy();
+    expect(view.getByText('Working')).toBeTruthy();
     expect(view.getByTestId('thinking-indicator')).toBeTruthy();
-    expect(view.queryByText('Thinking...')).toBeNull();
+    expect(view.queryByText('Thinking')).toBeNull();
     expect(view.getByText('I am checking the live sources.')).toBeTruthy();
     expect(view.getAllByText('Searched the web')).toHaveLength(1);
 
@@ -165,13 +165,13 @@ describe('synced assistant tool timeline', () => {
         ))}
       </View>,
     );
-    expect(audioView.getByText('Finding your answer')).toBeTruthy();
+    expect(audioView.getByText('Working')).toBeTruthy();
     expect(audioView.getAllByText('Searched the web')).toHaveLength(1);
     expect(audioView.queryAllByTestId(/^audio-bubble-/)).toHaveLength(0);
     expect(audioView.queryByTestId('streaming-thinking-hint')).toBeNull();
   });
 
-  it('closes failed peer work under one Could not finish accordion', () => {
+  it('closes failed peer work under one Work failed accordion', () => {
     const display = getDisplayMessages(
       [
         createMessage({
@@ -219,7 +219,7 @@ describe('synced assistant tool timeline', () => {
     );
 
     expect(view.getAllByTestId('assistant-work-toggle')).toHaveLength(1);
-    expect(view.getByText('Could not finish')).toBeTruthy();
+    expect(view.getByText('Work failed')).toBeTruthy();
     expect(view.queryByText('I checked the request.')).toBeNull();
     fireEvent.press(view.getByTestId('assistant-work-toggle'));
     expect(view.getByText('I checked the request.')).toBeTruthy();
@@ -273,7 +273,7 @@ describe('synced assistant tool timeline', () => {
     );
 
     expect(view.getAllByTestId('assistant-work-toggle')).toHaveLength(1);
-    expect(view.getByText('Stopped')).toBeTruthy();
+    expect(view.getByText('Work stopped')).toBeTruthy();
     expect(view.queryByTestId('message-bubble')).toBeNull();
     expect(view.queryByTestId('message-meta-row')).toBeNull();
   });
@@ -318,12 +318,12 @@ describe('synced assistant tool timeline', () => {
     fireEvent.press(view.getByTestId('assistant-work-toggle'));
     expect(
       view
-        .getAllByText(/^(Thought process|Generated image|Enhanced prompt)$/)
+        .getAllByText(/^(Thought|Generated image|Enhanced prompt)$/)
         .map(node => React.Children.toArray(node.props.children).join('')),
     ).toEqual([
-      'Thought process',
+      'Thought',
       'Generated image',
-      'Thought process',
+      'Thought',
       'Enhanced prompt',
     ]);
   });
@@ -403,7 +403,7 @@ describe('synced assistant tool timeline', () => {
 
     expect(view.getAllByTestId('assistant-work-toggle')).toHaveLength(1);
     fireEvent.press(view.getByTestId('assistant-work-toggle'));
-    expect(view.getAllByText('Thought process')).toHaveLength(2);
+    expect(view.getAllByText('Thought')).toHaveLength(2);
     expect(view.getAllByText('Enhanced prompt')).toHaveLength(1);
     expect(view.getAllByText('Generated image')).toHaveLength(1);
     expect(view.getByText('Generated image for: a horse')).toBeTruthy();
@@ -436,7 +436,7 @@ describe('synced assistant tool timeline', () => {
 
     expect(voiceView.getAllByTestId('assistant-work-toggle')).toHaveLength(1);
     fireEvent.press(voiceView.getByTestId('assistant-work-toggle'));
-    expect(voiceView.getAllByText('Thought process')).toHaveLength(2);
+    expect(voiceView.getAllByText('Thought')).toHaveLength(2);
     expect(voiceView.getAllByText('Enhanced prompt')).toHaveLength(1);
     expect(voiceView.getAllByText('Generated image')).toHaveLength(1);
     expect(voiceView.getAllByTestId('message-meta-row')).toHaveLength(1);
