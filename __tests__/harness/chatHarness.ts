@@ -712,9 +712,13 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     },
 
     /**
-     * REAL attach-photo gesture: open the attach popover, tap "Photo" — the (faked) native image picker
-     * returns an image, which the real useAttachments hook adds as a pending attachment. Requires a
-     * vision-capable model (setupChatScreen({vision:true})), else the app alerts instead of attaching.
+     * REAL attach-photo gesture: open the attach popover, tap "Choose photo" (or "Take photo") — the
+     * (faked) native image picker returns an image, which the real useAttachments hook adds as a pending
+     * attachment. Requires a vision-capable model (setupChatScreen({vision:true})); without one the menu
+     * shows a single "Photo" row that alerts instead of attaching.
+     * The two sources matter for a MULTI-image turn: the faked library returns one fixed uri every time,
+     * so two library picks are indistinguishable from one image arriving twice. The camera returns a
+     * different uri, which is what makes "both images reached the engine" an assertion rather than a hope.
      */
     async attachImageViaUI(source: 'library' | 'camera' = 'library') {
       const view = this.view!;
@@ -722,19 +726,11 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
         await rtl.waitFor(() => view.getByTestId('attach-button')),
       );
       rtl.fireEvent.press(
-        await rtl.waitFor(() => view.getByTestId('attach-photo')),
-      );
-      // Android: attach-photo opens a "Choose image source" alert — tap "Photo Library" or "Camera" (both
-      // real gestures), which (after a short delay) launches the faked picker and adds the attachment.
-      // The two sources matter for a MULTI-image turn: the faked library returns one fixed uri every time,
-      // so two library picks are indistinguishable from one image arriving twice. The camera returns a
-      // different uri, which is what makes "both images reached the engine" an assertion rather than a hope.
-      rtl.fireEvent.press(
         await rtl.waitFor(() =>
-          view.getByText(source === 'camera' ? 'Camera' : 'Photo Library'),
+          view.getByTestId(source === 'camera' ? 'attach-camera' : 'attach-library'),
         ),
       );
-      await this.settle(400); // the handler defers pickFromLibrary via setTimeout(300)
+      await this.settle(50); // let the async picker resolve and the attachment render
       await rtl.waitFor(() => {
         expect(view.queryByTestId('attachments-container')).not.toBeNull();
       });

@@ -25,7 +25,7 @@ describe('voice mode prompt enhancement', () => {
       />,
     );
 
-    expect(view.getByTestId('assistant-work-toggle').props.accessibilityLabel).toBe('Finding your answer');
+    expect(view.getByTestId('assistant-work-toggle').props.accessibilityLabel).toBe('Working');
     expect(view.getByText('Enhanced prompt')).toBeTruthy();
     expect(view.getByTestId('thinking-block-content')).toBeTruthy();
     expect(view.getByText('A cinematic fox in the snow.')).toBeTruthy();

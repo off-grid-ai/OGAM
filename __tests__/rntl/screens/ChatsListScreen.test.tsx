@@ -22,7 +22,11 @@ interface App {
   };
   factories: typeof import('../../utils/factories');
   /** Start a chat with these messages, as the app's chat store records them. */
-  chat(title: string, messages?: Array<{ role: 'user' | 'assistant'; content: string }>, projectId?: string): string;
+  chat(
+    title: string,
+    messages?: Array<{ role: 'user' | 'assistant'; content: string; turnKind?: 'text' | 'image' | 'video' }>,
+    projectId?: string,
+  ): string;
   /** A downloaded text model; `active` also makes it the chosen one. */
   model(active: boolean): void;
   render(): { view: ReturnType<Rtl['render']>; route(): string | undefined; params(): unknown };
@@ -86,6 +90,32 @@ function rowOf(app: App, view: ReturnType<Rtl['render']>, title: string) {
   const row = rows.find(r => r.queryByText(title));
   if (!row) throw new Error(`No row shows ${title}`);
   return row;
+}
+
+/** Every text a row shows, in order: a one-line row shows its title (and its project) and nothing else. */
+function rowTexts(app: App, view: ReturnType<Rtl['render']>, index: number): string[] {
+  return app.rtl
+    .within(view.getByTestId(`conversation-item-${index}`))
+    .queryAllByText(/./)
+    .map(node => String(node.props.children));
+}
+
+/** The day headings and the chat titles of the list, top to bottom, as the person reads them. */
+function readList(app: App, view: ReturnType<Rtl['render']>, titles: readonly string[]): string[] {
+  const headings = new Set(['Today', 'Yesterday', 'This week', 'Older']);
+  return app.rtl
+    .within(view.getByTestId('conversation-list'))
+    .queryAllByText(/./)
+    .map(node => String(node.props.children))
+    .filter(text => headings.has(text) || titles.includes(text));
+}
+
+/** The quiet kind icons (image, video) a row shows. */
+function kindIcons(app: App, view: ReturnType<Rtl['render']>, index: number): string[] {
+  const row = app.rtl.within(view.getByTestId(`conversation-item-${index}`));
+  return [...row.UNSAFE_queryAllByProps({ name: 'image' }), ...row.UNSAFE_queryAllByProps({ name: 'video' })]
+    .filter(node => typeof node.type === 'string')
+    .map(node => String(node.props.name));
 }
 
 describe('ChatsListScreen', () => {
@@ -174,7 +204,7 @@ describe('ChatsListScreen', () => {
       expect(app.rtl.within(view.getByTestId('conversation-item-1')).getByText('Older Chat')).toBeTruthy();
     });
 
-    it('previews the last reply, or the person\'s own last message with "You:"', () => {
+    it('shows each chat as one line: its title, with no reply and no message the person sent', () => {
       const app = boot();
       app.chat('Answered', [
         { role: 'user', content: 'Hello there' },
@@ -184,10 +214,13 @@ describe('ChatsListScreen', () => {
       app.chat('Empty Conv');
       const { view } = app.render();
 
-      expect(view.getByText('Hi! How can I help you?')).toBeTruthy();
-      expect(view.getByText(/You:.*My question/)).toBeTruthy();
+      const rows = [0, 1, 2].map(index => rowTexts(app, view, index));
+      expect(rows).toHaveLength(3);
+      expect(rows).toEqual(expect.arrayContaining([['Empty Conv'], ['Asked'], ['Answered']]));
+      expect(view.queryByText(/Hi! How can I help you\?/)).toBeNull();
+      expect(view.queryByText(/My question/)).toBeNull();
       expect(view.queryByText(/Hello there/)).toBeNull();
-      expect(rowOf(app, view, 'Empty Conv').queryByText(/You:/)).toBeNull();
+      expect(view.queryByText(/You:/)).toBeNull();
     });
 
     it('badges a chat with its project, and nothing for a chat outside one or in a deleted one', () => {
@@ -204,7 +237,7 @@ describe('ChatsListScreen', () => {
       expect(rowOf(app, view, 'Orphan Chat').queryByText('Code Review')).toBeNull();
     });
 
-    it('dates a chat under its day heading: the clock time today and yesterday, the weekday this week, Last week, N weeks ago, else the date', () => {
+    it('puts each chat under its day heading, and the row itself shows no time or date', () => {
       const app = boot();
       jest.useFakeTimers({ now: new Date(2026, 8, 1, 9, 30) });
       app.chat('Old Chat');
@@ -220,18 +253,49 @@ describe('ChatsListScreen', () => {
       app.chat('Today Chat');
       const { view } = app.render();
 
-      const dateOf = (index: number) => {
-        const { Text } = require('react-native');
-        const texts = app.rtl.within(view.getByTestId(`conversation-item-${index}`)).UNSAFE_getAllByType(Text);
-        return String(texts[texts.length - 1].props.children);
-      };
-      expect(dateOf(0)).toMatch(/9:30/);
-      expect(dateOf(1)).toMatch(/9:30/);
-      expect(view.getByText('Yesterday')).toBeTruthy();
-      expect(dateOf(2)).toMatch(/^Tue/);
-      expect(dateOf(3)).toBe('Last week');
-      expect(dateOf(4)).toBe('2 weeks ago');
-      expect(dateOf(5)).toMatch(/Sep\s*1\b|\b1\s*Sep/);
+      const titles = ['Today Chat', 'Yesterday Chat', 'Recent Chat', 'Last Week Chat', 'Two Weeks Chat', 'Old Chat'];
+      expect(readList(app, view, titles)).toEqual([
+        'Today', 'Today Chat',
+        'Yesterday', 'Yesterday Chat',
+        'This week', 'Recent Chat',
+        'Older', 'Last Week Chat', 'Two Weeks Chat', 'Old Chat',
+      ]);
+      // Each row is its title alone: no clock time, weekday, "Last week", "N weeks ago" or date.
+      titles.forEach((title, index) => expect(rowTexts(app, view, index)).toEqual([title]));
+      expect(view.queryByText(/9[:.]30/)).toBeNull();
+      expect(view.queryByText(/^(Last week|\d+ weeks ago|Tue)$/)).toBeNull();
+    });
+
+    it('marks a picture chat and a clip chat with a quiet icon, and names the project only on its chat', () => {
+      const app = boot();
+      const project = app.stores.project.getState().createProject({ name: 'Trips', description: '', systemPrompt: '' });
+      jest.useFakeTimers({ now: new Date(2026, 9, 27, 9, 30) });
+      app.chat('Beach clip', [{ role: 'user', content: 'a wave at sunset', turnKind: 'video' }]);
+      jest.setSystemTime(new Date(2026, 9, 29, 9, 30));
+      app.chat('Lake picture', [{ role: 'user', content: 'a lake at dawn', turnKind: 'image' }], project.id);
+      jest.setSystemTime(new Date(2026, 9, 30, 9, 30));
+      app.chat('Packing list', [
+        { role: 'user', content: 'What should I pack?', turnKind: 'text' },
+        { role: 'assistant', content: 'Boots and a warm coat' },
+      ]);
+      const { view } = app.render();
+
+      expect(readList(app, view, ['Packing list', 'Lake picture', 'Beach clip'])).toEqual([
+        'Today', 'Packing list',
+        'Yesterday', 'Lake picture',
+        'This week', 'Beach clip',
+      ]);
+      // Title, then the project only on the project chat; no reply text and no time on any row.
+      expect(rowTexts(app, view, 0)).toEqual(['Packing list']);
+      expect(rowTexts(app, view, 1)).toEqual(['Lake picture', 'Trips']);
+      expect(rowTexts(app, view, 2)).toEqual(['Beach clip']);
+      expect(view.getAllByText('Trips')).toHaveLength(1);
+      expect(view.queryByText(/Boots and a warm coat|What should I pack|a lake at dawn|a wave at sunset/)).toBeNull();
+      expect(view.queryByText(/9[:.]30/)).toBeNull();
+      // The image icon only on the picture chat, the video icon only on the clip chat.
+      expect(kindIcons(app, view, 0)).toEqual([]);
+      expect(kindIcons(app, view, 1)).toEqual(['image']);
+      expect(kindIcons(app, view, 2)).toEqual(['video']);
     });
 
     it('opening a chat makes it the active one and shows it', async () => {

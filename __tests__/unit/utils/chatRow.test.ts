@@ -1,7 +1,7 @@
 /**
  * A chat row's kind and preview (hand test 7: image chats showed no icon, and Home repeated titles).
  */
-import { chatKind, rowPreview } from '../../../src/utils/chatRow';
+import { chatKind } from '../../../src/utils/chatRow';
 
 const user = (extra: object = {}) => ({ id: 'u', role: 'user', content: 'x', timestamp: 0, ...extra }) as never;
 const reply = (extra: object = {}) => ({ id: 'a', role: 'assistant', content: 'y', timestamp: 0, ...extra }) as never;
@@ -18,17 +18,5 @@ describe('chatKind', () => {
 
   it('is a text chat otherwise', () => {
     expect(chatKind([user(), reply()])).toBe('text');
-  });
-});
-
-describe('rowPreview', () => {
-  it('drops a preview that only repeats the title', () => {
-    expect(rowPreview('You: [test] Find me one good hiking trail near Pune', '[test] Find me one good hiking trail…')).toBe('');
-  });
-
-  it('keeps a preview that says something new', () => {
-    expect(rowPreview('Sinhagad Fort is a 2.7 km climb.', '[test] Find me one good hiking trail near Pune')).toBe(
-      'Sinhagad Fort is a 2.7 km climb.',
-    );
   });
 });

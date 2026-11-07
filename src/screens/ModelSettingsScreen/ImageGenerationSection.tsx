@@ -1,3 +1,4 @@
+import { ChatStyleSetting } from '../../components/MediaStyles/ChatStyleSetting';
 import React, { useState } from 'react';
 import { AppSwitch } from '../../components/AppSwitch';
 import { View, Text, Platform } from 'react-native';
@@ -164,6 +165,9 @@ export const ImageGenerationSection: React.FC = () => {
 
   return (
     <Card style={styles.section}>
+      {/* The picture style, the same choice as the composer and as the Video card's style row
+          (Mac, 2026-11-07: video had styles here, images did not). */}
+      <ChatStyleSetting kind="image" />
       <Text style={styles.settingHelp}>
         Control how image generation requests are handled in chat.
       </Text>

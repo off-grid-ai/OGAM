@@ -115,16 +115,11 @@ describe('reload race — a send during the load window keeps thinking (device 2
     await h.rtl.waitFor(() => {
       expect(h.view!.queryByText(/seventeen has no divisors below its root/)).not.toBeNull();
     });
-    // BOTH turns carry the thinking affordance (the block collapses to its preview after completion).
+    // BOTH turns carry the thinking affordance.
     const blocks = h.view!.queryAllByTestId('thinking-block');
     expect(blocks.length).toBe(2);
-    // Expand the racing turn's block: the full reasoning renders in the block content.
-    // (walking-up press: the toggle's onPress lives on the composite above the testID host)
-    const toggles = h.view!.queryAllByTestId('thinking-block-toggle');
-    await h.rtl.act(async () => { pressByWalkingUp(toggles[toggles.length - 1]); });
-    await h.rtl.waitFor(() => {
-      const content = h.view!.queryAllByTestId('thinking-block-content');
-      expect(content.some(c => h.rtl.within(c).queryByText(/seventeen has no divisors below its root/) != null)).toBe(true);
-    });
+    // The racing turn's reasoning renders inside its block content (open by default with the work row).
+    const content = h.view!.queryAllByTestId('thinking-block-content');
+    expect(content.some(c => h.rtl.within(c).queryByText(/seventeen has no divisors below its root/) != null)).toBe(true);
   }, 30000);
 });

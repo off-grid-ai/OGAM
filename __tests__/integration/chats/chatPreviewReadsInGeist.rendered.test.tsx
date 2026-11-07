@@ -1,6 +1,6 @@
 /**
- * A chat row reads as one line: its title in Geist (reading text) and when it was last active in Geist
- * Mono (brand/DESIGN_PHILOSOPHY.md: Mono for timestamps), under its date heading.
+ * A chat row reads as one line: its title in Geist (reading text), under its day heading. The row
+ * shows no reply and no time: the heading says when.
  *
  * Real ChatsListScreen and the real chat store, rehydrated from storage.
  */
@@ -11,11 +11,11 @@ import { FONTS } from '../../../src/constants';
 // Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
 jest.unmock('@react-navigation/native');
 
-it('sets the title in Geist and the time in Geist Mono', async () => {
+it('sets the one-line title in Geist, under Today, with no reply and no time', async () => {
   installNativeBoundary({ fs: true });
   const AsyncStorage = require('@react-native-async-storage/async-storage');
   await AsyncStorage.clear();
-  // Active today, so the row shows its clock time (an older chat reads Last week, N weeks ago, a date).
+  // Active today, so the chat sits under the Today heading.
   const updatedAt = new Date().toISOString();
   await AsyncStorage.setItem(
     'local-llm-chat-storage',
@@ -45,7 +45,11 @@ it('sets the title in Geist and the time in Geist Mono', async () => {
 
   const title = await rtl.waitFor(() => chats.getByText('Weekend trip'));
   expect(StyleSheet.flatten(title.props.style).fontFamily).toBe(FONTS.sans);
-  // The time stays on the row, so chats with the same title can be told apart.
-  const time = chats.getByText(/^\d{1,2}[:.]\d{2}/);
-  expect(StyleSheet.flatten(time.props.style).fontFamily).toBe(FONTS.mono);
+  expect(title.props.numberOfLines).toBe(1);
+  expect(chats.getByText('Today')).toBeTruthy();
+  // The row is the title alone: no reply preview, no clock time.
+  const rowTexts = rtl.within(chats.getByTestId('conversation-item-0')).queryAllByText(/./);
+  expect(rowTexts.map(node => String(node.props.children))).toEqual(['Weekend trip']);
+  expect(chats.queryByText(/A cabin by the lake/)).toBeNull();
+  expect(chats.queryByText(/^\d{1,2}[:.]\d{2}/)).toBeNull();
 });

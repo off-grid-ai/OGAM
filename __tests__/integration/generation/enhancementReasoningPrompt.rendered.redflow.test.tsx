@@ -54,10 +54,17 @@ describe('T072 (rendered) — enhancement reasoning must not become the image pr
     // a real rendered surface, so a no-op can't fake a pass).
     await h.rtl.waitFor(() => { expect(h.view!.queryByText('Enhanced prompt')).not.toBeNull(); }, { timeout: 6000 });
 
+    // The row has no collapsed preview any more: open the "Enhanced prompt" row to read the prompt.
+    const enhancedRow = h.view!
+      .getAllByTestId('thinking-block-toggle')
+      .find(t => h.rtl.within(t).queryByText('Enhanced prompt') != null)!;
+    h.rtl.fireEvent.press(enhancedRow);
+
     // SPEC (UI layer): the enhanced prompt the user sees is the clean rewrite. RED on HEAD: enhancement
     // leaves thinking on → the reasoning dump ("Thinking Process:…") is what renders as the prompt.
     expect(h.view!.queryByText(/Thinking Process/i)).toBeNull();
-    // And the clean rewrite is the one shown (its preview text renders).
-    expect(h.view!.queryByText(/photorealistic tabby cat/i)).not.toBeNull();
+    // And the clean rewrite is the one shown, inside the opened row.
+    const shown = h.view!.getAllByTestId('thinking-block-content');
+    expect(shown.some(c => h.rtl.within(c).queryByText(/photorealistic tabby cat/i) != null)).toBe(true);
   });
 });

@@ -241,17 +241,19 @@ it('M24: an unavailable Gallery image explains the missing file and offers Remov
   view.unmount();
 });
 
-it('M9: the collapsed thinking preview keeps inline code, fenced code, and identifiers', async () => {
+it('M9: the opened reasoning keeps inline code, fenced code, and identifiers', async () => {
   const app = await launch();
   await selectTextAndOpenChat(app);
   await send(app, 'Explain the variable.', '<think># Plan\n**Keep** _this_ my_var_x and `some_code`.\n```python\nmy_var_x = some_code + 1\n```\nDone.</think>The code is ready.');
   const { view, rtl } = app;
   if (view.queryByTestId('assistant-work-toggle')) rtl.fireEvent.press(view.getByTestId('assistant-work-toggle'));
-  const toggle = await view.findByTestId('thinking-block-toggle');
-  if (!view.queryByTestId('thinking-block-preview')) rtl.fireEvent.press(toggle);
-  expect(rtl.within(view.getByTestId('thinking-block-preview')).getByText(
-    'Plan Keep this my_var_x and some_code. my_var_x = some_code + 1 Done.',
-  )).toBeTruthy();
+  expect(await view.findByTestId('thinking-block-toggle')).toBeTruthy();
+  // Opening the work row shows the reasoning at once (Desktop's row, no collapsed preview), with
+  // code and identifiers intact: my_var_x appears in the prose AND in the fenced code.
+  const content = view.getByTestId('thinking-block-content');
+  expect(rtl.within(content).getAllByText(/my_var_x/).length).toBeGreaterThanOrEqual(2);
+  expect(rtl.within(content).getByText(/my_var_x = some_code \+ 1/)).toBeTruthy();
+  expect(rtl.within(content).getAllByText(/some_code/).length).toBeGreaterThan(0);
   view.unmount();
 });
 

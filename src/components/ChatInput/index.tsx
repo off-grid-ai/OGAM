@@ -17,7 +17,7 @@ import { QueueRow, type QueueActions, type QueueView } from './Toolbar';
 import { AttachmentPreview, useAttachments } from './Attachments';
 import { useVoiceInput } from './Voice';
 import { buildVoiceNoteHandlers } from './voiceNoteSend';
-import { QuickSettingsPopover, AttachPickerPopover } from './Popovers';
+import { QuickSettingsPopover, AttachPickerPopover, type AttachChoice } from './Popovers';
 import { useKeyboardAwarePopover } from './useKeyboardAwarePopover';
 import { useAppStore } from '../../stores';
 import { useRemoteServerStore } from '../../stores/remoteServerStore';
@@ -505,32 +505,30 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             onPress: onAssistantSetupSync,
           };
 
+  // Each picker reports its own failure to the user; a rejection here is only logged.
+  const settle = (picking: Promise<unknown>) => {
+    picking.catch(reason => logger.warn('[COMPOSER-SM] attach failed:', reason));
+  };
+  // One list, one step, on both phones: a photo is taken or chosen right here, not behind a second
+  // menu (Mac, 2026-11-07: Photo, then Camera or Photo Library, asked twice). A model that can't see
+  // keeps a Photo row, which says why and offers the repair when the vision file is broken.
+  const attachChoices: AttachChoice[] = supportsVision
+    ? [
+        { key: 'camera', label: 'Take photo', icon: 'camera', onPress: () => settle(pickFromCamera()) },
+        { key: 'library', label: 'Choose photo', icon: 'image', onPress: () => settle(pickFromLibrary()) },
+        { key: 'document', label: 'Document', icon: 'file', onPress: () => settle(handlePickDocument()) },
+      ]
+    : [
+        { key: 'photo', label: 'Photo', icon: 'image', onPress: handleVisionPress },
+        { key: 'document', label: 'Document', icon: 'file', onPress: () => settle(handlePickDocument()) },
+      ];
+
   const handleAttachPress = () => {
     logger.log(`[COMPOSER-SM] attach pressed platform=${Platform.OS} supportsVision=${supportsVision}`);
     if (Platform.OS === 'ios') {
-      // One sheet, one step: a photo is taken or chosen right here, not behind a second sheet
-      // (Mac, 2026-11-07: Photo, then Camera or Photo Library, asked twice).
-      const options = supportsVision
-        ? ['Take photo', 'Choose photo', 'Document', 'Cancel']
-        : ['Document', 'Cancel'];
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options,
-          cancelButtonIndex: options.length - 1,
-          // The placeholder no longer says it, so the menu says why Photo is missing.
-          message: supportsVision ? undefined : "This model can't see photos. Choose one that can to add a photo.",
-        },
-        index => {
-          // Each picker reports its own failure to the user; a rejection here is only logged.
-          const settle = (picking: Promise<unknown>) => {
-            picking.catch(reason => logger.warn('[COMPOSER-SM] attach failed:', reason));
-          };
-          if (supportsVision) {
-            if (index === 0) settle(pickFromCamera());
-            else if (index === 1) settle(pickFromLibrary());
-            else if (index === 2) settle(handlePickDocument());
-          } else if (index === 0) settle(handlePickDocument());
-        },
+      const options = [...attachChoices.map(choice => choice.label), 'Cancel'];
+      ActionSheetIOS.showActionSheetWithOptions({ options, cancelButtonIndex: options.length - 1 }, index =>
+        attachChoices[index]?.onPress(),
       );
     } else {
       attachPicker.show();
@@ -578,13 +576,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         onToolsPress={onToolsPress}
         onMcpPress={onMcpPress}
         mcpToolCount={mcpToolCount}
-        onVisionPress={handleVisionPress}
-        onPickDocument={handlePickDocument}
+        attachChoices={attachChoices}
         onAttachPress={handleAttachPress}
         attachPicker={attachPicker}
         voicePicker={voicePicker}
         quickSettings={quickSettings}
-        supportsVision={supportsVision}
         alertState={alertState}
         setAlertState={setAlertState}
         assistantSelected={assistantEnabled}
@@ -664,7 +660,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       </View>
       {/* One box across the full width, down to the screen's bottom edge; in image or video mode the styles
           are its top, the input and send below. */}
-      <View style={[styles.composer, isFocused && styles.composerFocused, { marginBottom: bottomInset }]}>
+      {/* Full width down to the screen's bottom edge: the home-indicator inset is padding inside it. */}
+      <View style={[styles.composer, isFocused && styles.composerFocused, { paddingBottom: 8 + bottomInset }]}>
       {/* What you attach sits inside the box it goes with, on the same surface (brand Mobile profile;
           Mac, 2026-11-06: a photo above the composer read as a separate white tile). */}
       <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
@@ -752,9 +749,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           onClose={attachPicker.hide}
           anchorY={attachPicker.anchor.y}
           anchorX={attachPicker.anchor.x}
-          supportsVision={supportsVision}
-          onPhoto={handleVisionPress}
-          onDocument={handlePickDocument}
+          choices={attachChoices}
         />
       )}
 

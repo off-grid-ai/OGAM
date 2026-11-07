@@ -151,9 +151,9 @@ const ToolCallWithThinking: React.FC<{
 const TimelineThinkingBlock: React.FC<{
   text: string;
   styles: ReturnType<typeof createStyles>;
-  isStreaming: boolean;
-}> = ({ text, styles, isStreaming }) => {
-  const [expanded, setExpanded] = useState(isStreaming);
+}> = ({ text, styles }) => {
+  // Open by default, the same as a plain turn's reasoning and as on Desktop.
+  const [expanded, setExpanded] = useState(true);
   return (
     <ThinkingBlock
       parsedContent={{
@@ -172,8 +172,7 @@ const SyncedAssistantTimeline: React.FC<{
   message: Message;
   styles: ReturnType<typeof createStyles>;
   colors: ReturnType<typeof useTheme>['colors'];
-  isStreaming: boolean;
-}> = ({ message, styles, colors, isStreaming }) => (
+}> = ({ message, styles, colors }) => (
   <>
     {message.timeline?.map((entry, index) => {
       if (entry.kind === 'thinking') {
@@ -182,7 +181,6 @@ const SyncedAssistantTimeline: React.FC<{
             key={`thinking:${index}`}
             text={entry.text}
             styles={styles}
-            isStreaming={isStreaming}
           />
         );
       }
@@ -339,14 +337,15 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         <View style={styles.toolCallReplyContent}>
           <Accordion
             key={isStreaming ? 'live' : 'done'}
+            // Desktop's words for the work behind a reply (ChatToolRows STATE_LABELS).
             title={
               isStreaming
-                ? 'Finding your answer'
+                ? 'Working'
                 : message.turnStatus === 'failed'
-                  ? 'Could not finish'
+                  ? 'Work failed'
                 : message.turnStatus === 'cancelled'
-                  ? 'Stopped'
-                  : 'How I got this'
+                  ? 'Work stopped'
+                  : 'Work done'
             }
             defaultOpen={Boolean(isStreaming)}
             variant="plain"
@@ -357,7 +356,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 message={message}
                 styles={styles}
                 colors={colors}
-                isStreaming={Boolean(isStreaming)}
               />
             )}
             {!!message.toolArtifacts?.length && !timelineHasTools && (
@@ -507,7 +505,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     return () => { current = false; };
   }, [showActionMenu]);
   const [isEditing, setIsEditing] = useState(false);
-  const [showThinking, setShowThinking] = useState(!!isStreaming);
+  // Open by default, as on Desktop: opening the turn's Working / Work done row shows the reasoning
+  // straight away; the Thinking row still folds it away.
+  const [showThinking, setShowThinking] = useState(true);
   const [showSupportingContext, setShowSupportingContext] = useState(false);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
@@ -624,10 +624,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           <Accordion
             title={
               message.turnStatus === 'cancelled'
-                ? 'Stopped'
+                ? 'Work stopped'
                 : message.turnStatus === 'failed'
-                  ? 'Could not finish'
-                  : 'How I got this'
+                  ? 'Work failed'
+                  : 'Work done'
             }
             variant="plain"
             testID="assistant-work-toggle"

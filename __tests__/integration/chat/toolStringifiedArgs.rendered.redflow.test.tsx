@@ -23,7 +23,7 @@ describe('Q3 (behavioral) — stringified tool args surface an error bubble', ()
 
     // Wait on the completed work control, then inspect the tool result it contains.
     await h.rtl.waitFor(() => {
-      expect(h.view!.getByTestId('assistant-work-toggle').props.accessibilityLabel).toBe('How I got this');
+      expect(h.view!.getByTestId('assistant-work-toggle').props.accessibilityLabel).toBe('Work done');
     });
     await h.settle();
     h.rtl.fireEvent.press(h.view!.getByTestId('assistant-work-toggle'));

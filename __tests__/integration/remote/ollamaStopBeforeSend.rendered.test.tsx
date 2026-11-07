@@ -142,8 +142,7 @@ async function addOllamaPickModelAttachPhoto(app: App) {
   // The photo the device picker hands back, attached through the real attach gesture.
   app.boundary.fs!.seedFile('/mock/image.jpg', 2048);
   rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('attach-button')));
-  rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('attach-photo')));
-  rtl.fireEvent.press(await rtl.waitFor(() => view.getByText('Photo Library')));
+  rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('attach-library')));
   await rtl.waitFor(() => expect(view.queryByTestId('attachments-container')).not.toBeNull(),
     { timeout: 3000 });
 }

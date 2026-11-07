@@ -186,7 +186,7 @@ describe('ChatMessage', () => {
       });
       const view = render(<ChatMessage message={message} isStreaming />);
 
-      expect(view.getAllByText('Thinking...').length).toBeGreaterThan(0);
+      expect(view.getAllByText('Thinking').length).toBeGreaterThan(0);
       expect(view.getByText('I am deciding which source to use next.')).toBeTruthy();
       expect(view.getByTestId('tool-message')).toBeTruthy();
     });
@@ -257,7 +257,7 @@ describe('ChatMessage', () => {
       expect(getByTestId('thinking-block')).toBeTruthy();
     });
 
-    it('shows Thought process header when thinking is complete', () => {
+    it('shows the Thought header when thinking is complete', () => {
       const message = createAssistantMessage(
         '<think>Internal reasoning here</think>Final answer.',
       );
@@ -268,27 +268,12 @@ describe('ChatMessage', () => {
       fireEvent.press(getByTestId('assistant-work-toggle'));
 
       expect(getByTestId('thinking-block-title')).toBeTruthy();
-      expect(getByText('Thought process')).toBeTruthy();
+      expect(getByText('Thought')).toBeTruthy();
     });
 
-    it('shows the collapsed thinking preview as plain text, without Markdown syntax', () => {
+    it('shows the reasoning once the work row is open, and the Thinking row folds it, as on Desktop', () => {
       const message = createAssistantMessage(
         '<think>**Drafting Email Response**\nI am composing a direct reply.</think>Done.',
-      );
-
-      const { getByTestId, getByText, queryByText } = render(
-        <ChatMessage message={message} />,
-      );
-      fireEvent.press(getByTestId('assistant-work-toggle'));
-
-      expect(getByTestId('thinking-block-preview')).toBeTruthy();
-      expect(getByText('Drafting Email Response I am composing a direct reply.')).toBeTruthy();
-      expect(queryByText(/\*\*Drafting Email Response\*\*/)).toBeNull();
-    });
-
-    it('expands thinking block when toggle is pressed', () => {
-      const message = createAssistantMessage(
-        '<think>Step 1: Check input\nStep 2: Process</think>Done!',
       );
 
       const { getByTestId, queryByTestId } = render(
@@ -296,17 +281,37 @@ describe('ChatMessage', () => {
       );
       fireEvent.press(getByTestId('assistant-work-toggle'));
 
-      // Initially collapsed
-      expect(queryByTestId('thinking-block-content')).toBeNull();
-
-      // Press toggle
-      fireEvent.press(getByTestId('thinking-block-toggle'));
-
-      // Content should be visible
+      expect(queryByTestId('thinking-block-preview')).toBeNull();
       expect(getByTestId('thinking-block-content')).toBeTruthy();
+      fireEvent.press(getByTestId('thinking-block-toggle'));
+      expect(queryByTestId('thinking-block-content')).toBeNull();
     });
 
-    it('shows Thinking... header when thinking is incomplete', () => {
+    it('folds and unfolds the reasoning when the Thinking row is pressed', () => {
+      const message = createAssistantMessage(
+        '<think>Step 1: Check input\nStep 2: Process</think>Done!',
+      );
+
+      const { getByTestId, queryByTestId, queryByText } = render(
+        <ChatMessage message={message} />,
+      );
+      fireEvent.press(getByTestId('assistant-work-toggle'));
+
+      // Open by default once the work row is open, as on Desktop.
+      expect(getByTestId('thinking-block-content')).toBeTruthy();
+      expect(queryByText(/Step 1: Check input/)).not.toBeNull();
+
+      // Press the row: the reasoning folds away.
+      fireEvent.press(getByTestId('thinking-block-toggle'));
+      expect(queryByTestId('thinking-block-content')).toBeNull();
+      expect(queryByText(/Step 1: Check input/)).toBeNull();
+
+      // Press again: it comes back.
+      fireEvent.press(getByTestId('thinking-block-toggle'));
+      expect(queryByText(/Step 1: Check input/)).not.toBeNull();
+    });
+
+    it('shows the Thinking header when thinking is incomplete', () => {
       const message = createMessage({
         role: 'assistant',
         content: '<think>Thinking in progress...',
@@ -317,10 +322,10 @@ describe('ChatMessage', () => {
         <ChatMessage message={message} isStreaming={true} />,
       );
 
-      // Thinking block exists and shows "Thinking..." in the title
+      // Thinking block exists and shows "Thinking" in the title
       expect(getByTestId('thinking-block')).toBeTruthy();
-      // At least one element shows "Thinking..." (may be multiple due to indicator)
-      expect(getAllByText('Thinking...').length).toBeGreaterThan(0);
+      // At least one element shows "Thinking" (may be multiple due to indicator)
+      expect(getAllByText('Thinking').length).toBeGreaterThan(0);
     });
 
     it('shows thinking indicator when message.isThinking is true', () => {
@@ -1559,7 +1564,7 @@ describe('ChatMessage', () => {
   // Thinking block with Enhanced label (covers line 388 branch)
   // ============================================================================
   describe('thinking block Enhanced label', () => {
-    it('shows E icon for Enhanced thinking label', () => {
+    it('names an Enhanced thinking step by its label', () => {
       const message = createAssistantMessage(
         '<think>__LABEL:Enhanced Reasoning__\nDeep analysis here</think>The enhanced answer.',
       );
@@ -1571,7 +1576,6 @@ describe('ChatMessage', () => {
 
       expect(getByTestId('thinking-block')).toBeTruthy();
       expect(getByText('Enhanced Reasoning')).toBeTruthy();
-      expect(getByText('E')).toBeTruthy();
     });
   });
 
@@ -1681,7 +1685,7 @@ describe('ChatMessage', () => {
       expect(getByText(/\*\*not bold\*\*/)).toBeTruthy();
     });
 
-    it('renders markdown in thinking block content when expanded', () => {
+    it('renders markdown in thinking block content when the work row is open', () => {
       const message = createAssistantMessage(
         '<think>Step 1: Check the `input` value\nStep 2: **Process** it</think>Done!',
       );
@@ -1690,9 +1694,6 @@ describe('ChatMessage', () => {
         <ChatMessage message={message} />,
       );
       fireEvent.press(getByTestId('assistant-work-toggle'));
-
-      // Expand thinking block
-      fireEvent.press(getByTestId('thinking-block-toggle'));
 
       expect(getByTestId('thinking-block-content')).toBeTruthy();
       expect(getByText(/input/)).toBeTruthy();
@@ -1726,7 +1727,7 @@ describe('ChatMessage', () => {
       );
       fireEvent.press(getByTestId('assistant-work-toggle'));
 
-      expect(getByTestId('thinking-block-preview')).toBeTruthy();
+      expect(getByTestId('thinking-block-content')).toBeTruthy();
       expect(getByText(longThinking)).toBeTruthy();
     });
 
@@ -1739,7 +1740,6 @@ describe('ChatMessage', () => {
       const { getByText, getByTestId } = render(<ChatMessage message={message} />);
       fireEvent.press(getByTestId('assistant-work-toggle'));
 
-      // Preview should show the full text without '...'
       expect(getByText(shortThinking)).toBeTruthy();
     });
   });

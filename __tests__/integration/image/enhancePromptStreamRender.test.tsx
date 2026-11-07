@@ -98,7 +98,7 @@ describe('the Enhanced prompt card renders as a card from the first token', () =
     expect(view.getAllByTestId('assistant-work-toggle')).toHaveLength(1);
     await h.rtl.waitFor(() => {
       const toggle = view.getByTestId('assistant-work-toggle');
-      expect(toggle.props.accessibilityLabel).toBe('How I got this');
+      expect(toggle.props.accessibilityLabel).toBe('Work done');
       expect(toggle.props.accessibilityState.expanded).toBe(false);
     });
     await h.rtl.act(async () => {

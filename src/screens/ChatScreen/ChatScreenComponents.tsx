@@ -222,7 +222,7 @@ export const EmptyChat: React.FC<{
       <Text style={styles.privacyText}>
         {isRemote
           ? 'This chat runs on a remote server, not on this phone.'
-          : 'Private. Nothing you type leaves this phone.'}
+          : 'Your chats and files never leave your device.'}
       </Text>
     </AnimatedEntry>
   </View>

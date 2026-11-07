@@ -65,7 +65,9 @@ const createStyles = (colors: ThemeColors) => ({
   // 44 pt tall: a tab is a target (it was 36).
   item: { minHeight: 44, justifyContent: 'center' as const, alignItems: 'center' as const },
   text: { ...TYPOGRAPHY.body, color: colors.textMuted },
-  textActive: { color: colors.text, fontWeight: '500' as const },
+  // Colour and the underline say which tab is chosen. A heavier weight drew a wider word, so the tabs
+  // after it shifted when you switched (hand test 2026-11-07, Android).
+  textActive: { color: colors.text },
   // Absolute, so the chosen tab's label sits level with the others in the 44 pt row.
   indicator: {
     position: 'absolute' as const,

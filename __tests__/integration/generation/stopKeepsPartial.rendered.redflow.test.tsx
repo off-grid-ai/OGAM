@@ -102,7 +102,7 @@ describe('Stop mid-generation keeps the shown partial (never discards output) â€
         expect(h.view!.queryByTestId('stop-button')).toBeNull();
         expect(
           h.view!.getByTestId('assistant-work-toggle').props.accessibilityLabel,
-        ).toBe('Stopped');
+        ).toBe('Work stopped');
       },
       { timeout: 4000 },
     );
@@ -154,7 +154,7 @@ describe('Stop mid-generation keeps the shown partial (never discards output) â€
         expect(h.view!.queryByTestId('stop-button')).toBeNull();
         expect(
           h.view!.getByTestId('assistant-work-toggle').props.accessibilityLabel,
-        ).toBe('Stopped');
+        ).toBe('Work stopped');
       },
       { timeout: 4000 },
     );

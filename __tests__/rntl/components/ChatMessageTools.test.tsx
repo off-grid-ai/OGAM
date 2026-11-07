@@ -160,9 +160,8 @@ describe('ChatMessage — Tool message rendering', () => {
       const { getByTestId, getByText } = render(<ChatMessage message={message} />);
 
       expect(getByTestId('tool-call-message')).toBeTruthy();
-      // Assert the ACTUAL reasoning text is on screen (the collapsed block shows an 80-char
-      // preview of parsedContent.thinking), not merely that a block element mounted — the
-      // whole point is the user SEES the pre-tool-call thinking, not that a testID exists.
+      // Assert the ACTUAL reasoning text reaches the screen once the thinking row is opened, not
+      // merely that a block mounted: the user must be able to SEE the pre-tool-call thinking.
       expect(getByText(/I should search the knowledge base first\./)).toBeTruthy();
     });
 

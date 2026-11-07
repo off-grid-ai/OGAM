@@ -23,7 +23,7 @@ describe('Q2 (behavioral) — unquoted-key tool call renders no result bubble', 
 
     // Wait on the completed work control, then inspect the tool result it contains.
     await h.rtl.waitFor(() => {
-      expect(h.view!.getByTestId('assistant-work-toggle').props.accessibilityLabel).toBe('How I got this');
+      expect(h.view!.getByTestId('assistant-work-toggle').props.accessibilityLabel).toBe('Work done');
     });
     await h.settle(); // let the tool loop finish after the visible reply
     h.rtl.fireEvent.press(h.view!.getByTestId('assistant-work-toggle'));

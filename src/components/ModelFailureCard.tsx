@@ -41,7 +41,9 @@ function ActionButton({ icon, color, label, testID, onPress, styles }: {
   );
 }
 
-function FailureRow({ failure, onDismiss }: { failure: ModelFailure; onDismiss: () => void }): React.ReactElement {
+// Close is the person saying "leave it", so it also tells the owner (onDismiss). Retry and Run anyway
+// only take the card away: the owner still needs what it was about (the video journal) to try again.
+function FailureRow({ failure, onClose, onHide }: { failure: ModelFailure; onClose: () => void; onHide: () => void }): React.ReactElement {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   const tint = failure.severity === 'error' ? colors.error : colors.textSecondary;
@@ -51,7 +53,7 @@ function FailureRow({ failure, onDismiss }: { failure: ModelFailure; onDismiss: 
       <View style={styles.headerRow}>
         <Icon name={ICON_FOR_SEVERITY[failure.severity]} size={14} color={tint} style={styles.leadIcon} />
         <Text style={[styles.title, { color: tint }]} numberOfLines={2}>{failure.title}</Text>
-        <AnimatedPressable onPress={onDismiss} hitSlop={8} accessibilityLabel="Dismiss" testID={`model-failure-dismiss-${failure.modelType}`}>
+        <AnimatedPressable onPress={onClose} hitSlop={8} accessibilityLabel="Dismiss" testID={`model-failure-dismiss-${failure.modelType}`}>
           <Icon name="x" size={16} color={colors.textSecondary} />
         </AnimatedPressable>
       </View>
@@ -64,7 +66,7 @@ function FailureRow({ failure, onDismiss }: { failure: ModelFailure; onDismiss: 
               color={colors.primary}
               label={failure.memoryPressure ? 'Free memory & retry' : 'Retry'}
               testID={`model-failure-retry-${failure.modelType}`}
-              onPress={() => { onDismiss(); failure.onRetry?.(); }}
+              onPress={() => { onHide(); failure.onRetry?.(); }}
               styles={styles}
             />
           )}
@@ -74,7 +76,7 @@ function FailureRow({ failure, onDismiss }: { failure: ModelFailure; onDismiss: 
               color={colors.error}
               label="Run anyway"
               testID={`model-failure-load-anyway-${failure.modelType}`}
-              onPress={() => { onDismiss(); failure.onLoadAnyway?.(); }}
+              onPress={() => { onHide(); failure.onLoadAnyway?.(); }}
               styles={styles}
             />
           )}
@@ -95,7 +97,15 @@ export const ModelFailureCard: React.FC = () => {
   return (
     <View>
       {failures.map((f) => (
-        <FailureRow key={f.id} failure={f} onDismiss={() => dismiss(f.id)} />
+        <FailureRow
+          key={f.id}
+          failure={f}
+          onHide={() => dismiss(f.id)}
+          onClose={() => {
+            f.onDismiss?.();
+            dismiss(f.id);
+          }}
+        />
       ))}
     </View>
   );

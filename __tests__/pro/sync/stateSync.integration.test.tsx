@@ -431,7 +431,9 @@ describe('Pro mobile state sync journey', () => {
       expect(ui!.getByText('The late chat turn arrived.')).toBeTruthy(),
     );
     fireEvent.press(ui.getByLabelText('Back'));
-    expect(ui.getByText('The field notes are ready.')).toBeTruthy();
+    // The Chats row is the title and its project; the synced reply is read inside the chat below.
+    expect(ui.getByText('Field planning')).toBeTruthy();
+    expect(ui.queryByText('The field notes are ready.')).toBeNull();
     expect(ui.getByText('Desktop Research')).toBeTruthy();
     fireEvent.press(ui.getByText('Field planning'));
     await waitFor(() =>
@@ -443,10 +445,10 @@ describe('Pro mobile state sync journey', () => {
     expect(ui.queryByText('contacts_search')).toBeNull();
     expect(
       ui
-        .getAllByText(/^(Thought process|Searched the web)$/)
+        .getAllByText(/^(Thought|Searched the web)$/)
         .map(node => React.Children.toArray(node.props.children).join('')),
-    ).toEqual(['Thought process', 'Searched the web', 'Thought process']);
-    fireEvent.press(ui.getAllByTestId('thinking-block-toggle')[0]);
+    ).toEqual(['Thought', 'Searched the web', 'Thought']);
+    // Each step's reasoning is open by default, as on Desktop.
     expect(
       ui.getByText('I should confirm the notes before searching.'),
     ).toBeTruthy();
@@ -658,7 +660,10 @@ describe('Pro mobile state sync journey', () => {
     ).toMatchObject({ content: 'Bring the field notes' });
     fireEvent.press(ui.getByTestId('chats-tab'));
     await waitFor(() => expect(ui!.getByText('Field planning')).toBeTruthy());
-    expect(ui.getByText('The phone checked the notes.')).toBeTruthy();
+    // The phone's own reply survived the sync: open the chat and read it (rows show no preview).
+    fireEvent.press(ui.getByText('Field planning'));
+    await waitFor(() => expect(ui!.getByText('The phone checked the notes.')).toBeTruthy());
+    fireEvent.press(ui.getByLabelText('Back'));
 
     fireEvent.press(ui.getByTestId('settings-tab'));
     fireEvent.press(ui.getByText('Model settings'));

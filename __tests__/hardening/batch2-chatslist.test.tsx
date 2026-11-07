@@ -2,14 +2,14 @@
  * Batch 2 hardening — Chats list (sort, timestamp formatting, delete, empty state)
  *
  * Renders the REAL ChatsListScreen on a real React Navigation stack, with the real alert, model
- * sheet, list rows, swipe actions and chat store, so the REAL formatDate(), the REAL sort comparator
+ * sheet, list rows, swipe actions and chat store, so the REAL day grouping, the REAL sort comparator
  * and the REAL chatStore.deleteConversation run. Chats are written through the chat store's own
  * actions; their dates come from a faked clock. Only the device is faked (installNativeBoundary:
- * native modules and RAM). These tests assert the actual formatted string and the actual row order:
+ * native modules and RAM). These tests assert the actual heading, row text and row order:
  *
  *   25/30 — most-recently-active conversation floats to position 1 (real sort order).
- *   26    — a conversation from TODAY shows a clock time (HH:MM), not a date.
- *   27    — a conversation from a prior day shows a weekday / month-day, not a clock.
+ *   26    — a conversation from TODAY sits under the Today heading; its row shows no clock time.
+ *   27    — an older conversation sits under This week / Older; its row shows no weekday or date.
  *   31    — deleting a conversation removes exactly that row (real store delete).
  *   32    — deleting all conversations shows the empty state ("No Chats Yet").
  */
@@ -56,69 +56,74 @@ function chatDaysAgo(app: ReturnType<typeof boot>, title: string, now: Date, day
   return when;
 }
 
+/** The one day heading of a one-chat list, and every text its single row shows. */
+function headingAndRow(app: ReturnType<typeof boot>, view: ReturnType<Rtl['render']>) {
+  const list = app.rtl.within(view.getByTestId('conversation-list'));
+  const row = app.rtl.within(view.getByTestId('conversation-item-0'));
+  const texts = (nodes: ReadonlyArray<{ props: Record<string, unknown> }>) => nodes.map(node => String(node.props.children));
+  return { heading: texts(list.getAllByRole('header')).join(), row: texts(row.queryAllByText(/./)) };
+}
+
 describe('batch2 ChatsListScreen — sort, timestamp format, delete, empty', () => {
   afterEach(() => {
     jest.useRealTimers();
   });
 
-  // Case 26: today's conversation shows a clock time, NOT a date. Expected strings are built with
-  // src/utils/localTime (the app's own device-zone formatting), so this agrees with the app in any zone.
-  it('case26: shows a clock time for a conversation from today', () => {
+  // Cases 26/27: the day heading says when; the row itself shows no clock time, weekday, "Last week",
+  // "N weeks ago" or date. Each case reads the heading above the chat and the row's own texts.
+  it('case26: a conversation from today sits under Today, and its row shows no clock time', () => {
     const app = boot();
     const now = new Date(2026, 9, 30, 14, 5);
     jest.useFakeTimers({ now });
     app.chat('Today Chat');
 
-    const { getByText } = app.render();
-    const expectedClock = app.localTime.formatClockTime(now);
-    expect(getByText(expectedClock)).toBeTruthy();
-    // it is NOT a weekday or month/day string
-    expect(expectedClock).toMatch(/\d/);
+    const view = app.render();
+    expect(headingAndRow(app, view)).toEqual({ heading: 'Today', row: ['Today Chat'] });
+    expect(view.queryByText(app.localTime.formatClockTime(now))).toBeNull();
   });
 
-  // Case 27: a prior-day conversation shows a weekday (within a week) — not a clock.
-  it('case27: shows a weekday name for a conversation 3 days ago (not a clock time)', () => {
+  it('case27: a conversation 3 days ago sits under This week, and its row shows no weekday', () => {
     const app = boot();
     const now = new Date(2026, 9, 30, 14, 5);
     jest.useFakeTimers({ now });
     const threeDaysAgo = chatDaysAgo(app, 'Recent Chat', now, 3);
 
-    const { getByText } = app.render();
-    const expectedWeekday = formatWeekday(threeDaysAgo);
-    expect(getByText(expectedWeekday)).toBeTruthy();
-    // guard: a weekday short name is not a HH:MM clock
-    expect(expectedWeekday).not.toMatch(/^\d{1,2}:\d{2}/);
+    const view = app.render();
+    expect(headingAndRow(app, view)).toEqual({ heading: 'This week', row: ['Recent Chat'] });
+    expect(view.queryByText(formatWeekday(threeDaysAgo))).toBeNull();
   });
 
-  // Case 27 (older buckets): a week or more reads as weeks ago, and from four weeks on as month/day.
-  it('case27: shows "Last week" for a conversation 10 days ago', () => {
+  it('case27: a conversation 10 days ago sits under Older, and its row does not say "Last week"', () => {
     const app = boot();
     const now = new Date(2026, 9, 30, 14, 5);
     jest.useFakeTimers({ now });
     chatDaysAgo(app, 'Last Week Chat', now, 10);
 
-    const { getByText } = app.render();
-    expect(getByText('Last week')).toBeTruthy();
+    const view = app.render();
+    expect(headingAndRow(app, view)).toEqual({ heading: 'Older', row: ['Last Week Chat'] });
+    expect(view.queryByText('Last week')).toBeNull();
   });
 
-  it('case27: shows "2 weeks ago" for a conversation 14 days ago', () => {
+  it('case27: a conversation 14 days ago sits under Older, and its row does not say "2 weeks ago"', () => {
     const app = boot();
     const now = new Date(2026, 9, 30, 14, 5);
     jest.useFakeTimers({ now });
     chatDaysAgo(app, 'Old Chat', now, 14);
 
-    const { getByText } = app.render();
-    expect(getByText('2 weeks ago')).toBeTruthy();
+    const view = app.render();
+    expect(headingAndRow(app, view)).toEqual({ heading: 'Older', row: ['Old Chat'] });
+    expect(view.queryByText('2 weeks ago')).toBeNull();
   });
 
-  it('case27: shows month/day for a conversation 30 days ago', () => {
+  it('case27: a conversation 30 days ago sits under Older, and its row shows no date', () => {
     const app = boot();
     const now = new Date(2026, 9, 30, 14, 5);
     jest.useFakeTimers({ now });
     const monthAgo = chatDaysAgo(app, 'Older Chat', now, 30);
 
-    const { getByText } = app.render();
-    expect(getByText(formatShortDate(monthAgo))).toBeTruthy();
+    const view = app.render();
+    expect(headingAndRow(app, view)).toEqual({ heading: 'Older', row: ['Older Chat'] });
+    expect(view.queryByText(formatShortDate(monthAgo))).toBeNull();
   });
 
   // Cases 25/30: most-recently-active conversation is at position 1 (row index 0).

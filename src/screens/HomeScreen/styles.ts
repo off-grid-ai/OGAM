@@ -272,32 +272,21 @@ const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   // A row in the Recent ListGroup: flat, the group draws the surface and the hairlines.
   // Glass like every card: the row sits in a ListGroup, so it draws no fill of its own.
+  // One line per chat: the title and a quiet time, 44 pt tall.
   conversationItem: {
     ...listRowStyle,
-    paddingVertical: SPACING.sm + 2,
-  },
-  conversationInfo: {
-    flex: 1,
-  },
-  conversationHeader: {
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    alignItems: 'center' as const,
+    gap: SPACING.sm,
+    minHeight: 44,
+    paddingVertical: SPACING.sm,
   },
   conversationTitle: {
-    ...TYPOGRAPHY.bodySmall,
+    ...TYPOGRAPHY.body,
     color: colors.text,
     flex: 1,
-    marginRight: SPACING.sm,
   },
   conversationMeta: {
     ...TYPOGRAPHY.metaSmall,
     color: colors.textMuted,
-  },
-  conversationPreview: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.textSecondary,
-    marginTop: 1,
   },
   deleteAction: {
     backgroundColor: colors.errorBackground,

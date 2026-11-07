@@ -19,11 +19,11 @@ export const AppSwitch: React.FC<Omit<SwitchProps, 'trackColor' | 'thumbColor' |
       {...props}
       // A disabled switch dims on every platform (Android kept full colour, so it looked usable).
       style={[props.style, props.disabled && DISABLED]}
-      // iOS: the platform's white knob, with the TRACK saying on (emerald) or off (a visible grey).
-      // The dark knob read as broken on every screen in four hand tests. Android keeps its own tinted
-      // knob, which is how on and off read there.
+      // On is a white knob on the emerald track on both phones; the TRACK says on. The dark knob read
+      // as broken in four iOS hand tests, and on Android it drew black on green (hand test 2026-11-07).
+      // Off on Android keeps a muted knob, since a white one vanishes on the light grey track.
       trackColor={{ false: Platform.OS === 'ios' ? colors.border : colors.surfaceLight, true: colors.primary }}
-      thumbColor={Platform.OS === 'ios' ? '#FFFFFF' : on ? colors.onPrimary : colors.textMuted}
+      thumbColor={on || Platform.OS === 'ios' ? '#FFFFFF' : colors.textMuted}
       ios_backgroundColor={colors.border}
     />
   );

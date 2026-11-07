@@ -9,6 +9,8 @@
  */
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
+import { Switch } from 'react-native';
+import { useAppStore } from '../../../../src/stores';
 import { VideoGenerationSection } from '@offgrid/pro/video/ui/VideoGenerationSection';
 
 describe('VideoGenerationSection', () => {
@@ -38,5 +40,15 @@ describe('VideoGenerationSection', () => {
 
     fireEvent.press(getByTestId('video-generation-accordion'));
     expect(queryByTestId('video-settings-recommended')).toBeNull();
+  });
+
+  it('"Rewrite video prompts" is the app\'s switch: a white knob once it is on', () => {
+    useAppStore.getState().updateSettings({ enhanceVideoPrompts: false });
+    const { UNSAFE_getByType } = render(<VideoGenerationSection alwaysOpen />);
+
+    fireEvent(UNSAFE_getByType(Switch), 'valueChange', true);
+    expect(useAppStore.getState().settings.enhanceVideoPrompts).toBe(true);
+    expect(UNSAFE_getByType(Switch).props.value).toBe(true);
+    expect(UNSAFE_getByType(Switch).props.thumbColor).toBe('#FFFFFF');
   });
 });

@@ -34,9 +34,9 @@ describe('T058/B20 — LiteRT vision-capable model exposes the same attach-photo
     const h = await setupChatScreen({ navigation: 'real', engine: 'litert', vision: true });
     h.render();
 
-    // REAL affordance gesture: attach button → Photo → Photo Library → faked picker adds the image.
+    // REAL affordance gesture: attach button → Choose photo → faked picker adds the image.
     // attachImageViaUI() asserts the attachments-container renders; it can ONLY succeed if the app
-    // exposed vision for this LiteRT model (else the Photo tap raises "Vision Not Supported" and no
+    // exposed vision for this LiteRT model (else the menu offers only a Photo row, which raises "Vision Not Supported" and no
     // attachment is added). This is the rendered UI artifact — the image chip the user sees.
     await h.attachImageViaUI();
 
@@ -50,11 +50,12 @@ describe('T058/B20 — LiteRT vision-capable model exposes the same attach-photo
     const h = await setupChatScreen({ navigation: 'real', engine: 'litert', vision: false });
     h.render();
 
-    // Same real gesture path up to the Photo tap. Without vision the app must NOT attach — it alerts.
+    // Same real gesture. Without vision the menu offers Photo, not the pickers, and Photo alerts.
     const view = h.view!;
     h.rtl.fireEvent.press(await h.rtl.waitFor(() => view.getByTestId('attach-button')));
     h.rtl.fireEvent.press(await h.rtl.waitFor(() => view.getByTestId('attach-photo')));
-    await h.settle(400);
+    expect(view.queryByTestId('attach-library')).toBeNull();
+    expect(view.queryByTestId('attach-camera')).toBeNull();
 
     // The rendered UI artifact for "vision not exposed": the alert wall, and NO attachment chip.
     await h.rtl.waitFor(() => { expect(view.queryByText('Vision Not Supported')).not.toBeNull(); });

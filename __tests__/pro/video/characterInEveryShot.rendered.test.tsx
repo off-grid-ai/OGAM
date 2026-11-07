@@ -38,6 +38,8 @@ async function makeCharacter(app: StudioApp, name: string): Promise<void> {
   expect(view.getByTestId('character-save').props.accessibilityState?.disabled).toBe(true);
   rtl.fireEvent(view.getByTestId('character-consent'), 'valueChange', true);
   await rtl.waitFor(() => expect(view.getByTestId('character-save').props.accessibilityState?.disabled).toBe(false));
+  // The app's one switch: on is a white knob on the emerald track.
+  expect(view.getByTestId('character-consent').props.thumbTintColor).toBe('#FFFFFF');
   rtl.fireEvent.press(view.getByTestId('character-save'));
   await view.findByLabelText(`Stop keeping ${name}`, {}, { timeout: 10_000 });
 }

@@ -9,9 +9,16 @@ const createStyles = (colors: ThemeColors) => ({
   systemPromptContainer: {
     marginBottom: SPACING.md,
   },
+  // A heading and a line under it, like every other setting on the tab (hand test 2026-11-07: the
+  // box sat under a bare sentence with no name).
+  settingLabel: {
+    ...TYPOGRAPHY.body,
+    color: colors.text,
+    marginBottom: SPACING.xs,
+  },
   settingHelp: {
     ...TYPOGRAPHY.bodySmall,
-    color: colors.textMuted,
+    color: colors.textSecondary,
     marginBottom: SPACING.md,
     lineHeight: 18,
   },
@@ -38,6 +45,9 @@ export const SystemPromptSection: React.FC = () => {
 
   return (
     <View style={styles.systemPromptContainer}>
+      <Text style={styles.settingLabel} accessibilityRole="header">
+        Default instructions
+      </Text>
       <Text style={styles.settingHelp}>
         What the model is told before every chat outside a project. Leave it empty to use the built-in prompt.
       </Text>
