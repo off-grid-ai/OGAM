@@ -527,7 +527,6 @@ export const FIXED_ACTION_IDS: readonly string[] = [
   "text-model-search-row",
   "thinking-block",
   "thinking-block-content",
-  "thinking-block-preview",
   "thinking-block-title",
   "thinking-block-toggle",
   "thinking-budget",
