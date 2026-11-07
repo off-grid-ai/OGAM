@@ -58,4 +58,20 @@ describe('ModelFailureCard — Load Anyway affordance', () => {
     fireEvent.press(getByTestId('model-failure-load-anyway-tts'));
     expect(onLoadAnyway).toHaveBeenCalledTimes(1);
   });
+
+  it('the close control removes the card, with or without an owner to tell', () => {
+    push({ modelType: 'text' });
+    push({ modelType: 'image', onDismiss: () => useModelFailureStore.getState().report({
+      id: 'note', modelType: 'tts', severity: 'warning', title: 'Owner told', message: 'The image owner let go.',
+    }) });
+    const { getByTestId, queryByTestId, getByText } = render(<ModelFailureCard />);
+
+    fireEvent.press(getByTestId('model-failure-dismiss-text'));
+    expect(queryByTestId('model-failure-text')).toBeNull();
+
+    fireEvent.press(getByTestId('model-failure-dismiss-image'));
+    expect(queryByTestId('model-failure-image')).toBeNull();
+    expect(getByText('The image owner let go.')).toBeTruthy();
+  });
 });
+

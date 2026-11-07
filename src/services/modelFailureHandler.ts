@@ -52,6 +52,8 @@ export interface ReportFailureContext {
    *  errors and for warnings — so a caller can pass it unconditionally and it only
    *  surfaces when the gate is actually overridable. */
   onLoadAnyway?: () => void;
+  /** Runs when the person closes the card. */
+  onDismiss?: () => void;
   /** Remote refusals must not advise freeing this phone's memory. */
   remote?: boolean;
   /** Stable id so repeated reports for the same surface replace, not stack.
@@ -89,6 +91,7 @@ export function reportModelFailure(
     memoryPressure: !ctx.remote && reason === 'insufficient-memory',
     overridable,
     onLoadAnyway: overridable ? ctx.onLoadAnyway : undefined,
+    onDismiss: ctx.onDismiss,
   };
 
   // [FAIL-SM] trace (kept forever): every model failure, its derived reason and
