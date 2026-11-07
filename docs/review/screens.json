@@ -24,6 +24,14 @@
     "before": "screens/before/chat.jpg"
   },
   {
+    "id": "composer-photo",
+    "name": "Composer with a photo",
+    "group": "Chat",
+    "what": "A photo attached, before sending",
+    "file": "screens/composer-photo.jpg",
+    "before": "screens/before/composer-photo.jpg"
+  },
+  {
     "id": "chat-options-menu",
     "name": "Chat options",
     "group": "Chat",
