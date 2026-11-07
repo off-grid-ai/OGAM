@@ -111,6 +111,8 @@ describe('model settings surface parity', () => {
     useAppStore.getState().updateSettings({ systemPrompt: 'Saved instructions' });
     const modelSettings = renderModelSettings('general');
     const input = modelSettings.getByTestId('default-system-prompt-input');
+    // The box has a name, like every other setting on the tab.
+    expect(modelSettings.getByRole('header', { name: 'Default instructions' })).toBeTruthy();
     expect(input.props.value).toBe('Saved instructions');
     fireEvent.changeText(input, 'New instructions');
     expect(useAppStore.getState().settings.systemPrompt).toBe('New instructions');
