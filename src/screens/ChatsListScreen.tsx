@@ -12,7 +12,7 @@ import { Button } from '../components/Button';
 import { ModelSelectorModal } from '../components';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
 import { AnimatedEntry } from '../components/AnimatedEntry';
-import { ListGroupSeparator, listGroupRowEnds, listRowStyle } from '../components/ListGroup';
+import { listRowStyle } from '../components/ListGroup';
 import { groupByRecency } from '@offgrid/ui';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -22,7 +22,6 @@ import { pairedComputer } from '../services/pairedComputerSearch';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
-import { cardFill } from '../theme/surface';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useChatStore, useProjectStore, useAppStore, useRemoteServerStore } from '../stores';
 import { useActiveTextModel } from '../hooks/useActiveTextModel';
@@ -31,12 +30,10 @@ import { deleteChatImages, imagesNotDeletedAlert } from '../services/chatImageCl
 import { Conversation } from '../types';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { byRecentActivity } from '../utils/conversationOrdering';
-import { formatClockTime, formatWhen } from '../utils/localTime';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
-import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
 import { useIsFocused } from '@react-navigation/native';
 import { LivingField } from '../components/LivingField';
-import { chatKind, rowPreview } from '../utils/chatRow';
+import { chatKind } from '../utils/chatRow';
 import { chatTitle } from '../utils/chatTitle';
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'ChatsTab'>,
@@ -173,10 +170,9 @@ export const ChatsListScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
-  // One line per chat: a quiet icon for an image or video chat, its title, its project when it has
-  // one, and when it was last active, so chats with the same title can still be told apart. Each
-  // date group is one surface divided by hairlines (brand: lists in one surface).
-  const previewLine = useConversationPreviewLine();
+  // One line per chat, on the page: its title, its project when it has one, and a quiet icon for an
+  // image or video chat. No box, no hairlines, no reply preview and no time: the day heading says
+  // when, as in ChatGPT, Claude and Gemini (Mac, 2026-11-07: the card list read like settings).
 
   // One row open at a time, and an open row closes on a tap elsewhere or a scroll.
   const openRow = useRef<Swipeable | null>(null);
@@ -186,13 +182,11 @@ export const ChatsListScreen: React.FC = () => {
     openRow.current = null;
   };
 
-  const renderChat = ({ item, index: rowIndex, section }: { item: Conversation; index: number; section: { title: string; data: readonly Conversation[] } }) => {
+  const renderChat = ({ item }: { item: Conversation }) => {
     const project = item.projectId ? getProject(item.projectId) : null;
     const selected = selectedIds.has(item.id);
     const index = listIndex.get(item.id) ?? 0;
     const kind = chatKind(item.messages);
-    // The last reply (or your own last message after "You:"), unless it only repeats the title.
-    const preview = rowPreview(previewLine(item.messages), item.title);
 
     return (
       <Swipeable
@@ -212,7 +206,7 @@ export const ChatsListScreen: React.FC = () => {
         <AnimatedListItem
           index={index}
           trigger={focusTrigger}
-          style={[styles.chatItem, listGroupRowEnds(rowIndex, section.data.length)]}
+          style={styles.chatItem}
           onPress={() => {
             if (openRow.current) {
               closeOpenRow();
@@ -238,33 +232,17 @@ export const ChatsListScreen: React.FC = () => {
               color={selected ? colors.primary : colors.textMuted}
             />
           ) : null}
-          <View style={styles.chatText}>
-            <Text style={styles.chatTitle} numberOfLines={1}>
-              {chatTitle(item.title)}
-            </Text>
-            {/* A picture or clip chat says so at the start of its second line, so every title starts
-                at the same edge; ahead of the title it indented that one row (hand test 80). The
-                line is always there, so every row is two lines. */}
-            <View style={styles.chatPreviewLine}>
-              {kind !== 'text' ? (
-                <Icon name={kind === 'video' ? 'video' : 'image'} size={12} color={colors.textMuted} />
-              ) : null}
-              <Text style={styles.chatPreview} numberOfLines={1}>
-                {preview || ' '}
-              </Text>
-            </View>
-          </View>
+          <Text style={styles.chatTitle} numberOfLines={1}>
+            {chatTitle(item.title)}
+          </Text>
           {project ? (
             <Text style={styles.projectName} numberOfLines={1}>
               {project.name}
             </Text>
           ) : null}
-          {/* The heading already says the day, so Today and Yesterday rows show the clock time. */}
-          <Text style={styles.chatTime}>
-            {section.title === 'Today' || section.title === 'Yesterday'
-              ? formatClockTime(item.updatedAt)
-              : formatWhen(item.updatedAt)}
-          </Text>
+          {kind !== 'text' ? (
+            <Icon name={kind === 'video' ? 'video' : 'image'} size={14} color={colors.textMuted} />
+          ) : null}
         </AnimatedListItem>
       </Swipeable>
     );
@@ -422,7 +400,6 @@ export const ChatsListScreen: React.FC = () => {
             stickySectionHeadersEnabled={false}
             // Day headings count as items: render enough on first paint for the first screenful of chats.
             initialNumToRender={20}
-            ItemSeparatorComponent={ListGroupSeparator}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
@@ -478,7 +455,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   // brand Mobile profile: standard screen padding is 24px.
   list: {
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.lg,
   },
@@ -504,29 +481,20 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     textAlign: 'center' as const,
     paddingVertical: SPACING.xxl,
   },
-  // One line per chat, flat on the page (no box, no hairlines), about 48 px tall.
+  // One line per chat, flat on the page (no box, no hairlines), 48 pt tall. The row's own 8 pt inset
+  // plus the list's 16 pt puts every title on the 24 pt page edge.
   chatItem: {
     ...listRowStyle,
     gap: SPACING.sm,
-    paddingVertical: SPACING.md,
-    backgroundColor: cardFill(colors),
+    minHeight: 48,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    borderRadius: 10,
   },
-  chatTime: {
-    ...TYPOGRAPHY.meta,
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-  chatText: { flex: 1, gap: 2 },
-  chatPreviewLine: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.xs },
   chatTitle: {
     ...TYPOGRAPHY.body,
-    fontSize: 15,
     color: colors.text,
-  },
-  chatPreview: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.textSecondary,
-    flexShrink: 1,
+    flex: 1,
   },
   projectName: {
     ...TYPOGRAPHY.meta,
@@ -543,6 +511,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.textMuted,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
   },
   emptyState: {
     flex: 1,
@@ -593,7 +562,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     width: 44,
     borderRadius: 10,
-    marginBottom: SPACING.md,
+    marginVertical: SPACING.xs,
     marginLeft: SPACING.sm,
   },
 });
