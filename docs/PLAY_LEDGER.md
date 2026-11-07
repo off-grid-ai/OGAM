@@ -737,3 +737,7 @@ Bug to investigate: the paused "Wan 2.1 (1.3B), FP16" download is gone (Models >
 - Pass: "Ask anything" on one line; +, settings and assistant all grey, only mic or send filled; the composer grows cleanly while typing; a reply came; image mode reads "Describe a picture" with its styles inside the composer.
 - Fixed after: the assistant icon was thinner and smaller than + and settings (now 19 pt, 1.5 stroke); the attach menu now says why Photo is missing when the model can't see photos, since the placeholder no longer says it.
 - Open: the photo-attached composer needs Mac's own photo on the phone to check (hand tests never open the library).
+
+## Supervisor 10:22 (hand test 97, composer follow-ups) — 3 of 3 pass
+- Pass: the assistant icon matches + and settings in height, weight and grey; a model that sees photos offers Photo, Document, Cancel with no note; a model that can't says "This model can't see photos. Choose one that can to add a photo." with Document and Cancel. Model left as it was.
+- Open: the photo-attached composer (needs Mac's own photo).
