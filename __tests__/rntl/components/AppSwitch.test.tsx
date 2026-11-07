@@ -23,3 +23,29 @@ describe('AppSwitch', () => {
     expect(toggle.props.accessibilityState?.disabled ?? toggle.props.disabled).toBe(true);
   });
 });
+
+describe('AppSwitch knob colour', () => {
+  const { Platform, Switch: NativeSwitch } = require('react-native');
+  const { renderHook } = require('@testing-library/react-native');
+  const { useTheme } = require('../../../src/theme');
+  const originalOS = Platform.OS;
+  afterEach(() => { Platform.OS = originalOS; });
+
+  /** The knob colour handed to the platform's switch. */
+  const knob = (value: boolean) =>
+    render(<AppSwitch accessibilityLabel="Knob" value={value} />).UNSAFE_getByType(NativeSwitch).props.thumbColor;
+
+  it('on Android: a white knob when on, a muted knob when off', () => {
+    Platform.OS = 'android';
+    const { colors } = renderHook(() => useTheme()).result.current;
+    expect(knob(true)).toBe('#FFFFFF');
+    expect(knob(false)).toBe(colors.textMuted);
+    expect(colors.textMuted).not.toBe('#FFFFFF');
+  });
+
+  it('on iOS: a white knob both ways', () => {
+    Platform.OS = 'ios';
+    expect(knob(true)).toBe('#FFFFFF');
+    expect(knob(false)).toBe('#FFFFFF');
+  });
+});

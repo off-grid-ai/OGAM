@@ -257,6 +257,8 @@ describe('when a voice model is ready', () => {
     const { UNSAFE_getByType } = await renderReady();
     const { Switch } = require('react-native');
     expect(app.store().settings.enabled).toBe(true);
+    // The app's one switch: a white knob when on, not an emerald knob on a half-emerald track.
+    expect(UNSAFE_getByType(Switch).props.thumbColor).toBe('#FFFFFF');
     await app.rtl.act(async () => { app.rtl.fireEvent(UNSAFE_getByType(Switch), 'valueChange', false); });
     expect(app.store().settings.enabled).toBe(false);
   });
