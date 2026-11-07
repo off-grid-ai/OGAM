@@ -4,8 +4,7 @@
   "name": "Home",
   "group": "Home",
   "what": "The front door: name, promise, New chat, models, recent chats",
-  "file": "screens/v/home-2.jpg",
-  "clip": "screens/v/home-2.mp4",
+  "file": "screens/v/home-3.jpg",
   "versions": [
    {
     "v": 1,
@@ -20,6 +19,14 @@
     "file": "screens/v/home-2.jpg",
     "clip": "screens/v/home-2.mp4",
     "android": "screens/v/home-android.jpg"
+   },
+   {
+    "v": 3,
+    "label": "Recent is one line per chat",
+    "at": "2026-11-07T10:33:19Z",
+    "file": "screens/v/home-ios-r3.jpg",
+    "android": "screens/v/home-3.jpg",
+    "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
    }
   ]
  },
@@ -28,7 +35,7 @@
   "name": "Chats",
   "group": "Chats",
   "what": "Every chat, searchable",
-  "file": "screens/v/chats-2.jpg",
+  "file": "screens/v/chats-3.jpg",
   "versions": [
    {
     "v": 1,
@@ -42,6 +49,14 @@
     "at": "2026-11-06T10:21:32Z",
     "file": "screens/v/chats-2.jpg",
     "android": "screens/v/chats-android.jpg"
+   },
+   {
+    "v": 3,
+    "label": "One line per chat, no card",
+    "at": "2026-11-07T10:33:19Z",
+    "file": "screens/v/chats-ios-r3.jpg",
+    "android": "screens/v/chats-3.jpg",
+    "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
    }
   ]
  },
@@ -50,7 +65,7 @@
   "name": "A chat",
   "group": "Chat",
   "what": "A conversation with a reply",
-  "file": "screens/v/chat-2.jpg",
+  "file": "screens/v/chat-3.jpg",
   "versions": [
    {
     "v": 1,
@@ -64,6 +79,14 @@
     "at": "2026-11-06T10:21:32Z",
     "file": "screens/v/chat-2.jpg",
     "android": "screens/v/chat-android.jpg"
+   },
+   {
+    "v": 3,
+    "label": "Work done and Thought, open by default",
+    "at": "2026-11-07T10:33:19Z",
+    "file": "screens/v/chat-ios-r3.jpg",
+    "android": "screens/v/chat-3.jpg",
+    "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
    }
   ]
  },
@@ -72,7 +95,7 @@
   "name": "Attach menu",
   "group": "Chat",
   "what": "The + in the composer: Take photo, Choose photo, Document, in one step (Android shot; the iPhone shot follows)",
-  "file": "screens/v/attach-menu-1-android.jpg",
+  "file": "screens/v/attach-menu-2.jpg",
   "versions": [
    {
     "v": 1,
@@ -80,6 +103,14 @@
     "at": "2026-11-07T07:38:09Z",
     "file": "screens/v/attach-menu-1-android.jpg",
     "android": "screens/v/attach-menu-1-android.jpg"
+   },
+   {
+    "v": 2,
+    "label": "One menu: Take photo, Choose photo, Document",
+    "at": "2026-11-07T10:33:19Z",
+    "file": "screens/v/attach-menu-ios-r3.jpg",
+    "android": "screens/v/attach-menu-2.jpg",
+    "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
    }
   ]
  },
@@ -477,7 +508,7 @@
   "name": "Model settings: Image & video",
   "group": "Settings",
   "what": "Picture style at the top of the Image card, and one switch look (Android shot; the iPhone shot follows)",
-  "file": "screens/v/model-settings-image-video-1-android.jpg",
+  "file": "screens/v/model-settings-image-video-2.jpg",
   "versions": [
    {
     "v": 1,
@@ -485,6 +516,14 @@
     "at": "2026-11-07T07:38:09Z",
     "file": "screens/v/model-settings-image-video-1-android.jpg",
     "android": "screens/v/model-settings-image-video-1-android.jpg"
+   },
+   {
+    "v": 2,
+    "label": "One switch look",
+    "at": "2026-11-07T10:33:19Z",
+    "file": "screens/v/model-settings-image-video-ios-r3.jpg",
+    "android": "screens/v/model-settings-image-video-2.jpg",
+    "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
    }
   ]
  },
@@ -514,7 +553,7 @@
   "name": "Model settings",
   "group": "Settings",
   "what": "How the models run",
-  "file": "screens/v/settings-model-2.jpg",
+  "file": "screens/v/settings-model-3.jpg",
   "versions": [
    {
     "v": 1,
@@ -528,6 +567,14 @@
     "at": "2026-11-06T10:21:33Z",
     "file": "screens/v/settings-model-2.jpg",
     "android": "screens/v/settings-model-android.jpg"
+   },
+   {
+    "v": 3,
+    "label": "Aggressive on one line",
+    "at": "2026-11-07T10:33:19Z",
+    "file": "screens/v/settings-model-ios-r3.jpg",
+    "android": "screens/v/settings-model-3.jpg",
+    "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
    }
   ]
  },
