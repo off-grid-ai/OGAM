@@ -38,14 +38,13 @@ describe('T038 (rendered) — thinking + tool-result + answer all render in a re
     expect(h.view!.getAllByTestId('assistant-work-toggle')).toHaveLength(1);
     h.rtl.fireEvent.press(h.view!.getByTestId('assistant-work-toggle'));
 
-    // The user sees all three: the thinking block renders — tap it (real gesture) to expand and read the
-    // reasoning it captured.
-    const toggle = await h.rtl.waitFor(
+    // The user sees all three: the thinking block renders open, as on Desktop, with the reasoning it
+    // captured readable without a tap.
+    await h.rtl.waitFor(
       () => h.view!.getByTestId('thinking-block-toggle'),
       { timeout: 4000 },
     );
-    h.rtl.fireEvent.press(toggle);
-    // The expanded thinking block shows the reasoning as rendered text.
+    // The open thinking block shows the reasoning as rendered text.
     await h.rtl.waitFor(
       () => {
         expect(
@@ -133,22 +132,12 @@ describe('T038 (rendered) — thinking + tool-result + answer all render in a re
     const completedThinkingBlocks = h.view!.getAllByTestId('thinking-block');
     expect(completedThinkingBlocks).toHaveLength(2);
 
-    h.rtl.fireEvent.press(
-      h.rtl
-        .within(completedThinkingBlocks[0])
-        .getByTestId('thinking-block-toggle'),
-    );
     expect(
       h.rtl
         .within(completedThinkingBlocks[0])
         .getByTestId('thinking-block-content'),
     ).toHaveTextContent('First segment: I should use the calculator.');
 
-    h.rtl.fireEvent.press(
-      h.rtl
-        .within(completedThinkingBlocks[1])
-        .getByTestId('thinking-block-toggle'),
-    );
     const finalThinking = h.rtl
       .within(completedThinkingBlocks[1])
       .getByTestId('thinking-block-content');

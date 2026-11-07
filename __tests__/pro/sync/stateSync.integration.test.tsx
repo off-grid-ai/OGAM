@@ -446,7 +446,7 @@ describe('Pro mobile state sync journey', () => {
         .getAllByText(/^(Thought|Searched the web)$/)
         .map(node => React.Children.toArray(node.props.children).join('')),
     ).toEqual(['Thought', 'Searched the web', 'Thought']);
-    fireEvent.press(ui.getAllByTestId('thinking-block-toggle')[0]);
+    // Each step's reasoning is open by default, as on Desktop.
     expect(
       ui.getByText('I should confirm the notes before searching.'),
     ).toBeTruthy();
