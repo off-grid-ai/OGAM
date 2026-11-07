@@ -521,13 +521,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           message: supportsVision ? undefined : "This model can't see photos. Choose one that can to add a photo.",
         },
         index => {
+          // Each picker reports its own failure to the user; a rejection here is only logged.
+          const settle = (picking: Promise<unknown>) => {
+            picking.catch(reason => logger.warn('[COMPOSER-SM] attach failed:', reason));
+          };
           if (supportsVision) {
-            if (index === 0) pickFromCamera();
-            else if (index === 1) pickFromLibrary();
-            else if (index === 2) handlePickDocument();
-          } else {
-            if (index === 0) handlePickDocument();
-          }
+            if (index === 0) settle(pickFromCamera());
+            else if (index === 1) settle(pickFromLibrary());
+            else if (index === 2) settle(handlePickDocument());
+          } else if (index === 0) settle(handlePickDocument());
         },
       );
     } else {
