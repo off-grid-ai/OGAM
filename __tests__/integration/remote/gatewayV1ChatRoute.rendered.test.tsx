@@ -184,8 +184,7 @@ describe('a gateway saved with a /v1 address', () => {
 
     // Attach a photo through the real attach gesture.
     rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('attach-button')));
-    rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('attach-photo')));
-    rtl.fireEvent.press(await rtl.waitFor(() => view.getByText('Photo Library')));
+    rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('attach-library')));
     await rtl.waitFor(() => expect(view.queryByTestId('attachments-container')).not.toBeNull(),
       { timeout: 3000 });
 
