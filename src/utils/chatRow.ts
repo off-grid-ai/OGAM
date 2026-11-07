@@ -18,15 +18,3 @@ export function chatKind(messages: readonly Message[]): 'text' | 'image' | 'vide
   }
   return 'text';
 }
-
-/**
- * The preview a row shows, or nothing when it only repeats the title (e.g. "You: <the same words>"):
- * a row that says the same thing twice tells you nothing new.
- */
-export function rowPreview(preview: string | null | undefined, title: string): string {
-  if (!preview) return '';
-  const plain = (text: string) => text.replace(/^You:\s*/, '').replace(/[.…\s]+$/, '').trim().toLowerCase();
-  const p = plain(preview);
-  const t = plain(title);
-  return p.length > 0 && t.length > 0 && (p.startsWith(t) || t.startsWith(p)) ? '' : preview;
-}
