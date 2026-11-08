@@ -8,7 +8,7 @@ import { unzip } from 'react-native-zip-archive';
 import { showAlert } from '../utils/alertState';
 import { modelManager, hardwareService, backgroundDownloadService } from '../services';
 import { resolveCoreMLModelDir, downloadCoreMLTokenizerFiles } from '../utils/coreMLModelUtils';
-import { getUserFacingDownloadMessage } from '../utils/downloadErrors';
+import { downloadReasonCode, getUserFacingDownloadMessage } from '../utils/downloadErrors';
 import { ONNXImageModel } from '../types';
 import { useDownloadStore, isActiveStatus } from '../stores/downloadStore';
 import { makeImageModelKey } from '../utils/modelKey';
@@ -521,7 +521,10 @@ export async function proceedWithDownload(
       return;
     }
     // Native start failed: fail the placeholder row so the card/Manager offer retry.
-    useDownloadStore.getState().setStatus(placeholderId, 'failed', { message: error?.message || 'Download failed' });
+    useDownloadStore.getState().setStatus(placeholderId, 'failed', {
+      message: error?.message || 'Download failed',
+      code: downloadReasonCode(error),
+    });
     deps.setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(error?.message)));
   }
 }

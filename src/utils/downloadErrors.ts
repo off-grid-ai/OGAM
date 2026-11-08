@@ -111,6 +111,12 @@ export function isRetryable(reasonCode?: string): boolean {
   return RETRYABLE_CODES.has(reasonCode);
 }
 
+/** The reason code an error carries (`disk_full`, `http_404`, …) when it is one of the codes above. */
+export function downloadReasonCode(error: unknown): string | undefined {
+  const code = (error as { code?: unknown } | null | undefined)?.code;
+  return typeof code === 'string' && Object.prototype.hasOwnProperty.call(ERROR_MESSAGES, code) ? code : undefined;
+}
+
 export function getUserFacingDownloadMessage(message?: string, code?: string): string {
   return toUserMessage(message, code);
 }

@@ -109,6 +109,8 @@ Estimate for an active user: 2 sessions (6), 12 screen views, 5 messages (10), 2
 | `model_loaded` | `model`, `quant`, `engine`, `backend`, `soc`, `free_ram_gb`, `load_ms` |
 | `model_load_failed` | same + `error_code` |
 
+A download that began before the app restarted still sends its `model_download_finished` or `model_download_failed`, without `duration_ms` and `mb_per_sec`. On iOS and Android, the `error_code` of `model_download_failed` is a download reason code: `network_lost`, `disk_full`, `http_404` and the other codes in `src/utils/downloadErrors.ts`.
+
 A video model pack reports downloads once for the whole pack: `model` is its catalog ID and `quant` is empty. A video model loads inside each generation: OGAD sends `model_loaded` / `model_load_failed` for each clip's engine start; OGAM sends none.
 
 ### Generation

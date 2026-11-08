@@ -2,6 +2,7 @@ import RNFS from 'react-native-fs';
 import logger from '../utils/logger';
 import { useDownloadStore } from '../stores/downloadStore';
 import { makeModelKey } from '../utils/modelKey';
+import { downloadReasonCode } from '../utils/downloadErrors';
 import { backgroundDownloadService } from './backgroundDownloadService';
 import * as whisperModelFiles from './whisperModelFiles';
 import { WHISPER_MODELS, findTranscriptionModel } from './whisperModels';
@@ -288,7 +289,7 @@ export class WhisperModelDownloads {
       return;
     }
     const message = owner.failure instanceof Error ? owner.failure.message : String(owner.failure);
-    store.setStatus(entry.downloadId, 'failed', { message });
+    store.setStatus(entry.downloadId, 'failed', { message, code: downloadReasonCode(owner.failure) });
   }
 
   listDownloadedModels(): Promise<DownloadedWhisperModel[]> {

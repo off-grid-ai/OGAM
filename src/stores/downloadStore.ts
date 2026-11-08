@@ -71,18 +71,25 @@ function addEntry(state: DownloadStoreState, entry: DownloadEntry): Partial<Down
     },
   };
 }
-/** Report a download start. A hydrated or restored row is not a new start, so only add/retry call this. */
-function reportStarted(entry: DownloadEntry | undefined): void {
-  if (!entry) return;
-  downloadStarted(entry.modelKey, {
+function downloadFacts(entry: DownloadEntry) {
+  return {
     model: modelRef(entry.modelId),
     quant: entry.quantization || undefined,
     sizeBytes: entry.combinedTotalBytes || entry.totalBytes,
     modelType: entry.modelType,
-  });
+  };
 }
 
-/** Report the end of the main file's download (a vision sidecar never ends the download). */
+/** Report a download start. A hydrated or restored row is not a new start, so only add/retry call this. */
+function reportStarted(entry: DownloadEntry | undefined): void {
+  if (!entry) return;
+  downloadStarted(entry.modelKey, downloadFacts(entry));
+}
+
+/**
+ * Report the end of the main file's download (a vision sidecar never ends the download). Only a change
+ * into the end status counts, so a second `failed` for the same attempt is not a second failure.
+ */
 function reportEnd(
   state: DownloadStoreState,
   downloadId: string,
@@ -90,9 +97,9 @@ function reportEnd(
   code?: string,
 ): void {
   const entry = state.downloads[state.downloadIdIndex[downloadId] ?? ''];
-  if (entry?.downloadId !== downloadId) return;
-  if (status === 'failed') downloadEnded(entry.modelKey, 'failed', { code });
-  else if (status === 'completed') downloadEnded(entry.modelKey, 'done');
+  if (entry?.downloadId !== downloadId || entry.status === status) return;
+  if (status === 'failed') downloadEnded(entry.modelKey, 'failed', { code }, downloadFacts(entry));
+  else if (status === 'completed') downloadEnded(entry.modelKey, 'done', undefined, downloadFacts(entry));
 }
 
 export const useDownloadStore = create<DownloadStoreState>((set, get) => ({
@@ -351,6 +358,8 @@ export const useDownloadStore = create<DownloadStoreState>((set, get) => ({
   }),
 
   retryEntry: (modelKey, newDownloadId) => {
+    // A queued placeholder row reported its start when it was added; getting its native id is not a new start.
+    const fromPlaceholder = get().downloads[modelKey]?.downloadId.startsWith('queued:');
     set(state => {
     const entry = state.downloads[modelKey];
     if (!entry) return state;
@@ -389,7 +398,7 @@ export const useDownloadStore = create<DownloadStoreState>((set, get) => ({
       downloadIdIndex: newIndex,
     };
   });
-    reportStarted(get().downloads[modelKey]);
+    if (!fromPlaceholder) reportStarted(get().downloads[modelKey]);
   },
 
   remove: (modelKey) => set(state => {

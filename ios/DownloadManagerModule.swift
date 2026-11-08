@@ -251,6 +251,56 @@ class DownloadManagerModule: RCTEventEmitter {
     return resolved.hasPrefix(documentsDir) || resolved.hasPrefix(cachesDir) || resolved.hasPrefix(tmpDir)
   }
 
+  // MARK: - Failure reasons
+
+  /// The `reasonCode` a DownloadError carries: the same codes as Android's DownloadReason, so the UI and
+  /// analytics read one vocabulary on both platforms.
+  static func reasonCode(for error: Error?) -> String {
+    guard let error = error else { return "unknown_error" }
+    if let http = error as? HTTPStatusError { return reasonCode(forHTTPStatus: http.status) }
+    let nsError = error as NSError
+    if isOutOfSpace(nsError) { return "disk_full" }
+    guard nsError.domain == NSURLErrorDomain else { return "unknown_error" }
+    switch nsError.code {
+    case NSURLErrorCancelled:
+      return "user_cancelled"
+    case NSURLErrorTimedOut:
+      return "network_timeout"
+    case NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost, NSURLErrorCannotFindHost,
+         NSURLErrorCannotConnectToHost, NSURLErrorDNSLookupFailed, NSURLErrorInternationalRoamingOff,
+         NSURLErrorCallIsActive, NSURLErrorDataNotAllowed, NSURLErrorSecureConnectionFailed:
+      return "network_lost"
+    case NSURLErrorBackgroundSessionWasDisconnected:
+      return "download_interrupted"
+    case NSURLErrorZeroByteResource:
+      return "empty_response"
+    case NSURLErrorBadServerResponse:
+      return "server_unavailable"
+    default:
+      return "unknown_error"
+    }
+  }
+
+  static func reasonCode(forHTTPStatus status: Int) -> String {
+    switch status {
+    case 401: return "http_401"
+    case 403: return "http_403"
+    case 404: return "http_404"
+    case 416: return "http_416"
+    case 429: return "http_429"
+    case 500...599: return "server_unavailable"
+    case 400...499: return "client_error"
+    default: return "unknown_error"
+    }
+  }
+
+  private static func isOutOfSpace(_ error: NSError) -> Bool {
+    if error.domain == NSPOSIXErrorDomain && error.code == Int(ENOSPC) { return true }
+    if error.domain == NSCocoaErrorDomain && error.code == NSFileWriteOutOfSpaceError { return true }
+    if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError { return isOutOfSpace(underlying) }
+    return false
+  }
+
   // MARK: - Durable staging
 
   /// A DURABLE directory to stage a completed download until JS finalizes it (moves it to the model
@@ -1292,7 +1342,8 @@ extension DownloadManagerModule {
           "bytesDownloaded": NSNumber(value: info.bytesDownloaded),
           "totalBytes": NSNumber(value: info.totalBytes),
           "status": "failed",
-          "reason": "Failed to save download: \(error.localizedDescription)"
+          "reason": "Failed to save download: \(error.localizedDescription)",
+          "reasonCode": DownloadManagerModule.reasonCode(for: error)
         ] as [String: Any])
       }
     }
@@ -1333,13 +1384,20 @@ extension DownloadManagerModule {
           "bytesDownloaded": NSNumber(value: info.bytesDownloaded),
           "totalBytes": NSNumber(value: info.totalBytes),
           "status": "failed",
-          "reason": error?.localizedDescription ?? "Unknown error"
+          "reason": error?.localizedDescription ?? "Unknown error",
+          "reasonCode": DownloadManagerModule.reasonCode(for: error)
         ] as [String: Any])
       } else {
         NSLog("[DownloadManager] Download#%@ errored but hasListeners=false, NOT sending event!", downloadId)
       }
     }
   }
+}
+
+/// A download that ended with an HTTP error status (URLSession reports those as a finished download).
+struct HTTPStatusError: LocalizedError {
+  let status: Int
+  var errorDescription: String? { "HTTP \(status)" }
 }
 
 // MARK: - URLSession Delegate
@@ -1371,6 +1429,14 @@ class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
                   didFinishDownloadingTo location: URL) {
     NSLog("[DownloadManager] Delegate: didFinishDownloadingTo for task#%d at %@",
           downloadTask.taskIdentifier, location.path)
+
+    // URLSession finishes an HTTP error like a success, and the file at `location` is then the
+    // server's error page. Fail the download with its status instead of keeping that page as the model.
+    if let status = (downloadTask.response as? HTTPURLResponse)?.statusCode, status >= 400 {
+      NSLog("[DownloadManager] Delegate: task#%d ended with HTTP %d", downloadTask.taskIdentifier, status)
+      module?.handleError(taskId: downloadTask.taskIdentifier, error: HTTPStatusError(status: status))
+      return
+    }
 
     // CRITICAL: The file at `location` is deleted by URLSession as soon as this method returns.
     // We must copy it to a safe location SYNCHRONOUSLY before returning. That location must be

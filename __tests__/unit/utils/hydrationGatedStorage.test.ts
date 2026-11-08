@@ -275,6 +275,27 @@ describe('hydration-gated storage load and write failures', () => {
     expect(device.values.get('settings')).toBe(stored({ selected: 'next' }));
   });
 
+  it('a failed write from a store change (a full disk) is not an unhandled rejection', async () => {
+    const device = deviceStorage();
+    const { store } = createPersistedSelection(device.storage);
+    await waitForHydration(store);
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      device.failNextWrite = true;
+      store.setState({ selected: 'lost' });
+      await new Promise(resolve => setTimeout(resolve, 20));
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+    expect(unhandled).toEqual([]);
+
+    store.setState({ selected: 'kept' });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(device.values.get('settings')).toBe(stored({ selected: 'kept' }));
+  });
+
   it('reports a failed write to waiters', async () => {
     const device = deviceStorage();
     const { gate, store } = createPersistedSelection(device.storage);

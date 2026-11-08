@@ -708,6 +708,8 @@ export function watchBackgroundDownload(opts: WatchDownloadOpts): void {
         savedLiteRTVision: model.engine === 'litert' ? model.liteRTVision : undefined,
       });
       backgroundDownloadMetadataCallback?.(downloadId, null);
+      // The completion handler removes the row, so mark it completed first: that is what reports the finish.
+      useDownloadStore.getState().setCompleted(downloadId);
       onComplete?.(model);
       // When we finalized from an already-on-disk file (native move was skipped), the
       // stale native record still lingers as 'completed'-without-localUri and restore
@@ -765,7 +767,7 @@ export function watchBackgroundDownload(opts: WatchDownloadOpts): void {
 
   const removeMainComplete = backgroundDownloadService.onComplete(downloadId, handleMainComplete);
   const removeMainError = backgroundDownloadService.onError(downloadId, (event) => {
-    handleError(new Error(event.reason || 'Download failed'));
+    handleError(Object.assign(new Error(event.reason || 'Download failed'), { code: event.reasonCode }));
   });
 
   if (ctx.mmProjDownloadId && !ctx.mmProjCompleted) {
