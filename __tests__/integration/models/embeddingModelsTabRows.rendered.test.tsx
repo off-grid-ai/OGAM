@@ -4,7 +4,10 @@
  * SPEC (OGAM user's view): a model already on the phone shows its size ("35 MB"); one you would
  * still fetch says "125 MB download". Its trailing mark says what a tap does: an empty circle picks
  * a model that is here, a download mark gets one that is not. The built-in MiniLM is always here, so
- * once another model is in use it shows the circle too.
+ * once another model is in use it shows the circle too. While a model downloads, its own row shows the
+ * progress and the cancel, and nothing else on the tab does (no second loader under the search field).
+ * A cancel you asked for leaves no message: the row goes back to its download mark. A failed download
+ * says so on its own row, with Retry.
  *
  * Everything we own runs (the tab, ModelCard, embeddingService.hasModelFile, the documents.db store).
  * Device leaves only (harness/documentEngine): SQLite is a real in-memory engine, the filesystem memfs.
@@ -20,13 +23,13 @@ function setup() {
   const { sha256 } = require('js-sha256');
   const { RECOMMENDED_EMBEDDING_MODELS } = require('../../../src/services/huggingFaceModelBrowser');
   const store = require('../../../src/services/documents/store');
-  const [english, multilingual] = RECOMMENDED_EMBEDDING_MODELS as { id: string; name: string; size: number }[];
+  const [english, multilingual] = RECOMMENDED_EMBEDDING_MODELS as { id: string; name: string; size: number; downloadUrl: string }[];
   /** Put a model's file on the phone at the path and size the app checks. */
   const onPhone = async (model: { id: string; size: number }) => {
     const path = `${fs.DocumentDirectoryPath}/embedding-${sha256(model.id)}.gguf`;
     disk.seedFile(path, model.size);
   };
-  return { store, english, multilingual, onPhone };
+  return { store, english, multilingual, onPhone, disk };
 }
 
 async function renderTab() {
@@ -78,4 +81,42 @@ it('the built-in model shows the circle once another model is in use, and none w
   // The model in use has no mark: there is nothing to pick or get.
   expect(second.icons(h.english.name)).not.toContain('circle');
   expect(second.icons(h.english.name)).not.toContain('download');
+});
+
+it('a download shows on its own row with a cancel, and not again under the search field', async () => {
+  const h = setup();
+  const transfer = h.disk.serveRemoteFile(h.multilingual.downloadUrl, { body: 'model-bytes', hold: true });
+  const { rtl, view, row, icons } = await renderTab();
+
+  rtl.fireEvent.press(view.getByLabelText(h.multilingual.name));
+  rtl.fireEvent.press(await view.findByText('Switch'));
+  await rtl.waitFor(() => expect(transfer.held()).toBe(true));
+
+  const cancel = await rtl.waitFor(() => row(h.multilingual.name).getByLabelText('Cancel download'));
+  expect(view.queryByTestId('embedding-index-progress')).toBeNull();
+  expect(view.queryByText('Cancel model change')).toBeNull();
+
+  rtl.fireEvent.press(cancel);
+  await rtl.waitFor(() => expect(icons(h.multilingual.name)).toContain('download'));
+  expect(row(h.multilingual.name).queryByLabelText('Cancel download')).toBeNull();
+  expect(view.queryByText(/cancelled/i)).toBeNull();
+  expect(view.queryByRole('alert')).toBeNull();
+  expect(h.store.activeEmbeddingModel()).toBeNull();
+});
+
+it('a failed download says so on its own row, with Retry, and not under the search field', async () => {
+  const h = setup();
+  h.disk.serveRemoteFile(h.multilingual.downloadUrl, { statusCode: 500, body: 'error' });
+  const { rtl, view, row } = await renderTab();
+
+  rtl.fireEvent.press(view.getByLabelText(h.multilingual.name));
+  rtl.fireEvent.press(await view.findByText('Switch'));
+
+  await rtl.waitFor(() => expect(row(h.multilingual.name).getByText(/The previous model is still active\./)).toBeTruthy());
+  expect(row(h.multilingual.name).getByLabelText('Retry download')).toBeTruthy();
+  expect(view.queryByRole('alert')).toBeNull();
+  expect(h.store.activeEmbeddingModel()).toBeNull();
+
+  rtl.fireEvent.press(row(h.multilingual.name).getByLabelText('Remove download'));
+  await rtl.waitFor(() => expect(view.queryByText(/The previous model is still active\./)).toBeNull());
 });

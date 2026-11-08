@@ -108,7 +108,8 @@ export const EmbeddingModelsTab: React.FC = () => {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Switch', onPress: () => {
         setError('');
-        embeddingModelChanger.install(candidate).catch(e => setError(String(e.message)));
+        // A failed change reports on its row (status.error); nothing more to show here.
+        embeddingModelChanger.install(candidate).catch(() => undefined);
       } },
     ]));
   };
@@ -132,6 +133,11 @@ export const EmbeddingModelsTab: React.FC = () => {
     ]));
   };
   const activeInCandidates = active && candidates.some(candidate => candidate.id === active.id);
+  // A change in progress shows once: on the row of the model being fetched, with its own cancel, as in
+  // every model list. The line under the search field is only for a change with no row on screen
+  // (Mac, 2026-11-08: a second loader sat under the search bar, out of line with the list).
+  const changeRow = status.busy ? candidates.find(candidate => candidate.id === status.candidateId) : undefined;
+  const failedRow = !status.busy && status.error ? candidates.find(candidate => candidate.id === status.candidateId) : undefined;
 
   return (
     <ScrollView contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled" testID="embedding-models-tab">
@@ -147,9 +153,9 @@ export const EmbeddingModelsTab: React.FC = () => {
         clearLabel="Clear model search"
         testID="embedding-search-input"
       />
-      {!!status.message && <Text style={embeddingStyles.status} accessibilityLiveRegion="polite" testID="embedding-index-progress">{status.message}</Text>}
-      {!!(status.error || error) && <Text style={embeddingStyles.error} accessibilityRole="alert">{status.error || error}</Text>}
-      {status.busy && <Button title="Cancel model change" onPress={embeddingModelChanger.cancel} />}
+      {!!status.message && !changeRow && <Text style={embeddingStyles.status} accessibilityLiveRegion="polite" testID="embedding-index-progress">{status.message}</Text>}
+      {!!((!failedRow && status.error) || error) && <Text style={embeddingStyles.error} accessibilityRole="alert">{error || status.error}</Text>}
+      {status.busy && !changeRow && <Button title="Cancel model change" onPress={embeddingModelChanger.cancel} />}
       {loading && <Text style={embeddingStyles.status} aria-busy>Searching...</Text>}
       {!loading && query.trim() !== '' && !error && results.length === 0 && <Text style={embeddingStyles.status}>No models found. Try another name.</Text>}
       <Text style={embeddingStyles.sectionLabel}>{query.trim() ? 'Models' : 'Recommended'}</Text>
@@ -180,12 +186,18 @@ export const EmbeddingModelsTab: React.FC = () => {
           ].filter((fact): fact is string => !!fact)}
           isActive={active?.id === candidate.id}
           isDownloaded={downloaded.has(candidate.id)}
-          isDownloading={status.busy && status.candidateId === candidate.id}
-          downloadProgress={status.busy && status.candidateId === candidate.id ? status.fraction : undefined}
+          isDownloading={changeRow === candidate}
+          downloadProgress={changeRow === candidate ? status.fraction : undefined}
+          onCancel={changeRow === candidate ? embeddingModelChanger.cancel : undefined}
+          failedState={failedRow === candidate ? {
+            errorMessage: status.error, bytesDownloaded: 0, totalBytes: 0,
+            onRetry: () => { embeddingModelChanger.retry().catch(() => undefined); },
+            onRemove: embeddingModelChanger.dismiss,
+          } : undefined}
           onDelete={downloaded.has(candidate.id) && active?.id !== candidate.id && !status.busy ? () => remove(candidate) : undefined}
           disabled={status.busy || !ready || active?.id === candidate.id}
           onPress={() => select(candidate)}
-          trailing={active?.id === candidate.id ? undefined : <View style={embeddingStyles.rowAction}><Icon name={downloaded.has(candidate.id) ? 'circle' : 'download'} size={16} color={colors.textMuted} /></View>}
+          trailing={active?.id === candidate.id || changeRow === candidate || failedRow === candidate ? undefined : <View style={embeddingStyles.rowAction}><Icon name={downloaded.has(candidate.id) ? 'circle' : 'download'} size={16} color={colors.textMuted} /></View>}
         />
       ))}
       </ListGroup>
