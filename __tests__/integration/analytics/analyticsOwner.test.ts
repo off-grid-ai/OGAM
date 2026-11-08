@@ -182,6 +182,35 @@ it('downloads report start, finish speed, failure, and the image, voice and vide
   expect(funnels).toEqual(['image_setup', 'voice_setup', 'video_setup']);
 });
 
+it('a queued start reports one start, and a download restored after a restart still reports its end once', async () => {
+  const { endpoint, flush } = await setup({ usage: true });
+  const { useDownloadStore } = require('../../../src/stores/downloadStore');
+  const entry = (modelKey: string, downloadId: string, status: string) => ({
+    modelKey, downloadId, modelId: 'ggml-org/SmolVLM-GGUF', fileName: 'f', quantization: 'Q4_K_M',
+    modelType: 'text', status, bytesDownloaded: 0, totalBytes: 1.5 * GB, combinedTotalBytes: 0, progress: 0, createdAt: 0,
+  });
+  // The queued row reports the start; its native id arriving is the same start.
+  useDownloadStore.getState().add(entry('text:queued', 'queued:text:queued', 'pending'));
+  useDownloadStore.getState().retryEntry('text:queued', 'd20');
+  // Rows read back from the native downloader after a restart: no start in this session.
+  useDownloadStore.getState().hydrate([entry('text:restored-a', 'd21', 'running'), entry('text:restored-b', 'd22', 'running')]);
+  useDownloadStore.getState().setStatus('d21', 'failed', { message: 'Network connection lost.', code: 'network_lost' });
+  useDownloadStore.getState().setStatus('d21', 'failed', { message: 'Network connection lost.' });
+  useDownloadStore.getState().setCompleted('d22');
+  // iOS re-queues an interrupted download after a restart by cancelling its old native id.
+  useDownloadStore.getState().hydrate([entry('text:requeued', 'd23', 'pending')]);
+  useDownloadStore.getState().setStatus('d23', 'failed', { message: 'Download cancelled', code: 'user_cancelled' });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  await flush();
+  await waitFor(() => expect(endpoint.named('model_download_finished')).toHaveLength(1));
+  expect(endpoint.named('model_download_started')).toHaveLength(1);
+  const failed = endpoint.named('model_download_failed');
+  expect(failed).toHaveLength(1);
+  expect(failed[0].properties).toMatchObject({ model: 'ggml-org/SmolVLM-GGUF', size_bucket: '1-2GB', error_code: 'network_lost' });
+  expect(failed[0].properties.duration_ms).toBeUndefined();
+  expect(endpoint.named('model_download_finished')[0].properties.duration_ms).toBeUndefined();
+});
+
 it('reports the spec properties when the device cannot say its chip, memory or battery', async () => {
   const { analytics, endpoint, flush } = await setup(null);
   // Before opting in a download is not tracked at all, so its end later sends nothing.

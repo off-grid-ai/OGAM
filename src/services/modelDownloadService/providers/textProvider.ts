@@ -18,6 +18,7 @@ import { hardwareService } from '../../hardware';
 import { useAppStore } from '../../../stores';
 import { useDownloadStore, isActiveStatus, DownloadEntry } from '../../../stores/downloadStore';
 import { jobBytesDownloaded } from '../../../utils/downloadStatus';
+import { downloadReasonCode } from '../../../utils/downloadErrors';
 import logger from '../../../utils/logger';
 import { mapStoreStatus } from '../storeStatus';
 import { uniformDownloadId } from '../uniformId';
@@ -84,7 +85,7 @@ function reattach(downloadId: string): void {
       if (modelKey) useDownloadStore.getState().remove(modelKey);
     },
     (error: Error) => {
-      useDownloadStore.getState().setStatus(downloadId, 'failed', { message: error.message });
+      useDownloadStore.getState().setStatus(downloadId, 'failed', { message: error.message, code: downloadReasonCode(error) });
     },
   );
 }

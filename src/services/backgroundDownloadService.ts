@@ -607,7 +607,8 @@ class BackgroundDownloadService {
       });
       const removeError = this.onError(downloadId, err => {
         done();
-        const error = new Error(err.reason || 'Download failed') as Error & { cancelled?: boolean };
+        const error = Object.assign(new Error(err.reason || 'Download failed'), { code: err.reasonCode }) as
+          Error & { cancelled?: boolean; code?: string };
         // Let callers distinguish a user cancel from a real failure so they can
         // clean up quietly instead of surfacing a "download failed" error.
         if (err.reasonCode === 'user_cancelled') error.cancelled = true;

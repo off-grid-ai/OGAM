@@ -9,6 +9,7 @@ import { useAppStore } from '../stores';
 import { activeModelService } from './activeModelService';
 import { makeModelKey } from '../utils/modelKey';
 import { statFile } from '../utils/fileStat';
+import { downloadReasonCode } from '../utils/downloadErrors';
 import type { ModelFile, DownloadedModel } from '../types';
 
 /** Placeholder downloadId for a row that exists only to represent the QUEUED state
@@ -143,7 +144,10 @@ export async function startModelDownload(
   let currentDownloadId: string | undefined = queuedPlaceholderId(modelKey);
   const fail = (err: Error) => {
     if (currentDownloadId) {
-      useDownloadStore.getState().setStatus(currentDownloadId, 'failed', { message: err.message });
+      useDownloadStore.getState().setStatus(currentDownloadId, 'failed', {
+        message: err.message,
+        code: downloadReasonCode(err),
+      });
     }
     opts.onError?.(err);
   };

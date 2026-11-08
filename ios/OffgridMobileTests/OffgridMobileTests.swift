@@ -1246,3 +1246,34 @@ final class SyncClipboardObserverTests: XCTestCase {
     XCTAssertEqual(observed.count, 1)
   }
 }
+
+final class DownloadReasonCodeTests: XCTestCase {
+  func testNetworkErrorsMapToTheAndroidCodes() {
+    XCTAssertEqual(DownloadManagerModule.reasonCode(for: URLError(.notConnectedToInternet)), "network_lost")
+    XCTAssertEqual(DownloadManagerModule.reasonCode(for: URLError(.networkConnectionLost)), "network_lost")
+    XCTAssertEqual(DownloadManagerModule.reasonCode(for: URLError(.timedOut)), "network_timeout")
+    XCTAssertEqual(DownloadManagerModule.reasonCode(for: URLError(.cancelled)), "user_cancelled")
+  }
+
+  func testAFullDiskIsDiskFullAlsoWhenItIsTheUnderlyingError() {
+    let posix = NSError(domain: NSPOSIXErrorDomain, code: Int(ENOSPC))
+    XCTAssertEqual(DownloadManagerModule.reasonCode(for: posix), "disk_full")
+    let cocoa = NSError(domain: NSCocoaErrorDomain, code: NSFileWriteOutOfSpaceError)
+    XCTAssertEqual(DownloadManagerModule.reasonCode(for: cocoa), "disk_full")
+    let wrapped = NSError(domain: NSURLErrorDomain, code: NSURLErrorCannotWriteToFile,
+                          userInfo: [NSUnderlyingErrorKey: posix])
+    XCTAssertEqual(DownloadManagerModule.reasonCode(for: wrapped), "disk_full")
+  }
+
+  func testHTTPStatusesMapToTheAndroidCodes() {
+    XCTAssertEqual(DownloadManagerModule.reasonCode(for: HTTPStatusError(status: 404)), "http_404")
+    XCTAssertEqual(DownloadManagerModule.reasonCode(for: HTTPStatusError(status: 429)), "http_429")
+    XCTAssertEqual(DownloadManagerModule.reasonCode(for: HTTPStatusError(status: 503)), "server_unavailable")
+    XCTAssertEqual(DownloadManagerModule.reasonCode(for: HTTPStatusError(status: 410)), "client_error")
+  }
+
+  func testAnUnknownOrMissingErrorIsUnknownError() {
+    XCTAssertEqual(DownloadManagerModule.reasonCode(for: nil), "unknown_error")
+    XCTAssertEqual(DownloadManagerModule.reasonCode(for: NSError(domain: "other", code: 1)), "unknown_error")
+  }
+}

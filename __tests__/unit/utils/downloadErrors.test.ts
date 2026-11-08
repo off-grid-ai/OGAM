@@ -1,4 +1,9 @@
-import { getDownloadStatusLabel, getUserFacingDownloadMessage, isRetryable } from '../../../src/utils/downloadErrors';
+import {
+  downloadReasonCode,
+  getDownloadStatusLabel,
+  getUserFacingDownloadMessage,
+  isRetryable,
+} from '../../../src/utils/downloadErrors';
 
 describe('downloadErrors', () => {
   it('maps network failures to friendlier copy', () => {
@@ -83,5 +88,14 @@ describe('downloadErrors', () => {
       expect(isRetryable('http_404')).toBe(false);
       expect(isRetryable('user_cancelled')).toBe(false);
     });
+  });
+
+  it('reads a known download reason code from an error, and nothing else', () => {
+    expect(downloadReasonCode(Object.assign(new Error('Not enough space'), { code: 'disk_full' }))).toBe('disk_full');
+    expect(downloadReasonCode({ code: 'http_404' })).toBe('http_404');
+    expect(downloadReasonCode(Object.assign(new Error('native'), { code: 'NOT_FOUND' }))).toBeUndefined();
+    expect(downloadReasonCode({ code: 'toString' })).toBeUndefined();
+    expect(downloadReasonCode(new Error('no code'))).toBeUndefined();
+    expect(downloadReasonCode(undefined)).toBeUndefined();
   });
 });

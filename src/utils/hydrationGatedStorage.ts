@@ -208,7 +208,11 @@ export function createHydrationGatedStorage<S>(
         const write = drain();
         draining = write;
         pendingWrites.add(write);
-        return write.finally(() => pendingWrites.delete(write));
+        const settled = write.finally(() => pendingWrites.delete(write));
+        // Zustand drops the promise this returns, so a failed write (a full disk) is logged here instead of
+        // surfacing as an unhandled rejection. A caller that awaits the promise still gets the error.
+        settled.catch(error => logger.warn('[STORAGE-SM] a write failed:', error));
+        return settled;
       },
       removeItem: name => {
         if (!hydrated) return undefined;

@@ -729,6 +729,8 @@ export interface DownloadFacts {
 }
 
 const downloads = new Map<string, { facts: DownloadFacts; startedAt: number; base: Promise<Properties> }>();
+/** Downloads started in this app session. Any other download that ends began before a restart. */
+const startedThisSession = new Set<string>();
 
 function setupFlow(modelType: DownloadFacts['modelType']): Flow | null {
   if (modelType === 'image') return 'image_setup';
@@ -737,10 +739,8 @@ function setupFlow(modelType: DownloadFacts['modelType']): Flow | null {
   return null;
 }
 
-export function downloadStarted(key: string, facts: DownloadFacts): void {
-  // Not opted in: no disk read, nothing kept.
-  if (!client) return;
-  const base = Promise.resolve()
+function downloadProperties(facts: DownloadFacts): Promise<Properties> {
+  return Promise.resolve()
     .then(() => RNFS.getFSInfo())
     .then(info => bytesToGb(info.freeSpace))
     .catch(ignore)
@@ -752,18 +752,46 @@ export function downloadStarted(key: string, facts: DownloadFacts): void {
       network: 'unknown',
       free_storage_gb: free,
     }));
+}
+
+export function downloadStarted(key: string, facts: DownloadFacts): void {
+  // Not opted in: no disk read, nothing kept.
+  if (!client) return;
+  const base = downloadProperties(facts);
+  startedThisSession.add(key);
   downloads.set(key, { facts, startedAt: Date.now(), base });
   base.then(props => capture('model_download_started', props)).catch(ignore);
   const flow = setupFlow(facts.modelType);
   if (flow) flowStep(flow, 'model_picked');
 }
 
-export function downloadEnded(key: string, outcome: 'done' | 'failed', error?: unknown): void {
+/**
+ * `facts` describe a download that began before an app restart, which has no entry here: its end is
+ * still reported, without `duration_ms` and `mb_per_sec`.
+ */
+export function downloadEnded(
+  key: string,
+  outcome: 'done' | 'failed',
+  error?: unknown,
+  facts?: DownloadFacts,
+): void {
   // Before the early return: a person who has not opted in has no download entry, and they are
   // the ones the failure prompt is for.
   if (outcome === 'failed') maybePromptAfterFailure();
   const entry = downloads.get(key);
-  if (!entry) return;
+  if (!entry) {
+    // Cancelling a download from before the restart is how the app replaces it with a new start.
+    const replaced = errorCode(error) === 'user_cancelled';
+    if (client && facts && !startedThisSession.has(key) && !replaced) {
+      downloadProperties(facts)
+        .then(props => capture(
+          outcome === 'done' ? 'model_download_finished' : 'model_download_failed',
+          outcome === 'done' ? props : { ...props, error_code: errorCode(error) },
+        ))
+        .catch(ignore);
+    }
+    return;
+  }
   downloads.delete(key);
   const durationMs = Date.now() - entry.startedAt;
   entry.base
