@@ -249,16 +249,13 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.textMuted,
   },
   progressSection: {
-    marginTop: 10,
-    marginBottom: 12,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.xs,
   },
   progressTransferRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: SPACING.sm,
-  },
-  progressDetails: {
-    flex: 1,
   },
   progressActions: {
     flexDirection: 'row' as const,
@@ -270,19 +267,17 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     gap: 12,
   },
   progressBar: {
-    // Full card width (own row); the caption row below carries bytes + %.
-    alignSelf: 'stretch' as const,
+    // Fills the line beside its % and actions. The track uses the border tone: surfaceLight vanished
+    // on the glass card, so 0% read as an empty gap.
+    flex: 1,
     height: 8,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.border,
     borderRadius: 4,
     overflow: 'hidden' as const,
   },
   // Under-bar caption: bytes on the left, % / "Queued" on the right.
-  progressCaptionRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'space-between' as const,
-    marginTop: 7,
+  progressCaption: {
+    marginTop: SPACING.xs,
   },
   progressFill: {
     height: '100%' as const,

@@ -207,32 +207,31 @@ const DownloadProgressSection: React.FC<{
     queued || paused ? undefined : presented.rateText,
     countLabel,
   ].filter(Boolean).join(' · ');
+  // One line: the bar, then its state (%, Queued, Paused), then the actions, so the cancel sits beside
+  // what it cancels. Bytes and speed go under it only when there are some (Mac, 2026-11-08: the % and ×
+  // floated on a line of their own under a bar with no track).
   return (
     <View style={styles.progressSection}>
       <View style={styles.progressTransferRow}>
-        <View style={styles.progressDetails}>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${queued ? 0 : percentage}%` }]} />
-          </View>
-          <View style={styles.progressCaptionRow}>
-            <Text style={styles.progressBytesText}>{caption}</Text>
-            {queued ? (
-              <View style={styles.progressLabelRow}>
-                <Icon name={QUEUED_ICON} size={12} color={colors.textMuted} accessibilityLabel="Queued" />
-                <Text style={[styles.progressText, styles.queuedText]}>Queued</Text>
-              </View>
-            ) : paused ? (
-              <View style={styles.progressLabelRow}>
-                <Icon name={PAUSED_ICON} size={12} color={colors.textSecondary} accessibilityLabel="Paused" />
-                <Text style={styles.progressText}>Paused</Text>
-              </View>
-            ) : (
-              <Text style={styles.progressText}>{presented.percentageText ?? 'In progress'}</Text>
-            )}
-          </View>
+        <View style={styles.progressBar}>
+          <View style={[styles.progressFill, { width: `${queued ? 0 : percentage}%` }]} />
         </View>
+        {queued ? (
+          <View style={styles.progressLabelRow}>
+            <Icon name={QUEUED_ICON} size={12} color={colors.textMuted} accessibilityLabel="Queued" />
+            <Text style={[styles.progressText, styles.queuedText]}>Queued</Text>
+          </View>
+        ) : paused ? (
+          <View style={styles.progressLabelRow}>
+            <Icon name={PAUSED_ICON} size={12} color={colors.textSecondary} accessibilityLabel="Paused" />
+            <Text style={styles.progressText}>Paused</Text>
+          </View>
+        ) : (
+          <Text style={styles.progressText}>{presented.percentageText ?? 'In progress'}</Text>
+        )}
         {actions && <View style={styles.progressActions}>{actions}</View>}
       </View>
+      {caption ? <Text style={[styles.progressBytesText, styles.progressCaption]}>{caption}</Text> : null}
     </View>
   );
 };
