@@ -11,16 +11,22 @@ import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { SPACING, TYPOGRAPHY } from '../../constants';
 import { createStyles } from './styles';
+import { cardSurface } from '../../theme/surface';
 import { SearchField } from '../../components/SearchField';
 import { GROUPED_CARD_ROW, ListGroup } from '../../components/ListGroup';
 
 type Candidate = Awaited<ReturnType<typeof searchEmbeddingModels>>[number];
 
 const createEmbeddingStyles = (colors: ThemeColors) => ({
+  // On the glass, not on the dots: a paragraph outside a card read through the lattice (Mac, 2026-11-08).
+  introCard: {
+    ...cardSurface(colors),
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
   intro: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
-    marginBottom: SPACING.md,
   },
   // The same section label as the Text tab ("FOR THIS PHONE"): Mono, upper case, grey.
   sectionLabel: {
@@ -142,10 +148,12 @@ export const EmbeddingModelsTab: React.FC = () => {
   return (
     <ScrollView contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled" testID="embedding-models-tab">
       {/* What this is for, before any model name: the reader gets the outcome first. */}
-      <Text style={embeddingStyles.intro}>
-        When you add documents to a project, chat finds the passages that answer you. This model does
-        the finding, on this phone. The built-in one needs no download.
-      </Text>
+      <View style={embeddingStyles.introCard}>
+        <Text style={embeddingStyles.intro}>
+          When you add documents to a project, chat finds the passages that answer you. This model does
+          the finding, on this phone. The built-in one needs no download.
+        </Text>
+      </View>
       <SearchField
         value={query}
         onChangeText={setQuery}
