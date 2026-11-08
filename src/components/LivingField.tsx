@@ -8,7 +8,7 @@ import Animated, {
   useReducedMotion,
   useSharedValue,
 } from 'react-native-reanimated';
-import Svg, { Circle, Defs, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Mask, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { useTheme } from '../theme';
 import { ALIVE, LIVING_FIELD } from '../constants';
 import { useAlive, type AliveSignals } from './AliveProvider';
@@ -16,6 +16,10 @@ import { useAlive, type AliveSignals } from './AliveProvider';
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const GLOW_SIZE = 560;
+/** Text never sits on the dots: the lattice is clear behind the status bar and a screen's header,
+ *  then fades in below it. The light still shows there; only the dots step back (Mac, 2026-11-08). */
+const HEADER_CLEAR = 156;
+const HEADER_FADE = 40;
 const ECHO_SIZE = 440;
 
 /**
@@ -93,11 +97,18 @@ export const LivingField: React.FC<{
             <Pattern id="field-dots" width={spacing} height={spacing} patternUnits="userSpaceOnUse">
               <Circle cx={spacing / 2} cy={spacing / 2} r={dotRadius} fill={dot} />
             </Pattern>
+            <LinearGradient id="field-header-fade" x1="0" y1="0" x2="0" y2={latticeHeight} gradientUnits="userSpaceOnUse">
+              <Stop offset={HEADER_CLEAR / latticeHeight} stopColor="#fff" stopOpacity={0} />
+              <Stop offset={(HEADER_CLEAR + HEADER_FADE) / latticeHeight} stopColor="#fff" stopOpacity={1} />
+            </LinearGradient>
+            <Mask id="field-header-clear" maskUnits="userSpaceOnUse" x="0" y="0" width={width} height={latticeHeight}>
+              <Rect width={width} height={latticeHeight} fill="url(#field-header-fade)" />
+            </Mask>
             <Pattern id="field-dots-lit" width={spacing} height={spacing} patternUnits="userSpaceOnUse">
               <Circle cx={spacing / 2} cy={spacing / 2} r={dotRadius * 1.15} fill={colors.primary} fillOpacity={litAlpha} />
             </Pattern>
           </Defs>
-          <Rect width={width} height={latticeHeight} fill="url(#field-dots)" />
+          <Rect width={width} height={latticeHeight} fill="url(#field-dots)" mask="url(#field-header-clear)" />
           {/* The light under a finger: lit dots in three widening, fainter rings of the pattern (a
               soft falloff without a mask, which react-native-svg does not redraw as it animates). */}
           <AnimatedCircle animatedProps={lightOuter} fill="url(#field-dots-lit)" />
