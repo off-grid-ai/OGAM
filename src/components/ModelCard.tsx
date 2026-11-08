@@ -4,7 +4,7 @@ import { View, Text } from 'react-native';
 import { TouchableOpacity } from './Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { useThemedStyles, useTheme } from '../theme';
-import { isOffGridHfRepo } from '@offgrid/models';
+import { isOffGridHfRepo, isRawModelName, modelDisplayName } from '@offgrid/models';
 import { QUANTIZATION_INFO, CREDIBILITY_LABELS } from '../constants';
 import { ModelFile, DownloadedModel, ModelCredibility } from '../types';
 import { needsVisionRepair } from '../utils/visionRepair';
@@ -21,6 +21,7 @@ import {
 } from './ModelCardContent';
 import { PAUSED_ICON, QUEUED_ICON } from '../utils/downloadStatusIcon';
 import { formatBytes } from '../utils/formatBytes';
+import { huggingFaceService } from '../services/huggingface';
 import { presentProgress } from '../utils/progressPresentation';
 
 interface ModelCardProps {
@@ -55,6 +56,8 @@ interface ModelCardProps {
   incompatibleReason?: string;
   /** A size in words ("Smaller", "Recommended", "Best") shown instead of the quantization name. */
   sizeLabel?: string;
+  /** What the phone downloads when no single file is chosen yet (the catalog's own file sizes). */
+  downloadSizeBytes?: number;
   testID?: string;
   /** Extra container style: a list that groups its rows (ListGroup look) flattens the card into a row. */
   style?: StyleProp<ViewStyle>;
@@ -282,7 +285,7 @@ const FailedSection: React.FC<{
 const VERTICAL_HIT_SLOP = { top: 10, bottom: 10, left: 0, right: 0 };
 
 export const ModelCard: React.FC<ModelCardProps> = ({
-  model,
+  model: given,
   file,
   downloadedModel,
   isDownloaded,
@@ -296,6 +299,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   isCompatible = true,
   incompatibleReason,
   sizeLabel,
+  downloadSizeBytes,
   testID,
   style,
   onPress,
@@ -321,11 +325,17 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   factsTestID,
   footer,
 }) => {
+  // The name a person reads, from the shared resolver: a search result's "org/repo / file.gguf"
+  // reads as the model's name (Mac, 2026-11-08). Catalog names pass through unchanged.
+  const model = React.useMemo(
+    () => (isRawModelName(given.name) ? { ...given, name: modelDisplayName(given.name) ?? given.name } : given),
+    [given],
+  );
   const styles = useThemedStyles(createStyles);
   const useDenseLayout = compact;
 
   const quantInfo = resolveQuantInfo(file, downloadedModel);
-  const fileSize = resolveFileSize(file, downloadedModel);
+  const fileSize = resolveFileSize(file, downloadedModel) || downloadSizeBytes || 0;
   const isVisionModel = !!(model.modelType === 'vision' || file?.mmProjFile || (downloadedModel?.engine === 'llama' && downloadedModel.isVisionModel));
   const needsRepair = needsVisionRepair(downloadedModel, file);
 
@@ -340,12 +350,21 @@ export const ModelCard: React.FC<ModelCardProps> = ({
     };
   }, [model.files, fileSize]);
 
+  // A compact row shows its size too, as a range until one file is chosen (Mac, 2026-11-08: a list
+  // row with params but no size left out what the phone pays).
+  const rangeText = sizeRange
+    ? sizeRange.min === sizeRange.max
+      ? huggingFaceService.formatFileSize(sizeRange.min)
+      : `${huggingFaceService.formatFileSize(sizeRange.min)}–${huggingFaceService.formatFileSize(sizeRange.max)}`
+    : undefined;
+  const headingFacts = [sizeLabel, useDenseLayout ? rangeText : undefined, ...(facts ?? [])].filter((fact): fact is string => !!fact);
+
   const credibility = resolveCredibility(model, downloadedModel);
   const credibilityInfo = credibility ? CREDIBILITY_LABELS[credibility.source] : null;
   const reportedQuantization = [file?.quantization, downloadedModel?.quantization, model.quantization]
     .find(value => value && value !== 'Unknown');
   const quantization = reportedQuantization ||
-    /(?:^|[-_.])((?:Q\d+(?:_[A-Z0-9]+)*)|F16|F32|FP16|INT8)(?:[-_.]|$)/i.exec(`${model.id} ${model.name}`)?.[1]?.toUpperCase();
+    /(?:^|[-_.])((?:Q\d+(?:_[A-Z0-9]+)*)|F16|F32|FP16|INT8)(?:[-_.]|$)/i.exec(`${given.id} ${given.name}`)?.[1]?.toUpperCase();
   const actionsInProgress = !!compact && (isDownloading || isQueued || isPaused);
   const actionButtons = !failedState && (
     <ModelCardActions
@@ -406,7 +425,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
             credibilityInfo={credibilityInfo}
             isActive={isActive}
             incompatibleReason={!isCompatible ? (incompatibleReason ?? 'Too large') : undefined}
-            facts={sizeLabel ? [sizeLabel, ...(facts ?? [])] : facts}
+            facts={headingFacts.length ? headingFacts : undefined}
             capabilities={capabilities}
             sourceBadge={sourceBadge}
             nameTestID={nameTestID}
