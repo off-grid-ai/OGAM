@@ -18,7 +18,7 @@ import { TouchableOpacity } from '../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Button, Card } from '../components';
+import { Card } from '../components';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../theme';
 import { SPACING } from '../constants';
@@ -241,16 +241,23 @@ export const StorageSettingsScreen: React.FC = () => {
           </View>
         </Card>
 
-        <View style={styles.section}>
-          <Button
-            title="Choose models for this phone"
-            variant="outline"
-            size="small"
-            style={styles.sizedToText}
+        {/* A row in a card, as every way on from Settings: a lone small button between two cards
+            hung there (Mac, 2026-11-08: nothing hangs alone). */}
+        <Card style={styles.section}>
+          <TouchableOpacity
+            style={[styles.infoRow, styles.lastRow]}
             onPress={() => navigation.navigate('AutoSetup')}
+            accessibilityRole="button"
+            accessibilityLabel="Choose models for this phone. Picks what fits its memory"
             testID="storage-auto-setup"
-          />
-        </View>
+          >
+            <View style={styles.infoRowLeft}>
+              <Icon name="cpu" size={16} color={colors.textSecondary} />
+              <Text style={styles.infoLabel}>Choose models for this phone</Text>
+            </View>
+            <Icon name="chevron-right" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+        </Card>
 
         {staleDownloads.length > 0 && (
           <>
