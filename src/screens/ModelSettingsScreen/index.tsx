@@ -106,10 +106,12 @@ export const ModelSettingsScreen: React.FC = () => {
       >
         {tab === 'general' && (
           <>
-            {/* It places every modality (text, image, video, speech, voice, search), so it leads. */}
-            <FastestSettingsButton />
             <View style={styles.sectionsGroup}>
-              <View style={styles.settingSection}><GeneralGenerationControls /></View>
+              {/* It places every modality (text, image, video, speech, voice, search), so it leads the card. */}
+              <View style={styles.settingSection}>
+                <FastestSettingsButton />
+                <GeneralGenerationControls />
+              </View>
               <SystemPromptSection />
             </View>
           </>
