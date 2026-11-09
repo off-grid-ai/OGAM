@@ -753,3 +753,14 @@ Feedback (PostHog, Mac): 89 of 330 new phone users finished a download; on iPhon
   - *Airplane Mode:* 60 s offline left no failure; it continued from 36% when the network returned. After `f62bfb810`, a second run held 5% offline (it had dropped to 0% before) and went on to 8%.
   - Commits `5093c9011`, `f62bfb810`.
 - **Screen review:** new link https://claude.ai/artifact/TH4eeVc9r6JKZ9wQfjFvtE (the old page belongs to the other account). New versions for Home, Models: Text, Models: Documents (incl. search), Storage, Model settings and Downloads, plus a new screen "Choose models (first run)". 4 marks are on Downloads (file names, the bar covering the second line) and Documents search ("Bge m3").
+
+## r08 errors and reviews — 2026-11-09 20:37
+Sources: in-app PostHog (30 days, mostly 0.0.120–0.0.122), App Store public feed (38 reviews, 17 rated 3 or lower), Play reviews (242, 96 rated 3 or lower). Store crash reports were not reachable: no App Store Connect or Play Console keys on this Mac (CI secrets only).
+- **Fixed — processing failure re-downloads (Play, 0.0.122):** any unzip failure deleted the zip. It is kept now; a retry unzips it again; a second failure drops it. Commit `bd9f47838`, tests fail on the old code.
+- **Fixed earlier this round:** iPhone background and resume (`5093c9011`); honest download numbers; Quick start under 1 GB.
+- **Re-check after the downloader clean-up:** the hand-off still keeps its bytes (3%→7% in under a minute back on screen). The background rate varies with iOS throttling (this run about 0.4 MB/s; the first about 2.4 MB/s).
+- **Open, needs a call — loading crashes on 7 GB Android:** most unclean exits on 0.0.122 are loading K2 Horizon 3.7B (11, 5 people), plus Gemma 4 and Qwen 3.5 4B. That model is the phone's Fast pick, under the shared fit rule (52% of RAM on Android).
+- **Open, needs a call — memory refusals:** about 570 of 749 load failures. About half of the refused people later loaded the same model, so the gate is often too cautious, yet some loads crash. One rule must decide both.
+- **Open — iPhone disk full:** exceptions "Failed to write value … POSIX 28": the app cannot save its own state when models fill the phone.
+- **Reviews, newest themes:** downloads failing in processing (fixed); crashes (0.0.119); remote LM Studio connected but not choosable (0.0.110 — check on today's build); no text-size option (Pixel 9 Pro); GPU "unavailable" on Dimensity 9500; iPad layout; Pro and paywall complaints, including "Removed access to unapproved models within a week of paying for lifetime pro" (0.0.119) — a product call.
+- **Chats:** a Group by / Sort by menu like Claude's, and headers that fold (`c633e98b8`, `e9b264c8b`, `293014aca`), checked on the iPhone.
