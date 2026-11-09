@@ -108,12 +108,35 @@ export function picksAmong<T>(
   });
 }
 
-/** The chat picks for a phone with `ramGB` of RAM, in Fast, Balanced, Best order. */
-export function devicePicks(ramGB: number, catalog: readonly ModelEntry[] = phoneCatalog()): DevicePick[] {
-  const downloads = chatEntries(catalog).flatMap(entry => {
+/** Every chat model the phone can download, as the phone's download request with its full size. */
+function chatDownloads(catalog: readonly ModelEntry[]) {
+  return chatEntries(catalog).flatMap(entry => {
     const download = catalogEntryToDownload(entry);
     return download ? [{ ...download, entry, sizeBytes: download.file.size + (download.file.mmProjFile?.size ?? 0) }] : [];
   });
+}
+
+/** The chat picks for a phone with `ramGB` of RAM, in Fast, Balanced, Best order. */
+export function devicePicks(ramGB: number, catalog: readonly ModelEntry[] = phoneCatalog()): DevicePick[] {
+  return pickChat(chatDownloads(catalog), ramGB);
+}
+
+/** A first model's most it should download: small enough to finish on a phone's first try. */
+export const STARTER_MAX_BYTES = 1e9;
+
+/**
+ * The first model a new person gets: the best one under 1 GB, by the same picking rule. Most phone
+ * downloads never finished, and the bigger the file the fewer did (PostHog, 2026-11-09), so a first
+ * model that arrives in a few minutes matters more than its size. Bigger models stay one tap away.
+ * Null when no catalog model that small runs well on this phone.
+ */
+export function starterPick(ramGB: number, catalog: readonly ModelEntry[] = phoneCatalog()): DevicePick | null {
+  const small = chatDownloads(catalog).filter(d => d.sizeBytes < STARTER_MAX_BYTES);
+  const picks = pickChat(small, ramGB);
+  return picks.find(p => p.slot === 'best') ?? picks.at(-1) ?? null;
+}
+
+function pickChat(downloads: ReturnType<typeof chatDownloads>, ramGB: number): DevicePick[] {
   // The catalog's own facts drive the choice: quality ranks, active parameters set the speed, and
   // replaced, research-only or too-new models are never picked. Picks come from makers people know.
   return picksAmong(downloads, d => ({

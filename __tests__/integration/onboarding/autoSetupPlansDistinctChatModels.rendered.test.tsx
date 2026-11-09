@@ -143,8 +143,9 @@ describe('Auto Setup plans by phone memory', () => {
   it('a 12 GB iPhone sees three plans, Extreme with the 9B, never the same chat model twice', async () => {
     const plans = await plansSeenOnPhone(12);
     expect(plans.map(plan => plan.tier)).toEqual(['lean', 'balanced', 'extreme']);
-    // The plans are the phone's Fast, Balanced and Best picks (37759c684), by quality alone (afdb05f).
-    expect(chatModels(plans)).toEqual(['LFM2.5 8B A1B', 'MiniCPM5 2B', 'Qwen 3.5 9B']);
+    // Quick start is the best model under 1 GB (PostHog 2026-11-09); Balanced and Extreme are the
+    // phone's Balanced and Best picks (37759c684), by quality alone (afdb05f).
+    expect(chatModels(plans)).toEqual(['Qwen 3.5 0.8B', 'MiniCPM5 2B', 'Qwen 3.5 9B']);
   });
 
   // Setup's plans are the phone's picks (37759c684): a 6 GB phone has three distinct models that run
@@ -152,7 +153,7 @@ describe('Auto Setup plans by phone memory', () => {
   it('a 6 GB phone sees its own three picks, and no chat model twice', async () => {
     const small = await plansSeenOnPhone(6);
     expect(small.map(plan => plan.tier)).toEqual(['lean', 'balanced', 'extreme']);
-    expect(chatModels(small)).toEqual(['Qwen 3.5 2B', 'Qwen 3.5 4B', 'MiniCPM5 2B']);
+    expect(chatModels(small)).toEqual(['Qwen 3.5 0.8B', 'Qwen 3.5 4B', 'MiniCPM5 2B']);
     expect(new Set(chatModels(small)).size).toBe(small.length);
   });
 });

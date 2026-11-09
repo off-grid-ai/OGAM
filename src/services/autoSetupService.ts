@@ -101,7 +101,8 @@ function tierFromPersistedIntent(): AutoSetupTier {
   const mode = useAppStore.getState().settings.modelLoadingMode;
   if (mode === 'conservative') return 'lean';
   if (mode === 'aggressive') return 'extreme';
-  return 'balanced';
+  // A new person starts on Quick start: a first model under 1 GB that finishes downloading.
+  return 'lean';
 }
 
 export function autoSetupDownloadId(
