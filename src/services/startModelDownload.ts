@@ -143,7 +143,13 @@ export async function startModelDownload(
   let currentDownloadId: string | undefined = queuedPlaceholderId(modelKey);
   const fail = (err: Error) => {
     if (currentDownloadId) {
-      useDownloadStore.getState().setStatus(currentDownloadId, 'failed', { message: err.message });
+      // Keep the error's code (disk_full from the space check): without it every refusal read as
+      // a bare "error" in the numbers and in the row's message.
+      const code = (err as Error & { code?: unknown }).code;
+      useDownloadStore.getState().setStatus(currentDownloadId, 'failed', {
+        message: err.message,
+        code: typeof code === 'string' ? code : undefined,
+      });
     }
     opts.onError?.(err);
   };
