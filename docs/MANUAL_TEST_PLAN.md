@@ -110,7 +110,7 @@ Set-Up footer padding; **dismissable Off Grid AI Desktop promo card** on Home
 
 - 151 stale RNTL tests fixed (Chat mocks missing `ThinkingIndicator`/`ModelFailureCard`;
   SharePrompt copy drift). Download Manager tests rewritten to assert service-boundary
-  dispatch. Full suite green (249 suites / 6223 pass + 12 pro/audio suites).
+  dispatch. Full suite green (249 suites / 6223 pass).
 
 ---
 

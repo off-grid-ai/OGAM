@@ -81,8 +81,6 @@ interface QuickSettingsPopoverProps {
   supportsToolCalling: boolean;
   enabledToolCount: number;
   onToolsPress?: () => void;
-  mcpToolCount?: number;
-  onMcpPress?: () => void;
 }
 
 function getImageModeBadge(mode: ImageModeState, colors: any) {
@@ -121,8 +119,8 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
 
   const imgBadge = getImageModeBadge(imageMode, colors);
   const tools = getToolsStyle(supportsToolCalling, enabledToolCount, colors);
-  // The "Voice" row is provided by the pro audio feature via a slot. Free
-  // builds render nothing here.
+  // The "Voice" row is provided by the voice feature via a slot. With no
+  // slot registered nothing renders here.
   const AudioRow = getSlot(SLOTS.quickSettingsAudioRow);
 
   const toolIconColor = tools.iconColor;

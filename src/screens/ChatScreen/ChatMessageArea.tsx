@@ -17,10 +17,7 @@ import { EmptyChat, ImageProgressIndicator } from './ChatScreenComponents';
 import { getPlaceholderText, useChatScreen } from './useChatScreen';
 import { createStyles } from './styles';
 import { useTheme } from '../../theme';
-import { getToolExtensions } from '../../services/tools/extensions';
 import { AVAILABLE_TOOLS } from '../../services/tools';
-import { useOpenProTools } from '../../hooks/useOpenProTools';
-import { useIsProActive } from '../../hooks/useIsProActive';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -122,26 +119,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   const hasScrolledRef = React.useRef(false);
   const interfaceMode = useUiModeStore((s) => s.interfaceMode);
   const tabNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  // Subscribe to Pro activation so this re-renders the moment a license is
-  // activated. loadProFeatures() registers the tool extensions + the Pro Tools
-  // screen in one pass; without this subscription the getToolExtensions() reads
-  // below are non-reactive and the Pro Tools badge stayed stale until an app
-  // restart. Return is intentionally unused — the count is naturally 0 when Pro
-  // is inactive (no extensions registered); we only need the re-render.
-  useIsProActive();
-  // extToolCount is the live MCP tool count (the email/calendar extension reports 0
-  // here because those live in settings.enabledTools — see EmailCalendarExtension).
-  const extToolCount = getToolExtensions().reduce((n, e) => n + e.enabledToolCount(), 0);
-  // Pro tools (email/calendar) are toggled through settings.enabledTools, so count
-  // how many of them are on and fold MCP in — this is the "Pro Tools" badge.
-  const proToolIds = getToolExtensions().flatMap(e => (e.getToolDefinitions?.() ?? []).map(t => t.id));
-  const proToolsActiveCount = proToolIds.filter(id => chat.enabledTools.includes(id)).length;
-  const proToolsCount = proToolsActiveCount + extToolCount;
-  // The free Tools page lists only AVAILABLE_TOOLS, so its badge counts just those
-  // (pro email/calendar ids are surfaced under Pro Tools instead, not double-counted).
-  const freeToolIds = new Set(AVAILABLE_TOOLS.map(t => t.id));
-  const freeToolsCount = chat.enabledTools.filter(id => freeToolIds.has(id)).length;
-  const handleProToolsPress = useOpenProTools();
+  const enabledToolCount = chat.enabledTools.filter(id => AVAILABLE_TOOLS.some(t => t.id === id)).length;
   const [inputHeight, setInputHeight] = useState(84);
   const flatListHeightRef = useRef(0);
 
@@ -321,9 +299,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
               imageOnly: chat.imageModelLoaded && !chat.hasTextModel,
             })}
             onToolsPress={() => tabNav.navigate('Tools', { conversationId: chat.activeConversationId ?? undefined })}
-            enabledToolCount={freeToolsCount}
-            mcpToolCount={proToolsCount}
-            onMcpPress={handleProToolsPress}
+            enabledToolCount={enabledToolCount}
             supportsToolCalling={chat.supportsToolCalling}
             supportsThinking={chat.supportsThinking}
             onRepairVision={handleRepairVision}

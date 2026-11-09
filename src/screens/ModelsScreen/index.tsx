@@ -13,7 +13,6 @@ import { createStyles } from './styles';
 import { initialFilterState } from './constants';
 import { TextModelsTab } from './TextModelsTab';
 import { ImageModelsTab } from './ImageModelsTab';
-import { VoiceModelsUpsell } from '../../components/models/VoiceModelsUpsell';
 import { TranscriptionModelsTab } from './TranscriptionModelsTab';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 
@@ -21,9 +20,8 @@ export const ModelsScreen: React.FC = () => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const vm = useModelsScreen();
-  // Pro fills this slot with the real voice-models panel (engine + downloads).
-  // The Voice tab always renders; when the slot is empty (free / non-pro) we
-  // show an upsell so users can see what Pro adds.
+  // The voice feature fills this slot with the real voice-models panel (engine + downloads).
+  // The Voice tab always renders; with the slot empty it shows nothing.
   const VoiceModelsPanel = useSlot(SLOTS.modelsScreenVoiceTab);
   const route = useRoute<RouteProp<MainTabParamList, 'ModelsTab'>>();
   const navigation = useNavigation<any>();
@@ -269,12 +267,8 @@ export const ModelsScreen: React.FC = () => {
         />
       )}
 
-      {/* Voice Models Tab: pro panel when registered, otherwise an upsell. */}
-      {vm.activeTab === 'voice' && (
-        VoiceModelsPanel
-          ? <VoiceModelsPanel />
-          : <VoiceModelsUpsell onGetPro={() => vm.navigation.navigate('ProDetail')} />
-      )}
+      {/* Voice Models Tab: the voice panel registered in the modelsScreen.voiceTab slot. */}
+      {vm.activeTab === 'voice' && VoiceModelsPanel && <VoiceModelsPanel />}
 
       {/* Transcription Models Tab (speech-to-text, core). */}
       {vm.activeTab === 'transcription' && <TranscriptionModelsTab />}

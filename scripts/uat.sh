@@ -57,10 +57,7 @@ command -v bundle >/dev/null || error "bundler not installed (bundle install)"
 # A beta targets the NEXT version, not the live one (the live train is closed - see header).
 CURRENT_VERSION=$(node -p "require('./package.json').version")   # e.g. 0.0.102 (live)
 TARGET_VERSION=$(node -e "const [a,b,c]=require('./package.json').version.split('.').map(Number); console.log(a+'.'+b+'.'+(c+1))")   # 0.0.103
-# --no-recurse-submodules: this fetch only needs CORE tags to pick the next beta number. Recursing
-# into the pro submodule made it try to fetch pro commits referenced by old tag history that are no
-# longer on pro's remote (e.g. after a pro branch was deleted/rebased) → "not our ref" → the whole
-# tag refresh failed and blocked the build. The submodule is already checked out at the pinned commit.
+# --no-recurse-submodules: this fetch only needs tags to pick the next beta number.
 git fetch --tags --no-recurse-submodules --quiet || error "Could not refresh tags. Refusing to pick a beta number from stale tag history (would risk reusing an already-published beta tag and failing the tag push after the store uploads)."
 LAST_N=$(git tag -l "v${TARGET_VERSION}-beta.*" | sed -E "s/.*-beta\.([0-9]+)$/\1/" | sort -n | tail -1)
 N=$(( ${LAST_N:-0} + 1 ))

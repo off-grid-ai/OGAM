@@ -992,7 +992,7 @@ describe('Speech sections — Transcription (STT) + Text to Speech (TTS)', () =>
     expect(view.getByText('None selected — tap to choose')).toBeTruthy();
   });
 
-  it('does NOT show Text to Speech without the pro TTS slot (free build)', () => {
+  it('does NOT show Text to Speech without a TTS slot registered', () => {
     const view = renderScreen();
     expect(view.queryByTestId('tts-accordion')).toBeNull();
   });

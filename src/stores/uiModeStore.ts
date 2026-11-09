@@ -3,11 +3,11 @@ import { create } from 'zustand';
 /**
  * Public, reactive UI-mode flag. The chat surface (input row, message list,
  * scroll behaviour) renders differently in voice/audio mode vs text mode. The
- * audio feature lives in the private pro package, but core needs to react to
- * the mode without importing pro — so pro mirrors its interface mode into this
- * tiny core store, and core components subscribe here.
+ * voice feature registers itself through the hook and slot registries, so core
+ * reacts to the mode without importing it: the voice feature mirrors its interface
+ * mode into this tiny store, and core components subscribe here.
  *
- * Free builds (no pro) leave this at the default 'chat' forever.
+ * With no voice feature registered it stays at the default 'chat'.
  */
 type InterfaceMode = 'chat' | 'audio';
 
@@ -15,8 +15,8 @@ interface UiModeState {
   interfaceMode: InterfaceMode;
   setInterfaceMode: (mode: InterfaceMode) => void;
   /** Short active-voice label (e.g. "Kokoro TTS · Warm"), or null when no voice
-   *  model is set up. Mirrored from pro so core (the home Models summary) can
-   *  reactively show whether a voice is active without importing pro. */
+   *  model is set up. Mirrored from the voice feature so core (the home Models summary) can
+   *  reactively show whether a voice is active. */
   voiceSummary: string | null;
   setVoiceSummary: (summary: string | null) => void;
 }

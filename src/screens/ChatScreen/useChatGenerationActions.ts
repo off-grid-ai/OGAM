@@ -467,8 +467,8 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
     ? rawPrompt
     : await injectRagContext(conversation?.projectId, messageText, rawPrompt, enabledTools);
 
-  // In voice/audio mode the pro audio feature augments the prompt for spoken
-  // output. No-op (returns undefined) in free builds.
+  // In voice/audio mode the voice feature augments the prompt for spoken
+  // output. No-op (returns undefined) when none is registered.
   basePrompt = callHook<string>(HOOKS.audioAugmentPrompt, basePrompt) ?? basePrompt;
 
   const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;

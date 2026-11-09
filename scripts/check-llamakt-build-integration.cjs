@@ -8,7 +8,7 @@ assert.ok(fs.existsSync(path.join(root, '.github/workflows/atlas-vulkan-experime
 const wf = read('.github/workflows/atlas-vulkan-experimental.yml');
 assert.match(app, /atlasVulkanEnabled/, 'Vulkan must remain an opt-in Android build');
 assert.match(app, /project\(':atlasLlamaKt'\)/, 'app must include the pinned native Android library when enabled');
-assert.doesNotMatch(wf, /submodules:\s*recursive/, 'CI must not clone unrelated private pro submodule');
+assert.doesNotMatch(wf, /submodules:\s*recursive/, 'CI must not clone submodules recursively');
 assert.match(wf, /git submodule update --init --depth=1 vendor\/llama-kt/, 'CI must fetch only the pinned public engine');
 assert.match(wf, /git -C vendor\/llama-kt submodule update --init --recursive --depth=1/, 'CI must fetch pinned nested native sources');
 assert.match(wf, /android-actions\/setup-android@v4/, 'CI needs sdkmanager command-line tools before installing the NDK');

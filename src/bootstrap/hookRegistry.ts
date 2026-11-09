@@ -1,11 +1,11 @@
 /**
- * Function-hook seam. Pro features register plain functions against named hooks
- * during activation; core calls them when present and falls back to a no-op /
+ * Function-hook seam. Features register plain functions against named hooks
+ * at startup; core calls them when present and falls back to a no-op /
  * default when absent. Use this for behaviour (not UI — see slotRegistry for UI):
  * reading the audio interface mode, triggering speech after generation, and
  * augmenting the prompt in voice mode.
  *
- * Free builds register nothing, so callHook returns undefined and core keeps
+ * With nothing registered, callHook returns undefined and core keeps
  * its default behaviour.
  */
 type HookFn = (...args: any[]) => any;
@@ -28,7 +28,7 @@ export function _clearHooksForTesting(): void {
   }
 }
 
-/** Known hook names, centralised so core and pro stay in sync. */
+/** Known hook names, centralised so core and features stay in sync. */
 export const HOOKS = {
   /** () => boolean — whether a message can be spoken (TTS enabled + ready). */
   audioCanSpeak: 'audio.canSpeak',
@@ -36,12 +36,12 @@ export const HOOKS = {
   audioSpeak: 'audio.speak',
   /** () => void — stop any in-progress speech. */
   audioStop: 'audio.stop',
-  /** (content: string) => void — fired as the assistant message streams; pro
+  /** (content: string) => void — fired as the assistant message streams; the voice feature
    *  uses it to synthesize/play speech sentence-by-sentence while generation is
    *  still in progress (no-op unless voice mode + engine ready). */
   audioOnStreamingToken: 'audio.onStreamingToken',
   /** (conversationId: string) => void — when streaming ends, speak the final
-   *  assistant message if voice mode is active (pro checks mode/readiness). */
+   *  assistant message if voice mode is active (it checks mode/readiness). */
   audioOnStreamingEnd: 'audio.onStreamingEnd',
   /** () => void — app went to background: pause speech if playing. */
   audioOnAppBackground: 'audio.onAppBackground',

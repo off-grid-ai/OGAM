@@ -683,7 +683,7 @@ async function callLLMWithRetry(
 ): Promise<{ fullResponse: string; toolCalls: ToolCall[]; interrupted?: boolean }> {
   // Append tool-use behavioral guidance to the system prompt when tools are present.
   // Only covers the "when and how" — schemas are injected separately by each engine.
-  // Also append extension system-prompt hints so the model knows about MCP/pro tools.
+  // Also append extension system-prompt hints so the model knows about extension tools.
   // We shallow-copy messages to avoid mutating the caller's array.
   const exts = getToolExtensions();
   const extCount = exts.reduce((n, e) => n + e.enabledToolCount(), 0);

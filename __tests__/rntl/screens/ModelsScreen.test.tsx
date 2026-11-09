@@ -432,7 +432,7 @@ describe('ModelsScreen', () => {
   });
 
   // ============================================================================
-  // Voice Models Tab (locked teaser when pro is absent)
+  // Voice Models Tab
   // ============================================================================
   describe('voice models tab', () => {
     it('always shows the Voice Models tab button', async () => {
@@ -443,31 +443,6 @@ describe('ModelsScreen', () => {
       });
     });
 
-    it('does not show an upsell when no voice engine is registered', async () => {
-      const { getByTestId, queryByTestId, queryByText } = renderModelsScreen();
-
-      await waitFor(() => expect(getByTestId('voice-models-tab')).toBeTruthy());
-
-      await act(async () => {
-        fireEvent.press(getByTestId('voice-models-tab'));
-      });
-
-      expect(queryByTestId('voice-models-upsell')).toBeNull();
-      expect(queryByText('Get Pro')).toBeNull();
-    });
-
-    it('does not navigate to ProDetail from the voice tab when no engine is registered', async () => {
-      const { getByTestId, queryByText } = renderModelsScreen();
-
-      await waitFor(() => expect(getByTestId('voice-models-tab')).toBeTruthy());
-
-      await act(async () => {
-        fireEvent.press(getByTestId('voice-models-tab'));
-      });
-
-      expect(queryByText('Get Pro')).toBeNull();
-      expect(mockNavigate).not.toHaveBeenCalledWith('ProDetail');
-    });
   });
 
   // ============================================================================

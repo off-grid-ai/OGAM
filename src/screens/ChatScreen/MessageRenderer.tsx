@@ -48,9 +48,9 @@ const MessageRendererInner: React.FC<MessageRendererProps> = (props) => {
   const animateEntry = animateLastN > 0 && index >= displayMessagesLength - animateLastN;
   const isStreamingThis = item.id === 'streaming';
 
-  // Audio mode: the pro audio feature owns the whole message presentation
-  // (user/assistant bubbles, thinking, streaming). Free builds never reach
-  // this branch (interfaceMode stays 'chat').
+  // Audio mode: the voice feature owns the whole message presentation
+  // (user/assistant bubbles, thinking, streaming). It is skipped when no
+  // voice feature is registered (interfaceMode stays 'chat').
   const AudioMessage = getSlot(SLOTS.messageAudioMode);
   if (interfaceMode === 'audio' && AudioMessage) {
     return (
@@ -70,7 +70,7 @@ const MessageRendererInner: React.FC<MessageRendererProps> = (props) => {
     );
   }
 
-  // Chat Mode: the speak button (pro slot) lives in the meta row.
+  // Chat Mode: the speak button (voice slot) lives in the meta row.
   const Speak = getSlot(SLOTS.messageSpeakButton);
   const isPlainAssistant = msg.role === 'assistant' && !msg.isSystemInfo && !msg.toolCalls?.length;
   // No speaker on an in-progress reply (streaming, or the thinking/loading dots).

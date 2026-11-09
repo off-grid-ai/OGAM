@@ -1,6 +1,6 @@
 // Runtime + type shim for react-native-fs.
 //
-// The app (and the pro submodule) import this as a DEFAULT import:
+// The app imports this as a DEFAULT import:
 //   import RNFS from 'react-native-fs';
 // but the maintained fork it now resolves to, '@dr.pogodin/react-native-fs',
 // is an ES module with only NAMED exports and no `default`. Aliasing the old

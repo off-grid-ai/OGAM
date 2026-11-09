@@ -54,7 +54,6 @@ import {
   AppearanceScreen,
   GalleryScreen,
   RemoteServersScreen,
-  ProDetailScreen,
   AboutScreen,
   ToolsScreen,
 } from '../screens';
@@ -264,8 +263,8 @@ export const AppNavigator: React.FC = () => {
   const hasCompletedOnboarding = useAppStore((s) => s.hasCompletedOnboarding);
   const downloadedModels = useAppStore((s) => s.downloadedModels);
   const steps = useMemo(() => createSpotlightSteps(), []);
-  // Reactive: screens registered at runtime (Pro activation re-runs loadProFeatures)
-  // mount as real routes live, so navigate('McpServers') works without an app restart.
+  // Reactive: screens registered at runtime 
+  // mount as real routes live, without an app restart.
   const registeredScreens = useRegisteredScreens();
 
   // Determine initial route
@@ -350,11 +349,6 @@ export const AppNavigator: React.FC = () => {
         <RootStack.Screen name="SecuritySettings" component={SecuritySettingsScreen} />
         <RootStack.Screen name="Appearance" component={AppearanceScreen} />
         <RootStack.Screen name="Presentations" component={PresentationScreen} />
-        <RootStack.Screen
-          name="ProDetail"
-          component={ProDetailScreen}
-          options={{ headerShown: false, animation: 'slide_from_bottom' }}
-        />
         <RootStack.Screen
           name="About"
           component={AboutScreen}

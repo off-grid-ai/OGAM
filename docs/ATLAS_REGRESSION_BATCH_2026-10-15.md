@@ -14,7 +14,6 @@ Branch: `audit/atlas-stability-c20261014` / draft PR #7
 - Fixed ChatsListScreen model-picker completion to retain the user's selected private-versus-regular chat mode.
 - Added stable chat delete identifiers and test coverage for deleting exactly the selected conversation.
 - Extracted ChatsListScreen styles to its own theme module, eliminating obsolete inline styles and reducing component complexity.
-- Adjusted core tools tests to verify the current open-core tool selection, without pretending absent private Pro screens are available.
 
 ## Verification
 - Image lifecycle/regression batch: 22/22 tests PASS across 4 suites.

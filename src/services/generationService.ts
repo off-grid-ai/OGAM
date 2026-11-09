@@ -11,7 +11,6 @@ import logger from '../utils/logger';
 import { startStallWatchdog } from './generationWatchdog';
 import { holdScreenAwake, releaseScreenAwake } from '../atlasTools/runtimePower';
 import { maybeScheduleSharePrompt } from '../utils/sharePrompt';
-import { checkProPromptForText } from './proPrompt';
 import { remoteServerManager } from './remoteServerManager';
 import {
   buildGenerationMetaImpl,
@@ -177,7 +176,6 @@ class GenerationService {
     const s = useAppStore.getState();
     const count = s.incrementTextGenerationCount();
     maybeScheduleSharePrompt({ variant: 'text', count, hasEngaged: s.hasEngagedSharePrompt, delayMs });
-    checkProPromptForText(delayMs);
   }
 
   private buildToolLoopHandlers() { return buildToolLoopHandlersImpl(this); }

@@ -53,7 +53,7 @@ jobs:
         run: ./node_modules/.bin/tsc --noEmit -p .
       - name: Core regression gate
         run: ./node_modules/.bin/jest --runInBand --forceExit --coverage=false --silent
-      - name: Checkout pinned public llama.kt sources (exclude private Pro)
+      - name: Checkout pinned public llama.kt sources
         run: |
           set -euo pipefail
           git submodule sync -- vendor/llama-kt

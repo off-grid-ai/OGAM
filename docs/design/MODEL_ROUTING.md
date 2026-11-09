@@ -6,7 +6,7 @@ Status: **proposal, for review** · Owner: TBD · Last updated: 2026-06-20
 
 A user can have several on-device models installed across different jobs:
 text-to-text (llama GGUF), text-to-image (diffusion), speech-to-text
-(Whisper), and text-to-speech (pro TTS engines). Today the user must manually
+(Whisper), and text-to-speech (TTS engines). Today the user must manually
 pick the active model, and a chat effectively assumes a text model is loaded.
 
 We want: **the user types (or speaks) a request, and the app figures out which
@@ -50,7 +50,7 @@ classifier (text vs image), not a 4-way switch.
   `generateResponse()` — one text context at a time.
 - **`whisperStore`** (STT): `downloadedModelId`, `loadModel()`,
   `unloadModel()` — currently a single active model.
-- **pro `ttsStore` / engine registry** (TTS): `isReady`, `setEngine`,
+- **`ttsStore` / engine registry** (TTS): `isReady`, `setEngine`,
   `initializeEngine()`.
 - **`settings.modelLoadingStrategy`**: existing knob for eager/lazy loading.
 - Chat already supports an **image-only path** (`hasActiveModel = text || image`,

@@ -17,8 +17,6 @@ import logger from './src/utils/logger';
 import { useAppStore, useAuthStore, useRemoteServerStore, useWhisperStore } from './src/stores';
 import { useDebugLogsStore } from './src/stores/debugLogsStore';
 import { initDebugLogFile, appendDebugLine } from './src/utils/debugLogFile';
-import { loadProFeatures } from './src/bootstrap/loadProFeatures';
-import { checkProStatus } from './src/services/proLicenseService';
 import { hydrateDownloadStore } from './src/services/downloadHydration';
 import { initActiveDownloadPersistence } from './src/services/activeDownloadPersistence';
 import { restoreQueuedDownloads } from './src/services/restoreQueuedDownloads';
@@ -26,7 +24,6 @@ import { startLoadPolicySync } from './src/services/loadPolicySync';
 import { registerCoreDownloadProviders } from './src/services/modelDownloadService/registerProviders';
 import { useDownloadListeners } from './src/hooks/useDownloads';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { useSlot, SLOTS } from './src/bootstrap/slotRegistry';
 import { LockScreen } from './src/screens';
 import { useAppState } from './src/hooks/useAppState';
 import { useDownloadStore } from './src/stores/downloadStore';
@@ -100,10 +97,6 @@ function App() {
     return () => sub.remove();
   }, []);
   useDownloadListeners();
-  // Reactive: when Pro is activated at runtime (license key → loadProFeatures),
-  // the appRoot slot (TTS engine bridge) registers and this re-renders to mount
-  // it live — no restart needed.
-  const AppRoot = useSlot(SLOTS.appRoot);
   const [isInitializing, setIsInitializing] = useState(true);
   const setDeviceInfo = useAppStore((s) => s.setDeviceInfo);
   const setModelRecommendation = useAppStore((s) => s.setModelRecommendation);
@@ -298,36 +291,6 @@ function App() {
       // Initialize RAG database tables
       ragService.ensureReady().catch((err) => logger.error('Failed to initialize RAG service on startup', err));
 
-      // Read the cached Pro entitlement before Pro features load. checkProStatus
-      // returns the Keychain cache immediately and fires a background Keygen
-      // revalidation so the next launch stays fresh.
-      //
-      // Pro is optional: a failure here (keychain locked, no network) must never
-      // abort app init or hang the splash screen, so it is isolated and only logs.
-      let isPro = false;
-      try {
-        isPro = await checkProStatus();
-      } catch (proError) {
-        logger.error('[App] Pro check failed, continuing without entitlement:', proError);
-      }
-
-      try {
-        // Load pro features — only activates if the keychain entitlement is set
-        // (or in dev, where loadProFeatures force-unlocks).
-        await loadProFeatures(isPro);
-
-        // Reconcile the persisted Pro flag with the actual entitlement on every
-        // boot. Setting it to the resolved value (not only ever true) means a
-        // cleared/expired license also flips it back to false — previously it
-        // only ever went true, so a stale persisted true stuck forever.
-        // DEV builds force-unlock for local testing, unless the Settings
-        // "Turn off Pro (DEV)" toggle is set. Never force-unlocks in release.
-        const devUnlock = __DEV__ && !useAppStore.getState().devProDisabled;
-        useAppStore.getState().setHasRegisteredPro(isPro || devUnlock);
-      } catch (proError) {
-        logger.error('[App] Pro feature load failed, continuing without Pro:', proError);
-      }
-
       // Show the UI immediately
       setIsInitializing(false);
 
@@ -396,7 +359,6 @@ function App() {
       {backdrop ? <BackdropImage uri={backdrop.uri} dim={backdrop.dim} /> : null}
       <SafeAreaProvider>
         <SystemBars style={isDark ? 'light' : 'dark'} />
-        {AppRoot ? <AppRoot /> : null}
         <NavigationContainer
           ref={navigationRef}
           onReady={() => { flushShare(); flushAppLink(); }}

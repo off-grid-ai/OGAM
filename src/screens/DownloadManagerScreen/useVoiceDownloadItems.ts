@@ -1,8 +1,8 @@
 /**
  * Voice (TTS) + transcription (STT/Whisper) completed-download items for the
  * Download Manager. These models don't live in the model stores, so we read
- * them from disk: STT/Whisper is core; TTS is pro and contributes through the
- * downloads.listVoiceModels hook (absent in free builds).
+ * them from disk: STT/Whisper is core; TTS contributes through the
+ * downloads.listVoiceModels hook (absent when no voice feature is registered).
  */
 import { useState, useEffect, useCallback } from 'react';
 import { AlertState, showAlert } from '../../components/CustomAlert';

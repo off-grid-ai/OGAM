@@ -9,7 +9,6 @@ import { GeneratedImage } from '../types';
 import logger from '../utils/logger';
 import { holdScreenAwake, releaseScreenAwake } from '../atlasTools/runtimePower';
 import { maybeScheduleSharePrompt } from '../utils/sharePrompt';
-import { checkProPromptForImage } from './proPrompt';
 
 import { getImageTuning, getImageGuidance } from '../utils/nativeImageTuning';
 import { hardwareService } from './hardware';
@@ -166,7 +165,6 @@ class ImageGenerationService {
     const s = useAppStore.getState();
     const count = s.incrementImageGenerationCount();
     maybeScheduleSharePrompt({ variant: 'image', count, hasEngaged: s.hasEngagedSharePrompt, delayMs: SHARE_PROMPT_DELAY_MS });
-    checkProPromptForImage(SHARE_PROMPT_DELAY_MS);
   }
 
   private async _resetLlmAfterEnhancement(): Promise<void> {

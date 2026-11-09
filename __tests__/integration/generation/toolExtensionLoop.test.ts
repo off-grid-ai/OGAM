@@ -123,7 +123,7 @@ describe('tool extension loop integration', () => {
     return executorMock;
   }
 
-  describe('pro path — extension registered', () => {
+  describe('extension registered', () => {
     it('appends extension hint to the system prompt sent to LLM', async () => {
       setupProExtension();
 

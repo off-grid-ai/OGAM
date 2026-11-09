@@ -5,7 +5,7 @@
  * pre-existing convention already baked into WEDNESDAY_URL / the onboarding link:
  *
  *   utm_source = off-grid-mobile-app   (always — the traffic came from this app)
- *   utm_medium = <surface>             (which screen/card: home-promo, pro-detail, …)
+ *   utm_medium = <surface>             (which screen/card: home-promo, …)
  *   utm_campaign = in-app              (default; override for a specific campaign)
  *
  * Do NOT tag links to third parties that ignore UTM (GitHub) or share-intent text.

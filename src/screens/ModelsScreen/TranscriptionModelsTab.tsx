@@ -6,7 +6,7 @@
  * rendered with the shared ModelCard so it matches the Text, Image, and Voice
  * tabs.
  *
- * Whisper is a core feature, so this tab is always available (no pro gating).
+ * Whisper is a core feature, so this tab is always available (not gated).
  * The whisper store tracks a single active model; downloading another switches
  * the active one.
  */

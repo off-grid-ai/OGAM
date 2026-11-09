@@ -14,11 +14,8 @@ import { resetChatTools, toggleChatTool, toolSourceFor, toolsForConversation, se
 import type { ThemeColors, ThemeShadows } from '../../theme';
 
 /**
- * Full-page tool picker (replaces the old bottom-sheet drawer). Lists the free
- * core-registry tools as toggles. Pro tools (email/calendar) and MCP servers live
- * on the dedicated Pro Tools destination, reached via the row pinned to the top of
- * the list — for everyone. Free users land on the Pro upsell, pro users go
- * straight to the Pro Tools screen (see useOpenProTools).
+ * Full-page tool picker (replaces the old bottom-sheet drawer). Lists the
+ * built-in tools as switches, plus permission groups at the top.
  */
 export const ToolsScreen: React.FC = () => {
   const navigation = useNavigation<any>();

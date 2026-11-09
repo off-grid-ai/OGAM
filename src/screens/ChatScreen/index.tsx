@@ -13,10 +13,9 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useSpotlightTour } from 'react-native-spotlight-tour';
-import { CustomAlert, hideAlert, showAlert, SharePromptSheet, ProAhaSheet } from '../../components';
+import { CustomAlert, hideAlert, showAlert, SharePromptSheet } from '../../components';
 import { useEjectAllModels } from '../../hooks/useEjectAllModels';
 import { consumePendingSpotlight } from '../../components/onboarding/spotlightState';
-import { subscribeProPrompt } from '../../services/proPrompt';
 import { VOICE_HINT_STEP_INDEX, IMAGE_SETTINGS_STEP_INDEX } from '../../components/onboarding/spotlightConfig';
 import { useAppStore } from '../../stores/appStore';
 import { useChatOptions } from '../../components/ChatOptions';
@@ -141,18 +140,6 @@ export const ChatScreen: React.FC = () => {
   const [sharePromptVisible, setSharePromptVisible] = useState(false);
   // Atlas: no share prompts.
 
-  const [proAhaVisible, setProAhaVisible] = useState(false);
-  const proAhaShownThisSession = useRef(false);
-  useEffect(() => {
-    // Reset cycle on each new chat session so PRO sheet can fire again
-    useAppStore.getState().setProAhaTriggeredBy(null);
-    proAhaShownThisSession.current = false;
-  }, []);
-  useEffect(() => subscribeProPrompt(() => {
-    if (proAhaShownThisSession.current) return;
-    proAhaShownThisSession.current = true;
-    // Atlas: no Pro prompts.
-  }), []);
   // Only ONE AttachStep mounted at a time to avoid waypoint dots/lines.
   // chatSpotlight controls which index is active (3, 12, 15, or 16).
   const [chatSpotlight, setChatSpotlight] = useState<number | null>(null);
@@ -403,11 +390,6 @@ export const ChatScreen: React.FC = () => {
       <SharePromptSheet visible={sharePromptVisible} onClose={() => setSharePromptVisible(false)} />
       {chatOptions.element}
       <ChatPinGate conversationId={chat.activeConversationId} />
-      <ProAhaSheet
-        visible={proAhaVisible}
-        onClose={() => setProAhaVisible(false)}
-        onRegister={() => rootNavigation.navigate('ProDetail')}
-      />
     </SafeAreaView>
   );
 };

@@ -24,13 +24,10 @@ Owner: TBD. Branch: `fix/llm-stability-and-perf`.
 - **Root cause = jetsam memory kill, NOT a code crash.** Pulled device logs: `JetsamEvent` with `largestProcess: OffgridMobile`, `reason: per-process-limit`, ~2200 MB resident. The Xcode console just ends at `Scheduler::~Scheduler() was called` with no exception backtrace — classic jetsam SIGKILL (that's why no `.ips`/stack appears when debugging attached). The `increased-memory-limit` entitlement IS present (`ios/OffgridMobile/OffgridMobile.entitlements`), but the iPhone 12 (4 GB) is still hard-capped ~2.2 GB.
 - **Why footprint is huge even with a 360–500 MB model:** the crash-time console showed the app doing a LOT concurrently — SmolVLM2-500M f16 (820 MB)+mmproj, then Q8_0 (436 MB)+mmproj, a Core ML SD 2.1 zip (1.1 GB), THREE Whisper models (base 148 MB / tiny 78 MB / small 488 MB), AND a ~500-connection LAN discovery scan (`C1`…`C520`) for Ollama/LM Studio — plus the resident text model + Kokoro. The 2.2 GB is the SUM; TTS is the straw. (This also explains "downloads are super slow" — bandwidth split across ~6 concurrent transfers + connection storm.)
 - **Concrete defects found (the fix, consolidated on the existing 60% residency budget):**
-  1. `pro/audio/engine/tts/engines/kokoro/KokoroEngine.ts:68` `peakRamMB: 82` is set to the FILE size, not runtime footprint → residency UNDER-budgets TTS. Set to a realistic measured value.
-  2. On-demand TTS load `pro/audio/ttsStore.ts:208 initializeEngine()` takes the global lock via `runExclusive('load:tts', ...)` but **never calls `makeRoomFor` / budget-checks** (unlike text/image loads). Route it through the budget; when it won't fit → show the agreed message: "Not enough memory to use voice with this model loaded. Try a smaller text model." (product decision: message, do NOT auto-evict the chat model). NOTE: the boot-preload path `pro/audio/index.ts:198` DOES gate on `canLoadWithoutEviction` + `register` — only the on-demand path is unguarded.
   3. Cap concurrent downloads (queue, ~1–2 at a time) — biggest transient-memory amplifier + fixes slowness. (`src/services/backgroundDownloadService.ts` / `DownloadManagerModule`.)
   4. Throttle the LAN discovery scan (currently ~500 simultaneous connections) — `[Discovery]` in the network-scan service.
 
 ### "Kokoro isn't playing" (separate from the crash — NOT YET INVESTIGATED)
-- New symptom after the memory work: TTS audio not audible. Possibly related to the recent iOS audio-session commits in the pro submodule (`6db30a2c fix(kokoro): make TTS audible on iOS (activate playback session + resume context)`, `483b8f81 bind AudioContext to a local ctx before resume`). Check `KokoroTTSBridge.tsx` playback path + AVAudioSession activation. Needs device verification.
 
 ### Import local file scope (LOW — UX clarity)
 - `src/screens/ModelsScreen/useModelsScreen.ts:129 handleImportLocalModel` accepts `.gguf` (text), `.litertlm` (LiteRT), and `.zip` (image) — NOT STT/TTS. Picker uses `types.allFiles` then rejects post-pick. User wants this made explicit (up-front helper text listing supported formats). Decision pending on exact wording.
@@ -61,7 +58,7 @@ Owner: TBD. Branch: `fix/llm-stability-and-perf`.
 ## 2. Root causes (ranked)
 
 ### R1 — PRIMARY REGRESSION: MCP context boost forces 32k context + reload, never restores
-`src/services/mcpContextBoost.ts` + wired live via `pro/index.ts:54` (`watchMcpContextBoost`).
+`src/services/mcpContextBoost.ts`.
 - On the MCP-enabled `0 → >0` transition, `applyMcpContextBoost()`:
   - llama models: `contextLength → 32768` (8× the 4096 default), `maxTokens → 8192`, then **unload + reload** the active model.
   - litert on `>8 GB` devices: `liteRTMaxTokens → 32768`.

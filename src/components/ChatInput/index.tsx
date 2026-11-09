@@ -41,8 +41,6 @@ interface ChatInputProps {
   onToolsPress?: () => void;
   enabledToolCount?: number;
   supportsToolCalling?: boolean;
-  mcpToolCount?: number;
-  onMcpPress?: () => void;
   supportsThinking?: boolean;
   onRepairVision?: () => void;
   /** Whether the active text model is a remote (server) model. Remote models
@@ -61,7 +59,7 @@ const IMAGE_MODE_CYCLE: ImageModeState[] = ['auto', 'force', 'disabled'];
 
 /**
  * Expanded width of the collapsing pill-icons row. '+' and the settings gear
- * are always present; the thinking toggle and the pro mode-toggle are
+ * are always present; the thinking toggle and the mode toggle are
  * conditional. Sizing to the real count prevents the rightmost icons from
  * being clipped by the row's `overflow: hidden`.
  */
@@ -131,8 +129,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   enabledToolCount = 0,
   supportsToolCalling = false,
   supportsThinking = false,
-  mcpToolCount = 0,
-  onMcpPress,
   onRepairVision,
   isRemote = false,
   activeSpotlight = null,
@@ -263,9 +259,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  // ─── Audio mode: pro renders the mic-only layout via a slot ─────────────────
-  // Free builds have no audio slot, so interfaceMode never becomes 'audio' and
-  // this branch is skipped entirely.
+  // ─── Audio mode: the voice feature renders the mic-only layout via a slot ─────────────────
+  // With no audio slot, interfaceMode never becomes 'audio' and this branch is skipped.
   const AudioInput = getSlot(SLOTS.chatInputAudioMode);
   if (isAudioMode && AudioInput) {
     return (
@@ -299,8 +294,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         onImageModeToggle={handleImageModeToggle}
         onThinkingToggle={handleThinkingToggle}
         onToolsPress={onToolsPress}
-        onMcpPress={onMcpPress}
-        mcpToolCount={mcpToolCount}
         onVisionPress={handleVisionPress}
         onPickDocument={handlePickDocument}
         onAttachPress={handleAttachPress}
@@ -314,7 +307,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     );
   }
 
-  // Pro-only inline Chat↔Audio toggle (empty slot in free builds → null).
+  // Inline Chat↔Audio toggle (empty slot → null).
   const pillIconsExpandedWidth = computePillIconsWidth();
 
   const actionButton = canSend ? (
@@ -420,8 +413,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         supportsToolCalling={supportsToolCalling}
         enabledToolCount={enabledToolCount}
         onToolsPress={onToolsPress}
-        mcpToolCount={mcpToolCount}
-        onMcpPress={onMcpPress}
       />
       <CustomAlert
         visible={alertState.visible}

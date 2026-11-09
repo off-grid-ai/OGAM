@@ -37,8 +37,8 @@ export const ModelSettingsScreen: React.FC = () => {
   const [ttsOpen, setTtsOpen] = useState(false);
   const [sttOpen, setSttOpen] = useState(false);
   const [whisperOpen, setWhisperOpen] = useState(false);
-  // TTS is a pro feature injected via a slot (same as the in-chat generation settings). Free builds have no
-  // slot → the section is not shown at all.
+  // TTS is a feature injected via a slot (same as the in-chat generation settings). With no
+  // slot the section is not shown at all.
   const TtsSection = getSlot(SLOTS.generationSettingsTts);
   // Active transcription (STT/whisper) model — the single source is the whisper store (same as the picker).
   const sttModelId = useWhisperStore((s) => s.downloadedModelId);
@@ -161,7 +161,7 @@ export const ModelSettingsScreen: React.FC = () => {
   );
   const ttsBlock = (
     <>
-          {/* Text to Speech — pro feature via slot; free builds render nothing (no accordion). */}
+          {/* Text to Speech — feature via slot; nothing renders when it is absent (no accordion). */}
           {TtsSection && (
             <>
               <TouchableOpacity

@@ -58,7 +58,6 @@ export type RootStackParamList = {
   // Already in RootStack
   DownloadManager: undefined;
   Gallery: { conversationId?: string } | undefined;
-  ProDetail: undefined;
   About: undefined;
   Tools: { conversationId?: string } | undefined;
 };

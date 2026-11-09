@@ -18,7 +18,6 @@ Base: PR #7 / previously audited commit 5f7f24d
 ## Regression work completed
 - 10 project-file unit tests PASS; 3 encrypted backup round-trip integration tests PASS.
 - Four deliberately skipped app-bug checks enabled and PASS (decoded document filename and malformed URI, LiteRT resident unload, server tool-capability filter).
-- 21 remaining skipped cases are private Pro-only tests whose implementation is missing from this public checkout; no pass is claimed.
 - Image generation lifecycle suite: 61/61 PASS after the no-GPU test fixture explicitly chooses CPU and checks truthful backend metadata.
 - QNN compiled-variant compatibility suites PASS with exact variant matching, not unsupported assumptions that every high-end chip runs every compiled model.
 - Focused ProjectEditScreen, SecuritySettingsScreen, image metadata, project RAG and HomeScreen privacy-choice suites PASS; old expectations were corrected to current requirements.

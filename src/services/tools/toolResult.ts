@@ -1,14 +1,14 @@
 /**
  * The one place that turns ANY tool outcome — a returned result, an empty result,
  * or a thrown error — into a typed, model-readable ToolResult. Every tool path
- * (built-in, pro/email, MCP) funnels through here via the tool loop, so:
+ * (built-in and extension tools) funnels through here via the tool loop, so:
  *   - a tool that THROWS becomes a typed 'error' result (it never crashes the turn),
  *   - an empty result is marked 'empty' (not a silent success),
  *   - the string handed to the model is NEVER empty and explicitly states failure,
  *     so the model can't mistake a timeout / disconnected server / no-data for a
  *     successful answer (the root of the "tools give improper information" reports).
  *
- * Pure + UI-free so both core and pro depend on it without dragging UI in.
+ * Pure + UI-free so core and extensions both depend on it without dragging UI in.
  */
 import type { ToolCall, ToolResult, ToolErrorCategory } from './types';
 

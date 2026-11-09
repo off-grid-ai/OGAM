@@ -127,7 +127,7 @@ export const useChatScreen = () => {
   // snappy — nothing heavy runs until the user actually sends a message.
 
   // Stop TTS when navigating away, app backgrounded, or screen locked.
-  // No-op without the pro audio feature.
+  // No-op without the voice feature.
   useEffect(() => {
     const unsubBlur = navigation.addListener('blur', () => {
       callHook(HOOKS.audioStop);
@@ -336,8 +336,8 @@ export const useChatScreen = () => {
   // audio.stop mid-answer and aborted the current answer's streaming-TTS queue
   // (the "streams, then stops speaking once the answer is prepared" bug).
 
-  // When streaming ends, the pro audio feature speaks the final assistant
-  // message (only if voice mode is active + TTS ready). No-op in free builds.
+  // When streaming ends, the voice feature speaks the final assistant
+  // message (only if voice mode is active + TTS ready). No-op when none is registered.
   useEffect(() => {
     const was = prevStreamingRef.current;
     prevStreamingRef.current = isStreamingForThisConversation;

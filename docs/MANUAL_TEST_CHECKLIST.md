@@ -271,7 +271,7 @@ the ONE exhaustive record. **Auto:** ✅ test · ~ partial · ❌ none · n/a = 
 surface). **Verification (2026-07-12):** 10/12 line-refs re-confirmed against CURRENT code — Q15
 (`index.ts:427/432/439`), Q16 (`policy.ts:6`+`imageGenerationService.ts:248`), Q18 (`litert.ts:223`), M7
 (`index.ts:152`), M8 (`types.ts:50`), M9 (`policy.ts:55`+`index.ts:34`), M10 (jest unanchored), D2
-(`scan.ts:229-246`), D3 (`imageDownloadActions.ts`), V5 (`pro/audio/ttsDownloadProvider.ts:75,82`). M4/M6:
+(`scan.ts:229-246`), D3 (`imageDownloadActions.ts`). M4/M6:
 the code MECHANISM is confirmed (`memoryBudget.ts` clean/dirty + `aggressive` LoadPolicy) but the exact
 admit/refuse THRESHOLDS are the prior log's analysis, not re-derived — hence NEEDS-DEVICE in those rows.
 

@@ -98,9 +98,8 @@ if [ -n "$PUSHED_JS" ]; then
   fi
   rm -f "$dep_log"
 
-  # The public fork does not contain the private pro/ tree, so knip has known unresolved
-  # imports plus pre-existing dead-code findings. Still run and report it locally; CI remains
-  # authoritative until that public-fork baseline is cleaned up.
+  # knip has pre-existing dead-code findings. Still run and report it locally; CI remains
+  # authoritative until that baseline is cleaned up.
   echo "▶ Dead-code scan (knip, informational baseline)..."
   npm run knip || echo "⚠️  knip reported the known public-fork baseline findings; see output above."
 fi

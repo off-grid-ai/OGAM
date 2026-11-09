@@ -91,10 +91,8 @@ module.exports = {
       to: {
         dependencyTypes: ['unknown', 'undetermined', 'npm-no-pkg', 'npm-unknown'],
         // Known non-resolvable-by-cruiser but LEGITIMATE: whisper.rn IS declared (^0.5.5) but the
-        // `.rn` name defeats cruiser's resolver; @offgrid/pro is the private open-core submodule
-        // wired via metro haste through the ONE bootstrap loader (loadProFeatures) — intentional,
-        // not a phantom dep. Neither is real debt, so exclude rather than baseline.
-        pathNot: '(^whisper\\.rn(/|$)|^@offgrid/pro(/|$))',
+        // `.rn` name defeats cruiser's resolver, so exclude rather than baseline.
+        pathNot: '^whisper\\.rn(/|$)',
       },
     },
     {

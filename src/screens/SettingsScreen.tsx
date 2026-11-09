@@ -30,7 +30,6 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useAppStore } from '../stores';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
-import { clearProForTesting } from '../services/proLicenseService';
 import { appVersionLabel } from '../utils/appVersion';
 
 
@@ -45,8 +44,7 @@ export const SettingsScreen: React.FC = () => {
   const { colors } = useTheme();
   const wide = useWideLayout();
   const styles = useThemedStyles(createStyles);
-  // Reactive: Pro sections registered at runtime (license-key activation re-runs
-  // loadProFeatures) show up live without an app restart.
+  // Reactive: Sections registered at runtime show up live without an app restart.
   const settingsSections = useSettingsSections();
   const setOnboardingComplete = useAppStore((s) => s.setOnboardingComplete);
   const themeMode = useAppStore((s) => s.themeMode);
@@ -75,37 +73,10 @@ export const SettingsScreen: React.FC = () => {
     } catch (e: any) { Alert.alert('Encrypted backup failed', String(e?.message ?? e)); }
     finally { setBackupBusy(false); }
   };
-  // Hidden once the user dismisses it, or once Pro is active (the upsell makes no
-  // sense to a paid user). hasRegisteredPro only flips true after RC verification
-  // (activateProByEmail / revalidatePro), so this also covers "paid and verified".
-  const devProDisabled = useAppStore((s) => s.devProDisabled);
-  const setDevProDisabled = useAppStore((s) => s.setDevProDisabled);
-  const setHasRegisteredPro = useAppStore((s) => s.setHasRegisteredPro);
 
   useEffect(() => {
     completeChecklistStep('exploredSettings');
   }, [completeChecklistStep]);
-
-  // DEV-only: flip the Pro auto-unlock. Disabling also clears the cached license
-  // so the build behaves like a fresh free install. We flip the store flags
-  // synchronously (so the UI drops Pro immediately) and do NOT auto-reload —
-  // an immediate reload races the async persist write and rehydrates the old
-  // Pro-active state. A manual restart applies feature load/unload (slots
-  // registered at boot can't be cleanly torn down at runtime).
-  const handleToggleDevPro = async () => {
-    const disabling = !devProDisabled;
-    if (disabling) {
-      setDevProDisabled(true);
-      await clearProForTesting();
-      setHasRegisteredPro(false);
-    } else {
-      setDevProDisabled(false);
-    }
-    Alert.alert(
-      disabling ? 'Pro disabled (DEV)' : 'Pro enabled (DEV)',
-      `Restart the app to fully ${disabling ? 'unload' : 'load'} Pro features.`,
-    );
-  };
 
   const handleResetOnboarding = () => {
     setOnboardingComplete(false);
@@ -298,7 +269,7 @@ export const SettingsScreen: React.FC = () => {
           </View>
         </AnimatedEntry>
 
-        {/* Pro feature sections registered at runtime by @offgrid/pro */}
+        {/* Sections registered at runtime through the settings section registry */}
         {settingsSections.map((Section, i) => <Section key={Section.displayName ?? String(i)} />)}
 
         {/* Dev-only tooling — stripped from release builds */}
@@ -316,10 +287,6 @@ export const SettingsScreen: React.FC = () => {
               <TouchableOpacity style={styles.devButton} onPress={() => setShowDebugLogs(true)}>
                 <Icon name="terminal" size={14} color={colors.textMuted} />
                 <Text style={styles.devButtonText}>Debug Logs</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.devButton} onPress={handleToggleDevPro}>
-                <Icon name={devProDisabled ? 'unlock' : 'lock'} size={14} color={colors.textMuted} />
-                <Text style={styles.devButtonText}>{devProDisabled ? 'Turn on Pro (DEV)' : 'Turn off Pro (DEV)'}</Text>
               </TouchableOpacity>
             </View>
           </AnimatedEntry>

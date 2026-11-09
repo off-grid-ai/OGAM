@@ -15,14 +15,13 @@ assignment and estimates are decided separately in Jira.
 
 ### Already at parity - no work
 Chat + vision, image generation, voice STT (Whisper), tools/MCP, projects + RAG,
-model catalog/downloads, Keygen licensing.
+model catalog/downloads.
 
-TTS / Audio Mode - BUILT and shipped in the `mobile-pro` submodule
-(`pro/audio/`): Kokoro + OuteTTS + Qwen3 engines behind an EngineRegistry, full
+TTS / Audio Mode - BUILT: Kokoro + OuteTTS + Qwen3 engines behind an EngineRegistry, full
 `ttsService` lifecycle (download/load/generate/save/speak/stop/cache), streaming
 playback, waveforms, and complete audio-mode UI. At polish stage (recent iOS playback
 fix). NOTE: the public `TTS_IMPLEMENTATION_PLAN.md` is stale and says "NOT STARTED" -
-trust the pro code. Only follow-up: the audio module has no tests yet (quality task,
+trust the code. Only follow-up: the audio module has no tests yet (quality task,
 not a feature gap).
 
 ### Gaps - candidate epics
@@ -63,8 +62,7 @@ A -> G -> H -> C -> D -> E -> F
 
 ### Epic A - Offline Recordings & Transcriptions (mobile-native)
 Detailed in `offline-recordings.md`. Record (fg + bg) -> chunked Whisper transcription
--> LLM summary + action items. Pro-gated. Reuse note: `pro/audio/recordBridge.ts`
-already bridges mic input for audio mode.
+-> LLM summary + action items..
 
 ### Epic G - Capture loop (research spike first)
 Screen/context capture -> OCR -> observations + entities. Desktop-style "sees your
@@ -95,9 +93,7 @@ Searchable on-device clipboard history. Desktop has a `@offgrid/clipboard` engin
 reuse. Lower user value on mobile; parked low.
 
 ## Notes for the team
-- Pro-gating reuses `proLicenseService` (shared Keygen account with desktop; one
-  license already spans platforms).
 - Reuse-first: desktop packages (`@offgrid/rag`, `@offgrid/models`, `@offgrid/clipboard`),
-  the `mobile-pro` audio module, and desktop plan docs are the reference; do not fork.
+  and desktop plan docs are the reference; do not fork.
 - Epics G/H carry real OS-feasibility risk - resolve via spike before sizing build work.
 - TTS audio module needs test coverage added (repo mandates unit + integration tests).
