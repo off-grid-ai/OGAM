@@ -426,13 +426,7 @@ class DownloadManagerModule: RCTEventEmitter {
           // Drop the old key first: its cancellation then reaches handleError as an unknown task.
           self.taskToDownloadId.removeValue(forKey: oldKey)
           group.enter()
-          old.cancel(byProducingResumeData: { data in
-            self.continueDownload(downloadId, from: old, oldKey: oldKey, url: url, resumeData: data, in: target) {
-              NSLog("[DownloadManager] Handed off download #%@ to the %@ session (%@ resume data)",
-                    downloadId, toBackground ? "background" : "fast", data == nil ? "no" : "with")
-              group.leave()
-            }
-          })
+          self.handOff(old, downloadId: downloadId, oldKey: oldKey, url: url, to: target) { group.leave() }
         }
       }
       self.persistStateLocked()
@@ -440,6 +434,17 @@ class DownloadManagerModule: RCTEventEmitter {
         if assertion != .invalid { app.endBackgroundTask(assertion) }
       }
     }
+  }
+
+  /// Cancels `old` with its resume data and continues the download in `target` from there.
+  private func handOff(_ old: URLSessionDownloadTask, downloadId: String, oldKey: Int, url: URL,
+                       to target: URLSession, then done: @escaping () -> Void) {
+    let toBackground = target === DownloadManagerModule.backgroundSession
+    old.cancel(byProducingResumeData: { data in
+      NSLog("[DownloadManager] Handing off download #%@ to the %@ session (%@ resume data)",
+            downloadId, toBackground ? "background" : "fast", data == nil ? "no" : "with")
+      self.continueDownload(downloadId, from: old, oldKey: oldKey, url: url, resumeData: data, in: target, then: done)
+    })
   }
 
   /// Continues a download in `target` from where `old` stopped: from its resume data when there is
@@ -1619,7 +1624,7 @@ class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
   }
 
   /// iOS woke the app for background download events and they are all delivered: tell it so.
-  func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+  func urlSessionDidFinishEvents(forBackgroundURLSession _: URLSession) {
     DispatchQueue.main.async {
       DownloadManagerModule.backgroundEventsCompletionHandler?()
       DownloadManagerModule.backgroundEventsCompletionHandler = nil
