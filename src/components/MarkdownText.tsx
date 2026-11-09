@@ -1,6 +1,6 @@
 import { ChartBlock } from './ChartCard';
 import React, { useCallback, useMemo } from 'react';
-import { Clipboard, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Clipboard, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Markdown from '@ronradtke/react-native-markdown-display';
 import { useTheme } from '../theme';
 import type { ThemeColors } from '../theme';
@@ -50,9 +50,12 @@ const selectableRules = {
   ),
   fence: (node: any, _children: any, ...[, styles, inheritedStyles = {}]: any[]) => (node.sourceInfo?.trim() === 'chart' ? <View key={node.key}><ChartBlock content={node.content} /></View> : (
     <View key={node.key}>
-      <Text style={[inheritedStyles, styles.fence]} selectable>
-        {trimTrailingNewline(node.content)}
-      </Text>
+      {/* Code keeps its line breaks and indentation, so a wide line scrolls sideways instead of running off the screen. */}
+      <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator style={{ marginVertical: SPACING.sm }}>
+        <Text style={[inheritedStyles, styles.fence, { marginVertical: 0 }]} selectable>
+          {trimTrailingNewline(node.content)}
+        </Text>
+      </ScrollView>
       <CopyActions testID="copy-code" actions={[{ label: 'Copy code', text: () => trimTrailingNewline(node.content) }]} />
     </View>
   )),
@@ -87,7 +90,10 @@ const copyStyles = StyleSheet.create({
 const copyRules = {
   table: (node: any, children: any, ...[, styles]: any[]) => (
     <View key={node.key}>
-      <View style={styles._VIEW_SAFE_table}>{children}</View>
+      {/* A wide table scrolls sideways instead of running off the screen or squashing its columns. */}
+      <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator>
+        <View style={[styles._VIEW_SAFE_table, { minWidth: '100%' }]}>{children}</View>
+      </ScrollView>
       <CopyActions testID="copy-table" actions={[
         { label: 'Copy table', text: () => tableToTsv(tableRows(node)) },
         { label: 'Copy as Markdown', text: () => tableToMarkdown(tableRows(node)) },
@@ -232,12 +238,14 @@ function createMarkdownStyles(colors: ThemeColors, dimmed?: boolean) {
       backgroundColor: colors.surfaceLight,
     },
     th: {
+      minWidth: 96,
       padding: SPACING.sm,
       borderWidth: 0.5,
       borderColor: colors.border,
       fontWeight: '600' as const,
     },
     td: {
+      minWidth: 96,
       padding: SPACING.sm,
       borderWidth: 0.5,
       borderColor: colors.border,
@@ -262,6 +270,7 @@ function createMarkdownStyles(colors: ThemeColors, dimmed?: boolean) {
     // Image (unlikely in LLM text but handle gracefully)
     image: {
       borderRadius: 6,
+      maxWidth: '100%' as const,
     },
   };
 }
