@@ -38,7 +38,7 @@ export function relevantTools(message: string, enabled: string[], opts: { used?:
     if (used.has(tool)) return true;
     const trigger = TRIGGERS[tool];
     if (!trigger) return true; // not a built-in tool: kept (servers' tools are routed on their own)
-    if (tool === 'search_knowledge_base') return !!opts.projectHasDocs;
+    if (tool === 'search_knowledge_base' || tool === 'update_project_document') return !!opts.projectHasDocs; // in a project they are always on offer
     return trigger.test(message);
   });
 }

@@ -13,6 +13,7 @@ import { useAppStore } from '../stores';
 import { parseCustomTheme, ACCENTS, SKINS, CHAT_LAYOUTS, FONT_CHOICES, PALETTES, TEXT_SIZES, LAYOUT_MODES, type Appearance } from '../theme/appearance';
 import { NavBarSettings } from '../components/NavBarSettings';
 import { AI_LENGTHS, AI_LEVELS, AI_TONES, type AiStyle } from '../services/aiStyle';
+import { ABOUT_FIELDS, useAboutMe } from '../stores/aboutMeStore';
 
 type Option<T> = { id: T; name: string; hint?: string };
 
@@ -49,6 +50,10 @@ export const AppearanceScreen: React.FC = () => {
   const updateSettings = useAppStore(s => s.updateSettings);
   const appearance: Appearance = settings.appearance ?? {};
   const ai: AiStyle = settings.aiStyle ?? {};
+  const about = useAboutMe(st => st.about);
+  const memories = useAboutMe(st => st.memories);
+  const setAbout = useAboutMe(st => st.setField);
+  const removeMemory = useAboutMe(st => st.removeMemory);
   const setLook = (patch: Partial<Appearance>) => updateSettings({ appearance: { ...appearance, ...patch } });
   const [themeText, setThemeText] = React.useState('');
   const [themeMsg, setThemeMsg] = React.useState('');
@@ -209,7 +214,26 @@ export const AppearanceScreen: React.FC = () => {
         <Chips testID="share-location" value={settings.shareLocation !== false} onPick={on => updateSettings({ shareLocation: on })}
           options={[{ id: true, name: 'Tell the AI the city' }, { id: false, name: 'Never' }]} />
         <Text style={styles.note}>The AI can say what city you are in or near, from the phone's last GPS reading and a built-in list of large cities. It never leaves the phone, and the AI only gets the city and country, not coordinates. Needs location allowed once (open Maps).</Text>
-        <Text style={styles.label}>Always remember</Text>
+        <Text style={styles.section}>About you</Text>
+        <Text style={styles.note}>Every chat knows this, so you do not have to repeat it. Fill in only what you want; each box is optional.</Text>
+        {ABOUT_FIELDS.map(f => (
+          <View key={f.key}>
+            <Text style={styles.label}>{f.label}</Text>
+            <TextInput testID={`about-${f.key}`} value={about[f.key]} onChangeText={v => setAbout(f.key, v)}
+              placeholder={f.placeholder} placeholderTextColor={colors.textMuted} multiline={f.multiline} style={styles.input} />
+          </View>
+        ))}
+        {memories.length > 0 && (
+          <View>
+            <Text style={styles.label}>Things the assistant remembered</Text>
+            {memories.map((m, i) => (
+              <TouchableOpacity key={`${i}-${m}`} onPress={() => removeMemory(i)} accessibilityLabel={`Forget: ${m}`}>
+                <Text style={styles.note}>{m}  (tap to forget)</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+        <Text style={styles.label}>Always remember (standing instructions)</Text>
         <TextInput testID="ai-custom" value={ai.custom ?? ''} onChangeText={custom => setAi({ custom: custom.slice(0, 1200) })}
           placeholder="e.g. Use metric units. I am studying nursing. Call me Sam."
           placeholderTextColor={colors.textMuted} multiline style={styles.input} />

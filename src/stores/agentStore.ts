@@ -280,8 +280,17 @@ export function resolveAgentPrompt(projectPrompt: string | undefined, fallback: 
   // the phone-call note so call mode can still keep spoken answers short.
   let style = '';
   try { style = require('../services/aiStyle').aiStyleNote(require('./appStore').useAppStore.getState().settings?.aiStyle); } catch { /* no settings yet */ }
-  if (!agent || !agent.systemPrompt.trim()) return (projectPrompt?.trim() || fallback) + lp + style + phoneNote + projectGuard;
-  return agentPromptWithLessons(agent) + (projectPrompt?.trim() ? `\n\nProject notes:\n${projectPrompt.trim()}` : '') + lp + style + phoneNote + projectGuard;
+  let about = '';
+  try {
+    const me = require('./aboutMeStore');
+    about = me.aboutMeNote(me.useAboutMe.getState().about, me.useAboutMe.getState().memories, require('./appStore').useAppStore.getState().settings?.userName || '');
+  } catch { /* nothing saved yet */ }
+  // Models update shared project files far too rarely unless told when to: say it plainly in project chats.
+  const projectFiles = currentProject
+    ? '\n\nPROJECT FILES: this chat belongs to a project whose documents every chat in it shares. When you finish a piece of work, make a decision, or learn something the next chat will need, call update_project_document yourself (use "Current Progress" with mode "append" for progress, "replace" to rewrite a document). Do this without being asked, then tell the user in one short line what you saved. Read search_knowledge_base before answering questions about the project.'
+    : '';
+  if (!agent || !agent.systemPrompt.trim()) return (projectPrompt?.trim() || fallback) + lp + about + style + phoneNote + projectGuard + projectFiles;
+  return agentPromptWithLessons(agent) + (projectPrompt?.trim() ? `\n\nProject notes:\n${projectPrompt.trim()}` : '') + lp + about + style + phoneNote + projectGuard + projectFiles;
 }
 
 /** An agent's system prompt with its learned lessons underneath. */

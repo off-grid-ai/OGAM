@@ -184,7 +184,6 @@ export async function rememberFact(fact: string): Promise<string> {
   const { useAgentStore } = require('../stores/agentStore');
   const st = useAgentStore.getState();
   const agent = st.agents.find((a: any) => a.id === st.activeAgentId);
-  if (!agent) return 'No active agent to remember this for.';
   try {
     const { useChatStore } = require('../stores/chatStore');
     const cs = useChatStore.getState();
@@ -192,6 +191,11 @@ export async function rememberFact(fact: string): Promise<string> {
       return 'Not saved: this is a private chat, so nothing from it is remembered. (Tell the user they can say it again in a normal chat if they want it remembered.)';
     }
   } catch { /* ignore */ }
+  // No agent is the default for new chats: keep the fact with the user's "About you" notes so every chat has it.
+  if (!agent) {
+    const { useAboutMe } = require('../stores/aboutMeStore');
+    return useAboutMe.getState().addMemory(fact) === 'exists' ? 'Already remembered.' : `Remembered: ${fact.trim()}`;
+  }
   const memories: string[] = agent.memories || [];
   if (memories.some((m) => m.toLowerCase() === fact.toLowerCase())) return 'Already remembered.';
   st.updateAgent(agent.id, { memories: [...memories, fact.trim()].slice(-100) });

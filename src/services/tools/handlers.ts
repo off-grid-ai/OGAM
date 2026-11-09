@@ -12,8 +12,21 @@ import { NETWORK_TOOLS, offGridOn } from '../../atlasTools/offGrid';
 function makeResult(call: ToolCall, start: number, opts: { content: string; error?: string }): ToolResult {
   return { toolCallId: call.id, name: call.name, content: opts.content, error: opts.error, durationMs: Date.now() - start };
 }
+/** Small models often name an argument differently ("filename" for "path", "text" for "content"). Accept the usual alternatives. */
+const ALIASES: Record<string, string[]> = {
+  path: ['file_path', 'filepath', 'filename', 'file_name', 'file', 'name'],
+  content: ['text', 'body', 'data', 'file_content', 'contents'],
+  name: ['title', 'document', 'document_name', 'doc'],
+};
+function arg(call: ToolCall, param: string): unknown {
+  const a = call.arguments ?? {};
+  if (a[param] !== undefined && a[param] !== null && a[param] !== '') return a[param];
+  for (const alt of ALIASES[param] ?? []) if (a[alt] !== undefined && a[alt] !== null && a[alt] !== '') return a[alt];
+  return a[param];
+}
+
 function requireString(call: ToolCall, param: string): string | null {
-  const val = call.arguments[param];
+  const val = arg(call, param);
   return (val && typeof val === 'string' && val.trim()) ? val.trim() : null;
 }
 
@@ -77,7 +90,10 @@ async function dispatchTool(call: ToolCall): Promise<string> {
     case 'write_file': {
       const p = requireString(call, 'path');
       if (!p) throw new Error('Missing required parameter: path');
-      return DT.writeFile(p, String(call.arguments?.content ?? ''), call.arguments?.append === true || call.arguments?.append === 'true');
+      const body = arg(call, 'content');
+      // An empty file is almost always a cut-off tool call, not what was meant: say so instead of silently writing nothing.
+      if (typeof body !== 'string' || !body.trim()) return 'Nothing was written: the content was empty. Call write_file again with the complete text in "content" (if it is long, write it in parts: the first part with append false, then each next part with append true).';
+      return DT.writeFile(p, body, call.arguments?.append === true || call.arguments?.append === 'true');
     }
     case 'create_web_page':
       return DT.createWebPage(String(call.arguments?.name ?? 'site'), String(call.arguments?.html ?? ''));
