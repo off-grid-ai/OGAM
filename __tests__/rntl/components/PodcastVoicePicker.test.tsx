@@ -9,6 +9,7 @@ const mockSpoken: string[] = [];
 jest.mock('../../../src/atlasVoice/tts', () => ({
   listVoices: jest.fn(async () => Array.from({ length: 11 }, (_, i) => ({ name: `sid:${i}`, locale: 'en-US', quality: 500 }))),
   speakAndWait: jest.fn(async (_t: string, _p: number, _m: string, voice: string) => { mockSpoken.push(voice); return true; }),
+  stop: jest.fn(),
 }));
 
 import { PodcastVoicePicker } from '../../../src/components/PodcastVoicePicker';
