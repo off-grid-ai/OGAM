@@ -11,6 +11,8 @@ const mockRestore = jest.fn(async (_files: any[], _ids: string[]) => 1);
 jest.mock('../../../src/atlasTools/projectBackupFiles', () => ({
   collectProjectFiles: (...a: any[]) => mockCollect(...a as [string[]]),
   restoreProjectFiles: (...a: any[]) => mockRestore(...a as [any[], string[]]),
+  // The real preflight check: restore must refuse corrupt manifests before touching any store.
+  validateProjectFiles: jest.requireActual('../../../src/atlasTools/projectBackupFiles').validateProjectFiles,
 }));
 jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: {
   getAllKeys: jest.fn(async () => [...mockStore.keys()]),
@@ -74,8 +76,10 @@ describe('portable backup project file round trip', () => {
   it('refuses corrupt restored project files before importing settings', async () => {
     await exportBackup('very-long-backup-password');
     mockRestore.mockRejectedValueOnce(new Error('Invalid project document in backup'));
+    const before = JSON.stringify([...mockStore.entries()].sort());
     await expect(importBackup('very-long-backup-password')).rejects.toThrow(/Invalid project document/);
-    expect(AsyncStorage.multiSet).not.toHaveBeenCalled();
+    // The project documents are restored last; when that fails the settings written before it are put back.
+    expect(JSON.stringify([...mockStore.entries()].sort())).toBe(before);
   });
 });
 

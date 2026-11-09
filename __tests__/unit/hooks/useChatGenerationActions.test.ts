@@ -1028,7 +1028,9 @@ describe('SO4 engine tool-routing (LiteRT native path via engine registry)', () 
     // Terminal artifact: the system message that reaches generation. For LiteRT it is exactly the
     // base prompt — no appended tool-hint text (which is what llama-without-Jinja would get).
     const [, messages] = mockGenerateWithTools.mock.calls[0];
-    expect(messages[0].content).toBe('Be helpful');
+    // The always-on style note (no idle follow-up questions) is allowed; a tool hint is not.
+    const { NO_IDLE_QUESTIONS } = require('../../../src/services/aiStyle');
+    expect(messages[0].content).toBe(`Be helpful\n\nHOW THE USER WANTS YOU TO ANSWER (always follow, unless a safety rule says otherwise):\n${NO_IDLE_QUESTIONS}`);
   });
 
   // The two Gemma-4 <|think|> tests that lived here drove the token via deps.settings.thinkingEnabled

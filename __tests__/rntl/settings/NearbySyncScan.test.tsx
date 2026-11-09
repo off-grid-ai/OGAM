@@ -23,7 +23,7 @@ it('pairs by scanning the other device\'s code in the app', async () => {
   const { NearbySyncSettings } = require('../../../src/components/settings/NearbySyncSettings');
 
   const screen = render(<NearbySyncSettings />);
-  expect(screen.getByText(/no password\. Syncs everything/)).toBeTruthy();
+  expect(screen.getByText(/no password\. Syncs chats, agents/)).toBeTruthy();
   fireEvent(screen.getByTestId('nearby-sync-toggle'), 'valueChange', true);
   fireEvent.press(await screen.findByTestId('nearby-scan-button'));
   await waitFor(() => expect(RN.NativeModules.AtlasNearbySync.pair).toHaveBeenCalled());
