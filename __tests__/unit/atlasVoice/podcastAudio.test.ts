@@ -15,7 +15,9 @@ jest.mock('react-native-fs', () => ({
     path: `/cache/podcast-audio/ep${i}`, isDirectory: () => true, mtime: new Date(1000 * i),
   }))),
   unlink: jest.fn(async (p: string) => { mockDeleted.push(p); }),
+  writeFile: jest.fn(async (p: string) => { mockFiles.add(p); mockWritten.push(p); }),
 }));
+const mockWritten: string[] = [];
 const mockDeleted: string[] = [];
 jest.mock('react-native-audio-api', () => ({
   AudioContext: jest.fn().mockImplementation(() => ({
@@ -90,4 +92,13 @@ it('says a line live when its saved audio cannot be played, instead of ending th
     await playLine('fallback-episode', items, 0);
   } finally { mockFailDecode = false; }
   expect(spoken).toEqual(['Broken file line.']);
+});
+
+it('makes a jingle file once and plays it each time', async () => {
+  const { playJingle } = require('../../../src/atlasVoice/podcastAudio');
+  mockWritten.length = 0; mockPlayed.length = 0;
+  expect(await playJingle('intro')).toBe(true);
+  expect(await playJingle('intro')).toBe(true);
+  expect(mockWritten).toEqual(['/cache/podcast-audio/_jingles/intro-v1.wav']);
+  expect(mockPlayed).toHaveLength(2);
 });

@@ -7,7 +7,8 @@ import { useTheme } from '../theme';
 import { useProjectStore } from '../stores';
 import { MarkdownText } from '../components/MarkdownText';
 import { PodcastVoicePicker } from '../components/PodcastVoicePicker';
-import { castLine, playLine, stopPodcastAudio } from '../atlasVoice/podcastAudio';
+import { castLine, playLine, playJingle, stopPodcastAudio } from '../atlasVoice/podcastAudio';
+import { BRIEF_PROJECT, useBriefPrefs } from '../atlasTools/dailyBrief';
 import { generate, generatePodcast, podcastContextWarning, useStudyStore, StudyResult, Source, PodcastStyle } from '../study/engine';
 import { briefingSummary, briefingTranscript, safeFileName, saveMarkdown, studyMarkdown } from '../study/exportFiles';
 import { deckSlides, savePptx } from '../study/pptx';
@@ -171,7 +172,10 @@ export const StudyScreen: React.FC = () => {
     stopRef.current = false;
     keepScreenOn(true);
     let finished = false;
+    // The daily briefing opens and closes with a short tune (switch in Daily briefing > Show options).
+    const tunes = !!audioKey && audioKey.startsWith(`${BRIEF_PROJECT}-`) && useBriefPrefs.getState().jingles !== false;
     try {
+      if (tunes && from <= 0 && !(await playJingle('intro'))) return;
       for (let i = Math.max(0, from); i < items.length; i++) {
         if (stopRef.current || playToken.current !== my) break;
         setPlaying(i); setResumeAt(i); setItemStart(Date.now());
@@ -179,6 +183,7 @@ export const StudyScreen: React.FC = () => {
         if (!ok || playToken.current !== my) break;
         if (i === items.length - 1) finished = true;
       }
+      if (finished && tunes && playToken.current === my) await playJingle('outro');
     } catch (e: any) {
       Alert.alert('Playback stopped', String(e?.message || e));
     }

@@ -250,6 +250,10 @@ export const DailyBriefScreen: React.FC = () => {
             </View>
           )}
           <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>Short tunes at the start and end of the show</Text>
+            <Switch value={prefs.jingles !== false} onValueChange={(v) => prefs.set({ jingles: v })} testID="brief-jingles" />
+          </View>
+          <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>Fun fact from your offline library</Text>
             <Switch value={prefs.funFacts} onValueChange={(v) => prefs.set({ funFacts: v })} />
           </View>

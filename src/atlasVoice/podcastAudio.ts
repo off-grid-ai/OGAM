@@ -10,6 +10,7 @@ import { sha256 } from 'js-sha256';
 import { audioSessionManager } from '../services/audioSessionManager';
 import { canPreRender, speakAndWait, synthesizeLineToFile } from './tts';
 import { hostVoices } from './neural';
+import { makeJingle, wavBytes, toBase64, type JingleKind } from './jingles';
 import { useAtlasVoiceStore } from './store';
 import logger from '../utils/logger';
 
@@ -98,7 +99,7 @@ function render(key: string, items: CastLine[], i: number, urgent = false): Prom
 export async function pruneEpisodes(keepKey: string): Promise<void> {
   try {
     const dirs = (await RNFS.readDir(root())).filter((d) =>
-      d.isDirectory() && d.path !== dir(keepKey) &&
+      d.isDirectory() && d.path !== dir(keepKey) && !d.path.endsWith('/_jingles') &&
       ![...pending.keys()].some((path) => path.startsWith(`${d.path}/`)));
     const newest = dirs.sort((a, b) => (b.mtime?.getTime() ?? 0) - (a.mtime?.getTime() ?? 0));
     for (const d of newest.slice(KEEP_EPISODES - 1)) {
@@ -232,4 +233,21 @@ export function stopPodcastAudio(): void {
   try { source?.stop(); } catch { /* already stopped */ }
   source = null;
   settle?.('stopped'); // some audio backends never fire onEnded after stop
+}
+
+/** Plays one of the briefing's short tunes. Made once, kept as a small file, and never allowed to stop the show: any problem is skipped. */
+export async function playJingle(kind: JingleKind): Promise<boolean> {
+  const token = stopToken;
+  try {
+    const path = `${root()}/_jingles/${kind}-v1.wav`;
+    if (!(await RNFS.exists(path))) {
+      await RNFS.mkdir(`${root()}/_jingles`);
+      await RNFS.writeFile(path, toBase64(wavBytes(makeJingle(kind))), 'base64');
+    }
+    if (token !== stopToken) return false;
+    return (await playFile(path)) === 'ended' && token === stopToken;
+  } catch (e: any) {
+    logger.warn(`[POD] jingle ${kind} skipped: ${e?.message ?? e}`);
+    return token === stopToken;
+  }
 }

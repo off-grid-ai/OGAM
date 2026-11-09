@@ -23,8 +23,10 @@ interface BriefPrefs {
   avoid: string[];
   /** Each topic presented by its own expert, with the anchor handing over. */
   experts: boolean;
+  /** A short tune before and after the show. */
+  jingles: boolean;
   setInterests: (v: string[]) => void;
-  set: (p: Partial<Pick<BriefPrefs, 'minutes' | 'hosts' | 'funFacts' | 'deep' | 'avoid' | 'experts'>>) => void;
+  set: (p: Partial<Pick<BriefPrefs, 'minutes' | 'hosts' | 'funFacts' | 'deep' | 'avoid' | 'experts' | 'jingles'>>) => void;
 }
 
 export const useBriefPrefs = create<BriefPrefs>()(persist((set) => ({
@@ -35,9 +37,10 @@ export const useBriefPrefs = create<BriefPrefs>()(persist((set) => ({
   deep: true,
   avoid: [],
   experts: false,
+  jingles: true,
   setInterests: (interests) => set({ interests }),
   set: (p) => set(p),
-}), { name: 'atlas-daily-brief', storage: createJSONStorage(() => AsyncStorage), partialize: (s) => ({ interests: s.interests, minutes: s.minutes, hosts: s.hosts, funFacts: s.funFacts, deep: s.deep, avoid: s.avoid, experts: s.experts }) }));
+}), { name: 'atlas-daily-brief', storage: createJSONStorage(() => AsyncStorage), partialize: (s) => ({ interests: s.interests, minutes: s.minutes, hosts: s.hosts, funFacts: s.funFacts, deep: s.deep, avoid: s.avoid, experts: s.experts, jingles: s.jingles }) }));
 
 const EXPERT_NAMES = ['Maya', 'Theo', 'Priya', 'Marcus', 'Lena', 'Omar', 'Grace', 'Sam'];
 
