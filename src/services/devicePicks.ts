@@ -122,7 +122,7 @@ export function devicePicks(ramGB: number, catalog: readonly ModelEntry[] = phon
 }
 
 /** A first model's most it should download: small enough to finish on a phone's first try. */
-export const STARTER_MAX_BYTES = 1e9;
+const STARTER_MAX_BYTES = 1e9;
 
 /**
  * The first model a new person gets: the best one under 1 GB, by the same picking rule. Most phone

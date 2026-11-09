@@ -770,7 +770,7 @@ export function downloadStarted(key: string, facts: DownloadFacts): void {
  * chat or image download ever reported finishing (PostHog, 2026-11-09: 0 of 2,300 GGUF starts). The
  * arrival of the model is the one fact every finish path shares, so it is what ends the download.
  */
-export function reportArrivedDownloads(
+function reportArrivedDownloads(
   textModels: ReadonlyArray<{ id: string }>,
   imageModels: ReadonlyArray<{ id: string }>,
 ): void {
