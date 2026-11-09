@@ -61,7 +61,7 @@ function headingAndRow(app: ReturnType<typeof boot>, view: ReturnType<Rtl['rende
   const list = app.rtl.within(view.getByTestId('conversation-list'));
   const row = app.rtl.within(view.getByTestId('conversation-item-0'));
   const texts = (nodes: ReadonlyArray<{ props: Record<string, unknown> }>) => nodes.map(node => String(node.props.children));
-  return { heading: texts(list.getAllByRole('header')).join(), row: texts(row.queryAllByText(/./)) };
+  return { heading: list.getAllByRole('header').map(node => String(node.props.accessibilityLabel)).join(), row: texts(row.queryAllByText(/./)) };
 }
 
 describe('batch2 ChatsListScreen — sort, timestamp format, delete, empty', () => {
@@ -69,7 +69,7 @@ describe('batch2 ChatsListScreen — sort, timestamp format, delete, empty', () 
     jest.useRealTimers();
   });
 
-  // Cases 26/27: the day heading says when; the row itself shows no clock time, weekday, "Last week",
+  // Cases 26/27: the day heading says when (Today, Yesterday, then the day itself, like Claude's list); the row itself shows no clock time, weekday, "Last week",
   // "N weeks ago" or date. Each case reads the heading above the chat and the row's own texts.
   it('case26: a conversation from today sits under Today, and its row shows no clock time', () => {
     const app = boot();
@@ -82,48 +82,80 @@ describe('batch2 ChatsListScreen — sort, timestamp format, delete, empty', () 
     expect(view.queryByText(app.localTime.formatClockTime(now))).toBeNull();
   });
 
-  it('case27: a conversation 3 days ago sits under This week, and its row shows no weekday', () => {
+  it('case27: a conversation 3 days ago sits under its day, and its row shows no weekday', () => {
     const app = boot();
     const now = new Date(2026, 9, 30, 14, 5);
     jest.useFakeTimers({ now });
     const threeDaysAgo = chatDaysAgo(app, 'Recent Chat', now, 3);
 
     const view = app.render();
-    expect(headingAndRow(app, view)).toEqual({ heading: 'This week', row: ['Recent Chat'] });
+    expect(headingAndRow(app, view)).toEqual({ heading: 'Oct 27', row: ['Recent Chat'] });
     expect(view.queryByText(formatWeekday(threeDaysAgo))).toBeNull();
   });
 
-  it('case27: a conversation 10 days ago sits under Older, and its row does not say "Last week"', () => {
+  it('case27: a conversation 10 days ago sits under its day, and its row does not say "Last week"', () => {
     const app = boot();
     const now = new Date(2026, 9, 30, 14, 5);
     jest.useFakeTimers({ now });
     chatDaysAgo(app, 'Last Week Chat', now, 10);
 
     const view = app.render();
-    expect(headingAndRow(app, view)).toEqual({ heading: 'Older', row: ['Last Week Chat'] });
+    expect(headingAndRow(app, view)).toEqual({ heading: 'Oct 20', row: ['Last Week Chat'] });
     expect(view.queryByText('Last week')).toBeNull();
   });
 
-  it('case27: a conversation 14 days ago sits under Older, and its row does not say "2 weeks ago"', () => {
+  it('case27: a conversation 14 days ago sits under its day, and its row does not say "2 weeks ago"', () => {
     const app = boot();
     const now = new Date(2026, 9, 30, 14, 5);
     jest.useFakeTimers({ now });
     chatDaysAgo(app, 'Old Chat', now, 14);
 
     const view = app.render();
-    expect(headingAndRow(app, view)).toEqual({ heading: 'Older', row: ['Old Chat'] });
+    expect(headingAndRow(app, view)).toEqual({ heading: 'Oct 16', row: ['Old Chat'] });
     expect(view.queryByText('2 weeks ago')).toBeNull();
   });
 
-  it('case27: a conversation 30 days ago sits under Older, and its row shows no date', () => {
+  it('case27: a conversation 30 days ago sits under its day, and its row shows no date', () => {
     const app = boot();
     const now = new Date(2026, 9, 30, 14, 5);
     jest.useFakeTimers({ now });
     const monthAgo = chatDaysAgo(app, 'Older Chat', now, 30);
 
     const view = app.render();
-    expect(headingAndRow(app, view)).toEqual({ heading: 'Older', row: ['Older Chat'] });
-    expect(view.queryByText(formatShortDate(monthAgo))).toBeNull();
+    expect(headingAndRow(app, view)).toEqual({ heading: 'Sep 30', row: ['Older Chat'] });
+    // The heading names the day; the row itself does not.
+    expect(app.rtl.within(view.getByTestId('conversation-item-0')).queryByText(formatShortDate(monthAgo))).toBeNull();
+  });
+
+  // Like Claude's chat list: a view menu groups by date, project or nothing, and a header folds.
+  it('the view menu groups chats by project, a header folds its chats, and the choice is kept', async () => {
+    const app = boot();
+    const { useChatStore } = require('../../src/stores/chatStore');
+    const { useProjectStore } = require('../../src/stores/projectStore');
+    const { useAppStore } = require('../../src/stores/appStore');
+    const garden = useProjectStore.getState().createProject({ name: 'Garden', description: '', systemPrompt: '' });
+    useChatStore.getState().createConversation(useAppStore.getState().activeModelId, 'Tomatoes', garden.id);
+    app.chat('Loose chat');
+
+    const view = app.render();
+    app.rtl.fireEvent.press(view.getByLabelText('View options'));
+    app.rtl.fireEvent.press(await view.findByTestId('chats-group-project'));
+
+    const headers = () => app.rtl.within(view.getByTestId('conversation-list')).getAllByRole('header')
+      .map(node => String(node.props.accessibilityLabel));
+    await app.rtl.waitFor(() => expect(headers()).toEqual(['Garden', 'No project']));
+    expect(useAppStore.getState().settings.chatsGroupBy).toBe('project');
+
+    // Folding Garden hides its chat and keeps the other section.
+    app.rtl.fireEvent.press(view.getByTestId(`chats-section-project:${garden.id}`));
+    expect(view.queryByText('Tomatoes')).toBeNull();
+    expect(view.getByText('Loose chat')).toBeTruthy();
+    app.rtl.fireEvent.press(view.getByTestId(`chats-section-project:${garden.id}`));
+    expect(view.getByText('Tomatoes')).toBeTruthy();
+
+    // Reset goes back to grouping by date.
+    app.rtl.fireEvent.press(view.getByTestId('chats-view-reset'));
+    await app.rtl.waitFor(() => expect(headers()).toEqual(['Today']));
   });
 
   // Cases 25/30: most-recently-active conversation is at position 1 (row index 0).
