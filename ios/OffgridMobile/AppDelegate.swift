@@ -15,9 +15,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     handleEventsForBackgroundURLSession identifier: String,
     completionHandler: @escaping () -> Void
   ) {
-    // Pass the completion handler to RNFS so it can finalize the background
-    // URL session and signal iOS that all events have been processed.
-    // Without this, iOS may penalise the app for not calling the handler promptly.
+    // Model downloads keep running in their own background session; iOS wakes the app when they
+    // have events. The downloader calls this handler once it has taken them. Anything else is RNFS.
+    // Without the call, iOS may penalise the app for not calling the handler promptly.
+    if identifier == DownloadManagerModule.backgroundIdentifier {
+      DownloadManagerModule.backgroundEventsCompletionHandler = completionHandler
+      return
+    }
     RNFSBackgroundDownloads.setCompletionHandlerForIdentifier(identifier, completionHandler: completionHandler)
   }
 
