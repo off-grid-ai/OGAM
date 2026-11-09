@@ -10,7 +10,7 @@ import { FONTS, TYPOGRAPHY, SPACING } from '../../constants';
 import { AVAILABLE_TOOLS } from '../../services/tools';
 import { useAppStore, useChatStore } from '../../stores';
 import { useAgentStore } from '../../stores/agentStore';
-import { resetChatTools, toggleChatTool, toolSourceFor, toolsForConversation } from '../../services/tools/chatTools';
+import { resetChatTools, toggleChatTool, toolSourceFor, toolsForConversation, setChatToolGroup, withGroup, groupIsOn, TOOL_GROUPS, PROJECT_TOOL_IDS } from '../../services/tools/chatTools';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 
 const TOOL_WARNING_COLOR = '#F59E0B';
@@ -47,7 +47,15 @@ export const ToolsScreen: React.FC = () => {
     });
   };
 
-  const showHint = enabledTools.length > 3 && !toolCountHintDismissed;
+  // Atlas only sends the tools a message could use, so there is no longer a "keep it to 3" limit.
+  const showHint = false && !toolCountHintDismissed;
+  const inProject = !conv || !!conv.projectId;
+  const shownTools = AVAILABLE_TOOLS.filter(t => inProject || !PROJECT_TOOL_IDS.includes(t.id));
+  const toggleGroup = (tools: string[], on: boolean) => {
+    if (conv) { setChatToolGroup(conv.id, tools, on); return; }
+    updateSettings({ enabledTools: withGroup(useAppStore.getState().settings.enabledTools || [], tools, on) });
+  };
+  const allGroupTools = TOOL_GROUPS.flatMap(g => g.tools);
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
@@ -78,6 +86,34 @@ export const ToolsScreen: React.FC = () => {
           )}
         </View>
 
+        <View testID="tool-groups" style={styles.scopeNote}>
+          <Text style={styles.toolName}>Permissions in one tap</Text>
+          <Text style={styles.toolDescription}>
+            Turn on what this {conv ? 'chat' : 'app'} may use. Atlas only gives the model the tools a message could need, so you can leave many on.
+            {conv && !conv.projectId ? ' Study, maths and project-document tools are used inside projects only.' : ''}
+          </Text>
+          {TOOL_GROUPS.map(g => {
+            const on = groupIsOn(g.tools, enabledTools);
+            return (
+              <View key={g.id} style={styles.toolRow} testID={`tool-group-${g.id}`}>
+                <View style={styles.toolInfo}>
+                  <Text style={styles.toolName}>{g.label}</Text>
+                  <Text style={styles.toolDescription}>{g.hint}</Text>
+                </View>
+                <Switch value={on} onValueChange={(v) => toggleGroup(g.tools, v)}
+                  trackColor={{ false: colors.border, true: `${colors.primary}80` }} thumbColor={on ? colors.primary : colors.textMuted} />
+              </View>
+            );
+          })}
+          <View style={styles.toolRow} testID="tool-group-all">
+            <View style={styles.toolInfo}>
+              <Text style={styles.toolName}>Everything above</Text>
+            </View>
+            <Switch value={groupIsOn(allGroupTools, enabledTools)} onValueChange={(v) => toggleGroup(allGroupTools, v)}
+              trackColor={{ false: colors.border, true: `${colors.primary}80` }} thumbColor={colors.primary} />
+          </View>
+        </View>
+
         <WebSearchSettings />
 
         {showHint && (
@@ -94,7 +130,7 @@ export const ToolsScreen: React.FC = () => {
           </View>
         )}
 
-        {AVAILABLE_TOOLS.map(tool => {
+        {shownTools.map(tool => {
           const isEnabled = enabledTools.includes(tool.id);
           return (
             <View key={tool.id} style={styles.toolRow} testID={`tool-picker-row-${tool.id}`}>
@@ -120,7 +156,7 @@ export const ToolsScreen: React.FC = () => {
           );
         })}
         <Text style={styles.hint}>
-          Enabling more tools can confuse the model and increases latency on first response.
+          Each message is sent with only the tools it could use, so more switches on does not slow replies.
         </Text>
       </ScrollView>
     </SafeAreaView>
