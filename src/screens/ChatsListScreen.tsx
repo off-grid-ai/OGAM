@@ -192,7 +192,8 @@ export const ChatsListScreen: React.FC = () => {
   };
 
   const renderChat = ({ item }: { item: Conversation }) => {
-    const project = item.projectId ? getProject(item.projectId) : null;
+    // Grouped by project, the header already names it: no tag on each row.
+    const project = item.projectId && groupBy !== 'project' ? getProject(item.projectId) : null;
     const selected = selectedIds.has(item.id);
     const index = listIndex.get(item.id) ?? 0;
     const kind = chatKind(item.messages);

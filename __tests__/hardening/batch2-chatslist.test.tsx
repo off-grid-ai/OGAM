@@ -145,6 +145,8 @@ describe('batch2 ChatsListScreen — sort, timestamp format, delete, empty', () 
       .map(node => String(node.props.accessibilityLabel));
     await app.rtl.waitFor(() => expect(headers()).toEqual(['Garden', 'No project']));
     expect(useAppStore.getState().settings.chatsGroupBy).toBe('project');
+    // The header names the project, so the row carries no project tag of its own.
+    expect(view.getAllByText('Garden')).toHaveLength(1);
 
     // Folding Garden hides its chat and keeps the other section.
     app.rtl.fireEvent.press(view.getByTestId(`chats-section-project:${garden.id}`));
