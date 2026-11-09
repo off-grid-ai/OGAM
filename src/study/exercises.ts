@@ -4,7 +4,7 @@
  * question. Exercises the material does not support are dropped (grounding), and malformed model output never throws.
  */
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, type PersistStorage, type StorageValue } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface ExerciseSource { doc: string; page?: number; section?: string; quote: string }
@@ -108,6 +108,22 @@ function hash(s: string): number { let h = 0; for (let i = 0; i < s.length; i++)
 export interface Progress { box: number; due: number; attempts: number; correct: number; last?: boolean; saved?: unknown; /** Marked in the current round; the typed answer stays on screen until the question is asked again. */ answered?: boolean; /** The person's own note on why they got it wrong. */ note?: string }
 const DAYS = [0, 1, 2, 4, 8, 16];
 
+/**
+ * Saves at most once every `ms` after the last change. Typing in a drill answer changes the store on every key, and each save writes
+ * every saved question; without this, one answer meant dozens of full writes. The latest value always gets written.
+ */
+export function debouncedStorage<S>(ms: number): PersistStorage<S> {
+  const base = createJSONStorage<S>(() => AsyncStorage) as PersistStorage<S>;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let waiting: { name: string; value: StorageValue<S> } | undefined;
+  const flush = () => { timer = undefined; const w = waiting; waiting = undefined; if (w) void base.setItem(w.name, w.value); };
+  return {
+    getItem: (name) => base.getItem(name),
+    removeItem: (name) => { waiting = undefined; return base.removeItem(name); },
+    setItem: (name, value) => { waiting = { name, value }; if (timer) clearTimeout(timer); timer = setTimeout(flush, ms); },
+  };
+}
+
 const MAX_BANK = 600;
 /**
  * Keeps the saved questions from growing without limit (every drill press adds some, and they are all saved on the phone).
@@ -135,6 +151,8 @@ interface ExerciseState {
   setNote: (id: string, note: string) => void;
   /** Starts these questions afresh: wipes the typed answer and the "marked" flag (scores and review dates stay). */
   freshen: (ids: string[]) => void;
+  /** Deletes every saved question, score, note and the daily counts (the goal setting stays). */
+  clearAll: () => void;
   exercises: Record<string, Exercise>;
   addSet: (set: Exercise[]) => void;
   record: (id: string, correct: boolean, now?: number) => void;
@@ -145,6 +163,7 @@ interface ExerciseState {
 export const useExerciseStore = create<ExerciseState>()(persist((set) => ({
   progress: {}, exercises: {}, daily: {}, goal: { on: false, perDay: 10 },
   freshen: (ids) => set((st) => ({ progress: Object.fromEntries(Object.entries(st.progress).map(([id, p]) => [id, ids.includes(id) ? { ...p, saved: undefined, answered: false } : p])) })),
+  clearAll: () => set({ exercises: {}, progress: {}, daily: {} }),
   setGoal: (g) => set((st) => ({ goal: { ...st.goal, ...g } })),
   setNote: (id, note) => set((st) => ({ progress: { ...st.progress, [id]: { ...(st.progress[id] ?? { box: 0, due: 0, attempts: 0, correct: 0 }), note: note.slice(0, 400) } } })),
   addSet: (s) => set((st) => pruneBank({ ...st.exercises, ...Object.fromEntries(s.map((e) => [e.id, e])) }, st.progress, s.map((e) => e.id))),
@@ -161,7 +180,7 @@ export const useExerciseStore = create<ExerciseState>()(persist((set) => ({
     ids.forEach((i) => { delete exercises[i]; delete progress[i]; });
     return { exercises, progress };
   }),
-}), { name: 'atlas-exercises', storage: createJSONStorage(() => AsyncStorage) }));
+}), { name: 'atlas-exercises', storage: debouncedStorage<ExerciseState>(600) }));
 
 /** A practice set: due and missed first, then unseen, then the rest; optional topic filter. Harder boxes come after easier ones. */
 export function practiceSet(exercises: Exercise[], progress: Record<string, Progress>, opts: { topic?: string; count?: number; now?: number } = {}): Exercise[] {

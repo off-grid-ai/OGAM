@@ -11,8 +11,8 @@ const mockRestore = jest.fn(async (_files: any[], _ids: string[]) => 1);
 jest.mock('../../../src/atlasTools/projectBackupFiles', () => ({
   collectProjectFiles: (...a: any[]) => mockCollect(...a as [string[]]),
   restoreProjectFiles: (...a: any[]) => mockRestore(...a as [any[], string[]]),
-  // The real preflight check: restore must refuse corrupt manifests before touching any store.
-  validateProjectFiles: jest.requireActual('../../../src/atlasTools/projectBackupFiles').validateProjectFiles,
+  // The real manifest check: backup.ts now validates every document before it changes anything.
+  validateProjectFiles: (...a: any[]) => (jest.requireActual('../../../src/atlasTools/projectBackupFiles') as any).validateProjectFiles(...a),
 }));
 jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: {
   getAllKeys: jest.fn(async () => [...mockStore.keys()]),
@@ -73,13 +73,13 @@ describe('portable backup project file round trip', () => {
     expect(JSON.parse(mockArchive).projectFiles).toBeUndefined();
     expect(mockCollect).not.toHaveBeenCalled();
   });
-  it('refuses corrupt restored project files before importing settings', async () => {
+  it('a failed document restore leaves the settings exactly as they were (rolled back)', async () => {
     await exportBackup('very-long-backup-password');
+    mockStore.set('local-llm-project-storage', JSON.stringify({ state: { projects: [{ id: 'therapy', name: 'Edited since the backup' }] }, version: 0 }));
+    const before = new Map(mockStore);
     mockRestore.mockRejectedValueOnce(new Error('Invalid project document in backup'));
-    const before = JSON.stringify([...mockStore.entries()].sort());
     await expect(importBackup('very-long-backup-password')).rejects.toThrow(/Invalid project document/);
-    // The project documents are restored last; when that fails the settings written before it are put back.
-    expect(JSON.stringify([...mockStore.entries()].sort())).toBe(before);
+    expect(new Map(mockStore)).toEqual(before);
   });
 });
 

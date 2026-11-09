@@ -569,6 +569,12 @@ What changed:
   model. A second, short-prompt check decides whether to use the first-word workaround: prompts under about 192 tokens run
   once first so the first word comes from the engine's single-token step; it is switched on only if the same check passes with
   it, and never for long prompts. The remembered verdict records the batch size and CPU-kernel setting.
+- 0.0.146: audit and polish. Efficiency: practice questions were written to storage in full on every key typed into a drill answer;
+  they are now saved once, 0.6 seconds after you stop. Clean-up: the Practice screen is split into a start panel and a question panel
+  (it had grown to one 190-line function), shared styles live in one file, unused imports and style entries removed, two functions
+  that took too many positional arguments now take one object. Small additions: the plan screen shows days to go for each exam;
+  the periodic table has a colour key; a timed exam keeps the screen on; "Clear my practice history" on the Practice screen (asks
+  first, keeps your daily-goal setting). Not verified on a phone.
 - 0.0.144: teaching moved onto the learning game board, with no subject to pick. The AI plans a whole subject (up to 60 squares in
   up to 10 units) and now has these new square types: "Exact drill" (practice the app makes and marks itself with exact arithmetic,
   with account dropdowns and amounts to type for financial statements: balance sheet, income statement, cash flow, trial balance,

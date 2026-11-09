@@ -26,6 +26,8 @@ it('saves exams in order, shows today\'s target, ticks topics, and explains a ba
   expect(r.getByTestId('plan-msg').props.children).toMatch(/Saved 2 exams/);
   expect(usePlanStore.getState().exams.map((e: any) => e.name)).toEqual(['REG', 'TCP']);
   expect(r.getByTestId('plan-today')).toBeTruthy();
+  expect(r.getByTestId('exam-days-REG').props.children.join('')).toMatch(/\(40 days to go\)/);
+  expect(r.getByTestId('exam-days-TCP').props.children.join('')).toMatch(/\(90 days to go\)/);
   const topic = () => r.getAllByRole('checkbox')[0];
   expect(r.getAllByText('REG: Basis').length).toBeGreaterThan(0);
 

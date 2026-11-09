@@ -42,11 +42,16 @@ type RenderJob = { path: string; run: () => Promise<string | null>; resolve: (pa
 const queued: RenderJob[] = [];
 const pending = new Map<string, Promise<string | null>>();
 let rendering = false;
+let pumpScheduled = false;
+/** Starts the queue on the next tick, so lines asked for together are all queued, in order, before the first one starts. */
+function schedulePump(): void {
+  if (pumpScheduled) return;
+  pumpScheduled = true;
+  void Promise.resolve().then(() => { pumpScheduled = false; pump(); });
+}
 
-/** While > 0, newly queued jobs wait, so a batch can be put in order before the first one starts. */
-let holdPump = 0;
 function pump(): void {
-  if (rendering || holdPump > 0) return;
+  if (rendering) return;
   const next = queued.shift();
   if (!next) return;
   rendering = true;
@@ -63,7 +68,8 @@ function prioritize(path: string): void {
 }
 
 /** Render once per file, moving requested playback ahead of queued background work. */
-function render(key: string, items: CastLine[], i: number, urgent = false): Promise<string | null> {
+function render(ref: { key: string; items: CastLine[]; i: number }, urgent = false): Promise<string | null> {
+  const { key, items, i } = ref;
   const path = pathFor(key, i, items[i]);
   const known = pending.get(path);
   if (known) {
@@ -91,7 +97,7 @@ function render(key: string, items: CastLine[], i: number, urgent = false): Prom
     },
   };
   if (urgent) queued.unshift(job); else queued.push(job);
-  pump();
+  schedulePump();
   return result;
 }
 
@@ -113,7 +119,7 @@ export async function pruneEpisodes(keepKey: string): Promise<void> {
 export function preRenderEpisode(key: string, items: CastLine[]): void {
   if (!renderable(items)) return;
   pruneEpisodes(key).catch(() => undefined);
-  items.forEach((_, i) => { render(key, items, i).catch(() => undefined); });
+  items.forEach((_, i) => { render({ key, items, i }).catch(() => undefined); });
 }
 
 let sessionReady = false;
@@ -195,24 +201,23 @@ function playFile(path: string): Promise<PlayResult> {
  */
 export async function playLine(key: string, items: CastLine[], i: number): Promise<boolean> {
   const line = items[i];
-  if (!renderable(items)) { logger.warn('[POD] this phone cannot save speech to a file, so every line is spoken live (expect a long silence before each)'); return speakAndWait(line.text, line.pitch, 'podcast', line.voice || ''); }
+  if (!renderable(items)) {
+    logger.warn('[POD] this phone cannot save speech to a file, so every line is spoken live (expect a long silence before each)');
+    return speakAndWait(line.text, line.pitch, 'podcast', line.voice || '');
+  }
   const token = stopToken;
   // This line first, then the next few behind it, so it never waits for the others.
   // Queue the next lines in reverse priority order, then put this line first.
-  // The queue must be in order BEFORE the engine starts: the first job queued otherwise starts at once, so the line to
-  // play waited behind a line three ahead of it (seconds of silence before every line).
-  holdPump++;
-  let current: Promise<string | null>;
-  try {
-    for (let k = Math.min(items.length - 1, i + AHEAD); k > i; k--) render(key, items, k, true).catch(() => undefined);
-    current = render(key, items, i, true);
-  } finally { holdPump--; }
-  pump();
+  for (let k = Math.min(items.length - 1, i + AHEAD); k > i; k--) render({ key, items, i: k }, true).catch(() => undefined);
+  const current = render({ key, items, i }, true);
   // And the next line is decoded now, while this one plays, so the gap between lines is not a decode.
-  if (i + 1 < items.length) render(key, items, i + 1).then((next) => { if (next) decode(next).catch(() => undefined); }).catch(() => undefined);
+  if (i + 1 < items.length) render({ key, items, i: i + 1 }).then((next) => { if (next) decode(next).catch(() => undefined); }).catch(() => undefined);
   const path = await current;
   if (token !== stopToken) return false;
-  if (!path) { logger.warn(`[POD] line ${i}: no rendered file, speaking it live (expect a long silence first)`); return speakAndWait(line.text, line.pitch, 'podcast', line.voice || ''); }
+  if (!path) {
+    logger.warn(`[POD] line ${i}: no rendered file, speaking it live (expect a long silence first)`);
+    return speakAndWait(line.text, line.pitch, 'podcast', line.voice || '');
+  }
   // A saved file the system could not play (cleared from the cache, cut short): forget it and say the
   // line live instead of ending the whole podcast.
   const result = await playFile(path);
