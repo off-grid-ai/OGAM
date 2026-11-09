@@ -204,7 +204,7 @@ export const AppearanceScreen: React.FC = () => {
           options={[{ id: undefined, name: 'Model decides' }, { id: false, name: 'Never' }, { id: true, name: 'Sometimes' }]} />
         <Text style={styles.label}>Follow-up questions</Text>
         <Chips testID="ai-followups" value={ai.followUps} onPick={followUps => setAi({ followUps })}
-          options={[{ id: undefined, name: 'Model decides' }, { id: false, name: 'Never' }, { id: true, name: 'When useful' }]} />
+          options={[{ id: undefined, name: 'Only when needed' }, { id: false, name: 'Never' }, { id: true, name: 'When useful' }]} />
         <Text style={styles.label}>Where I am</Text>
         <Chips testID="share-location" value={settings.shareLocation !== false} onPick={on => updateSettings({ shareLocation: on })}
           options={[{ id: true, name: 'Tell the AI the city' }, { id: false, name: 'Never' }]} />
