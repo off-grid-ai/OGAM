@@ -6,6 +6,7 @@ import {
   resolveHuggingFaceModel,
   type MobileWhisperCatalogModel,
   extractQuantization,
+  cleanModelName,
   imageEngineSettings,
   isCompleteSDCheckpointHeader,
   isImageWeightAvailableOn,
@@ -413,7 +414,9 @@ export async function searchEmbeddingModels(query: string, signal?: AbortSignal)
       (file.lfs?.size ?? file.size ?? 0) > 0,
     ).map(file => ({
       id: `${repo.id}@${data.sha}/${file.rfilename}`,
-      name: `${repo.id} / ${file.rfilename}`,
+      // The name a person reads ("Bge small en v1.5"), not "org/repo / file.gguf": the quant shows on
+      // its own beside it (Mac, 2026-11-08).
+      name: cleanModelName(file.rfilename),
       size: file.lfs?.size ?? file.size ?? 0,
       sha256: file.lfs?.sha256,
       downloadUrl: `https://huggingface.co/${repo.id}/resolve/${data.sha}/${file.rfilename.split('/').map(encodeURIComponent).join('/')}`,
