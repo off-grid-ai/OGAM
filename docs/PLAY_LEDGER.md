@@ -748,3 +748,8 @@ Feedback (PostHog, Mac): 89 of 330 new phone users finished a download; on iPhon
 - **iPhone cause:** the downloader used only a foreground session, so a download died when the app was suspended or the phone locked. There was no resume, and no retry after a drop. Fix in progress: the fast session while on screen, a hand-off with resume data to a background session off screen, up to 5 automatic resumes after a drop, and reason codes matching Android.
 - **First model:** setup preselected Balanced, which on a 6–8 GB phone is a 3.4 GB download. Quick start (the best model under 1 GB, Qwen 3.5 0.8B) is now the default (`8a7465c37`).
 - **Not yet done:** an app force-quit by the person still needs a tap on retry. JS reconcile after a kill is still unwired.
+- **Device proof, 13:44, iPhone 17 Pro Max:**
+  - *Background:* app suspended 2 min, a 2.9 GB download went from 15% to 25%. Back on screen it kept its bytes and finished in about 16 min.
+  - *Airplane Mode:* 60 s offline left no failure; it continued from 36% when the network returned. After `f62bfb810`, a second run held 5% offline (it had dropped to 0% before) and went on to 8%.
+  - Commits `5093c9011`, `f62bfb810`.
+- **Screen review:** new link https://claude.ai/artifact/TH4eeVc9r6JKZ9wQfjFvtE (the old page belongs to the other account). New versions for Home, Models: Text, Models: Documents (incl. search), Storage, Model settings and Downloads, plus a new screen "Choose models (first run)". 4 marks are on Downloads (file names, the bar covering the second line) and Documents search ("Bge m3").

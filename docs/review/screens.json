@@ -1,791 +1,856 @@
 [
- {
-  "id": "home",
-  "name": "Home",
-  "group": "Home",
-  "what": "The front door: name, promise, New chat, models, recent chats",
-  "file": "screens/v/home-3.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:07Z",
-    "file": "screens/v/home-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T13:00:34Z",
-    "file": "screens/v/home-2.jpg",
-    "clip": "screens/v/home-2.mp4",
-    "android": "screens/v/home-android.jpg"
-   },
-   {
-    "v": 3,
-    "label": "Recent is one line per chat",
-    "at": "2026-11-07T10:33:19Z",
-    "file": "screens/v/home-ios-r3.jpg",
-    "android": "screens/v/home-3.jpg",
-    "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
-   }
-  ]
- },
- {
-  "id": "chats",
-  "name": "Chats",
-  "group": "Chats",
-  "what": "Every chat, searchable",
-  "file": "screens/v/chats-3.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:07Z",
-    "file": "screens/v/chats-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:32Z",
-    "file": "screens/v/chats-2.jpg",
-    "android": "screens/v/chats-android.jpg"
-   },
-   {
-    "v": 3,
-    "label": "One line per chat, no card",
-    "at": "2026-11-07T10:33:19Z",
-    "file": "screens/v/chats-ios-r3.jpg",
-    "android": "screens/v/chats-3.jpg",
-    "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
-   }
-  ]
- },
- {
-  "id": "chat",
-  "name": "A chat",
-  "group": "Chat",
-  "what": "A conversation with a reply",
-  "file": "screens/v/chat-3.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:07Z",
-    "file": "screens/v/chat-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:32Z",
-    "file": "screens/v/chat-2.jpg",
-    "android": "screens/v/chat-android.jpg"
-   },
-   {
-    "v": 3,
-    "label": "Work done and Thought, open by default",
-    "at": "2026-11-07T10:33:19Z",
-    "file": "screens/v/chat-ios-r3.jpg",
-    "android": "screens/v/chat-3.jpg",
-    "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
-   }
-  ]
- },
- {
-  "id": "attach-menu",
-  "name": "Attach menu",
-  "group": "Chat",
-  "what": "The + in the composer: Take photo, Choose photo, Document, in one step (Android shot; the iPhone shot follows)",
-  "file": "screens/v/attach-menu-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Android pass",
-    "at": "2026-11-07T07:38:09Z",
-    "file": "screens/v/attach-menu-1-android.jpg",
-    "android": "screens/v/attach-menu-1-android.jpg"
-   },
-   {
-    "v": 2,
-    "label": "One menu: Take photo, Choose photo, Document",
-    "at": "2026-11-07T10:33:19Z",
-    "file": "screens/v/attach-menu-ios-r3.jpg",
-    "android": "screens/v/attach-menu-2.jpg",
-    "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
-   }
-  ]
- },
- {
-  "id": "composer-photo",
-  "name": "Composer with a photo",
-  "group": "Chat",
-  "what": "A photo attached, before sending",
-  "file": "screens/v/composer-photo-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-07T05:03:22Z",
-    "file": "screens/v/composer-photo-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-07T05:03:33Z",
-    "file": "screens/v/composer-photo-2.jpg"
-   }
-  ]
- },
- {
-  "id": "chat-options-menu",
-  "name": "Chat options",
-  "group": "Chat",
-  "what": "The + menu beside the composer",
-  "file": "screens/v/chat-options-menu-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:07Z",
-    "file": "screens/v/chat-options-menu-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:32Z",
-    "file": "screens/v/chat-options-menu-2.jpg"
-   }
-  ]
- },
- {
-  "id": "chat-settings-sheet",
-  "name": "Chat settings",
-  "group": "Chat",
-  "what": "Settings for this chat",
-  "file": "screens/v/chat-settings-sheet-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:07Z",
-    "file": "screens/v/chat-settings-sheet-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:32Z",
-    "file": "screens/v/chat-settings-sheet-2.jpg"
-   }
-  ]
- },
- {
-  "id": "projects",
-  "name": "Projects",
-  "group": "Projects",
-  "what": "All projects",
-  "file": "screens/v/projects-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:08Z",
-    "file": "screens/v/projects-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:33Z",
-    "file": "screens/v/projects-2.jpg"
-   }
-  ]
- },
- {
-  "id": "project",
-  "name": "A project",
-  "group": "Projects",
-  "what": "One project's chats",
-  "file": "screens/v/project-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:08Z",
-    "file": "screens/v/project-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:33Z",
-    "file": "screens/v/project-2.jpg"
-   }
-  ]
- },
- {
-  "id": "project-knowledge",
-  "name": "Project knowledge base",
-  "group": "Projects",
-  "what": "Documents a project answers from",
-  "file": "screens/v/project-knowledge-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:08Z",
-    "file": "screens/v/project-knowledge-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:32Z",
-    "file": "screens/v/project-knowledge-2.jpg"
-   }
-  ]
- },
- {
-  "id": "models-text",
-  "name": "Models: Text",
-  "group": "Models",
-  "what": "Text models to download and use",
-  "file": "screens/v/models-text-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:08Z",
-    "file": "screens/v/models-text-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T13:02:08Z",
-    "file": "screens/v/models-text-2.jpg"
-   }
-  ]
- },
- {
-  "id": "text-picker",
-  "name": "Text model sheet",
-  "group": "Models",
-  "what": "The text model sheet from the Home chip: this phone's models, then other devices'",
-  "file": "screens/v/text-picker-1.jpg",
-  "clip": "screens/v/text-picker-1.mp4",
-  "versions": [
-   {
-    "v": 1,
-    "label": "First look",
-    "at": "2026-11-06T13:01:44Z",
+  {
+    "id": "setup",
+    "name": "Choose models (first run)",
+    "group": "Setup",
+    "what": "What a new person sees first: Quick start, a model under 1 GB, is chosen for them.",
+    "file": "screens/v/setup-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Quick start first",
+        "at": "2026-11-09T08:02:29Z",
+        "file": "screens/v/setup-1.jpg",
+        "what": "Quick start (Qwen 3.5 0.8B, 706 MB) replaces Lean and is the default for a new person; Balanced and Extreme stay one tap away."
+      }
+    ]
+  },
+  {
+    "id": "home",
+    "name": "Home",
+    "group": "Home",
+    "what": "The front door: name, promise, New chat, models, recent chats",
+    "file": "screens/v/home-4.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:07Z",
+        "file": "screens/v/home-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T13:00:34Z",
+        "file": "screens/v/home-2.jpg",
+        "clip": "screens/v/home-2.mp4",
+        "android": "screens/v/home-android.jpg"
+      },
+      {
+        "v": 3,
+        "label": "Recent is one line per chat",
+        "at": "2026-11-07T10:33:19Z",
+        "file": "screens/v/home-ios-r3.jpg",
+        "android": "screens/v/home-3.jpg",
+        "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
+      },
+      {
+        "v": 4,
+        "label": "Logo and living field",
+        "at": "2026-11-09T08:02:29Z",
+        "file": "screens/v/home-4.jpg",
+        "what": "The logo is the website's sharp mark, larger than the title; the dots fade out behind the status bar and headers."
+      }
+    ]
+  },
+  {
+    "id": "chats",
+    "name": "Chats",
+    "group": "Chats",
+    "what": "Every chat, searchable",
+    "file": "screens/v/chats-3.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:07Z",
+        "file": "screens/v/chats-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:32Z",
+        "file": "screens/v/chats-2.jpg",
+        "android": "screens/v/chats-android.jpg"
+      },
+      {
+        "v": 3,
+        "label": "One line per chat, no card",
+        "at": "2026-11-07T10:33:19Z",
+        "file": "screens/v/chats-ios-r3.jpg",
+        "android": "screens/v/chats-3.jpg",
+        "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
+      }
+    ]
+  },
+  {
+    "id": "chat",
+    "name": "A chat",
+    "group": "Chat",
+    "what": "A conversation with a reply",
+    "file": "screens/v/chat-3.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:07Z",
+        "file": "screens/v/chat-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:32Z",
+        "file": "screens/v/chat-2.jpg",
+        "android": "screens/v/chat-android.jpg"
+      },
+      {
+        "v": 3,
+        "label": "Work done and Thought, open by default",
+        "at": "2026-11-07T10:33:19Z",
+        "file": "screens/v/chat-ios-r3.jpg",
+        "android": "screens/v/chat-3.jpg",
+        "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
+      }
+    ]
+  },
+  {
+    "id": "attach-menu",
+    "name": "Attach menu",
+    "group": "Chat",
+    "what": "The + in the composer: Take photo, Choose photo, Document, in one step (Android shot; the iPhone shot follows)",
+    "file": "screens/v/attach-menu-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Android pass",
+        "at": "2026-11-07T07:38:09Z",
+        "file": "screens/v/attach-menu-1-android.jpg",
+        "android": "screens/v/attach-menu-1-android.jpg"
+      },
+      {
+        "v": 2,
+        "label": "One menu: Take photo, Choose photo, Document",
+        "at": "2026-11-07T10:33:19Z",
+        "file": "screens/v/attach-menu-ios-r3.jpg",
+        "android": "screens/v/attach-menu-2.jpg",
+        "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
+      }
+    ]
+  },
+  {
+    "id": "composer-photo",
+    "name": "Composer with a photo",
+    "group": "Chat",
+    "what": "A photo attached, before sending",
+    "file": "screens/v/composer-photo-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-07T05:03:22Z",
+        "file": "screens/v/composer-photo-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-07T05:03:33Z",
+        "file": "screens/v/composer-photo-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "chat-options-menu",
+    "name": "Chat options",
+    "group": "Chat",
+    "what": "The + menu beside the composer",
+    "file": "screens/v/chat-options-menu-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:07Z",
+        "file": "screens/v/chat-options-menu-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:32Z",
+        "file": "screens/v/chat-options-menu-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "chat-settings-sheet",
+    "name": "Chat settings",
+    "group": "Chat",
+    "what": "Settings for this chat",
+    "file": "screens/v/chat-settings-sheet-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:07Z",
+        "file": "screens/v/chat-settings-sheet-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:32Z",
+        "file": "screens/v/chat-settings-sheet-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "projects",
+    "name": "Projects",
+    "group": "Projects",
+    "what": "All projects",
+    "file": "screens/v/projects-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:08Z",
+        "file": "screens/v/projects-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:33Z",
+        "file": "screens/v/projects-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "project",
+    "name": "A project",
+    "group": "Projects",
+    "what": "One project's chats",
+    "file": "screens/v/project-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:08Z",
+        "file": "screens/v/project-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:33Z",
+        "file": "screens/v/project-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "project-knowledge",
+    "name": "Project knowledge base",
+    "group": "Projects",
+    "what": "Documents a project answers from",
+    "file": "screens/v/project-knowledge-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:08Z",
+        "file": "screens/v/project-knowledge-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:32Z",
+        "file": "screens/v/project-knowledge-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "models-text",
+    "name": "Models: Text",
+    "group": "Models",
+    "what": "Text models to download and use",
+    "file": "screens/v/models-text-3.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:08Z",
+        "file": "screens/v/models-text-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T13:02:08Z",
+        "file": "screens/v/models-text-2.jpg"
+      },
+      {
+        "v": 3,
+        "label": "Real names and sizes",
+        "at": "2026-11-09T08:02:29Z",
+        "file": "screens/v/models-text-3.jpg",
+        "what": "Every model row shows its size and its real name from the shared resolver; a download in progress shows on the Fast card."
+      }
+    ]
+  },
+  {
+    "id": "text-picker",
+    "name": "Text model sheet",
+    "group": "Models",
+    "what": "The text model sheet from the Home chip: this phone's models, then other devices'",
     "file": "screens/v/text-picker-1.jpg",
-    "clip": "screens/v/text-picker-1.mp4"
-   }
-  ]
- },
- {
-  "id": "image-picker",
-  "name": "Image model sheet",
-  "group": "Models",
-  "what": "The image model sheet from the Home chip",
-  "file": "screens/v/image-picker-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "First look",
-    "at": "2026-11-06T13:01:57Z",
-    "file": "screens/v/image-picker-1.jpg"
-   }
-  ]
- },
- {
-  "id": "talk-sheet",
-  "name": "Talk sheet",
-  "group": "Models",
-  "what": "What the Talk card opens: speech-to-text models, this phone first",
-  "file": "screens/v/talk-sheet-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "First look",
-    "at": "2026-11-06T13:01:32Z",
-    "file": "screens/v/talk-sheet-1.jpg"
-   }
-  ]
- },
- {
-  "id": "models-documents",
-  "name": "Models: Documents",
-  "group": "Models",
-  "what": "The document search model",
-  "file": "screens/v/models-documents-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:08Z",
-    "file": "screens/v/models-documents-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T13:02:22Z",
-    "file": "screens/v/models-documents-2.jpg"
-   }
-  ]
- },
- {
-  "id": "models-image",
-  "name": "Models: Image",
-  "group": "Models",
-  "what": "Picks for this phone, then every image model",
-  "file": "screens/v/models-image-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "First look",
-    "at": "2026-11-06T13:02:32Z",
-    "file": "screens/v/models-image-1.jpg"
-   }
-  ]
- },
- {
-  "id": "models-video",
-  "name": "Models: Video",
-  "group": "Models",
-  "what": "Video models; the one in use is marked",
-  "file": "screens/v/models-video-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "First look",
-    "at": "2026-11-06T13:02:43Z",
-    "file": "screens/v/models-video-1.jpg"
-   }
-  ]
- },
- {
-  "id": "models-voice",
-  "name": "Models: Voice",
-  "group": "Models",
-  "what": "Voices that read replies aloud",
-  "file": "screens/v/models-voice-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "First look",
-    "at": "2026-11-06T13:02:55Z",
-    "file": "screens/v/models-voice-1.jpg"
-   }
-  ]
- },
- {
-  "id": "models-speech",
-  "name": "Models: Speech",
-  "group": "Models",
-  "what": "Speech-to-text picks, then English-only and multilingual",
-  "file": "screens/v/models-speech-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "First look",
-    "at": "2026-11-06T13:03:04Z",
-    "file": "screens/v/models-speech-1.jpg"
-   }
-  ]
- },
- {
-  "id": "downloads",
-  "name": "Downloads",
-  "group": "Models",
-  "what": "Downloads in progress and on this phone",
-  "file": "screens/v/downloads-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:08Z",
-    "file": "screens/v/downloads-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T13:03:16Z",
-    "file": "screens/v/downloads-2.jpg"
-   }
-  ]
- },
- {
-  "id": "gallery",
-  "name": "Gallery",
-  "group": "Gallery",
-  "what": "Generated images and videos",
-  "file": "screens/v/gallery-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:08Z",
-    "file": "screens/v/gallery-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T13:03:43Z",
-    "file": "screens/v/gallery-2.jpg"
-   }
-  ]
- },
- {
-  "id": "gallery-videos",
-  "name": "Gallery: Videos",
-  "group": "Gallery",
-  "what": "Start a film, your cast, then every clip",
-  "file": "screens/v/gallery-videos-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "First look",
-    "at": "2026-11-06T13:03:53Z",
-    "file": "screens/v/gallery-videos-1.jpg"
-   }
-  ]
- },
- {
-  "id": "video-library",
-  "name": "Your videos",
-  "group": "Gallery",
-  "what": "Every film and clip in a grid",
-  "file": "screens/v/video-library-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "First look",
-    "at": "2026-11-06T13:04:20Z",
-    "file": "screens/v/video-library-1.jpg"
-   }
-  ]
- },
- {
-  "id": "gallery-viewer",
-  "name": "Image viewer",
-  "group": "Gallery",
-  "what": "One image, full screen",
-  "file": "screens/v/gallery-viewer-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:09Z",
-    "file": "screens/v/gallery-viewer-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:32Z",
-    "file": "screens/v/gallery-viewer-2.jpg"
-   }
-  ]
- },
- {
-  "id": "settings",
-  "name": "Settings",
-  "group": "Settings",
-  "what": "Settings, top",
-  "file": "screens/v/settings-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:09Z",
-    "file": "screens/v/settings-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:33Z",
-    "file": "screens/v/settings-2.jpg"
-   }
-  ]
- },
- {
-  "id": "model-settings-image-video",
-  "name": "Model settings: Image & video",
-  "group": "Settings",
-  "what": "Picture style at the top of the Image card, and one switch look (Android shot; the iPhone shot follows)",
-  "file": "screens/v/model-settings-image-video-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Android pass",
-    "at": "2026-11-07T07:38:09Z",
-    "file": "screens/v/model-settings-image-video-1-android.jpg",
-    "android": "screens/v/model-settings-image-video-1-android.jpg"
-   },
-   {
-    "v": 2,
-    "label": "One switch look",
-    "at": "2026-11-07T10:33:19Z",
-    "file": "screens/v/model-settings-image-video-ios-r3.jpg",
-    "android": "screens/v/model-settings-image-video-2.jpg",
-    "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
-   }
-  ]
- },
- {
-  "id": "settings-lower",
-  "name": "Settings, lower",
-  "group": "Settings",
-  "what": "Settings, scrolled down",
-  "file": "screens/v/settings-lower-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:09Z",
-    "file": "screens/v/settings-lower-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T13:04:44Z",
-    "file": "screens/v/settings-lower-2.jpg"
-   }
-  ]
- },
- {
-  "id": "settings-model",
-  "name": "Model settings",
-  "group": "Settings",
-  "what": "How the models run",
-  "file": "screens/v/settings-model-3.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:09Z",
-    "file": "screens/v/settings-model-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:33Z",
-    "file": "screens/v/settings-model-2.jpg",
-    "android": "screens/v/settings-model-android.jpg"
-   },
-   {
-    "v": 3,
-    "label": "Aggressive on one line",
-    "at": "2026-11-07T10:33:19Z",
-    "file": "screens/v/settings-model-ios-r3.jpg",
-    "android": "screens/v/settings-model-3.jpg",
-    "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
-   }
-  ]
- },
- {
-  "id": "settings-document-search",
-  "name": "Document search",
-  "group": "Settings",
-  "what": "Which model finds passages in documents",
-  "file": "screens/v/settings-document-search-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:09Z",
-    "file": "screens/v/settings-document-search-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:33Z",
-    "file": "screens/v/settings-document-search-2.jpg"
-   }
-  ]
- },
- {
-  "id": "settings-remote-servers",
-  "name": "Remote servers",
-  "group": "Settings",
-  "what": "Use models running on another computer",
-  "file": "screens/v/settings-remote-servers-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:09Z",
-    "file": "screens/v/settings-remote-servers-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:33Z",
-    "file": "screens/v/settings-remote-servers-2.jpg"
-   }
-  ]
- },
- {
-  "id": "settings-storage",
-  "name": "Storage",
-  "group": "Settings",
-  "what": "What takes space",
-  "file": "screens/v/settings-storage-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:09Z",
-    "file": "screens/v/settings-storage-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:33Z",
-    "file": "screens/v/settings-storage-2.jpg"
-   }
-  ]
- },
- {
-  "id": "settings-device-information",
-  "name": "Device information",
-  "group": "Settings",
-  "what": "This phone's hardware and what it can run",
-  "file": "screens/v/settings-device-information-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:09Z",
-    "file": "screens/v/settings-device-information-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:33Z",
-    "file": "screens/v/settings-device-information-2.jpg"
-   }
-  ]
- },
- {
-  "id": "settings-security",
-  "name": "Security",
-  "group": "Settings",
-  "what": "App lock",
-  "file": "screens/v/settings-security-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:09Z",
-    "file": "screens/v/settings-security-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:33Z",
-    "file": "screens/v/settings-security-2.jpg"
-   }
-  ]
- },
- {
-  "id": "settings-engine-updates",
-  "name": "Engine updates",
-  "group": "Settings",
-  "what": "How the engine stays current",
-  "file": "screens/v/settings-engine-updates-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:10Z",
-    "file": "screens/v/settings-engine-updates-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:33Z",
-    "file": "screens/v/settings-engine-updates-2.jpg"
-   }
-  ]
- },
- {
-  "id": "settings-what-we-share",
-  "name": "What we share",
-  "group": "Settings",
-  "what": "What analytics sends and never sends",
-  "file": "screens/v/settings-what-we-share-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:10Z",
-    "file": "screens/v/settings-what-we-share-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:33Z",
-    "file": "screens/v/settings-what-we-share-2.jpg"
-   }
-  ]
- },
- {
-  "id": "settings-about",
-  "name": "About",
-  "group": "Settings",
-  "what": "About Off Grid AI",
-  "file": "screens/v/settings-about-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:10Z",
-    "file": "screens/v/settings-about-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T13:04:56Z",
-    "file": "screens/v/settings-about-2.jpg"
-   }
-  ]
- },
- {
-  "id": "tools",
-  "name": "Tools",
-  "group": "Tools",
-  "what": "Tools the model can use",
-  "file": "screens/v/tools-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:10Z",
-    "file": "screens/v/tools-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:33Z",
-    "file": "screens/v/tools-2.jpg"
-   }
-  ]
- },
- {
-  "id": "pro-tools",
-  "name": "Pro tools",
-  "group": "Tools",
-  "what": "Email, calendar and MCP servers",
-  "file": "screens/v/pro-tools-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Reviewed",
-    "at": "2026-11-06T06:14:10Z",
-    "file": "screens/v/pro-tools-1.jpg"
-   },
-   {
-    "v": 2,
-    "label": "Release pass",
-    "at": "2026-11-06T10:21:32Z",
-    "file": "screens/v/pro-tools-2.jpg"
-   }
-  ]
- }
+    "clip": "screens/v/text-picker-1.mp4",
+    "versions": [
+      {
+        "v": 1,
+        "label": "First look",
+        "at": "2026-11-06T13:01:44Z",
+        "file": "screens/v/text-picker-1.jpg",
+        "clip": "screens/v/text-picker-1.mp4"
+      }
+    ]
+  },
+  {
+    "id": "image-picker",
+    "name": "Image model sheet",
+    "group": "Models",
+    "what": "The image model sheet from the Home chip",
+    "file": "screens/v/image-picker-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "First look",
+        "at": "2026-11-06T13:01:57Z",
+        "file": "screens/v/image-picker-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "talk-sheet",
+    "name": "Talk sheet",
+    "group": "Models",
+    "what": "What the Talk card opens: speech-to-text models, this phone first",
+    "file": "screens/v/talk-sheet-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "First look",
+        "at": "2026-11-06T13:01:32Z",
+        "file": "screens/v/talk-sheet-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "models-documents",
+    "name": "Models: Documents",
+    "group": "Models",
+    "what": "The document search model",
+    "file": "screens/v/models-documents-4.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:08Z",
+        "file": "screens/v/models-documents-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T13:02:22Z",
+        "file": "screens/v/models-documents-2.jpg"
+      },
+      {
+        "v": 3,
+        "label": "Search shows model names",
+        "at": "2026-11-09T08:02:29Z",
+        "file": "screens/v/models-documents-3.jpg",
+        "what": "Search results read 'Bge m3' with the quant beside it, not 'org/repo / file.gguf'; the intro sits on the glass."
+      },
+      {
+        "v": 4,
+        "label": "Search results",
+        "at": "2026-11-09T08:08:53Z",
+        "file": "screens/v/models-documents-4.jpg",
+        "what": "Searching 'bge': each result reads its model name with the quant beside it, not 'org/repo / file.gguf'."
+      }
+    ]
+  },
+  {
+    "id": "models-image",
+    "name": "Models: Image",
+    "group": "Models",
+    "what": "Picks for this phone, then every image model",
+    "file": "screens/v/models-image-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "First look",
+        "at": "2026-11-06T13:02:32Z",
+        "file": "screens/v/models-image-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "models-video",
+    "name": "Models: Video",
+    "group": "Models",
+    "what": "Video models; the one in use is marked",
+    "file": "screens/v/models-video-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "First look",
+        "at": "2026-11-06T13:02:43Z",
+        "file": "screens/v/models-video-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "models-voice",
+    "name": "Models: Voice",
+    "group": "Models",
+    "what": "Voices that read replies aloud",
+    "file": "screens/v/models-voice-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "First look",
+        "at": "2026-11-06T13:02:55Z",
+        "file": "screens/v/models-voice-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "models-speech",
+    "name": "Models: Speech",
+    "group": "Models",
+    "what": "Speech-to-text picks, then English-only and multilingual",
+    "file": "screens/v/models-speech-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "First look",
+        "at": "2026-11-06T13:03:04Z",
+        "file": "screens/v/models-speech-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "downloads",
+    "name": "Downloads",
+    "group": "Models",
+    "what": "Downloads in progress and on this phone",
+    "file": "screens/v/downloads-3.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:08Z",
+        "file": "screens/v/downloads-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T13:03:16Z",
+        "file": "screens/v/downloads-2.jpg"
+      },
+      {
+        "v": 3,
+        "label": "A download running",
+        "at": "2026-11-09T08:02:29Z",
+        "file": "screens/v/downloads-3.jpg",
+        "what": "A 2.9 GB download in progress: bar, percent, speed and pause on its own row."
+      }
+    ]
+  },
+  {
+    "id": "gallery",
+    "name": "Gallery",
+    "group": "Gallery",
+    "what": "Generated images and videos",
+    "file": "screens/v/gallery-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:08Z",
+        "file": "screens/v/gallery-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T13:03:43Z",
+        "file": "screens/v/gallery-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "gallery-videos",
+    "name": "Gallery: Videos",
+    "group": "Gallery",
+    "what": "Start a film, your cast, then every clip",
+    "file": "screens/v/gallery-videos-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "First look",
+        "at": "2026-11-06T13:03:53Z",
+        "file": "screens/v/gallery-videos-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "video-library",
+    "name": "Your videos",
+    "group": "Gallery",
+    "what": "Every film and clip in a grid",
+    "file": "screens/v/video-library-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "First look",
+        "at": "2026-11-06T13:04:20Z",
+        "file": "screens/v/video-library-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "gallery-viewer",
+    "name": "Image viewer",
+    "group": "Gallery",
+    "what": "One image, full screen",
+    "file": "screens/v/gallery-viewer-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:09Z",
+        "file": "screens/v/gallery-viewer-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:32Z",
+        "file": "screens/v/gallery-viewer-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "settings",
+    "name": "Settings",
+    "group": "Settings",
+    "what": "Settings, top",
+    "file": "screens/v/settings-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:09Z",
+        "file": "screens/v/settings-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:33Z",
+        "file": "screens/v/settings-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "model-settings-image-video",
+    "name": "Model settings: Image & video",
+    "group": "Settings",
+    "what": "Picture style at the top of the Image card, and one switch look (Android shot; the iPhone shot follows)",
+    "file": "screens/v/model-settings-image-video-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Android pass",
+        "at": "2026-11-07T07:38:09Z",
+        "file": "screens/v/model-settings-image-video-1-android.jpg",
+        "android": "screens/v/model-settings-image-video-1-android.jpg"
+      },
+      {
+        "v": 2,
+        "label": "One switch look",
+        "at": "2026-11-07T10:33:19Z",
+        "file": "screens/v/model-settings-image-video-ios-r3.jpg",
+        "android": "screens/v/model-settings-image-video-2.jpg",
+        "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
+      }
+    ]
+  },
+  {
+    "id": "settings-lower",
+    "name": "Settings, lower",
+    "group": "Settings",
+    "what": "Settings, scrolled down",
+    "file": "screens/v/settings-lower-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:09Z",
+        "file": "screens/v/settings-lower-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T13:04:44Z",
+        "file": "screens/v/settings-lower-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "settings-model",
+    "name": "Model settings",
+    "group": "Settings",
+    "what": "How the models run",
+    "file": "screens/v/settings-model-4.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:09Z",
+        "file": "screens/v/settings-model-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:33Z",
+        "file": "screens/v/settings-model-2.jpg",
+        "android": "screens/v/settings-model-android.jpg"
+      },
+      {
+        "v": 3,
+        "label": "Aggressive on one line",
+        "at": "2026-11-07T10:33:19Z",
+        "file": "screens/v/settings-model-ios-r3.jpg",
+        "android": "screens/v/settings-model-3.jpg",
+        "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
+      },
+      {
+        "v": 4,
+        "label": "Fastest settings in the card",
+        "at": "2026-11-09T08:02:29Z",
+        "file": "screens/v/settings-model-4.jpg",
+        "what": "Fastest settings is a setting inside the card, not a button above it."
+      }
+    ]
+  },
+  {
+    "id": "settings-document-search",
+    "name": "Document search",
+    "group": "Settings",
+    "what": "Which model finds passages in documents",
+    "file": "screens/v/settings-document-search-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:09Z",
+        "file": "screens/v/settings-document-search-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:33Z",
+        "file": "screens/v/settings-document-search-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "settings-remote-servers",
+    "name": "Remote servers",
+    "group": "Settings",
+    "what": "Use models running on another computer",
+    "file": "screens/v/settings-remote-servers-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:09Z",
+        "file": "screens/v/settings-remote-servers-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:33Z",
+        "file": "screens/v/settings-remote-servers-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "settings-storage",
+    "name": "Storage",
+    "group": "Settings",
+    "what": "What takes space",
+    "file": "screens/v/settings-storage-3.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:09Z",
+        "file": "screens/v/settings-storage-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:33Z",
+        "file": "screens/v/settings-storage-2.jpg"
+      },
+      {
+        "v": 3,
+        "label": "Choose models is a row",
+        "at": "2026-11-09T08:02:29Z",
+        "file": "screens/v/settings-storage-3.jpg",
+        "what": "'Choose models for this phone' is a row inside a card, not a button between cards."
+      }
+    ]
+  },
+  {
+    "id": "settings-device-information",
+    "name": "Device information",
+    "group": "Settings",
+    "what": "This phone's hardware and what it can run",
+    "file": "screens/v/settings-device-information-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:09Z",
+        "file": "screens/v/settings-device-information-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:33Z",
+        "file": "screens/v/settings-device-information-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "settings-security",
+    "name": "Security",
+    "group": "Settings",
+    "what": "App lock",
+    "file": "screens/v/settings-security-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:09Z",
+        "file": "screens/v/settings-security-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:33Z",
+        "file": "screens/v/settings-security-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "settings-engine-updates",
+    "name": "Engine updates",
+    "group": "Settings",
+    "what": "How the engine stays current",
+    "file": "screens/v/settings-engine-updates-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:10Z",
+        "file": "screens/v/settings-engine-updates-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:33Z",
+        "file": "screens/v/settings-engine-updates-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "settings-what-we-share",
+    "name": "What we share",
+    "group": "Settings",
+    "what": "What analytics sends and never sends",
+    "file": "screens/v/settings-what-we-share-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:10Z",
+        "file": "screens/v/settings-what-we-share-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:33Z",
+        "file": "screens/v/settings-what-we-share-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "settings-about",
+    "name": "About",
+    "group": "Settings",
+    "what": "About Off Grid AI",
+    "file": "screens/v/settings-about-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:10Z",
+        "file": "screens/v/settings-about-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T13:04:56Z",
+        "file": "screens/v/settings-about-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "tools",
+    "name": "Tools",
+    "group": "Tools",
+    "what": "Tools the model can use",
+    "file": "screens/v/tools-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:10Z",
+        "file": "screens/v/tools-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:33Z",
+        "file": "screens/v/tools-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "pro-tools",
+    "name": "Pro tools",
+    "group": "Tools",
+    "what": "Email, calendar and MCP servers",
+    "file": "screens/v/pro-tools-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Reviewed",
+        "at": "2026-11-06T06:14:10Z",
+        "file": "screens/v/pro-tools-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Release pass",
+        "at": "2026-11-06T10:21:32Z",
+        "file": "screens/v/pro-tools-2.jpg"
+      }
+    ]
+  }
 ]
