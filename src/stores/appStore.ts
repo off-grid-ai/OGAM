@@ -102,6 +102,8 @@ type AppSettings = {
   autoBackendMigrated?: boolean;
   /** What agents call the user (fills {{name}} in agent prompts). */
   userName?: string;
+  /** Home screen tiles the person hid or reordered. */
+  homeTiles?: { order?: string[]; hidden?: string[] };
   /** Theme, accent color, font and text size (see theme/appearance). */
   appearance?: import('../theme/appearance').Appearance;
   /** Which destinations the bottom bar shows, their order and whether it has labels. */
