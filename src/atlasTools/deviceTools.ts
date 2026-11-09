@@ -36,12 +36,17 @@ async function resolvePath(p?: string): Promise<string> {
   return path;
 }
 
+/** How long a question to the user waits. An unseen prompt (app in the background, another sheet on top) held the whole reply forever. */
+export const CONFIRM_TIMEOUT_MS = 2 * 60 * 1000;
+
 export function confirm(title: string, message: string, ok = 'Allow'): Promise<boolean> {
   return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), CONFIRM_TIMEOUT_MS); // no answer counts as Deny
+    const answer = (v: boolean) => { clearTimeout(timer); resolve(v); };
     Alert.alert(title, message, [
-      { text: 'Deny', style: 'cancel', onPress: () => resolve(false) },
-      { text: ok, onPress: () => resolve(true) },
-    ], { cancelable: true, onDismiss: () => resolve(false) });
+      { text: 'Deny', style: 'cancel', onPress: () => answer(false) },
+      { text: ok, onPress: () => answer(true) },
+    ], { cancelable: true, onDismiss: () => answer(false) });
   });
 }
 
@@ -103,7 +108,7 @@ export async function writeFile(path: string, content: string, append = false): 
     `${p}\n\n${content.slice(0, 400)}${content.length > 400 ? '\n...' : ''}`,
     append ? 'Add' : exists ? 'Replace' : 'Create',
   );
-  if (!ok) return 'The user declined. Nothing was written.';
+  if (!ok) return 'The user declined, or did not answer in time. Nothing was written.';
   await RNFS.mkdir(p.substring(0, p.lastIndexOf('/')));
   if (append && exists) await RNFS.appendFile(p, content, 'utf8');
   else await RNFS.writeFile(p, content, 'utf8');

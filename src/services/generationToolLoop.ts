@@ -7,6 +7,7 @@ import { liteRTService } from './litert';
 import { useChatStore, useRemoteServerStore, useAppStore } from '../stores';
 import { Message } from '../types';
 import { getToolsAsOpenAISchema, executeToolCall } from './tools';
+import { withTimeout } from '../utils/withTimeout';
 import type { ToolCall, ToolResult } from './tools/types';
 import { normalizeToolResult, toolErrorResult, toolResultModelContent } from './tools/toolResult';
 import { modelInputImageUris, modelInputAudioUris } from './modelMedia';
@@ -277,12 +278,18 @@ function getLastUserQuery(messages: Message[]): string {
  * handler behave identically: success/empty/error all become a typed result whose
  * model-facing string (toolResultModelContent) explicitly states failure/empty.
  */
+/** A tool that has not answered by now is stopped and reported to the model as a failure, so the turn can go on. */
+export const TOOL_TIMEOUT_MS = 3 * 60 * 1000;
+/** Tools that legitimately run for minutes (they search and read many pages, or make media). */
+const LONG_TOOL = /research|podcast|image|video|download|sync|backup/i;
+export const toolTimeoutFor = (name: string): number => (LONG_TOOL.test(name) ? 10 * 60 * 1000 : TOOL_TIMEOUT_MS);
+
 async function executeToolCallSafely(tc: ToolCall): Promise<ToolResult> {
   const exts = getToolExtensions();
   const ext = exts.find(e => e.canHandle(tc.name));
   const start = Date.now();
   try {
-    const raw = ext ? await ext.execute(tc) : await executeToolCall(tc);
+    const raw = await withTimeout(Promise.resolve(ext ? ext.execute(tc) : executeToolCall(tc)), toolTimeoutFor(tc.name), `The "${tc.name}" tool`);
     return normalizeToolResult(tc, raw);
   } catch (err) {
     logger.error(`[ToolLoop] tool "${tc.name}" threw — surfacing as a typed error result`, err);
