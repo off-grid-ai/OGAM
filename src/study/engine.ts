@@ -28,6 +28,8 @@ export interface StudyResult {
   cards?: Card[];
   quiz?: QuizItem[];
   podcast?: PodcastLine[];
+  /** Line numbers where the second and later stories of a news briefing start (for the chime between stories). */
+  storyStarts?: number[];
   hosts?: number;
   slides?: Slide[];
   learningTerms?: LearningTerm[];
@@ -482,6 +484,7 @@ async function writeOutlinedEpisode(
   const wordCount = () => lines.reduce((n, l) => n + l.text.split(/\s+/).filter(Boolean).length, 0);
   let used = 0;
   let finished = false;
+  const storyStarts: number[] = [];
   for (let i = 0; i < outline.length; i++) {
     if (opts.shouldStop?.() && lines.length >= 4) break;
     // Once the length is reached only the items marked `always` (a fun fact) are still written.
@@ -509,14 +512,16 @@ async function writeOutlinedEpisode(
       'You write natural spoken scripts from sources. Say ONLY what the sources say: never add names, numbers, dates, places or quotes that are not in them. If the source gives few details, the hosts may say why it matters, using only what the source says. Never mention source numbers.',
       `SOURCES:\n${sourceBlock(part.sources)}\n\nEpisode: "${title}". Style: ${cfg.style}. Cast: ${cast}.\nThis item: ${part.topic}\n${where}\n${recap ? `Last lines so far:\n${recap}\n` : ''}${covered ? `Already covered (do not repeat or retell these):\n${covered}\n` : ''}${opts.rules ? `${opts.rules}\n` : ''}${howMany}, exactly in this format:\n${cfg.fmt}`,
     );
-    lines.push(...withoutRepeats(parseLines(t, cfg.hosts).slice(0, n + 2), lines));
+    const written = withoutRepeats(parseLines(t, cfg.hosts).slice(0, n + 2), lines);
+    if (lines.length && written.length) storyStarts.push(lines.length);
+    lines.push(...written);
     if (!part.always) used++;
     if (reaches) finished = true;
     if (last) break;
   }
   opts.onItemsUsed?.(used);
   if (lines.length < 2) throw new Error('The model did not write the script in the expected format. Try again or use a bigger model.');
-  return { kind: 'podcast', createdAt: Date.now(), topic: opts.prompt, title, sources: all.slice(0, 60), podcast: lines, hosts: cfg.hosts };
+  return { kind: 'podcast', createdAt: Date.now(), topic: opts.prompt, title, sources: all.slice(0, 60), podcast: lines, hosts: cfg.hosts, storyStarts };
 }
 
 export async function writeEpisode(sources: Source[], opts: PodcastOptions, onStep: (m: string) => void = () => undefined): Promise<StudyResult> {

@@ -307,6 +307,8 @@ export async function makeBriefing(onStep: (m: string) => void, voicesAvailable:
     onItemsUsed: (count) => { usedStories = count; },
   }, onStep);
   if (gotNews && r.podcast) r.podcast = [{ host: 'A', text: greetingLine() }, ...r.podcast];
+  // The greeting is now line 0, so every story start moves down one line.
+  if (gotNews && r.storyStarts) r.storyStarts = r.storyStarts.map((n) => n + 1);
   r.minutes = Math.max(1, Math.round(spokenMinutes((r.podcast ?? []).map((l) => l.text))));
   r.headlines = stories.slice(0, usedStories).map(({ interest, headline: h }, i) => ({
     title: h.title, source: h.source, date: h.date, interest: interests[interest], url: outline[i]?.sources[0]?.url || h.url,

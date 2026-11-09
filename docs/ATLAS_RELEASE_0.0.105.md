@@ -569,6 +569,19 @@ What changed:
   model. A second, short-prompt check decides whether to use the first-word workaround: prompts under about 192 tokens run
   once first so the first word comes from the engine's single-token step; it is switched on only if the same check passes with
   it, and never for long prompts. The remembered verdict records the batch size and CPU-kernel setting.
+- 0.0.147: fixes and additions from phone use. Daily briefing: lines are queued in order so the one you play renders first (the
+  gaps of several seconds before each card); the briefing opens and closes with a short tune (switch in Show options); timing lines
+  tagged [POD] in Debug Logs. Chat: tool calls time out (3 minutes, 10 for research and media), an unanswered file prompt counts as
+  Deny after 2 minutes, a reply with no progress for 5 minutes is stopped with its text kept; reply length follows the memory size
+  (Auto, or 512 to 8K in Chat settings); the start of a reply is no longer cut when the stream was revised; models no longer end every
+  answer with a question unless you turn that on; SAVE fixes an old message without resending; wide code blocks and tables scroll
+  sideways. Looks: iMessage, text message, WhatsApp, Messenger, Telegram and Discord chat styles. Permissions: group switches
+  (facts and web, calendar, files, memory, phone); study, maths and project-document tools are used in projects only; the "keep
+  it to 3 tools" warnings are gone. About you: boxes for name, age, work, how to help, interests and notes, known to every chat;
+  remember works with no agent. Project chats update the shared documents themselves; write_file accepts the usual alternative
+  argument names. Learning: lessons are also saved as Learning/<name>-lessons.md. Home: Get models, Load a model, Learn a language,
+  Learn a topic, and Customize to hide or move tiles. Skills: 13 controlled-language, reasoning and style skills in the library.
+  The private Pro app and everything built for it were removed. Not verified on a phone.
 - 0.0.146: audit and polish. Efficiency: practice questions were written to storage in full on every key typed into a drill answer;
   they are now saved once, 0.6 seconds after you stop. Clean-up: the Practice screen is split into a start panel and a question panel
   (it had grown to one 190-line function), shared styles live in one file, unused imports and style entries removed, two functions

@@ -165,7 +165,7 @@ export const StudyScreen: React.FC = () => {
   };
 
   /** Plays from line `from`. A podcast (with `audioKey`) plays from pre-rendered audio files. */
-  const play = async (items: { text: string; pitch: number; voice?: string }[], from = 0, audioKey?: string) => {
+  const play = async (items: { text: string; pitch: number; voice?: string }[], from = 0, audioKey?: string, storyStarts: number[] = []) => {
     const my = ++playToken.current;
     stop();
     stopPodcastAudio(); // a line playing from a file would otherwise play on top of the new one
@@ -178,6 +178,8 @@ export const StudyScreen: React.FC = () => {
       if (tunes && from <= 0 && !(await playJingle('intro'))) return;
       for (let i = Math.max(0, from); i < items.length; i++) {
         if (stopRef.current || playToken.current !== my) break;
+        // A soft chime when the next story begins (not when playback starts or is moved to a line).
+        if (tunes && i > from && storyStarts.includes(i) && !(await playJingle('chime'))) break;
         setPlaying(i); setResumeAt(i); setItemStart(Date.now());
         const ok = audioKey ? await playLine(audioKey, items, i) : await speakAndWait(items[i].text, items[i].pitch, 'podcast', items[i].voice || '');
         if (!ok || playToken.current !== my) break;
@@ -334,11 +336,11 @@ export const StudyScreen: React.FC = () => {
                 const items = v.podcast!.map((l) => ({ text: l.text, ...castVoice(l.host, v.hosts ?? 2) }));
                 return (
                   <MediaBar durations={items.map((x) => secs(x.text))} playing={playing} resumeAt={resumeAt} itemStart={itemStart} colors={colors}
-                    onPlay={(i) => play(items, i, `${projectId}-${v.createdAt}`)} onPause={halt} label="podcast" />
+                    onPlay={(i) => play(items, i, `${projectId}-${v.createdAt}`, v.storyStarts)} onPause={halt} label="podcast" />
                 );
               })()}
               {v.podcast.map((l, i) => (
-                <TouchableOpacity key={i} activeOpacity={0.8} onPress={() => play(v.podcast!.map((x) => ({ text: x.text, ...castVoice(x.host, v.hosts ?? 2) })), i, `${projectId}-${v.createdAt}`)}
+                <TouchableOpacity key={i} activeOpacity={0.8} onPress={() => play(v.podcast!.map((x) => ({ text: x.text, ...castVoice(x.host, v.hosts ?? 2) })), i, `${projectId}-${v.createdAt}`, v.storyStarts)}
                   style={[card, { borderLeftWidth: 4, borderLeftColor: l.host === 'A' ? '#2563EB' : l.host === 'B' ? '#D97706' : '#16A34A', opacity: playing === null || playing === i ? 1 : 0.55 }]}>
                   <Text style={{ color: colors.textMuted, fontSize: 12 }}>{(v.hosts ?? 2) === 1 ? 'Narrator' : `Host ${l.host}`}</Text>
                   <Text style={{ color: colors.text, fontSize: 16 }}>{l.text}</Text>
