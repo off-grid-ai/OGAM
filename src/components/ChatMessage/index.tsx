@@ -22,6 +22,7 @@ import { formatTime, formatDuration, buildMessageData } from './utils';
 import { ThinkingBlock } from './components/ThinkingBlock';
 import type { ChatMessageProps } from './types';
 import type { Message } from '../../types';
+import { isMessageLook, messageLookStyle, isDarkColor } from '../../theme/messageLooks';
 import { usePins } from '../../pins/store';
 import { slidesFromReply } from '../../presentations/replySlides';
 
@@ -239,6 +240,8 @@ interface MessageBubbleProps {
   onMenuOpen: () => void;
   /** Clean chat layout: smaller gaps between messages. */
   clean?: boolean;
+  /** A name shown above the message (Discord style). */
+  label?: string;
 }
 
 /** The bubble's styles: Clean = plain-text replies and a rounded bubble for your own message; Bubbles = every message boxed. */
@@ -253,7 +256,7 @@ function bubbleStyleFor(o: { styles: any; isUser: boolean; clean: boolean; isWid
 const MessageBubble: React.FC<MessageBubbleProps> = ({
   message, styles, colors, isUser, isStreaming, hasAttachments, bubbleStyle,
   parsedContent, showThinking, showActions, showGenerationDetails, metaExtra,
-  onImagePress, onToggleThinking, onLongPress, onMenuOpen, clean,
+  onImagePress, onToggleThinking, onLongPress, onMenuOpen, clean, label,
 }) => (
   <TouchableOpacity
     testID={isUser ? 'user-message' : 'assistant-message'}
@@ -267,6 +270,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     delayLongPress={300}
   >
     <View style={bubbleStyle}>
+      {!!label && <Text style={{ fontWeight: '700', marginBottom: 2, color: colors.primary }}>{label}</Text>}
       {hasAttachments && (
         <MessageAttachments
           attachments={message.attachments!}
@@ -348,8 +352,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const hasAttachments = Boolean(message.attachments?.length);
   // Tablet/unfolded column: shorter user bubbles, more room for long answers and code.
   const { isWide } = useWideLayout();
-  const clean = useAppStore((s) => (s.settings.appearance?.chatLayout ?? 'clean') === 'clean');
-  const bubbleStyle = bubbleStyleFor({ styles, isUser, clean, isWide, hasAttachments });
+  const layout = useAppStore((s) => s.settings.appearance?.chatLayout ?? 'clean');
+  const clean = layout === 'clean';
+  const look = isMessageLook(layout) ? messageLookStyle(layout, isUser, isDarkColor(colors.background)) : undefined;
+  // A messaging-app look sets its own bubble colours, so the text colour is set to match.
+  const lookStyles = look ? { ...styles, userText: { ...styles.userText, color: look.textColor }, assistantText: { ...styles.assistantText, color: look.textColor } } : styles;
+  const bubbleStyle = look ? [...bubbleStyleFor({ styles, isUser, clean: false, isWide, hasAttachments }), look.bubble] : bubbleStyleFor({ styles, isUser, clean, isWide, hasAttachments });
 
   const handleCopy = () => {
     Clipboard.setString(displayContent);
@@ -449,8 +457,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const messageBody = (
     <MessageBubble
       clean={clean}
+      label={look?.label}
       message={message}
-      styles={styles}
+      styles={lookStyles}
       colors={colors}
       isUser={isUser}
       isStreaming={isStreaming}
