@@ -128,6 +128,8 @@ export interface ToolGenerationDeps {
   isThinkingEnabled: boolean;
   isGemma4Model: boolean;
   disableCtxShift: boolean;
+  /** The context window in use, so an automatic reply length can follow it. */
+  contextLength?: number;
   /** The loaded model's file path, for its recommended sampling defaults. */
   modelPath?: string | null;
   manageContextWindow: (messages: Message[], extraReserve?: number) => Promise<Message[]>;
@@ -168,7 +170,7 @@ export async function generateWithToolsImpl(
 
     const completionParams = {
       messages: oaiMessages,
-      ...buildCompletionParams(settings, { disableCtxShift: deps.disableCtxShift, modelPath: deps.modelPath }),
+      ...buildCompletionParams(settings, { disableCtxShift: deps.disableCtxShift, modelPath: deps.modelPath, contextLength: deps.contextLength }),
       tools: options.tools,
       tool_choice: 'auto',
       ...buildThinkingCompletionParams(deps.isThinkingEnabled, deps.isGemma4Model),

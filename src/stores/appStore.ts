@@ -48,6 +48,8 @@ type OnboardingChecklist = {
 
 type AppSettings = {
   systemPrompt: string; temperature: number; maxTokens: number;
+  /** Auto sizes the reply to the memory window; manual uses maxTokens. Unset counts as auto. */
+  maxTokensMode?: 'auto' | 'manual';
   topP: number; repeatPenalty: number; contextLength: number;
   /** Auto chooses a RAM-safe window; manual uses contextLength subject to memory checks. */
   contextMode?: 'auto' | 'manual';
@@ -246,6 +248,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   systemPrompt: 'You are a helpful AI assistant running locally on the user\'s device. Be concise and helpful.',
   temperature: 0.7,
   maxTokens: 1024,
+  maxTokensMode: 'auto',
   topP: 0.9,
   repeatPenalty: 1.1,
   contextLength: 4096,
@@ -427,7 +430,8 @@ export const useAppStore = create<AppState>()(
       settings: { ...DEFAULT_SETTINGS },
       updateSettings: (newSettings) =>
         set((state) => ({
-          settings: { ...state.settings, ...newSettings },
+          // Choosing a reply length by hand turns the automatic length off.
+          settings: { ...state.settings, ...(newSettings.maxTokens !== undefined && newSettings.maxTokensMode === undefined ? { maxTokensMode: 'manual' as const } : {}), ...newSettings },
         })),
       // Back to the defaults for every model setting. Personal choices that have no default (accent and
       // font, bottom bar, name, tone, haptics) are not model settings and stay.

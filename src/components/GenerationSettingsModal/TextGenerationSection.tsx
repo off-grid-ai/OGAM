@@ -59,7 +59,7 @@ function buildLlamaConfig(modelMaxContext: number | null = null): SettingConfig[
       label: 'Max Tokens',
       min: 64, max: 8192, step: 64,
       format: (v) => v >= 1024 ? `${(v / 1024).toFixed(1)}K` : v.toString(),
-      description: 'Maximum length of generated response',
+      description: 'Maximum length of an answer. Moving this turns off Auto reply length (Chat settings).',
     },
     {
       key: 'topP',

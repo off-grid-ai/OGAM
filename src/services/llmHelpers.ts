@@ -15,6 +15,7 @@ import {
 
 import { HTP_ENABLED } from '../config/featureFlags';
 import { BYTES_PER_GB } from '../utils/contextLimits';
+import { resolveReplyTokens } from './contextWindow';
 export { BYTES_PER_GB, getMaxContextForDevice } from '../utils/contextLimits';
 
 const RESPONSE_RESERVE = 512;
@@ -571,14 +572,17 @@ export { validateModelFile, checkMemoryForModel, safeCompletion, resolveSafeCont
 const STOP_TOKENS = ['</s>', '<|end|>', '<|eot_id|>'];
 export function buildCompletionParams(settings: {
   maxTokens?: number; temperature?: number; topP?: number; repeatPenalty?: number;
-}, options?: { disableCtxShift?: boolean; modelPath?: string | null }): Record<string, any> {
+  maxTokensMode?: 'auto' | 'manual';
+}, options?: { disableCtxShift?: boolean; modelPath?: string | null; contextLength?: number }): Record<string, any> {
   // Atlas: the active agent's own temperature / top-p / max tokens / repeat penalty win; then what the person set in Settings;
   // then the model author's recommendation for this model (modelSamplingDefaults.ts); then the app's defaults.
   const agent = activeAgentOverrides();
   const sampling = resolveSampling({ agent, user: settings, model: samplingDefaultsFor(options?.modelPath) });
+  // An agent's own limit (or low-battery mode) wins; otherwise the reply is as long as this context window allows.
+  const nPredict = typeof agent.maxTokens === 'number' ? agent.maxTokens : resolveReplyTokens(settings, options?.contextLength);
   settings = { ...settings, ...agent };
   return {
-    n_predict: settings.maxTokens || RESPONSE_RESERVE,
+    n_predict: nPredict || RESPONSE_RESERVE,
     temperature: sampling.temperature,
     top_k: sampling.topK,
     top_p: sampling.topP,

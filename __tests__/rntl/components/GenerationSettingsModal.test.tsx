@@ -665,7 +665,7 @@ describe('GenerationSettingsModal', () => {
     fireEvent.press(getByText('TEXT GENERATION'));
 
     expect(getByText('Higher = more creative, Lower = more focused')).toBeTruthy();
-    expect(getByText('Maximum length of generated response')).toBeTruthy();
+    expect(getByText('Maximum length of an answer. Moving this turns off Auto reply length (Chat settings).')).toBeTruthy();
   });
 
   // ============================================================================

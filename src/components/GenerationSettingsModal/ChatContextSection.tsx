@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getMaxContextForDevice } from '../../services/llmHelpers';
+import { autoReplyTokens } from '../../services/contextWindow';
 import { hardwareService } from '../../services/hardware';
 import { ActivityIndicator, Alert, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -27,6 +28,8 @@ export const ChatContextSection: React.FC = () => {
   const ctxValue = useAppStore((s) => (s.settings as any)[ctxKey] as number) || 4096;
   const contextMode = useAppStore((s) => s.settings.contextMode ?? 'manual');
   const modelMax = useAppStore((s) => s.modelMaxContext);
+  const replyMode = useAppStore((s) => s.settings.maxTokensMode ?? 'auto');
+  const replyTokens = useAppStore((s) => s.settings.maxTokens);
   // Same ceiling the loader uses for this phone's RAM (bigger choices would be cut down anyway).
   const ramGB = hardwareService.getTotalMemoryGB();
   const deviceCap = ramGB === 4 ? 8192 : getMaxContextForDevice(ramGB * 1024 ** 3); // 4 = "not measured yet"
@@ -77,6 +80,23 @@ export const ChatContextSection: React.FC = () => {
             </TouchableOpacity>
           ))}
         </View>
+        <Text style={{ color: colors.text, fontWeight: '600', marginTop: 12 }}>Reply length</Text>
+        <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+          How much the model may write in one answer. Auto follows the memory size above, so long files, code and reports are written in one go instead of stopping and needing "continue".
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 8 }}>
+          {([['auto', 'Auto'], [512, '512'], [1024, '1K'], [2048, '2K'], [4096, '4K'], [8192, '8K']] as const).map(([v, label]) => {
+            const on = v === 'auto' ? replyMode !== 'manual' : replyMode === 'manual' && replyTokens === v;
+            return (
+              <TouchableOpacity key={String(v)} accessibilityRole="button" accessibilityLabel={v === 'auto' ? 'Automatic reply length' : `Reply length ${label} tokens`}
+                onPress={() => updateSettings(v === 'auto' ? { maxTokensMode: 'auto' } : { maxTokens: v, maxTokensMode: 'manual' })}
+                style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: on ? colors.primary : colors.background }}>
+                <Text style={{ color: on ? colors.background : colors.text, fontSize: 13 }}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        {replyMode !== 'manual' && <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 6 }}>Right now: up to {autoReplyTokens(ctxValue).toLocaleString()} tokens per answer.</Text>}
         <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 6 }}>More options (temperature, length, GPU) are under Text generation below.</Text>
       </View>
       <View style={box}>

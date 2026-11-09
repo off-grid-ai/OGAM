@@ -28,6 +28,7 @@ import { fitMessagesToContext } from './contextWindow';
 import type { ToolCall } from './tools/types';
 import type { MultimodalSupport, LLMPerformanceSettings, LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
+import { resolveReplyTokens } from './contextWindow';
 import { isGemma4Path, knownVerdict, recordVerdict, runOutputCheck, logOutputReport, describeBadOutput, primeFirstWord, estimatePromptTokens, scanPromptLengths, SHORT_PROMPT_TOKENS, type OutputCheck } from './outputHealth';
 ;
 import type { StreamToken } from './llmStreamTypes';
@@ -562,7 +563,7 @@ class LLMService {
       // regardless of the global thinkingEnabled — a rewrite is not a reasoning task, and
       // letting it think leaked "Thinking Process:..." into the enhanced prompt (B30).
       const thinkingOn = this.isThinkingEnabled() && !opts?.disableThinking;
-      const completionParams = { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift(), modelPath: this.currentModelPath }), ...buildThinkingCompletionParams(thinkingOn, this.isGemma4Model()) };
+      const completionParams = { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift(), modelPath: this.currentModelPath, contextLength: this.currentSettings.contextLength }), ...buildThinkingCompletionParams(thinkingOn, this.isGemma4Model()) };
       logger.log(`[LLM][THINKING] thinkingSupported=${this.thinkingSupported}, thinkingEnabled=${useAppStore.getState().settings.thinkingEnabled}, isThinkingEnabled=${this.isThinkingEnabled()}, enable_thinking=${(completionParams as any).enable_thinking}, reasoning_format=${(completionParams as any).reasoning_format}`);
       // Never log chat prompts, streamed text, reasoning, or model file paths: even
       // development logcat output may outlive private/PIN-protected conversations.
@@ -608,6 +609,7 @@ class LLMService {
       isThinkingEnabled: this.isThinkingEnabled(),
       isGemma4Model: this.isGemma4Model(),
       disableCtxShift: this.shouldDisableCtxShift(),
+      contextLength: this.currentSettings.contextLength,
       modelPath: this.currentModelPath,
       manageContextWindow: (msgs, extra?) => this.manageContextWindow(msgs, extra),
       convertToOAIMessages: (msgs) => this.convertToOAIMessages(msgs),
@@ -629,7 +631,7 @@ class LLMService {
     const managed = await fitMessagesToContext({
       messages,
       contextTokens: this.currentSettings.contextLength || APP_CONFIG.maxContextLength,
-      outputTokens: Math.max(settings.maxTokens || 512, extraReserve),
+      outputTokens: Math.max(resolveReplyTokens(settings, this.currentSettings.contextLength), extraReserve),
       format: (items) => this.vulkanLoaded
         ? vulkanEngine.formatChat(items.map(m => ({ role: m.role === 'tool' ? 'user' : m.role, content: m.content })))
         : this.formatMessages(items),
@@ -704,7 +706,7 @@ class LLMService {
     const { settings } = useAppStore.getState();
     let fullResponse = '';
     const ctx = this.context;
-    const maxParams = { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift(), modelPath: this.currentModelPath }), n_predict: maxTokens };
+    const maxParams = { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift(), modelPath: this.currentModelPath, contextLength: this.currentSettings.contextLength }), n_predict: maxTokens };
     if (this.shouldPrime(oaiMessages)) await primeFirstWord(ctx, maxParams);
     const completionWork = safeCompletion(ctx, () => ctx.completion(
       maxParams,

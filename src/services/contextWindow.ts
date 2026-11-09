@@ -14,6 +14,29 @@ export type ContextWindowResult<T> = {
   budgetTokens: number;
 };
 
+/** Smallest and largest reply the automatic length will choose. */
+export const AUTO_MIN_REPLY_TOKENS = 1024;
+export const AUTO_MAX_REPLY_TOKENS = 8192;
+
+/**
+ * How long a reply may be when the length is automatic: as much of the memory window as the prompt guard will keep
+ * free for the answer (40% of it), within sensible limits. A fixed 1K cap made long writing (files, code, reports)
+ * stop mid-way and need "continue" again and again, which was far slower than writing it in one go.
+ */
+export function autoReplyTokens(contextTokens: number): number {
+  const context = Math.max(256, Math.floor(contextTokens));
+  return Math.min(AUTO_MAX_REPLY_TOKENS, Math.max(AUTO_MIN_REPLY_TOKENS, Math.floor(context * 0.4)));
+}
+
+/** The reply limit in use: the chosen number when manual, else the automatic one for this context size. */
+export function resolveReplyTokens(
+  settings: { maxTokens?: number; maxTokensMode?: 'auto' | 'manual' },
+  contextTokens?: number,
+): number {
+  if (settings.maxTokensMode === 'manual' || !contextTokens) return settings.maxTokens || 512;
+  return autoReplyTokens(contextTokens);
+}
+
 export function contextOutputReserve(contextTokens: number, requestedOutput: number): number {
   const context = Math.max(256, Math.floor(contextTokens));
   return Math.min(Math.max(64, requestedOutput || 512), Math.floor(context * 0.4));
