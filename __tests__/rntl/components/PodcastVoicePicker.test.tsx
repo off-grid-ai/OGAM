@@ -3,7 +3,7 @@
  * once, and the players use it (hostVoices). Fakes only the device boundary (the voice engine).
  */
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 const mockSpoken: string[] = [];
 jest.mock('../../../src/atlasVoice/tts', () => ({
@@ -20,9 +20,11 @@ it('lets each host have a chosen voice, used by the podcast players', async () =
   const screen = render(<PodcastVoicePicker hosts={2} />);
   expect(await screen.findByLabelText('Host B: George (UK)')).toBeTruthy();
   fireEvent.press(screen.getByLabelText('Host B: George (UK)'));
-  expect(mockSpoken).toEqual(['sid:9']);
+  // The button shows as picked at once; saving and the spoken preview follow a moment later.
+  expect(screen.getByLabelText('Host B: George (UK)').props.accessibilityState.selected).toBe(true);
+  await waitFor(() => expect(mockSpoken).toEqual(['sid:9']));
   const voices = Array.from({ length: 11 }, (_, i) => ({ name: `sid:${i}` }));
   expect(hostVoices(voices)[1]).toBe('sid:9');
-  fireEvent.press(screen.getByText('Use automatic voices'));
+  fireEvent.press(await screen.findByText('Use automatic voices'));
   expect(hostVoices(voices)[1]).not.toBe('sid:9');
 });
