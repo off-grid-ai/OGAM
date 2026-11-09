@@ -741,3 +741,10 @@ Bug to investigate: the paused "Wan 2.1 (1.3B), FP16" download is gone (Models >
 ## Supervisor 10:22 (hand test 97, composer follow-ups) — 3 of 3 pass
 - Pass: the assistant icon matches + and settings in height, weight and grey; a model that sees photos offers Photo, Document, Cancel with no note; a model that can't says "This model can't see photos. Choose one that can to add a photo." with Document and Cancel. Model left as it was.
 - Open: the photo-attached composer (needs Mac's own photo).
+
+## r07 downloads — 2026-11-09 13:18
+Feedback (PostHog, Mac): 89 of 330 new phone users finished a download; on iPhone, 1–2 GB models finished 12 times in 691 starts.
+- **Measurement:** chat and image downloads never sent "finished", because they end by registering the model, not through the completed status. Every GGUF chat model showed 0 finishes. Real arrival, measured by a later local load, is about 45% (Android 111/236 people, iPhone 31/70). Fixed: a download ends when its model arrives (`54c315d2b`). Each attempt counts once; starts were doubled (`ec82f8832`). A space refusal keeps `disk_full` (`2236e027b`).
+- **iPhone cause:** the downloader used only a foreground session, so a download died when the app was suspended or the phone locked. There was no resume, and no retry after a drop. Fix in progress: the fast session while on screen, a hand-off with resume data to a background session off screen, up to 5 automatic resumes after a drop, and reason codes matching Android.
+- **First model:** setup preselected Balanced, which on a 6–8 GB phone is a 3.4 GB download. Quick start (the best model under 1 GB, Qwen 3.5 0.8B) is now the default (`8a7465c37`).
+- **Not yet done:** an app force-quit by the person still needs a tap on retry. JS reconcile after a kill is still unwired.
