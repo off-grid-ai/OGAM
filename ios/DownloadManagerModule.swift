@@ -1198,7 +1198,9 @@ extension DownloadManagerModule {
           var aggregateBytes: Int64 = 0
           var aggregateTotal: Int64 = 0
           for (taskId, var fileTask) in info.fileTasks {
-            if let task = fileTask.task {
+            // A task that has received nothing yet (a resume waiting for the network) keeps the
+            // count it had, so the bar does not drop to 0% while the phone is offline.
+            if let task = fileTask.task, task.countOfBytesReceived > 0 || fileTask.bytesDownloaded == 0 {
               fileTask.bytesDownloaded = task.countOfBytesReceived
               if task.countOfBytesExpectedToReceive > 0 {
                 fileTask.totalBytes = task.countOfBytesExpectedToReceive
@@ -1211,7 +1213,7 @@ extension DownloadManagerModule {
           info.bytesDownloaded = aggregateBytes
           if info.totalBytes <= 0 { info.totalBytes = aggregateTotal }
         } else if let task = info.task {
-          info.bytesDownloaded = task.countOfBytesReceived
+          if task.countOfBytesReceived > 0 { info.bytesDownloaded = task.countOfBytesReceived }
           if task.countOfBytesExpectedToReceive > 0 {
             info.totalBytes = task.countOfBytesExpectedToReceive
           }
