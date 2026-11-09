@@ -42,8 +42,10 @@ const queued: RenderJob[] = [];
 const pending = new Map<string, Promise<string | null>>();
 let rendering = false;
 
+/** While > 0, newly queued jobs wait, so a batch can be put in order before the first one starts. */
+let holdPump = 0;
 function pump(): void {
-  if (rendering) return;
+  if (rendering || holdPump > 0) return;
   const next = queued.shift();
   if (!next) return;
   rendering = true;
@@ -75,9 +77,12 @@ function render(key: string, items: CastLine[], i: number, urgent = false): Prom
     resolve: finish,
     run: async () => {
       try {
-        if (await RNFS.exists(path)) return path;
+        if (await RNFS.exists(path)) { logger.log(`[POD] line ${i}: already rendered (no wait)`); return path; }
         await RNFS.mkdir(dir(key));
-        return await synthesizeLineToFile(items[i].text, items[i].voice ?? '', path, items[i].voice ? 1 : items[i].pitch);
+        const t0 = Date.now();
+        const out = await synthesizeLineToFile(items[i].text, items[i].voice ?? '', path, items[i].voice ? 1 : items[i].pitch);
+        logger.log(`[POD] line ${i}: rendered in ${((Date.now() - t0) / 1000).toFixed(1)}s (${items[i].text.length} chars, voice "${items[i].voice ?? ''}")`);
+        return out;
       } catch (e: any) {
         logger.warn(`[POD] could not render line ${i}: ${e?.message ?? e}`);
         return null;
@@ -189,17 +194,24 @@ function playFile(path: string): Promise<PlayResult> {
  */
 export async function playLine(key: string, items: CastLine[], i: number): Promise<boolean> {
   const line = items[i];
-  if (!renderable(items)) return speakAndWait(line.text, line.pitch, 'podcast', line.voice || '');
+  if (!renderable(items)) { logger.warn('[POD] this phone cannot save speech to a file, so every line is spoken live (expect a long silence before each)'); return speakAndWait(line.text, line.pitch, 'podcast', line.voice || ''); }
   const token = stopToken;
   // This line first, then the next few behind it, so it never waits for the others.
   // Queue the next lines in reverse priority order, then put this line first.
-  for (let k = Math.min(items.length - 1, i + AHEAD); k > i; k--) render(key, items, k, true).catch(() => undefined);
-  const current = render(key, items, i, true);
+  // The queue must be in order BEFORE the engine starts: the first job queued otherwise starts at once, so the line to
+  // play waited behind a line three ahead of it (seconds of silence before every line).
+  holdPump++;
+  let current: Promise<string | null>;
+  try {
+    for (let k = Math.min(items.length - 1, i + AHEAD); k > i; k--) render(key, items, k, true).catch(() => undefined);
+    current = render(key, items, i, true);
+  } finally { holdPump--; }
+  pump();
   // And the next line is decoded now, while this one plays, so the gap between lines is not a decode.
   if (i + 1 < items.length) render(key, items, i + 1).then((next) => { if (next) decode(next).catch(() => undefined); }).catch(() => undefined);
   const path = await current;
   if (token !== stopToken) return false;
-  if (!path) return speakAndWait(line.text, line.pitch, 'podcast', line.voice || '');
+  if (!path) { logger.warn(`[POD] line ${i}: no rendered file, speaking it live (expect a long silence first)`); return speakAndWait(line.text, line.pitch, 'podcast', line.voice || ''); }
   // A saved file the system could not play (cleared from the cache, cut short): forget it and say the
   // line live instead of ending the whole podcast.
   const result = await playFile(path);
