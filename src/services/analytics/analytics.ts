@@ -231,6 +231,9 @@ export function startAnalytics(
     if (state.activeVideoModelId && state.activeVideoModelId !== prev.activeVideoModelId) {
       modelSelected('video', state.activeVideoModelId);
     }
+    if (state.downloadedModels !== prev.downloadedModels || state.downloadedImageModels !== prev.downloadedImageModels) {
+      reportArrivedDownloads(state.downloadedModels, state.downloadedImageModels);
+    }
   });
   setScreenSink({ subScreen: trackSubScreen, sheetShown, sheetHidden });
   foregroundAt = Date.now();
@@ -756,6 +759,23 @@ export function downloadStarted(key: string, facts: DownloadFacts): void {
   base.then(props => capture('model_download_started', props)).catch(ignore);
   const flow = setupFlow(facts.modelType);
   if (flow) flowStep(flow, 'model_picked');
+}
+
+/**
+ * A download is done when its model is on the phone. Chat and image downloads finish by registering
+ * the model and dropping their row, never through the store's completed status, so for months no
+ * chat or image download ever reported finishing (PostHog, 2026-11-09: 0 of 2,300 GGUF starts). The
+ * arrival of the model is the one fact every finish path shares, so it is what ends the download.
+ */
+export function reportArrivedDownloads(
+  textModels: ReadonlyArray<{ id: string }>,
+  imageModels: ReadonlyArray<{ id: string }>,
+): void {
+  if (downloads.size === 0) return;
+  const arrived = new Set([...textModels.map(m => m.id), ...imageModels.map(m => `image:${m.id}`)]);
+  for (const key of [...downloads.keys()]) {
+    if (arrived.has(key)) downloadEnded(key, 'done');
+  }
 }
 
 export function downloadEnded(key: string, outcome: 'done' | 'failed', error?: unknown): void {

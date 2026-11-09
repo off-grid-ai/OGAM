@@ -182,6 +182,37 @@ it('downloads report start, finish speed, failure, and the image, voice and vide
   expect(funnels).toEqual(['image_setup', 'voice_setup', 'video_setup']);
 });
 
+it('a chat or image download that ends by registering its model reports finished', async () => {
+  // The real finish path for chat and image models: the model is registered and its row dropped,
+  // never the store's completed status. No such download had ever reported finishing (PostHog
+  // 2026-11-09: 0 finishes for every GGUF chat model and every image model).
+  const { endpoint, flush } = await setup({ usage: true });
+  const { useDownloadStore } = require('../../../src/stores/downloadStore');
+  const { useAppStore } = require('../../../src/stores/appStore');
+  const row = (modelKey: string, modelId: string, modelType: string, downloadId: string) => ({
+    modelKey, downloadId, modelId, fileName: 'f', quantization: '', modelType, status: 'pending',
+    bytesDownloaded: 0, totalBytes: 0.8 * GB, combinedTotalBytes: 0, progress: 0, createdAt: 0,
+  });
+  const chatKey = 'unsloth/Qwen3.5-0.8B-GGUF/Qwen3.5-0.8B-Q4_K_M.gguf';
+  useDownloadStore.getState().add(row(chatKey, 'unsloth/Qwen3.5-0.8B-GGUF', 'text', 'c1'));
+  useDownloadStore.getState().add(row('image:anythingv5_cpu', 'anythingv5_cpu', 'image', 'i1'));
+  useDownloadStore.getState().add(row('text:cancelled', 'org/cancelled-GGUF', 'text', 'x1'));
+
+  useAppStore.getState().addDownloadedModel({ id: chatKey, name: 'Qwen 3.5 0.8B', author: 'unsloth', filePath: '/m/q.gguf',
+    fileName: 'q.gguf', fileSize: 0.8 * GB, quantization: 'Q4_K_M', downloadedAt: '2026-11-09T00:00:00Z' });
+  useDownloadStore.getState().remove(chatKey);
+  useAppStore.getState().addDownloadedImageModel({ id: 'anythingv5_cpu', name: 'Anything V5', description: '', modelPath: '/m/a', downloadedAt: '2026-11-09T00:00:00Z', size: 1 });
+  useDownloadStore.getState().remove('image:anythingv5_cpu');
+  // A row removed without its model arriving (a cancel) is not a finish.
+  useDownloadStore.getState().remove('text:cancelled');
+
+  await new Promise(resolve => setTimeout(resolve, 20));
+  await flush();
+  await waitFor(() => expect(endpoint.named('model_download_finished')).toHaveLength(2));
+  expect(endpoint.named('model_download_finished').map(e => e.properties.model).sort())
+    .toEqual(['anythingv5_cpu', 'unsloth/Qwen3.5-0.8B-GGUF']);
+});
+
 it('reports the spec properties when the device cannot say its chip, memory or battery', async () => {
   const { analytics, endpoint, flush } = await setup(null);
   // Before opting in a download is not tracked at all, so its end later sends nothing.
