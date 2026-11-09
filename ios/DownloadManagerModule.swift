@@ -427,12 +427,7 @@ class DownloadManagerModule: RCTEventEmitter {
           self.taskToDownloadId.removeValue(forKey: oldKey)
           group.enter()
           old.cancel(byProducingResumeData: { data in
-            self.queue.async(flags: .barrier) {
-              let next = data.map { target.downloadTask(withResumeData: $0) }
-                ?? target.downloadTask(with: self.makeDownloadRequest(url))
-              next.taskDescription = old.taskDescription
-              self.replaceTask(downloadId: downloadId, oldKey: oldKey, with: next, in: target)
-              next.resume()
+            self.continueDownload(downloadId, from: old, oldKey: oldKey, url: url, resumeData: data, in: target) {
               NSLog("[DownloadManager] Handed off download #%@ to the %@ session (%@ resume data)",
                     downloadId, toBackground ? "background" : "fast", data == nil ? "no" : "with")
               group.leave()
@@ -444,6 +439,21 @@ class DownloadManagerModule: RCTEventEmitter {
       group.notify(queue: .main) {
         if assertion != .invalid { app.endBackgroundTask(assertion) }
       }
+    }
+  }
+
+  /// Continues a download in `target` from where `old` stopped: from its resume data when there is
+  /// some, else from the start of the file. Shared by the hand-off and the automatic retry.
+  func continueDownload(_ downloadId: String, from old: URLSessionDownloadTask, oldKey: Int, url: URL,
+                        resumeData: Data?, in target: URLSession, then done: (() -> Void)? = nil) {
+    queue.async(flags: .barrier) {
+      defer { done?() }
+      guard self.downloads[downloadId] != nil else { return } // cancelled meanwhile
+      let next = resumeData.map { target.downloadTask(withResumeData: $0) }
+        ?? target.downloadTask(with: self.makeDownloadRequest(url))
+      next.taskDescription = old.taskDescription
+      self.replaceTask(downloadId: downloadId, oldKey: oldKey, with: next, in: target)
+      next.resume()
     }
   }
 
@@ -1482,7 +1492,7 @@ extension DownloadManagerModule {
       || code == "download_interrupted"
   }
 
-  fileprivate func handleError(taskId: Int, error: Error?, session: URLSession? = nil) {
+  fileprivate func handleError(taskId: Int, error: Error?) {
     NSLog("[DownloadManager] handleError: task#%d, error=%@", taskId, error?.localizedDescription ?? "nil")
     queue.async(flags: .barrier) {
       guard let downloadId = self.taskToDownloadId[taskId],
@@ -1505,15 +1515,7 @@ extension DownloadManagerModule {
         NSLog("[DownloadManager] Download #%@ stopped (%@); retry %d/%d in %.0fs %@ resume data",
               downloadId, code, attempts + 1, DownloadManagerModule.maxAutoRetries, delay, resumeData == nil ? "without" : "with")
         DispatchQueue.global().asyncAfter(deadline: .now() + delay) {
-          self.queue.async(flags: .barrier) {
-            guard self.downloads[downloadId] != nil else { return } // cancelled meanwhile
-            let target = self.currentSession
-            let next = resumeData.map { target.downloadTask(withResumeData: $0) }
-              ?? target.downloadTask(with: self.makeDownloadRequest(url))
-            next.taskDescription = old.taskDescription
-            self.replaceTask(downloadId: downloadId, oldKey: taskId, with: next, in: target)
-            next.resume()
-          }
+          self.continueDownload(downloadId, from: old, oldKey: taskId, url: url, resumeData: resumeData, in: self.currentSession)
         }
         return
       }
@@ -1601,7 +1603,7 @@ class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
       module?.handleCompletion(taskId: key, location: safeURL)
     } catch {
       NSLog("[DownloadManager] Delegate: FAILED to copy temp file: %@", error.localizedDescription)
-      module?.handleError(taskId: key, error: error, session: session)
+      module?.handleError(taskId: key, error: error)
     }
   }
 
@@ -1609,7 +1611,7 @@ class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
     if let error = error {
       NSLog("[DownloadManager] Delegate: didCompleteWithError for task#%d: %@",
             task.taskIdentifier, error.localizedDescription)
-      module?.handleError(taskId: module?.taskKey(task, in: session) ?? task.taskIdentifier, error: error, session: session)
+      module?.handleError(taskId: module?.taskKey(task, in: session) ?? task.taskIdentifier, error: error)
     } else {
       NSLog("[DownloadManager] Delegate: didCompleteWithError for task#%d: NO error (success)",
             task.taskIdentifier)
