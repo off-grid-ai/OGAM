@@ -1,3 +1,4 @@
+import { Dimensions } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING, FONTS } from '../../constants';
 
@@ -376,8 +377,9 @@ const createActionStyles = (colors: ThemeColors) => ({
     borderColor: colors.border,
     padding: SPACING.md,
     color: colors.text,
-    minHeight: 100,
-    maxHeight: 300,
+    // Long messages need room: about half the screen, scrolling inside.
+    minHeight: 160,
+    maxHeight: Math.max(300, Math.round(Dimensions.get('window').height * 0.5)),
     textAlignVertical: 'top' as const,
   },
   editActions: {

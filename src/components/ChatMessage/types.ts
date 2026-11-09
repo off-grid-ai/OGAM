@@ -6,7 +6,7 @@ export interface ChatMessageProps {
   onImagePress?: (uri: string) => void;
   onCopy?: (content: string) => void;
   onRetry?: (message: Message) => void;
-  onEdit?: (message: Message, newContent: string) => void;
+  onEdit?: (message: Message, newContent: string, opts?: { resend?: boolean }) => void;
   onDelete?: (message: Message) => void;
   onSaveToProject?: (message: Message) => void;
   onGenerateImage?: (prompt: string) => void;

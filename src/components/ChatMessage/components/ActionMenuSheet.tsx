@@ -199,6 +199,8 @@ interface EditSheetProps {
   defaultValue: string;
   onChangeText: (text: string) => void;
   onSave: () => void;
+  /** Save the change but keep the conversation after this message and do not ask again. */
+  onSaveOnly?: () => void;
   onCancel: () => void;
   styles: any;
   colors: any;
@@ -210,6 +212,7 @@ export function EditSheet({
   defaultValue,
   onChangeText,
   onSave,
+  onSaveOnly,
   onCancel,
   styles,
   colors,
@@ -231,6 +234,7 @@ export function EditSheet({
           placeholder="Enter message..."
           placeholderTextColor={colors.textMuted}
           textAlignVertical="top"
+          scrollEnabled
         />
         <View style={styles.editActions}>
           <AnimatedPressable
@@ -240,6 +244,16 @@ export function EditSheet({
           >
             <Text style={styles.editButtonText}>CANCEL</Text>
           </AnimatedPressable>
+          {!!onSaveOnly && (
+            <AnimatedPressable
+              hapticType="selection"
+              style={[styles.editButton, styles.editButtonCancel]}
+              onPress={onSaveOnly}
+              testID="edit-save-only"
+            >
+              <Text style={styles.editButtonText}>SAVE</Text>
+            </AnimatedPressable>
+          )}
           <AnimatedPressable
             hapticType="impactMedium"
             style={[styles.editButton, styles.editButtonSave]}

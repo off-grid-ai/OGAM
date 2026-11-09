@@ -1609,3 +1609,20 @@ describe('chat layout', () => {
     expect(flat(getByTestId('assistant-message')).marginVertical).toBe(8);
   });
 });
+
+describe('ChatMessage: fixing an old message without resending', () => {
+  it('SAVE keeps the conversation after it and says not to resend', () => {
+    jest.useFakeTimers();
+    const onEdit = jest.fn();
+    const { getByTestId, getByText, getByPlaceholderText } = render(
+      <ChatMessage message={createUserMessage('Original text')} onEdit={onEdit} showActions={true} />,
+    );
+    fireEvent(getByTestId('user-message'), 'longPress');
+    fireEvent.press(getByTestId('action-edit'));
+    act(() => { jest.advanceTimersByTime(400); });
+    fireEvent.changeText(getByPlaceholderText('Enter message...'), 'Fixed text');
+    fireEvent.press(getByText('SAVE'));
+    expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ content: 'Original text' }), 'Fixed text', { resend: false });
+    jest.useRealTimers();
+  });
+});

@@ -454,8 +454,10 @@ export const useChatScreen = () => {
     handleCopyMessage: (_content: string) => { },
     handleRetryMessage: (message: Message) =>
       handleRetryMessageFn(message, genDeps, { activeConversationId, hasActiveModel, activeConversation, deleteMessagesAfter, setDebugInfo }),
-    handleEditMessage: (message: Message, newContent: string) =>
-      handleEditMessageFn(genDeps, { message, newContent, activeConversationId, hasActiveModel, activeConversation, updateMessageContent, deleteMessagesAfter, setDebugInfo }),
+    handleEditMessage: (message: Message, newContent: string, opts?: { resend?: boolean }) =>
+      (opts?.resend === false && activeConversationId
+        ? Promise.resolve(updateMessageContent(activeConversationId, message.id, newContent)) // fix the text only: keep the rest of the chat
+        : handleEditMessageFn(genDeps, { message, newContent, activeConversationId, hasActiveModel, activeConversation, updateMessageContent, deleteMessagesAfter, setDebugInfo })),
     handleSelectProject: (project: Project | null) => {
       setPendingProjectId(project?.id);
       if (!activeConversationId) {

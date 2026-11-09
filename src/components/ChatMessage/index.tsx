@@ -411,9 +411,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     setTimeout(() => setShowSelectText(true), 350);
   };
 
-  const handleSaveEdit = () => {
+  /** `resend` false only fixes the text: the conversation after it is kept and nothing is sent again. */
+  const handleSaveEdit = (resend = true) => {
     const trimmed = editedContent.trim();
-    if (trimmed !== message.content) onEdit?.(message, trimmed);
+    if (trimmed !== message.content) { if (resend) onEdit?.(message, trimmed); else onEdit?.(message, trimmed, { resend: false }); }
     setIsEditing(false);
   };
 
@@ -510,7 +511,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         onGenerateImage={handleGenerateImage}
         onSpeak={handleSpeak}
         onSelectText={handleSelectText}
-        onSaveEdit={handleSaveEdit}
+        onSaveEditOnly={isUser ? () => handleSaveEdit(false) : undefined}
+        onSaveEdit={() => handleSaveEdit(!isUser ? false : true)}
         onCancelEdit={handleCancelEdit}
         onCloseAlert={() => setAlertState(hideAlert())}
       />
