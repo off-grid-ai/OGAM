@@ -743,6 +743,9 @@ function setupFlow(modelType: DownloadFacts['modelType']): Flow | null {
 export function downloadStarted(key: string, facts: DownloadFacts): void {
   // Not opted in: no disk read, nothing kept.
   if (!client) return;
+  // One start per attempt. A queued row that gets its native id reports again while its attempt is
+  // still open, which counted every download twice; a real retry comes after the attempt ended.
+  if (downloads.has(key)) return;
   const base = Promise.resolve()
     .then(() => RNFS.getFSInfo())
     .then(info => bytesToGb(info.freeSpace))

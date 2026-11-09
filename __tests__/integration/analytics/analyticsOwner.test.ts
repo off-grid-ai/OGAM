@@ -213,6 +213,25 @@ it('a chat or image download that ends by registering its model reports finished
     .toEqual(['anythingv5_cpu', 'unsloth/Qwen3.5-0.8B-GGUF']);
 });
 
+it('a queued download that gets its native id is one start, and a retry after a failure is another', async () => {
+  const { endpoint, flush } = await setup({ usage: true });
+  const { useDownloadStore } = require('../../../src/stores/downloadStore');
+  useDownloadStore.getState().add({
+    modelKey: 'org/m-GGUF/m.gguf', downloadId: 'queued-1', modelId: 'org/m-GGUF', fileName: 'm.gguf', quantization: '',
+    modelType: 'text', status: 'pending', bytesDownloaded: 0, totalBytes: GB, combinedTotalBytes: 0, progress: 0, createdAt: 0,
+  });
+  // The native start swaps the placeholder id for the real one: the same download.
+  useDownloadStore.getState().retryEntry('org/m-GGUF/m.gguf', 'native-1');
+  useDownloadStore.getState().setStatus('native-1', 'failed', { message: 'x', code: 'network_lost' });
+  // The person taps retry: a new attempt.
+  useDownloadStore.getState().retryEntry('org/m-GGUF/m.gguf', 'native-2');
+
+  await new Promise(resolve => setTimeout(resolve, 20));
+  await flush();
+  await waitFor(() => expect(endpoint.named('model_download_failed')).toHaveLength(1));
+  expect(endpoint.named('model_download_started')).toHaveLength(2);
+});
+
 it('reports the spec properties when the device cannot say its chip, memory or battery', async () => {
   const { analytics, endpoint, flush } = await setup(null);
   // Before opting in a download is not tracked at all, so its end later sends nothing.
