@@ -7,7 +7,7 @@ import { useAppStore } from '../stores/appStore';
 import { recordLlamaTimings } from '../atlasTools/speedHooks';
 import type { Message } from '../types';
 import type { ToolCall } from './tools/types';
-import { recordGenerationStats, buildCompletionParams, buildThinkingCompletionParams, safeCompletion, isTruncatedResult, getStreamingDelta, nextStreamedContent } from './llmHelpers';
+import { recordGenerationStats, buildCompletionParams, buildThinkingCompletionParams, safeCompletion, isTruncatedResult, getStreamingDelta, nextStreamedContent, restoreCutStart } from './llmHelpers';
 import type { StreamToken } from './llmStreamTypes';
 import logger from '../utils/logger';
 import { TOOL_CALL_OPENERS, TOOL_CALL_CLOSERS, maxPartialTagSuffix } from '../utils/messageContent';
@@ -220,6 +220,8 @@ export async function generateWithToolsImpl(
       tokenCount = cr?.tokens_predicted || tokenCount;
       logger.log(`[LLM-Tools] Using completionResult.content as response (${fullResponse.length} chars)`);
     }
+    // The streamed text can lack the first letters or words when the parser revised what was already shown.
+    if (typeof cr?.content === 'string') fullResponse = restoreCutStart(fullResponse, cr.content);
     // The reasoning the user sees: prefer the runtime's parsed reasoning_content, else what streamed.
     const finalReasoning = (typeof cr?.reasoning_content === 'string' && cr.reasoning_content) || fullReasoning;
 

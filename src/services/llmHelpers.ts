@@ -401,6 +401,19 @@ export function getStreamingDelta(nextValue: string | undefined, displayed: stri
   return nextValue.length > displayed.length ? nextValue.slice(displayed.length) : undefined;
 }
 
+/**
+ * The streamed reply with its beginning put back. getStreamingDelta can only append, so when the parser revised text
+ * it had already shown (a held-back "<|channel>" fragment, trimmed whitespace) the real start of the answer was skipped:
+ * the reply began a letter or word late. The parser's final content is the whole answer; when the streamed text is
+ * only its tail, use the whole.
+ */
+export function restoreCutStart(streamed: string, parsed: string | undefined): string {
+  if (!parsed) return streamed;
+  const whole = parsed.trim();
+  const tail = streamed.trim();
+  return tail && whole.length > tail.length && whole.endsWith(tail) ? whole : streamed;
+}
+
 /** Accumulated content for a stream event: parsed content, else displayed text + raw token. */
 export function nextStreamedContent(
   data: { content?: string; reasoning_content?: string; token?: string }, displayed: string,
