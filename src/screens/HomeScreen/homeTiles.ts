@@ -10,7 +10,8 @@ export function arrangeTiles(keys: string[], prefs: HomeTilePrefs | undefined, s
 }
 
 /** Moves one tile a place up or down among all tiles. */
-export function moveTile(keys: string[], prefs: HomeTilePrefs | undefined, key: string, by: -1 | 1): HomeTilePrefs {
+export function moveTile(keys: string[], prefs: HomeTilePrefs | undefined, move: { key: string; by: -1 | 1 }): HomeTilePrefs {
+  const { key, by } = move;
   const all = arrangeTiles(keys, prefs, true);
   const i = all.indexOf(key);
   const j = i + by;

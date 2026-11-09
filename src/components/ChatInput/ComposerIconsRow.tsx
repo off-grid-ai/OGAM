@@ -12,7 +12,6 @@ interface ComposerIconsRowProps {
   onAttachPress: () => void;
   quickSettingsTriggerRef: TriggerRef;
   onQuickSettingsPress: () => void;
-  showSettingsDot: boolean;
   disabled?: boolean;
 }
 
@@ -23,7 +22,7 @@ interface ComposerIconsRowProps {
  */
 export const ComposerIconsRow: React.FC<ComposerIconsRowProps> = ({
   pillIconsExpandedWidth, attachTriggerRef, onAttachPress,
-  quickSettingsTriggerRef, onQuickSettingsPress, showSettingsDot, disabled,
+  quickSettingsTriggerRef, onQuickSettingsPress, disabled,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -49,7 +48,6 @@ export const ComposerIconsRow: React.FC<ComposerIconsRowProps> = ({
       >
         <View style={styles.iconWrapper}>
           <Icon name="settings" size={18} color={disabled ? colors.textMuted : colors.textSecondary} />
-          {showSettingsDot && <View style={styles.toolWarningDot} />}
         </View>
       </TouchableOpacity>
     </View>

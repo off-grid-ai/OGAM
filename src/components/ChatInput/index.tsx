@@ -52,7 +52,6 @@ interface ChatInputProps {
   /** True when the active model IS a vision model but its projector isn't installed (repairable). */
   visionNeedsRepair?: boolean;
   activeSpotlight?: number | null;
-  showSettingsDot?: boolean;
   /** Opens the shared fullscreen image viewer when a pending (pre-send)
    * attachment thumbnail is tapped — the same handler in-message images use. */
   onImagePress?: (uri: string) => void;
@@ -137,7 +136,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onRepairVision,
   isRemote = false,
   activeSpotlight = null,
-  showSettingsDot = false,
   onImagePress,
 }) => {
   const { colors } = useTheme();
@@ -387,7 +385,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onAttachPress={handleAttachPress}
                 quickSettingsTriggerRef={quickSettings.triggerRef}
                 onQuickSettingsPress={handleQuickSettingsPress}
-                showSettingsDot={showSettingsDot}
                 disabled={disabled}
               />
             </>

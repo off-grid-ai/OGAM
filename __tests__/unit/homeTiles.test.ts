@@ -15,9 +15,9 @@ describe('home tiles', () => {
     expect(arrangeTiles(keys, { hidden: ['projects'] }, true)).toEqual(keys);
   });
   it('move a tile and stop at the ends', () => {
-    expect(moveTile(keys, undefined, 'models', -1).order).toEqual(['chat', 'models', 'projects', 'settings']);
-    expect(moveTile(keys, undefined, 'chat', -1).order).toEqual(keys);
-    expect(moveTile(keys, undefined, 'settings', 1).order).toEqual(keys);
+    expect(moveTile(keys, undefined, { key: 'models', by: -1 }).order).toEqual(['chat', 'models', 'projects', 'settings']);
+    expect(moveTile(keys, undefined, { key: 'chat', by: -1 }).order).toEqual(keys);
+    expect(moveTile(keys, undefined, { key: 'settings', by: 1 }).order).toEqual(keys);
   });
   it('toggle a tile, and never hide Settings', () => {
     const hidden = toggleTile(undefined, 'chat');

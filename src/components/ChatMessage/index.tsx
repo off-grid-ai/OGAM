@@ -22,7 +22,7 @@ import { formatTime, formatDuration, buildMessageData } from './utils';
 import { ThinkingBlock } from './components/ThinkingBlock';
 import type { ChatMessageProps } from './types';
 import type { Message } from '../../types';
-import { isMessageLook, messageLookStyle, isDarkColor } from '../../theme/messageLooks';
+import { applyMessageLook } from '../../theme/messageLooks';
 import { usePins } from '../../pins/store';
 import { slidesFromReply } from '../../presentations/replySlides';
 
@@ -270,7 +270,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     delayLongPress={300}
   >
     <View style={bubbleStyle}>
-      {!!label && <Text style={{ fontWeight: '700', marginBottom: 2, color: colors.primary }}>{label}</Text>}
+      {!!label && <Text style={styles.lookLabel}>{label}</Text>}
       {hasAttachments && (
         <MessageAttachments
           attachments={message.attachments!}
@@ -354,9 +354,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const { isWide } = useWideLayout();
   const layout = useAppStore((s) => s.settings.appearance?.chatLayout ?? 'clean');
   const clean = layout === 'clean';
-  const look = isMessageLook(layout) ? messageLookStyle(layout, isUser, isDarkColor(colors.background)) : undefined;
-  // A messaging-app look sets its own bubble colours, so the text colour is set to match.
-  const lookStyles = look ? { ...styles, userText: { ...styles.userText, color: look.textColor }, assistantText: { ...styles.assistantText, color: look.textColor } } : styles;
+  const { look, lookStyles } = applyMessageLook({ layout, isUser, background: colors.background, styles });
   const bubbleStyle = look ? [...bubbleStyleFor({ styles, isUser, clean: false, isWide, hasAttachments }), look.bubble] : bubbleStyleFor({ styles, isUser, clean, isWide, hasAttachments });
 
   const handleCopy = () => {

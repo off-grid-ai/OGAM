@@ -9,7 +9,6 @@ import { triggerHaptic } from '../../utils/haptics';
 import { FONTS } from '../../constants';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 
-const TOOL_WARNING_COLOR = '#F59E0B';
 
 // Popovers are anchored from the screen's right edge (`right: anchorX`) and
 // extend leftward. When the trigger is far left (e.g. the audio-mode "+"), a
@@ -116,7 +115,7 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
   supportsToolCalling, enabledToolCount, onToolsPress,
 }) => {
   const { colors } = useTheme();
-  const { settings, updateSettings, toolCountHintDismissed } = useAppStore();
+  const { settings, updateSettings } = useAppStore();
 
   if (!visible) return null;
 
@@ -126,11 +125,8 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
   // builds render nothing here.
   const AudioRow = getSlot(SLOTS.quickSettingsAudioRow);
 
-  // The tools icon turns amber at 3+ enabled tools.
-  const showToolsWarning = supportsToolCalling && enabledToolCount >= 3 && !toolCountHintDismissed;
-
-  const toolIconColor = showToolsWarning ? TOOL_WARNING_COLOR : tools.iconColor;
-  const toolBadgeBg = showToolsWarning ? TOOL_WARNING_COLOR : tools.badgeBg;
+  const toolIconColor = tools.iconColor;
+  const toolBadgeBg = tools.badgeBg;
 
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>

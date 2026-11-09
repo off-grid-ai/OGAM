@@ -10,19 +10,19 @@ const RATE = 24000;
 const NOTE: Record<string, number> = { C4: 261.63, G4: 392, C5: 523.25, D5: 587.33, E5: 659.25, G5: 783.99, A5: 880, C6: 1046.5 };
 
 interface Note { hz: number; at: number; len: number; gain: number }
-const n = (name: string, at: number, len: number, gain = 1): Note => ({ hz: NOTE[name], at, len, gain });
+const n = (name: string, [at, len]: [number, number], gain = 1): Note => ({ hz: NOTE[name], at, len, gain });
 
 /** What each jingle plays: a quick rising run then a held chord (intro), a falling run that settles (outro), two soft notes (chime). */
 export const SCORES: Record<JingleKind, Note[]> = {
   intro: [
-    n('C5', 0, 0.35, 0.7), n('E5', 0.14, 0.35, 0.7), n('G5', 0.28, 0.35, 0.7), n('C6', 0.42, 0.5, 0.8),
-    n('C5', 0.62, 1.2), n('E5', 0.62, 1.2), n('G5', 0.62, 1.2), n('C6', 0.62, 1.2, 0.8),
+    n('C5', [0, 0.35], 0.7), n('E5', [0.14, 0.35], 0.7), n('G5', [0.28, 0.35], 0.7), n('C6', [0.42, 0.5], 0.8),
+    n('C5', [0.62, 1.2]), n('E5', [0.62, 1.2]), n('G5', [0.62, 1.2]), n('C6', [0.62, 1.2], 0.8),
   ],
   outro: [
-    n('G5', 0, 0.3, 0.7), n('E5', 0.16, 0.3, 0.7), n('D5', 0.32, 0.3, 0.7),
-    n('C4', 0.5, 1.4), n('G4', 0.5, 1.4), n('C5', 0.5, 1.4, 0.9),
+    n('G5', [0, 0.3], 0.7), n('E5', [0.16, 0.3], 0.7), n('D5', [0.32, 0.3], 0.7),
+    n('C4', [0.5, 1.4]), n('G4', [0.5, 1.4]), n('C5', [0.5, 1.4], 0.9),
   ],
-  chime: [n('E5', 0, 0.3, 0.8), n('A5', 0.12, 0.4, 0.8)],
+  chime: [n('E5', [0, 0.3], 0.8), n('A5', [0.12, 0.4], 0.8)],
 };
 
 export const jingleSeconds = (kind: JingleKind): number => Math.max(...SCORES[kind].map((x) => x.at + x.len)) + 0.25;

@@ -78,3 +78,16 @@ export function messageLookStyle(look: MessageLook, isUser: boolean, dark: boole
     textColor: isUser ? p.meText : p.themText,
   };
 }
+
+/**
+ * The look for one message and the chat styles to draw it with. A messaging-app look sets its own bubble colours, so the
+ * text colour is set to match. Returns the styles unchanged (and no look) for Clean and Bubbles.
+ */
+export function applyMessageLook<S extends { userText: object; assistantText: object }>(o: {
+  layout: string; isUser: boolean; background: string; styles: S;
+}): { look?: MessageLookStyle; lookStyles: S } {
+  if (!isMessageLook(o.layout)) return { lookStyles: o.styles };
+  const look = messageLookStyle(o.layout, o.isUser, isDarkColor(o.background));
+  const lookStyles = { ...o.styles, userText: { ...o.styles.userText, color: look.textColor }, assistantText: { ...o.styles.assistantText, color: look.textColor } };
+  return { look, lookStyles };
+}

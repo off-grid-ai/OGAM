@@ -88,10 +88,10 @@ export const QuickHomeScreen: React.FC<Props> = ({ navigation, mode }) => {
                 {!tiles && !editing && <Icon name="chevron-right" size={simple ? 23 : 19} color={colors.textMuted} />}
                 {editing && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                    <TouchableOpacity testID={'tile-up-' + item.key} accessibilityLabel={'Move ' + item.label + ' up'} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }} onPress={() => save(moveTile(keys, prefs, item.key, -1))}>
+                    <TouchableOpacity testID={'tile-up-' + item.key} accessibilityLabel={'Move ' + item.label + ' up'} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }} onPress={() => save(moveTile(keys, prefs, { key: item.key, by: -1 }))}>
                       <Icon name="arrow-up" size={20} color={colors.textSecondary} />
                     </TouchableOpacity>
-                    <TouchableOpacity testID={'tile-down-' + item.key} accessibilityLabel={'Move ' + item.label + ' down'} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }} onPress={() => save(moveTile(keys, prefs, item.key, 1))}>
+                    <TouchableOpacity testID={'tile-down-' + item.key} accessibilityLabel={'Move ' + item.label + ' down'} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }} onPress={() => save(moveTile(keys, prefs, { key: item.key, by: 1 }))}>
                       <Icon name="arrow-down" size={20} color={colors.textSecondary} />
                     </TouchableOpacity>
                     {item.key !== 'settings' && (

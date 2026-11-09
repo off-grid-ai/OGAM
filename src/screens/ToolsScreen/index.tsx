@@ -13,8 +13,6 @@ import { useAgentStore } from '../../stores/agentStore';
 import { resetChatTools, toggleChatTool, toolSourceFor, toolsForConversation, setChatToolGroup, withGroup, groupIsOn, TOOL_GROUPS, PROJECT_TOOL_IDS } from '../../services/tools/chatTools';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 
-const TOOL_WARNING_COLOR = '#F59E0B';
-
 /**
  * Full-page tool picker (replaces the old bottom-sheet drawer). Lists the free
  * core-registry tools as toggles. Pro tools (email/calendar) and MCP servers live
@@ -36,8 +34,6 @@ export const ToolsScreen: React.FC = () => {
   const enabledTools = conv ? toolsForConversation(conv) : appTools || [];
   const source = conv ? toolSourceFor(conv) : null;
   const updateSettings = useAppStore(st => st.updateSettings);
-  const toolCountHintDismissed = useAppStore(st => st.toolCountHintDismissed);
-  const setToolCountHintDismissed = useAppStore(st => st.setToolCountHintDismissed);
 
   const handleToggleTool = (toolId: string) => {
     if (conv) { toggleChatTool(conv.id, toolId); return; }
@@ -47,8 +43,6 @@ export const ToolsScreen: React.FC = () => {
     });
   };
 
-  // Atlas only sends the tools a message could use, so there is no longer a "keep it to 3" limit.
-  const showHint = false && !toolCountHintDismissed;
   const inProject = !conv || !!conv.projectId;
   const shownTools = AVAILABLE_TOOLS.filter(t => inProject || !PROJECT_TOOL_IDS.includes(t.id));
   const toggleGroup = (tools: string[], on: boolean) => {
@@ -116,19 +110,6 @@ export const ToolsScreen: React.FC = () => {
 
         <WebSearchSettings />
 
-        {showHint && (
-          <View style={[styles.hintBanner, { backgroundColor: colors.surface }]}>
-            <Icon name="alert-circle" size={16} color={TOOL_WARNING_COLOR} style={styles.hintIcon} />
-            <View style={styles.hintBody}>
-              <Text style={[styles.hintText, { color: colors.text }]}>
-                Too many tools can confuse the model and increase latency on the first response. Stick to 2-3 tools for best results.
-              </Text>
-              <TouchableOpacity onPress={setToolCountHintDismissed} style={styles.hintDismiss}>
-                <Text style={styles.hintDismissText}>Got it</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
 
         {shownTools.map(tool => {
           const isEnabled = enabledTools.includes(tool.id);
@@ -254,33 +235,5 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.textMuted,
     marginTop: SPACING.lg,
     textAlign: 'center' as const,
-  },
-  hintBanner: {
-    flexDirection: 'row' as const,
-    alignItems: 'flex-start' as const,
-    borderWidth: 1,
-    borderColor: TOOL_WARNING_COLOR,
-    borderRadius: 10,
-    padding: SPACING.md,
-    marginTop: SPACING.sm,
-  },
-  hintIcon: {
-    marginRight: SPACING.sm,
-    marginTop: 1,
-  },
-  hintBody: {
-    flex: 1,
-  },
-  hintText: {
-    ...TYPOGRAPHY.bodySmall,
-    lineHeight: 18,
-  },
-  hintDismiss: {
-    marginTop: SPACING.sm,
-  },
-  hintDismissText: {
-    ...TYPOGRAPHY.bodySmall,
-    fontWeight: '400' as const,
-    color: TOOL_WARNING_COLOR,
   },
 });

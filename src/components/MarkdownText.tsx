@@ -51,8 +51,8 @@ const selectableRules = {
   fence: (node: any, _children: any, ...[, styles, inheritedStyles = {}]: any[]) => (node.sourceInfo?.trim() === 'chart' ? <View key={node.key}><ChartBlock content={node.content} /></View> : (
     <View key={node.key}>
       {/* Code keeps its line breaks and indentation, so a wide line scrolls sideways instead of running off the screen. */}
-      <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator style={{ marginVertical: SPACING.sm }}>
-        <Text style={[inheritedStyles, styles.fence, { marginVertical: 0 }]} selectable>
+      <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator style={markdownLayout.codeScroll}>
+        <Text style={[inheritedStyles, styles.fence, markdownLayout.codeText]} selectable>
           {trimTrailingNewline(node.content)}
         </Text>
       </ScrollView>
@@ -87,12 +87,18 @@ const copyStyles = StyleSheet.create({
   label: { ...TYPOGRAPHY.meta },
 });
 
+const markdownLayout = StyleSheet.create({
+  codeScroll: { marginVertical: SPACING.sm },
+  codeText: { marginVertical: 0 },
+  table: { minWidth: '100%' },
+});
+
 const copyRules = {
   table: (node: any, children: any, ...[, styles]: any[]) => (
     <View key={node.key}>
       {/* A wide table scrolls sideways instead of running off the screen or squashing its columns. */}
       <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator>
-        <View style={[styles._VIEW_SAFE_table, { minWidth: '100%' }]}>{children}</View>
+        <View style={[styles._VIEW_SAFE_table, markdownLayout.table]}>{children}</View>
       </ScrollView>
       <CopyActions testID="copy-table" actions={[
         { label: 'Copy table', text: () => tableToTsv(tableRows(node)) },

@@ -79,6 +79,11 @@ const createBubbleStyles = (colors: ThemeColors) => ({
   },
   // Clean layout (like ChatGPT and Claude): the reply is plain text across the page, your own message keeps a
   // rounded bubble, and the gaps between messages are smaller.
+  lookLabel: {
+    fontWeight: '700' as const,
+    marginBottom: 2,
+    color: colors.primary,
+  },
   cleanContainer: {
     marginVertical: 4,
     paddingHorizontal: 12,

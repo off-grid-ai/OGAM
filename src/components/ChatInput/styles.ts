@@ -178,15 +178,6 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   iconWrapper: {
     position: 'relative' as const,
   },
-  toolWarningDot: {
-    position: 'absolute' as const,
-    top: -2,
-    right: -2,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: TOOL_WARNING_COLOR,
-  },
   // Small badge on image gen icon
   iconBadge: {
     position: 'absolute' as const,

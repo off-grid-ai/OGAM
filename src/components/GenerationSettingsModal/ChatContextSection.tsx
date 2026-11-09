@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { getMaxContextForDevice } from '../../services/llmHelpers';
 import { autoReplyTokens } from '../../services/contextWindow';
 import { hardwareService } from '../../services/hardware';
-import { ActivityIndicator, Alert, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../theme';
 import { useChatStore, useAppStore } from '../../stores';
@@ -14,6 +14,7 @@ import { useAgentStore } from '../../stores/agentStore';
 /** Chat settings: this chat's own instructions, and compressing older messages so long chats keep going. */
 export const ChatContextSection: React.FC = () => {
   const { colors } = useTheme();
+  const styles = useMemo(() => makeChipStyles(colors), [colors]);
   const convId = useChatStore((s) => s.activeConversationId);
   const conv = useChatStore((s) => s.conversations.find((c) => c.id === s.activeConversationId));
   const [text, setText] = useState(conv?.instructions || '');
@@ -71,27 +72,27 @@ export const ChatContextSection: React.FC = () => {
             <Text style={{ color: contextMode === 'auto' ? colors.background : colors.text }}>Auto (RAM-aware)</Text>
           </TouchableOpacity>
         )}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 8 }}>
+        <View style={styles.chipRow}>
           {(isLiteRT ? [2048, 4096, 8192] : [2048, 4096, 8192, 16384].filter((n) => n <= deviceCap && (!modelMax || n <= Math.max(modelMax, 4096)))).map((n) => (
             <TouchableOpacity key={n} accessibilityRole="button" accessibilityLabel={`Use ${n / 1024}K manual context`}
               onPress={() => updateSettings({ [ctxKey]: n, ...(!isLiteRT && { contextMode: 'manual' }) } as any)}
-              style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: (isLiteRT || contextMode === 'manual') && ctxValue === n ? colors.primary : colors.background }}>
-              <Text style={{ color: (isLiteRT || contextMode === 'manual') && ctxValue === n ? colors.background : colors.text, fontSize: 13 }}>{n / 1024}K</Text>
+              style={(isLiteRT || contextMode === 'manual') && ctxValue === n ? styles.chipOn : styles.chip}>
+              <Text style={(isLiteRT || contextMode === 'manual') && ctxValue === n ? styles.chipTextOn : styles.chipText}>{n / 1024}K</Text>
             </TouchableOpacity>
           ))}
         </View>
-        <Text style={{ color: colors.text, fontWeight: '600', marginTop: 12 }}>Reply length</Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+        <Text style={styles.subTitle}>Reply length</Text>
+        <Text style={styles.hint}>
           How much the model may write in one answer. Auto follows the memory size above, so long files, code and reports are written in one go instead of stopping and needing "continue".
         </Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 8 }}>
+        <View style={styles.chipRow}>
           {([['auto', 'Auto'], [512, '512'], [1024, '1K'], [2048, '2K'], [4096, '4K'], [8192, '8K']] as const).map(([v, label]) => {
             const on = v === 'auto' ? replyMode !== 'manual' : replyMode === 'manual' && replyTokens === v;
             return (
               <TouchableOpacity key={String(v)} accessibilityRole="button" accessibilityLabel={v === 'auto' ? 'Automatic reply length' : `Reply length ${label} tokens`}
                 onPress={() => updateSettings(v === 'auto' ? { maxTokensMode: 'auto' } : { maxTokens: v, maxTokensMode: 'manual' })}
-                style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: on ? colors.primary : colors.background }}>
-                <Text style={{ color: on ? colors.background : colors.text, fontSize: 13 }}>{label}</Text>
+                style={on ? styles.chipOn : styles.chip}>
+                <Text style={on ? styles.chipTextOn : styles.chipText}>{label}</Text>
               </TouchableOpacity>
             );
           })}
@@ -133,4 +134,17 @@ export const ChatContextSection: React.FC = () => {
       </View>
     </View>
   );
+};
+
+const makeChipStyles = (colors: ReturnType<typeof useTheme>['colors']) => {
+  const chip = { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16 };
+  return StyleSheet.create({
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 8 },
+    chip: { ...chip, backgroundColor: colors.background },
+    chipOn: { ...chip, backgroundColor: colors.primary },
+    subTitle: { color: colors.text, fontWeight: '600', marginTop: 12 },
+    hint: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+    chipText: { color: colors.text, fontSize: 13 },
+    chipTextOn: { color: colors.background, fontSize: 13 },
+  });
 };

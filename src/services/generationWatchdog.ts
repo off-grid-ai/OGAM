@@ -4,7 +4,7 @@
  * long as the app stayed open (a reported half hour). Progress is anything that changes what the chat shows: more
  * answer text, more thinking text, or a new message (a tool result).
  */
-export const STALL_LIMIT_MS = 5 * 60 * 1000;
+const STALL_LIMIT_MS = 5 * 60 * 1000;
 const CHECK_EVERY_MS = 15 * 1000;
 
 export interface StallWatchdogOptions {

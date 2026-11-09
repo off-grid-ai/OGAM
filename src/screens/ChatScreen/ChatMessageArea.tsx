@@ -17,7 +17,6 @@ import { EmptyChat, ImageProgressIndicator } from './ChatScreenComponents';
 import { getPlaceholderText, useChatScreen } from './useChatScreen';
 import { createStyles } from './styles';
 import { useTheme } from '../../theme';
-import { useAppStore } from '../../stores';
 import { getToolExtensions } from '../../services/tools/extensions';
 import { AVAILABLE_TOOLS } from '../../services/tools';
 import { useOpenProTools } from '../../hooks/useOpenProTools';
@@ -123,7 +122,6 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   const hasScrolledRef = React.useRef(false);
   const interfaceMode = useUiModeStore((s) => s.interfaceMode);
   const tabNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { toolCountHintDismissed } = useAppStore();
   // Subscribe to Pro activation so this re-renders the moment a license is
   // activated. loadProFeatures() registers the tool extensions + the Pro Tools
   // screen in one pass; without this subscription the getToolExtensions() reads
@@ -143,9 +141,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   // (pro email/calendar ids are surfaced under Pro Tools instead, not double-counted).
   const freeToolIds = new Set(AVAILABLE_TOOLS.map(t => t.id));
   const freeToolsCount = chat.enabledTools.filter(id => freeToolIds.has(id)).length;
-  const totalToolCount = freeToolsCount + proToolsCount;
   const handleProToolsPress = useOpenProTools();
-  const showSettingsDot = totalToolCount > 3 && !toolCountHintDismissed;
   const [inputHeight, setInputHeight] = useState(84);
   const flatListHeightRef = useRef(0);
 
@@ -326,7 +322,6 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
             })}
             onToolsPress={() => tabNav.navigate('Tools', { conversationId: chat.activeConversationId ?? undefined })}
             enabledToolCount={freeToolsCount}
-            showSettingsDot={showSettingsDot}
             mcpToolCount={proToolsCount}
             onMcpPress={handleProToolsPress}
             supportsToolCalling={chat.supportsToolCalling}
