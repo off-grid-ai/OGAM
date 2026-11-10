@@ -23,6 +23,9 @@ describe('knowing about a newer Atlas', () => {
     expect(updateFromRelease(release({ draft: true }), 143)).toBeNull();
     expect(updateFromRelease(release({ tag_name: 'atlas-library' }), 143)).toBeNull();
   });
+  it('leaves the install blurb out of what is new', () => {
+    expect(updateFromRelease(release({ body: 'Install this APK on your phone.\nFixed the briefing.' }), 143)?.notes).toBe('Fixed the briefing.');
+  });
   it('says nothing when this build does not know its own number', () => {
     expect(updateFromRelease(release(), null)).toBeNull();
   });

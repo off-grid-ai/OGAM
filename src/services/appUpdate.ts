@@ -20,12 +20,15 @@ export const buildFromTag = (tag: string | undefined): number | null => {
 };
 
 /** The update a release offers, or null when it is not newer, has no APK, or is not an Atlas build. */
+/** The release text without the install blurb, so "What is new" shows only what changed. */
+const whatIsNew = (body: unknown): string => String(body ?? '').replace(/^Install this APK[^\n]*\n?/i, '').trim();
+
 export function updateFromRelease(release: any, currentBuild: number | null): UpdateInfo | null {
   const build = buildFromTag(release?.tag_name);
   if (build === null || currentBuild === null || build <= currentBuild || release?.draft || release?.prerelease) return null;
   const apk = (release.assets ?? []).find((a: any) => /\.apk$/i.test(a?.name ?? '') && a?.browser_download_url);
   if (!apk) return null;
-  return { build, tag: release.tag_name, name: release.name || `Atlas build ${build}`, apkUrl: apk.browser_download_url, size: Number(apk.size) || 0, notes: String(release.body ?? '') };
+  return { build, tag: release.tag_name, name: release.name || `Atlas build ${build}`, apkUrl: apk.browser_download_url, size: Number(apk.size) || 0, notes: whatIsNew(release.body) };
 }
 
 export function installedBuild(): number | null {

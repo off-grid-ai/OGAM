@@ -18,3 +18,11 @@ it('says a newer build is published and downloads and installs it on one tap', a
   await waitFor(() => expect(mockInstall).toHaveBeenCalled());
   expect((mockInstall.mock.calls[0] as any)[0].build).toBe(144);
 });
+
+it('shows what is new only when asked', async () => {
+  const view = render(<AppUpdateCard />);
+  await waitFor(() => expect(view.getByTestId('app-update-notes-toggle')).toBeTruthy());
+  expect(view.queryByTestId('app-update-notes')).toBeNull();
+  fireEvent.press(view.getByTestId('app-update-notes-toggle'));
+  expect(view.getByTestId('app-update-notes').props.children).toBe('What is new');
+});

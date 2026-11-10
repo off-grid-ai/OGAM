@@ -16,6 +16,7 @@ export function AppUpdateCard() {
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [fraction, setFraction] = useState(0);
   const [message, setMessage] = useState('');
+  const [showNotes, setShowNotes] = useState(false);
   const build = installedBuild();
 
   const check = async () => {
@@ -56,7 +57,14 @@ export function AppUpdateCard() {
           </TouchableOpacity>
         )}
       </View>
-      {state === 'available' && !!update?.notes && <Text numberOfLines={6} style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>{update.notes}</Text>}
+      {state === 'available' && !!update?.notes && (
+        <View style={{ marginTop: 8 }}>
+          <TouchableOpacity onPress={() => setShowNotes((v) => !v)} testID="app-update-notes-toggle" accessibilityRole="button">
+            <Text style={{ color: colors.primary, fontSize: 13 }}>{showNotes ? 'Hide what is new' : 'What is new'}</Text>
+          </TouchableOpacity>
+          {showNotes && <Text selectable style={{ color: colors.textMuted, fontSize: 12, marginTop: 6 }} testID="app-update-notes">{update.notes}</Text>}
+        </View>
+      )}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
         <Text style={{ flex: 1, color: colors.textSecondary, fontSize: 12, paddingRight: 8 }}>Check when the app opens (contacts GitHub; skipped in off-grid mode)</Text>
         <Switch value={auto} onValueChange={(v) => updateSettings({ checkUpdates: v } as any)} testID="app-update-auto" />
