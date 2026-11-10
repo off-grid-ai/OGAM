@@ -518,7 +518,7 @@
     "name": "Downloads",
     "group": "Models",
     "what": "Downloads in progress and on this phone",
-    "file": "screens/v/downloads-3.jpg",
+    "file": "screens/v/downloads-4.jpg",
     "versions": [
       {
         "v": 1,
@@ -538,6 +538,13 @@
         "at": "2026-11-09T08:02:29Z",
         "file": "screens/v/downloads-3.jpg",
         "what": "A 2.9 GB download in progress: bar, percent, speed and pause on its own row."
+      },
+      {
+        "v": 4,
+        "label": "Running downloads by model name",
+        "at": "2026-11-10T10:40:00Z",
+        "file": "screens/v/downloads-4.jpg",
+        "what": "A running or paused download now reads its model's name (Wan 2.1 (1.3B), FP16), as on Models. Finished models saved under a file stem still show it; that fix is in the shared resolver."
       }
     ]
   },
