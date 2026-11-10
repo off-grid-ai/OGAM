@@ -284,6 +284,12 @@ const FailedSection: React.FC<{
 /** Retry and Remove sit side by side: the touch area grows only up and down, so neither takes the other's tap. */
 const VERTICAL_HIT_SLOP = { top: 10, bottom: 10, left: 0, right: 0 };
 
+/** One size, or "min–max" when the files differ. */
+function formatSizeRange(range: { min: number; max: number }): string {
+  const min = huggingFaceService.formatFileSize(range.min);
+  return range.min === range.max ? min : `${min}–${huggingFaceService.formatFileSize(range.max)}`;
+}
+
 export const ModelCard: React.FC<ModelCardProps> = ({
   model: given,
   file,
@@ -352,11 +358,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
 
   // A compact row shows its size too, as a range until one file is chosen (Mac, 2026-11-08: a list
   // row with params but no size left out what the phone pays).
-  const rangeText = sizeRange
-    ? sizeRange.min === sizeRange.max
-      ? huggingFaceService.formatFileSize(sizeRange.min)
-      : `${huggingFaceService.formatFileSize(sizeRange.min)}–${huggingFaceService.formatFileSize(sizeRange.max)}`
-    : undefined;
+  const rangeText = sizeRange ? formatSizeRange(sizeRange) : undefined;
   const headingFacts = [sizeLabel, useDenseLayout ? rangeText : undefined, ...(facts ?? [])].filter((fact): fact is string => !!fact);
 
   const credibility = resolveCredibility(model, downloadedModel);

@@ -6,8 +6,7 @@
 import { Platform } from 'react-native';
 import { mobileUseMmap } from '@offgrid/models';
 import { DownloadedModel, ONNXImageModel } from '../../types';
-import { readModelFileType } from '../modelHeader';
-import { readModelHeader } from '../modelHeader';
+import { readModelFileType, readModelHeader } from '../modelHeader';
 import { buildModelParams } from '../llmHelpers';
 import { hardwareService } from '../hardware';
 import { llmService } from '../llm';

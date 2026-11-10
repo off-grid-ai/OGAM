@@ -784,7 +784,8 @@ function reportArrivedDownloads(
 ): void {
   if (downloads.size === 0) return;
   const arrived = new Set([...textModels.map(m => m.id), ...imageModels.map(m => `image:${m.id}`)]);
-  for (const key of [...downloads.keys()]) {
+  // Ending a download deletes it from the map; deleting the current key while iterating is safe.
+  for (const key of downloads.keys()) {
     if (arrived.has(key)) downloadEnded(key, 'done');
   }
 }
