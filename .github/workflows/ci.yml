@@ -76,6 +76,11 @@ jobs:
         if: ${{ !cancelled() }}
         run: npm run knip
 
+      # The video runtime's pure C++ helpers (no ggml, no device), e.g. the phone's --max-vram budgets.
+      - name: Native video helper tests
+        if: ${{ !cancelled() }}
+        run: bash scripts/test-native-video.sh
+
   jest:
     name: jest (${{ matrix.shard }}/8)
     runs-on: ubuntu-latest
