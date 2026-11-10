@@ -1,7 +1,8 @@
 /**
  * scripts/uat.sh's stages, which the parallel nightly runs one job at a time.
  *
- * SPEC: `--plan` names the next beta and changes nothing: the version is the next patch of package.json,
+ * SPEC: `--plan` names the next beta and changes nothing: the version is the next patch of package.json
+ * once that version is live (its plain tag exists), else package.json's own version,
  * N is one past the last `v<version>-beta.<N>` tag, the store build number is a timestamp, and the
  * shared commit is ../shared's HEAD. It prints them as KEY=VALUE and appends them to $GITHUB_OUTPUT,
  * writes the notes where UAT_NOTES_OUT says, and pushes, commits and tags nothing. A later stage
@@ -44,7 +45,9 @@ function sandbox() {
     'scripts/uat.sh': fs.readFileSync(UAT, 'utf8'),
     '.gitignore': '',
   });
-  // Earlier betas of the next version: the plan takes the one after the highest.
+  // 0.0.119 is live (promote.sh pushed its plain tag), so the plan targets 0.0.120. Earlier betas of
+  // it: the plan takes the one after the highest.
+  git(mobile, 'tag', 'v0.0.119');
   git(mobile, 'tag', 'v0.0.120-beta.1');
   git(mobile, 'tag', 'v0.0.120-beta.3');
   git(mobile, 'push', '-q', 'origin', '--tags');
