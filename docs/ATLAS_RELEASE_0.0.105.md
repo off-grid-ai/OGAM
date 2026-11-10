@@ -569,6 +569,18 @@ What changed:
   model. A second, short-prompt check decides whether to use the first-word workaround: prompts under about 192 tokens run
   once first so the first word comes from the engine's single-token step; it is switched on only if the same check passes with
   it, and never for long prompts. The remembered verdict records the batch size and CPU-kernel setting.
+- 0.0.148: from phone use. Daily briefing: Listen from the beginning no longer stops silently when the opening tune cannot be
+  played (a tune that fails or never ends is skipped). Teach the AI (was Learning mode): one screen for the default chat with an
+  expert per subject (General, Taxes, Law, Psychology...), each with its own topic, question bank, reports and lessons; every report
+  the AI writes is readable in full with the judge's verdict, score and sources; a chat uses only the lessons of the expert whose
+  subject it is about; "More options" holds the old controls. Agents and pals are listed apart (Friend and Jake are pals; a Type
+  choice when editing). Home: Teach the AI, Study a textbook (Knowledge) and optional Atlas emergency tiles (turn on under
+  Customize). A reply that says a file was saved when no file tool saved one now says so. The Appearance screen groups its options
+  so it starts short (every option kept). Merging chats: a review sheet shows each chat's agent, project, size and last line, lets you
+  choose which settings and agent the merged chat keeps, and merges one set at a time. An always-on honesty line and a
+  grounded-answers skill reduce made-up answers. A message longer than the model can read now tells you the start was left out.
+  Atlas emergency packages in Small, Medium, Large and Full sizes: add to the phone, save as one file to an SD card or flash drive,
+  and import from it. Not verified on a phone.
 - 0.0.147: fixes and additions from phone use. Daily briefing: lines are queued in order so the one you play renders first (the
   gaps of several seconds before each card); the briefing opens and closes with a short tune (switch in Show options); timing lines
   tagged [POD] in Debug Logs. Chat: tool calls time out (3 minutes, 10 for research and media), an unanswered file prompt counts as
