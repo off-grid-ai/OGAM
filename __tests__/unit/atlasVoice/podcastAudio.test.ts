@@ -6,6 +6,7 @@
 const mockFiles = new Set<string>();
 const mockRendered: string[] = [];
 const mockPlayed: string[] = [];
+const mockRates: number[] = [];
 let mockFailDecode = false;
 jest.mock('react-native-fs', () => ({
   CachesDirectoryPath: '/cache',
@@ -24,8 +25,8 @@ jest.mock('react-native-audio-api', () => ({
     destination: {},
     decodeAudioData: jest.fn(async (path: string) => { if (mockFailDecode) throw new Error('cannot decode'); return { path }; }),
     createBufferSource: jest.fn(() => {
-      const node: any = { connect: jest.fn(), stop: jest.fn(), onEnded: null, buffer: null };
-      node.start = jest.fn(() => { mockPlayed.push(node.buffer.path); setTimeout(() => node.onEnded?.(), 0); });
+      const node: any = { connect: jest.fn(), stop: jest.fn(), onEnded: null, buffer: null, playbackRate: { value: 1 } };
+      node.start = jest.fn(() => { mockPlayed.push(node.buffer.path); mockRates.push(node.playbackRate.value); setTimeout(() => node.onEnded?.(), 0); });
       return node;
     }),
   })),
@@ -107,6 +108,19 @@ it('a jingle that cannot be played never stops the show', async () => {
   const { playJingle } = require('../../../src/atlasVoice/podcastAudio');
   mockFailDecode = true;
   try { expect(await playJingle('intro')).toBe(true); } finally { mockFailDecode = false; }
+});
+
+it('plays saved lines at the chosen speed', async () => {
+  const { playLine, setPodcastSpeed } = require('../../../src/atlasVoice/podcastAudio');
+  mockRates.length = 0;
+  const items = [{ text: 'Speed line.', pitch: 1, voice: 'sid:0' }];
+  try {
+    setPodcastSpeed(1.25);
+    await playLine('speed-episode', items, 0);
+    setPodcastSpeed(1);
+    await playLine('speed-episode', items, 0);
+  } finally { setPodcastSpeed(1); }
+  expect(mockRates).toEqual([1.25, 1]);
 });
 
 it('a jingle that never reports its end is cut off after its length plus a few seconds', async () => {

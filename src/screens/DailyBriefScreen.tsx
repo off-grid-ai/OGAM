@@ -265,6 +265,14 @@ export const DailyBriefScreen: React.FC = () => {
               </View>
             </>
           )}
+          <Text style={styles.sectionLabel}>Playback speed</Text>
+          <View style={styles.chips}>
+            {([0.8, 1, 1.25] as const).map((v) => (
+              <TouchableOpacity key={v} testID={`brief-speed-${v}`} onPress={() => prefs.set({ speed: v })} style={chip((prefs.speed ?? 1) === v)}>
+                <Text style={chipText((prefs.speed ?? 1) === v)}>{v === 0.8 ? 'Slower' : v === 1 ? 'Normal' : 'Faster'}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>Fun fact from your offline library</Text>
             <Switch value={prefs.funFacts} onValueChange={(v) => prefs.set({ funFacts: v })} />

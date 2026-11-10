@@ -185,6 +185,7 @@ function playFile(path: string): Promise<PlayResult> {
       const node = audioContext().createBufferSource();
       node.buffer = buffer;
       node.connect(audioContext().destination);
+      if (speed !== 1 && node.playbackRate) node.playbackRate.value = speed;
       node.onEnded = () => { if (source === node) source = null; finish(token === stopToken ? 'ended' : 'stopped'); };
       source = node;
       settleCurrent = finish;
@@ -228,6 +229,10 @@ export async function playLine(key: string, items: CastLine[], i: number): Promi
   }
   return result === 'ended' && token === stopToken;
 }
+
+let speed = 1;
+/** How fast saved lines play from now on (1 is as recorded). Spoken-live lines are not affected. */
+export function setPodcastSpeed(x: number): void { speed = x > 0 ? x : 1; }
 
 /** Stops whatever podcast line is playing from a file. */
 export function stopPodcastAudio(): void {

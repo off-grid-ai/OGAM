@@ -27,8 +27,12 @@ interface BriefPrefs {
   jingles: boolean;
   /** How loud the opening, closing and story tunes are. */
   jingleVolume: 'quiet' | 'normal' | 'loud';
+  /** How fast the briefing is played (1 is as recorded; faster also raises the voices a little). */
+  speed: 0.8 | 1 | 1.25;
+  /** The briefing line the person last reached, to carry on from. */
+  listened: { key: string; line: number } | null;
   setInterests: (v: string[]) => void;
-  set: (p: Partial<Pick<BriefPrefs, 'minutes' | 'hosts' | 'funFacts' | 'deep' | 'avoid' | 'experts' | 'jingles' | 'jingleVolume'>>) => void;
+  set: (p: Partial<Pick<BriefPrefs, 'minutes' | 'hosts' | 'funFacts' | 'deep' | 'avoid' | 'experts' | 'jingles' | 'jingleVolume' | 'speed' | 'listened'>>) => void;
 }
 
 export const useBriefPrefs = create<BriefPrefs>()(persist((set) => ({
@@ -41,9 +45,11 @@ export const useBriefPrefs = create<BriefPrefs>()(persist((set) => ({
   experts: false,
   jingles: true,
   jingleVolume: 'normal',
+  speed: 1,
+  listened: null,
   setInterests: (interests) => set({ interests }),
   set: (p) => set(p),
-}), { name: 'atlas-daily-brief', storage: createJSONStorage(() => AsyncStorage), partialize: (s) => ({ interests: s.interests, minutes: s.minutes, hosts: s.hosts, funFacts: s.funFacts, deep: s.deep, avoid: s.avoid, experts: s.experts, jingles: s.jingles, jingleVolume: s.jingleVolume }) }));
+}), { name: 'atlas-daily-brief', storage: createJSONStorage(() => AsyncStorage), partialize: (s) => ({ interests: s.interests, minutes: s.minutes, hosts: s.hosts, funFacts: s.funFacts, deep: s.deep, avoid: s.avoid, experts: s.experts, jingles: s.jingles, jingleVolume: s.jingleVolume, speed: s.speed, listened: s.listened }) }));
 
 const EXPERT_NAMES = ['Maya', 'Theo', 'Priya', 'Marcus', 'Lena', 'Omar', 'Grace', 'Sam'];
 

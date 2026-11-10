@@ -7,8 +7,9 @@ import { useTheme } from '../theme';
 import { useProjectStore } from '../stores';
 import { MarkdownText } from '../components/MarkdownText';
 import { PodcastVoicePicker } from '../components/PodcastVoicePicker';
-import { castLine, playLine, playJingle, stopPodcastAudio } from '../atlasVoice/podcastAudio';
+import { castLine, playLine, playJingle, setPodcastSpeed, stopPodcastAudio } from '../atlasVoice/podcastAudio';
 import { storyJumps, currentStory } from '../study/storyJumps';
+import { resumeLine } from '../study/listenPosition';
 import { BRIEF_PROJECT, useBriefPrefs } from '../atlasTools/dailyBrief';
 import { generate, generatePodcast, podcastContextWarning, useStudyStore, StudyResult, Source, PodcastStyle } from '../study/engine';
 import { briefingSummary, briefingTranscript, safeFileName, saveMarkdown, studyMarkdown } from '../study/exportFiles';
@@ -97,7 +98,10 @@ export const StudyScreen: React.FC = () => {
   const castVoice = (host: string, hosts: number) => castLine(host, hosts, voices);
   const rate = useAtlasVoiceStore((s) => s.rate);
   const [itemStart, setItemStart] = useState(0);
-  const [resumeAt, setResumeAt] = useState(0);
+  const [resumeAt, setResumeAt] = useState(() => {
+    const r = openAt ? (useStudyStore.getState().saved[projectId] || []).find((x) => x.createdAt === openAt) : undefined;
+    return r?.podcast ? resumeLine(useBriefPrefs.getState().listened, `${projectId}-${r.createdAt}`, r.podcast.length) : 0;
+  });
   const [, setTick] = useState(0);
   const playToken = useRef(0);
   React.useEffect(() => {
@@ -175,7 +179,9 @@ export const StudyScreen: React.FC = () => {
     let finished = false;
     // The daily briefing opens and closes with a short tune (switch in Daily briefing > Show options).
     const volume = useBriefPrefs.getState().jingleVolume ?? 'normal';
-    const tunes = !!audioKey && audioKey.startsWith(`${BRIEF_PROJECT}-`) && useBriefPrefs.getState().jingles !== false;
+    const isBrief = !!audioKey && audioKey.startsWith(`${BRIEF_PROJECT}-`);
+    const tunes = isBrief && useBriefPrefs.getState().jingles !== false;
+    setPodcastSpeed(isBrief ? useBriefPrefs.getState().speed ?? 1 : 1);
     try {
       if (tunes && from <= 0 && !(await playJingle('intro', volume))) return;
       for (let i = Math.max(0, from); i < items.length; i++) {
@@ -183,6 +189,7 @@ export const StudyScreen: React.FC = () => {
         // A soft chime when the next story begins (not when playback starts or is moved to a line).
         if (tunes && i > from && storyStarts.includes(i) && !(await playJingle('chime', volume))) break;
         setPlaying(i); setResumeAt(i); setItemStart(Date.now());
+        if (isBrief) useBriefPrefs.getState().set({ listened: { key: audioKey!, line: i } });
         const ok = audioKey ? await playLine(audioKey, items, i) : await speakAndWait(items[i].text, items[i].pitch, 'podcast', items[i].voice || '');
         if (!ok || playToken.current !== my) break;
         if (i === items.length - 1) finished = true;
@@ -194,7 +201,7 @@ export const StudyScreen: React.FC = () => {
     if (playToken.current !== my) return; // a newer play (seek) took over
     keepScreenOn(false);
     setPlaying(null);
-    if (finished) setResumeAt(0);
+    if (finished) { setResumeAt(0); if (isBrief) useBriefPrefs.getState().set({ listened: null }); }
   };
   const halt = () => { playToken.current++; stopRef.current = true; stop(); stopPodcastAudio(); keepScreenOn(false); setPlaying(null); };
 
