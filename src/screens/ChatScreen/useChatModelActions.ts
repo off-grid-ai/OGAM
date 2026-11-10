@@ -5,8 +5,8 @@ import {
   hideAlert,
 } from '../../components';
 import { llmService, activeModelService, modelManager, generationService } from '../../services';
-import { isModelReady, activeLocalTextCapabilities, activeTextCapabilities, backendFallbackNotice } from '../../services/engines';
-import { useAppStore } from '../../stores';
+import { isModelReady, activeLocalTextCapabilities, activeTextCapabilities, backendFallbackNotice, lowMemoryNotice } from '../../services/engines';
+import { useAppStore, useChatStore } from '../../stores';
 import { DownloadedModel, RemoteModel, ONNXImageModel, isLiteRTModel } from '../../types';
 import logger from '../../utils/logger';
 import { ModelReadyOutcome, reasonFromLoadError } from './modelReadiness';
@@ -69,19 +69,23 @@ function addSystemMsg(
 }
 
 /**
- * Surface a silent backend downgrade after a successful load — NOT gated on showGenerationDetails:
+ * Surface a silent backend downgrade, or low-memory mode, after a successful load — NOT gated on showGenerationDetails:
  * a user who explicitly selected GPU and got CPU must see it without any debug setting (the
  * device-reported "Backend=GPU but the turn ran on CPU" class). The verdict is owned by the
  * engine layer (engines.backendFallbackNotice); this only renders it.
  */
-function addBackendFallbackMsg(deps: Pick<ModelActionDeps, 'activeModel' | 'activeConversationId' | 'addMessage'>) {
-  const notice = backendFallbackNotice(deps.activeModel);
-  if (!notice || !deps.activeConversationId) return;
-  deps.addMessage(deps.activeConversationId, {
-    role: 'assistant',
-    content: notice,
-    isSystemInfo: true,
-  });
+function addBackendFallbackMsg(deps: Pick<ModelActionDeps, 'activeModel' | 'addMessage'>) {
+  // The chat as it is now: a first send creates the chat after these deps were taken, so their id is
+  // still null and the notice was dropped.
+  const conversationId = useChatStore.getState().activeConversationId;
+  for (const notice of [backendFallbackNotice(deps.activeModel), lowMemoryNotice(deps.activeModel)]) {
+    if (!notice || !conversationId) continue;
+    deps.addMessage(conversationId, {
+      role: 'assistant',
+      content: notice,
+      isSystemInfo: true,
+    });
+  }
 }
 
 async function doLoadTextModel(deps: ModelActionDeps, opts?: { override?: boolean }): Promise<boolean> {
