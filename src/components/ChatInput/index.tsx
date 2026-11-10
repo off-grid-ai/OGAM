@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useQuoteDraft } from '../../utils/quoteDraft';
 import { RewriteButton } from '../RewriteButton';
 import { View, TextInput, TouchableOpacity, StyleSheet, Platform, ActionSheetIOS } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -138,6 +139,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const styles = useThemedStyles(createStyles);
   const [message, setMessage] = useState(starterText ?? '');
   useEffect(() => { if (starterText) setMessage(starterText); }, [starterText]);
+  // "Ask about this" on a reply puts a quote of it in front of what is being typed.
+  const quote = useQuoteDraft((q) => q.text);
+  useEffect(() => {
+    if (!quote) return;
+    setMessage((m) => (m ? `${m}\n\n${quote}` : quote));
+    useQuoteDraft.getState().set('');
+  }, [quote]);
   const [imageMode, setImageMode] = useState<ImageModeState>('auto');
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const quickSettings = useKeyboardAwarePopover();

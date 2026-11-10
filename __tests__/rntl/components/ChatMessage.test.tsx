@@ -1744,3 +1744,14 @@ describe('ChatMessage: why this reply', () => {
     expect(queryByTestId('action-why')).toBeNull();
   });
 });
+
+describe('ChatMessage: ask about this', () => {
+  it('quotes the reply into the message box', () => {
+    const { useQuoteDraft } = require('../../../src/utils/quoteDraft');
+    const { getByTestId } = render(<ChatMessage message={createAssistantMessage('The rate is 5%.')} showActions={true} />);
+    fireEvent(getByTestId('assistant-message'), 'longPress');
+    fireEvent.press(getByTestId('action-ask'));
+    expect(useQuoteDraft.getState().text).toBe('> The rate is 5%.\n\n');
+    useQuoteDraft.getState().set('');
+  });
+});

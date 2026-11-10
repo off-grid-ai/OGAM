@@ -1,5 +1,6 @@
 import { CitationChips } from '../CitationChips';
 import { sourcesFromSearch, type CheckedCitation } from '../../study/citations';
+import { quoteForAsk, useQuoteDraft } from '../../utils/quoteDraft';
 import { whyThisReply } from '../../study/whyReply';
 import { sourcesBefore, citedNumbers, markSources } from '../../study/replySources';
 import React, { useMemo, useState } from 'react';
@@ -416,6 +417,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     usePins.getState().add({ id: message.id, text: displayContent, role: message.role, conversationId: conversation?.id ?? null, conversationTitle: conversation?.title ?? 'Chat' });
     triggerHaptic('notificationSuccess');
   };
+  const handleAsk = () => {
+    setShowActionMenu(false);
+    useQuoteDraft.getState().set(quoteForAsk(displayContent));
+  };
   const handleWhy = () => {
     setShowActionMenu(false);
     const why = whyThisReply(message.generationMeta);
@@ -552,7 +557,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         onRetry={handleRetry}
         onDelete={handleDelete}
         onSaveToProject={handleSaveToProject}
-        extras={{ pinned, onPin: handlePin, onSlides: isStreaming ? undefined : handleSlides, onCheck: isStreaming || !onCheckAnswer ? undefined : handleCheck, onWhy: isStreaming ? undefined : handleWhy }}
+        extras={{ pinned, onPin: handlePin, onSlides: isStreaming ? undefined : handleSlides, onCheck: isStreaming || !onCheckAnswer ? undefined : handleCheck, onWhy: isStreaming ? undefined : handleWhy, onAsk: isStreaming ? undefined : handleAsk }}
         onGenerateImage={handleGenerateImage}
         onSpeak={handleSpeak}
         onSelectText={handleSelectText}
