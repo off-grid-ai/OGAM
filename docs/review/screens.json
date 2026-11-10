@@ -58,7 +58,7 @@
     "name": "Chats",
     "group": "Chats",
     "what": "Every chat, searchable",
-    "file": "screens/v/chats-3.jpg",
+    "file": "screens/v/chats-ios-r4.jpg",
     "versions": [
       {
         "v": 1,
@@ -80,6 +80,44 @@
         "file": "screens/v/chats-ios-r3.jpg",
         "android": "screens/v/chats-3.jpg",
         "what": "iPhone and Android shots of the same build, both checked by hand on 2026-11-07."
+      },
+      {
+        "v": 4,
+        "label": "Group by date, folding headers",
+        "at": "2026-11-09T15:01:00Z",
+        "file": "screens/v/chats-ios-r4.jpg",
+        "what": "Chats grouped by day like Claude's: Yesterday, then each date. Tap a header to fold it. The sliders button opens the View menu."
+      }
+    ]
+  },
+  {
+    "id": "chats-view-menu",
+    "name": "Chats view menu",
+    "group": "Chats",
+    "what": "Group by Date, Project or None; sort by Last updated or Created; Reset to defaults.",
+    "file": "screens/v/chats-view-menu-ios-r4.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "New: View menu",
+        "at": "2026-11-09T15:01:00Z",
+        "file": "screens/v/chats-view-menu-ios-r4.jpg"
+      }
+    ]
+  },
+  {
+    "id": "chats-by-project",
+    "name": "Chats by project",
+    "group": "Chats",
+    "what": "Chats grouped under their project; chats outside a project go last under No project.",
+    "file": "screens/v/chats-by-project-ios-r4.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "New: grouped by project",
+        "at": "2026-11-09T15:01:00Z",
+        "file": "screens/v/chats-by-project-ios-r4.jpg",
+        "what": "Taken before the fix that hides each row's project tag (the tag repeats the header). Retake pending on the new build."
       }
     ]
   },

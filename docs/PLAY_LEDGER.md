@@ -764,3 +764,12 @@ Sources: in-app PostHog (30 days, mostly 0.0.120–0.0.122), App Store public fe
 - **Open — iPhone disk full:** exceptions "Failed to write value … POSIX 28": the app cannot save its own state when models fill the phone.
 - **Reviews, newest themes:** downloads failing in processing (fixed); crashes (0.0.119); remote LM Studio connected but not choosable (0.0.110 — check on today's build); no text-size option (Pixel 9 Pro); GPU "unavailable" on Dimensity 9500; iPad layout; Pro and paywall complaints, including "Removed access to unapproved models within a week of paying for lifetime pro" (0.0.119) — a product call.
 - **Chats:** a Group by / Sort by menu like Claude's, and headers that fold (`c633e98b8`, `e9b264c8b`, `293014aca`), checked on the iPhone.
+
+## r09 why 7 GB Android crashes on load — 2026-11-10
+Source: in-app PostHog, 30 days, 0.0.122. `free_ram_gb` is sampled when the load starts, for both outcomes.
+- **The crash follows free RAM, not total RAM.** K2 Horizon 3.7B on 7 GB Android: 49 loads (median 3.0 GB free), 11 crashes during load (1.9 GB free), 13 refusals (1.4 GB free). All Android chat loads: 1–2 GB free → 6 of 12 crash; 2–3 GB → 4 of 21; 3–4 GB → 3 of 25; 4 GB and up → 0 of 18.
+- **Root cause: neither gate reads free RAM for an Android chat model.** Android copies Q4_K-type weights into memory (`mobileUseMmap` is false on 6 GB and up), so they are dirty. But the pre-load check credits `max(free, 60% of RAM)` (`effectiveAvailableMB`, whose own comment says the credit is for mapped weights only), and the residency manager marks only LiteRT as dirty. On a 7.3 GB phone the check always sees at least 4.4 GB free.
+- **So the verdict does not match the outcome.** It refuses on size and context math alone: 60 of 83 refused people loaded the same model later with Load Anyway, at the same free RAM (median 2.9 GB vs 3.15 GB). And it passes loads at 1–2 GB free that then crash.
+- **The pick:** K2 Horizon 3.7B (3.16 GB) is "Runs well" on 7.3 GB under the Android budget (soft 0.52 → 3.8 GB). Copied, it needs about 3.8 GB with KV, more than most 8 GB phones have free.
+- **Proposed one rule:** a load's copied bytes (weights + KV + compute + headroom) must fit in live free RAM; mapped weights keep the fit-rule bound. Android's fit budget then measures RAM after the OS's share (e.g. 0.65 × (RAM − 2.5 GB): 3.1 GB on 7.3 GB, so K2 3.7B is Tight and not picked; 5.7 GB on 11.2 GB, so K2 7B still Runs well). Load Anyway stays.
+- Image models (ONNX, 298 refusals) already use live RAM; their refusals are a separate check.
