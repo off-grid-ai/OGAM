@@ -140,11 +140,13 @@ export const EmbeddingModelsTab: React.FC = () => {
   };
   const removeFailed = (candidate: Candidate) => {
     const forget = () => setDownloaded(previous => { const next = new Set(previous); next.delete(candidate.id); return next; });
-    const deleteIfThere = active?.id === candidate.id
-      ? Promise.resolve()
-      : embeddingService.hasModelFile(candidate).then(has => (has ? embeddingService.deleteModelFile(candidate).then(forget) : undefined));
+    const deleteIfThere = async () => {
+      if (active?.id === candidate.id || !(await embeddingService.hasModelFile(candidate))) return;
+      await embeddingService.deleteModelFile(candidate);
+      forget();
+    };
     // The failure clears only once the file is gone; a delete that fails keeps it, with the reason.
-    deleteIfThere.then(() => embeddingModelChanger.dismiss()).catch(e => setError(String(e.message)));
+    deleteIfThere().then(() => embeddingModelChanger.dismiss()).catch(e => setError(String(e.message)));
   };
   const activeInCandidates = active && candidates.some(candidate => candidate.id === active.id);
   // A change in progress shows once: on the row of the model being fetched, with its own cancel, as in

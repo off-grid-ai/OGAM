@@ -333,7 +333,7 @@ export function createAutoSetupSession(
         // fall back to the largest plan that is, so a plan is picked and its download button shows.
         selectedTier: plans.some(plan => plan.tier === state.selectedTier)
           ? state.selectedTier
-          : plans[plans.length - 1]?.tier ?? state.selectedTier,
+          : plans.at(-1)?.tier ?? state.selectedTier,
         installedIds: [
           ...installed.filter(download => download.status === 'completed').map(download => download.id),
           ...installedEmbedding.filter((id): id is string => id !== null),

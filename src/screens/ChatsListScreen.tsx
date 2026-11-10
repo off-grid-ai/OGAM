@@ -282,6 +282,10 @@ export const ChatsListScreen: React.FC = () => {
   // A folded section keeps its header and hides its chats; a search shows every match, folded or not.
   const searching = deferredQuery.trim() !== '';
   const shut = (key: string) => folded.has(key) && !searching;
+  const foldHint = (section: { key: string; count: number }): string | undefined => {
+    if (searching) return undefined;
+    return shut(section.key) ? `Shows ${section.count} chats` : 'Hides these chats';
+  };
   const sections = useMemo(
     () => grouped.map(section => ({
       ...section,
@@ -443,7 +447,7 @@ export const ChatsListScreen: React.FC = () => {
                   disabled={searching}
                   accessibilityRole="header"
                   accessibilityLabel={section.title}
-                  accessibilityHint={searching ? undefined : shut(section.key) ? `Shows ${section.count} chats` : 'Hides these chats'}
+                  accessibilityHint={foldHint(section)}
                   accessibilityState={{ expanded: !shut(section.key), disabled: searching }}
                   testID={`chats-section-${section.key}`}
                 >
