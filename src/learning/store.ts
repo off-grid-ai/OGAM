@@ -46,6 +46,21 @@ export interface BankItem {
   round: number;
 }
 
+/** A report the learner wrote, kept in full with what the judge said about it, so it can be read. */
+export interface LearnReport {
+  id: string;
+  itemId: string;
+  q: string;
+  text: string;
+  sources: string;
+  at: number;
+  /** waiting = not judged yet. */
+  status: 'waiting' | 'pass' | 'fail';
+  score?: number;
+  /** The judge's reason (why it failed, or why it passed). */
+  why?: string;
+}
+
 export interface PendingReport { itemId: string; q: string; report: string; sources: string }
 export interface LearnedNote { q: string; answer: string; at: number; score?: number }
 
@@ -53,6 +68,8 @@ export interface PerAgent {
   round: number;
   bank: BankItem[];
   pendingReports: PendingReport[];
+  /** Every report written (newest first, up to 100), in full. */
+  reportLog?: LearnReport[];
   reportsSinceJudge: number;
   judgesSinceManager: number;
   totalReports: number;
@@ -75,7 +92,7 @@ export interface PerAgent {
 }
 
 export const blankState = (): PerAgent => ({
-  round: 0, bank: [], pendingReports: [], reportsSinceJudge: 0, judgesSinceManager: 0, totalReports: 0,
+  round: 0, bank: [], pendingReports: [], reportLog: [], reportsSinceJudge: 0, judgesSinceManager: 0, totalReports: 0,
   direction: '', judgeNote: '', pendingFindings: [], scores: [], notes: [], sessionLessons: '', onTrack: null, lessons: '',
 });
 

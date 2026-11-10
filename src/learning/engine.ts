@@ -25,7 +25,7 @@ import { ragService } from '../services/rag';
 import { useAppStore } from '../stores/appStore';
 import { Agent, agentPromptWithLessons } from '../stores/agentStore';
 import { learningAgent, setLessons } from './agents';
-import { useLearningStore, newItem, BankItem, LearnConfig, PerAgent } from './store';
+import { useLearningStore, newItem, BankItem, LearnConfig, LearnReport, PerAgent } from './store';
 import type { Message } from '../types';
 import logger from '../utils/logger';
 import { ensureTextModel } from '../atlasTools/models';
@@ -240,7 +240,9 @@ async function writeReport(agent: Agent, cfg: LearnConfig, item: BankItem): Prom
     'learner',
   );
   L().log({ agentId: agent.id, kind: 'report', title: `Report: ${item.q.slice(0, 70)}`, body: report.slice(0, 2500) });
+  const entry: LearnReport = { id: `${item.id}:${item.tries + 1}`, itemId: item.id, q: item.q, text: report.slice(0, 8000), sources: src.slice(0, 3000), at: Date.now(), status: 'waiting' };
   L().patch(agent.id, {
+    reportLog: [entry, ...(st.reportLog ?? [])].slice(0, 100),
     pendingReports: [...st.pendingReports, { itemId: item.id, q: item.q, report: report.slice(0, 1600), sources: src.slice(0, 1200) }],
     reportsSinceJudge: st.reportsSinceJudge + 1,
     totalReports: st.totalReports + 1,
@@ -260,6 +262,14 @@ async function saveNote(agent: Agent, cfg: LearnConfig, q: string, answer: strin
     await RNFS.writeFile(path, body, 'utf8');
     await ragService.indexDocument({ projectId: cfg.projectId, filePath: path, fileName: name, fileSize: body.length });
   } catch (e) { logger.log(`[Learning] could not save note: ${String(e)}`); }
+}
+
+/** Records the judge's ruling on the newest report written for a question. */
+function markReport(agentId: string, itemId: string, patch: Partial<LearnReport>): void {
+  const log = L().get(agentId).reportLog ?? [];
+  const i = log.findIndex((r) => r.itemId === itemId);
+  if (i < 0) return;
+  L().patch(agentId, { reportLog: log.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
 }
 
 async function judgeReports(agent: Agent, cfg: LearnConfig): Promise<void> {
@@ -283,6 +293,7 @@ async function judgeReports(agent: Agent, cfg: LearnConfig): Promise<void> {
     if (sc) scores.push(Math.min(10, parseFloat(sc[1])));
     const item = L().get(agent.id).bank.find((b) => b.id === rep.itemId);
     if (!item) continue;
+    markReport(agent.id, rep.itemId, { status: v ? (v.ok ? 'pass' : 'fail') : 'waiting', score: sc ? parseFloat(sc[1]) : undefined, why: v?.reason });
     if (!v) {
       // No clear verdict: never count it as learned. Try once more, then give up on it.
       if (item.tries < 2) L().updateItem(agent.id, item.id, { status: 'approved', feedback: 'The judge could not read your report clearly. Use the ANSWER / KEY POINTS / REASONING format.' });
@@ -293,8 +304,10 @@ async function judgeReports(agent: Agent, cfg: LearnConfig): Promise<void> {
       pass++;
       L().updateItem(agent.id, item.id, { status: 'answered', reason: undefined });
       const cur = L().get(agent.id);
-      L().patch(agent.id, { notes: [{ q: rep.q, answer: rep.report, at: Date.now(), score: sc ? parseFloat(sc[1]) : undefined }, ...cur.notes].slice(0, 200) });
-      await saveNote(agent, cfg, rep.q, rep.report);
+      // The judge read a shortened copy; what is kept and saved is the full report.
+      const full = (cur.reportLog ?? []).find((r) => r.itemId === rep.itemId)?.text ?? rep.report;
+      L().patch(agent.id, { notes: [{ q: rep.q, answer: full, at: Date.now(), score: sc ? parseFloat(sc[1]) : undefined }, ...cur.notes].slice(0, 200) });
+      await saveNote(agent, cfg, rep.q, full);
     } else if (item.tries < 2) {
       L().updateItem(agent.id, item.id, { status: 'approved', feedback: v.reason }); // back in the queue for one redo
     } else {

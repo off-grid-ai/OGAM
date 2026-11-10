@@ -41,7 +41,8 @@ export const LearningScreen: React.FC = () => {
   const wide = width >= 900; // tablets / unfolded screens: settings and feed side by side
 
   const agents = useAgentStore((s) => s.agents);
-  const [agentId, setAgentId] = useState<string>(route.params?.agentId || useAgentStore.getState().activeAgentId || agents[0]?.id || NO_AGENT);
+  // Learning is for the default (no agent) chat. An agent id is only used when a link passes one in.
+  const agentId: string = route.params?.agentId || NO_AGENT;
   const agent = agents.find((a) => a.id === agentId);
   const projects = useProjectStore((s) => s.projects);
   const rawCfg = useLearningStore((s) => s.config[agentId]);
@@ -54,6 +55,8 @@ export const LearningScreen: React.FC = () => {
   const [statusText, setStatusText] = useState(isLearning() ? 'Running' : 'Idle');
   const [open, setOpen] = useState<string | null>(null);
   const [newQ, setNewQ] = useState('');
+  const [advanced, setAdvanced] = useState(false);
+  const [openReport, setOpenReport] = useState<string | null>(null);
   const updateItem = useLearningStore((s) => s.updateItem);
   const addItems = useLearningStore((s) => s.addItems);
   const bank = st?.bank || [];
@@ -75,18 +78,7 @@ export const LearningScreen: React.FC = () => {
 
   const settings = (
     <View>
-      <Text style={styles.label}>Agent</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <TouchableOpacity disabled={running} onPress={() => setAgentId(NO_AGENT)} style={[styles.chip, isNoAgent(agentId) && styles.chipOn]} testID="learning-no-agent">
-          <Text style={[styles.chipText, isNoAgent(agentId) && styles.chipTextOn]}>No agent</Text>
-        </TouchableOpacity>
-        {agents.map((a) => (
-          <TouchableOpacity key={a.id} disabled={running} onPress={() => setAgentId(a.id)} style={[styles.chip, a.id === agentId && styles.chipOn]}>
-            <Text style={[styles.chipText, a.id === agentId && styles.chipTextOn]}>{a.name}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
+      <Text style={styles.note}>Describe something to get good at. The AI researches it, writes reports, a judge checks them, and what it learns is kept as lessons that every chat without an agent uses.</Text>
       <Text style={styles.label}>Task to become an expert at</Text>
       <TextInput
         style={styles.input}
@@ -107,21 +99,6 @@ export const LearningScreen: React.FC = () => {
         ))}
       </ScrollView>
 
-      <Text style={styles.label}>Mode</Text>
-      <View style={[styles.row, { marginTop: 0 }]}>
-        {([['keep', 'Keep learning', 'Lessons go into the agent; checked answers are saved to the project'], ['session', 'Practice session', 'Temporary: nothing changes unless you tap Keep at the end']] as const).map(([m, t, d]) => (
-          <TouchableOpacity key={m} disabled={running} onPress={() => setConfig(agentId, { mode: m })} style={[styles.modeCard, cfg.mode === m && { borderColor: colors.primary }]}>
-            <Text style={[styles.chipText, { fontWeight: '700' }]}>{t}</Text>
-            <Text style={styles.counts}>{d}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      {cfg.mode === 'keep' && (
-        <View style={styles.switchRow}>
-          <Text style={styles.switchText}>Keep going with new question rounds (constant learning)</Text>
-          <Switch value={cfg.continuous} onValueChange={(v) => setConfig(agentId, { continuous: v })} disabled={running} />
-        </View>
-      )}
       <View style={styles.switchRow}>
         <Text style={styles.switchText}>Also research in the offline library (WikiMed, Wikipedia...)</Text>
         <Switch value={cfg.useLibrary} onValueChange={(v) => setConfig(agentId, { useLibrary: v })} disabled={running} />
@@ -130,30 +107,6 @@ export const LearningScreen: React.FC = () => {
         <Text style={styles.switchText}>Also research on the web (when online, not in off-grid mode)</Text>
         <Switch value={cfg.useWeb} onValueChange={(v) => setConfig(agentId, { useWeb: v })} disabled={running} />
       </View>
-
-      <View style={styles.row}>
-        <Stepper label="Questions per round" value={cfg.bankSize} onChange={(v: number) => setConfig(agentId, { bankSize: v })} colors={colors} styles={styles} />
-        <Stepper label="Reports per judge" value={cfg.reportsPerJudge} onChange={(v: number) => setConfig(agentId, { reportsPerJudge: v })} colors={colors} styles={styles} />
-        <Stepper label="Judge turns per manager" value={cfg.judgesPerManager} onChange={(v: number) => setConfig(agentId, { judgesPerManager: v })} colors={colors} styles={styles} />
-      </View>
-
-      <Text style={styles.label}>Models for each role</Text>
-      <Text style={styles.note}>
-        Optional. A bigger model as judge or manager checks better. Different models mean the app swaps models at each hand-over, which is slower.
-      </Text>
-      {(['learner', 'judge', 'manager'] as const).map((role) => (
-        <View key={role} style={styles.roleRow}>
-          <Text style={styles.roleName}>{role[0].toUpperCase() + role.slice(1)}</Text>
-          <View style={styles.roleChips}>
-            <ModelChips
-              value={(cfg as any)[`${role}ModelId`] || ''}
-              onChange={(id) => setConfig(agentId, { [`${role}ModelId`]: id } as any)}
-              colors={colors}
-              disabled={running}
-            />
-          </View>
-        </View>
-      ))}
 
       <View style={styles.statusBox}>
         <Text style={styles.statusText}>{running || !/^(Idle|Stopped|Running|Starting...)$/.test(statusText) ? statusText : 'Idle'}</Text>
@@ -184,11 +137,96 @@ export const LearningScreen: React.FC = () => {
           <Icon name={running ? 'square' : 'play'} size={16} color="#fff" />
           <Text style={styles.bigBtnText}>{running ? 'Stop' : 'Start learning'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity disabled={running} onPress={() => auditNow(agentId)} style={styles.smallBtn}>
-          <Text style={styles.smallBtnText}>Manager audit now</Text>
-        </TouchableOpacity>
       </View>
 
+
+      <Text style={styles.label}>Reports it wrote</Text>
+      <Text style={styles.note}>Every report the AI writes while it learns, in full, with what the judge said. Tap one to read it.</Text>
+      {(st?.reportLog ?? []).length === 0 && <Text style={styles.counts}>None yet. Reports appear here as it works.</Text>}
+      {(st?.reportLog ?? []).slice(0, 30).map((r) => {
+        const isOpen = openReport === r.id;
+        const color = r.status === 'pass' ? '#4D7C0F' : r.status === 'fail' ? colors.error : colors.textMuted;
+        return (
+          <TouchableOpacity key={r.id} onPress={() => setOpenReport(isOpen ? null : r.id)} style={styles.bankRow} testID={`learn-report-${r.id}`} accessibilityRole="button">
+            <View style={[styles.dot, { backgroundColor: color }]} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.chipText}>{r.q}</Text>
+              <Text style={[styles.counts, { color }]}>
+                {r.status === 'pass' ? 'Judge passed it' : r.status === 'fail' ? 'Judge failed it' : 'Waiting for the judge'}{r.score !== undefined ? ` · ${r.score}/10` : ''} · {new Date(r.at).toLocaleString()}
+              </Text>
+              <Text style={styles.eventBody} numberOfLines={isOpen ? undefined : 3} selectable={isOpen}>{r.text}</Text>
+              {isOpen && !!r.why && <Text style={styles.direction}>Judge: {r.why}</Text>}
+              {isOpen && !!r.sources && <Text style={styles.counts} selectable>Sources it had:{'\n'}{r.sources}</Text>}
+            </View>
+          </TouchableOpacity>
+        );
+      })}
+
+      <Text style={styles.label}>{isNoAgent(agentId) ? 'Lessons learned (used in every chat without an agent, and saved as a file)' : 'Lessons this agent uses in every chat'}</Text>
+      <TextInput
+        style={[styles.input, styles.lessons]}
+        value={(isNoAgent(agentId) ? st?.lessons : agent?.lessons) || ''}
+        editable={!running}
+        onChangeText={(t) => setLessons(agentId, t)}
+        placeholder="None yet. The manager writes these after auditing the judge. You can edit them."
+        placeholderTextColor={colors.textMuted}
+        multiline
+        textAlignVertical="top"
+      />
+      <Text style={styles.note}>
+        Keep the app open while it learns (the screen stays on). Plugging in is a good idea. The model itself does not
+        change: the agent keeps its lessons (added to its instructions) and, in Keep mode with a project chosen, the
+        judge-checked answers are saved to that project's documents so chats can use them.
+      </Text>
+
+      <TouchableOpacity onPress={() => setAdvanced((v) => !v)} style={styles.advToggle} accessibilityRole="button" testID="learning-advanced">
+        <Text style={styles.label}>More options</Text>
+        <Icon name={advanced ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
+      </TouchableOpacity>
+      {advanced && (
+        <View>
+      <Text style={styles.label}>Mode</Text>
+      <View style={[styles.row, { marginTop: 0 }]}>
+        {([['keep', 'Keep learning', 'Lessons go into the agent; checked answers are saved to the project'], ['session', 'Practice session', 'Temporary: nothing changes unless you tap Keep at the end']] as const).map(([m, t, d]) => (
+          <TouchableOpacity key={m} disabled={running} onPress={() => setConfig(agentId, { mode: m })} style={[styles.modeCard, cfg.mode === m && { borderColor: colors.primary }]}>
+            <Text style={[styles.chipText, { fontWeight: '700' }]}>{t}</Text>
+            <Text style={styles.counts}>{d}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {cfg.mode === 'keep' && (
+        <View style={styles.switchRow}>
+          <Text style={styles.switchText}>Keep going with new question rounds (constant learning)</Text>
+          <Switch value={cfg.continuous} onValueChange={(v) => setConfig(agentId, { continuous: v })} disabled={running} />
+        </View>
+      )}
+      <View style={styles.row}>
+        <Stepper label="Questions per round" value={cfg.bankSize} onChange={(v: number) => setConfig(agentId, { bankSize: v })} colors={colors} styles={styles} />
+        <Stepper label="Reports per judge" value={cfg.reportsPerJudge} onChange={(v: number) => setConfig(agentId, { reportsPerJudge: v })} colors={colors} styles={styles} />
+        <Stepper label="Judge turns per manager" value={cfg.judgesPerManager} onChange={(v: number) => setConfig(agentId, { judgesPerManager: v })} colors={colors} styles={styles} />
+      </View>
+
+      <Text style={styles.label}>Models for each role</Text>
+      <Text style={styles.note}>
+        Optional. A bigger model as judge or manager checks better. Different models mean the app swaps models at each hand-over, which is slower.
+      </Text>
+      {(['learner', 'judge', 'manager'] as const).map((role) => (
+        <View key={role} style={styles.roleRow}>
+          <Text style={styles.roleName}>{role[0].toUpperCase() + role.slice(1)}</Text>
+          <View style={styles.roleChips}>
+            <ModelChips
+              value={(cfg as any)[`${role}ModelId`] || ''}
+              onChange={(id) => setConfig(agentId, { [`${role}ModelId`]: id } as any)}
+              colors={colors}
+              disabled={running}
+            />
+          </View>
+        </View>
+      ))}
+
+          <TouchableOpacity disabled={running} onPress={() => auditNow(agentId)} style={styles.smallBtn}>
+          <Text style={styles.smallBtnText}>Manager audit now</Text>
+        </TouchableOpacity>
       <Text style={styles.label}>Question bank</Text>
       <Text style={styles.note}>The learner writes it, the judge approves or rejects (the learner can argue back once), the manager can drop or add questions. Tap a question to approve or reject it yourself.</Text>
       {bank.filter((b) => b.status !== 'dropped').slice(-40).map((b) => (
@@ -216,25 +254,11 @@ export const LearningScreen: React.FC = () => {
         </View>
       )}
 
-      <Text style={styles.label}>{isNoAgent(agentId) ? 'Lessons learned (kept here; copy them wherever you want)' : 'Lessons this agent uses in every chat'}</Text>
-      <TextInput
-        style={[styles.input, styles.lessons]}
-        value={(isNoAgent(agentId) ? st?.lessons : agent?.lessons) || ''}
-        editable={!running}
-        onChangeText={(t) => setLessons(agentId, t)}
-        placeholder="None yet. The manager writes these after auditing the judge. You can edit them."
-        placeholderTextColor={colors.textMuted}
-        multiline
-        textAlignVertical="top"
-      />
-      <TouchableOpacity disabled={running} onPress={() => { clearAgent(agentId); setLessons(agentId, ''); }} style={styles.resetBtn}>
-        <Text style={styles.resetText}>Reset lessons and history</Text>
-      </TouchableOpacity>
-      <Text style={styles.note}>
-        Keep the app open while it learns (the screen stays on). Plugging in is a good idea. The model itself does not
-        change: the agent keeps its lessons (added to its instructions) and, in Keep mode with a project chosen, the
-        judge-checked answers are saved to that project's documents so chats can use them.
-      </Text>
+          <TouchableOpacity disabled={running} onPress={() => { clearAgent(agentId); setLessons(agentId, ''); }} style={styles.resetBtn}>
+            <Text style={styles.resetText}>Reset lessons and history</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 
@@ -259,7 +283,7 @@ export const LearningScreen: React.FC = () => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}><Icon name="arrow-left" size={20} color={colors.text} /></TouchableOpacity>
-        <Text style={styles.title}>Learning mode</Text>
+        <Text style={styles.title}>Teach the AI</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Knowledge')} style={styles.back} accessibilityLabel="Knowledge: documents, experts, library, import and export" testID="open-knowledge">
           <Icon name="book-open" size={20} color={colors.text} />
         </TouchableOpacity>
@@ -311,6 +335,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   bigBtnText: { color: '#fff', fontWeight: '600' as const, fontSize: 15 },
   smallBtn: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
   smallBtnText: { color: colors.text, fontSize: 13 },
+  advToggle: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
   resetBtn: { marginTop: SPACING.sm, paddingVertical: 8 },
   modeCard: { flex: 1, minWidth: 150, borderWidth: 2, borderColor: colors.border, borderRadius: 10, padding: SPACING.md, backgroundColor: colors.surface },
   switchRow: { flexDirection: 'row' as const, alignItems: 'center' as const, marginTop: SPACING.md },
