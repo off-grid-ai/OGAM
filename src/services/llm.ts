@@ -259,7 +259,8 @@ class LLMService {
       // back, since a switch that goes ahead releases it first. A context that stopped answering is
       // replaced the same way, even for the same file.
       const switching = !!this.context && (this.currentModelPath !== modelPath || this.contextUnusable);
-      const reclaimBytes = switching && this.currentModelPath ? await modelBytesOnDisk(this.currentModelPath) : 0;
+      // A model in low-memory mode holds its weights as file pages, which already count as free.
+      const reclaimBytes = switching && this.currentModelPath && !this.loadedInLowMemory ? await modelBytesOnDisk(this.currentModelPath) : 0;
       const { fileSize, memCheck, params } = await this.validateAndPrepareModel(modelPath, opts?.override, reclaimBytes, mmProjPath);
       if (switching) {
         logger.log('[LLM] Releasing previous context before loading new model');
