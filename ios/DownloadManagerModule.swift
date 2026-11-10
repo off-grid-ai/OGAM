@@ -658,6 +658,43 @@ class DownloadManagerModule: RCTEventEmitter {
     }
   }
 
+  /// The download a live task belongs to, rebuilt from the task's own description and attached to
+  /// it: the persisted entry when there is one, else a fresh one. Nil for a multi-file task whose
+  /// description lacks its path. Caller holds the barrier.
+  private func reattach(_ downloadTask: URLSessionDownloadTask, key: Int, desc: TaskDescription) -> DownloadInfo? {
+    var info = downloads[desc.downloadId] ?? DownloadInfo(
+      downloadId: desc.downloadId,
+      fileName: desc.fileName,
+      modelId: desc.modelId,
+      totalBytes: desc.totalBytes ?? 0,
+      bytesDownloaded: 0,
+      status: statusString(from: downloadTask.state),
+      startedAt: Date().timeIntervalSince1970 * 1000,
+      modelKey: nil,
+      modelType: "text",
+      combinedTotalBytes: 0,
+      metadataJson: nil,
+      task: nil,
+      taskIdentifier: nil,
+      localUri: nil,
+      fileTasks: [:],
+      multiFileDestDir: desc.destinationDir,
+      isMultiFile: desc.isMultiFile
+    )
+    if desc.isMultiFile {
+      guard let relativePath = desc.relativePath, let destinationDir = desc.destinationDir else { return nil }
+      restoreMultiFileTask(downloadTask, key: key, desc: desc, relativePath: relativePath, destinationDir: destinationDir, info: &info)
+    } else {
+      info.task = downloadTask
+      info.taskIdentifier = key
+      info.bytesDownloaded = downloadTask.countOfBytesReceived
+      if downloadTask.countOfBytesExpectedToReceive > 0 {
+        info.totalBytes = downloadTask.countOfBytesExpectedToReceive
+      }
+    }
+    return info
+  }
+
   private func restoreTasksFromSession() {
     // Tasks from both sessions: background tasks survive suspension and a system kill.
     var found: [(URLSessionTask, URLSession)] = []
@@ -685,40 +722,7 @@ class DownloadManagerModule: RCTEventEmitter {
             continue
           }
 
-          var info = self.downloads[desc.downloadId] ?? DownloadInfo(
-            downloadId: desc.downloadId,
-            fileName: desc.fileName,
-            modelId: desc.modelId,
-            totalBytes: desc.totalBytes ?? 0,
-            bytesDownloaded: 0,
-            status: self.statusString(from: downloadTask.state),
-            startedAt: Date().timeIntervalSince1970 * 1000,
-            modelKey: nil,
-            modelType: "text",
-            combinedTotalBytes: 0,
-            metadataJson: nil,
-            task: nil,
-            taskIdentifier: nil,
-            localUri: nil,
-            fileTasks: [:],
-            multiFileDestDir: desc.destinationDir,
-            isMultiFile: desc.isMultiFile
-          )
-
-          if desc.isMultiFile {
-            guard let relativePath = desc.relativePath, let destinationDir = desc.destinationDir else {
-              continue
-            }
-            self.restoreMultiFileTask(downloadTask, key: key, desc: desc, relativePath: relativePath, destinationDir: destinationDir, info: &info)
-          } else {
-            info.task = downloadTask
-            info.taskIdentifier = key
-            info.bytesDownloaded = downloadTask.countOfBytesReceived
-            if downloadTask.countOfBytesExpectedToReceive > 0 {
-              info.totalBytes = downloadTask.countOfBytesExpectedToReceive
-            }
-          }
-
+          guard var info = self.reattach(downloadTask, key: key, desc: desc) else { continue }
           info.status = self.statusString(from: downloadTask.state)
           self.downloads[desc.downloadId] = info
           self.taskToDownloadId[key] = desc.downloadId
@@ -1300,9 +1304,17 @@ extension DownloadManagerModule {
     }
   }
 
-  fileprivate func handleCompletion(taskId: Int, location: URL) {
+  fileprivate func handleCompletion(taskId: Int, location: URL, task: URLSessionDownloadTask? = nil) {
     NSLog("[DownloadManager] handleCompletion: task#%d, location=%@", taskId, location.path)
     queue.async(flags: .barrier) {
+      // After a relaunch the background session can finish a task before restoration has mapped it.
+      // The task's own description names its download, so attach it here instead of dropping it.
+      if self.taskToDownloadId[taskId] == nil, let task, let desc = self.decodeTaskDescription(task.taskDescription),
+         let attached = self.reattach(task, key: taskId, desc: desc) {
+        NSLog("[DownloadManager] handleCompletion: task#%d mapped from its description to #%@", taskId, desc.downloadId)
+        self.downloads[desc.downloadId] = attached
+        self.taskToDownloadId[taskId] = desc.downloadId
+      }
       guard let downloadId = self.taskToDownloadId[taskId],
             var info = self.downloads[downloadId] else {
         NSLog("[DownloadManager] handleCompletion: task#%d NOT FOUND in taskToDownloadId", taskId)
@@ -1605,7 +1617,7 @@ class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
     do {
       try fileManager.copyItem(at: location, to: safeURL)
       NSLog("[DownloadManager] Delegate: copied temp file to safe location: %@", safeTmp)
-      module?.handleCompletion(taskId: key, location: safeURL)
+      module?.handleCompletion(taskId: key, location: safeURL, task: downloadTask)
     } catch {
       NSLog("[DownloadManager] Delegate: FAILED to copy temp file: %@", error.localizedDescription)
       module?.handleError(taskId: key, error: error)
