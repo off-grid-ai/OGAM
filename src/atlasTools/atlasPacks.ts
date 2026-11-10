@@ -3,7 +3,7 @@ import { useProjectStore } from '../stores/projectStore';
 import { zip } from 'react-native-zip-archive';
 import { ATLAS_REPO } from '../constants';
 import { importZipFromPath, MANIFEST_NAME, type PackManifest, type PackResult } from './packImport';
-import { packsForTier, type TierId } from './emergencyTiers';
+import { packsForTier, spaceProblem, type TierId } from './emergencyTiers';
 
 /** Atlas library packs, built automatically on GitHub (release "atlas-library") and downloaded on demand. */
 export { ATLAS_REPO };
@@ -77,6 +77,9 @@ export async function installAtlasPack(pack: AtlasPack, onProgress: (msg: string
 export async function saveTierToDrive(tier: TierId, packs: AtlasPack[], onProgress: (msg: string, frac?: number) => void): Promise<string | null> {
   const chosen = packsForTier(tier, packs);
   if (!chosen.length) throw new Error('No packs of that size are published yet.');
+  const free = await RNFS.getFSInfo().then((i) => i.freeSpace).catch(() => undefined);
+  const problem = spaceProblem(chosen.reduce((n, p) => n + p.size, 0), free);
+  if (problem) throw new Error(problem);
   const stage = `${RNFS.CachesDirectoryPath}/atlas-bundle-${tier}`;
   const out = `${RNFS.CachesDirectoryPath}/Atlas-Emergency-${tier}.zip`;
   await RNFS.unlink(stage).catch(() => undefined);
