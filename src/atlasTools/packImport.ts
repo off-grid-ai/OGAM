@@ -10,12 +10,14 @@ const MAX_BYTES = 5 * 1024 * 1024;
 
 export interface PackResult { added: number; skipped: number; failed: { name: string; error: string }[]; total: number }
 
-async function walk(dir: string, out: any[] = []): Promise<any[]> {
+/** Text files to add, and any zips inside the unpacked folder (a package bundle holds one zip per subject pack). */
+async function walk(dir: string, out: any[] = [], zips: any[] = []): Promise<{ items: any[]; zips: any[] }> {
   for (const it of await RNFS.readDir(dir)) {
-    if (it.isDirectory()) await walk(it.path, out);
+    if (it.isDirectory()) await walk(it.path, out, zips);
     else if (TEXT.test(it.name)) out.push(it);
+    else if (/\.zip$/i.test(it.name)) zips.push(it);
   }
-  return out;
+  return { items: out, zips };
 }
 
 /**
@@ -40,8 +42,14 @@ export async function importZipFromPath(projectId: string, local: string, name: 
   await RNFS.mkdir(target);
   onProgress('Unpacking...');
   await unzip(local.replace(/^file:\/\//, ''), target);
-  const items = await walk(target);
+  const { items, zips } = await walk(target);
   const res: PackResult = { added: 0, skipped: 0, failed: [], total: items.length };
+  // An Atlas package saved to a drive is one zip of subject packs: add each pack in turn.
+  for (const z of zips) {
+    if (shouldStop()) break;
+    const inner = await importZipFromPath(projectId, z.path, z.name, onProgress, shouldStop);
+    res.added += inner.added; res.skipped += inner.skipped; res.total += inner.total; res.failed.push(...inner.failed);
+  }
   for (let i = 0; i < items.length; i++) {
     if (shouldStop()) break;
     const it = items[i];
