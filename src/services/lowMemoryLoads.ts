@@ -36,8 +36,10 @@ async function crashedModels(): Promise<string[]> {
   const inFlight = await readJson<InFlight>(IN_FLIGHT_KEY);
   if (!inFlight || inFlight.launch === LAUNCH) return crashed;
   const next = crashed.includes(inFlight.modelPath) ? crashed : [...crashed, inFlight.modelPath];
-  await AsyncStorage.setItem(CRASHED_KEY, JSON.stringify(next)).catch(ignore);
-  await AsyncStorage.removeItem(IN_FLIGHT_KEY).catch(ignore);
+  // The marker goes only once the list holds the model: if saving fails, the next call still sees
+  // the marker, so the loader never retries the copy that killed the app.
+  const saved = await AsyncStorage.setItem(CRASHED_KEY, JSON.stringify(next)).then(() => true, () => false);
+  if (saved) await AsyncStorage.removeItem(IN_FLIGHT_KEY).catch(ignore);
   return next;
 }
 

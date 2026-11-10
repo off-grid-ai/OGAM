@@ -51,6 +51,15 @@ describe('a copy load the app died in', () => {
     expect(await only.startsInLowMemory(MODEL)).toBe(false);
   });
 
+  it('a crash it cannot save yet stays marked, so every later check in that launch still sees it', async () => {
+    await launch().copiedLoadStarted(MODEL);
+    const second = launch();
+    jest.spyOn(storage, 'setItem').mockRejectedValueOnce(new Error('POSIX 28: no space left'));
+    expect(await second.startsInLowMemory(MODEL)).toBe(true);
+    // The residency check asked first; the loader asks again and must get the same answer.
+    expect(await second.startsInLowMemory(MODEL)).toBe(true);
+  });
+
   it('a full disk or an unreadable marker never fails a load', async () => {
     const first = launch();
     jest.spyOn(storage, 'setItem').mockRejectedValueOnce(new Error('POSIX 28: no space left'));
