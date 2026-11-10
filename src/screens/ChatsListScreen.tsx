@@ -281,6 +281,7 @@ export const ChatsListScreen: React.FC = () => {
   }, [visibleConversations, shownGroupBy, shownSortBy, projects]);
   // A folded section keeps its header and hides its chats; a search shows every match, folded or not.
   const searching = deferredQuery.trim() !== '';
+  const shut = (key: string) => folded.has(key) && !searching;
   const sections = useMemo(
     () => grouped.map(section => ({
       ...section,
@@ -434,17 +435,20 @@ export const ChatsListScreen: React.FC = () => {
             renderSectionHeader={({ section }) =>
               // An ungrouped list has one untitled section and no header.
               section.title ? (
+                // While searching every match shows, so the header reads open, and a tap there cannot
+                // change the fold that comes back when the search is cleared.
                 <TouchableOpacity
                   style={styles.sectionHeader}
                   onPress={() => toggleSection(section.key)}
+                  disabled={searching}
                   accessibilityRole="header"
                   accessibilityLabel={section.title}
-                  accessibilityHint={folded.has(section.key) ? `Shows ${section.count} chats` : 'Hides these chats'}
-                  accessibilityState={{ expanded: !folded.has(section.key) }}
+                  accessibilityHint={searching ? undefined : shut(section.key) ? `Shows ${section.count} chats` : 'Hides these chats'}
+                  accessibilityState={{ expanded: !shut(section.key), disabled: searching }}
                   testID={`chats-section-${section.key}`}
                 >
                   <Text style={styles.sectionLabel}>{section.title}</Text>
-                  <Icon name={folded.has(section.key) ? 'chevron-right' : 'chevron-down'} size={14} color={colors.textMuted} />
+                  <Icon name={shut(section.key) ? 'chevron-right' : 'chevron-down'} size={14} color={colors.textMuted} />
                 </TouchableOpacity>
               ) : null
             }

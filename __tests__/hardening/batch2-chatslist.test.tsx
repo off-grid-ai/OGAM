@@ -161,6 +161,11 @@ describe('batch2 ChatsListScreen — sort, timestamp format, delete, empty', () 
     // A search shows a match inside a folded section; clearing it folds the section again.
     app.rtl.fireEvent.changeText(view.getByTestId('chat-search-input'), 'Tomat');
     await app.rtl.waitFor(() => expect(view.getByText('Tomatoes')).toBeTruthy());
+    // The header says what shows (open), and a tap during the search leaves the fold as it was.
+    const header = view.getByTestId(`chats-section-project:${garden.id}`);
+    expect(header.props.accessibilityState).toMatchObject({ expanded: true, disabled: true });
+    app.rtl.fireEvent.press(header);
+    expect(view.getByText('Tomatoes')).toBeTruthy();
     app.rtl.fireEvent.changeText(view.getByTestId('chat-search-input'), '');
     await app.rtl.waitFor(() => expect(view.queryByText('Tomatoes')).toBeNull());
     app.rtl.fireEvent.press(view.getByTestId(`chats-section-project:${garden.id}`));
