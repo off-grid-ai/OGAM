@@ -102,3 +102,28 @@ it('makes a jingle file once and plays it each time', async () => {
   expect(mockWritten).toEqual(['/cache/podcast-audio/_jingles/intro-v1.wav']);
   expect(mockPlayed).toHaveLength(2);
 });
+
+it('a jingle that cannot be played never stops the show', async () => {
+  const { playJingle } = require('../../../src/atlasVoice/podcastAudio');
+  mockFailDecode = true;
+  try { expect(await playJingle('intro')).toBe(true); } finally { mockFailDecode = false; }
+});
+
+it('a jingle that never reports its end is cut off after its length plus a few seconds', async () => {
+  jest.useFakeTimers();
+  try {
+    const { playJingle } = require('../../../src/atlasVoice/podcastAudio');
+    const { AudioContext } = require('react-native-audio-api');
+    // A source that never fires onEnded.
+    AudioContext.mockImplementationOnce(() => ({
+      destination: {}, decodeAudioData: jest.fn(async (path: string) => ({ path })),
+      createBufferSource: jest.fn(() => ({ connect: jest.fn(), stop: jest.fn(), start: jest.fn(), onEnded: null, buffer: null })),
+    }));
+    jest.resetModules();
+    const fresh = require('../../../src/atlasVoice/podcastAudio');
+    const done = fresh.playJingle('chime');
+    await jest.advanceTimersByTimeAsync(10_000);
+    await expect(done).resolves.toBe(true);
+    void playJingle;
+  } finally { jest.useRealTimers(); }
+});
