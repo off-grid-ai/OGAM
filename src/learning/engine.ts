@@ -25,7 +25,7 @@ import { ragService } from '../services/rag';
 import { useAppStore } from '../stores/appStore';
 import { Agent, agentPromptWithLessons } from '../stores/agentStore';
 import { learningAgent, setLessons } from './agents';
-import { useLearningStore, newItem, BankItem, LearnConfig, LearnReport, PerAgent } from './store';
+import { useLearningStore, newItem, BankItem, LearnConfig, LearnReport, ReportSource, PerAgent } from './store';
 import type { Message } from '../types';
 import logger from '../utils/logger';
 import { ensureTextModel } from '../atlasTools/models';
@@ -78,12 +78,15 @@ async function ask(system: string, user: string, role: Role): Promise<string> {
 }
 
 // ------------------------------------------------------------------ research
-async function research(cfg: LearnConfig, query: string): Promise<string> {
-  const parts: string[] = [];
+/** What the learner read for a question: the text it is shown (each source numbered) and the same sources as a list. */
+interface Research { text: string; list: ReportSource[] }
+
+async function research(cfg: LearnConfig, query: string): Promise<Research> {
+  const found: Array<{ title: string; kind: ReportSource['kind']; content: string; url?: string }> = [];
   if (cfg.projectId) {
     try {
       const res: any = await ragService.searchProject(cfg.projectId, query);
-      (res?.chunks || []).slice(0, 3).forEach((c: any) => parts.push(`[${c.name}] ${String(c.content).replace(/\s+/g, ' ').slice(0, 800)}`));
+      (res?.chunks || []).slice(0, 3).forEach((c: any) => found.push({ title: String(c.name), kind: 'project', content: String(c.content).replace(/\s+/g, ' ').slice(0, 800) }));
     } catch (e) { logger.log(`[Learning] knowledge search failed: ${String(e)}`); }
   }
   if (cfg.useLibrary) {
@@ -92,7 +95,7 @@ async function research(cfg: LearnConfig, query: string): Promise<string> {
       const hits = await searchLibrary(query, 2);
       for (const h of hits.slice(0, 1)) {
         const a = await readArticle(h.uri, h.path, 900);
-        parts.push(`[${h.library}: ${a.title}] ${a.text.replace(/\s+/g, ' ').slice(0, 800)}`);
+        found.push({ title: `${h.library}: ${a.title}`, kind: 'library', content: a.text.replace(/\s+/g, ' ').slice(0, 800) });
       }
     } catch { /* no library */ }
   }
@@ -102,11 +105,14 @@ async function research(cfg: LearnConfig, query: string): Promise<string> {
       if (!offGridOn()) {
         const { searchWeb } = require('../services/tools/webSearchProviders');
         const r = await searchWeb(query, (q: string) => require('../services/tools/handlers').braveSearch(q));
-        r.results.slice(0, 2).forEach((w: any) => { if (w.snippet) parts.push(`[web: ${w.title}] ${w.snippet.slice(0, 500)}`); });
+        r.results.slice(0, 2).forEach((w: any) => { if (w.snippet) found.push({ title: String(w.title), kind: 'web', content: w.snippet.slice(0, 500), url: w.url }); });
       }
     } catch { /* offline */ }
   }
-  return parts.join('\n\n');
+  return {
+    text: found.map((f, i) => `[${i + 1}] (${f.title}) ${f.content}`).join('\n\n'),
+    list: found.map((f, i) => ({ n: i + 1, title: f.title, kind: f.kind, url: f.url })),
+  };
 }
 
 const numbered = (items: { q: string }[]) => items.map((b, i) => `${i + 1}. ${b.q}`).join('\n');
@@ -231,16 +237,16 @@ async function buildBank(agent: Agent, cfg: LearnConfig): Promise<void> {
 async function writeReport(agent: Agent, cfg: LearnConfig, item: BankItem): Promise<void> {
   const st = L().get(agent.id);
   status(`Learner is researching: ${item.q.slice(0, 60)}...`);
-  const src = await research(cfg, item.q);
+  const { text: src, list: sourceList } = await research(cfg, item.q);
   if (stopRequested) return;
   status('Learner is writing a report...');
   const report = await ask(
     learnerSystem(agent, st, cfg),
-    `${src ? `SOURCES:\n${src}\n\n` : 'No sources found: use what you know, and say so.\n\n'}TASK: ${cfg.topic}\nQUESTION: ${item.q}\n${item.feedback ? `Judge feedback on your last try: ${item.feedback}\n` : ''}\nWrite a simple report:\nANSWER: 2-5 plain sentences.\nKEY POINTS: 2-4 short bullets.\nREASONING: why this is right, step by step, and which source supports it.\nUNSURE: anything you could not confirm (or "nothing").`,
+    `${src ? `SOURCES:\n${src}\n\n` : 'No sources found: use what you know, and say so.\n\n'}TASK: ${cfg.topic}\nQUESTION: ${item.q}\n${item.feedback ? `Judge feedback on your last try: ${item.feedback}\n` : ''}\nWrite a simple report:\nANSWER: 2-5 plain sentences.\nKEY POINTS: 2-4 short bullets.\nREASONING: why this is right, step by step, and which source supports it. Cite each source you use by its number in square brackets, like [1].\nUNSURE: anything you could not confirm (or "nothing").`,
     'learner',
   );
   L().log({ agentId: agent.id, kind: 'report', title: `Report: ${item.q.slice(0, 70)}`, body: report.slice(0, 2500) });
-  const entry: LearnReport = { id: `${item.id}:${item.tries + 1}`, itemId: item.id, q: item.q, text: report.slice(0, 8000), sources: src.slice(0, 3000), at: Date.now(), status: 'waiting' };
+  const entry: LearnReport = { id: `${item.id}:${item.tries + 1}`, itemId: item.id, q: item.q, text: report.slice(0, 8000), sources: src.slice(0, 3000), sourceList, at: Date.now(), status: 'waiting' };
   L().patch(agent.id, {
     reportLog: [entry, ...(st.reportLog ?? [])].slice(0, 100),
     pendingReports: [...st.pendingReports, { itemId: item.id, q: item.q, report: report.slice(0, 1600), sources: src.slice(0, 1200) }],

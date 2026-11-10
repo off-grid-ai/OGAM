@@ -79,3 +79,23 @@ it('each expert learns on its own: adding Taxes does not touch General, and only
   expect(other).toContain('General rule');
   expect(other).not.toContain('Check the filing deadline');
 });
+
+it('numbers the sources a report used: small raised numbers in the text and a list 1 to 3 when it is opened', () => {
+  installNativeBoundary({ fs: true });
+  const rtl = requireRTL();
+  const React = require('react');
+  const { LearningScreen } = require('../../../src/screens/LearningScreen');
+  const { useLearningStore, blankState } = require('../../../src/learning/store');
+  const { NO_AGENT } = require('../../../src/learning/agents');
+  useLearningStore.setState({ experts: [], config: {}, state: { [NO_AGENT]: { ...blankState(), reportLog: [{
+    id: 's:1', itemId: 's', q: 'When is the deadline?', text: 'ANSWER: April 15 [1]. REASONING: the penalty is 5% [3].', sources: '', at: 1, status: 'pass',
+    sourceList: [{ n: 1, title: 'IRS deadlines', kind: 'web', url: 'https://irs.example' }, { n: 2, title: 'Tax guide', kind: 'project' }, { n: 3, title: 'Penalties', kind: 'library' }],
+  }] } } });
+  const view = rtl.render(React.createElement(LearningScreen));
+  expect(view.getByText(/April 15¹\. REASONING: the penalty is 5%³\./)).toBeTruthy();
+  expect(view.getByText('3 sources')).toBeTruthy();
+  rtl.fireEvent.press(view.getByTestId('learn-report-s:1'));
+  expect(view.getByText(/¹ IRS deadlines \(web\) https:\/\/irs.example/)).toBeTruthy();
+  expect(view.getByText(/² Tax guide \(project\)/)).toBeTruthy();
+  expect(view.getByText(/³ Penalties \(library\)/)).toBeTruthy();
+});

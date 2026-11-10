@@ -1,10 +1,11 @@
 import { CitationChips } from '../CitationChips';
-import { sourcesFromSearch } from '../../study/citations';
-import React, { useState } from 'react';
+import { sourcesFromSearch, type CheckedCitation } from '../../study/citations';
+import { sourcesBefore, citedNumbers, markSources } from '../../study/replySources';
+import React, { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, Clipboard } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
-import { useUiModeStore, useAccordionExpanded, useAppStore } from '../../stores';
+import { useUiModeStore, useAccordionExpanded, useAppStore, useChatStore } from '../../stores';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import Icon from 'react-native-vector-icons/Feather';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../CustomAlert';
@@ -244,6 +245,8 @@ interface MessageBubbleProps {
   label?: string;
   /** Learned lessons the reply was written with, shown as a small note under it. */
   lessonsUsed?: string[];
+  /** Numbered sources the reply cites, listed under it. */
+  sources?: CheckedCitation[];
 }
 
 /** The bubble's styles: Clean = plain-text replies and a rounded bubble for your own message; Bubbles = every message boxed. */
@@ -258,7 +261,7 @@ function bubbleStyleFor(o: { styles: any; isUser: boolean; clean: boolean; isWid
 const MessageBubble: React.FC<MessageBubbleProps> = ({
   message, styles, colors, isUser, isStreaming, hasAttachments, bubbleStyle,
   parsedContent, showThinking, showActions, showGenerationDetails, metaExtra,
-  onImagePress, onToggleThinking, onLongPress, onMenuOpen, clean, label, lessonsUsed,
+  onImagePress, onToggleThinking, onLongPress, onMenuOpen, clean, label, lessonsUsed, sources,
 }) => (
   <TouchableOpacity
     testID={isUser ? 'user-message' : 'assistant-message'}
@@ -303,6 +306,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         <Text style={styles.toolStatusText}>Reply cut off at the token limit. Retry to continue.</Text>
       </View>
     )}
+
+    {!!sources?.length && <CitationChips cites={sources} testID="reply-sources" />}
 
     {!!lessonsUsed?.length && (
       <View style={styles.toolStatusRow} testID="lessons-used">
@@ -356,7 +361,16 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const [showThinking, setShowThinking] = useState(!!isStreaming);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
-  const { displayContent, parsedContent } = buildMessageData(message);
+  const { displayContent, parsedContent: rawParsed } = buildMessageData(message);
+  // Source numbers: a reply that cites a search result as [1] shows a small raised 1 and lists the sources under it.
+  const sources = useMemo(() => {
+    if (message.role !== 'assistant' || !/\[\d{1,2}\]/.test(rawParsed.response ?? '')) return [];
+    const chat = useChatStore.getState();
+    const msgs = chat.conversations.find((c: { id: string }) => c.id === chat.activeConversationId)?.messages ?? [];
+    return sourcesBefore(msgs as any, message.id);
+  }, [message.id, message.role, rawParsed.response]);
+  const cited = citedNumbers(rawParsed.response ?? '', sources.length).length > 0;
+  const parsedContent = cited ? { ...rawParsed, response: markSources(rawParsed.response ?? '', sources.length) } : rawParsed;
 
   const isUser = message.role === 'user';
   const hasAttachments = Boolean(message.attachments?.length);
@@ -474,6 +488,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       clean={clean}
       label={look?.label}
       lessonsUsed={!isUser && showLessons ? message.generationMeta?.lessonsUsed : undefined}
+      sources={cited ? sources : undefined}
       message={message}
       styles={lookStyles}
       colors={colors}

@@ -34,3 +34,14 @@ describe('reports file', () => {
   });
   it('says so when there are none', () => expect(reportsMarkdown('', [])).toContain('0 reports'));
 });
+
+describe('numbered sources in reports', () => {
+  it('lists the sources 1, 2, 3 in the exported file', () => {
+    const md = reportsMarkdown('Taxes', [{ q: 'Deadline?', text: 'Due April 15 [1].', status: 'pass', at: 1,
+      sourceList: [{ n: 1, title: 'IRS: deadlines', kind: 'web', url: 'https://irs.example' }, { n: 2, title: 'Tax guide', kind: 'project' }] }]);
+    expect(md).toContain('**Sources**');
+    expect(md).toContain('1. IRS: deadlines (web) https://irs.example');
+    expect(md).toContain('2. Tax guide (project)');
+    expect(md).not.toContain('Sources it had');
+  });
+});

@@ -1660,3 +1660,42 @@ describe('ChatMessage: check this answer', () => {
     expect(queryByTestId('action-check-answer')).toBeNull();
   });
 });
+
+describe('ChatMessage: source numbers', () => {
+  const { useChatStore } = require('../../../src/stores/chatStore');
+  it('shows a small raised number where a search result was cited, and lists the sources under the reply', () => {
+    const search = 'Results from Brave:\n\n1. [Tax deadlines](https://irs.example/deadlines)\n   Returns are due April 15.\n2. [Penalties](https://irs.example/penalties)\n   The late fee is 5% a month.';
+    const reply = { ...createAssistantMessage('Due April 15 [1]. The fee is 5% [2].'), id: 'a1' };
+    useChatStore.setState({
+      activeConversationId: 'c1',
+      conversations: [{ id: 'c1', title: 't', modelId: 'm', createdAt: '', updatedAt: '', messages: [
+        { id: 'u1', role: 'user', content: 'When?', timestamp: 1 },
+        { id: 't1', role: 'tool', toolName: 'web_search', content: search, timestamp: 2 },
+        reply,
+      ] }],
+    });
+    const view = render(<ChatMessage message={reply} />);
+    expect(view.getByText(/Due April 15¹\. The fee is 5%²\./)).toBeTruthy();
+    expect(view.getByTestId('reply-sources')).toBeTruthy();
+    expect(view.getAllByTestId(/^chip-/).length).toBe(2);
+  });
+  it('adds nothing to a reply that cites nothing', () => {
+    const reply = createAssistantMessage('Plain answer.');
+    useChatStore.setState({ activeConversationId: 'c1', conversations: [{ id: 'c1', title: 't', modelId: 'm', createdAt: '', updatedAt: '', messages: [reply] }] });
+    const view = render(<ChatMessage message={reply} />);
+    expect(view.queryByTestId('reply-sources')).toBeNull();
+  });
+});
+
+describe('ChatMessage: pin', () => {
+  it('pins a reply from the action menu without crashing (it reads the open chat)', () => {
+    const { useChatStore } = require('../../../src/stores/chatStore');
+    const { usePins } = require('../../../src/pins/store');
+    const reply = { ...createAssistantMessage('Worth keeping.'), id: 'pin-1' };
+    useChatStore.setState({ activeConversationId: 'c9', conversations: [{ id: 'c9', title: 'Trip', modelId: 'm', createdAt: '', updatedAt: '', messages: [reply] }] });
+    const { getByTestId } = render(<ChatMessage message={reply} showActions={true} />);
+    fireEvent(getByTestId('assistant-message'), 'longPress');
+    fireEvent.press(getByTestId('action-pin'));
+    expect(usePins.getState().pins.some((p: { id: string }) => p.id === 'pin-1')).toBe(true);
+  });
+});

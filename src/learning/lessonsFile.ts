@@ -21,7 +21,7 @@ export function lessonsMarkdown(name: string, lessons: string, when: Date = new 
 export const reportsFileName = (name: string): string => lessonsFileName(name).replace(/-lessons\.md$/, '-reports.md');
 
 /** Every report the AI wrote on a subject, in full, with what the judge said about each. */
-export function reportsMarkdown(name: string, reports: Array<{ q: string; text: string; status: string; score?: number; why?: string; sources?: string; at: number }>): string {
+export function reportsMarkdown(name: string, reports: Array<{ q: string; text: string; status: string; score?: number; why?: string; sources?: string; sourceList?: Array<{ n: number; title: string; kind: string; url?: string }>; at: number }>): string {
   const verdict = (r: { status: string; score?: number }) => (r.status === 'pass' ? 'Judge passed it' : r.status === 'fail' ? 'Judge failed it' : 'Not judged yet') + (r.score !== undefined ? ` (${r.score}/10)` : '');
   return [
     `# Reports on ${name || 'General'}`,
@@ -34,7 +34,8 @@ export function reportsMarkdown(name: string, reports: Array<{ q: string; text: 
       '',
       r.text.trim(),
       ...(r.why ? ['', `Judge: ${r.why}`] : []),
-      ...(r.sources ? ['', '<details><summary>Sources it had</summary>', '', r.sources.trim(), '', '</details>'] : []),
+      ...(r.sourceList?.length ? ['', '**Sources**', '', ...r.sourceList.map((s) => `${s.n}. ${s.title} (${s.kind})${s.url ? ` ${s.url}` : ''}`)]
+        : r.sources ? ['', '<details><summary>Sources it had</summary>', '', r.sources.trim(), '', '</details>'] : []),
       '',
     ]),
   ].join('\n');

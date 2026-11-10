@@ -9,6 +9,7 @@ import { TYPOGRAPHY, SPACING } from '../constants';
 import { useAgentStore } from '../stores/agentStore';
 import { NO_AGENT, isNoAgent, setLessons, expertName } from '../learning/agents';
 import { reportsMarkdown, writeReportsFile } from '../learning/lessonsFile';
+import { markSources, superscript } from '../study/replySources';
 import { useProjectStore, useAppStore } from '../stores';
 import { useLearningStore, LearnEvent, defaultLearnConfig, newItem, BankStatus } from '../learning/store';
 import { startLearning, stopLearning, isLearning, onLearningStatus, auditNow, keepSession, newRound } from '../learning/engine';
@@ -201,7 +202,15 @@ export const LearningScreen: React.FC = () => {
               <Text style={[styles.counts, { color }]}>
                 {r.status === 'pass' ? 'Judge passed it' : r.status === 'fail' ? 'Judge failed it' : 'Waiting for the judge'}{r.score !== undefined ? ` · ${r.score}/10` : ''} · {new Date(r.at).toLocaleString()}
               </Text>
-              <Text style={styles.eventBody} numberOfLines={isOpen ? undefined : 3} selectable={isOpen}>{r.text}</Text>
+              <Text style={styles.eventBody} numberOfLines={isOpen ? undefined : 3} selectable={isOpen}>{markSources(r.text, r.sourceList?.length ?? 0)}</Text>
+              {!!r.sourceList?.length && (
+                <View testID={`report-sources-${r.id}`}>
+                  <Text style={styles.counts}>{isOpen ? 'Sources' : `${r.sourceList.length} ${r.sourceList.length === 1 ? 'source' : 'sources'}`}</Text>
+                  {isOpen && r.sourceList.map((s) => (
+                    <Text key={s.n} style={styles.counts} selectable>{superscript(s.n)} {s.title} ({s.kind}){s.url ? ` ${s.url}` : ''}</Text>
+                  ))}
+                </View>
+              )}
               {isOpen && !!r.why && <Text style={styles.direction}>Judge: {r.why}</Text>}
               {isOpen && !!r.sources && <Text style={styles.counts} selectable>Sources it had:{'\n'}{r.sources}</Text>}
             </View>

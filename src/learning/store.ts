@@ -46,6 +46,8 @@ export interface BankItem {
   round: number;
 }
 
+export interface ReportSource { n: number; title: string; kind: 'project' | 'library' | 'web'; url?: string }
+
 /** A report the learner wrote, kept in full with what the judge said about it, so it can be read. */
 export interface LearnReport {
   id: string;
@@ -53,6 +55,8 @@ export interface LearnReport {
   q: string;
   text: string;
   sources: string;
+  /** The numbered sources the report was written from; [1], [2]... in its text refer to these. */
+  sourceList?: ReportSource[];
   at: number;
   /** waiting = not judged yet. */
   status: 'waiting' | 'pass' | 'fail';
