@@ -89,7 +89,12 @@ export const EmbeddingModelsTab: React.FC = () => {
   const [downloaded, setDownloaded] = useState<Set<string>>(new Set());
   // The failed row whose file is being removed: it shows that it is working, and offers neither Retry
   // (an install could start while the file is deleted) nor a second Remove until it is done.
-  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [removingIds, setRemovingIds] = useState<ReadonlySet<string>>(new Set());
+  const removing = (id: string, on: boolean) => setRemovingIds(previous => {
+    const next = new Set(previous);
+    if (on) next.add(id); else next.delete(id);
+    return next;
+  });
 
   useEffect(() => {
     try {
@@ -159,12 +164,12 @@ export const EmbeddingModelsTab: React.FC = () => {
       forget();
     };
     // The failure clears only once the file is gone; a delete that fails keeps it, with the reason.
-    setRemovingId(candidate.id);
+    removing(candidate.id, true);
     deleteIfThere()
       // Only this model's failure: another change may have started and failed while the disk was slow.
       .then(() => { if (embeddingModelChanger.getChange().candidateId === candidate.id) embeddingModelChanger.dismiss(); })
       .catch(e => setError(String(e.message)))
-      .finally(() => setRemovingId(null));
+      .finally(() => removing(candidate.id, false));
   };
   const activeInCandidates = active && candidates.some(candidate => candidate.id === active.id);
   // A change in progress shows once: on the row of the model being fetched, with its own cancel, as in
@@ -175,7 +180,7 @@ export const EmbeddingModelsTab: React.FC = () => {
   // The row's right-hand mark: working while its file is removed; nothing where the row shows its own
   // state (in use, downloading, failed); else what a tap does (a circle picks it, a mark downloads it).
   const trailingFor = (candidate: Candidate) => {
-    if (removingId === candidate.id) {
+    if (removingIds.has(candidate.id)) {
       return <View style={embeddingStyles.rowAction}><ActivityIndicator size="small" color={colors.textMuted} accessibilityLabel="Removing" /></View>;
     }
     if (active?.id === candidate.id || changeRow === candidate || failedRow === candidate) return undefined;
@@ -240,7 +245,7 @@ export const EmbeddingModelsTab: React.FC = () => {
           isDownloading={changeRow === candidate}
           downloadProgress={changeRow === candidate ? status.fraction : undefined}
           onCancel={changeRow === candidate ? embeddingModelChanger.cancel : undefined}
-          failedState={failedRow === candidate && removingId !== candidate.id ? {
+          failedState={failedRow === candidate && !removingIds.has(candidate.id) ? {
             errorMessage: status.error, bytesDownloaded: 0, totalBytes: 0,
             onRetry: () => { embeddingModelChanger.retry().catch(() => undefined); },
             // "Remove download" also deletes a file that arrived but failed its check, asked of the disk
@@ -248,7 +253,8 @@ export const EmbeddingModelsTab: React.FC = () => {
             onRemove: () => { removeFailed(candidate); },
           } : undefined}
           onDelete={downloaded.has(candidate.id) && active?.id !== candidate.id && !status.busy ? () => remove(candidate) : undefined}
-          disabled={status.busy || !ready || active?.id === candidate.id}
+          // Not while its file is removed: a switch then could start an install the delete would remove.
+          disabled={status.busy || !ready || active?.id === candidate.id || removingIds.has(candidate.id)}
           onPress={() => select(candidate)}
           trailing={trailingFor(candidate)}
         />

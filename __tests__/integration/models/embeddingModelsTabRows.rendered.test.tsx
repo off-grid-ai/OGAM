@@ -159,6 +159,9 @@ it('while Remove download works, the row says so and offers no Retry or second R
   await rtl.waitFor(() => expect(row(h.multilingual.name).getByLabelText('Removing')).toBeTruthy());
   expect(row(h.multilingual.name).queryByLabelText('Retry download')).toBeNull();
   expect(row(h.multilingual.name).queryByLabelText('Remove download')).toBeNull();
+  // Nor can the row itself be picked: a switch now would start an install the delete would remove.
+  rtl.fireEvent.press(view.getByLabelText(h.multilingual.name));
+  expect(view.queryByText('Switch')).toBeNull();
 
   release();
   await rtl.waitFor(() => expect(view.queryByLabelText('Removing')).toBeNull());
