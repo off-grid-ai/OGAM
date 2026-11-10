@@ -44,3 +44,25 @@ describe('messaging-app chat looks', () => {
     }
   });
 });
+
+import { lookBackground, messageTime, applyMessageLook } from '../../src/theme/messageLooks';
+
+describe('chat background and time in a messaging-app look', () => {
+  it('has a background for every look, light and dark', () => {
+    for (const l of MESSAGE_LOOKS) {
+      expect(lookBackground(l.id, false)).toMatch(/^#[0-9A-F]{6}$/);
+      expect(lookBackground(l.id, true)).toMatch(/^#[0-9A-F]{6}$/);
+      expect(isDarkColor(lookBackground(l.id, true))).toBe(true);
+    }
+    expect(lookBackground('whatsapp', false)).toBe('#EFEAE2');
+    expect(lookBackground('telegram', true)).toBe('#0E1621');
+  });
+  it('formats a message time', () => {
+    expect(messageTime(Date.UTC(2026, 10, 10, 21, 41))).toMatch(/\d{1,2}:\d{2}/);
+  });
+  it('gives the time the same colour as the text on the bubble', () => {
+    const { look, timeStyle } = applyMessageLook({ layout: 'imessage', isUser: true, background: '#FFFFFF', styles: { userText: {}, assistantText: {} } });
+    expect((timeStyle as any).color).toBe(look!.textColor);
+    expect(applyMessageLook({ layout: 'clean', isUser: true, background: '#FFFFFF', styles: { userText: {}, assistantText: {} } }).timeStyle).toBeUndefined();
+  });
+});

@@ -1699,3 +1699,18 @@ describe('ChatMessage: pin', () => {
     expect(usePins.getState().pins.some((p: { id: string }) => p.id === 'pin-1')).toBe(true);
   });
 });
+
+describe('ChatMessage: messaging-app look shows the time', () => {
+  const { useAppStore } = require('../../../src/stores/appStore');
+  it('shows the time inside a bubble in the iMessage look, and not in the Clean look', () => {
+    const message = createUserMessage('hello');
+    useAppStore.getState().updateSettings({ appearance: { chatLayout: 'imessage' } });
+    const on = render(<ChatMessage message={message} />);
+    expect(on.getByTestId('look-time')).toBeTruthy();
+    on.unmount();
+    useAppStore.getState().updateSettings({ appearance: { chatLayout: 'clean' } });
+    const off = render(<ChatMessage message={message} />);
+    expect(off.queryByTestId('look-time')).toBeNull();
+    useAppStore.getState().updateSettings({ appearance: undefined });
+  });
+});

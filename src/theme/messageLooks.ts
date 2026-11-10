@@ -54,12 +54,26 @@ const PALETTES: Record<Exclude<MessageLook, 'discord'>, { light: Palette; dark: 
     dark: { me: '#2B5278', meText: '#FFFFFF', them: '#182533', themText: '#FFFFFF' } },
 };
 
+/** The chat screen's background in a messaging-app look (WhatsApp's beige, Telegram's blue-grey...), or undefined to keep the app's own. */
+const BACKGROUNDS: Record<MessageLook, { light: string; dark: string }> = {
+  imessage: { light: '#FFFFFF', dark: '#000000' },
+  sms: { light: '#FFFFFF', dark: '#000000' },
+  whatsapp: { light: '#EFEAE2', dark: '#0B141A' },
+  messenger: { light: '#FFFFFF', dark: '#18191A' },
+  telegram: { light: '#DDE5EC', dark: '#0E1621' },
+  discord: { light: '#FFFFFF', dark: '#313338' },
+};
+export const lookBackground = (look: MessageLook, dark: boolean): string => BACKGROUNDS[look][dark ? 'dark' : 'light'];
+
+/** "9:41 PM" for a message time (the locale's own style). */
+export const messageTime = (timestamp: number): string => new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
 /** How one message looks in a messaging-app look. `dark` is whether the screen background is dark. */
 export function messageLookStyle(look: MessageLook, isUser: boolean, dark: boolean): MessageLookStyle {
   if (look === 'discord') {
     const base = dark ? '#313338' : '#F2F3F5';
     return {
-      bubble: { backgroundColor: isUser ? 'transparent' : base, borderRadius: 6, maxWidth: '100%', width: '100%', minWidth: undefined, paddingHorizontal: 12, paddingVertical: 8 },
+      bubble: { backgroundColor: isUser ? 'transparent' : dark ? '#2B2D31' : base, borderRadius: 6, maxWidth: '100%', width: '100%', minWidth: undefined, paddingHorizontal: 12, paddingVertical: 8 },
       textColor: dark ? '#DBDEE1' : '#2E3338',
       label: isUser ? 'You' : 'Assistant',
     };
@@ -85,9 +99,9 @@ export function messageLookStyle(look: MessageLook, isUser: boolean, dark: boole
  */
 export function applyMessageLook<S extends { userText: object; assistantText: object }>(o: {
   layout: string; isUser: boolean; background: string; styles: S;
-}): { look?: MessageLookStyle; lookStyles: S } {
+}): { look?: MessageLookStyle; lookStyles: S; timeStyle?: object } {
   if (!isMessageLook(o.layout)) return { lookStyles: o.styles };
   const look = messageLookStyle(o.layout, o.isUser, isDarkColor(o.background));
   const lookStyles = { ...o.styles, userText: { ...o.styles.userText, color: look.textColor }, assistantText: { ...o.styles.assistantText, color: look.textColor } };
-  return { look, lookStyles };
+  return { look, lookStyles, timeStyle: { color: look.textColor, opacity: 0.6, fontSize: 11, alignSelf: 'flex-end', marginTop: 2 } };
 }

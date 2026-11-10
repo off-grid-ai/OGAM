@@ -1,5 +1,5 @@
 /* eslint-disable react-native/no-inline-styles, max-lines-per-function, complexity -- Existing chat orchestrator coordinates many native model and UI lifecycles. */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useWideLayout } from '../../hooks/useWideLayout';
 import { isProtectedProjectUnlocked } from '../../stores/protectedProjectStorage';
 import { FlatList, Keyboard, InteractionManager, Platform, View } from 'react-native';
@@ -21,6 +21,7 @@ import { useAppStore } from '../../stores/appStore';
 import { useChatOptions } from '../../components/ChatOptions';
 import type { Conversation, Message } from '../../types';
 import { useTheme, useThemedStyles } from '../../theme';
+import { isMessageLook, lookBackground } from '../../theme/messageLooks';
 import { createStyles } from './styles';
 import { useChatScreen } from './useChatScreen';
 import { MessageRenderer } from './MessageRenderer';
@@ -45,7 +46,7 @@ export const ChatScreen: React.FC = () => {
   const flatListRef = React.useRef<FlatList>(null);
   const isNearBottomRef = React.useRef(true);
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
   const chat = useChatScreen();
   // Deleting the open chat from its header menu leaves the screen instead of showing a deleted chat.
@@ -137,6 +138,8 @@ export const ChatScreen: React.FC = () => {
   // Clean layout (the default) uses more of a tablet's width; Bubbles keeps the narrower reading column.
   const chatLayout = useAppStore((s) => s.settings.appearance?.chatLayout ?? 'clean');
   const wide = useWideLayout(chatLayout === 'clean' ? 1180 : undefined);
+  // A messaging-app chat look also sets the screen's background (WhatsApp's beige, Telegram's blue-grey...).
+  const lookBackgroundStyle = useMemo(() => (isMessageLook(chatLayout) ? { backgroundColor: lookBackground(chatLayout, isDark) } : undefined), [chatLayout, isDark]);
   const [sharePromptVisible, setSharePromptVisible] = useState(false);
   // Atlas: no share prompts.
 
@@ -300,7 +303,7 @@ export const ChatScreen: React.FC = () => {
   // — otherwise the inset stacks on top of the input's own padding and leaves a
   // gap below the bar.
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, lookBackgroundStyle]} edges={['top']}>
       <KeyboardAvoidingView testID="chat-screen" style={styles.keyboardView} behavior="padding" keyboardVerticalOffset={0}>
         <View style={wide.column}>
         <ChatHeader

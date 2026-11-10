@@ -23,7 +23,7 @@ import { formatTime, formatDuration, buildMessageData } from './utils';
 import { ThinkingBlock } from './components/ThinkingBlock';
 import type { ChatMessageProps } from './types';
 import type { Message } from '../../types';
-import { applyMessageLook } from '../../theme/messageLooks';
+import { applyMessageLook, messageTime } from '../../theme/messageLooks';
 import { usePins } from '../../pins/store';
 import { slidesFromReply } from '../../presentations/replySlides';
 
@@ -247,6 +247,9 @@ interface MessageBubbleProps {
   lessonsUsed?: string[];
   /** Numbered sources the reply cites, listed under it. */
   sources?: CheckedCitation[];
+  /** The message's time, shown inside the bubble in a messaging-app look. */
+  time?: string;
+  timeStyle?: object;
 }
 
 /** The bubble's styles: Clean = plain-text replies and a rounded bubble for your own message; Bubbles = every message boxed. */
@@ -261,7 +264,7 @@ function bubbleStyleFor(o: { styles: any; isUser: boolean; clean: boolean; isWid
 const MessageBubble: React.FC<MessageBubbleProps> = ({
   message, styles, colors, isUser, isStreaming, hasAttachments, bubbleStyle,
   parsedContent, showThinking, showActions, showGenerationDetails, metaExtra,
-  onImagePress, onToggleThinking, onLongPress, onMenuOpen, clean, label, lessonsUsed, sources,
+  onImagePress, onToggleThinking, onLongPress, onMenuOpen, clean, label, lessonsUsed, sources, time, timeStyle,
 }) => (
   <TouchableOpacity
     testID={isUser ? 'user-message' : 'assistant-message'}
@@ -296,6 +299,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         onToggleThinking={onToggleThinking}
         styles={styles}
       />
+      {!!time && <Text style={timeStyle} testID="look-time">{time}</Text>}
     </View>
 
     <RoutedToolsRow message={message} isUser={isUser} isStreaming={isStreaming} styles={styles} colors={colors} />
@@ -379,7 +383,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const layout = useAppStore((s) => s.settings.appearance?.chatLayout ?? 'clean');
   const showLessons = useAppStore((s) => s.settings.showLessonsUsed !== false);
   const clean = layout === 'clean';
-  const { look, lookStyles } = applyMessageLook({ layout, isUser, background: colors.background, styles });
+  const { look, lookStyles, timeStyle } = applyMessageLook({ layout, isUser, background: colors.background, styles });
   const bubbleStyle = look ? [...bubbleStyleFor({ styles, isUser, clean: false, isWide, hasAttachments }), look.bubble] : bubbleStyleFor({ styles, isUser, clean, isWide, hasAttachments });
 
   const handleCopy = () => {
@@ -486,9 +490,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const messageBody = (
     <MessageBubble
       clean={clean}
-      label={look?.label}
+      label={look?.label ? `${look.label} · ${messageTime(message.timestamp)}` : undefined}
       lessonsUsed={!isUser && showLessons ? message.generationMeta?.lessonsUsed : undefined}
       sources={cited ? sources : undefined}
+      time={look && !look.label ? messageTime(message.timestamp) : undefined}
+      timeStyle={timeStyle}
       message={message}
       styles={lookStyles}
       colors={colors}
