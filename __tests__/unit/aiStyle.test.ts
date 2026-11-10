@@ -1,4 +1,4 @@
-import { aiStyleNote, NO_IDLE_QUESTIONS } from '../../src/services/aiStyle';
+import { aiStyleNote, NO_IDLE_QUESTIONS, BE_HONEST } from '../../src/services/aiStyle';
 
 describe('aiStyleNote follow-up questions', () => {
   it('tells the model not to end with idle questions when nothing is chosen', () => {
@@ -17,5 +17,9 @@ describe('aiStyleNote follow-up questions', () => {
     const note = aiStyleNote({ length: 'brief', custom: 'Use metric units.' });
     expect(note).toContain('Keep answers short');
     expect(note).toContain('Use metric units.');
+  });
+  it('always tells the model not to invent facts', () => {
+    expect(aiStyleNote(undefined)).toContain(BE_HONEST);
+    expect(aiStyleNote({ tone: 'formal', followUps: true })).toContain(BE_HONEST);
   });
 });

@@ -6,7 +6,7 @@ import type { Skill } from '../../src/skills/skillsStore';
 const asSkills = (): Skill[] => SKILL_LIBRARY.map((s) => ({ ...s, enabled: true, addedAt: 0 }));
 const NEW = ['simplified-technical-english', 'basic-english', 'plain-legal-language', 'special-english-voa', 'procedure-controlled-language',
   'first-principles', 'steelman-redteam', 'socratic-method', 'morphological-analysis', 'phenomenological-description',
-  'pseudocode-to-prose', 'historical-era-voice', 'zero-adjective'];
+  'pseudocode-to-prose', 'historical-era-voice', 'zero-adjective', 'grounded-answers'];
 
 describe('skill library', () => {
   it('has unique names that are valid commands', () => {
