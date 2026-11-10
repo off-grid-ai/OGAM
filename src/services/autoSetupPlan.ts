@@ -145,12 +145,15 @@ export function selectAutoSetupPlans(
   const plans = (['lean', 'balanced', 'extreme'] as const)
     .map(tier => selectAutoSetupPlan(tier, catalog))
     .filter((plan): plan is AutoSetupPlan => plan !== null);
-  // Extreme is always offered as the device's limit. Lean and Balanced each need their own chat
-  // model; one that repeats a smaller plan's model, or Extreme's, offers nothing new.
+  // Quick start is the default, so it always stays. Extreme is the device's limit, offered unless it
+  // would repeat Quick start's model (a small phone whose best model is under 1 GB): then Quick start
+  // stands for both. Balanced needs a chat model of its own.
+  const lean = plans.find(plan => plan.tier === 'lean');
   const extreme = plans.find(plan => plan.tier === 'extreme');
-  return plans.filter((plan, index) =>
-    plan.tier === 'extreme' ||
-    (plans.findIndex(other => other.items[0].id === plan.items[0].id) === index &&
-      plan.items[0].id !== extreme?.items[0].id),
-  );
+  const sameModel = (a: AutoSetupPlan, b: AutoSetupPlan | undefined): boolean => !!b && a.items[0].id === b.items[0].id;
+  return plans.filter(plan => {
+    if (plan.tier === 'lean') return true;
+    if (plan.tier === 'extreme') return !sameModel(plan, lean);
+    return !sameModel(plan, lean) && !sameModel(plan, extreme);
+  });
 }
