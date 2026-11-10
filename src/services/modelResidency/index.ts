@@ -284,8 +284,10 @@ class ModelResidencyManager {
    */
   private planFor(spec: ResidentSpec, residents: Resident[], budgetMB: number, singleModel: boolean) {
     if (!spec.prefersCopy || spec.dirtyMemory) return planEviction(residents, spec, budgetMB, { singleModel });
-    const copyPlan = planEviction(residents, spec, this.budgetForSpec({ ...spec, dirtyMemory: true }), { singleModel });
-    if (copyPlan.fits) return copyPlan;
+    if (!spec.startsMapped) {
+      const copyPlan = planEviction(residents, spec, this.budgetForSpec({ ...spec, dirtyMemory: true }), { singleModel });
+      if (copyPlan.fits) return copyPlan;
+    }
     const mappedPlan = planEviction(residents, spec, budgetMB, { singleModel });
     return mappedPlan.fits ? mappedPlan : { ...planEviction(residents, spec, budgetMB, { singleModel: true }), fits: true };
   }

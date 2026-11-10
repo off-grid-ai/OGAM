@@ -5,6 +5,7 @@ import { getActiveEngineService } from '../engines';
 import { localDreamGeneratorService as onnxImageGeneratorService } from '../localDreamGenerator';
 import { hardwareService } from '../hardware';
 import { modelResidencyManager } from '../modelResidency';
+import { startsInLowMemory } from '../lowMemoryLoads';
 import { OverridableMemoryError, ImageModelIncompleteError } from '../modelLoadErrors';
 import { validateImageModelDir } from '../imageModelIntegrity';
 import { remoteServerManager } from '../remoteServerManager';
@@ -241,7 +242,12 @@ class ActiveModelService {
     // LiteRT weights + KV are dirty/accelerator memory → gated on REAL free RAM (mmap GGUF
     // stays clean/physical-cap). Derived once so makeRoomFor and register agree.
     const textIsDirty = model.engine === 'litert';
-    const textSpec = { key: 'text', type: 'text' as const, modelId, sizeMB: textSizeMB, dirtyMemory: textIsDirty, prefersCopy: await textPrefersCopy(model) };
+    const prefersCopy = await textPrefersCopy(model);
+    const textSpec = {
+      key: 'text', type: 'text' as const, modelId, sizeMB: textSizeMB, dirtyMemory: textIsDirty, prefersCopy,
+      // A model that died loading as a copy loads mapped from the start (llm.ts): no room is made for a copy.
+      startsMapped: prefersCopy && await startsInLowMemory(model.filePath),
+    };
     // Residency manager is authoritative: evict other generation models to fit the budget.
     // Evicted unloads are the non-locking internal variants (we hold the lock), so no deadlock.
     const room = await modelResidencyManager.makeRoomFor(textSpec, { override: opts?.override });

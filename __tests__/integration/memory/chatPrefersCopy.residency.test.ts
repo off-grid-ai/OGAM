@@ -51,4 +51,16 @@ describe('an Android chat model that prefers a copy', () => {
     expect(room.fits).toBe(true);
     expect(imageUnload).toHaveBeenCalled();
   });
+
+  it('a model that died loading as a copy (starts mapped) unloads nothing for a copy, and is still not refused', async () => {
+    await setDeviceMemory({ ...SEVEN_GB_ANDROID, availGB: 3.5 });
+    const whisperUnload = makeResident({ key: 'whisper', type: 'whisper', sizeMB: 800 });
+    const room = await modelResidencyManager.makeRoomFor({ ...chat(3000, true), startsMapped: true });
+    expect(room.fits).toBe(true);
+    expect(whisperUnload).not.toHaveBeenCalled();
+
+    // Past the budget it is still admitted (it loads mapped); only the fit rule's Too big refuses it.
+    const big = await modelResidencyManager.makeRoomFor({ ...chat(4854, true), startsMapped: true });
+    expect(big.fits).toBe(true);
+  });
 });

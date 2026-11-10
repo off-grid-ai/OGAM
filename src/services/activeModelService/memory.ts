@@ -7,7 +7,6 @@ import { Platform } from 'react-native';
 import { mobileUseMmap } from '@offgrid/models';
 import { DownloadedModel, ONNXImageModel } from '../../types';
 import { readModelFileType, readModelHeader } from '../modelHeader';
-import { startsInLowMemory } from '../lowMemoryLoads';
 import { buildModelParams } from '../llmHelpers';
 import { hardwareService } from '../hardware';
 import { llmService } from '../llm';
@@ -90,8 +89,6 @@ export async function estimateTextModelMemoryMB(model: DownloadedModel): Promise
  *  fastest as a copy, and loads mapped when the copy will not fit in free RAM. */
 export async function textPrefersCopy(model: DownloadedModel): Promise<boolean> {
   if (Platform.OS !== 'android' || model.engine !== 'llama') return false;
-  // A model that died loading as a copy loads mapped from the start (llm.ts), so evicting for a copy is moot.
-  if (await startsInLowMemory(model.filePath)) return false;
   return !mobileUseMmap('android', await readModelFileType(model.filePath), hardwareService.getTotalMemoryGB());
 }
 

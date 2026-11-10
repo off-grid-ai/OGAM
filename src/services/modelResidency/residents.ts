@@ -49,6 +49,9 @@ export interface ResidentSpec {
    * other model is unloaded and it loads mapped. Only the shared fit rule's "Too big" refuses it.
    */
   prefersCopy?: boolean;
+  /** A prefersCopy model that loads mapped from the start (it died loading as a copy before): it is
+   *  still never refused on the budget, but no room is made for a copy. */
+  startsMapped?: boolean;
 }
 
 export interface EnsureResult {
