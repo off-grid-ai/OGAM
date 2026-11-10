@@ -28,6 +28,7 @@ import {
   checkMemoryForDualModel as _checkMemoryForDualModel,
   getCurrentlyLoadedMemoryGB as _getCurrentlyLoadedMemoryGB,
   estimateTextModelMemoryMB,
+  textPrefersCopy,
 } from './memory';
 import { doLoadTextModel, doLoadImageModel, checkImageModelCanLoad } from './loaders';
 import { modelSelected, trackModelLoad } from '../analytics/analytics';
@@ -234,12 +235,10 @@ class ActiveModelService {
     // LiteRT weights + KV are dirty/accelerator memory → gated on REAL free RAM (mmap GGUF
     // stays clean/physical-cap). Derived once so makeRoomFor and register agree.
     const textIsDirty = model.engine === 'litert';
+    const textSpec = { key: 'text', type: 'text' as const, modelId, sizeMB: textSizeMB, dirtyMemory: textIsDirty, prefersCopy: await textPrefersCopy(model) };
     // Residency manager is authoritative: evict other generation models to fit the budget.
     // Evicted unloads are the non-locking internal variants (we hold the lock), so no deadlock.
-    const room = await modelResidencyManager.makeRoomFor(
-      { key: 'text', type: 'text', modelId, sizeMB: textSizeMB, dirtyMemory: textIsDirty },
-      { override: opts?.override },
-    );
+    const room = await modelResidencyManager.makeRoomFor(textSpec, { override: opts?.override });
     // First refusal is OVERRIDABLE ("Load Anyway"); a refusal UNDER override is a hard limit → plain Error.
     if (!room.fits) {
       // A LiteRT model is refused on what free RAM can spare (budgetMB already holds back the OS
@@ -268,7 +267,7 @@ class ActiveModelService {
         this.setLoadedText(id);
         useAppStore.getState().setTextModelEvicted(false); // loaded → clear any prior eviction
         modelResidencyManager.register(
-          { key: 'text', type: 'text', modelId, sizeMB: textSizeMB, dirtyMemory: textIsDirty },
+          textSpec,
           () => this.doUnloadTextModelLocked(true), // eviction keeps the selection
         );
       },

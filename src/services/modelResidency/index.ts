@@ -297,7 +297,15 @@ class ModelResidencyManager {
     // also evicts everything to free maximum RAM. Aggressive is NOT single-model — it
     // co-resides like balanced, just with a larger RAM budget.
     const singleModel = this.loadPolicy === 'conservative' || override;
-    const plan = planEviction(residents, spec, budgetMB, { singleModel });
+    // A model that prefers a copy first tries to fit as one in real free RAM, unloading our other
+    // models if that is enough; otherwise it plans as mapped weights (physical RAM) and loads mapped.
+    const copyPlan = spec.prefersCopy && !spec.dirtyMemory
+      ? planEviction(residents, spec, this.budgetForSpec({ ...spec, dirtyMemory: true }), { singleModel })
+      : null;
+    let plan = copyPlan?.fits ? copyPlan : planEviction(residents, spec, budgetMB, { singleModel });
+    // It never waits on the budget: when even that does not fit, everything else is unloaded and the
+    // model loads mapped. Only the shared fit rule's "Too big" refuses it (the llm pre-load check).
+    if (spec.prefersCopy && !plan.fits) plan = { ...planEviction(residents, spec, budgetMB, { singleModel: true }), fits: true };
     // [MEM-SM] trace (kept forever): the exact numbers behind every fit decision.
     // budgetForSpec already folds in the live os_proc budget under dirty pressure, so
     // there's one owner of the memory math - planEviction enforces it. Also log the raw
