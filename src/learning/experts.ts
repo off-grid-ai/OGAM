@@ -3,6 +3,8 @@
  * only the lessons of the subject it is about, picked by how much the message shares with the expert's name and topic.
  * The General expert's lessons are short and always apply. Pure, so it is tested without a device.
  */
+const MIN_SCORE = 2;
+
 export interface ExpertView { id: string; name: string; topic: string; lessons: string }
 
 const STOP = new Set(['the', 'and', 'for', 'with', 'that', 'this', 'you', 'your', 'how', 'what', 'when', 'about', 'into', 'from', 'are', 'can', 'will', 'does', 'have', 'has', 'not']);
@@ -19,19 +21,24 @@ export function expertRelevance(message: string, e: ExpertView): number {
   return score;
 }
 
+/** The expert whose subject the message is about, or undefined when none of them matches well enough. */
+export function bestExpert(message: string, experts: ExpertView[]): ExpertView | undefined {
+  const best = experts
+    .filter((e) => e.lessons.trim())
+    .map((e) => ({ e, score: expertRelevance(message, e) }))
+    .sort((a, b) => b.score - a.score)[0];
+  return best && best.score >= MIN_SCORE ? best.e : undefined;
+}
+
 export const GENERAL_CHARS = 600;
 export const EXPERT_CHARS = 1400;
-const MIN_SCORE = 2;
 
 /** The prompt note: the general lessons, plus the best-matching expert's lessons when the message is about its subject. */
 export function expertsNote(message: string, general: string, experts: ExpertView[]): string {
   const parts: string[] = [];
   const g = general.trim();
   if (g) parts.push(`Lessons learned from practice (follow these):\n${g.slice(0, GENERAL_CHARS)}`);
-  const best = experts
-    .filter((e) => e.lessons.trim())
-    .map((e) => ({ e, score: expertRelevance(message, e) }))
-    .sort((a, b) => b.score - a.score)[0];
-  if (best && best.score >= MIN_SCORE) parts.push(`You are acting as an expert in ${best.e.name}. What you learned about it (follow these):\n${best.e.lessons.trim().slice(0, EXPERT_CHARS)}`);
+  const best = bestExpert(message, experts);
+  if (best) parts.push(`You are acting as an expert in ${best.name}. What you learned about it (follow these):\n${best.lessons.trim().slice(0, EXPERT_CHARS)}`);
   return parts.length ? `\n\n${parts.join('\n\n')}` : '';
 }

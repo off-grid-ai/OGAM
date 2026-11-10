@@ -13,6 +13,7 @@ import type { ToolResult } from './tools/types';
 import type { GenerationOptions, CompletionResult } from './providers/types';
 import logger from '../utils/logger';
 import { reconcileStreamedAnswer } from './streamReconcile';
+import { lessonsUsedThisTurn } from '../learning/learnedNote';
 
 // ~12 streamed UI updates/sec stays smooth while reducing redraw competition with inference.
 const FLUSH_INTERVAL_MS = 80;
@@ -87,6 +88,8 @@ export function buildGenerationMetaImpl(svc: any): GenerationMeta {
   const meta = buildBaseGenerationMeta(svc);
   const routed = svc.state?.routedToolNames;
   if (Array.isArray(routed) && routed.length > 0) meta.routedToolNames = routed;
+  const lessons = lessonsUsedThisTurn();
+  if (lessons.length > 0) meta.lessonsUsed = lessons;
   return meta;
 }
 function buildBaseGenerationMeta(svc: any): GenerationMeta {

@@ -177,6 +177,8 @@ export interface MediaAttachment {
 
 // Generation metadata - details about how a message was generated
 export interface GenerationMeta {
+  /** Which learned lessons the reply was written with (General, and the matching expert). */
+  lessonsUsed?: string[];
   /** Whether GPU was used for inference */
   gpu: boolean;
   /** GPU backend name (e.g., 'Metal', 'CPU') */

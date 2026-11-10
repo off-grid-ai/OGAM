@@ -1626,3 +1626,18 @@ describe('ChatMessage: fixing an old message without resending', () => {
     jest.useRealTimers();
   });
 });
+
+describe('ChatMessage: which lessons a reply used', () => {
+  const { useAppStore } = require('../../../src/stores/appStore');
+  it('shows a small note when the reply was written with learned lessons, and hides it when switched off', () => {
+    const message = { ...createAssistantMessage('Use the 15th.'), generationMeta: { gpu: false, lessonsUsed: ['General', 'Taxes'] } } as any;
+    useAppStore.getState().updateSettings({ showLessonsUsed: true });
+    const on = render(<ChatMessage message={message} />);
+    expect(on.getByText('Used: General and Taxes lessons')).toBeTruthy();
+    on.unmount();
+    useAppStore.getState().updateSettings({ showLessonsUsed: false });
+    const off = render(<ChatMessage message={message} />);
+    expect(off.queryByTestId('lessons-used')).toBeNull();
+    useAppStore.getState().updateSettings({ showLessonsUsed: undefined });
+  });
+});

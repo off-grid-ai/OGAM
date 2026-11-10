@@ -242,6 +242,8 @@ interface MessageBubbleProps {
   clean?: boolean;
   /** A name shown above the message (Discord style). */
   label?: string;
+  /** Learned lessons the reply was written with, shown as a small note under it. */
+  lessonsUsed?: string[];
 }
 
 /** The bubble's styles: Clean = plain-text replies and a rounded bubble for your own message; Bubbles = every message boxed. */
@@ -256,7 +258,7 @@ function bubbleStyleFor(o: { styles: any; isUser: boolean; clean: boolean; isWid
 const MessageBubble: React.FC<MessageBubbleProps> = ({
   message, styles, colors, isUser, isStreaming, hasAttachments, bubbleStyle,
   parsedContent, showThinking, showActions, showGenerationDetails, metaExtra,
-  onImagePress, onToggleThinking, onLongPress, onMenuOpen, clean, label,
+  onImagePress, onToggleThinking, onLongPress, onMenuOpen, clean, label, lessonsUsed,
 }) => (
   <TouchableOpacity
     testID={isUser ? 'user-message' : 'assistant-message'}
@@ -299,6 +301,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       <View testID="message-cutoff-indicator" style={styles.toolStatusRow}>
         <Icon name="alert-triangle" size={12} color={colors.textMuted} />
         <Text style={styles.toolStatusText}>Reply cut off at the token limit. Retry to continue.</Text>
+      </View>
+    )}
+
+    {!!lessonsUsed?.length && (
+      <View style={styles.toolStatusRow} testID="lessons-used">
+        <Icon name="award" size={12} color={colors.textMuted} />
+        <Text style={styles.toolStatusText}>Used: {lessonsUsed.join(' and ')} lessons</Text>
       </View>
     )}
 
@@ -353,6 +362,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   // Tablet/unfolded column: shorter user bubbles, more room for long answers and code.
   const { isWide } = useWideLayout();
   const layout = useAppStore((s) => s.settings.appearance?.chatLayout ?? 'clean');
+  const showLessons = useAppStore((s) => s.settings.showLessonsUsed !== false);
   const clean = layout === 'clean';
   const { look, lookStyles } = applyMessageLook({ layout, isUser, background: colors.background, styles });
   const bubbleStyle = look ? [...bubbleStyleFor({ styles, isUser, clean: false, isWide, hasAttachments }), look.bubble] : bubbleStyleFor({ styles, isUser, clean, isWide, hasAttachments });
@@ -457,6 +467,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     <MessageBubble
       clean={clean}
       label={look?.label}
+      lessonsUsed={!isUser && showLessons ? message.generationMeta?.lessonsUsed : undefined}
       message={message}
       styles={lookStyles}
       colors={colors}

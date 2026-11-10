@@ -31,3 +31,22 @@ describe('which expert a chat uses', () => {
     expect(expertRelevance('law', law)).toBeGreaterThan(expertRelevance('contracts', law));
   });
 });
+
+describe('which lessons a reply used', () => {
+  it('names the general lessons and the matching expert', () => {
+    const { learnedNote, lessonsUsedThisTurn } = require('../../src/learning/learnedNote');
+    const { useLearningStore, blankState } = require('../../src/learning/store');
+    const { NO_AGENT } = require('../../src/learning/agents');
+    const { useAgentStore } = require('../../src/stores/agentStore');
+    useAgentStore.setState({ activeAgentId: null });
+    const id = useLearningStore.getState().addExpert('Taxes');
+    useLearningStore.setState((s: any) => ({
+      state: { ...s.state, [NO_AGENT]: { ...blankState(), lessons: '- Be brief' }, [id]: { ...blankState(), lessons: '- Check the deadline' } },
+      config: { ...s.config, [id]: { ...s.config[id], topic: 'personal income tax filing' } },
+    }));
+    learnedNote('How do I file my taxes?');
+    expect(lessonsUsedThisTurn()).toEqual(['General', 'Taxes']);
+    learnedNote('A pasta recipe please');
+    expect(lessonsUsedThisTurn()).toEqual(['General']);
+  });
+});

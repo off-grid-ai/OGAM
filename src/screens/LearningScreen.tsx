@@ -8,7 +8,7 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useAgentStore } from '../stores/agentStore';
 import { NO_AGENT, isNoAgent, setLessons, expertName } from '../learning/agents';
-import { useProjectStore } from '../stores';
+import { useProjectStore, useAppStore } from '../stores';
 import { useLearningStore, LearnEvent, defaultLearnConfig, newItem, BankStatus } from '../learning/store';
 import { startLearning, stopLearning, isLearning, onLearningStatus, auditNow, keepSession, newRound } from '../learning/engine';
 import { keepScreenOn } from '../atlasVoice/tts';
@@ -60,6 +60,8 @@ export const LearningScreen: React.FC = () => {
   const [open, setOpen] = useState<string | null>(null);
   const [newQ, setNewQ] = useState('');
   const [advanced, setAdvanced] = useState(false);
+  const showLessons = useAppStore((s) => s.settings.showLessonsUsed !== false);
+  const updateSettings = useAppStore((s) => s.updateSettings);
   const [openReport, setOpenReport] = useState<string | null>(null);
   const updateItem = useLearningStore((s) => s.updateItem);
   const addItems = useLearningStore((s) => s.addItems);
@@ -215,6 +217,10 @@ export const LearningScreen: React.FC = () => {
       </TouchableOpacity>
       {advanced && (
         <View>
+          <View style={styles.switchRow}>
+            <Text style={styles.switchText}>Show which lessons a reply used (a small note under the reply)</Text>
+            <Switch value={showLessons} onValueChange={(v) => updateSettings({ showLessonsUsed: v })} testID="show-lessons-used" />
+          </View>
       <Text style={styles.label}>Mode</Text>
       <View style={[styles.row, { marginTop: 0 }]}>
         {([['keep', 'Keep learning', 'Lessons go into the agent; checked answers are saved to the project'], ['session', 'Practice session', 'Temporary: nothing changes unless you tap Keep at the end']] as const).map(([m, t, d]) => (

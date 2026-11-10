@@ -106,6 +106,8 @@ type AppSettings = {
   homeTiles?: { order?: string[]; hidden?: string[] };
   /** Look for a newer Atlas release when the app opens. Unset counts as on. */
   checkUpdates?: boolean;
+  /** Show "Used: Taxes lessons" under a reply that was written with learned lessons. Unset counts as on. */
+  showLessonsUsed?: boolean;
   /** Theme, accent color, font and text size (see theme/appearance). */
   appearance?: import('../theme/appearance').Appearance;
   /** Which destinations the bottom bar shows, their order and whether it has labels. */
