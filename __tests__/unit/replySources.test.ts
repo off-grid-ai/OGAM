@@ -36,3 +36,18 @@ describe('source numbers in a reply', () => {
     expect(sourcesBefore(messages, 'a2')).toEqual([]);
   });
 });
+
+import { sourcesFromChunks, setTurnSources, turnSources } from '../../src/services/rag/turnSources';
+describe('document excerpts as numbered sources', () => {
+  it('numbers the excerpts in the order the prompt shows them', () => {
+    const s = sourcesFromChunks([{ name: 'tax-guide.pdf', position: 2, content: 'Returns   are due\nApril 15.' }, { name: 'penalties.md', position: 0, content: 'x'.repeat(500) }]);
+    expect(s[0]).toEqual({ title: 'tax-guide.pdf (part 3)', quote: 'Returns are due April 15.' });
+    expect(s[1].quote).toHaveLength(200);
+  });
+  it('keeps the latest turn sources until they are replaced', () => {
+    setTurnSources([{ title: 'a', quote: 'q' }]);
+    expect(turnSources()).toHaveLength(1);
+    setTurnSources([]);
+    expect(turnSources()).toEqual([]);
+  });
+});

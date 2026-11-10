@@ -122,9 +122,9 @@ describe('RetrievalService', () => {
 
       expect(result).toContain('<knowledge_base>');
       expect(result).toContain('</knowledge_base>');
-      expect(result).toContain('[Source: notes.txt (part 1)]');
+      expect(result).toContain('[Source 1: notes.txt (part 1)]');
       expect(result).toContain('Some content here');
-      expect(result).toContain('[Source: notes.txt (part 2)]');
+      expect(result).toContain('[Source 2: notes.txt (part 2)]');
       expect(result).toContain('More content');
     });
 

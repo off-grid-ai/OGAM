@@ -151,7 +151,7 @@ describe('RAG Flow Integration', () => {
       const formatted = retrievalService.formatForPrompt(searchResult);
       expect(formatted).toContain('<knowledge_base>');
       expect(formatted).toContain('</knowledge_base>');
-      expect(formatted).toContain('[Source: ml-guide.txt');
+      expect(formatted).toMatch(/\[Source \d+: ml-guide.txt/);
       expect(formatted).toContain('machine learning');
     });
   });

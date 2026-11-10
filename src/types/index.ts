@@ -179,6 +179,8 @@ export interface MediaAttachment {
 export interface GenerationMeta {
   /** Which learned lessons the reply was written with (General, and the matching expert). */
   lessonsUsed?: string[];
+  /** Project-document excerpts the reply was written from, numbered 1 to n as the model saw them. */
+  sources?: Array<{ title: string; quote: string }>;
   /** Whether GPU was used for inference */
   gpu: boolean;
   /** GPU backend name (e.g., 'Metal', 'CPU') */

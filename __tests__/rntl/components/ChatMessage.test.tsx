@@ -1714,3 +1714,15 @@ describe('ChatMessage: messaging-app look shows the time', () => {
     useAppStore.getState().updateSettings({ appearance: undefined });
   });
 });
+
+describe('ChatMessage: source numbers for project documents', () => {
+  const { useChatStore } = require('../../../src/stores/chatStore');
+  it('lists the document excerpts a reply was written from and raises the numbers it cites', () => {
+    const reply = { ...createAssistantMessage('The deadline is April 15 [1], and late filing costs 5% [2].'), id: 'r1',
+      generationMeta: { gpu: false, sources: [{ title: 'tax-guide.pdf (part 3)', quote: 'Returns are due April 15.' }, { title: 'penalties.md (part 1)', quote: 'The late fee is 5% a month.' }] } } as any;
+    useChatStore.setState({ activeConversationId: 'c1', conversations: [{ id: 'c1', title: 't', modelId: 'm', createdAt: '', updatedAt: '', messages: [{ id: 'u1', role: 'user', content: 'When?', timestamp: 1 }, reply] }] });
+    const view = render(<ChatMessage message={reply} />);
+    expect(view.getByText(/April 15¹, and late filing costs 5%²\./)).toBeTruthy();
+    expect(view.getAllByTestId(/^chip-/).length).toBe(2);
+  });
+});

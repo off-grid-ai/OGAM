@@ -70,14 +70,14 @@ class RetrievalService {
   formatForPrompt(result: SearchResult): string {
     if (result.chunks.length === 0) return '';
 
-    const sections = result.chunks.map((chunk) => {
+    const sections = result.chunks.map((chunk, index) => {
       // Sanitize content to prevent prompt injection from user-uploaded documents
       const safeName = chunk.name.replaceAll(/[<>]/g, '');
       const safeContent = stripAngleBracketTags(chunk.content);
-      return `[Source: ${safeName} (part ${chunk.position + 1})]\n${safeContent}`;
+      return `[Source ${index + 1}: ${safeName} (part ${chunk.position + 1})]\n${safeContent}`;
     });
 
-    return `<knowledge_base>\nThe following excerpts are from the user's project knowledge base. Use them to inform your response when relevant.\n\n${sections.join('\n\n---\n\n')}\n</knowledge_base>`;
+    return `<knowledge_base>\nThe following excerpts are from the user's project knowledge base. Use them to inform your response when relevant, and cite an excerpt you use by its source number in square brackets, like [1].\n\n${sections.join('\n\n---\n\n')}\n</knowledge_base>`;
   }
 
   estimateCharBudget(contextLengthTokens: number): number {

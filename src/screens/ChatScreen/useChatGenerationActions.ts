@@ -7,6 +7,7 @@ import { expertKnowledgeNote } from '../../knowledge/chatHook';
 import { chartNote } from '../../study/chart';
 import { skillsNote } from '../../skills/selectSkills';
 import { learnedNote } from '../../learning/learnedNote';
+import { setTurnSources, sourcesFromChunks } from '../../services/rag/turnSources';
 import { needsReadingInParts, readInParts } from '../../services/readInParts';
 import { Dispatch, SetStateAction } from 'react';
 import { resolveAgentPrompt } from '../../stores/agentStore';
@@ -349,6 +350,7 @@ async function generateWithCompactionRetry(
 }
 /** Exported for tests: project knowledge reaches every chat in the project through this prompt. */
 export async function injectRagContext(projectId: string | undefined, query: string, prompt: string, enabledTools: string[] = []): Promise<string> {
+  setTurnSources([]);
   if (!projectId) return prompt;
   try {
     const docs = await ragService.getDocumentsByProject(projectId);
@@ -367,6 +369,7 @@ export async function injectRagContext(projectId: string | undefined, query: str
     const r = await ragService.searchProject(projectId, query);
     if (r.chunks.length > 0) {
       kbPrompt += `\n\n${retrievalService.formatForPrompt(r)}`;
+      setTurnSources(sourcesFromChunks(r.chunks)); // numbered as in the prompt, for the source list under the reply
     }
     return prompt + kbPrompt;
   } catch (err) {

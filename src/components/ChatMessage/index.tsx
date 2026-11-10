@@ -371,8 +371,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     if (message.role !== 'assistant' || !/\[\d{1,2}\]/.test(rawParsed.response ?? '')) return [];
     const chat = useChatStore.getState();
     const msgs = chat.conversations.find((c: { id: string }) => c.id === chat.activeConversationId)?.messages ?? [];
-    return sourcesBefore(msgs as any, message.id);
-  }, [message.id, message.role, rawParsed.response]);
+    const searched = sourcesBefore(msgs as any, message.id);
+    if (searched.length) return searched;
+    // No web search led to this reply: the numbers refer to the project-document excerpts it was written from.
+    return (message.generationMeta?.sources ?? []).map((s) => ({ title: s.title, quote: s.quote, verified: true }));
+  }, [message.id, message.role, rawParsed.response, message.generationMeta?.sources]);
   const cited = citedNumbers(rawParsed.response ?? '', sources.length).length > 0;
   const parsedContent = cited ? { ...rawParsed, response: markSources(rawParsed.response ?? '', sources.length) } : rawParsed;
 
