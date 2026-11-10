@@ -124,8 +124,8 @@ PUSHED_LIST
         stem=$(basename "$file" | sed -E 's/\.(ts|tsx|js|jsx)$//')
         [ "$stem" = index ] && stem=$(basename "$(dirname "$file")")
         MAPPED_TESTS="${MAPPED_TESTS}
-$(find __tests__ -type f \( -name "${stem}.test.*" -o -name "${stem}.*.test.*" \) 2>/dev/null)
-$(grep -rlE "['\"/]${stem}['\"]" __tests__ --include='*.test.ts' --include='*.test.tsx' 2>/dev/null)"
+$(find __tests__ -type f \( -name "${stem}.test.*" -o -name "${stem}.*.test.*" \) 2>/dev/null || true)
+$(grep -rlE "['\"/]${stem}['\"]" __tests__ --include='*.test.ts' --include='*.test.tsx' 2>/dev/null || true)"
       done
       RELATED_JS=""
     fi
