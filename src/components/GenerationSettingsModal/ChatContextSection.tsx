@@ -19,6 +19,7 @@ export const ChatContextSection: React.FC = () => {
   const conv = useChatStore((s) => s.conversations.find((c) => c.id === s.activeConversationId));
   const [text, setText] = useState(conv?.instructions || '');
   const [busy, setBusy] = useState(false);
+  const [converting, setConverting] = useState('');
   const [showSummary, setShowSummary] = useState(false);
   const autoCompress = useChatPrefs((s) => s.autoCompress);
   const setPrefs = useChatPrefs((s) => s.set);
@@ -58,6 +59,20 @@ export const ChatContextSection: React.FC = () => {
       Alert.alert(did ? 'Chat compressed' : 'Nothing to compress', did ? 'Older messages were summarized. They stay on screen, but the AI now reads the short summary instead, so the chat can go on much longer.' : 'This chat is still short.');
     } catch (e: any) { Alert.alert('Could not compress', String(e?.message || e)); } finally { setBusy(false); }
   };
+  /** Turns every Word, PowerPoint, Excel, PDF, web page and CSV file in the workspace into a .md file in its Converted folder. */
+  const convertWorkspace = async () => {
+    setConverting('Converting...');
+    try {
+      const { workspaceDir } = require('../../atlasTools/deviceTools');
+      const { convertFolderToMarkdown } = require('../../services/convertFolder');
+      const dir = await workspaceDir();
+      const r = await convertFolderToMarkdown(dir, (done: number, total: number) => setConverting(`Converting ${done} of ${total}...`));
+      const failed = r.failed.length ? `\n\n${r.failed.length} could not be read: ${r.failed.map((f: { name: string }) => f.name).join(', ')}` : '';
+      Alert.alert('Markdown files', r.converted.length ? `${r.converted.length} converted, saved in ${dir}/Converted${failed}` : `Nothing to convert. Put Word, PowerPoint, Excel, PDF, web page or CSV files in ${dir} first.${failed}`);
+    } catch (e: any) { Alert.alert('Could not convert', String(e?.message || e)); }
+    setConverting('');
+  };
+
   const box = { backgroundColor: colors.surface, borderRadius: 10, padding: 12, marginBottom: 12 };
   return (
     <View>
@@ -118,6 +133,9 @@ export const ChatContextSection: React.FC = () => {
           </View>
           <Switch value={toMarkdown} onValueChange={(v) => updateSettings({ convertToMarkdown: v })} testID="convert-to-markdown" />
         </View>
+        <TouchableOpacity onPress={convertWorkspace} disabled={!!converting} testID="convert-workspace" accessibilityRole="button" style={styles.convertButton}>
+          <Text style={{ color: colors.primary }}>{converting || 'Convert the Atlas workspace folder to Markdown files'}</Text>
+        </TouchableOpacity>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
           <View style={{ flex: 1, paddingRight: 8 }}>
             <Text style={{ color: colors.text, fontWeight: '600' }}>Read very long messages in parts</Text>
@@ -156,6 +174,7 @@ const makeChipStyles = (colors: ReturnType<typeof useTheme>['colors']) => {
   const chip = { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16 };
   return StyleSheet.create({
     chipRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 8 },
+    convertButton: { paddingVertical: 6, marginBottom: 12 },
     chip: { ...chip, backgroundColor: colors.background },
     chipOn: { ...chip, backgroundColor: colors.primary },
     subTitle: { color: colors.text, fontWeight: '600', marginTop: 12 },

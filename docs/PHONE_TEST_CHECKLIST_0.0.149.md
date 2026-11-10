@@ -35,3 +35,13 @@ Nothing below has been run on a phone yet. Tick each line on a real device, and 
 
 ## Emergency packs
 - [ ] Atlas packs: pick Small, Medium, Large or Full, save to a flash drive or SD card, and import it back.
+
+## Added late
+- [ ] Long-press a reply > Ask about this: the start of the reply is quoted in the message box.
+- [ ] Long-press a reply > Why this reply: shows the model, lessons and numbered excerpts.
+- [ ] Tap a source chip on a project-document reply: "Open the document" opens the file.
+- [ ] Chat menu > Save as Markdown: the file lists the numbered sources under a reply that used them.
+- [ ] Update card: Cancel while downloading goes back to the offer.
+- [ ] Daily briefing options: Playback speed changes how fast the saved lines play. Stop partway, leave and reopen: it carries on from that line.
+- [ ] Chat settings > Convert the Atlas workspace folder to Markdown: .md files appear in the workspace Converted folder.
+- [ ] A fresh Teach the AI screen shows the no-experts and no-reports hints.

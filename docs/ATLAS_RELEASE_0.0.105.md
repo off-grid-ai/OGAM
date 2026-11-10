@@ -575,7 +575,13 @@ What changed:
   shows a small raised number and lists the excerpts under it. Searching a document keeps each excerpt's heading trail. A
   document's preview has a button that saves it as a .md file in the workspace Converted folder. Briefing tunes have a volume
   (Quiet, Normal or Loud). The update card has a "What is new" toggle, and each release page now carries the newest notes.
-  Fixes: Markdown conversion kept `<` inside code, and chunking an empty document no longer throws.
+  Also: "Ask about this" on a reply quotes it into the message box; "Why this reply" lists the model, lessons and numbered
+  excerpts behind a reply; a source chip can open the project document it came from; exported chats list their numbered
+  sources; the update card shows a Cancel button while downloading; the briefing has a playback speed (Slower, Normal,
+  Faster; faster also raises the voices a little) and carries on from the line you stopped at; Chat settings can convert
+  every Word, PowerPoint, Excel, PDF, web page and CSV file in the Atlas workspace into .md files in its Converted folder;
+  empty Teach the AI screens say what to do first. Fixes: Markdown conversion kept `<` inside code, chunking an empty
+  document no longer throws, and a failing update check can no longer throw into the app.
 - 0.0.148: from phone use. Daily briefing: Listen from the beginning no longer stops silently when the opening tune cannot be
   played (a tune that fails or never ends is skipped). Teach the AI (was Learning mode): one screen for the default chat with an
   expert per subject (General, Taxes, Law, Psychology...), each with its own topic, question bank, reports and lessons; every report
