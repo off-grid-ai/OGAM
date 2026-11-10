@@ -66,6 +66,14 @@ const createEmbeddingStyles = (colors: ThemeColors) => ({
   },
 });
 
+/** Which language a search model is for, when its name or description says. */
+function languageFact(candidate: Candidate): string | undefined {
+  if (candidate.name.toLowerCase().includes('multilingual')) return 'Multilingual';
+  const description = 'description' in candidate ? String(candidate.description ?? '') : '';
+  if (description.includes('English')) return 'English';
+  return undefined;
+}
+
 export const EmbeddingModelsTab: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const embeddingStyles = useThemedStyles(createEmbeddingStyles);
@@ -161,6 +169,15 @@ export const EmbeddingModelsTab: React.FC = () => {
   // (Mac, 2026-11-08: a second loader sat under the search bar, out of line with the list).
   const changeRow = status.busy ? candidates.find(candidate => candidate.id === status.candidateId) : undefined;
   const failedRow = !status.busy && status.error ? candidates.find(candidate => candidate.id === status.candidateId) : undefined;
+  // The row's right-hand mark: working while its file is removed; nothing where the row shows its own
+  // state (in use, downloading, failed); else what a tap does (a circle picks it, a mark downloads it).
+  const trailingFor = (candidate: Candidate) => {
+    if (removingId === candidate.id) {
+      return <View style={embeddingStyles.rowAction}><ActivityIndicator size="small" color={colors.textMuted} accessibilityLabel="Removing" /></View>;
+    }
+    if (active?.id === candidate.id || changeRow === candidate || failedRow === candidate) return undefined;
+    return <View style={embeddingStyles.rowAction}><Icon name={downloaded.has(candidate.id) ? 'circle' : 'download'} size={16} color={colors.textMuted} /></View>;
+  };
 
   return (
     <ScrollView contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled" testID="embedding-models-tab">
@@ -211,8 +228,7 @@ export const EmbeddingModelsTab: React.FC = () => {
         <ModelCard key={candidate.id} compact style={GROUPED_CARD_ROW}
           model={{ id: candidate.id, name: candidate.name, author: '' }}
           facts={[
-            candidate.name.toLowerCase().includes('multilingual') ? 'Multilingual' :
-              'description' in candidate && candidate.description?.includes('English') ? 'English' : undefined,
+            languageFact(candidate),
             // A model already here has a size, not a download.
             `${Math.round(candidate.size / 1024 / 1024)} MB${downloaded.has(candidate.id) ? '' : ' download'}`,
           ].filter((fact): fact is string => !!fact)}
@@ -231,9 +247,7 @@ export const EmbeddingModelsTab: React.FC = () => {
           onDelete={downloaded.has(candidate.id) && active?.id !== candidate.id && !status.busy ? () => remove(candidate) : undefined}
           disabled={status.busy || !ready || active?.id === candidate.id}
           onPress={() => select(candidate)}
-          trailing={removingId === candidate.id
-            ? <View style={embeddingStyles.rowAction}><ActivityIndicator size="small" color={colors.textMuted} accessibilityLabel="Removing" /></View>
-            : active?.id === candidate.id || changeRow === candidate || failedRow === candidate ? undefined : <View style={embeddingStyles.rowAction}><Icon name={downloaded.has(candidate.id) ? 'circle' : 'download'} size={16} color={colors.textMuted} /></View>}
+          trailing={trailingFor(candidate)}
         />
       ))}
       </ListGroup>
