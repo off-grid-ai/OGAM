@@ -381,6 +381,14 @@ final class DownloadManagerModuleTests: XCTestCase {
     )
     waitForExpectations(timeout: 2)
   }
+
+  // A failed save after the bytes arrived had no reason code, so it counted as a generic "error".
+  func testSaveFailureHasItsOwnCodeAndAFullDiskStaysDiskFull() {
+    let full = NSError(domain: NSCocoaErrorDomain, code: NSFileWriteOutOfSpaceError)
+    let other = NSError(domain: NSCocoaErrorDomain, code: NSFileWriteNoPermissionError)
+    XCTAssertEqual(DownloadManagerModule.saveFailureCode(for: full), "disk_full")
+    XCTAssertEqual(DownloadManagerModule.saveFailureCode(for: other), "save_failed")
+  }
 }
 
 // MARK: - AppDelegate Background URL Session Tests

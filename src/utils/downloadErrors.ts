@@ -17,6 +17,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   http_416:             'The server could not resume this download. Please retry it.',
   http_429:             'Server is rate-limiting. Please try again later.',
   client_error:         'A client error occurred. Please retry.',
+  save_failed:          'The download finished but could not be saved. Please retry.',
+  finalize_failed:      'The download finished but could not be saved. Tap Retry to save it.',
   unknown_error:        'The download stopped before it finished. Try again.',
 };
 
@@ -103,7 +105,7 @@ export function toUserMessage(reason?: string, code?: string): string {
 
 const RETRYABLE_CODES = new Set([
   'network_lost', 'network_timeout', 'server_unavailable', 'download_interrupted',
-  'http_416', 'http_429', 'empty_response', 'unknown_error',
+  'http_416', 'http_429', 'empty_response', 'unknown_error', 'save_failed', 'finalize_failed',
 ]);
 
 export function isRetryable(reasonCode?: string): boolean {

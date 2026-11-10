@@ -1487,13 +1487,22 @@ extension DownloadManagerModule {
           "bytesDownloaded": NSNumber(value: info.bytesDownloaded),
           "totalBytes": NSNumber(value: info.totalBytes),
           "status": "failed",
-          "reason": "Failed to save download: \(error.localizedDescription)"
+          "reason": "Failed to save download: \(error.localizedDescription)",
+          // A code of its own: without one this counted as a generic "error". The temporary file is
+          // gone, so this is not finalize_failed (whose bytes stay on disk for Retry to save).
+          "reasonCode": DownloadManagerModule.saveFailureCode(for: error)
         ] as [String: Any])
       }
     }
   }
 
   /// The reason a download stopped, in the codes Android sends (src/utils/downloadErrors.ts).
+  /// Moving a finished file into place failed: a full disk, or another save error.
+  static func saveFailureCode(for error: Error) -> String {
+    let code = reasonCode(for: error)
+    return code == "disk_full" ? code : "save_failed"
+  }
+
   static func reasonCode(for error: Error?) -> String {
     guard let error = error as NSError? else { return "unknown_error" }
     if error.domain == NSURLErrorDomain {
