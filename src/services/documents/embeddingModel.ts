@@ -52,7 +52,10 @@ class EmbeddingModelChanger {
   }
 
   /** Clear a failed change's message (the row's Remove). */
-  dismiss = (): void => this.report(false, '');
+  /** Clears a failed change. A change still running is left alone: only cancel stops it. */
+  dismiss = (): void => {
+    if (!this.change.busy) this.report(false, '');
+  };
 
   /** Try the last model change again (the Download Manager's Retry). */
   retry = (): Promise<void> =>

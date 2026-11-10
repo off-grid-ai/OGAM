@@ -133,6 +133,7 @@ export const FIXED_ACTION_IDS: readonly string[] = [
   "downloads-badge-count",
   "downloads-icon",
   "embedded-models-screen",
+  "embedding-error-dismiss",
   "embedding-index-progress",
   "embedding-models-tab",
   "embedding-search-input",
