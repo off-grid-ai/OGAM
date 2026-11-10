@@ -1,6 +1,7 @@
 import React from 'react';
 import { ScrollView, Text, TouchableOpacity } from 'react-native';
 import { useVoiceProfiles } from '../atlasVoice/profiles';
+const WHITE = '#ffffff';
 
 /** Horizontal picker of saved voice profiles ('' = the saved app voice). */
 export function VoiceProfileChips({ value, onChange, colors }: {
@@ -18,7 +19,7 @@ export function VoiceProfileChips({ value, onChange, colors }: {
             onPress={() => onChange(p.id)}
             style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, marginRight: 8, backgroundColor: on ? colors.primary : colors.surface, maxWidth: 220 }}
           >
-            <Text numberOfLines={1} style={{ color: on ? '#fff' : colors.text, fontSize: 13 }}>{p.name}</Text>
+            <Text numberOfLines={1} style={{ color: on ? WHITE : colors.text, fontSize: 13 }}>{p.name}</Text>
           </TouchableOpacity>
         );
       })}

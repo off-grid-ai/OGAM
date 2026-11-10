@@ -44,7 +44,7 @@ async function pptxMarkdown(dir: string): Promise<string> {
   for (const f of slides) {
     const paragraphs = (await RNFS.readFile(f.path, 'utf8')).split('</a:p>').map((p) => tidy(p)).filter(Boolean);
     const notes = tidy((await read(`${dir}/ppt/notesSlides/notesSlide${num(f.name)}.xml`)).replace(/<\/a:p>/g, '\n')).replace(/^\d+\s*$/m, '').trim();
-    out.push(slideMarkdown(num(f.name), paragraphs[0] ?? '', paragraphs.slice(1), notes));
+    out.push(slideMarkdown(num(f.name), { title: paragraphs[0] ?? '', paragraphs: paragraphs.slice(1), notes }));
   }
   return out.join('\n\n');
 }

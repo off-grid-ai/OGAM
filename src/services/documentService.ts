@@ -116,7 +116,8 @@ class DocumentService {
     }
   }
 
-  private async readContent(resolvedPath: string, isPdf: boolean, maxChars: number, forceMarkdown = false): Promise<string> {
+  private async readContent(resolvedPath: string, isPdf: boolean, opts: { maxChars: number; forceMarkdown?: boolean }): Promise<string> {
+    const { maxChars, forceMarkdown = false } = opts;
     console.log(`[DocumentService] readContent called - isPdf: ${isPdf}, maxChars: ${maxChars}`);
     const ext = `.${resolvedPath.split('.').pop()?.toLowerCase()}`;
     // The AI reads Markdown (headings, lists, tables) better than flat text, so documents are converted to it (Chat settings).
@@ -143,7 +144,7 @@ class DocumentService {
     const extension = `.${path.split('.').pop()?.toLowerCase()}`;
     const isPdf = extension === PDF_EXTENSION;
     this.validateFileType(extension, isPdf);
-    return this.readContent(path, isPdf, maxChars, true);
+    return this.readContent(path, isPdf, { maxChars, forceMarkdown: true });
   }
 
   private async savePersistentCopy(resolvedPath: string, originalPath: string, name: string): Promise<{ id: string; uri: string }> {
@@ -202,7 +203,7 @@ class DocumentService {
       }
 
       const maxChars = maxCharsOverride ?? Math.floor((useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength) * 4 * 0.5);
-      const textContent = await this.readContent(resolvedPath, isPdf, maxChars);
+      const textContent = await this.readContent(resolvedPath, isPdf, { maxChars });
       const { id, uri } = await this.savePersistentCopy(resolvedPath, filePath, name);
 
       return { id, type: 'document', uri, fileName: name, textContent, fileSize: stat.size };

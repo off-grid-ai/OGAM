@@ -69,20 +69,20 @@ export const MergeChatsSheet: React.FC<{ visible: boolean; onClose: () => void }
                 {[{ id: null as string | null, name: 'No agent' }, ...agents.map((a) => ({ id: a.id as string | null, name: a.name }))].map((a) => (
                   <TouchableOpacity key={a.id ?? 'none'} onPress={() => set(key, { agentId: a.id })} testID={`merge-agent-${a.id ?? 'none'}`}
                     accessibilityRole="radio" accessibilityState={{ selected: agentId === a.id }} style={chip(agentId === a.id)}>
-                    <Text style={{ color: colors.text, fontSize: 13 }}>{a.name}</Text>
+                    <Text style={[styles.chipName, { color: colors.text }]}>{a.name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
               <TouchableOpacity onPress={() => mergeSets(g.map((c) => c.id))} style={[styles.button, { backgroundColor: colors.primary }]} testID={`merge-this-${key}`} accessibilityRole="button">
-                <Text style={{ color: colors.background, fontWeight: '600' }}>Merge these {g.length} chats</Text>
+                <Text style={[styles.buttonText, { color: colors.background }]}>Merge these {g.length} chats</Text>
               </TouchableOpacity>
             </View>
           );
         })}
         {groups.length > 1 && (
-          <TouchableOpacity onPress={() => mergeSets()} style={[styles.button, { borderColor: colors.primary, borderWidth: 1 }]} testID="merge-all" accessibilityRole="button">
-            <Text style={{ color: colors.primary, fontWeight: '600' }}>Merge all {groups.length} sets with the choices above</Text>
+          <TouchableOpacity onPress={() => mergeSets()} style={[styles.button, styles.outlined, { borderColor: colors.primary }]} testID="merge-all" accessibilityRole="button">
+            <Text style={[styles.buttonText, { color: colors.primary }]}>Merge all {groups.length} sets with the choices above</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -101,5 +101,8 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: 14 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
+  chipName: { fontSize: 13 },
+  buttonText: { fontWeight: '400' },
+  outlined: { borderWidth: 1 },
   button: { borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 8 },
 });

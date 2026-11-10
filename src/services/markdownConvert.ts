@@ -109,7 +109,7 @@ function docxRuns(paragraph: string): string {
     if (!text) continue;
     const bold = /<w:b\/>|<w:b w:val="(?:1|true)"\/>/.test(run);
     const italic = /<w:i\/>|<w:i w:val="(?:1|true)"\/>/.test(run);
-    out += text.trim() && (bold || italic) ? text.replace(/^(\s*)(.*?)(\s*)$/s, (_, a, b, c) => `${a}${bold && italic ? '***' : bold ? '**' : '*'}${b}${bold && italic ? '***' : bold ? '**' : '*'}${c}`) : text;
+    out += text.trim() && (bold || italic) ? text.replace(/^(\s*)(.*?)(\s*)$/s, (...g: string[]) => emphasise(g[1], g[2], g[3], bold, italic)) : text;
   }
   return out;
 }
@@ -138,9 +138,15 @@ export function docxToMarkdown(xml: string): string {
   return out.reduce((acc, line, i) => acc + (i === 0 ? '' : /^\s*(-|\d+\.) /.test(line) && /^\s*(-|\d+\.) /.test(out[i - 1]) ? '\n' : '\n\n') + line, '').trim();
 }
 
+/** A run's text wrapped in bold and/or italic marks, keeping the spaces outside the marks. */
+const emphasise = (before: string, text: string, after: string, bold: boolean, italic: boolean): string => {
+  const mark = bold && italic ? '***' : bold ? '**' : '*';
+  return `${before}${mark}${text}${mark}${after}`;
+};
+
 // ------------------------------------------------------------------ PowerPoint / Excel
-export const slideMarkdown = (n: number, title: string, paragraphs: string[], notes = ''): string =>
-  [`## Slide ${n}${title ? `: ${title}` : ''}`, ...paragraphs.filter(Boolean).map((p) => `- ${p}`), ...(notes ? ['', `Notes: ${notes}`] : [])].join('\n');
+export const slideMarkdown = (n: number, slide: { title: string; paragraphs: string[]; notes?: string }): string =>
+  [`## Slide ${n}${slide.title ? `: ${slide.title}` : ''}`, ...slide.paragraphs.filter(Boolean).map((p) => `- ${p}`), ...(slide.notes ? ['', `Notes: ${slide.notes}`] : [])].join('\n');
 
 export const sheetMarkdown = (name: string, rows: string[][]): string => `## Sheet: ${name}\n\n${tableMarkdown(rows)}`;
 

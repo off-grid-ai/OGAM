@@ -38,7 +38,8 @@ export async function bookPageCount(path: string, kind: BookKind): Promise<numbe
   return kind === 'pdf' ? pdfPageCount(path) : (await textPages(path, kind)).length;
 }
 
-export async function bookExtractPages(path: string, kind: BookKind, start: number, count: number): Promise<string[]> {
+export async function bookExtractPages(path: string, kind: BookKind, range: { start: number; count: number }): Promise<string[]> {
+  const { start, count } = range;
   return kind === 'pdf' ? pdfExtractPages(path, start, count) : (await textPages(path, kind)).slice(start, start + count);
 }
 

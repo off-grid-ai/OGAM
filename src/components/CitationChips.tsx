@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../theme';
 import { hostOf, type CheckedCitation } from '../study/citations';
+const VERIFIED = '#16A34A';
 
 const st = StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 }, chip: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 3, marginRight: 6, marginBottom: 4 },
@@ -20,8 +21,8 @@ export const CitationChips: React.FC<{ cites: CheckedCitation[]; testID?: string
     <View testID={testID ?? 'citation-chips'}>
       <View style={st.row}>
         {cites.map((x, i) => (
-          <TouchableOpacity key={i} testID={`chip-${i}`} accessibilityRole="button" onPress={() => setOpen(open === i ? null : i)} style={[st.chip, { borderColor: x.verified ? '#16A34A' : colors.border, backgroundColor: open === i ? colors.surfaceLight : 'transparent' }]}>
-            <Text style={[st.small, { color: x.verified ? '#16A34A' : colors.textSecondary }]}>{label(x, i)}</Text>
+          <TouchableOpacity key={i} testID={`chip-${i}`} accessibilityRole="button" onPress={() => setOpen(open === i ? null : i)} style={[st.chip, { borderColor: x.verified ? VERIFIED : colors.border, backgroundColor: open === i ? colors.surfaceLight : 'transparent' }]}>
+            <Text style={[st.small, { color: x.verified ? VERIFIED : colors.textSecondary }]}>{label(x, i)}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -29,7 +30,7 @@ export const CitationChips: React.FC<{ cites: CheckedCitation[]; testID?: string
         <View testID="chip-detail" style={st.detail}>
           <Text style={{ color: colors.text }}>{c.title}{c.page ? `, p. ${c.page}` : ''}{c.section ? `, ${c.section}` : ''}</Text>
           {!!c.quote && <Text style={[st.top4, { color: colors.textSecondary }]}>"{c.quote}"</Text>}
-          <Text testID="chip-status" style={[st.small, st.top4, { color: c.verified ? '#16A34A' : colors.textMuted }]}>
+          <Text testID="chip-status" style={[st.small, st.top4, { color: c.verified ? VERIFIED : colors.textMuted }]}>
             {c.verified ? 'Quote found in the source.' : 'Not checked against the source: this is the text the source gave.'}
           </Text>
           {!!c.file && (

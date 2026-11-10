@@ -311,7 +311,7 @@ async function judgeReports(agent: Agent, cfg: LearnConfig): Promise<void> {
       L().updateItem(agent.id, item.id, { status: 'answered', reason: undefined });
       const cur = L().get(agent.id);
       // The judge read a shortened copy; what is kept and saved is the full report.
-      const full = (cur.reportLog ?? []).find((r) => r.itemId === rep.itemId)?.text ?? rep.report;
+      const full = (cur.reportLog ?? []).find((x) => x.itemId === rep.itemId)?.text ?? rep.report;
       L().patch(agent.id, { notes: [{ q: rep.q, answer: full, at: Date.now(), score: sc ? parseFloat(sc[1]) : undefined }, ...cur.notes].slice(0, 200) });
       await saveNote(agent, cfg, rep.q, full);
     } else if (item.tries < 2) {

@@ -6,6 +6,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../theme';
 import { Button } from '../components/Button';
 import { checkDraft, parseRubric, type CriterionResult } from '../study/rubric';
+const OK = '#16A34A';
 
 const st = StyleSheet.create({
   flex: { flex: 1 }, header: { flexDirection: 'row', alignItems: 'center', padding: 12 }, title: { fontSize: 18, marginLeft: 12 }, content: { padding: 16, paddingBottom: 120 },
@@ -42,7 +43,7 @@ export const RubricScreen: React.FC = () => {
         {!!error && <Text testID="rubric-error" style={[st.top10, { color: colors.error }]}>{error}</Text>}
         {results && (
           <View style={st.top14}>
-            <Text testID="rubric-summary" style={[st.semi, { color: open.length ? colors.error : '#16A34A' }]}>
+            <Text testID="rubric-summary" style={[st.semi, { color: open.length ? colors.error : OK }]}>
               {open.length ? `${open.length} of ${results.length} criteria look unaddressed` : `All ${results.length} criteria are mentioned`}
             </Text>
             {results.map((r) => (

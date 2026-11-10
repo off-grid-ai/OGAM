@@ -17,6 +17,7 @@ import { localUniqueId } from '../utils/uniqueId';
 import { ImageModelTestScreen } from './ImageModelTestScreen';
 import { isOverridableMemoryError } from '../utils/modelLoadErrors';
 import { cancelTuning, tuneDevice, type TuneOutcome, type TuneProgress } from '../services/deviceTuner';
+const WHITE = '#ffffff';
 
 type Status = 'wait' | 'run' | 'ok' | 'warn' | 'fail' | 'skip';
 interface Step { key: string; title: string; status: Status; detail: string }
@@ -227,13 +228,13 @@ const TextModelTestScreen: React.FC = () => {
       const requested = Math.max(1, useAppStore.getState().settings.gpuLayers || 99);
       const started = Date.now();
       const loaded = await vulkanEngine.loadModel(model.filePath, requested, 2048, 0);
-      if (!/vulkan/i.test(loaded.backend)) throw new Error('Model loaded without Vulkan offload (active: ' + loaded.backend + ')');
+      if (!/vulkan/i.test(loaded.backend)) throw new Error(`Model loaded without Vulkan offload (active: ${loaded.backend})`);
       if (loaded.offloadedGpuLayers === 0) throw new Error('Vulkan loaded the model with no GPU layers');
       let output = '';
       const prompt = await vulkanEngine.formatChat([{ role: 'user', content: 'Reply with the word OK.' }]);
       await vulkanEngine.generate(prompt, 24, text => { output += text; });
       const layers = loaded.offloadedGpuLayers > 0
-        ? describeOffload(loaded.offloadedGpuLayers, loaded.totalLayers) + ' on the GPU'
+        ? `${describeOffload(loaded.offloadedGpuLayers, loaded.totalLayers)} on the GPU`
         : `${requested} layers requested (model header unreadable, count unconfirmed)`;
       setVulkanResult(`${describeVulkanStatus(runtime)}. Backend: ${loaded.backend}. ${layers}. Load + reply: ${((Date.now() - started) / 1000).toFixed(1)}s. Reply: ${output.trim() || '(empty; check model template)'}`);
     } catch (e: any) {
@@ -284,7 +285,7 @@ const TextModelTestScreen: React.FC = () => {
                 <Text style={{ color: colors.text, fontWeight: '700' }}>Find the best settings</Text>
                 <Text style={{ color: colors.textSecondary, marginTop: 4 }}>Loads this model a few ways (automatic GPU or NPU, and the CPU with different thread counts), times a short reply each way and keeps the fastest. Takes a few minutes. Your chat is not touched.</Text>
                 <TouchableOpacity onPress={findBest} disabled={running || vulkanBusy || tuneBusy} testID="model-tune-start" style={{ marginTop: 10, backgroundColor: tuneBusy ? colors.border : colors.primary, borderRadius: 10, padding: 11 }}>
-                  <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center' }}>{tuneBusy ? `Trying ${tune?.step ?? 1} of ${tune?.steps ?? '...'}: ${tune?.label ?? ''}` : tuned ? 'Find again' : 'Find the best settings'}</Text>
+                  <Text style={{ color: WHITE, fontWeight: '700', textAlign: 'center' }}>{tuneBusy ? `Trying ${tune?.step ?? 1} of ${tune?.steps ?? '...'}: ${tune?.label ?? ''}` : tuned ? 'Find again' : 'Find the best settings'}</Text>
                 </TouchableOpacity>
                 {tuneBusy && (
                   <TouchableOpacity onPress={cancelTuning} style={{ marginTop: 8 }} testID="model-tune-cancel"><Text style={{ color: colors.error }}>Stop and keep my settings</Text></TouchableOpacity>
@@ -307,7 +308,7 @@ const TextModelTestScreen: React.FC = () => {
                 <Text style={{ color: colors.text, fontWeight: '700' }}>Vulkan GPU test</Text>
                 <Text style={{ color: colors.textSecondary, marginTop: 4 }}>Loads this model with your accelerator layer limit on the Vulkan engine and reports the layers actually placed on the GPU. This unloads the active text model to save memory.</Text>
                 <TouchableOpacity onPress={runVulkan} disabled={running || vulkanBusy} style={{ marginTop: 10, backgroundColor: colors.primary, borderRadius: 10, padding: 11 }}>
-                  <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center' }}>{vulkanBusy ? 'Testing Vulkan...' : 'Test Vulkan GPU'}</Text>
+                  <Text style={{ color: WHITE, fontWeight: '700', textAlign: 'center' }}>{vulkanBusy ? 'Testing Vulkan...' : 'Test Vulkan GPU'}</Text>
                 </TouchableOpacity>
                 {!!vulkanResult && <Text style={{ color: colors.textSecondary, marginTop: 8 }}>{vulkanResult}</Text>}
               </View>

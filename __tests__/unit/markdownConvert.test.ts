@@ -74,7 +74,7 @@ describe('documents as Markdown', () => {
   });
 
   it('formats a slide and a sheet', () => {
-    expect(slideMarkdown(2, 'Budget', ['Q1 up', '', 'Q2 flat'], 'say thanks')).toBe('## Slide 2: Budget\n- Q1 up\n- Q2 flat\n\nNotes: say thanks');
+    expect(slideMarkdown(2, { title: 'Budget', paragraphs: ['Q1 up', '', 'Q2 flat'], notes: 'say thanks' })).toBe('## Slide 2: Budget\n- Q1 up\n- Q2 flat\n\nNotes: say thanks');
     expect(sheetMarkdown('Totals', [['a', 'b'], ['1', '2']])).toBe('## Sheet: Totals\n\n| a | b |\n| --- | --- |\n| 1 | 2 |');
   });
 

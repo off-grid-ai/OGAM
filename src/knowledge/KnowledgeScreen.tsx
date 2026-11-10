@@ -16,6 +16,9 @@ import {
   addPdfs, allReportsMarkdown, autoBackup, listBackups, restoreBackup, decide, deleteDocument, evaluateAgent, exportKnowledge, importPackage, listDocuments, listProfiles, pauseStudy,
   previewPackage, snapshotFor, startStudy, transferHistory, useKnowledgeStatus,
 } from './controller';
+const NO_COLOR = 'transparent';
+const rowGap = { flexDirection: 'row' as const, gap: SPACING.sm };
+const tabStyle = { paddingVertical: SPACING.xs, paddingHorizontal: SPACING.sm, borderBottomWidth: 2 };
 
 type Tab = 'now' | 'experts' | 'documents' | 'library' | 'transfer';
 const TABS: Array<[Tab, string]> = [['now', 'Now'], ['experts', 'Experts'], ['documents', 'Documents'], ['library', 'Library'], ['transfer', 'Transfer']];
@@ -103,7 +106,7 @@ export const KnowledgeScreen: React.FC = () => {
       </View>
       <View style={{ flexDirection: 'row', paddingHorizontal: SPACING.md, gap: SPACING.xs }}>
         {TABS.map(([id, label]) => (
-          <TouchableOpacity key={id} onPress={() => setTab(id)} testID={`knowledge-tab-${id}`} style={{ paddingVertical: SPACING.xs, paddingHorizontal: SPACING.sm, borderBottomWidth: 2, borderBottomColor: tab === id ? colors.primary : 'transparent' }}>
+          <TouchableOpacity key={id} onPress={() => setTab(id)} testID={`knowledge-tab-${id}`} style={[tabStyle, { borderBottomColor: tab === id ? colors.primary : NO_COLOR }]}>
             <Text style={{ color: tab === id ? colors.primary : colors.textSecondary, ...TYPOGRAPHY.meta }}>{label}</Text>
           </TouchableOpacity>
         ))}
@@ -137,7 +140,7 @@ export const KnowledgeScreen: React.FC = () => {
             <Text style={s.text}>{a.name} · {a.stage === 'expert' ? 'expert' : 'workspace, still gathering evidence'}</Text>
             <Text style={s.meta}>{a.stats.findings} findings ({a.stats.approved} reviewed, {a.stats.provisional} provisional, {a.stats.conflicted} conflicting) · {a.stats.documents} documents · {a.stats.cycles} cycles</Text>
             <Text style={s.meta}>{a.evaluation ? `Can find and cite ${Math.round(a.evaluation.score * 100)}% of its own findings (${a.evaluation.answered} of ${a.evaluation.questions}), measured ${a.evaluation.at.slice(0, 10)}` : 'Not measured yet'}</Text>
-            <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
+            <View style={rowGap}>
               <Button title="Measure" variant="outline" onPress={async () => { await evaluateAgent(a.agentId); await reload(); }} />
               <Button title="Export this expert" variant="outline" onPress={() => doExport({ kind: 'agents', agentIds: [a.agentId] })} />
             </View>
@@ -153,7 +156,7 @@ export const KnowledgeScreen: React.FC = () => {
                 <Text style={s.meta}>{d.status}{d.pages ? ` · ${d.pages} pages` : ''} · {d.progress.chunksStudied}/{d.progress.chunksTotal || '?'} sections studied{d.agentId ? ` · ${d.agentId}` : ''}</Text>
                 {d.unreadablePages.length > 0 && <Text style={s.meta}>{d.unreadablePages.length} pages have no readable text (scans) and were not studied.</Text>}
                 {!!d.error && <Text style={s.meta}>{d.error}</Text>}
-                <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
+                <View style={rowGap}>
                   {d.status !== 'done' && <Button title={status.running === d.sourceId ? 'Studying...' : d.progress.chunksStudied ? 'Resume' : 'Study'} disabled={!!status.running} onPress={() => study(d.sourceId)} testID={`doc-study-${d.sourceId}`} />}
                   <Button title="Remove" variant="outline" onPress={() => Alert.alert('Remove this source?', 'The file, its text and the knowledge that rests only on it are deleted.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => deleteDocument(d.sourceId).then((n) => setNotice(`Removed. ${n} findings erased.`)) }])} />
                 </View>
@@ -176,7 +179,7 @@ export const KnowledgeScreen: React.FC = () => {
                 <Text style={s.meta}>{f.evidence.map((e) => `${f.documentTitle ?? e.sourceId}${e.page ? `, page ${e.page}` : ''}`).join('; ') || 'no citation'}</Text>
                 {!!f.uncertainty && <Text style={s.meta}>Unclear: {f.uncertainty}</Text>}
                 {f.status !== 'approved' && f.status !== 'rejected' && (
-                  <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
+                  <View style={rowGap}>
                     <Button title="Approve" variant="outline" onPress={() => decide(f.recordId, 'approved')} />
                     <Button title="Reject" variant="outline" onPress={() => decide(f.recordId, 'rejected')} />
                   </View>

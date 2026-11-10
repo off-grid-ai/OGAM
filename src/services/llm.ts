@@ -307,7 +307,7 @@ class LLMService {
                 if (!short.ok) {
                   const primedShort = await runOutputCheck(context, { isGemma4: true, primed: true, strictAnswer: true });
                   this.shortPromptStatus = primedShort.ok ? 'workaround' : 'unreliable';
-                  logger.warn(`[LLM][OUTPUT-CHECK] very short prompts: ${short.reason}; ${primedShort.ok ? 'the first-word workaround fixes it and is on for prompts under ~' + SHORT_PROMPT_TOKENS + ' tokens' : 'the workaround does not fix it, so very short prompts may start with a wrong word'}`);
+                  logger.warn(`[LLM][OUTPUT-CHECK] very short prompts: ${short.reason}; ${primedShort.ok ? `the first-word workaround fixes it and is on for prompts under ~${SHORT_PROMPT_TOKENS} tokens` : 'the workaround does not fix it, so very short prompts may start with a wrong word'}`);
                 }
               }
               this.firstWordWorkaround = this.shortPromptStatus === 'workaround';

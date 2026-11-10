@@ -112,7 +112,7 @@ export async function extractDocument(sourceId: string, opts: RunOptions = {}): 
   while (doc.progress.pagesExtracted < total) {
     if (opts.shouldStop?.()) return patchDocument(sourceId, (d) => { d.status = 'paused'; });
     const start = doc.progress.pagesExtracted;
-    const texts = await bookExtractPages(P.original(doc.hash), kind, start, PAGES_PER_FILE);
+    const texts = await bookExtractPages(P.original(doc.hash), kind, { start, count: PAGES_PER_FILE });
     if (!texts.length) throw new Error(`The PDF returned no pages at page ${start + 1}.`);
     const rows: PageRow[] = texts.map((text, i) => ({ page: start + i + 1, text }));
     await atomicWriteText(pagesFile(doc.hash, Math.floor(start / PAGES_PER_FILE) + 1), `${rows.map((r) => JSON.stringify(r)).join('\n')  }\n`);

@@ -782,9 +782,10 @@ function buildStreamHandler(ctx: ToolLoopContext, state: ToolLoopState): ((data:
   };
 }
 
-function emitFinalResponse(ctx: ToolLoopContext, state: ToolLoopState, displayResponse: string, loopMessages: Message[] = []): void {
+function emitFinalResponse(ctx: ToolLoopContext, state: ToolLoopState, reply: { text: string; messages: Message[] }): void {
+  const displayResponse = reply.text;
   // The model may claim it saved a file it never wrote; say so in the reply itself.
-  const note = fileClaimNote(displayResponse, loopMessages);
+  const note = fileClaimNote(displayResponse, reply.messages);
   if (!state.streamedContent) {
     if (!state.thinkingDoneFired) {
       ctx.onThinkingDone();
@@ -803,7 +804,7 @@ async function forceFinalTextResponse(ctx: ToolLoopContext, state: ToolLoopState
   state.firstTokenFired = false;
   const forcedOnStream = buildStreamHandler(ctx, state);
   const { fullResponse: forcedResponse } = await callLLMWithRetry(loopMessages, [], { onStream: forcedOnStream, forceRemote: ctx.forceRemote, disableThinking: true, conversationId: ctx.conversationId, ctx });
-  emitFinalResponse(ctx, state, forcedResponse, loopMessages);
+  emitFinalResponse(ctx, state, { text: forcedResponse, messages: loopMessages });
 }
 
 /**
@@ -926,10 +927,10 @@ export async function runToolLoop(ctx: ToolLoopContext): Promise<ToolLoopOutcome
         const { fullResponse: fallbackResp } = await callLLMWithRetry(
           loopMessages, [], { onStream: fallbackOnStream, forceRemote: ctx.forceRemote, disableThinking: true, conversationId: ctx.conversationId, ctx },
         );
-        emitFinalResponse(ctx, state, fallbackResp, loopMessages);
+        emitFinalResponse(ctx, state, { text: fallbackResp, messages: loopMessages });
         return { interrupted: false };
       }
-      emitFinalResponse(ctx, state, displayResponse, loopMessages);
+      emitFinalResponse(ctx, state, { text: displayResponse, messages: loopMessages });
       return { interrupted: false };
     }
 

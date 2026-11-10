@@ -10,6 +10,7 @@ import { PodcastVoicePicker } from '../components/PodcastVoicePicker';
 import { castLine, playLine, playJingle, setPodcastSpeed, stopPodcastAudio } from '../atlasVoice/podcastAudio';
 import { storyJumps, currentStory } from '../study/storyJumps';
 import { resumeLine } from '../study/listenPosition';
+import { playEpisode } from '../study/playEpisode';
 import { BRIEF_PROJECT, useBriefPrefs } from '../atlasTools/dailyBrief';
 import { generate, generatePodcast, podcastContextWarning, useStudyStore, StudyResult, Source, PodcastStyle } from '../study/engine';
 import { briefingSummary, briefingTranscript, safeFileName, saveMarkdown, studyMarkdown } from '../study/exportFiles';
@@ -18,7 +19,7 @@ import { ProjectLearningGame } from '../components/ProjectLearningGame';
 import { ProjectGame } from '../components/games/ProjectGame';
 import { generateGame, PROJECT_GAMES, type GameType } from '../study/games/generate';
 import { dueItems, streakFrom, useStudyProgress } from '../study/progress';
-import { Switch } from 'react-native';
+import { Switch, StyleSheet } from 'react-native';
 import { speakAndWait, stop, listVoices, TtsVoice, keepScreenOn } from '../atlasVoice/tts';
 import { useAtlasVoiceStore } from '../atlasVoice/store';
 import { cancelVideoExport, exportSlidesVideo, openVideo, shareVideo, videoExportAvailable, VideoExportCancelled, type SavedVideo, type VideoProgress } from '../services/videoExport';
@@ -169,32 +170,28 @@ export const StudyScreen: React.FC = () => {
     } finally { setBusy(null); }
   };
 
-  /** Plays from line `from`. A podcast (with `audioKey`) plays from pre-rendered audio files. */
-  const play = async (items: { text: string; pitch: number; voice?: string }[], from = 0, audioKey?: string, storyStarts: number[] = []) => {
+  /** Plays from line `from`. A podcast (with `source`) plays from pre-rendered audio files; the daily briefing also has tunes. */
+  const play = async (items: { text: string; pitch: number; voice?: string }[], from = 0, source?: { audioKey: string; storyStarts: number[] }) => {
     const my = ++playToken.current;
     stop();
     stopPodcastAudio(); // a line playing from a file would otherwise play on top of the new one
     stopRef.current = false;
     keepScreenOn(true);
     let finished = false;
-    // The daily briefing opens and closes with a short tune (switch in Daily briefing > Show options).
-    const volume = useBriefPrefs.getState().jingleVolume ?? 'normal';
+    const prefs = useBriefPrefs.getState();
+    const audioKey = source?.audioKey;
     const isBrief = !!audioKey && audioKey.startsWith(`${BRIEF_PROJECT}-`);
-    const tunes = isBrief && useBriefPrefs.getState().jingles !== false;
-    setPodcastSpeed(isBrief ? useBriefPrefs.getState().speed ?? 1 : 1);
+    setPodcastSpeed(isBrief ? prefs.speed ?? 1 : 1);
     try {
-      if (tunes && from <= 0 && !(await playJingle('intro', volume))) return;
-      for (let i = Math.max(0, from); i < items.length; i++) {
-        if (stopRef.current || playToken.current !== my) break;
-        // A soft chime when the next story begins (not when playback starts or is moved to a line).
-        if (tunes && i > from && storyStarts.includes(i) && !(await playJingle('chime', volume))) break;
-        setPlaying(i); setResumeAt(i); setItemStart(Date.now());
-        if (isBrief) useBriefPrefs.getState().set({ listened: { key: audioKey!, line: i } });
-        const ok = audioKey ? await playLine(audioKey, items, i) : await speakAndWait(items[i].text, items[i].pitch, 'podcast', items[i].voice || '');
-        if (!ok || playToken.current !== my) break;
-        if (i === items.length - 1) finished = true;
-      }
-      if (finished && tunes && playToken.current === my) await playJingle('outro', volume);
+      finished = await playEpisode({ count: items.length, from, tunes: isBrief && prefs.jingles !== false ? { storyStarts: source!.storyStarts } : undefined }, {
+        stopped: () => stopRef.current || playToken.current !== my,
+        jingle: (kind) => playJingle(kind, prefs.jingleVolume ?? 'normal'),
+        onLine: (i) => {
+          setPlaying(i); setResumeAt(i); setItemStart(Date.now());
+          if (isBrief) useBriefPrefs.getState().set({ listened: { key: audioKey!, line: i } });
+        },
+        line: (i) => (audioKey ? playLine(audioKey, items, i) : speakAndWait(items[i].text, items[i].pitch, 'podcast', items[i].voice || '')),
+      });
     } catch (e: any) {
       Alert.alert('Playback stopped', String(e?.message || e));
     }
@@ -345,7 +342,7 @@ export const StudyScreen: React.FC = () => {
                 const items = v.podcast!.map((l) => ({ text: l.text, ...castVoice(l.host, v.hosts ?? 2) }));
                 return (
                   <MediaBar durations={items.map((x) => secs(x.text))} playing={playing} resumeAt={resumeAt} itemStart={itemStart} colors={colors}
-                    onPlay={(i) => play(items, i, `${projectId}-${v.createdAt}`, v.storyStarts)} onPause={halt} label="podcast" />
+                    onPlay={(i) => play(items, i, { audioKey: `${projectId}-${v.createdAt}`, storyStarts: v.storyStarts ?? [] })} onPause={halt} label="podcast" />
                 );
               })()}
               {(() => {
@@ -353,19 +350,19 @@ export const StudyScreen: React.FC = () => {
                 if (!jumps.length) return null;
                 const now = currentStory(jumps, playing ?? resumeAt);
                 return (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }} testID="story-jumps">
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={jumpStyles.row} testID="story-jumps">
                     {jumps.map((j, k) => (
                       <TouchableOpacity key={`${j.line}-${j.label}`} testID={`story-jump-${k}`} accessibilityRole="button" accessibilityLabel={`Play story ${k + 1}: ${j.label}`}
-                        onPress={() => play(v.podcast!.map((x) => ({ text: x.text, ...castVoice(x.host, v.hosts ?? 2) })), j.line, `${projectId}-${v.createdAt}`, v.storyStarts)}
-                        style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, marginRight: 8, backgroundColor: k === now ? colors.primary : colors.surface }}>
-                        <Text style={{ color: k === now ? colors.background : colors.text, fontSize: 13 }}>{k + 1}. {j.label}</Text>
+                        onPress={() => play(v.podcast!.map((x) => ({ text: x.text, ...castVoice(x.host, v.hosts ?? 2) })), j.line, { audioKey: `${projectId}-${v.createdAt}`, storyStarts: v.storyStarts ?? [] })}
+                        style={[jumpStyles.chip, { backgroundColor: k === now ? colors.primary : colors.surface }]}>
+                        <Text style={[jumpStyles.text, { color: k === now ? colors.background : colors.text }]}>{k + 1}. {j.label}</Text>
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
                 );
               })()}
               {v.podcast.map((l, i) => (
-                <TouchableOpacity key={i} activeOpacity={0.8} onPress={() => play(v.podcast!.map((x) => ({ text: x.text, ...castVoice(x.host, v.hosts ?? 2) })), i, `${projectId}-${v.createdAt}`, v.storyStarts)}
+                <TouchableOpacity key={i} activeOpacity={0.8} onPress={() => play(v.podcast!.map((x) => ({ text: x.text, ...castVoice(x.host, v.hosts ?? 2) })), i, { audioKey: `${projectId}-${v.createdAt}`, storyStarts: v.storyStarts ?? [] })}
                   style={[card, { borderLeftWidth: 4, borderLeftColor: l.host === 'A' ? '#2563EB' : l.host === 'B' ? '#D97706' : '#16A34A', opacity: playing === null || playing === i ? 1 : 0.55 }]}>
                   <Text style={{ color: colors.textMuted, fontSize: 12 }}>{(v.hosts ?? 2) === 1 ? 'Narrator' : `Host ${l.host}`}</Text>
                   <Text style={{ color: colors.text, fontSize: 16 }}>{l.text}</Text>
@@ -639,3 +636,5 @@ const MediaBar: React.FC<{
     </View>
   );
 };
+
+const jumpStyles = StyleSheet.create({ row: { marginBottom: 10 }, chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, marginRight: 8 }, text: { fontSize: 13 } });

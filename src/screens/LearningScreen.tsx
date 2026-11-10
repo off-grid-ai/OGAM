@@ -95,7 +95,7 @@ export const LearningScreen: React.FC = () => {
     <View>
       <TouchableOpacity onPress={() => navigation.navigate('Knowledge')} style={styles.textbookCard} testID="open-textbook" accessibilityRole="button">
         <Icon name="book-open" size={20} color={colors.primary} />
-        <View style={{ flex: 1 }}>
+        <View style={styles.grow}>
           <Text style={styles.chipText}>Studying a textbook or a long PDF?</Text>
           <Text style={styles.counts}>Add it under Knowledge. It is split into sections and studied piece by piece, with every finding tied to a quote and a page.</Text>
         </View>
@@ -114,7 +114,7 @@ export const LearningScreen: React.FC = () => {
       </ScrollView>
       {experts.length === 0 && <Text style={styles.counts} testID="no-experts-hint">No experts yet. Type a subject below (Taxes, Law, Psychology) and press Add expert, so the AI learns one field at a time.</Text>}
       <View style={styles.row}>
-        <TextInput style={[styles.input, { flex: 1 }]} value={newExpert} onChangeText={setNewExpert} placeholder="New expert, e.g. Taxes, Law, Psychology" placeholderTextColor={colors.textMuted} editable={!running} testID="new-expert-input" />
+        <TextInput style={[styles.input, styles.grow]} value={newExpert} onChangeText={setNewExpert} placeholder="New expert, e.g. Taxes, Law, Psychology" placeholderTextColor={colors.textMuted} editable={!running} testID="new-expert-input" />
         <TouchableOpacity disabled={running || !newExpert.trim()} onPress={() => { setAgentId(addExpert(newExpert)); setNewExpert(''); }} style={styles.smallBtn} testID="new-expert-add" accessibilityRole="button">
           <Text style={styles.smallBtnText}>Add expert</Text>
         </TouchableOpacity>
@@ -174,7 +174,7 @@ export const LearningScreen: React.FC = () => {
         <TouchableOpacity
           onPress={running ? stopLearning : start}
           disabled={!cfg.topic.trim() && !running}
-          style={[styles.bigBtn, { backgroundColor: running ? colors.error : colors.primary, opacity: !cfg.topic.trim() && !running ? 0.5 : 1 }]}
+          style={[styles.bigBtn, { backgroundColor: running ? colors.error : colors.primary }, !cfg.topic.trim() && !running ? styles.dim : undefined]}
         >
           <Icon name={running ? 'square' : 'play'} size={16} color="#fff" />
           <Text style={styles.bigBtnText}>{running ? 'Stop' : 'Start learning'}</Text>
@@ -183,7 +183,7 @@ export const LearningScreen: React.FC = () => {
 
 
       <View style={styles.reportsHead}>
-        <Text style={[styles.label, { flex: 1 }]}>Reports it wrote</Text>
+        <Text style={[styles.label, styles.grow]}>Reports it wrote</Text>
         {(st?.reportLog ?? []).length > 0 && (
           <TouchableOpacity onPress={shareReports} style={styles.smallBtn} testID="share-reports" accessibilityRole="button">
             <Text style={styles.smallBtnText}>Share reports</Text>
@@ -198,7 +198,7 @@ export const LearningScreen: React.FC = () => {
         return (
           <TouchableOpacity key={r.id} onPress={() => setOpenReport(isOpen ? null : r.id)} style={styles.bankRow} testID={`learn-report-${r.id}`} accessibilityRole="button">
             <View style={[styles.dot, { backgroundColor: color }]} />
-            <View style={{ flex: 1 }}>
+            <View style={styles.grow}>
               <Text style={styles.chipText}>{r.q}</Text>
               <Text style={[styles.counts, { color }]}>
                 {r.status === 'pass' ? 'Judge passed it' : r.status === 'fail' ? 'Judge failed it' : 'Waiting for the judge'}{r.score !== undefined ? ` · ${r.score}/10` : ''} · {new Date(r.at).toLocaleString()}
@@ -293,14 +293,14 @@ export const LearningScreen: React.FC = () => {
       {bank.filter((b) => b.status !== 'dropped').slice(-40).map((b) => (
         <TouchableOpacity key={b.id} disabled={running && b.status !== 'pending'} onPress={() => cycle(b.id, b.status)} onLongPress={() => Alert.alert('Remove question?', b.q, [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => updateItem(agentId, b.id, { status: 'dropped', reason: 'Removed by you' }) }])} style={styles.bankRow}>
           <View style={[styles.dot, { backgroundColor: STATUS_COLOR[b.status] || colors.textMuted }]} />
-          <View style={{ flex: 1 }}>
+          <View style={styles.grow}>
             <Text style={styles.chipText}>{b.q}</Text>
             <Text style={[styles.counts, { color: STATUS_COLOR[b.status] }]}>{b.status}{b.appealed ? ' (appealed)' : ''}{b.reason ? ` - ${b.reason}` : ''}</Text>
           </View>
         </TouchableOpacity>
       ))}
       <View style={[styles.row, { marginTop: 6 }]}>
-        <TextInput style={[styles.input, { flex: 1 }]} value={newQ} onChangeText={setNewQ} placeholder="Add your own question" placeholderTextColor={colors.textMuted} />
+        <TextInput style={[styles.input, styles.grow]} value={newQ} onChangeText={setNewQ} placeholder="Add your own question" placeholderTextColor={colors.textMuted} />
         <TouchableOpacity onPress={() => { if (newQ.trim()) { addItems(agentId, [newItem(newQ, st?.round || 1, 'approved')]); setNewQ(''); } }} style={styles.smallBtn}><Text style={styles.smallBtnText}>Add</Text></TouchableOpacity>
         <TouchableOpacity disabled={running} onPress={() => newRound(agentId)} style={styles.smallBtn}><Text style={styles.smallBtnText}>New round</Text></TouchableOpacity>
       </View>
@@ -402,6 +402,8 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   smallBtn: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
   smallBtnText: { color: colors.text, fontSize: 13 },
   textbookCard: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, borderWidth: 1, borderColor: colors.primary, borderRadius: 10, padding: SPACING.md, marginTop: SPACING.sm },
+  grow: { flex: 1 },
+  dim: { opacity: 0.5 },
   reportsHead: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
   expertRow: { marginTop: 4 },
   advToggle: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
