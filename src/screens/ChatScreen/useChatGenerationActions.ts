@@ -6,6 +6,7 @@ import { locationNote } from '../../atlasMaps/locationNote';
 import { expertKnowledgeNote } from '../../knowledge/chatHook';
 import { chartNote } from '../../study/chart';
 import { skillsNote } from '../../skills/selectSkills';
+import { learnedNote } from '../../learning/learnedNote';
 import { Dispatch, SetStateAction } from 'react';
 import { resolveAgentPrompt } from '../../stores/agentStore';
 import { toolsForConversation } from '../../services/tools/chatTools';
@@ -409,6 +410,7 @@ function resolveToolsAndPrompt(deps: GenerationDeps, conversation: any, messageT
   const rawPrompt = resolveAgentPrompt(project?.systemPrompt, deps.settings.systemPrompt || APP_CONFIG.defaultSystemPrompt)
     + (chatNote ? `\n\nInstructions for this chat:\n${chatNote}` : '')
     + locationNote()
+    + learnedNote(messageText)
     + skillsNote(messageText, useSkills.getState().skills, llmService.getPerformanceSettings?.()?.contextLength || 4096)
     + (llmService.isThinkingEnabled?.() ? thinkingNote(deps.settings as any) : '');
   return { enabledTools, rawPrompt, localToolSupport };

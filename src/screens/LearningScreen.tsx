@@ -7,7 +7,7 @@ import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useAgentStore } from '../stores/agentStore';
-import { NO_AGENT, isNoAgent, setLessons } from '../learning/agents';
+import { NO_AGENT, isNoAgent, setLessons, expertName } from '../learning/agents';
 import { useProjectStore } from '../stores';
 import { useLearningStore, LearnEvent, defaultLearnConfig, newItem, BankStatus } from '../learning/store';
 import { startLearning, stopLearning, isLearning, onLearningStatus, auditNow, keepSession, newRound } from '../learning/engine';
@@ -41,8 +41,12 @@ export const LearningScreen: React.FC = () => {
   const wide = width >= 900; // tablets / unfolded screens: settings and feed side by side
 
   const agents = useAgentStore((s) => s.agents);
-  // Learning is for the default (no agent) chat. An agent id is only used when a link passes one in.
-  const agentId: string = route.params?.agentId || NO_AGENT;
+  // Each subject (an expert) learns on its own. General is always there; others are added below.
+  const experts = useLearningStore((s) => s.experts);
+  const addExpert = useLearningStore((s) => s.addExpert);
+  const removeExpert = useLearningStore((s) => s.removeExpert);
+  const [agentId, setAgentId] = useState<string>(route.params?.agentId || NO_AGENT);
+  const [newExpert, setNewExpert] = useState('');
   const agent = agents.find((a) => a.id === agentId);
   const projects = useProjectStore((s) => s.projects);
   const rawCfg = useLearningStore((s) => s.config[agentId]);
@@ -78,7 +82,24 @@ export const LearningScreen: React.FC = () => {
 
   const settings = (
     <View>
-      <Text style={styles.note}>Describe something to get good at. The AI researches it, writes reports, a judge checks them, and what it learns is kept as lessons that every chat without an agent uses.</Text>
+      <Text style={styles.label}>Expert</Text>
+      <Text style={styles.note}>Each subject learns on its own, so one expert never blurs into another. A chat uses the lessons of the expert whose subject it is about.</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.expertRow}>
+        {[{ id: NO_AGENT, name: 'General' }, ...experts].map((e) => (
+          <TouchableOpacity key={e.id} disabled={running} onPress={() => setAgentId(e.id)} testID={`expert-${e.id}`} accessibilityRole="button"
+            accessibilityState={{ selected: e.id === agentId }} style={[styles.chip, e.id === agentId && styles.chipOn]}>
+            <Text style={[styles.chipText, e.id === agentId && styles.chipTextOn]}>{e.name}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+      <View style={styles.row}>
+        <TextInput style={[styles.input, { flex: 1 }]} value={newExpert} onChangeText={setNewExpert} placeholder="New expert, e.g. Taxes, Law, Psychology" placeholderTextColor={colors.textMuted} editable={!running} testID="new-expert-input" />
+        <TouchableOpacity disabled={running || !newExpert.trim()} onPress={() => { setAgentId(addExpert(newExpert)); setNewExpert(''); }} style={styles.smallBtn} testID="new-expert-add" accessibilityRole="button">
+          <Text style={styles.smallBtnText}>Add expert</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={styles.note}>{agentId === NO_AGENT ? 'General is for anything that is not one field.' : `${expertName(agentId)}: `}Describe something to get good at. The AI researches it, writes reports, a judge checks them, and what it learns is kept as lessons for this subject.</Text>
       <Text style={styles.label}>Task to become an expert at</Text>
       <TextInput
         style={styles.input}
@@ -162,7 +183,7 @@ export const LearningScreen: React.FC = () => {
         );
       })}
 
-      <Text style={styles.label}>{isNoAgent(agentId) ? 'Lessons learned (used in every chat without an agent, and saved as a file)' : 'Lessons this agent uses in every chat'}</Text>
+      <Text style={styles.label}>{isNoAgent(agentId) ? `${expertName(agentId)} lessons (used in chats about this subject, and saved as a file)` : 'Lessons this agent uses in every chat'}</Text>
       <TextInput
         style={[styles.input, styles.lessons]}
         value={(isNoAgent(agentId) ? st?.lessons : agent?.lessons) || ''}
@@ -257,6 +278,11 @@ export const LearningScreen: React.FC = () => {
           <TouchableOpacity disabled={running} onPress={() => { clearAgent(agentId); setLessons(agentId, ''); }} style={styles.resetBtn}>
             <Text style={styles.resetText}>Reset lessons and history</Text>
           </TouchableOpacity>
+          {agentId !== NO_AGENT && isNoAgent(agentId) && (
+            <TouchableOpacity disabled={running} onPress={() => Alert.alert(`Delete the ${expertName(agentId)} expert?`, 'Its topic, reports and lessons are removed. This cannot be undone.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => { removeExpert(agentId); setAgentId(NO_AGENT); } }])} style={styles.resetBtn} testID="delete-expert">
+              <Text style={styles.resetText}>Delete this expert</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>
@@ -335,6 +361,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   bigBtnText: { color: '#fff', fontWeight: '600' as const, fontSize: 15 },
   smallBtn: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
   smallBtnText: { color: colors.text, fontSize: 13 },
+  expertRow: { marginTop: 4 },
   advToggle: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
   resetBtn: { marginTop: SPACING.sm, paddingVertical: 8 },
   modeCard: { flex: 1, minWidth: 150, borderWidth: 2, borderColor: colors.border, borderRadius: 10, padding: SPACING.md, backgroundColor: colors.surface },

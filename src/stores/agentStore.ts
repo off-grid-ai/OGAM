@@ -297,13 +297,7 @@ export function resolveAgentPrompt(projectPrompt: string | undefined, fallback: 
   const projectFiles = currentProject
     ? '\n\nPROJECT FILES: this chat belongs to a project whose documents every chat in it shares. When you finish a piece of work, make a decision, or learn something the next chat will need, call update_project_document yourself (use "Current Progress" with mode "append" for progress, "replace" to rewrite a document). Do this without being asked, then tell the user in one short line what you saved. Read search_knowledge_base before answering questions about the project.'
     : '';
-  // What "Teach the AI" learned applies to chats without an agent (an agent keeps its own lessons).
-  let learned = '';
-  try {
-    const lessons = String(require('../learning/store').useLearningStore.getState().get(require('../learning/agents').NO_AGENT).lessons || '').trim();
-    if (lessons) learned = `\n\nLessons learned from practice (follow these):\n${lessons.slice(0, 1500)}`;
-  } catch { /* nothing learned yet */ }
-  if (!agent || !agent.systemPrompt.trim()) return (projectPrompt?.trim() || fallback) + learned + lp + about + style + phoneNote + projectGuard + projectFiles;
+  if (!agent || !agent.systemPrompt.trim()) return (projectPrompt?.trim() || fallback) + lp + about + style + phoneNote + projectGuard + projectFiles;
   return agentPromptWithLessons(agent) + (projectPrompt?.trim() ? `\n\nProject notes:\n${projectPrompt.trim()}` : '') + lp + about + style + phoneNote + projectGuard + projectFiles;
 }
 

@@ -101,7 +101,14 @@ export const defaultLearnConfig = (): LearnConfig => ({
   useLibrary: true, useWeb: false, continuous: true,
 });
 
+/** A subject the AI studies on its own: its own topic, question bank, reports and lessons. */
+export interface Expert { id: string; name: string }
+
 interface LearningState {
+  /** Subjects beyond the general one (taxes, law, psychology...). Each keeps its own learning, so one expert never blurs into another. */
+  experts: Expert[];
+  addExpert: (name: string) => string;
+  removeExpert: (id: string) => void;
   config: Record<string, LearnConfig>;
   state: Record<string, PerAgent>;
   events: LearnEvent[];
@@ -118,6 +125,18 @@ interface LearningState {
 export const useLearningStore = create<LearningState>()(
   persist(
     (set, getS) => ({
+      experts: [],
+      addExpert: (name) => {
+        const base = name.trim().slice(0, 40) || 'Expert';
+        const id = `expert-${base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'x'}-${localUniqueId('e').slice(-4)}`;
+        set((s) => ({ experts: [...s.experts, { id, name: base }] }));
+        return id;
+      },
+      removeExpert: (id) => set((s) => {
+        const { [id]: _c, ...config } = s.config;
+        const { [id]: _s, ...state } = s.state;
+        return { experts: s.experts.filter((e) => e.id !== id), config, state, events: s.events.filter((e) => e.agentId !== id) };
+      }),
       config: {},
       state: {},
       events: [],
