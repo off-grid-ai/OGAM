@@ -702,6 +702,12 @@ class DownloadManagerModule: RCTEventEmitter {
     return info
   }
 
+  /// After a relaunch, tasks that ran in the background session move back to the fast one when the
+  /// app is on screen (the first didBecomeActive after launch does not move them). Main queue.
+  private func returnRestoredTasksIfActive() {
+    if UIApplication.shared.applicationState == .active { handOffRunningTasks(toBackground: false) }
+  }
+
   private func restoreTasksFromSession() {
     // Tasks from both sessions: background tasks survive suspension and a system kill.
     var found: [(URLSessionTask, URLSession)] = []
@@ -757,11 +763,7 @@ class DownloadManagerModule: RCTEventEmitter {
         }
 
         self.persistStateLocked()
-        // Tasks that kept going in the background session while the app was closed come back to the
-        // fast one when the app is on screen: the first didBecomeActive after launch does not move them.
-        DispatchQueue.main.async {
-          if UIApplication.shared.applicationState == .active { self.handOffRunningTasks(toBackground: false) }
-        }
+        DispatchQueue.main.async(execute: self.returnRestoredTasksIfActive)
         NSLog("[DownloadManager] Restored %d URLSession tasks (%d downloads), %d orphaned → failed", self.taskToDownloadId.count, self.downloads.count, orphanedIds.count)
       }
     }
