@@ -62,11 +62,21 @@ PUSHED_ANDROID_NATIVE=$(printf '%s\n' "$CHANGED_FILES" | grep -E '\.(kt|kts)$|^a
 PUSHED_IOS_NATIVE=$(printf '%s\n' "$CHANGED_FILES" | grep -E '\.swift$|^ios/|Podfile|^package(-lock)?\.json$' | grep -v 'Pods/' | grep -v '/build/' || true)
 
 if [ -n "$PUSHED_JS" ]; then
-  echo "▶ JS/TS lint (push range)..."
-  echo "$PUSHED_JS" | tr '\n' '\0' | xargs -0 eslint --max-warnings=999
-
-  echo "▶ TypeScript type check..."
-  npx tsc --noEmit
+  # The four static gates run side by side, in the background, while Jest runs: one after another
+  # they held a push for minutes. Each writes its own log; a failure prints it and stops the push.
+  GATE_DIR=$(mktemp -d)
+  run_gate() {
+    name=$1; shift
+    ( "$@" > "$GATE_DIR/$name.log" 2>&1; echo $? > "$GATE_DIR/$name.status" ) &
+  }
+  echo "▶ Static gates in parallel: lint (push range), TypeScript, dependency-cruiser, knip..."
+  printf '%s\n' "$PUSHED_JS" | tr '\n' '\0' > "$GATE_DIR/js.list"
+  run_gate lint sh -c "xargs -0 eslint --max-warnings=999 < '$GATE_DIR/js.list'"
+  # Incremental: a repeat push re-checks only what changed (the build info lives in node_modules/.cache).
+  run_gate tsc npx tsc --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc-prepush.tsbuildinfo
+  run_gate depcruise npm run --silent depcruise
+  # knip runs in CI as a hard 0-gate; it analyses the whole project, so it stays in this block.
+  run_gate knip npm run --silent knip
 
   echo "▶ JS/TS tests (related to changed files)..."
   # Keep related rendered journeys serial because they share native-boundary state.
@@ -98,28 +108,48 @@ __tests__/unit/services/llmHelpers.branches.test.ts"
 ${file}"
         ;;
     esac
-  done <<EOF
+  done <<PUSHED_LIST
 $PUSHED_JS
-EOF
+PUSHED_LIST
+  RELATED_JS=$(printf '%s\n' "$RELATED_JS" | sed '/^$/d' | sort -u)
+  # A core file (a store, a service barrel) reaches hundreds of suites through Jest's reverse graph.
+  # Past RELATED_CAP the push runs the suites named after the changed files instead, and CI runs
+  # the whole suite. OFFGRID_ALL_RELATED=1 runs every related suite anyway.
+  RELATED_CAP=${OFFGRID_RELATED_CAP:-150}
+  if [ -n "$RELATED_JS" ] && [ "${OFFGRID_ALL_RELATED:-0}" != "1" ]; then
+    related_count=$(printf '%s\n' "$RELATED_JS" | tr '\n' '\0' | xargs -0 npx jest --listTests --findRelatedTests 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$related_count" -gt "$RELATED_CAP" ]; then
+      echo "  $related_count related suites (over $RELATED_CAP): running the suites that import the changed files or are named after them; CI runs the rest."
+      for file in $RELATED_JS; do
+        stem=$(basename "$file" | sed -E 's/\.(ts|tsx|js|jsx)$//')
+        [ "$stem" = index ] && stem=$(basename "$(dirname "$file")")
+        MAPPED_TESTS="${MAPPED_TESTS}
+$(find __tests__ -type f \( -name "${stem}.test.*" -o -name "${stem}.*.test.*" \) 2>/dev/null)
+$(grep -rlE "['\"/]${stem}['\"]" __tests__ --include='*.test.ts' --include='*.test.tsx' 2>/dev/null)"
+      done
+      RELATED_JS=""
+    fi
+  fi
   SELECTED_TESTS=$(printf '%s\n%s\n' "$DIRECT_TESTS" "$MAPPED_TESTS" | sed '/^$/d' | sort -u)
   if [ -n "$SELECTED_TESTS" ]; then
     printf '%s\n' "$SELECTED_TESTS" | tr '\n' '\0' | \
       xargs -0 npx jest --passWithNoTests --maxWorkers=50% --workerIdleMemoryLimit=1GB --bail=1 --forceExit
   fi
-  RELATED_JS=$(printf '%s\n' "$RELATED_JS" | sed '/^$/d' | sort -u)
   if [ -n "$RELATED_JS" ]; then
     printf '%s\n' "$RELATED_JS" | tr '\n' '\0' | \
       xargs -0 npx jest --findRelatedTests --passWithNoTests --maxWorkers=50% --workerIdleMemoryLimit=1GB --bail=1 --forceExit
   fi
 
-  echo "▶ Architecture gate (dependency-cruiser)..."
-  npm run depcruise
-
-  # knip runs in CI (the "architecture" job) as a hard 0-gate, but was NOT in this local hook, so
-  # unused-export failures only surfaced after a wasted CI round-trip (twice). Run it here too. It
-  # analyses the whole project (not just the push range), so keep it in the JS block.
-  echo "▶ Dead-code gate (knip)..."
-  npm run knip
+  wait
+  gate_failed=0
+  for name in lint tsc depcruise knip; do
+    if [ "$(cat "$GATE_DIR/$name.status" 2>/dev/null)" != "0" ]; then
+      echo "✖ $name failed:"; cat "$GATE_DIR/$name.log"; gate_failed=1
+    fi
+  done
+  rm -rf "$GATE_DIR"
+  [ "$gate_failed" = "0" ] || exit 1
+  echo "✓ Static gates passed."
 fi
 
 if [ -n "$PUSHED_SWIFT" ]; then
