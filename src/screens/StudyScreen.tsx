@@ -8,6 +8,7 @@ import { useProjectStore } from '../stores';
 import { MarkdownText } from '../components/MarkdownText';
 import { PodcastVoicePicker } from '../components/PodcastVoicePicker';
 import { castLine, playLine, playJingle, stopPodcastAudio } from '../atlasVoice/podcastAudio';
+import { storyJumps, currentStory } from '../study/storyJumps';
 import { BRIEF_PROJECT, useBriefPrefs } from '../atlasTools/dailyBrief';
 import { generate, generatePodcast, podcastContextWarning, useStudyStore, StudyResult, Source, PodcastStyle } from '../study/engine';
 import { briefingSummary, briefingTranscript, safeFileName, saveMarkdown, studyMarkdown } from '../study/exportFiles';
@@ -337,6 +338,22 @@ export const StudyScreen: React.FC = () => {
                 return (
                   <MediaBar durations={items.map((x) => secs(x.text))} playing={playing} resumeAt={resumeAt} itemStart={itemStart} colors={colors}
                     onPlay={(i) => play(items, i, `${projectId}-${v.createdAt}`, v.storyStarts)} onPause={halt} label="podcast" />
+                );
+              })()}
+              {(() => {
+                const jumps = storyJumps(v);
+                if (!jumps.length) return null;
+                const now = currentStory(jumps, playing ?? resumeAt);
+                return (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }} testID="story-jumps">
+                    {jumps.map((j, k) => (
+                      <TouchableOpacity key={`${j.line}-${j.label}`} testID={`story-jump-${k}`} accessibilityRole="button" accessibilityLabel={`Play story ${k + 1}: ${j.label}`}
+                        onPress={() => play(v.podcast!.map((x) => ({ text: x.text, ...castVoice(x.host, v.hosts ?? 2) })), j.line, `${projectId}-${v.createdAt}`, v.storyStarts)}
+                        style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, marginRight: 8, backgroundColor: k === now ? colors.primary : colors.surface }}>
+                        <Text style={{ color: k === now ? colors.background : colors.text, fontSize: 13 }}>{k + 1}. {j.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 );
               })()}
               {v.podcast.map((l, i) => (
