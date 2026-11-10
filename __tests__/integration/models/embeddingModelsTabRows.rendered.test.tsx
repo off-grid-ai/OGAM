@@ -139,3 +139,29 @@ it('Remove download that cannot check the disk keeps the failure and says why', 
   expect(row(h.multilingual.name).getByLabelText('Retry download')).toBeTruthy();
   fs.exists.mockImplementation(exists);
 });
+
+it('while Remove download works, the row says so and offers no Retry or second Remove', async () => {
+  const h = setup();
+  h.disk.serveRemoteFile(h.multilingual.downloadUrl, { statusCode: 500, body: 'error' });
+  const { rtl, view, row } = await renderTab();
+  rtl.fireEvent.press(view.getByLabelText(h.multilingual.name));
+  rtl.fireEvent.press(await view.findByText('Switch'));
+  await rtl.waitFor(() => expect(row(h.multilingual.name).getByLabelText('Retry download')).toBeTruthy());
+
+  // The disk check is slow (a busy phone): hold it while the row is looked at.
+  const fs = h.disk.module;
+  const exists = fs.exists.getMockImplementation();
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  fs.exists.mockImplementation(async (path: string) => { await held; return exists!(path); });
+  rtl.fireEvent.press(row(h.multilingual.name).getByLabelText('Remove download'));
+
+  await rtl.waitFor(() => expect(row(h.multilingual.name).getByLabelText('Removing')).toBeTruthy());
+  expect(row(h.multilingual.name).queryByLabelText('Retry download')).toBeNull();
+  expect(row(h.multilingual.name).queryByLabelText('Remove download')).toBeNull();
+
+  release();
+  await rtl.waitFor(() => expect(view.queryByLabelText('Removing')).toBeNull());
+  expect(view.queryByText(/The previous model is still active\./)).toBeNull();
+  fs.exists.mockImplementation(exists);
+});

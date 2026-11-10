@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button, ModelCard } from '../../components';
 import { CustomAlert, initialAlertState, showAlert, hideAlert } from '../../components/CustomAlert';
@@ -79,6 +79,9 @@ export const EmbeddingModelsTab: React.FC = () => {
   const [error, setError] = useState('');
   const [alert, setAlert] = useState(initialAlertState);
   const [downloaded, setDownloaded] = useState<Set<string>>(new Set());
+  // The failed row whose file is being removed: it shows that it is working, and offers neither Retry
+  // (an install could start while the file is deleted) nor a second Remove until it is done.
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -146,7 +149,11 @@ export const EmbeddingModelsTab: React.FC = () => {
       forget();
     };
     // The failure clears only once the file is gone; a delete that fails keeps it, with the reason.
-    deleteIfThere().then(() => embeddingModelChanger.dismiss()).catch(e => setError(String(e.message)));
+    setRemovingId(candidate.id);
+    deleteIfThere()
+      .then(() => embeddingModelChanger.dismiss())
+      .catch(e => setError(String(e.message)))
+      .finally(() => setRemovingId(null));
   };
   const activeInCandidates = active && candidates.some(candidate => candidate.id === active.id);
   // A change in progress shows once: on the row of the model being fetched, with its own cancel, as in
@@ -214,7 +221,7 @@ export const EmbeddingModelsTab: React.FC = () => {
           isDownloading={changeRow === candidate}
           downloadProgress={changeRow === candidate ? status.fraction : undefined}
           onCancel={changeRow === candidate ? embeddingModelChanger.cancel : undefined}
-          failedState={failedRow === candidate ? {
+          failedState={failedRow === candidate && removingId !== candidate.id ? {
             errorMessage: status.error, bytesDownloaded: 0, totalBytes: 0,
             onRetry: () => { embeddingModelChanger.retry().catch(() => undefined); },
             // "Remove download" also deletes a file that arrived but failed its check, asked of the disk
@@ -224,7 +231,9 @@ export const EmbeddingModelsTab: React.FC = () => {
           onDelete={downloaded.has(candidate.id) && active?.id !== candidate.id && !status.busy ? () => remove(candidate) : undefined}
           disabled={status.busy || !ready || active?.id === candidate.id}
           onPress={() => select(candidate)}
-          trailing={active?.id === candidate.id || changeRow === candidate || failedRow === candidate ? undefined : <View style={embeddingStyles.rowAction}><Icon name={downloaded.has(candidate.id) ? 'circle' : 'download'} size={16} color={colors.textMuted} /></View>}
+          trailing={removingId === candidate.id
+            ? <View style={embeddingStyles.rowAction}><ActivityIndicator size="small" color={colors.textMuted} accessibilityLabel="Removing" /></View>
+            : active?.id === candidate.id || changeRow === candidate || failedRow === candidate ? undefined : <View style={embeddingStyles.rowAction}><Icon name={downloaded.has(candidate.id) ? 'circle' : 'download'} size={16} color={colors.textMuted} /></View>}
         />
       ))}
       </ListGroup>
