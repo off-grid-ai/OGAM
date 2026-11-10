@@ -120,3 +120,22 @@ it('a failed download says so on its own row, with Retry, and not under the sear
   rtl.fireEvent.press(row(h.multilingual.name).getByLabelText('Remove download'));
   await rtl.waitFor(() => expect(view.queryByText(/The previous model is still active\./)).toBeNull());
 });
+
+it('Remove download that cannot check the disk keeps the failure and says why', async () => {
+  const h = setup();
+  h.disk.serveRemoteFile(h.multilingual.downloadUrl, { statusCode: 500, body: 'error' });
+  const { rtl, view, row } = await renderTab();
+  rtl.fireEvent.press(view.getByLabelText(h.multilingual.name));
+  rtl.fireEvent.press(await view.findByText('Switch'));
+  await rtl.waitFor(() => expect(row(h.multilingual.name).getByLabelText('Retry download')).toBeTruthy());
+
+  // The phone's storage cannot be read when Remove is pressed: nothing was removed, so the failure stays.
+  const fs = h.disk.module;
+  const exists = fs.exists.getMockImplementation();
+  fs.exists.mockImplementation(async () => { throw new Error('Storage is not available'); });
+  rtl.fireEvent.press(row(h.multilingual.name).getByLabelText('Remove download'));
+
+  await rtl.waitFor(() => expect(view.getByText('Storage is not available')).toBeTruthy());
+  expect(row(h.multilingual.name).getByLabelText('Retry download')).toBeTruthy();
+  fs.exists.mockImplementation(exists);
+});
