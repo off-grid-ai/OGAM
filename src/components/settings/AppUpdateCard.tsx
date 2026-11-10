@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../theme';
 import { useAppStore } from '../../stores';
+import { offGridOn } from '../../atlasTools/offGrid';
 import { checkForUpdate, downloadAndInstall, installedBuild, type UpdateInfo } from '../../services/appUpdate';
 
 const mb = (n: number) => `${Math.max(1, Math.round(n / 1e6))} MB`;
@@ -25,7 +26,8 @@ export function AppUpdateCard() {
       setState(r.update ? 'available' : 'latest');
     } catch (e: any) { setState('error'); setMessage(String(e?.message || e)); }
   };
-  useEffect(() => { if (state === 'idle' && auto) void check(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Looking by itself contacts GitHub, so it is skipped in off-grid mode (the button still works when asked).
+  useEffect(() => { if (state === 'idle' && auto && !offGridOn()) void check(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const install = async () => {
     if (!update) return;

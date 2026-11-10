@@ -422,7 +422,7 @@ let researchInFlight = false;
 export function isResearchInFlight(): boolean { return researchInFlight; }
 
 /** Reads a very long message in parts with the loaded model; returns the shorter text for the model, or the message itself. */
-async function condenseLongMessage(text: string, deps: GenerationDeps, conversationId: string): Promise<string> {
+async function condenseLongMessage(text: string, deps: GenerationDeps): Promise<string> {
   const contextTokens = llmService.getPerformanceSettings?.()?.contextLength || useAppStore.getState().settings.contextLength || 4096;
   if (!needsReadingInParts(text, contextTokens)) return text;
   try {
@@ -489,7 +489,7 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
   }
   // A message longer than the model can hold is read in parts and shown to the model as notes (the saved message is unchanged).
   if (!deps.activeModelInfo?.isRemote && useAppStore.getState().settings.readLongInParts !== false && llmService.isModelLoaded()) {
-    researchMessage = await condenseLongMessage(researchMessage, deps, conversation?.id ?? targetConversationId);
+    researchMessage = await condenseLongMessage(researchMessage, deps);
   }
   // Offline research already contains the selected document excerpts; do not inject them twice.
   let basePrompt = usedOfflineProjectEvidence
