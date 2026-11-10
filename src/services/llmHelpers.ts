@@ -232,9 +232,9 @@ function throwNativeLlamaRuntimeError(message: string): never {
 export async function initContextWithFallback(
   params: object,
   contextLength: number,
-  nGpuLayers: number,
-  allowCpuFallback: boolean = true,
+  gpu: { nGpuLayers: number; allowCpuFallback?: boolean },
 ): Promise<ContextInitResult> {
+  const { nGpuLayers, allowCpuFallback = true } = gpu;
   const modelPath = (params as any).model || 'unknown';
   const isHtp = HTP_ENABLED && Array.isArray((params as any).devices) && (params as any).devices.some((d: string) => d.startsWith('HTP'));
   // Capture llama.cpp's own log so a load failure surfaces its REAL reason

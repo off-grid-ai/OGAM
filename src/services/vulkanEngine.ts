@@ -102,7 +102,8 @@ export const vulkanEngine = {
       return false;
     }
   },
-  async loadModel(path: string, gpuLayers: number, context = 4096, threads = 0): Promise<VulkanLoadResult> {
+  async loadModel(path: string, opts: { gpuLayers: number; context?: number; threads?: number }): Promise<VulkanLoadResult> {
+    const { gpuLayers, context = 4096, threads = 0 } = opts;
     if (activeSession) throw new Error('Cannot replace a model while generating');
     const result = await required().loadModel(path, gpuLayers, context, threads);
     // Older bridges resolved only the backend name; their layer count is unknown.
@@ -119,8 +120,8 @@ export const vulkanEngine = {
   async tokenize(text: string): Promise<number[]> {
     return required().tokenize(text);
   },
-  async generate(prompt: string, maxTokens: number, onToken: (text: string) => void,
-    sampling: VulkanSamplingSettings = {}): Promise<void> {
+  async generate(prompt: string, opts: { maxTokens: number; onToken: (text: string) => void; sampling?: VulkanSamplingSettings }): Promise<void> {
+    const { maxTokens, onToken, sampling = {} } = opts;
     if (activeSession) throw new Error('Vulkan generation is already active');
     const module = required();
     const sessionId = String(++generationCounter);

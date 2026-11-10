@@ -70,7 +70,7 @@ export function FeynmanGame({ result, projectId, onOpenSource }: GameProps) {
       const g = await gradeExplanation(result.sources, concept, text);
       setGrade(g);
       const t = terms.find((x) => x.answer === concept);
-      if (t) record(t.clue, t.answer, g.score >= 7, t.src);
+      if (t) record({ prompt: t.clue, answer: t.answer, src: t.src }, g.score >= 7);
     } catch (e: any) { setError(String(e?.message || e)); }
     finally { setBusy(false); }
   };
@@ -281,7 +281,7 @@ export function PalaceGame({ result, projectId, onOpenSource }: GameProps) {
         : checked === null ? <GameButton label="Check" disabled={!typed.trim()} onPress={() => {
           const ok = similarity(typed, st.term) >= 0.8;
           setChecked(ok); if (ok) setScore((s) => s + 1);
-          record(`Memory palace, ${st.room}: ${clue || st.image}`, st.term, ok, st.src);
+          record({ prompt: `Memory palace, ${st.room}: ${clue || st.image}`, answer: st.term, src: st.src }, ok);
         }} />
           : <GameButton label="Next room" onPress={() => { setChecked(null); setTyped(''); setI((x) => x + 1); }} />}
     </View>
@@ -353,7 +353,7 @@ export function ConceptMapGame({ result, projectId, onOpenSource }: GameProps) {
               setPicked(id);
               const ok = id === edge.to;
               if (ok) setScore((s) => s + 1);
-              record(`${label(edge.from)} ${edge.label} ...?`, label(edge.to), ok, edge.src);
+              record({ prompt: `${label(edge.from)} ${edge.label} ...?`, answer: label(edge.to), src: edge.src }, ok);
             }} state={picked === null ? null : id === edge.to ? 'right' : id === picked ? 'wrong' : null} />
           ))}
           {picked !== null && <GameButton label="Next link" onPress={() => { setPicked(null); setQi((x) => x + 1); }} />}

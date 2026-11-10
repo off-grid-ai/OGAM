@@ -527,7 +527,7 @@ class ImageGenerationService {
           opencl: () => hardwareService.getOpenCLCapability(),
           npu: async () => (await hardwareService.getSoCInfo()).hasNPU,
         },
-        settings.imageAllowCpuFallback === true,
+        { allowCpuFallback: settings.imageAllowCpuFallback === true },
       );
     } catch (error: any) {
       if (!this._isRequestCurrent(requestEpoch)) return null;

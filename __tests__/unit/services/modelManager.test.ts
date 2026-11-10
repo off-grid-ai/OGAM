@@ -1198,7 +1198,7 @@ describe('ModelManager', () => {
 
     it('attaches an MTP file next to the model and records it on the model', async () => {
       mockedAsyncStorage.getItem.mockResolvedValue(JSON.stringify([base]));
-      await modelManager.attachDraft(base.id, 'file:///downloads/Qwen-MTP.gguf', 'Qwen-MTP.gguf', 300);
+      await modelManager.attachDraft(base.id, { uri: 'file:///downloads/Qwen-MTP.gguf', fileName: 'Qwen-MTP.gguf', size: 300 });
       const saved = savedModels();
       expect(saved[0].draftFileName).toBe('Qwen-MTP.gguf');
       expect(saved[0].draftPath).toBe('/mock/documents/models/m.mtp-Qwen-MTP.gguf');
@@ -1216,7 +1216,7 @@ describe('ModelManager', () => {
 
     it('refuses a file that is not a .gguf', async () => {
       mockedAsyncStorage.getItem.mockResolvedValue(JSON.stringify([base]));
-      await expect(modelManager.attachDraft(base.id, '/x/a.bin', 'a.bin')).rejects.toThrow('.gguf');
+      await expect(modelManager.attachDraft(base.id, { uri: '/x/a.bin', fileName: 'a.bin' })).rejects.toThrow('.gguf');
     });
   });
 
@@ -1586,7 +1586,7 @@ describe('ModelManager', () => {
 
     it('attaches an MTP file next to the model and records it on the model', async () => {
       mockedAsyncStorage.getItem.mockResolvedValue(JSON.stringify([base]));
-      await modelManager.attachDraft(base.id, 'file:///downloads/Qwen-MTP.gguf', 'Qwen-MTP.gguf', 300);
+      await modelManager.attachDraft(base.id, { uri: 'file:///downloads/Qwen-MTP.gguf', fileName: 'Qwen-MTP.gguf', size: 300 });
       const saved = savedModels();
       expect(saved[0].draftFileName).toBe('Qwen-MTP.gguf');
       expect(saved[0].draftPath).toBe('/mock/documents/models/m.mtp-Qwen-MTP.gguf');
@@ -1604,7 +1604,7 @@ describe('ModelManager', () => {
 
     it('refuses a file that is not a .gguf', async () => {
       mockedAsyncStorage.getItem.mockResolvedValue(JSON.stringify([base]));
-      await expect(modelManager.attachDraft(base.id, '/x/a.bin', 'a.bin')).rejects.toThrow('.gguf');
+      await expect(modelManager.attachDraft(base.id, { uri: '/x/a.bin', fileName: 'a.bin' })).rejects.toThrow('.gguf');
     });
   });
 

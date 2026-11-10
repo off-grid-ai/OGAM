@@ -44,7 +44,7 @@ export function ScrambleGame({ result, projectId, onOpenSource }: GameProps) {
     const guess = typed.toUpperCase().replace(/[^A-Z]/g, '');
     if (!guess) return;
     const ok = guess === term.answer.toUpperCase();
-    record(term.clue, term.answer, ok, term.src);
+    record({ prompt: term.clue, answer: term.answer, src: term.src }, ok);
     if (ok) { setScore((s) => s + scramblePoints(hint)); setState('right'); } else setState('wrong');
   };
   return (
@@ -62,7 +62,7 @@ export function ScrambleGame({ result, projectId, onOpenSource }: GameProps) {
           <GameButton label="Check" onPress={submit} />
           <View style={literalStyles.s5}>
             <View style={literalStyles.s6}><GameButton kind="plain" label="Hint" disabled={hint} onPress={() => setHint(true)} /></View>
-            <View style={literalStyles.s6}><GameButton kind="plain" label="Skip" onPress={() => { record(term.clue, term.answer, false, term.src); next(); }} /></View>
+            <View style={literalStyles.s6}><GameButton kind="plain" label="Skip" onPress={() => { record({ prompt: term.clue, answer: term.answer, src: term.src }, false); next(); }} /></View>
           </View>
         </View>
       ) : (
@@ -110,7 +110,7 @@ export function LadderGame({ result, projectId, onOpenSource }: GameProps) {
     if (answered) return;
     setPicked(k);
     const ok = k === q.answer;
-    record(q.q, q.options[q.answer], ok, q.src);
+    record({ prompt: q.q, answer: q.options[q.answer], src: q.src }, ok);
   };
   const advance = () => {
     const ok = picked === q.answer;
@@ -168,7 +168,7 @@ export function MistakeGame({ result, projectId, onOpenSource }: GameProps) {
       <Card>
         <McView q={q} result={result} onOpenSource={onOpenSource} onAnswer={(ok) => {
           setAnswered(true);
-          record(item.text, item.fix, ok, item.src);
+          record({ prompt: item.text, answer: item.fix, src: item.src }, ok);
           if (ok) setScore((s) => s + 1);
         }} />
       </Card>

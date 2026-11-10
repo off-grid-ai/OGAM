@@ -200,10 +200,10 @@ export function seedReviewItems(projectId: string): number {
   const progress = useStudyProgress.getState();
   let added = 0;
   for (const r of saved) {
-    for (const c of r.cards ?? []) { if (progress.seed(projectId, c.q, c.a, c.src)) added++; }
-    for (const t of r.learningTerms ?? []) { if (progress.seed(projectId, t.clue, t.answer, t.src)) added++; }
+    for (const c of r.cards ?? []) { if (progress.seed(projectId, { prompt: c.q, answer: c.a, src: c.src })) added++; }
+    for (const t of r.learningTerms ?? []) { if (progress.seed(projectId, { prompt: t.clue, answer: t.answer, src: t.src })) added++; }
     if (r.kind === 'game' && Array.isArray(r.game?.data?.terms)) {
-      for (const t of r.game!.data.terms as LearningTerm[]) { if (progress.seed(projectId, t.clue, t.answer, t.src)) added++; }
+      for (const t of r.game!.data.terms as LearningTerm[]) { if (progress.seed(projectId, { prompt: t.clue, answer: t.answer, src: t.src })) added++; }
     }
   }
   return added;

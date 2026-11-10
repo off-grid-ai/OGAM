@@ -234,7 +234,7 @@ class LLMService {
             requireGpuLayers('vulkan', requestedLayers);
             const contextLength = Math.min(ctxLen, 32768);
             // nThreads already counts only the fast cores on a big.LITTLE chip (see getRecommendedThreadCount).
-            const loaded = await vulkanEngine.loadModel(modelPath, requestedLayers, contextLength, nThreads);
+            const loaded = await vulkanEngine.loadModel(modelPath, { gpuLayers: requestedLayers, context: contextLength, threads: nThreads });
             if (!/vulkan/i.test(loaded.backend)) throw new Error(
               `Native model reported ${loaded.backend}, not Vulkan`,
             );
@@ -411,7 +411,7 @@ class LLMService {
     const deviceCtxCap = getMaxContextForDevice(deviceInfo.totalMemory);
     const safeCtx = Math.min(params.ctxLen, deviceCtxCap);
     if (safeCtx !== params.ctxLen) logger.log(`[LLM] context capped for ${(deviceInfo.totalMemory / BYTES_PER_GB).toFixed(1)}GB RAM: ${params.ctxLen} → ${safeCtx}`);
-    const initial = { ...await initContextWithFallback(resolvedBaseParams, safeCtx, safeGpuLayers, !strictAcceleration), attemptedGpuLayers: safeGpuLayers };
+    const initial = { ...await initContextWithFallback(resolvedBaseParams, safeCtx, { nGpuLayers: safeGpuLayers, allowCpuFallback: !strictAcceleration }), attemptedGpuLayers: safeGpuLayers };
     const modelMax = getModelMaxContext(initial.context);
     const userIsOnDefault = this.currentSettings.contextLength === APP_CONFIG.maxContextLength;
     if (!modelMax || !userIsOnDefault || modelMax <= initial.actualLength) return initial;
@@ -420,7 +420,7 @@ class LLMService {
     if (targetCtx <= initial.actualLength) return initial;
     logger.log(`[LLM] Model supports ${modelMax} ctx, RAM cap ${deviceMaxCtx}, scaling ${initial.actualLength} → ${targetCtx}`);
     try { await initial.context.release(); } catch (e) { logger.warn('[LLM] Error releasing initial context:', e); }
-    return { ...await initContextWithFallback(resolvedBaseParams, targetCtx, safeGpuLayers, !strictAcceleration), attemptedGpuLayers: safeGpuLayers };
+    return { ...await initContextWithFallback(resolvedBaseParams, targetCtx, { nGpuLayers: safeGpuLayers, allowCpuFallback: !strictAcceleration }), attemptedGpuLayers: safeGpuLayers };
   }
   /** Multimodal init on a NOT-YET-PUBLISHED context (the load pipeline) — no instance-state writes. */
   private async deriveMultimodalFromProjector(context: LlamaContext, modelPath: string, mmProjPath: string): Promise<{ initialized: boolean; support: MultimodalSupport }> {
@@ -531,14 +531,14 @@ class LLMService {
           Math.floor(this.currentSettings.contextLength * 0.4)));
         const managed = await this.manageContextWindow(messages, maxTokens);
         const prompt = await vulkanEngine.formatChat(managed.map(m => ({ role: m.role === 'tool' ? 'user' : m.role, content: m.content })));
-        await vulkanEngine.generate(prompt, maxTokens, token => {
+        await vulkanEngine.generate(prompt, { maxTokens, onToken: token => {
           if (!this.isGenerating || !token) return;
           if (!firstTokenMs) firstTokenMs = Date.now() - started;
           tokenCount++;
           output += token;
           onStream?.({ content: token, reasoningContent: '' });
-        }, { temperature: settings.temperature, topP: settings.topP,
-          repeatPenalty: settings.repeatPenalty });
+        }, sampling: { temperature: settings.temperature, topP: settings.topP,
+          repeatPenalty: settings.repeatPenalty } });
         this.performanceStats = recordGenerationStats(started, firstTokenMs, tokenCount);
         onComplete?.({ content: output, reasoningContent: '' });
         return output;
@@ -694,7 +694,7 @@ class LLMService {
       const task = (async () => {
         const managed = await this.manageContextWindow(messages, maxTokens);
         const prompt = await vulkanEngine.formatChat(managed.map(m => ({ role: m.role === 'tool' ? 'user' : m.role, content: m.content })));
-        await vulkanEngine.generate(prompt, Math.max(1, Math.min(maxTokens, 4096)), token => { if (this.isGenerating) response += token; });
+        await vulkanEngine.generate(prompt, { maxTokens: Math.max(1, Math.min(maxTokens, 4096)), onToken: token => { if (this.isGenerating) response += token; } });
         return response.trim();
       })();
       this.activeCompletionPromise = task.then(() => {}, () => {});

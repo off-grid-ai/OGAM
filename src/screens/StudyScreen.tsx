@@ -297,7 +297,7 @@ export const StudyScreen: React.FC = () => {
           setPlaying(i); setResumeAt(i); setItemStart(Date.now());
           if (isBrief) useBriefPrefs.getState().set({ listened: { key: audioKey!, line: i } });
         },
-        line: (i) => (audioKey ? playLine(audioKey, items, i) : speakAndWait(items[i].text, items[i].pitch, 'podcast', items[i].voice || '')),
+        line: (i) => (audioKey ? playLine(audioKey, items, i) : speakAndWait(items[i].text, { pitch: items[i].pitch, voice: items[i].voice || '' })),
       });
     } catch (e: any) {
       Alert.alert('Playback stopped', String(e?.message || e));

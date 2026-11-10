@@ -85,7 +85,7 @@ export function createCall(scenario: Scenario): Call {
       queue = queue.then(async () => {
         if (turn !== epoch) return;
         set({ phase: 'speaking' });
-        await speakInAndWait(sentence, code, 'call', await callerVoice);
+        await speakInAndWait(sentence, code, { messageId: 'call', voice: await callerVoice });
       });
     };
     try {

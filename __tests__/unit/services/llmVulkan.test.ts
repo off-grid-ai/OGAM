@@ -57,7 +57,7 @@ it('streams actual text through Vulkan while keeping the ordinary completion cal
   mockVulkanReady();
   jest.spyOn(vulkanEngine,'loadModel').mockResolvedValue(VK_LOADED);
   jest.spyOn(vulkanEngine,'formatChat').mockResolvedValue('formatted prompt');
-  jest.spyOn(vulkanEngine,'generate').mockImplementation(async (_prompt,_limit,cb)=>{cb('Hello');cb(' world');});
+  jest.spyOn(vulkanEngine,'generate').mockImplementation(async (_prompt,{ onToken })=>{onToken('Hello');onToken(' world');});
   await llmService.loadModel('/models/small.gguf');
   const streamed: string[]=[];
   const onComplete=jest.fn();
@@ -172,10 +172,10 @@ it('uses a user-selected Vulkan context above the former 4K limit and honors sam
   jest.spyOn(vulkanEngine, 'tokenize').mockResolvedValue([1, 2, 3, 4]);
   const generate = jest.spyOn(vulkanEngine, 'generate').mockResolvedValue();
   await llmService.loadModel('/models/small.gguf');
-  expect(load.mock.calls[0][2]).toBeGreaterThan(4096);
+  expect(load.mock.calls[0][1].context).toBeGreaterThan(4096);
   await llmService.generateResponse([{id:'q',role:'user',content:'Hello',timestamp:0}]);
-  expect(generate).toHaveBeenCalledWith('small prompt', 800, expect.any(Function), {
-    temperature: 0.35, topP: 0.75, repeatPenalty: 1.2,
+  expect(generate).toHaveBeenCalledWith('small prompt', {
+    maxTokens: 800, onToken: expect.any(Function), sampling: { temperature: 0.35, topP: 0.75, repeatPenalty: 1.2 },
   });
 });
 

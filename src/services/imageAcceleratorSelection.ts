@@ -63,8 +63,9 @@ export async function selectImageAccelerator(
   backend: ImageBackend,
   mode: ImageComputeMode,
   probe: Probes,
-  allowCpuFallback = false,
+  options: { allowCpuFallback?: boolean } = {},
 ): Promise<ImageComputeDecision> {
+  const { allowCpuFallback = false } = options;
   if (backend === 'coreml') {
     if (mode === 'cpu')
       throw new Error('Core ML CPU-only execution is not selectable in this image runtime.');

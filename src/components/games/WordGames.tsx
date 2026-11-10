@@ -63,7 +63,7 @@ export function PairsGame({ result, projectId, onOpenSource }: GameProps) {
       const term = terms[a.pair];
       if (a.pair === b.pair) {
         setMatched((m) => [...m, a.pair]);
-        if (term) record(term.clue, term.answer, true, term.src);
+        if (term) record({ prompt: term.clue, answer: term.answer, src: term.src }, true);
         setOpen([]);
       } else setTimeout(() => setOpen([]), 1000);
     }
@@ -120,7 +120,7 @@ export function HangmanGame({ result, projectId, onOpenSource }: GameProps) {
   if (!term) return <Finished score={score} max={terms.length} onAgain={() => { setIndex(0); setScore(0); }} />;
   const status = mode === 'hangman' ? hangmanStatus(state)
     : guesses.some((g) => g.word === term.answer) ? 'won' : guesses.length >= 6 ? 'lost' : 'playing';
-  const finish = (won: boolean) => { if (won) setScore((s) => s + 1); record(term.clue, term.answer, won, term.src); };
+  const finish = (won: boolean) => { if (won) setScore((s) => s + 1); record({ prompt: term.clue, answer: term.answer, src: term.src }, won); };
   const next = () => setIndex((i) => i + 1);
   const pressLetter = (l: string) => {
     const nextState = hangmanGuess(state, l);
@@ -224,7 +224,7 @@ export function ClozeGame({ result, projectId, onOpenSource }: GameProps) {
     if (picked !== null) return;
     const ok = hard ? closeEnough(value, item.answer) : value === item.answer;
     setPicked(value);
-    record(item.sentence, item.answer, ok, item.src);
+    record({ prompt: item.sentence, answer: item.answer, src: item.src }, ok);
     if (ok) { setScore((s) => s + (streak >= 2 ? 2 : 1)); setStreak((s) => s + 1); }
     else { setStreak(0); setMissed((m) => [...m, item]); }
   };

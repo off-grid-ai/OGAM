@@ -48,7 +48,7 @@ export function PodcastVoicePicker({ hosts = 3 }: { hosts?: number }) {
     setTimeout(() => {
       useAtlasVoiceStore.getState().setPodcastVoices(next);
       stopSpeech();
-      speakAndWait(`Hello, I'm ${ROLES[role].replace(/ \(.*\)/, '')}.`, 1, 'podcast', name).catch(() => undefined);
+      speakAndWait(`Hello, I'm ${ROLES[role].replace(/ \(.*\)/, '')}.`, { voice: name }).catch(() => undefined);
     }, 0);
   }, [shown, stored]);
   if (voices.length < 2) return null;

@@ -63,7 +63,7 @@ export async function installAtlasPack(pack: AtlasPack, onProgress: (msg: string
   const tmp = `${RNFS.CachesDirectoryPath}/${pack.name}`;
   await downloadPack(pack, tmp, onProgress);
   try {
-    return await importZipFromPath(atlasLibraryProjectId(), tmp, pack.name, (m) => onProgress(m));
+    return await importZipFromPath(atlasLibraryProjectId(), { path: tmp, name: pack.name }, { onProgress: (m) => onProgress(m) });
   } finally {
     RNFS.unlink(tmp).catch(() => undefined);
   }

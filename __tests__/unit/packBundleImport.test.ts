@@ -39,7 +39,7 @@ it('adds the books of every pack inside a package bundle', async () => {
   tree['/docs/atlas_packs/Atlas-Emergency-small'][0].path = '/in/01_Medical.zip';
   tree['/docs/atlas_packs/Atlas-Emergency-small'][1].path = '/in/02_Water.zip';
 
-  const r = await importZipFromPath('p1', '/drive/Atlas-Emergency-small.zip', 'Atlas-Emergency-small.zip', () => undefined);
+  const r = await importZipFromPath('p1', { path: '/drive/Atlas-Emergency-small.zip', name: 'Atlas-Emergency-small.zip' }, { onProgress: () => undefined });
   expect(indexed.sort()).toEqual(['drugs.md', 'first-aid.md', 'purify.txt']);
   expect(r.added).toBe(3);
   expect(r.failed).toEqual([]);
@@ -47,7 +47,7 @@ it('adds the books of every pack inside a package bundle', async () => {
 
 it('still adds a plain pack of text files', async () => {
   tree['/docs/atlas_packs/pack'] = [entry('/docs/atlas_packs/pack', 'a.md'), entry('/docs/atlas_packs/pack', 'b.txt'), entry('/docs/atlas_packs/pack', 'picture.png')];
-  const r = await importZipFromPath('p1', '/x/pack.zip', 'pack.zip', () => undefined);
+  const r = await importZipFromPath('p1', { path: '/x/pack.zip', name: 'pack.zip' }, { onProgress: () => undefined });
   expect(indexed.sort()).toEqual(['a.md', 'b.txt']);
   expect(r.added).toBe(2);
 });
@@ -65,14 +65,14 @@ describe('a package that says what it should contain', () => {
   });
   it('adds nothing and says why when a pack was cut short', async () => {
     setup(4000);
-    await expect(importZipFromPath('p1', '/drive/b.zip', 'Atlas-Emergency-small.zip', () => undefined)).rejects.toThrow(/incomplete, so nothing was added: 01_Medical.zip is cut short/);
+    await expect(importZipFromPath('p1', { path: '/drive/b.zip', name: 'Atlas-Emergency-small.zip' }, { onProgress: () => undefined })).rejects.toThrow(/incomplete, so nothing was added: 01_Medical.zip is cut short/);
     expect(indexed).toEqual([]);
   });
   it('does not treat the manifest as a book, and adds the packs when all is complete', async () => {
     setup(5000);
     tree['/docs/atlas_packs/01_Medical'] = [entry('/docs/atlas_packs/01_Medical', 'first-aid.md')];
     tree[bundleDir][0].path = '/in/01_Medical.zip';
-    await importZipFromPath('p1', '/drive/b.zip', 'Atlas-Emergency-small.zip', () => undefined);
+    await importZipFromPath('p1', { path: '/drive/b.zip', name: 'Atlas-Emergency-small.zip' }, { onProgress: () => undefined });
     expect(indexed).toEqual(['first-aid.md']);
   });
 });

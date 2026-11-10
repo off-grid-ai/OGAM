@@ -436,7 +436,7 @@ export function DictationView({ content, onDone }: ViewProps<'dictation'>) {
   const [right, setRight] = useState(0);
   const sentence = content.sentences[i];
   const last = i === content.sentences.length - 1;
-  const play = () => { try { require('../atlasVoice/tts').speakIn(sentence, content.lang, 'dictation'); } catch { /* no voice on this phone */ } };
+  const play = () => { try { require('../atlasVoice/tts').speakIn(sentence, content.lang, { messageId: 'dictation' }); } catch { /* no voice on this phone */ } };
   React.useEffect(play, [i]); // eslint-disable-line react-hooks/exhaustive-deps
   const checkAnswer = () => {
     const ok = answersMatch(typed, sentence);

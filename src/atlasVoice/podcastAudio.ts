@@ -87,7 +87,7 @@ function render(ref: { key: string; items: CastLine[]; i: number }, urgent = fal
         if (await RNFS.exists(path)) { logger.log(`[POD] line ${i}: already rendered (no wait)`); return path; }
         await RNFS.mkdir(dir(key));
         const t0 = Date.now();
-        const out = await synthesizeLineToFile(items[i].text, items[i].voice ?? '', path, items[i].voice ? 1 : items[i].pitch);
+        const out = await synthesizeLineToFile(items[i].text, { voice: items[i].voice ?? '', path, pitch: items[i].voice ? 1 : items[i].pitch });
         logger.log(`[POD] line ${i}: rendered in ${((Date.now() - t0) / 1000).toFixed(1)}s (${items[i].text.length} chars, voice "${items[i].voice ?? ''}")`);
         return out;
       } catch (e: any) {
@@ -204,7 +204,7 @@ export async function playLine(key: string, items: CastLine[], i: number): Promi
   const line = items[i];
   if (!renderable(items)) {
     logger.warn('[POD] this phone cannot save speech to a file, so every line is spoken live (expect a long silence before each)');
-    return speakAndWait(line.text, line.pitch, 'podcast', line.voice || '');
+    return speakAndWait(line.text, { pitch: line.pitch, voice: line.voice || '' });
   }
   const token = stopToken;
   // This line first, then the next few behind it, so it never waits for the others.
@@ -217,7 +217,7 @@ export async function playLine(key: string, items: CastLine[], i: number): Promi
   if (token !== stopToken) return false;
   if (!path) {
     logger.warn(`[POD] line ${i}: no rendered file, speaking it live (expect a long silence first)`);
-    return speakAndWait(line.text, line.pitch, 'podcast', line.voice || '');
+    return speakAndWait(line.text, { pitch: line.pitch, voice: line.voice || '' });
   }
   // A saved file the system could not play (cleared from the cache, cut short): forget it and say the
   // line live instead of ending the whole podcast.
@@ -225,7 +225,7 @@ export async function playLine(key: string, items: CastLine[], i: number): Promi
   if (result === 'failed' && token === stopToken) {
     pending.delete(path);
     await RNFS.unlink(path).catch(() => undefined);
-    return speakAndWait(line.text, line.pitch, 'podcast', line.voice || '');
+    return speakAndWait(line.text, { pitch: line.pitch, voice: line.voice || '' });
   }
   return result === 'ended' && token === stopToken;
 }

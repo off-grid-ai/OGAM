@@ -120,7 +120,8 @@ const adjusted = (messageId: string, rate: number) => (rateAdjuster ? rateAdjust
 /** Speak in another language (BCP-47 like 'es-ES'). Calls onNoLanguage if the phone lacks that voice. */
 let noLangHandler: ((lang: string) => void) | null = null;
 export function onMissingLanguage(fn: ((lang: string) => void) | null): void { noLangHandler = fn; }
-export function speakIn(text: string, lang: string, messageId = 'phrase', voice = ''): void {
+export function speakIn(text: string, lang: string, opts: { messageId?: string; voice?: string } = {}): void {
+  const { messageId = 'phrase', voice = '' } = opts;
   if (!ttsAvailable() || !text.trim()) return;
   ensureListeners();
   Native.setVoice?.(voice).catch(() => undefined);
@@ -136,12 +137,14 @@ export function speakIn(text: string, lang: string, messageId = 'phrase', voice 
 }
 
 /** Speak and wait until finished (resolves false if stopped). Optional pitch / voice for podcast hosts. */
-export function speakAndWait(text: string, pitch = 1.0, messageId = 'podcast', voice = ''): Promise<boolean> {
+export function speakAndWait(text: string, opts: { pitch?: number; messageId?: string; voice?: string } = {}): Promise<boolean> {
+  const { pitch = 1.0, messageId = 'podcast', voice = '' } = opts;
   return speakWait({ text, pitch, messageId, voice, lang: 'en-US' });
 }
 
 /** Speak in a language (e.g. "es-ES") and wait until finished (false if stopped). */
-export function speakInAndWait(text: string, lang: string, messageId = 'lesson', voice = ''): Promise<boolean> {
+export function speakInAndWait(text: string, lang: string, opts: { messageId?: string; voice?: string } = {}): Promise<boolean> {
+  const { messageId = 'lesson', voice = '' } = opts;
   return speakWait({ text, pitch: 1.0, messageId, voice, lang });
 }
 
@@ -200,7 +203,8 @@ export async function synthesizeToFile(text: string, outPath: string, lang = 'en
  * Save one podcast line in a given host voice as a WAV file, without playing it. The voice
  * is set only for this file and put back afterwards. Resolves the file path.
  */
-export async function synthesizeLineToFile(text: string, voice: string, outPath: string, pitch = 1): Promise<string> {
+export async function synthesizeLineToFile(text: string, target: { voice: string; path: string; pitch?: number }): Promise<string> {
+  const { voice, path: outPath, pitch = 1 } = target;
   if (!ttsAvailable() || !Native.synthesizeToFile) throw new Error('Saving speech is not available on this phone.');
   await Native.setVoice?.(voice).catch(() => undefined);
   if (pitch !== 1) await Native.setPitch?.(pitch).catch(() => undefined);

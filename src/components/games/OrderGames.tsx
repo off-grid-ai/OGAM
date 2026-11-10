@@ -51,7 +51,7 @@ export function TrueFalseGame({ result, projectId, onOpenSource }: GameProps) {
   const answer = (saysTrue: boolean) => {
     if (!running || !item) return;
     const ok = saysTrue === item.isTrue;
-    record(item.text, item.isTrue ? 'True' : `False: ${item.fix}`, ok, item.src);
+    record({ prompt: item.text, answer: item.isTrue ? 'True' : `False: ${item.fix}`, src: item.src }, ok);
     setFlash(ok ? 'right' : 'wrong');
     setTimeout(() => setFlash(null), 250);
     if (ok) { setCombo((c) => c + 1); setScore((s) => s + 1 + Math.min(2, Math.floor(combo / 3))); }
@@ -123,7 +123,7 @@ export function TimelineGame({ result, projectId, onOpenSource }: GameProps) {
     setChecked(true);
     const t = tries + 1;
     setTries(t);
-    if (allRight || t >= 3) order.forEach((x, k) => record(`${kind === 'dates' ? 'When' : 'Which step'}: ${x.text}`, x.label || String(x.order), x.order === k + 1, x.src));
+    if (allRight || t >= 3) order.forEach((x, k) => record({ prompt: `${kind === 'dates' ? 'When' : 'Which step'}: ${x.text}`, answer: x.label || String(x.order), src: x.src }, x.order === k + 1));
   };
   const done = checked && (allRight || tries >= 3);
   const partial = longestOrderedRun(order.map((x) => x.order));
@@ -173,7 +173,7 @@ export function SortGame({ result, projectId, onOpenSource }: GameProps) {
   const drop = (bucket: number) => {
     if (feedback) return;
     const ok = bucket === item.bucket;
-    record(item.text, data.buckets[item.bucket], ok, item.src);
+    record({ prompt: item.text, answer: data.buckets[item.bucket], src: item.src }, ok);
     if (ok) setScore((s) => s + 1);
     setPlaced((p) => ({ ...p, [item.bucket]: [...(p[item.bucket] ?? []), item.text] }));
     setFeedback({ ok, why: item.why, src: item.src });

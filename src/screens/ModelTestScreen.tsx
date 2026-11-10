@@ -258,12 +258,12 @@ const TextModelTestScreen: React.FC = () => {
       await activeModelService.unloadTextModel(false);
       const requested = Math.max(1, useAppStore.getState().settings.gpuLayers || 99);
       const started = Date.now();
-      const loaded = await vulkanEngine.loadModel(model.filePath, requested, 2048, 0);
+      const loaded = await vulkanEngine.loadModel(model.filePath, { gpuLayers: requested, context: 2048, threads: 0 });
       if (!/vulkan/i.test(loaded.backend)) throw new Error(`Model loaded without Vulkan offload (active: ${loaded.backend})`);
       if (loaded.offloadedGpuLayers === 0) throw new Error('Vulkan loaded the model with no GPU layers');
       let output = '';
       const prompt = await vulkanEngine.formatChat([{ role: 'user', content: 'Reply with the word OK.' }]);
-      await vulkanEngine.generate(prompt, 24, text => { output += text; });
+      await vulkanEngine.generate(prompt, { maxTokens: 24, onToken: text => { output += text; } });
       const layers = loaded.offloadedGpuLayers > 0
         ? `${describeOffload(loaded.offloadedGpuLayers, loaded.totalLayers)} on the GPU`
         : `${requested} layers requested (model header unreadable, count unconfirmed)`;

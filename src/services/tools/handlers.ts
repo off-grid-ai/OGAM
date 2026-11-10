@@ -88,12 +88,12 @@ async function dispatchTool(call: ToolCall): Promise<string> {
     case 'calendar_events':
       return DT.calendarEvents(Math.max(1, parseInt(String(call.arguments?.days_ahead ?? 7), 10) || 7), Math.max(0, parseInt(String(call.arguments?.days_back ?? 0), 10) || 0));
     case 'add_calendar_event':
-      return DT.addCalendarEvent(String(call.arguments?.title ?? 'Event'), String(call.arguments?.start ?? ''), call.arguments?.end, call.arguments?.location ?? '');
+      return DT.addCalendarEvent(String(call.arguments?.title ?? 'Event'), String(call.arguments?.start ?? ''), { end: call.arguments?.end, location: call.arguments?.location ?? '' });
     case 'draft_message': {
       const kind = String(call.arguments?.kind ?? 'text');
       const body = String(call.arguments?.body ?? '');
       if (kind !== 'call' && !body.trim()) throw new Error('Missing required parameter: body');
-      return DT.draftMessage(kind, body, String(call.arguments?.to ?? ''), String(call.arguments?.subject ?? ''));
+      return DT.draftMessage(kind, body, { to: String(call.arguments?.to ?? ''), subject: String(call.arguments?.subject ?? '') });
     }
     case 'schedule_task': {
       const { createScheduledTask } = require('../../schedule/createFromTool');

@@ -356,7 +356,8 @@ class ModelManager {
    * Atlas: attach a vision file (mmproj) the user picked to a model already on the phone.
    * Copies it next to the model and links it, whatever its file name.
    */
-  async attachMmProj(modelId: string, sourceUri: string, fileName: string, size?: number, onProgress?: (f: number) => void): Promise<void> {
+  async attachMmProj(modelId: string, file: { uri: string; fileName: string; size?: number }, onProgress?: (f: number) => void): Promise<void> {
+    const { uri: sourceUri, fileName, size } = file;
     const models = await this.getDownloadedModels();
     const target = models.find(m => m.id === modelId);
     if (!target || target.engine !== 'llama') throw new Error('Vision files can only be added to GGUF (llama) models.');
@@ -385,7 +386,8 @@ class ModelManager {
    * tokens ahead with it and the main model checks them, so replies come faster when the guesses are right.
    * Copied next to the model; the old MTP file (if any) is replaced.
    */
-  async attachDraft(modelId: string, sourceUri: string, fileName: string, size?: number, onProgress?: (f: number) => void): Promise<void> {
+  async attachDraft(modelId: string, file: { uri: string; fileName: string; size?: number }, onProgress?: (f: number) => void): Promise<void> {
+    const { uri: sourceUri, fileName, size } = file;
     const models = await this.getDownloadedModels();
     const target = models.find(m => m.id === modelId);
     if (!target || target.engine !== 'llama') throw new Error('MTP files can only be added to GGUF (llama) models.');

@@ -53,12 +53,15 @@ interface ProgressState {
   /** Streak freezes used, by ISO week. */
   freezes: string[];
   /** Record an answer from any game (right = good, wrong = again). */
-  record: (projectId: string, prompt: string, answer: string, correct: boolean, src?: number[]) => void;
+  record: (projectId: string, card: StudyCard, correct: boolean) => void;
   rate: (key: string, rating: Rating) => void;
   /** Add an item to review if it is new (due now). Returns true when added. */
-  seed: (projectId: string, prompt: string, answer: string, src?: number[]) => boolean;
+  seed: (projectId: string, card: StudyCard) => boolean;
   markDailyDone: () => void;
 }
+
+/** One thing to remember: what is asked, the answer, and the numbered sources it came from. */
+export interface StudyCard { prompt: string; answer: string; src?: number[] }
 
 export const itemKey = (projectId: string, answer: string, prompt: string) =>
   `${projectId}:${answer.trim().toLowerCase().slice(0, 60)}:${prompt.trim().toLowerCase().slice(0, 40)}`;
@@ -69,7 +72,8 @@ export const useStudyProgress = create<ProgressState>()(
       items: {},
       doneDays: [],
       freezes: [],
-      record: (projectId, prompt, answer, correct, src) => {
+      record: (projectId, card, correct) => {
+        const { prompt, answer, src } = card;
         if (!prompt.trim() || !answer.trim()) return;
         const key = itemKey(projectId, answer, prompt);
         const now = Date.now();
@@ -83,7 +87,8 @@ export const useStudyProgress = create<ProgressState>()(
         const next = schedule(prev, rating, Date.now());
         set((s) => ({ items: { ...s.items, [key]: { ...prev, ...next, correct: prev.correct + (rating === 'again' ? 0 : 1), wrong: prev.wrong + (rating === 'again' ? 1 : 0) } } }));
       },
-      seed: (projectId, prompt, answer, src) => {
+      seed: (projectId, card) => {
+        const { prompt, answer, src } = card;
         if (!prompt.trim() || !answer.trim()) return false;
         const key = itemKey(projectId, answer, prompt);
         if (get().items[key]) return false;

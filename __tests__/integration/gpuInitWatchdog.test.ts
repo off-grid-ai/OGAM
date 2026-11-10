@@ -28,7 +28,7 @@ afterEach(() => { jest.useRealTimers(); });
 
 it('does not call a slow load hung while its weights are still loading, even past 45 seconds in total', async () => {
   const t = setup();
-  const result = t.initContextWithFallback({ model: '/models/gemma.gguf' }, 2048, 24, false);
+  const result = t.initContextWithFallback({ model: '/models/gemma.gguf' }, 2048, { nGpuLayers: 24, allowCpuFallback: false });
   // 120 seconds of steady weight loading (a percentage every 10 s): far past the old flat 45 s limit.
   for (let pct = 10; pct <= 100; pct += 10) { await tick(10_000); t.pending[0].onProgress!(pct); }
   const ctx = t.makeContext(true);
@@ -41,7 +41,7 @@ it('does not call a slow load hung while its weights are still loading, even pas
 
 it('says the weights stalled, and where, when the percentage stops moving', async () => {
   const t = setup();
-  const result = t.initContextWithFallback({ model: '/models/gemma.gguf' }, 2048, 24, false);
+  const result = t.initContextWithFallback({ model: '/models/gemma.gguf' }, 2048, { nGpuLayers: 24, allowCpuFallback: false });
   const failure = result.catch((e: Error) => e);
   await tick(5_000); t.pending[0].onProgress!(40);
   await tick(5_000); t.pending[0].onProgress!(63);
@@ -53,7 +53,7 @@ it('says the weights stalled, and where, when the percentage stops moving', asyn
 
 it('says GPU setup hung when the weights finished but nothing came after', async () => {
   const t = setup();
-  const failure = t.initContextWithFallback({ model: '/models/gemma.gguf' }, 2048, 24, false).catch((e: Error) => e);
+  const failure = t.initContextWithFallback({ model: '/models/gemma.gguf' }, 2048, { nGpuLayers: 24, allowCpuFallback: false }).catch((e: Error) => e);
   await tick(8_000); t.pending[0].onProgress!(100);
   await tick(91_000);
   const error = (await failure) as Error;
@@ -63,12 +63,12 @@ it('says GPU setup hung when the weights finished but nothing came after', async
 
 it('lets a timed-out load finish and release its context before the next load starts', async () => {
   const t = setup();
-  const first = t.initContextWithFallback({ model: '/models/gemma.gguf' }, 2048, 24, false).catch((e: Error) => e);
+  const first = t.initContextWithFallback({ model: '/models/gemma.gguf' }, 2048, { nGpuLayers: 24, allowCpuFallback: false }).catch((e: Error) => e);
   await tick(46_000);
   expect(((await first) as Error).message).toMatch(/timed out after 45000ms/);
 
   // The user retries while the native load is still running: no second native load may start yet.
-  const second = t.initContextWithFallback({ model: '/models/gemma.gguf' }, 2048, 0, true);
+  const second = t.initContextWithFallback({ model: '/models/gemma.gguf' }, 2048, { nGpuLayers: 0, allowCpuFallback: true });
   await tick(5_000);
   expect(t.pending).toHaveLength(1);
 
@@ -86,10 +86,10 @@ it('lets a timed-out load finish and release its context before the next load st
 
 it('refuses to start another load when the abandoned one never finishes, and tells the person to restart Atlas', async () => {
   const t = setup();
-  const first = t.initContextWithFallback({ model: '/models/gemma.gguf' }, 2048, 24, false).catch((e: Error) => e);
+  const first = t.initContextWithFallback({ model: '/models/gemma.gguf' }, 2048, { nGpuLayers: 24, allowCpuFallback: false }).catch((e: Error) => e);
   await tick(46_000);
   await first;
-  const second = t.initContextWithFallback({ model: '/models/gemma.gguf' }, 2048, 0, true).catch((e: Error) => e);
+  const second = t.initContextWithFallback({ model: '/models/gemma.gguf' }, 2048, { nGpuLayers: 0, allowCpuFallback: true }).catch((e: Error) => e);
   await tick(121_000);
   const error = (await second) as Error;
   expect(error.message).toMatch(/Close Atlas completely and open it again/);

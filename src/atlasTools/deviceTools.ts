@@ -148,7 +148,8 @@ export async function calendarEvents(daysAhead = 7, daysBack = 0): Promise<strin
   return ev.map((e) => `- ${f(e.begin, e.allDay)}${e.allDay ? ' (all day)' : ` to ${new Date(e.end).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`}: ${e.title}${e.location ? ` @ ${e.location}` : ''}`).join('\n');
 }
 
-export async function addCalendarEvent(title: string, start: string, end?: string, location = '', description = ''): Promise<string> {
+export async function addCalendarEvent(title: string, start: string, more: { end?: string; location?: string; description?: string } = {}): Promise<string> {
+  const { end, location = '', description = '' } = more;
   const s = Date.parse(start);
   if (isNaN(s)) return 'Could not understand the start time. Use a format like 2026-10-05T14:00.';
   const e = end && !isNaN(Date.parse(end)) ? Date.parse(end) : s + 3600000;
@@ -157,7 +158,8 @@ export async function addCalendarEvent(title: string, start: string, end?: strin
 }
 
 /** The link that opens the phone's Messages or Email app with a draft filled in (nothing is sent from here). */
-export function messageUrl(kind: 'text' | 'email' | 'call', body: string, to = '', subject = ''): string {
+export function messageUrl(kind: 'text' | 'email' | 'call', body: string, who: { to?: string; subject?: string } = {}): string {
+  const { to = '', subject = '' } = who;
   if (kind === 'call') return `tel:${to.replace(/[^\d+*#]/g, '')}`;
   if (kind === 'text') return `sms:${to.replace(/[^\d+,;]/g, '')}?body=${encodeURIComponent(body)}`;
   const recipient = to.replace(/[^\w@+.,;-]/g, '');
@@ -165,13 +167,14 @@ export function messageUrl(kind: 'text' | 'email' | 'call', body: string, to = '
 }
 
 /** Opens Messages or Email with the draft ready; the user reads it and presses send themselves. */
-export async function draftMessage(kind: string, body: string, to = '', subject = ''): Promise<string> {
+export async function draftMessage(kind: string, body: string, who: { to?: string; subject?: string } = {}): Promise<string> {
+  const { to = '', subject = '' } = who;
   const which = kind === 'email' ? 'email' : kind === 'call' ? 'call' : 'text';
   if (which === 'call' && !to.replace(/\D/g, '')) return 'There is no phone number to call. Ask the user for it.';
   if (which !== 'call' && !body.trim()) return 'The draft has no text. Write the message first.';
   const { Linking } = require('react-native');
   try {
-    await Linking.openURL(messageUrl(which, body, to, subject));
+    await Linking.openURL(messageUrl(which, body, { to, subject }));
   } catch {
     return `This phone could not open ${which === 'email' ? 'an email app' : which === 'call' ? 'the phone app' : 'a messaging app'}.`;
   }

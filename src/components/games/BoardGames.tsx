@@ -4,7 +4,7 @@ import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-nativ
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import type { JeopardyCategory, McQuestion, Statement } from '../../study/games/generate';
 import { closeEnough, shuffle, type ClozeItem } from '../../study/games/logic';
-import { dueItems, nextIntervalLabel, streakFrom, useStudyProgress, type ProgressItem, type Rating } from '../../study/progress';
+import { dueItems, nextIntervalLabel, streakFrom, useStudyProgress, type ProgressItem, type Rating, type StudyCard } from '../../study/progress';
 import { useStudyStore } from '../../study/engine';
 import { speakAndWait, stop } from '../../atlasVoice/tts';
 import { Banner, BAD, Card, Choice, Finished, GameButton, GOOD, ScoreLine, SourceLinks, Title, useGameColors, useRecord, type GameProps } from './kit';
@@ -119,7 +119,7 @@ export function JeopardyGame({ result, projectId, onOpenSource }: GameProps) {
   if (open) {
     const clue = board[open.c].clues[open.k];
     const mark = (ok: boolean) => {
-      record(clue.clue, clue.answer, ok, clue.src);
+      record({ prompt: clue.clue, answer: clue.answer, src: clue.src }, ok);
       setScores((s) => s.map((v, i) => (i === turn ? v + (ok ? clue.value : -Math.round(clue.value / 2)) : v)));
       setUsed((u) => [...u, `${open.c}:${open.k}`]);
       setOpen(null); setRevealed(false); setTurn((t) => (t + 1) % players.length);
@@ -228,7 +228,7 @@ export function BossGame({ result, projectId, onOpenSource }: GameProps) {
       <Card>
         <McView q={q} result={result} onOpenSource={onOpenSource} onAnswer={(ok) => {
           setAnswered(true);
-          record(q.q, q.options[q.answer], ok, q.src);
+          record({ prompt: q.q, answer: q.options[q.answer], src: q.src }, ok);
           if (ok) {
             const dmg = (q.difficulty ?? 2) * 10 + streak * 5;
             setHp((h) => h - dmg); setStreak((s) => s + 1); setHurt(true); setTimeout(() => setHurt(false), 400);
@@ -262,8 +262,8 @@ export function ExamGame({ result, projectId, onOpenSource }: GameProps) {
     return () => clearInterval(t);
   }, [started, i, all.length]);
   const finished = started && (i >= all.length || left === 0);
-  const answer = (ok: boolean, prompt: string, ans: string, src?: number[]) => {
-    record(prompt, ans, ok, src);
+  const answer = (ok: boolean, card: StudyCard) => {
+    record(card, ok);
     setAnswers((a) => [...a, ok]); setTyped('');
     setTimeout(() => setI((x) => x + 1), 250);
   };
@@ -305,13 +305,13 @@ export function ExamGame({ result, projectId, onOpenSource }: GameProps) {
         <Text style={[{ color: left < 60 ? BAD : colors.text }, literalStyles.s5]}>{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}</Text>
       </View>
       <Card>
-        {x.kind === 'mc' && <McView key={i} q={x.q} result={result} onOpenSource={onOpenSource} revealNow={false} onAnswer={(ok) => answer(ok, x.q.q, x.q.options[x.q.answer], x.q.src)} />}
+        {x.kind === 'mc' && <McView key={i} q={x.q} result={result} onOpenSource={onOpenSource} revealNow={false} onAnswer={(ok) => answer(ok, { prompt: x.q.q, answer: x.q.options[x.q.answer], src: x.q.src })} />}
         {x.kind === 'tf' && (
           <View>
             <Text style={[{ color: colors.text }, literalStyles.s6]}>True or false: {x.s.text}</Text>
             <View style={literalStyles.s9}>
-              <View style={literalStyles.s10}><GameButton label="False" kind="plain" onPress={() => answer(!x.s.isTrue, x.s.text, x.s.isTrue ? 'True' : 'False', x.s.src)} /></View>
-              <View style={literalStyles.s10}><GameButton label="True" onPress={() => answer(x.s.isTrue, x.s.text, x.s.isTrue ? 'True' : 'False', x.s.src)} /></View>
+              <View style={literalStyles.s10}><GameButton label="False" kind="plain" onPress={() => answer(!x.s.isTrue, { prompt: x.s.text, answer: x.s.isTrue ? 'True' : 'False', src: x.s.src })} /></View>
+              <View style={literalStyles.s10}><GameButton label="True" onPress={() => answer(x.s.isTrue, { prompt: x.s.text, answer: x.s.isTrue ? 'True' : 'False', src: x.s.src })} /></View>
             </View>
           </View>
         )}
@@ -319,7 +319,7 @@ export function ExamGame({ result, projectId, onOpenSource }: GameProps) {
           <View>
             <Text style={[{ color: colors.text }, literalStyles.s6]}>{x.c.sentence}</Text>
             <TextInput value={typed} onChangeText={setTyped} autoCapitalize="characters" placeholder="Missing word" placeholderTextColor={colors.textMuted} style={[{ color: colors.text, backgroundColor: colors.background }, literalStyles.s26]} />
-            <GameButton label="Answer" disabled={!typed.trim()} onPress={() => answer(closeEnough(typed, x.c.answer), x.c.sentence, x.c.answer, x.c.src)} />
+            <GameButton label="Answer" disabled={!typed.trim()} onPress={() => answer(closeEnough(typed, x.c.answer), { prompt: x.c.sentence, answer: x.c.answer, src: x.c.src })} />
           </View>
         )}
       </Card>
@@ -413,7 +413,7 @@ export function DailyGame({ result, projectId, onOpenSource }: GameProps) {
     return <Finished score={score} max={tasks.length} note={`streak ${streakFrom([...doneDays, today], today)} days`} />;
   }
   const t = tasks[i];
-  const next = (ok: boolean) => { record(t.prompt, t.answer, ok, t.src); if (ok) setScore((s) => s + 1); setShown(false); setTyped(''); setI((x) => x + 1); };
+  const next = (ok: boolean) => { record({ prompt: t.prompt, answer: t.answer, src: t.src }, ok); if (ok) setScore((s) => s + 1); setShown(false); setTyped(''); setI((x) => x + 1); };
   return (
     <View>
       <Text style={{ color: colors.textSecondary }}>Daily challenge · {i + 1} of {tasks.length} · streak {streak} 🔥</Text>
@@ -462,14 +462,14 @@ export function PodcastQuizGame({ result, projectId, onOpenSource }: GameProps) 
     const line = lines[q.line ?? 0];
     if (!line) return;
     setReplaying(true);
-    await speakAndWait(line.text, 1, 'podcast-quiz');
+    await speakAndWait(line.text, { messageId: 'podcast-quiz' });
     setReplaying(false);
   };
   return (
     <View>
       <ScoreLine score={score} max={questions.length} extra={`question ${i + 1}`} />
       <Card>
-        <McView q={q} result={result} onOpenSource={onOpenSource} onAnswer={(ok) => { setAnswered(true); if (ok) setScore((s) => s + 1); record(q.q, q.options[q.answer], ok); }} />
+        <McView q={q} result={result} onOpenSource={onOpenSource} onAnswer={(ok) => { setAnswered(true); if (ok) setScore((s) => s + 1); record({ prompt: q.q, answer: q.options[q.answer] }, ok); }} />
       </Card>
       {answered && (
         <View>

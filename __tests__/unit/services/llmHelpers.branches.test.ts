@@ -228,7 +228,7 @@ describe('initContextWithFallback — all three attempts fail', () => {
       .mockRejectedValueOnce(new Error('minctx fail'));
 
     await expect(
-      initContextWithFallback({ model: '/m.gguf' }, 4096, 0),
+      initContextWithFallback({ model: '/m.gguf' }, 4096, { nGpuLayers: 0 }),
     ).rejects.toThrow(/Failed to load model even at minimum context/);
   });
 
@@ -239,7 +239,7 @@ describe('initContextWithFallback — all three attempts fail', () => {
       .mockRejectedValueOnce(new Error('final-specific'));
 
     try {
-      await initContextWithFallback({ model: '/m.gguf' }, 8192, 99);
+      await initContextWithFallback({ model: '/m.gguf' }, 8192, { nGpuLayers: 99 });
       throw new Error('should have thrown');
     } catch (e: any) {
       expect(e.message).toContain('GPU: gpu-specific');
@@ -257,7 +257,7 @@ describe('initContextWithFallback — all three attempts fail', () => {
       .mockRejectedValueOnce(new Error('same'));
 
     try {
-      await initContextWithFallback({ model: '/m.gguf' }, 4096, 99);
+      await initContextWithFallback({ model: '/m.gguf' }, 4096, { nGpuLayers: 99 });
       throw new Error('should have thrown');
     } catch (e: any) {
       expect(e.message).toContain('min-ctx: same');
@@ -273,7 +273,7 @@ describe('initContextWithFallback — all three attempts fail', () => {
       .mockRejectedValueOnce('plain-string-final');
 
     await expect(
-      initContextWithFallback({ model: '/m.gguf' }, 2048, 0),
+      initContextWithFallback({ model: '/m.gguf' }, 2048, { nGpuLayers: 0 }),
     ).rejects.toThrow(/Failed to load model/);
   });
 });

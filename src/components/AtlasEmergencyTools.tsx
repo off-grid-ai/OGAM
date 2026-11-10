@@ -271,7 +271,7 @@ function PhrasePractice() {
   const phrase = lang.phrases[idx];
   const options = useMemo(() => shuffle([idx, ...shuffle(PHRASES_EN.map((_, k) => k).filter((k) => k !== idx)).slice(0, 3)]), [idx]);
   useEffect(() => () => stop(), []);
-  const say = () => phrase && speakIn(phrase[0], lang.code, 'phrase-practice');
+  const say = () => phrase && speakIn(phrase[0], lang.code, { messageId: 'phrase-practice' });
   useEffect(() => { if (mode === 'listen') setTimeout(say, 300); }, [i, mode, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const next = () => { setPicked(null); setShown(false); setI((x) => x + 1); };
   return (

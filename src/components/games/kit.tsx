@@ -3,7 +3,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../theme';
 import type { Source, StudyResult } from '../../study/engine';
-import { useStudyProgress } from '../../study/progress';
+import { useStudyProgress, type StudyCard } from '../../study/progress';
 const BORDERWIDTH_0 = 0;
 const BORDERWIDTH_1 = 1;
 const OPACITY_0_5 = 0.5;
@@ -117,7 +117,7 @@ export function ScoreLine({ score, max, extra }: { score: number; max: number; e
 /** Report an answer to spaced repetition (all games share one review queue). */
 export function useRecord(projectId: string) {
   const record = useStudyProgress((s) => s.record);
-  return (prompt: string, answer: string, correct: boolean, src?: number[]) => record(projectId, prompt, answer, correct, src);
+  return (card: StudyCard, correct: boolean) => record(projectId, card, correct);
 }
 
 export function Finished({ score, max, onAgain, note }: { score: number; max: number; onAgain?: () => void; note?: string }) {

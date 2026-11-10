@@ -256,7 +256,8 @@ async function writeReport(agent: Agent, cfg: LearnConfig, item: BankItem): Prom
   L().updateItem(agent.id, item.id, { tries: item.tries + 1 });
 }
 
-async function saveNote(agent: Agent, cfg: LearnConfig, q: string, answer: string): Promise<void> {
+async function saveNote(agent: Agent, cfg: LearnConfig, note: { q: string; answer: string }): Promise<void> {
+  const { q, answer } = note;
   if (cfg.mode !== 'keep' || !cfg.projectId) return;
   try {
     const dir = `${RNFS.DocumentDirectoryPath}/learned`;
@@ -313,7 +314,7 @@ async function judgeReports(agent: Agent, cfg: LearnConfig): Promise<void> {
       // The judge read a shortened copy; what is kept and saved is the full report.
       const full = (cur.reportLog ?? []).find((x) => x.itemId === rep.itemId)?.text ?? rep.report;
       L().patch(agent.id, { notes: [{ q: rep.q, answer: full, at: Date.now(), score: sc ? parseFloat(sc[1]) : undefined }, ...cur.notes].slice(0, 200) });
-      await saveNote(agent, cfg, rep.q, full);
+      await saveNote(agent, cfg, { q: rep.q, answer: full });
     } else if (item.tries < 2) {
       L().updateItem(agent.id, item.id, { status: 'approved', feedback: v.reason }); // back in the queue for one redo
     } else {
@@ -464,7 +465,7 @@ export async function keepSession(agentId: string): Promise<string> {
   setLessons(agentId, lines.join('\n'));
   let saved = 0;
   if (cfg.projectId) {
-    for (const n of st.notes.slice(0, 60)) { await saveNote(agent, { ...cfg, mode: 'keep' }, n.q, n.answer); saved++; }
+    for (const n of st.notes.slice(0, 60)) { await saveNote(agent, { ...cfg, mode: 'keep' }, { q: n.q, answer: n.answer }); saved++; }
   }
   L().patch(agentId, { sessionLessons: '', notes: [] });
   return `Kept ${lines.length} lessons${cfg.projectId ? ` and ${saved} answers (saved to the project's knowledge base)` : ''}.`;

@@ -139,7 +139,7 @@ export async function importGgufFiles(
     });
     addDownloadedModel(model);
     try {
-      await modelManager.attachDraft(model.id, draftFile.uri, draftFile.name, draftFile.size, f => setImportProgress({ fraction: 0.8 + f * 0.2, fileName: draftFile.name }));
+      await modelManager.attachDraft(model.id, { uri: draftFile.uri, fileName: draftFile.name, size: draftFile.size }, f => setImportProgress({ fraction: 0.8 + f * 0.2, fileName: draftFile.name }));
       setAlertState(showAlert('Success', `${model.name} imported with its MTP file.`));
     } catch (e) {
       setAlertState(showAlert('Model imported, MTP file not added', getErrorMessage(e)));
@@ -195,7 +195,7 @@ export async function pickAndAttachMmProj(modelId: string, modelName: string, de
   if (!name.toLowerCase().endsWith('.gguf')) { deps.setAlertState(showAlert('Not a vision file', 'Pick the .gguf vision file (it usually has "mmproj" in its name).')); return false; }
   try {
     deps.setImportProgress({ fraction: 0, fileName: name });
-    await modelManager.attachMmProj(modelId, file.uri, name, file.size ?? undefined, (f) => deps.setImportProgress({ fraction: f, fileName: name }));
+    await modelManager.attachMmProj(modelId, { uri: file.uri, fileName: name, size: file.size ?? undefined }, (f) => deps.setImportProgress({ fraction: f, fileName: name }));
     deps.setAlertState(showAlert('Vision added', `${modelName} can now look at pictures. Reload the model (or restart the chat) to use it.`));
     return true;
   } catch (e) {
@@ -214,7 +214,7 @@ export async function pickAndAttachDraft(modelId: string, modelName: string, dep
   if (!name.toLowerCase().endsWith('.gguf')) { deps.setAlertState(showAlert('Not an MTP file', 'Pick the .gguf MTP (draft) file.')); return false; }
   try {
     deps.setImportProgress({ fraction: 0, fileName: name });
-    await modelManager.attachDraft(modelId, file.uri, name, file.size ?? undefined, (f) => deps.setImportProgress({ fraction: f, fileName: name }));
+    await modelManager.attachDraft(modelId, { uri: file.uri, fileName: name, size: file.size ?? undefined }, (f) => deps.setImportProgress({ fraction: f, fileName: name }));
     deps.setAlertState(showAlert('MTP file added', `${modelName} will draft with it. Reload the model (or restart the chat) to use it.`));
     return true;
   } catch (e) {

@@ -8,7 +8,7 @@ import { render, fireEvent, waitFor } from '@testing-library/react-native';
 const mockSpoken: string[] = [];
 jest.mock('../../../src/atlasVoice/tts', () => ({
   listVoices: jest.fn(async () => Array.from({ length: 11 }, (_, i) => ({ name: `sid:${i}`, locale: 'en-US', quality: 500 }))),
-  speakAndWait: jest.fn(async (_t: string, _p: number, _m: string, voice: string) => { mockSpoken.push(voice); return true; }),
+  speakAndWait: jest.fn(async (_t: string, opts: { voice: string }) => { mockSpoken.push(opts.voice); return true; }),
   stop: jest.fn(),
 }));
 

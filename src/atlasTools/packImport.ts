@@ -45,13 +45,15 @@ export async function importZipPack(projectId: string, onProgress: (msg: string)
   const f = files[0];
   onProgress('Copying the pack...');
   const local = await resolvePickedFileUri(f.uri, f.name || 'atlas-pack.zip');
-  const res = await importZipFromPath(projectId, local, f.name || 'pack.zip', onProgress, shouldStop);
+  const res = await importZipFromPath(projectId, { path: local, name: f.name || 'pack.zip' }, { onProgress, shouldStop });
   try { await RNFS.unlink(local.replace(/^file:\/\//, '')); } catch { /* copy may be the original */ }
   return res;
 }
 
 /** Unpack a .zip that is already on the phone and add its text files to the project's knowledge base. */
-export async function importZipFromPath(projectId: string, local: string, name: string, onProgress: (msg: string) => void, shouldStop: () => boolean = () => false): Promise<PackResult> {
+export async function importZipFromPath(projectId: string, file: { path: string; name: string }, hooks: { onProgress: (msg: string) => void; shouldStop?: () => boolean }): Promise<PackResult> {
+  const { path: local, name } = file;
+  const { onProgress, shouldStop = () => false } = hooks;
   const target = `${RNFS.DocumentDirectoryPath}/atlas_packs/${name.replace(/\.zip$/i, '').replace(/[^A-Za-z0-9._-]/g, '_')}`;
   await RNFS.mkdir(target);
   onProgress('Unpacking...');
@@ -69,7 +71,7 @@ export async function importZipFromPath(projectId: string, local: string, name: 
   // An Atlas package saved to a drive is one zip of subject packs: add each pack in turn.
   for (const z of zips) {
     if (shouldStop()) break;
-    const inner = await importZipFromPath(projectId, z.path, z.name, onProgress, shouldStop);
+    const inner = await importZipFromPath(projectId, { path: z.path, name: z.name }, { onProgress, shouldStop });
     res.added += inner.added; res.skipped += inner.skipped; res.total += inner.total; res.failed.push(...inner.failed);
   }
   for (let i = 0; i < items.length; i++) {

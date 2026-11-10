@@ -41,5 +41,5 @@ export function speakerSlots(speakers: (string | undefined)[]): (s: string | und
 
 /** Speak a line of the language being learned in the voice its slot picks (a different voice for different sentences). */
 export function speakVaried(text: string, code: string, tag: string): void {
-  voiceForSlot(code, slotForText(text)).then((voice) => speakIn(text, code, tag, voice)).catch(() => speakIn(text, code, tag));
+  voiceForSlot(code, slotForText(text)).then((voice) => speakIn(text, code, { messageId: tag, voice })).catch(() => speakIn(text, code, { messageId: tag }));
 }

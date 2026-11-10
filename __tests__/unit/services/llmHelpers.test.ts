@@ -576,7 +576,7 @@ describe('initContextWithFallback — HTP device stripping and timeout', () => {
     const mockCtx = { gpu: true, release: jest.fn() };
     mockedInitLlama.mockResolvedValueOnce(mockCtx as any);
 
-    await initContextWithFallback(baseParams, 2048, 99);
+    await initContextWithFallback(baseParams, 2048, { nGpuLayers: 99 });
 
     // A GPU/HTP load also gets a progress callback, so a slow load can be told apart from a hung one.
     expect(mockedInitLlama).toHaveBeenCalledWith(
@@ -588,7 +588,7 @@ describe('initContextWithFallback — HTP device stripping and timeout', () => {
     const callsBefore = mockedInitLlama.mock.calls.length;
     mockedInitLlama.mockRejectedValueOnce(new Error('JSI bindings not installed'));
 
-    await expect(initContextWithFallback(baseParams, 8192, 99)).rejects.toThrow(
+    await expect(initContextWithFallback(baseParams, 8192, { nGpuLayers: 99 })).rejects.toThrow(
       'app installation/build problem',
     );
 
@@ -600,7 +600,7 @@ describe('initContextWithFallback — HTP device stripping and timeout', () => {
     const mockCtx = { gpu: true, release: jest.fn() };
     mockedInitLlama.mockResolvedValueOnce(mockCtx as any);
 
-    await initContextWithFallback(baseParams, 2048, 99);
+    await initContextWithFallback(baseParams, 2048, { nGpuLayers: 99 });
 
     const gpuCall = mockedInitLlama.mock.calls[1][0] as Record<string, unknown>;
     expect(gpuCall.devices).toBeUndefined();
@@ -614,7 +614,7 @@ describe('initContextWithFallback — HTP device stripping and timeout', () => {
     const mockCtx = { gpu: false, release: jest.fn() };
     mockedInitLlama.mockResolvedValueOnce(mockCtx as any);
 
-    await initContextWithFallback(baseParams, 8192, 99);
+    await initContextWithFallback(baseParams, 8192, { nGpuLayers: 99 });
 
     const minCtxCall = mockedInitLlama.mock.calls[3][0] as Record<string, unknown>;
     expect(minCtxCall.devices).toBeUndefined();
@@ -628,7 +628,7 @@ describe('initContextWithFallback — HTP device stripping and timeout', () => {
     mockedInitLlama.mockResolvedValueOnce(mockCtx as any);
     const logger = require('../../../src/utils/logger').default;
 
-    await initContextWithFallback(baseParams, 2048, 99);
+    await initContextWithFallback(baseParams, 2048, { nGpuLayers: 99 });
 
     expect(logger.log).toHaveBeenCalledWith(
       expect.stringContaining('backend=HTP'),
@@ -664,7 +664,7 @@ describe('initContextWithFallback — GPU timeout on Android', () => {
       .mockReturnValueOnce(slowGpu)
       .mockResolvedValueOnce(cpuCtx);
 
-    const resultPromise = initContextWithFallback({ model: '/m.gguf' }, 2048, 4);
+    const resultPromise = initContextWithFallback({ model: '/m.gguf' }, 2048, { nGpuLayers: 4 });
     await jest.advanceTimersByTimeAsync(45001);
     // The GPU load is still running natively: the CPU load must not have started beside it.
     expect(mockedInitLlama).toHaveBeenCalledTimes(1);
@@ -687,7 +687,7 @@ describe('initContextWithFallback — GPU timeout on Android', () => {
       .mockReturnValueOnce(slowGpu)
       .mockResolvedValueOnce(cpuCtx);
 
-    const resultPromise = initContextWithFallback({ model: '/m.gguf' }, 2048, 4);
+    const resultPromise = initContextWithFallback({ model: '/m.gguf' }, 2048, { nGpuLayers: 4 });
     await jest.advanceTimersByTimeAsync(45001);
 
     const lateCtx = { release: jest.fn().mockRejectedValue(new Error('release fail')) };

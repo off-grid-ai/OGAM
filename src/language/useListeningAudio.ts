@@ -18,7 +18,7 @@ export function useListeningAudio({ piece, code, part, done, autoPlay }: { piece
     const slotOf = speakerSlots(piece.parts.flatMap((p) => p.lines.map((l) => l.speaker)));
     for (const l of piece.parts[index].lines) {
       const voice = await voiceForSlot(code, l.speaker ? slotOf(l.speaker) : slotForText(piece.title));
-      if (!(await speakInAndWait(l.t, code, 'listening', voice))) break;
+      if (!(await speakInAndWait(l.t, code, { messageId: 'listening', voice }))) break;
     }
     setPlaying(false);
   };

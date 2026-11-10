@@ -82,7 +82,7 @@ export const CrosswordScreen: React.FC = () => {
     if (!right) { setNote('Not quite. Try again, or tap Hint.'); return; }
     const next = [...solved, current.id];
     setSolved(next); setTyped(''); setNote(null); setPicked(null);
-    speakIn(current.word.toLocaleLowerCase(), code, 'crossword');
+    speakIn(current.word.toLocaleLowerCase(), code, { messageId: 'crossword' });
     if (next.length === puzzle.entries.length) finish(next.length);
   };
 
