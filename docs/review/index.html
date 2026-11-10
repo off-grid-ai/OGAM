@@ -421,8 +421,9 @@ function renderStage() {
   if (!s) { $("title").textContent = "No screens yet"; return; }
   $("title").textContent = s.name;
   const vs = versions(s), a = afterIdx(s);
-  // On Android, a screen with no Android shot says the shot is the iPhone's.
-  const noAndroid = platform === "android" && !hasAndroid(s) ? " (iPhone shot: no Android one yet)" : "";
+  // On Android, a version with no Android shot says the shot is the iPhone's (judged per version:
+  // an older version's Android shot does not cover the latest one).
+  const noAndroid = platform === "android" && !vs[a].android ? " (iPhone shot: no Android one for this version)" : "";
   $("what").textContent = (vs[a].what || s.what || "") + noAndroid;
   $("views").hidden = a === 0;
   // The version picker: every version of this screen, newest first.
@@ -846,7 +847,10 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && shrink()) return;
   if (!$("lightbox").hidden) return;
   // [ folds the screen list, ] the notes; typing in a box or a menu keeps the keys.
-  if ((e.key === "[" || e.key === "]") && !/^(TEXTAREA|INPUT|SELECT)$/.test(e.target.tagName)) {
+  // ⌘[ / ⌘] (and Ctrl+[ / ] without Alt) are the browser's Back and Forward: leave them alone.
+  // Ctrl+Alt is AltGr on Windows, which some layouts need to type [ and ].
+  const navChord = e.metaKey || (e.ctrlKey && !e.altKey);
+  if ((e.key === "[" || e.key === "]") && !navChord && !/^(TEXTAREA|INPUT|SELECT)$/.test(e.target.tagName)) {
     e.preventDefault(); toggleFold(e.key === "[" ? "list" : "notes"); return;
   }
   if ((e.key === "f" || e.key === "F") && e.target.id !== "text") {
