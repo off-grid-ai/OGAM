@@ -232,6 +232,26 @@ it('a queued download that gets its native id is one start, and a retry after a 
   expect(endpoint.named('model_download_started')).toHaveLength(2);
 });
 
+it('a cancelled download closes its attempt: downloading it again is a new start, with no finish or failure sent', async () => {
+  const { endpoint, flush } = await setup({ usage: true });
+  const { useDownloadStore } = require('../../../src/stores/downloadStore');
+  const row = (downloadId: string) => ({
+    modelKey: 'image:sd', downloadId, modelId: 'sd', fileName: 'sd.zip', quantization: '',
+    modelType: 'image', status: 'running', bytesDownloaded: 0, totalBytes: GB, combinedTotalBytes: 0, progress: 0, createdAt: 0,
+  });
+  useDownloadStore.getState().add(row('dl-1'));
+  // The person cancels: the row goes.
+  useDownloadStore.getState().remove('image:sd');
+  // Later they download it again.
+  useDownloadStore.getState().add(row('dl-2'));
+
+  await new Promise(resolve => setTimeout(resolve, 20));
+  await flush();
+  await waitFor(() => expect(endpoint.named('model_download_started')).toHaveLength(2));
+  expect(endpoint.named('model_download_finished')).toHaveLength(0);
+  expect(endpoint.named('model_download_failed')).toHaveLength(0);
+});
+
 it('reports the spec properties when the device cannot say its chip, memory or battery', async () => {
   const { analytics, endpoint, flush } = await setup(null);
   // Before opting in a download is not tracked at all, so its end later sends nothing.

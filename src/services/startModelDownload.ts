@@ -160,8 +160,9 @@ export async function startModelDownload(
     // Cancelled (the row is gone) stops quietly. A failed file clears the row and says so; the next
     // tap fetches only what is still missing.
     const cancelled = (e as Error & { cancelled?: boolean }).cancelled || !useDownloadStore.getState().downloads[modelKey];
+    // A failure is recorded first (with its code, disk_full from the space check), then the row clears.
+    if (!cancelled) fail(e as Error);
     useDownloadStore.getState().remove(modelKey);
-    if (!cancelled) opts.onError?.(e as Error);
     return;
   }
 

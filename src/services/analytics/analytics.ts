@@ -790,6 +790,11 @@ function reportArrivedDownloads(
   }
 }
 
+/** A download that stopped without finishing or failing (cancelled, removed): forget its attempt. */
+export function downloadDropped(key: string): void {
+  downloads.delete(key);
+}
+
 export function downloadEnded(key: string, outcome: 'done' | 'failed', error?: unknown): void {
   // Before the early return: a person who has not opted in has no download entry, and they are
   // the ones the failure prompt is for.

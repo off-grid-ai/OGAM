@@ -6,7 +6,7 @@ import logger from '../utils/logger';
 // existing `from '../stores/downloadStore'` importer of these keeps working unchanged.
 import { DownloadStatus, DownloadEntry, isActiveStatus } from '../utils/downloadStatus';
 import { sampleProgressRate } from '@offgrid/ui';
-import { downloadEnded, downloadStarted } from '../services/analytics/analytics';
+import { downloadDropped, downloadEnded, downloadStarted } from '../services/analytics/analytics';
 import { modelRef } from '../services/analytics/values';
 
 export type { DownloadStatus, DownloadEntry };
@@ -399,6 +399,9 @@ export const useDownloadStore = create<DownloadStoreState>((set, get) => ({
   remove: (modelKey) => set(state => {
     const entry = state.downloads[modelKey];
     if (!entry) return state;
+    // A row removed mid-attempt (a cancel) closes the attempt, so a later download starts fresh. A
+    // finished download registered its model first, which already reported it done.
+    downloadDropped(modelKey);
     const newIndex = { ...state.downloadIdIndex };
     delete newIndex[entry.downloadId];
     if (entry.mmProjDownloadId) delete newIndex[entry.mmProjDownloadId];
