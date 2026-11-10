@@ -8,5 +8,10 @@ import { registerHook, HOOKS } from './hookRegistry';
 export function registerAtlasHooks(): void {
   registerHook(HOOKS.ensureTextModel, (modelId: string | null) => require('../atlasTools/models').ensureTextModel(modelId));
   registerHook(HOOKS.agentModelChosen, (modelId: string) => { require('../atlasTools/models').switchToModelInBackground(modelId); });
+  registerHook(HOOKS.protectedProjectIds, () => {
+    const { projectStoreRef } = require('../stores/storeRefs');
+    try { return (projectStoreRef().getState().projects as Array<{ id: string; pinVerifier?: string }>).filter((p) => p.pinVerifier).map((p) => p.id); } catch { return []; }
+  });
+  registerHook(HOOKS.generationActive, () => { try { return !!require('../services/llm').llmService.isCurrentlyGenerating(); } catch { return false; } });
   registerHook(HOOKS.messageCut, (latest: number, budget: number) => { require('../services/longMessageNotice').postLongMessageNotice(latest, budget); });
 }

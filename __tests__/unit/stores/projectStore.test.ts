@@ -22,6 +22,8 @@ jest.mock('../../../src/stores/encryptedChatStorage', () => ({ encryptedChatStor
 } }));
 import { useProjectStore } from '../../../src/stores/projectStore';
 
+require('../../utils/registerStores').registerStoreRefs();
+
 describe('projectStore', () => {
   beforeEach(() => {
     // Reset to default projects

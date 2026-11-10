@@ -41,6 +41,7 @@ function boot() {
     const vec = (t: string) => new Array(8).fill(0).map((_, i) => Math.sin(i + t.length * 0.1));
     return { embeddingService: { load: async () => undefined, embed: async (t: string) => vec(t), embedBatch: async (ts: string[]) => ts.map(vec), isLoaded: () => true } };
   });
+  require('../../utils/registerStores').registerStoreRefs();
   const rag = require('../../../src/services/rag');
   const db = require('../../../src/services/rag/database').ragDatabase;
   const storage = require('../../../src/stores/protectedProjectStorage');

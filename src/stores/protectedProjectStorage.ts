@@ -4,12 +4,14 @@ import type { Project } from '../types';
 import { protectedVault } from './protectedProjectVault';
 import { protectedStudyVault } from './protectedStudyVault';
 import logger from '../utils/logger';
+import { isProtectedProjectUnlocked, isProtectedProjectOpen, unlockedProjectPin, unlockedProjectIds, unlockedProjectEntries, rememberProjectPin, forgetProjectPin, forgetAllProjectPins } from './protectionState';
+
+export { isProtectedProjectUnlocked, isProtectedProjectOpen, unlockedProjectPin };
 
 /** Selective encryption of a project's metadata and its documents. Document text, names and
  * embeddings live in an encrypted per-project vault (protectedProjectVault), never in rag.db;
  * study outputs in protectedStudyVault; the project's chats are sealed with the same PIN. */
 const KEY = 'local-llm-project-storage';
-const pins = new Map<string, string>();
 const blobs = new Map<string, string>();
 const lastEncrypted = new Map<string, string>();
 let pending: Promise<void> = Promise.resolve();
@@ -36,8 +38,6 @@ const native = () => {
 const PORTABLE = 'atlasbackup:v1:';
 const portablePass = (pin: string, id: string) => `${pin}:atlas-protected-project:${id}`;
 /** True while a protected project is open (its PIN is in memory this session). */
-export const isProtectedProjectOpen = (id: string): boolean => pins.has(id);
-
 export const isPortableProjectBlob = (blob: unknown): boolean => typeof blob === 'string' && blob.startsWith(PORTABLE);
 const clearSecurity = (p: Project): Project => {
   const { pinVerifier: _pinVerifier, protectedBlob: _protectedBlob, ...rest } = p;
@@ -55,7 +55,7 @@ const seal = async (raw: string, reencryptUnlocked = true): Promise<string> => {
   for (const p of root.state.projects as Project[]) {
     if (!p.pinVerifier) { projects.push(clearSecurity(p)); continue; }
     let blob = blobs.get(p.id) || p.protectedBlob;
-    const pin = pins.get(p.id);
+    const pin = unlockedProjectPin(p.id);
     const plain = JSON.stringify(clearSecurity(p));
     if (pin && reencryptUnlocked && (!blob || lastEncrypted.get(p.id) !== plain)) {
       blob = await native().encryptProtectedItem('project', p.id, plain, pin, p.pinVerifier);
@@ -80,17 +80,10 @@ async function writeReplacement(id: string, project: Project): Promise<void> {
     if (await AsyncStorage.getItem(KEY) !== protectedText) throw new Error('Could not verify protected project write.');
   });
 }
-export function isProtectedProjectUnlocked(id: string): boolean {
-  return pins.has(id);
-}
-/** The PIN of an unlocked project, kept in memory only. For the document vault. */
-export function unlockedProjectPin(id: string): string | undefined {
-  return pins.get(id);
-}
 export async function protectProject(id: string, pin: string): Promise<void> {
-  const { useProjectStore } = require('./projectStore');
-  const { useChatStore } = require('./chatStore');
-  const { useStudyStore } = require('../study/engine');
+  const useProjectStore = require('./storeRefs').projectStoreRef();
+  const useChatStore = require('./storeRefs').chatStoreRef();
+  const { useStudyStore } = require('../study/store');
   const { ragService } = require('../services/rag');
   await pending;
   const project: Project | undefined = useProjectStore.getState().projects.find((p: Project) => p.id === id);
@@ -122,7 +115,7 @@ export async function protectProject(id: string, pin: string): Promise<void> {
     await protectedStudyVault.destroy(id, pin, verifier);
     throw e;
   }
-  blobs.set(id, blob); pins.delete(id); lastEncrypted.delete(id);
+  blobs.set(id, blob); forgetProjectPin(id); lastEncrypted.delete(id);
   useProjectStore.setState((s: any) => ({ projects: s.projects.map((p: Project) => p.id === id ? locked : p) }));
   // The project is now PIN-marked, so this write drops its outputs from plain study storage.
   dropStudyFromMemory([id]);
@@ -133,7 +126,7 @@ export async function protectProject(id: string, pin: string): Promise<void> {
 }
 /** Removes protected projects' study outputs from memory (their encrypted files stay). */
 function dropStudyFromMemory(ids: string[]): void {
-  const { useStudyStore } = require('../study/engine');
+  const { useStudyStore } = require('../study/store');
   useStudyStore.setState((s: any) => {
     const saved = { ...s.saved };
     ids.forEach((pid) => { delete saved[pid]; });
@@ -145,10 +138,10 @@ let studySealer: (() => void) | null = null;
 /** While a protected project is unlocked, every change to its study outputs is re-encrypted. */
 function watchProtectedStudy(): void {
   if (studySealer) return;
-  const { useStudyStore } = require('../study/engine');
-  const { useProjectStore } = require('./projectStore');
+  const { useStudyStore } = require('../study/store');
+  const useProjectStore = require('./storeRefs').projectStoreRef();
   studySealer = useStudyStore.subscribe((state: any, prev: any) => {
-    for (const [pid, pin] of pins) {
+    for (const [pid, pin] of unlockedProjectEntries()) {
       if (state.saved[pid] === prev.saved[pid]) continue;
       const verifier = useProjectStore.getState().projects.find((p: Project) => p.id === pid)?.pinVerifier;
       if (!verifier) continue;
@@ -162,8 +155,8 @@ function watchProtectedStudy(): void {
 async function openProjectStudy(id: string, pin: string, verifier: string): Promise<void> {
   try {
     const results = await protectedStudyVault.open(id, pin, verifier);
-    if (pins.get(id) !== pin) return; // re-locked while decrypting
-    const { useStudyStore } = require('../study/engine');
+    if (unlockedProjectPin(id) !== pin) return; // re-locked while decrypting
+    const { useStudyStore } = require('../study/store');
     // Set before watching, so opening the outputs does not re-encrypt them.
     useStudyStore.setState((s: any) => ({ saved: { ...s.saved, [id]: results } }));
     watchProtectedStudy();
@@ -176,7 +169,7 @@ async function openProjectStudy(id: string, pin: string, verifier: string): Prom
  * new chat was sealed) so they are encrypted from now on.
  */
 async function unlockProjectChats(id: string, pin: string): Promise<void> {
-  const { useChatStore } = require('./chatStore');
+  const useChatStore = require('./storeRefs').chatStoreRef();
   const { unlockChat, isChatUnlocked, protectChat } = require('./encryptedChatStorage');
   const chats = useChatStore.getState().conversations.filter((c: any) => c.projectId === id && !c.isPrivate);
   for (const chat of chats) {
@@ -197,7 +190,7 @@ const SEAL_RETRY_MS = 250;
 export async function sealNewProjectChat(chatId: string, projectId: string): Promise<void> {
   const { protectChat, unlockChat } = require('./encryptedChatStorage');
   for (let attempt = 0; attempt < SEAL_RETRIES; attempt++) {
-    const pin = pins.get(projectId);
+    const pin = unlockedProjectPin(projectId);
     if (!pin) return; // project re-locked: sealed on the next unlock instead
     try {
       await protectChat(chatId, pin);
@@ -227,9 +220,9 @@ async function decryptProject(p: Project, pin: string): Promise<Project> {
  */
 export async function openProtectedProjectsForBackup(): Promise<Project[]> {
   await pending;
-  const { useProjectStore } = require('./projectStore');
+  const useProjectStore = require('./storeRefs').projectStoreRef();
   const out: Project[] = [];
-  for (const [id, pin] of pins) {
+  for (const [id, pin] of unlockedProjectEntries()) {
     const p: Project | undefined = useProjectStore.getState().projects.find((x: Project) => x.id === id);
     if (!p?.pinVerifier) continue;
     const docs = await protectedVault.readAll(id, pin, p.pinVerifier);
@@ -256,13 +249,13 @@ async function adoptPortableProject(p: Project, pin: string): Promise<void> {
 
 export async function unlockProject(id: string, pin: string): Promise<void> {
   await pending;
-  const { useProjectStore } = require('./projectStore');
+  const useProjectStore = require('./storeRefs').projectStoreRef();
   const p: Project | undefined = useProjectStore.getState().projects.find((x: Project) => x.id === id);
   if (!p) throw new Error('Project not found.');
   // A record restored from a backup wins over any cached on-phone ciphertext of an older copy.
   if (isPortableProjectBlob(p.protectedBlob)) { blobs.delete(id); await adoptPortableProject(p, pin); }
   const original = await decryptProject(p, pin);
-  pins.set(id, pin); lastEncrypted.set(id, JSON.stringify(clearSecurity(original)));
+  rememberProjectPin(id, pin); lastEncrypted.set(id, JSON.stringify(clearSecurity(original)));
   try { await protectedVault.open(id, pin, p.pinVerifier!); }
   catch (e) { logger.error('[ProtectedProject] documents could not be opened', e); } // the project still opens; its documents stay hidden
   await unlockProjectChats(id, pin);
@@ -272,7 +265,7 @@ export async function unlockProject(id: string, pin: string): Promise<void> {
 }
 export async function permanentlyUnprotectProject(id: string, pin: string): Promise<void> {
   await pending;
-  const { useProjectStore } = require('./projectStore');
+  const useProjectStore = require('./storeRefs').projectStoreRef();
   const p: Project | undefined = useProjectStore.getState().projects.find((x: Project) => x.id === id);
   if (!p || !p.pinVerifier) throw new Error('Project is not protected.');
   const decrypted = await decryptProject(p, pin);
@@ -287,22 +280,22 @@ export async function permanentlyUnprotectProject(id: string, pin: string): Prom
   }
   const study = await protectedStudyVault.open(id, pin, p.pinVerifier);
   await protectedVault.destroy(id, pin, p.pinVerifier);
-  pins.delete(id); blobs.delete(id); lastEncrypted.delete(id);
+  forgetProjectPin(id); blobs.delete(id); lastEncrypted.delete(id);
   useProjectStore.setState((s: any) => ({ projects: s.projects.map((x: Project) => x.id === id ? decrypted : x) }));
   // No longer protected: its outputs go back to ordinary study storage, then the vault goes.
-  const { useStudyStore } = require('../study/engine');
+  const { useStudyStore } = require('../study/store');
   useStudyStore.setState((s: any) => ({ saved: { ...s.saved, [id]: study } }));
   await protectedStudyVault.destroy(id, pin, p.pinVerifier);
   await native().removeProtectedItemKey('project', id, pin, p.pinVerifier);
 }
 export async function relockProjects(): Promise<void> {
   await pending;
-  const { useProjectStore } = require('./projectStore');
+  const useProjectStore = require('./storeRefs').projectStoreRef();
   if (useProjectStore.persist?.hasHydrated?.() === false) return;
   const projects = useProjectStore.getState().projects;
   await protectedProjectStorage.setItem(KEY, JSON.stringify({ state: { projects }, version: 0 }));
-  const unlocked = [...pins.keys()];
-  pins.clear(); lastEncrypted.clear();
+  const unlocked = unlockedProjectIds();
+  forgetAllProjectPins(); lastEncrypted.clear();
   protectedVault.closeAll();
   dropStudyFromMemory(unlocked);
   useProjectStore.setState((s: any) => ({ projects: s.projects.map((p: Project) => p.pinVerifier
@@ -334,7 +327,7 @@ export const protectedProjectStorage = {
     if (key !== KEY) throw new Error('Unexpected project storage key.');
     return queue(async () => {
       await AsyncStorage.removeItem(KEY);
-      pins.clear(); blobs.clear(); lastEncrypted.clear();
+      forgetAllProjectPins(); blobs.clear(); lastEncrypted.clear();
     });
   },
 };

@@ -285,8 +285,8 @@ class RagService {
   async deleteProjectDocuments(projectId: string): Promise<void> {
     await this.ensureReady();
     if (isProtectedProject(projectId)) {
-      const { useProjectStore } = require('../../stores/projectStore');
-      const { unlockedProjectPin } = require('../../stores/protectedProjectStorage');
+      const useProjectStore = require('../../stores/storeRefs').projectStoreRef();
+      const { unlockedProjectPin } = require('../../stores/protectionState');
       const verifier: string | undefined = useProjectStore.getState().getProject(projectId)?.pinVerifier;
       for (const doc of protectedVault.list(projectId)) await removeAppOwnedCopy(doc.path);
       await protectedVault.destroy(projectId, unlockedProjectPin(projectId), verifier);

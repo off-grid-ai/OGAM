@@ -38,6 +38,8 @@ jest.mock('../../../src/stores/encryptedChatStorage', () => ({
   encryptedChatStorage: { getItem: jest.fn(async () => null), setItem: jest.fn(async () => undefined) },
 }));
 const projects = () => JSON.stringify({state:{projects:[{id:'therapy',name:'Therapy',systemPrompt:'Notes'}]},version:0});
+require('../../utils/registerStores').registerStoreRefs();
+
 describe('portable backup project file round trip', () => {
   beforeEach(() => {
     jest.clearAllMocks(); mockStore.clear(); mockArchive = '';

@@ -10,7 +10,7 @@ import { learnedNote } from '../../learning/learnedNote';
 import { setTurnSources, sourcesFromChunks } from '../../services/rag/turnSources';
 import { needsReadingInParts, readInParts } from '../../services/readInParts';
 import { Dispatch, SetStateAction } from 'react';
-import { resolveAgentPrompt } from '../../stores/agentStore';
+import { resolveAgentPrompt } from '../../services/agentPrompt';
 import { toolsForConversation } from '../../services/tools/chatTools';
 import { offGridOn, NETWORK_TOOLS } from '../../atlasTools/offGrid';
 import { useChatPrefs } from '../../atlasTools/chatPrefs';

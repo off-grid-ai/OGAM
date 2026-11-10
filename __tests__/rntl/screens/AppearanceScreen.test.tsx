@@ -7,7 +7,7 @@ import { render, fireEvent } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 import { AppearanceScreen } from '../../../src/screens/AppearanceScreen';
 import { useAppStore } from '../../../src/stores/appStore';
-import { resolveAgentPrompt } from '../../../src/stores/agentStore';
+import { resolveAgentPrompt } from '../../../src/services/agentPrompt';
 
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),

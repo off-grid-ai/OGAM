@@ -56,6 +56,8 @@ beforeAll(async () => {
   await protectedVault.open('therapy', '123456', 'pin:v1:123456');
 });
 
+require('../../utils/registerStores').registerStoreRefs();
+
 it('reads the exact text, saves edits and a rename, and keeps one copy encrypted', async () => {
   const docId = await ragService.saveProjectNote({ projectId: 'therapy', name: 'Current Progress', text: ORIGINAL });
   mockParams = { projectId: 'therapy', docId, name: 'Current Progress' };

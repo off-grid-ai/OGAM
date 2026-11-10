@@ -30,6 +30,10 @@ export function _clearHooksForTesting(): void {
 
 /** Known hook names, centralised so core and features stay in sync. */
 export const HOOKS = {
+  /** () => string[] — the ids of PIN-protected projects (their study results and documents never reach plain storage). */
+  protectedProjectIds: 'projects.protectedIds',
+  /** () => boolean — whether a model is writing an answer right now (never re-lock chats mid-reply). */
+  generationActive: 'models.generationActive',
   /** (latestTokens: number, budgetTokens: number) => void — the person's latest message was too long for the model and its start was cut; tell them in the chat. */
   messageCut: 'chat.messageCut',
   /** (modelId: string | null) => Promise<void> — make sure a text model is loaded (null: the one in use, else the first downloaded). */

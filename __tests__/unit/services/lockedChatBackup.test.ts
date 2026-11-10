@@ -38,6 +38,8 @@ const chat = (id: string): any => ({
   createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
 });
 
+require('../../utils/registerStores').registerStoreRefs();
+
 describe('locked chats in encrypted backups', () => {
   const disk = new Map<string, string>();
   const files = new Map<string, string>();

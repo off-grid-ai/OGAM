@@ -28,7 +28,7 @@ jest.mock('../../../src/stores/encryptedChatStorage', () => ({
   isChatUnlocked: (id: string) => mockUnlocked.has(id),
 }));
 const mockStudyListeners = new Set<(s: any, prev: any) => void>();
-jest.mock('../../../src/study/engine', () => ({ useStudyStore: {
+const mockStudyStore = {
   getState: () => fakeStudy,
   setState: (fn: any) => {
     const prev = { ...fakeStudy };
@@ -36,7 +36,9 @@ jest.mock('../../../src/study/engine', () => ({ useStudyStore: {
     mockStudyListeners.forEach((l) => l(fakeStudy, prev));
   },
   subscribe: (l: any) => { mockStudyListeners.add(l); return () => mockStudyListeners.delete(l); },
-} }));
+};
+jest.mock('../../../src/study/engine', () => ({ useStudyStore: mockStudyStore }));
+jest.mock('../../../src/study/store', () => ({ useStudyStore: mockStudyStore }));
 const mockFiles = new Map<string, string>();
 jest.mock('react-native-fs', () => ({
   DocumentDirectoryPath: '/docs', CachesDirectoryPath: '/cache',
@@ -58,6 +60,8 @@ const project = (id: string) => ({ id, name: 'My secret writing project', descri
 const snapshot = (projects: any[]) => JSON.stringify({ state: { projects }, version: 0 });
 const encode = (text: string) => `atlasitem:v1:${  Buffer.from(text).toString('base64')}`;
 const decode = (blob: string) => Buffer.from(blob.slice('atlasitem:v1:'.length), 'base64').toString();
+
+require('../../utils/registerStores').registerStoreRefs();
 
 describe('selective protection for metadata-only projects', () => {
   const disk = new Map<string, string>();

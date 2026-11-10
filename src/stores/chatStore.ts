@@ -8,6 +8,7 @@ import { generateId } from '../utils/generateId';
 import { callHook, HOOKS } from '../bootstrap/hookRegistry';
 import type { PersistStorage, StorageValue } from 'zustand/middleware';
 import { enforceForageSafety } from '../utils/forageSafety';
+import { registerChatStore } from './storeRefs';
 
 /** Field ID replies get the code-enforced foraging safety net. */
 function isFieldIdConversation(conv: Conversation | undefined): boolean {
@@ -474,3 +475,6 @@ export const useChatStore = create<ChatState>()(
     }
   )
 );
+
+// The persist adapter and the vaults under this store reach it through this handle (no import cycle).
+registerChatStore(useChatStore);

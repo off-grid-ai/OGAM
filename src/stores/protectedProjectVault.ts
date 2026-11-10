@@ -52,8 +52,8 @@ const serial = <T>(fn: () => Promise<T>): Promise<T> => {
 };
 
 function credentials(projectId: string): { pin: string; verifier: string } {
-  const { useProjectStore } = require('./projectStore');
-  const { unlockedProjectPin } = require('./protectedProjectStorage');
+  const useProjectStore = require('./storeRefs').projectStoreRef();
+  const { unlockedProjectPin } = require('./protectionState');
   const project = useProjectStore.getState().projects.find((p: any) => p.id === projectId);
   const pin: string | undefined = unlockedProjectPin(projectId);
   if (!project?.pinVerifier || !pin) throw new Error('Unlock this project first.');
@@ -92,7 +92,7 @@ export const protectedVault = {
     await serial(async () => {
       const docs = await readFile(projectId, pin, verifier);
       // The project may have re-locked while the file was being decrypted: keep nothing in memory then.
-      const { unlockedProjectPin } = require('./protectedProjectStorage');
+      const { unlockedProjectPin } = require('./protectionState');
       if (unlockedProjectPin(projectId) === pin) open.set(projectId, docs);
     });
   },

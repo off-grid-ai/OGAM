@@ -97,7 +97,7 @@ async function saveReplacement(id: string, next: Conversation): Promise<void> {
   });
 }
 export async function protectChat(id: string, pin: string): Promise<void> {
-  const { useChatStore } = require('./chatStore');
+  const useChatStore = require('./storeRefs').chatStoreRef();
   await writes;
   const conv: Conversation | undefined = useChatStore.getState().conversations.find((c: Conversation) => c.id === id);
   if (!conv || conv.isPrivate || conv.pinVerifier) throw new Error('Select an unlocked, saved conversation.');
@@ -146,7 +146,7 @@ async function recover(conv: Conversation, pin: string): Promise<{ restored: Con
 /** True while a PIN-protected chat is open in this session. */
 export const isChatUnlocked = (id: string): boolean => sessionPins.has(id);
 export async function unlockChat(id: string, pin: string): Promise<void> {
-  const { useChatStore } = require('./chatStore');
+  const useChatStore = require('./storeRefs').chatStoreRef();
   await writes;
   const conv: Conversation | undefined = useChatStore.getState().conversations.find((c: Conversation) => c.id === id);
   if (!conv) throw new Error('Conversation not found.');
@@ -162,7 +162,7 @@ export async function unlockChat(id: string, pin: string): Promise<void> {
  * Chats that are still locked are not here (no PIN to seal with): see lockedChatsForBackup.
  */
 export async function openLockedChatsForBackup(): Promise<Conversation[]> {
-  const { useChatStore } = require('./chatStore');
+  const useChatStore = require('./storeRefs').chatStoreRef();
   await writes;
   const out: Conversation[] = [];
   for (const c of useChatStore.getState().conversations as Conversation[]) {
@@ -180,7 +180,7 @@ export const isLockedChatOpen = (id: string): boolean => sessionPins.has(id);
 export const isLockedChatBlob = (blob: unknown): boolean =>
   typeof blob === 'string' && (blob.startsWith(PORTABLE) || blob.startsWith('atlasitem:v1:'));
 export async function permanentlyUnprotectChat(id: string, pin: string): Promise<void> {
-  const { useChatStore } = require('./chatStore');
+  const useChatStore = require('./storeRefs').chatStoreRef();
   await writes;
   const conv: Conversation | undefined = useChatStore.getState().conversations.find((c: Conversation) => c.id === id);
   if (!conv) throw new Error('Conversation not found.');
@@ -193,7 +193,7 @@ export async function permanentlyUnprotectChat(id: string, pin: string): Promise
 }
 export async function relockProtectedChats(): Promise<void> {
   await writes;
-  const { useChatStore } = require('./chatStore');
+  const useChatStore = require('./storeRefs').chatStoreRef();
   // A background event can arrive while Zustand is hydrating. Never write the
   // default empty store over existing disk data before hydration completes.
   if (useChatStore.persist?.hasHydrated?.() === false) return;
@@ -220,10 +220,11 @@ export function onProtectedChatsRelocked(fn: () => void): () => void {
 let relockTimer: ReturnType<typeof setTimeout> | null = null;
 function generationRunning(): boolean {
   try {
-    const st = require('./chatStore').useChatStore.getState();
+    const st = require('./storeRefs').chatStoreRef().getState();
     if (st.isStreaming || st.isThinking) return true;
   } catch { /* store not ready */ }
-  try { return !!require('../services/llm').llmService.isCurrentlyGenerating(); } catch { return false; }
+  const { callHook, HOOKS } = require('../bootstrap/hookRegistry');
+  return callHook(HOOKS.generationActive) === true;
 }
 export function scheduleRelock(delayMs = RELOCK_GRACE_MS): void {
   if (relockTimer) clearTimeout(relockTimer);

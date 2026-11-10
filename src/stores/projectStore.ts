@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { protectedProjectStorage, isProtectedProjectUnlocked } from './protectedProjectStorage';
+import { protectedProjectStorage } from './protectedProjectStorage';
+import { isProtectedProjectUnlocked } from './protectionState';
 import { Project } from '../types';
 import { generateId } from '../utils/generateId';
 import { ragService } from '../services/rag';
-import { useChatStore } from './chatStore';
+
 import logger from '../utils/logger';
 import { LANGUAGE_PROJECT_ID, LANGUAGE_PROJECT_NAME, languageProjectDescription, tutorPrompt } from '../language/tutor';
+import { registerProjectStore } from './storeRefs';
 
 /** Earlier versions shipped this as "Spanish Learning"; it becomes the Learn a language course project. */
 function upgradeLanguageProject(p: Project): Project {
@@ -130,7 +132,7 @@ export const useProjectStore = create<ProjectState>()(
         // no longer exists (a dangling projectId isn't re-filable and still tripped the
         // KB-tool injection). The project store owns "what happens on delete" (like RAG
         // cleanup above); chatStore owns the conversation mutation.
-        useChatStore.getState().unfileConversationsForProject(id);
+        require('./storeRefs').chatStoreRef().getState().unfileConversationsForProject(id);
         set((state) => ({
           projects: state.projects.filter((project) => project.id !== id),
         }));
@@ -170,3 +172,6 @@ export const useProjectStore = create<ProjectState>()(
     }
   )
 );
+
+// The persist adapter and the vaults under this store reach it through this handle (no import cycle).
+registerProjectStore(useProjectStore);

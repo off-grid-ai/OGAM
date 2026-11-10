@@ -55,6 +55,8 @@ beforeAll(async () => {
   await protectedVault.open('therapy', '123456', 'pin:v1:123456');
 });
 
+require('../../utils/registerStores').registerStoreRefs();
+
 it('a document updated in one chat reaches another chat in the same protected project', async () => {
   const update = await executeToolCall({ id: 't1', name: 'update_project_document', context: { projectId: 'therapy' },
     arguments: { name: 'Current Progress', content: 'Week 3: sleeping better after the evening walk routine.', mode: 'append' } } as any);

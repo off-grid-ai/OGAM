@@ -25,6 +25,8 @@ const chat = (id: string, content = 'a secret conversation'): any => ({
 });
 const snapshot = (conversations: any[]) => JSON.stringify({ state: { conversations, activeConversationId: null }, version: 0 });
 
+require('../../utils/registerStores').registerStoreRefs();
+
 describe('selective and migration-safe chat storage', () => {
   const disk = new Map<string, string>();
   beforeEach(async () => {
