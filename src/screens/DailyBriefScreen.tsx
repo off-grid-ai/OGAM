@@ -253,6 +253,18 @@ export const DailyBriefScreen: React.FC = () => {
             <Text style={styles.switchLabel}>Short tunes at the start and end of the show</Text>
             <Switch value={prefs.jingles !== false} onValueChange={(v) => prefs.set({ jingles: v })} testID="brief-jingles" />
           </View>
+          {prefs.jingles !== false && (
+            <>
+              <Text style={styles.sectionLabel}>Tune volume</Text>
+              <View style={styles.chips}>
+                {(['quiet', 'normal', 'loud'] as const).map((v) => (
+                  <TouchableOpacity key={v} testID={`brief-tune-${v}`} onPress={() => prefs.set({ jingleVolume: v })} style={chip((prefs.jingleVolume ?? 'normal') === v)}>
+                    <Text style={chipText((prefs.jingleVolume ?? 'normal') === v)}>{v === 'quiet' ? 'Quiet' : v === 'normal' ? 'Normal' : 'Loud'}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>Fun fact from your offline library</Text>
             <Switch value={prefs.funFacts} onValueChange={(v) => prefs.set({ funFacts: v })} />

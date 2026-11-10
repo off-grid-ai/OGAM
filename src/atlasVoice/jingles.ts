@@ -4,6 +4,9 @@
  * apart from playing so it is tested without a device.
  */
 export type JingleKind = 'intro' | 'outro' | 'chime';
+export type JingleVolume = 'quiet' | 'normal' | 'loud';
+/** How loud the tunes peak, as a share of the loudest sound the file can hold. The voices are the main thing, so even Loud leaves headroom. */
+export const JINGLE_PEAK: Record<JingleVolume, number> = { quiet: 0.25, normal: 0.55, loud: 0.85 };
 
 const RATE = 24000;
 /** Note names to Hz (equal temperament, A4 = 440). */
@@ -28,7 +31,7 @@ export const SCORES: Record<JingleKind, Note[]> = {
 export const jingleSeconds = (kind: JingleKind): number => Math.max(...SCORES[kind].map((x) => x.at + x.len)) + 0.25;
 
 /** 16-bit mono samples of a jingle. Bell-like: a pure tone with two softer overtones, a quick attack and a smooth fade. */
-export function makeJingle(kind: JingleKind, rate = RATE): Int16Array {
+export function makeJingle(kind: JingleKind, rate = RATE, peakLevel = JINGLE_PEAK.normal): Int16Array {
   const total = Math.ceil(jingleSeconds(kind) * rate);
   const mix = new Float32Array(total);
   for (const note of SCORES[kind]) {
@@ -44,7 +47,7 @@ export function makeJingle(kind: JingleKind, rate = RATE): Int16Array {
   }
   let peak = 0;
   for (const v of mix) peak = Math.max(peak, Math.abs(v));
-  const scale = peak > 0 ? 0.55 / peak : 0; // leave headroom: the voices are the main thing
+  const scale = peak > 0 ? peakLevel / peak : 0;
   const out = new Int16Array(total);
   for (let i = 0; i < total; i++) out[i] = Math.round(mix[i] * scale * 32767);
   return out;

@@ -99,7 +99,7 @@ it('makes a jingle file once and plays it each time', async () => {
   mockWritten.length = 0; mockPlayed.length = 0;
   expect(await playJingle('intro')).toBe(true);
   expect(await playJingle('intro')).toBe(true);
-  expect(mockWritten).toEqual(['/cache/podcast-audio/_jingles/intro-v1.wav']);
+  expect(mockWritten).toEqual(['/cache/podcast-audio/_jingles/intro-normal-v2.wav']);
   expect(mockPlayed).toHaveLength(2);
 });
 
@@ -126,4 +126,12 @@ it('a jingle that never reports its end is cut off after its length plus a few s
     await expect(done).resolves.toBe(true);
     void playJingle;
   } finally { jest.useRealTimers(); }
+});
+
+it('makes a separate file for each volume', async () => {
+  const { playJingle } = require('../../../src/atlasVoice/podcastAudio');
+  mockWritten.length = 0;
+  await playJingle('chime', 'quiet');
+  await playJingle('chime', 'loud');
+  expect(mockWritten).toEqual(['/cache/podcast-audio/_jingles/chime-quiet-v2.wav', '/cache/podcast-audio/_jingles/chime-loud-v2.wav']);
 });

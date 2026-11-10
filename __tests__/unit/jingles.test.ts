@@ -1,4 +1,4 @@
-import { makeJingle, wavBytes, toBase64, jingleSeconds, SCORES, type JingleKind } from '../../src/atlasVoice/jingles';
+import { makeJingle, wavBytes, toBase64, jingleSeconds, SCORES, JINGLE_PEAK, type JingleKind } from '../../src/atlasVoice/jingles';
 
 const KINDS: JingleKind[] = ['intro', 'outro', 'chime'];
 
@@ -32,5 +32,11 @@ describe('jingles', () => {
   it('encode base64 like the standard', () => {
     const enc = (s: string) => toBase64(Uint8Array.from(Buffer.from(s)));
     for (const s of ['', 'f', 'fo', 'foo', 'foob', 'fooba', 'foobar']) expect(enc(s)).toBe(Buffer.from(s).toString('base64'));
+  });
+  it('come in three volumes, each louder than the one before and none clipped', () => {
+    const peak = (v: keyof typeof JINGLE_PEAK) => makeJingle('chime', undefined, JINGLE_PEAK[v]).reduce((m, x) => Math.max(m, Math.abs(x)), 0);
+    expect(peak('quiet')).toBeLessThan(peak('normal'));
+    expect(peak('normal')).toBeLessThan(peak('loud'));
+    expect(peak('loud')).toBeLessThan(32767 * 0.9);
   });
 });

@@ -10,7 +10,7 @@ import { sha256 } from 'js-sha256';
 import { audioSessionManager } from '../services/audioSessionManager';
 import { canPreRender, speakAndWait, synthesizeLineToFile } from './tts';
 import { hostVoices } from './neural';
-import { makeJingle, wavBytes, toBase64, jingleSeconds, type JingleKind } from './jingles';
+import { makeJingle, wavBytes, toBase64, jingleSeconds, JINGLE_PEAK, type JingleKind, type JingleVolume } from './jingles';
 import { useAtlasVoiceStore } from './store';
 import logger from '../utils/logger';
 
@@ -245,13 +245,13 @@ export function stopPodcastAudio(): void {
  * cannot be decoded or never reports that it ended, it is skipped and the show goes on. Returns false only when the listener
  * stopped playback.
  */
-export async function playJingle(kind: JingleKind): Promise<boolean> {
+export async function playJingle(kind: JingleKind, volume: JingleVolume = 'normal'): Promise<boolean> {
   const token = stopToken;
   try {
-    const path = `${root()}/_jingles/${kind}-v1.wav`;
+    const path = `${root()}/_jingles/${kind}-${volume}-v2.wav`;
     if (!(await RNFS.exists(path))) {
       await RNFS.mkdir(`${root()}/_jingles`);
-      await RNFS.writeFile(path, toBase64(wavBytes(makeJingle(kind))), 'base64');
+      await RNFS.writeFile(path, toBase64(wavBytes(makeJingle(kind, undefined, JINGLE_PEAK[volume]))), 'base64');
     }
     if (token !== stopToken) return false;
     let timer: ReturnType<typeof setTimeout> | undefined;

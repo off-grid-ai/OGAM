@@ -174,19 +174,20 @@ export const StudyScreen: React.FC = () => {
     keepScreenOn(true);
     let finished = false;
     // The daily briefing opens and closes with a short tune (switch in Daily briefing > Show options).
+    const volume = useBriefPrefs.getState().jingleVolume ?? 'normal';
     const tunes = !!audioKey && audioKey.startsWith(`${BRIEF_PROJECT}-`) && useBriefPrefs.getState().jingles !== false;
     try {
-      if (tunes && from <= 0 && !(await playJingle('intro'))) return;
+      if (tunes && from <= 0 && !(await playJingle('intro', volume))) return;
       for (let i = Math.max(0, from); i < items.length; i++) {
         if (stopRef.current || playToken.current !== my) break;
         // A soft chime when the next story begins (not when playback starts or is moved to a line).
-        if (tunes && i > from && storyStarts.includes(i) && !(await playJingle('chime'))) break;
+        if (tunes && i > from && storyStarts.includes(i) && !(await playJingle('chime', volume))) break;
         setPlaying(i); setResumeAt(i); setItemStart(Date.now());
         const ok = audioKey ? await playLine(audioKey, items, i) : await speakAndWait(items[i].text, items[i].pitch, 'podcast', items[i].voice || '');
         if (!ok || playToken.current !== my) break;
         if (i === items.length - 1) finished = true;
       }
-      if (finished && tunes && playToken.current === my) await playJingle('outro');
+      if (finished && tunes && playToken.current === my) await playJingle('outro', volume);
     } catch (e: any) {
       Alert.alert('Playback stopped', String(e?.message || e));
     }

@@ -25,8 +25,10 @@ interface BriefPrefs {
   experts: boolean;
   /** A short tune before and after the show. */
   jingles: boolean;
+  /** How loud the opening, closing and story tunes are. */
+  jingleVolume: 'quiet' | 'normal' | 'loud';
   setInterests: (v: string[]) => void;
-  set: (p: Partial<Pick<BriefPrefs, 'minutes' | 'hosts' | 'funFacts' | 'deep' | 'avoid' | 'experts' | 'jingles'>>) => void;
+  set: (p: Partial<Pick<BriefPrefs, 'minutes' | 'hosts' | 'funFacts' | 'deep' | 'avoid' | 'experts' | 'jingles' | 'jingleVolume'>>) => void;
 }
 
 export const useBriefPrefs = create<BriefPrefs>()(persist((set) => ({
@@ -38,9 +40,10 @@ export const useBriefPrefs = create<BriefPrefs>()(persist((set) => ({
   avoid: [],
   experts: false,
   jingles: true,
+  jingleVolume: 'normal',
   setInterests: (interests) => set({ interests }),
   set: (p) => set(p),
-}), { name: 'atlas-daily-brief', storage: createJSONStorage(() => AsyncStorage), partialize: (s) => ({ interests: s.interests, minutes: s.minutes, hosts: s.hosts, funFacts: s.funFacts, deep: s.deep, avoid: s.avoid, experts: s.experts, jingles: s.jingles }) }));
+}), { name: 'atlas-daily-brief', storage: createJSONStorage(() => AsyncStorage), partialize: (s) => ({ interests: s.interests, minutes: s.minutes, hosts: s.hosts, funFacts: s.funFacts, deep: s.deep, avoid: s.avoid, experts: s.experts, jingles: s.jingles, jingleVolume: s.jingleVolume }) }));
 
 const EXPERT_NAMES = ['Maya', 'Theo', 'Priya', 'Marcus', 'Lena', 'Omar', 'Grace', 'Sam'];
 
