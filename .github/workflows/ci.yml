@@ -77,13 +77,13 @@ jobs:
         run: npm run knip
 
   jest:
-    name: jest (${{ matrix.shard }}/6)
+    name: jest (${{ matrix.shard }}/8)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         # Balanced by recorded suite run time (scripts/jest-sequencer.js), not by suite count.
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -109,9 +109,9 @@ jobs:
             jest-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', 'babel.config.js', 'jest.config.js') }}-shard${{ matrix.shard }}-
             jest-${{ runner.os }}-${{ runner.arch }}-
 
-      # A shard holds a sixth of the suites, so it cannot check coverageThreshold: the files the
+      # A shard holds an eighth of the suites, so it cannot check coverageThreshold: the files the
       # other shards cover would look uncovered. It saves its raw coverage instead, and the coverage
-      # job below merges all six and checks the thresholds as one unsharded run would.
+      # job below merges all eight and checks the thresholds as one unsharded run would.
       - name: Run Jest tests
         id: jest
         env:
@@ -127,7 +127,7 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
           SHARD: ${{ matrix.shard }}
         run: >-
-          npx jest --shard="$SHARD/6" --coverage --coverageReporters=json --coverageThreshold='{}'
+          npx jest --shard="$SHARD/8" --coverage --coverageReporters=json --coverageThreshold='{}'
           --forceExit --maxWorkers=1 --workerIdleMemoryLimit=1GB --cacheDirectory="$JEST_CACHE_DIR"
           --json --outputFile="$RUNNER_TEMP/jest-results.json"
 
@@ -193,6 +193,8 @@ jobs:
 
   android:
     name: android tests
+    needs: changes
+    if: ${{ needs.changes.outputs.native == 'true' }}
     # Gradle unit tests need no Mac, and Linux runners start at once; only iOS waits for macOS.
     runs-on: ubuntu-latest
     steps:
@@ -222,6 +224,8 @@ jobs:
 
   ios:
     name: ios tests
+    needs: changes
+    if: ${{ needs.changes.outputs.native == 'true' }}
     runs-on: macos-latest
     steps:
       - name: Checkout code
@@ -233,7 +237,8 @@ jobs:
         run: |
           id="$(bash scripts/ios-simulator-id.sh)"
           echo "IOS_SIMULATOR_ID=$id" >> "$GITHUB_ENV"
-          xcrun simctl boot "$id"
+          # In the background: the boot itself took a minute of this step (2026-11-10).
+          nohup xcrun simctl boot "$id" >/dev/null 2>&1 &
 
       - name: Set up the workspace
         uses: ./.github/actions/setup-mobile
@@ -288,23 +293,36 @@ jobs:
   # pinned revision, its patches, or the scripts that build it. The same paths as videoRuntimeMoved
   # in scripts/lib/engines.js. Read from the API, so no checkout is needed.
   changes:
-    name: video runtime inputs
+    name: changed inputs
     runs-on: ubuntu-latest
     outputs:
       video: ${{ steps.files.outputs.video }}
+      native: ${{ steps.files.outputs.native }}
     steps:
       - name: List the changed files
         id: files
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
+          PRO_TOKEN: ${{ secrets.PRO_SUBMODULE_PAT }}
         run: |
           video=false
+          # Native tests run on main, on a dispatch, and on a pull request that touches what they
+          # build: native code, dependencies and their patches, the pro pin, or CI itself. A JS-only
+          # pull request skips the macOS runner (the 14-minute critical path, 2026-11-10).
+          native=true
           if [ -n "$PR" ]; then
             gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/files.txt"
             if grep -Eq '^(scripts/video/|scripts/prepare-video-runtime\.sh$|scripts/build-video-ios\.sh$)' "$RUNNER_TEMP/files.txt"; then video=true; fi
+            native=false
+            if grep -Eq '^(ios/|android/|patches/|pro$|\.github/|package(-lock)?\.json$|Gemfile|react-native\.config\.js$|app\.json$|scripts/(test-ios|test-android|ios-simulator-id|download-prebuilt-binaries)[^/]*$)' "$RUNNER_TEMP/files.txt"; then native=true; fi
+            # CI builds pro's matching branch, whose native changes this pull request's files do not list.
+            if [ -n "$PRO_TOKEN" ] && git -c http.https://github.com/.extraheader= ls-remote --exit-code --heads \
+              "https://x-access-token:${PRO_TOKEN}@github.com/off-grid-ai/mobile-pro.git" "$HEAD_REF" >/dev/null 2>&1; then native=true; fi
           fi
           echo "video=$video" | tee -a "$GITHUB_OUTPUT"
+          echo "native=$native" | tee -a "$GITHUB_OUTPUT"
 
   # The video runtimes built from source, with no cache, on a pull request that changes their inputs:
   # chiefly the engine bot's stable-diffusion.cpp bump (scripts/merge-engine-pr.js merges it only
@@ -379,12 +397,17 @@ jobs:
     steps:
       - name: Every job passed
         env:
-          RESULTS: ${{ needs.gates.result }} ${{ needs.jest.result }} ${{ needs.coverage.result }} ${{ needs.android.result }} ${{ needs.ios.result }} ${{ needs.changes.result }}
+          RESULTS: ${{ needs.gates.result }} ${{ needs.jest.result }} ${{ needs.coverage.result }} ${{ needs.changes.result }}
+          NATIVE: ${{ needs.changes.outputs.native }}
+          NATIVE_RESULTS: ${{ needs.android.result }} ${{ needs.ios.result }}
           VIDEO: ${{ needs.changes.outputs.video }}
           VIDEO_RESULTS: ${{ needs.video-android.result }} ${{ needs.video-ios.result }}
         run: |
-          echo "jobs: $RESULTS; video runtime moved: $VIDEO; video builds: $VIDEO_RESULTS"
+          echo "jobs: $RESULTS; native changed: $NATIVE, tests: $NATIVE_RESULTS; video runtime moved: $VIDEO; video builds: $VIDEO_RESULTS"
           for result in $RESULTS; do [ "$result" = success ] || exit 1; done
+          for result in $NATIVE_RESULTS; do
+            [ "$result" = success ] || { [ "$NATIVE" != true ] && [ "$result" = skipped ]; } || exit 1
+          done
           for result in $VIDEO_RESULTS; do
             [ "$result" = success ] || { [ "$VIDEO" != true ] && [ "$result" = skipped ]; } || exit 1
           done
