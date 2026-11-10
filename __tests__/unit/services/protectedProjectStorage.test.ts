@@ -145,7 +145,7 @@ describe('selective protection for metadata-only projects', () => {
     try {
       await protectProject('secret', '123456');
       expect(exportSpy).toHaveBeenCalledWith('secret');
-      expect(sealSpy).toHaveBeenCalledWith('secret', '123456', 'pin:v1:123456', docs);
+      expect(sealSpy).toHaveBeenCalledWith('secret', { pin: '123456', verifier: 'pin:v1:123456' }, docs);
       expect(disk.get(KEY)).not.toContain('Private story notes');
       expect(fakeProjects.projects[0].name).toBe('Locked project');
     } finally {
@@ -271,8 +271,8 @@ describe('selective protection for metadata-only projects', () => {
     const sealStudy = jest.spyOn(protectedStudyVault, 'seal');
     await expect(unlockProject('therapy', '000000')).rejects.toThrow(/Incorrect PIN/);
     await unlockProject('therapy', '123456');
-    expect(sealDocs).toHaveBeenCalledWith('therapy', '123456', 'pin:v1:123456', docs);
-    expect(sealStudy).toHaveBeenCalledWith('therapy', '123456', 'pin:v1:123456', [{ title: 'Coping skills quiz', createdAt: 1 }]);
+    expect(sealDocs).toHaveBeenCalledWith('therapy', { pin: '123456', verifier: 'pin:v1:123456' }, docs);
+    expect(sealStudy).toHaveBeenCalledWith('therapy', { pin: '123456', verifier: 'pin:v1:123456' }, [{ title: 'Coping skills quiz', createdAt: 1 }]);
     expect(fakeProjects.projects[0].systemPrompt).toBe('Private story notes');
     const saved = JSON.parse(disk.get(KEY)!).state.projects[0];
     expect(saved.protectedBlob.startsWith('atlasitem:v1:')).toBe(true); // now on this phone's keys

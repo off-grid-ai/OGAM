@@ -569,6 +569,11 @@ What changed:
   model. A second, short-prompt check decides whether to use the first-word workaround: prompts under about 192 tokens run
   once first so the first word comes from the engine's single-token step; it is switched on only if the same check passes with
   it, and never for long prompts. The remembered verdict records the batch size and CPU-kernel setting.
+- 0.0.151: lint clean-up across the app (no change to what anything does). Literal style values moved into module-level
+  StyleSheets and colour literals into named constants; long parameter lists became option objects (speech, pack import, vault
+  sealing, study cards, drills, slides, the Vulkan engine, model file attach, image accelerator choice); template strings,
+  shadowed names and a few inverted checks tidied. Files that are still over the size and complexity caps are listed once in
+  .eslintrc.js so new code stays under them.
 - 0.0.150: the 0.0.149 features, with the lint errors in the code changed this week fixed. The update card, Chat settings and
   the packs section use the themed style sheets; the briefing's tune-and-line player moved out of the Study screen into a small
   tested module (it also now stops cleanly when the opening tune is cut off); long parameter lists became option objects
