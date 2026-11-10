@@ -121,7 +121,7 @@ it('writes a square from the learner\'s own sources, and a bad result adds a les
     { title: 'Accounting', summary: '', style: '', theme: '', squares: [
       { key: 's1', format: 'quiz', title: 'Depreciation', focus: 'straight-line depreciation of an asset', unit: 'U' },
       { key: 's2', format: 'lesson', title: 'Next', focus: 'next', unit: 'U' },
-    ] }, [source]);
+    ] }, { sources: [source] });
 
   // The prompt the AI gets for the square carries the matching passage of the learner's own source.
   const { llmService } = require('../../src/services/llm');
@@ -187,7 +187,7 @@ it('a course made from a project belongs to that project, and the project\'s pag
   useAppStore.setState({ downloadedModels: [createDownloadedModel({ id: 'llm', engine: 'llama', filePath: '/models/small.gguf', fileSize: 500 * 1024 * 1024 })], activeModelId: 'llm' });
   const plan = { title: 'Other', summary: '', style: '', theme: '', squares: [{ key: 's1', format: 'lesson' as const, title: 'A', focus: 'a', unit: 'U' }] };
   useTopics.setState({ courses: [] });
-  useTopics.getState().add({ topic: 'Elsewhere', goal: '', level: 'x', how: '', minutes: 10 }, plan, [], 'other-project');
+  useTopics.getState().add({ topic: 'Elsewhere', goal: '', level: 'x', how: '', minutes: 10 }, plan, { sources: [], projectId: 'other-project' });
 
   mockParams = { projectId: 'p1', topic: 'Biology 101' };
   boundary.llama!.scriptCompletion({ text: PLAN });

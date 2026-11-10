@@ -150,13 +150,16 @@ export async function studyDocument(sourceId: string, opts: StudyOptions = {}): 
   return withJobLock(`study ${sourceId}`, async (heartbeat) => {
     let doc = await getDocument(sourceId);
     if (!doc || doc.removed) throw new Error('No such document.');
-    const progress = (phase: StudyProgress['phase'], agentId: string, findings: number, d = doc!, studied?: number) => opts.onProgress?.({ sourceId, agentId, phase, chunksStudied: studied ?? d.progress.chunksStudied, chunksTotal: d.progress.chunksTotal, findings, pages: d.pages });
+    const progress = (phase: StudyProgress['phase'], agentId: string, at: { findings: number; d?: typeof doc; studied?: number }) => {
+      const d = at.d ?? doc!;
+      opts.onProgress?.({ sourceId, agentId, phase, chunksStudied: at.studied ?? d.progress.chunksStudied, chunksTotal: d.progress.chunksTotal, findings: at.findings, pages: d.pages });
+    };
 
     if (doc.status !== 'ready' && doc.status !== 'studying' && doc.status !== 'done') {
-      progress('extracting', doc.agentId ?? '', 0);
-      doc = await extractDocument(sourceId, { shouldStop: opts.shouldStop, onProgress: (d) => progress('extracting', d.agentId ?? '', 0, d) });
+      progress('extracting', doc.agentId ?? '', { findings: 0 });
+      doc = await extractDocument(sourceId, { shouldStop: opts.shouldStop, onProgress: (d) => progress('extracting', d.agentId ?? '', { findings: 0, d }) });
       if (doc.status === 'paused') return { status: 'paused', agentId: doc.agentId ?? '', report: null, chunksStudied: doc.progress.chunksStudied, chunksTotal: doc.progress.chunksTotal, findings: 0 };
-      progress('chunking', doc.agentId ?? '', 0);
+      progress('chunking', doc.agentId ?? '', { findings: 0 });
       doc = await chunkDocument(sourceId);
     }
     if (doc.status === 'failed') throw new Error(doc.error ?? 'This document could not be prepared.');
@@ -197,14 +200,14 @@ export async function studyDocument(sourceId: string, opts: StudyOptions = {}): 
         await writeJson(P.checkpoint(`study-${doc.hash}`), { sourceId, next, findings: filed, updatedAt: new Date().toISOString() } satisfies Checkpoint);
         await markStudied(sourceId, next);
         await heartbeat();
-        progress('studying', agentId, filed, doc, next);
+        progress('studying', agentId, { findings: filed, d: doc, studied: next });
       }
     } catch (e: any) {
       if (String(e?.message) !== 'stopped') { noteError(handle, String(e?.message || e)); await finalizeCycle(handle, { status: 'failed', summary: `Stopped by an error: ${String(e?.message || e)}` }); await setDocumentStatus(sourceId, 'paused', String(e?.message || e)); throw e; }
       stopped = true;
     }
 
-    progress('finishing', agentId, filed, doc, next);
+    progress('finishing', agentId, { findings: filed, d: doc, studied: next });
     const done = !stopped && next >= doc.progress.chunksTotal;
     if (done) await managerPass(agentId);
     const mine = (await searchFindings({ agentId, limit: 200 })).filter((f) => f.cycleId === handle.cycleId);

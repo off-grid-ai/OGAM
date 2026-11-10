@@ -24,7 +24,7 @@ async function askUntil<T>(prompt: { system: string; user: string }, read: (raw:
 /** Plans a course for the request and saves it. Returns its id. */
 export async function createCourse(request: CourseRequest, sources: CourseSource[] = [], projectId?: string): Promise<string> {
   const plan = await askUntil(planMessages(request, sources), parsePlan, 'a course plan');
-  return useTopics.getState().add(request, plan, sources, projectId);
+  return useTopics.getState().add(request, plan, { sources, projectId });
 }
 
 /** Passages from the shared documents of the course's project that match the square (none when there is no project or no documents). */

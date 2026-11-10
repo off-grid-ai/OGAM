@@ -475,10 +475,26 @@ export function withoutRepeats(fresh: PodcastLine[], before: PodcastLine[]): Pod
   return out;
 }
 
+/** Where an item sits in the episode, as an instruction for the writer. */
+function placement(spot: { first: boolean; last: boolean }, noWelcome?: boolean): string {
+  if (spot.first && spot.last) return `This is the WHOLE episode: ${noWelcome ? 'cover it' : 'welcome listeners, cover it'}, then say goodbye.`;
+  if (spot.first) return noWelcome ? 'This is the FIRST item: a greeting was already said, so start straight into it.' : 'This is the START: A welcomes listeners and names the episode, then covers this item.';
+  return spot.last ? 'This is the LAST item: cover it, then a one-line wrap-up and goodbye.' : 'Move on to this item with a short natural transition.';
+}
+
+/** How many lines an item gets: never more than its source can fill (no padding), but as many as the chosen length needs. */
+const itemLines = (opts: PodcastOptions, sources: Source[]): number =>
+  (opts.linesPerItem ? Math.min(opts.linesPerItem, Math.max(4, Math.round(sources.reduce((k, x) => k + x.text.length, 0) / 80))) : outlineLines(sources));
+
+/** With a length to reach, ask for about n lines (the hosts may explain why the story matters, from the source); otherwise at most n. */
+const howManyLines = (opts: PodcastOptions, n: number): string =>
+  (opts.linesPerItem ? `Write about ${n} lines (no fewer than ${Math.max(3, n - 2)}), each 1-2 sentences; never repeat a line already said` : `Write at most ${n} lines (each 1-2 sentences)`);
+
 async function writeOutlinedEpisode(
   outline: { topic: string; sources: Source[]; always?: boolean }[], opts: PodcastOptions,
-  cfg: { cast: string; fmt: string; style: string; hosts: number }, onStep: (m: string) => void,
+  cfg: { cast: string; fmt: string; style: string; hosts: number; onStep: (m: string) => void },
 ): Promise<StudyResult> {
+  const { onStep } = cfg;
   const title = opts.title || opts.prompt || 'Episode';
   const lines: PodcastLine[] = [];
   const all: Source[] = [];
@@ -493,21 +509,15 @@ async function writeOutlinedEpisode(
     onStep(`Writing part ${i + 1} of ${outline.length}: ${outline[i].topic.slice(0, 60)}...`);
     const part = outline[i];
     part.sources.forEach((x) => all.push(x));
-    // Never more lines than the source can fill (no padding), but as many as the chosen length needs.
-    const n = opts.linesPerItem ? Math.min(opts.linesPerItem, Math.max(4, Math.round(part.sources.reduce((k, x) => k + x.text.length, 0) / 80))) : outlineLines(part.sources);
+    const n = itemLines(opts, part.sources);
     // With a word target, this is the last item once it should bring the script to the target (or when none are left).
     const reaches = !!opts.targetWords && wordCount() + n * 12 >= opts.targetWords;
     const alwaysAfter = outline.slice(i + 1).some((o) => o.always);
     const last = i === outline.length - 1 || ((reaches || finished) && !alwaysAfter);
-    const where = last && i === 0 ? `This is the WHOLE episode: ${opts.noWelcome ? 'cover it' : 'welcome listeners, cover it'}, then say goodbye.`
-      : i === 0 ? (opts.noWelcome ? 'This is the FIRST item: a greeting was already said, so start straight into it.' : 'This is the START: A welcomes listeners and names the episode, then covers this item.')
-        : last ? 'This is the LAST item: cover it, then a one-line wrap-up and goodbye.'
-          : 'Move on to this item with a short natural transition.';
+    const where = placement({ first: i === 0, last }, opts.noWelcome);
     const recap = lines.slice(-3).map((l) => `${l.host}: ${l.text}`).join('\n');
     const covered = outline.slice(0, i).map((o) => `- ${o.topic.slice(0, 90)}`).join('\n');
-    // With a length to reach, ask for about n lines (the hosts may explain why the story
-    // matters, from the source); otherwise at most n.
-    const howMany = opts.linesPerItem ? `Write about ${n} lines (no fewer than ${Math.max(3, n - 2)}), each 1-2 sentences; never repeat a line already said` : `Write at most ${n} lines (each 1-2 sentences)`;
+    const howMany = howManyLines(opts, n);
     const cast = opts.castFor?.(i) ?? cfg.cast;
     const t = await ask(
       'You write natural spoken scripts from sources. Say ONLY what the sources say: never add names, numbers, dates, places or quotes that are not in them. If the source gives few details, the hosts may say why it matters, using only what the source says. Never mention source numbers.',
@@ -539,7 +549,7 @@ export async function writeEpisode(sources: Source[], opts: PodcastOptions, onSt
   const fmt = hosts === 1 ? 'A: ...' : hosts === 3 ? 'A: ...\nB: ...\nC: ...' : 'A: ...\nB: ...';
   const style = STYLE_TEXT[opts.style];
 
-  if (opts.outline?.length) return writeOutlinedEpisode(opts.outline, opts, { cast, fmt, style, hosts }, onStep);
+  if (opts.outline?.length) return writeOutlinedEpisode(opts.outline, opts, { cast, fmt, style, hosts, onStep });
   onStep('Planning the episode...');
   const ask0 = opts.prompt ? `The listener asked for: ${opts.prompt}\n` : 'Pick the most interesting angle in these sources yourself.\n';
   // Short episodes are planned in one call. Long ones are planned a dozen parts at a time, each

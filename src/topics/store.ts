@@ -27,7 +27,7 @@ export interface Course {
 
 interface TopicsState {
   courses: Course[];
-  add: (request: CourseRequest, plan: CoursePlan, sources?: CourseSource[], projectId?: string) => string;
+  add: (request: CourseRequest, plan: CoursePlan, origin?: { sources?: CourseSource[]; projectId?: string }) => string;
   /** A course opened from a file someone sent: its squares and content, with no progress and no project. */
   addShared: (shared: SharedCourse, projectId?: string) => string;
   addSources: (id: string, sources: CourseSource[]) => void;
@@ -42,7 +42,8 @@ interface TopicsState {
 
 export const useTopics = create<TopicsState>()(persist((set) => ({
   courses: [],
-  add: (request, plan, sources = [], projectId) => {
+  add: (request, plan, origin = {}) => {
+    const { sources = [], projectId } = origin;
     const id = localUniqueId('course');
     const course: Course = {
       id, topic: request.topic, title: plan.title, summary: plan.summary, style: plan.style, theme: plan.theme, request,

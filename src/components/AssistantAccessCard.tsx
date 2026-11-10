@@ -32,7 +32,9 @@ export function AssistantAccessCard() {
     const sub = AppState.addEventListener('change', (s) => { if (s === 'active') refresh(); });
     return () => sub.remove();
   }, [refresh]);
-  const row = (label: string, on: boolean, action: () => void, desc: string) => (
+  const row = (label: string, access: { on: boolean; action: () => void; desc: string }) => {
+    const { on, action, desc } = access;
+    return (
     <View style={[literalStyles.s1, { borderTopColor: colors.border }]}>
       <View style={literalStyles.s2}>
         <Text style={[{ color: colors.text }, literalStyles.s3]}>{label}</Text>
@@ -44,15 +46,16 @@ export function AssistantAccessCard() {
         </TouchableOpacity>
       )}
     </View>
-  );
+    );
+  };
   return (
     <View style={[{ backgroundColor: colors.surface }, literalStyles.s7]}>
       <Text style={[{ color: colors.text }, literalStyles.s8]}>Assistant access</Text>
       <Text style={[{ color: colors.textSecondary }, literalStyles.s9]}>
         What agents with file/calendar tools (like Phone Assistant) can reach. Everything stays on the phone; changes always ask you first.
       </Text>
-      {row('All files access', files, () => requestAllFiles(), 'Read and edit your documents anywhere on the phone. Without it, agents only use their own folder.')}
-      {row('Calendar', cal, async () => { await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CALENDAR); refresh(); }, 'Read your events. Adding an event opens the calendar for you to save.')}
+      {row('All files access', { on: files, action: () => requestAllFiles(), desc: 'Read and edit your documents anywhere on the phone. Without it, agents only use their own folder.' })}
+      {row('Calendar', { on: cal, action: async () => { await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CALENDAR); refresh(); }, desc: 'Read your events. Adding an event opens the calendar for you to save.' })}
       <Text style={[{ color: colors.textMuted }, literalStyles.s10]}>Workspace folder: {ws}</Text>
     </View>
   );
