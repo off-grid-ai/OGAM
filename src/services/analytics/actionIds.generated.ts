@@ -333,6 +333,7 @@ export const FIXED_ACTION_IDS: readonly string[] = [
   "note-notice",
   "notes-empty-new",
   "notes-new",
+  "notes-screen",
   "notes-search",
   "npu-gpu-badge",
   "onboarding-dots",

@@ -353,12 +353,13 @@ export async function generateStandalone(
   onToken?: (token: string) => void,
   options: { maxTokens?: number } = {},
 ): Promise<string> {
-  return parseModelOutput(await standaloneRaw(messages, onToken)).answer.trim();
+  return parseModelOutput(await standaloneRaw(messages, onToken, options)).answer.trim();
 }
 
 async function standaloneRaw(
   messages: Message[],
-  onToken?: (token: string) => void,
+  onToken: ((token: string) => void) | undefined,
+  options: { maxTokens?: number },
 ): Promise<string> {
   // Remote/gateway text model active with no local engine loaded: enhancement used to
   // fall through to the (unloaded) local llama and throw, so it was silently skipped
