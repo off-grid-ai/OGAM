@@ -1,0 +1,37 @@
+# Phone test checklist, 0.0.149
+
+Nothing below has been run on a phone yet. Tick each line on a real device, and note what you saw when it fails.
+
+## Install and update
+- [ ] Install the APK over the old build. Settings shows version 0.0.149 (build N).
+- [ ] Settings > About > Updates: "Check for updates" says you are up to date, or offers a newer build.
+- [ ] When a newer build exists: "What is new" opens the notes, and Download and install opens the Android installer.
+- [ ] The first install from Atlas asks to allow installing from this source.
+
+## Daily briefing
+- [ ] Play from the beginning: the opening tune plays (or is skipped), then the first card, with no long silences.
+- [ ] Tap a card: it starts at that story. Story chips jump between stories.
+- [ ] Settings > Briefing tunes: Quiet, Normal and Loud change how loud the tunes are.
+
+## Documents and Markdown
+- [ ] Attach a Word, PowerPoint, Excel and PDF file in chat. The AI answers with headings and tables intact.
+- [ ] Preview a document and tap the download icon: a .md file appears in the workspace Converted folder.
+- [ ] Chat settings > Convert documents to Markdown off: documents go back to flat text.
+- [ ] A project with documents: ask a question. The reply has a small raised number, and the excerpts are listed under it.
+
+## Teach the AI and learning
+- [ ] Teach the AI: pick an expert (taxes, law), start a session, open Reports and see numbered sources.
+- [ ] A chat that used a lesson shows the "used lessons" note.
+- [ ] Share reports opens the Android share sheet.
+
+## Home, chats and styles
+- [ ] Home tiles: Get models, Load a model, Teach the AI, Study a textbook, Customize. Optional tiles appear once switched on.
+- [ ] Merge chats shows what is in each chat, and Undo brings them back.
+- [ ] Styles screen: every option is still there inside its group. Message looks (iMessage, WhatsApp, Telegram...) change the chat.
+
+## Long messages and files
+- [ ] Paste a very long message: a notice says it was cut, or it is read in parts.
+- [ ] Ask the AI to write a file. The file exists, or the reply says no file was made.
+
+## Emergency packs
+- [ ] Atlas packs: pick Small, Medium, Large or Full, save to a flash drive or SD card, and import it back.

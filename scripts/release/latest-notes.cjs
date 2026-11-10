@@ -4,9 +4,12 @@ const path = require('node:path');
 
 function latestNotes(markdown) {
   const lines = markdown.split('\n');
-  const start = lines.findIndex((l) => /^- 0\.0\.\d+:/.test(l));
+  const isEntry = (l) => /^- 0\.0\.\d+:/.test(l);
+  const num = (l) => Number(/^- 0\.0\.(\d+):/.exec(l)[1]);
+  let start = -1;
+  lines.forEach((l, i) => { if (isEntry(l) && (start < 0 || num(l) > num(lines[start]))) start = i; });
   if (start < 0) return '';
-  let end = lines.findIndex((l, i) => i > start && /^- 0\.0\.\d+:/.test(l));
+  let end = lines.findIndex((l, i) => i > start && isEntry(l));
   if (end < 0) end = lines.length;
   return lines.slice(start, end).map((l, i) => (i === 0 ? l.replace(/^- /, '') : l.replace(/^ {2}/, ''))).join('\n').trim();
 }

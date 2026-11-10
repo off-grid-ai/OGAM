@@ -569,6 +569,13 @@ What changed:
   model. A second, short-prompt check decides whether to use the first-word workaround: prompts under about 192 tokens run
   once first so the first word comes from the engine's single-token step; it is switched on only if the same check passes with
   it, and never for long prompts. The remembered verdict records the batch size and CPU-kernel setting.
+- 0.0.149: documents, sources and update notes. Documents are converted to Markdown before the AI reads them (Word, PowerPoint,
+  Excel, PDF, HTML, CSV: headings, lists and tables are kept; code, JSON and plain text are left as they are; switch it off in
+  Chat settings > Convert documents to Markdown). Project-document excerpts are numbered: the model cites [1], and the reply
+  shows a small raised number and lists the excerpts under it. Searching a document keeps each excerpt's heading trail. A
+  document's preview has a button that saves it as a .md file in the workspace Converted folder. Briefing tunes have a volume
+  (Quiet, Normal or Loud). The update card has a "What is new" toggle, and each release page now carries the newest notes.
+  Fixes: Markdown conversion kept `<` inside code, and chunking an empty document no longer throws.
 - 0.0.148: from phone use. Daily briefing: Listen from the beginning no longer stops silently when the opening tune cannot be
   played (a tune that fails or never ends is skipped). Teach the AI (was Learning mode): one screen for the default chat with an
   expert per subject (General, Taxes, Law, Psychology...), each with its own topic, question bank, reports and lessons; every report

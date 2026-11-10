@@ -8,6 +8,9 @@ describe('release notes for a GitHub release', () => {
   it('takes the last entry to the end of the file', () => {
     expect(latestNotes('- 0.0.1: only\n  entry')).toBe('0.0.1: only\nentry');
   });
+  it('picks the highest version even when entries are out of order', () => {
+    expect(latestNotes('- 0.0.130: a\n- 0.0.148: b\n  more\n- 0.0.147: c')).toBe('0.0.148: b\nmore');
+  });
   it('gives nothing when there are no entries', () => expect(latestNotes('# nothing here')).toBe(''));
   it('reads the real notes file', () => {
     const real = latestNotes(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '..', 'docs', 'ATLAS_RELEASE_0.0.105.md'), 'utf8'));
