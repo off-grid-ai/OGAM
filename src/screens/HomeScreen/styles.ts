@@ -32,8 +32,10 @@ const createLayoutStyles = (colors: ThemeColors) => ({
   },
   // A compact pill that sits level with the title, not a slab that outweighs it (Mac, 2026-11-06).
   newChatButton: { paddingVertical: 6, paddingHorizontal: SPACING.md },
-  brand: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.sm },
-  appLogo: { width: 32, height: 32 },
+  // The website's lockup: the mark is the larger part and the gap is a third of it. 32 pt sat below
+  // the 30 pt title and read small (Mac, 2026-11-08); the file is 192 px so it stays sharp at 3x.
+  brand: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.md },
+  appLogo: { width: 44, height: 44 },
   promiseRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: SPACING.md },
   crownButton: {
     width: 44,

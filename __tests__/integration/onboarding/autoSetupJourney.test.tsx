@@ -220,13 +220,14 @@ describe('Auto Setup release journey', () => {
       expect(ui.getByTestId('auto-setup-plan-balanced')).toBeTruthy(),
     );
 
-    // Only the chosen plan is expanded.
+    // Only the chosen plan is expanded, and a new person starts on Quick start: the best model under
+    // 1 GB, so the first download finishes (PostHog 2026-11-09).
     expect(ui.getAllByTestId('auto-setup-selected-plan')).toHaveLength(1);
-    // Lean, Balanced and Extreme are this 12 GB phone's Fast, Balanced and Best picks (37759c684),
-    // ranked by quality alone (shared afdb05f).
+    expect(ui.getByText('Qwen 3.5 0.8B')).toBeTruthy();
+    // Balanced and Extreme are this 12 GB phone's Balanced and Best picks (37759c684), ranked by
+    // quality alone (shared afdb05f).
+    fireEvent.press(ui.getByTestId('auto-setup-plan-heading-balanced'));
     expect(ui.getByText('MiniCPM5 2B')).toBeTruthy();
-    fireEvent.press(ui.getByTestId('auto-setup-plan-heading-lean'));
-    expect(ui.getByText('LFM2.5 8B A1B')).toBeTruthy();
     expect(ui.queryByText('SmolVLM 2B')).toBeNull();
     fireEvent.press(ui.getByTestId('auto-setup-plan-heading-extreme'));
     expect(ui.getByText('Qwen 3.5 9B')).toBeTruthy();
@@ -379,7 +380,8 @@ describe('Auto Setup release journey', () => {
     );
     fireEvent.press(ui.getByTestId('auto-setup-plan-heading-extreme'));
 
-    expect(ui.getByText('MiniCPM5 2B')).toBeTruthy();
+    // The plan that started (Quick start, the default) stays: its model shows, Extreme's does not.
+    expect(ui.getByText('Qwen 3.5 0.8B')).toBeTruthy();
     expect(ui.queryByText('Qwen 3.5 9B')).toBeNull();
     expect(useAppStore.getState().settings.modelLoadingMode).toBe('balanced');
     ui.unmount();

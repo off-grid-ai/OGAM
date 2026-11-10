@@ -1,7 +1,7 @@
 import { videoSeam } from '../bootstrap/videoSeam';
 import { ramFitScore } from '../utils/recommendedModels';
 import { fileExceedsBudget } from './memoryBudget';
-import { devicePicks } from './devicePicks';
+import { devicePicks, starterPick, type DevicePick, type PickSlot } from './devicePicks';
 import { fetchModelFiles } from './modelCatalogFiles';
 import { hardwareService } from './hardware';
 import { WHISPER_MODELS } from './whisperModels';
@@ -33,14 +33,19 @@ const productionCatalogBoundaries: AutoSetupCatalogBoundaries = {
 /** Setup's chat models are this phone's Fast, Balanced and Best: the shared picking rule over the
  *  catalog pool (bundled plus catalog/models.json), the same three the Models screen offers. */
 function buildAutoSetupPickCandidates(ramGB: number): AutoSetupCompatibleCatalog['text'] {
-  return devicePicks(ramGB).map(pick => ({
+  const starter = starterPick(ramGB);
+  const picks: { slot: PickSlot | 'starter'; pick: DevicePick }[] = [
+    ...(starter ? [{ slot: 'starter' as const, pick: starter }] : []),
+    ...devicePicks(ramGB).map(pick => ({ slot: pick.slot, pick })),
+  ];
+  return picks.map(({ slot, pick }) => ({
     id: `${pick.model.id}/${pick.file.name}`,
     name: pick.model.name,
     kind: 'text' as const,
     sizeBytes: pick.sizeBytes,
     fitScore: 0,
     parameterCountB: pick.model.paramCount,
-    pick: pick.slot,
+    pick: slot,
     payload: { modelId: pick.model.id, file: pick.file },
   }));
 }

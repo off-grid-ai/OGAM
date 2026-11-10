@@ -4,7 +4,7 @@ import { View, Text } from 'react-native';
 import { TouchableOpacity } from './Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { useThemedStyles, useTheme } from '../theme';
-import { isOffGridHfRepo } from '@offgrid/models';
+import { isOffGridHfRepo, isRawModelName, modelDisplayName } from '@offgrid/models';
 import { QUANTIZATION_INFO, CREDIBILITY_LABELS } from '../constants';
 import { ModelFile, DownloadedModel, ModelCredibility } from '../types';
 import { needsVisionRepair } from '../utils/visionRepair';
@@ -21,6 +21,7 @@ import {
 } from './ModelCardContent';
 import { PAUSED_ICON, QUEUED_ICON } from '../utils/downloadStatusIcon';
 import { formatBytes } from '../utils/formatBytes';
+import { huggingFaceService } from '../services/huggingface';
 import { presentProgress } from '../utils/progressPresentation';
 
 interface ModelCardProps {
@@ -55,6 +56,8 @@ interface ModelCardProps {
   incompatibleReason?: string;
   /** A size in words ("Smaller", "Recommended", "Best") shown instead of the quantization name. */
   sizeLabel?: string;
+  /** What the phone downloads when no single file is chosen yet (the catalog's own file sizes). */
+  downloadSizeBytes?: number;
   testID?: string;
   /** Extra container style: a list that groups its rows (ListGroup look) flattens the card into a row. */
   style?: StyleProp<ViewStyle>;
@@ -207,32 +210,31 @@ const DownloadProgressSection: React.FC<{
     queued || paused ? undefined : presented.rateText,
     countLabel,
   ].filter(Boolean).join(' · ');
+  // One line: the bar, then its state (%, Queued, Paused), then the actions, so the cancel sits beside
+  // what it cancels. Bytes and speed go under it only when there are some (Mac, 2026-11-08: the % and ×
+  // floated on a line of their own under a bar with no track).
   return (
     <View style={styles.progressSection}>
       <View style={styles.progressTransferRow}>
-        <View style={styles.progressDetails}>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${queued ? 0 : percentage}%` }]} />
-          </View>
-          <View style={styles.progressCaptionRow}>
-            <Text style={styles.progressBytesText}>{caption}</Text>
-            {queued ? (
-              <View style={styles.progressLabelRow}>
-                <Icon name={QUEUED_ICON} size={12} color={colors.textMuted} accessibilityLabel="Queued" />
-                <Text style={[styles.progressText, styles.queuedText]}>Queued</Text>
-              </View>
-            ) : paused ? (
-              <View style={styles.progressLabelRow}>
-                <Icon name={PAUSED_ICON} size={12} color={colors.textSecondary} accessibilityLabel="Paused" />
-                <Text style={styles.progressText}>Paused</Text>
-              </View>
-            ) : (
-              <Text style={styles.progressText}>{presented.percentageText ?? 'In progress'}</Text>
-            )}
-          </View>
+        <View style={styles.progressBar}>
+          <View style={[styles.progressFill, { width: `${queued ? 0 : percentage}%` }]} />
         </View>
+        {queued ? (
+          <View style={styles.progressLabelRow}>
+            <Icon name={QUEUED_ICON} size={12} color={colors.textMuted} accessibilityLabel="Queued" />
+            <Text style={[styles.progressText, styles.queuedText]}>Queued</Text>
+          </View>
+        ) : paused ? (
+          <View style={styles.progressLabelRow}>
+            <Icon name={PAUSED_ICON} size={12} color={colors.textSecondary} accessibilityLabel="Paused" />
+            <Text style={styles.progressText}>Paused</Text>
+          </View>
+        ) : (
+          <Text style={styles.progressText}>{presented.percentageText ?? 'In progress'}</Text>
+        )}
         {actions && <View style={styles.progressActions}>{actions}</View>}
       </View>
+      {caption ? <Text style={[styles.progressBytesText, styles.progressCaption]}>{caption}</Text> : null}
     </View>
   );
 };
@@ -282,8 +284,14 @@ const FailedSection: React.FC<{
 /** Retry and Remove sit side by side: the touch area grows only up and down, so neither takes the other's tap. */
 const VERTICAL_HIT_SLOP = { top: 10, bottom: 10, left: 0, right: 0 };
 
+/** One size, or "min–max" when the files differ. */
+function formatSizeRange(range: { min: number; max: number }): string {
+  const min = huggingFaceService.formatFileSize(range.min);
+  return range.min === range.max ? min : `${min}–${huggingFaceService.formatFileSize(range.max)}`;
+}
+
 export const ModelCard: React.FC<ModelCardProps> = ({
-  model,
+  model: given,
   file,
   downloadedModel,
   isDownloaded,
@@ -297,6 +305,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   isCompatible = true,
   incompatibleReason,
   sizeLabel,
+  downloadSizeBytes,
   testID,
   style,
   onPress,
@@ -322,11 +331,17 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   factsTestID,
   footer,
 }) => {
+  // The name a person reads, from the shared resolver: a search result's "org/repo / file.gguf"
+  // reads as the model's name (Mac, 2026-11-08). Catalog names pass through unchanged.
+  const model = React.useMemo(
+    () => (isRawModelName(given.name) ? { ...given, name: modelDisplayName(given.name) ?? given.name } : given),
+    [given],
+  );
   const styles = useThemedStyles(createStyles);
   const useDenseLayout = compact;
 
   const quantInfo = resolveQuantInfo(file, downloadedModel);
-  const fileSize = resolveFileSize(file, downloadedModel);
+  const fileSize = resolveFileSize(file, downloadedModel) || downloadSizeBytes || 0;
   const isVisionModel = !!(model.modelType === 'vision' || file?.mmProjFile || (downloadedModel?.engine === 'llama' && downloadedModel.isVisionModel));
   const needsRepair = needsVisionRepair(downloadedModel, file);
 
@@ -341,12 +356,17 @@ export const ModelCard: React.FC<ModelCardProps> = ({
     };
   }, [model.files, fileSize]);
 
+  // A compact row shows its size too, as a range until one file is chosen (Mac, 2026-11-08: a list
+  // row with params but no size left out what the phone pays).
+  const rangeText = sizeRange ? formatSizeRange(sizeRange) : undefined;
+  const headingFacts = [sizeLabel, useDenseLayout ? rangeText : undefined, ...(facts ?? [])].filter((fact): fact is string => !!fact);
+
   const credibility = resolveCredibility(model, downloadedModel);
   const credibilityInfo = credibility ? CREDIBILITY_LABELS[credibility.source] : null;
   const reportedQuantization = [file?.quantization, downloadedModel?.quantization, model.quantization]
     .find(value => value && value !== 'Unknown');
   const quantization = reportedQuantization ||
-    /(?:^|[-_.])((?:Q\d+(?:_[A-Z0-9]+)*)|F16|F32|FP16|INT8)(?:[-_.]|$)/i.exec(`${model.id} ${model.name}`)?.[1]?.toUpperCase();
+    /(?:^|[-_.])((?:Q\d+(?:_[A-Z0-9]+)*)|F16|F32|FP16|INT8)(?:[-_.]|$)/i.exec(`${given.id} ${given.name}`)?.[1]?.toUpperCase();
   const actionsInProgress = !!compact && (isDownloading || isQueued || isPaused);
   const actionButtons = !failedState && (
     <ModelCardActions
@@ -407,7 +427,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
             credibilityInfo={credibilityInfo}
             isActive={isActive}
             incompatibleReason={!isCompatible ? (incompatibleReason ?? 'Too large') : undefined}
-            facts={sizeLabel ? [sizeLabel, ...(facts ?? [])] : facts}
+            facts={headingFacts.length ? headingFacts : undefined}
             capabilities={capabilities}
             sourceBadge={sourceBadge}
             nameTestID={nameTestID}

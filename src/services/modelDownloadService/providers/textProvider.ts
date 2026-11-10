@@ -19,6 +19,7 @@ import { useAppStore } from '../../../stores';
 import { useDownloadStore, isActiveStatus, DownloadEntry } from '../../../stores/downloadStore';
 import { jobBytesDownloaded } from '../../../utils/downloadStatus';
 import logger from '../../../utils/logger';
+import { failureDetails } from '../../../utils/downloadErrors';
 import { mapStoreStatus } from '../storeStatus';
 import { uniformDownloadId } from '../uniformId';
 import { startModelDownload } from '../../startModelDownload';
@@ -84,7 +85,7 @@ function reattach(downloadId: string): void {
       if (modelKey) useDownloadStore.getState().remove(modelKey);
     },
     (error: Error) => {
-      useDownloadStore.getState().setStatus(downloadId, 'failed', { message: error.message });
+      useDownloadStore.getState().setStatus(downloadId, 'failed', failureDetails(error));
     },
   );
 }
@@ -159,6 +160,13 @@ export const textProvider: DownloadProvider = {
   async retry(id: string): Promise<void> {
     const entry = findEntry(keyOf(id));
     if (!entry) return;
+    if (entry.errorCode === 'finalize_failed' && entry.downloadId) {
+      // The download finished and saving it failed: save it again from the bytes on disk. The native
+      // row is completed, so a native retry refused it and the person had to download it all again.
+      useDownloadStore.getState().setStatus(entry.downloadId, 'processing');
+      reattach(entry.downloadId);
+      return;
+    }
     if (Platform.OS === 'android') {
       // Android resumes the existing WorkManager job in place, so it genuinely needs the live
       // downloadId to reattach to.

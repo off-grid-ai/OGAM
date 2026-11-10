@@ -51,6 +51,12 @@ class EmbeddingModelChanger {
     this.listeners.forEach(listener => listener());
   }
 
+  /** Clear a failed change's message (the row's Remove). */
+  /** Clears a failed change. A change still running is left alone: only cancel stops it. */
+  dismiss = (): void => {
+    if (!this.change.busy) this.report(false, '');
+  };
+
   /** Try the last model change again (the Download Manager's Retry). */
   retry = (): Promise<void> =>
     this.last === undefined ? Promise.resolve() : this.install(this.last);
@@ -80,13 +86,10 @@ class EmbeddingModelChanger {
       });
       this.report(false, 'Search model changed. Documents update as you use them.');
     } catch (error) {
-      this.report(
-        false,
-        '',
-        controller.signal.aborted
-          ? 'Model change cancelled. The previous model is still active.'
-          : `${headline(error)} The previous model is still active.`,
-      );
+      // A cancel you asked for needs no message: the row goes back to how it was. A failure stays on
+      // the model's row until you retry or dismiss it.
+      if (controller.signal.aborted) this.report(false, '');
+      else this.report(false, '', `${headline(error)} The previous model is still active.`);
       throw error;
     } finally {
       this.abort = null;

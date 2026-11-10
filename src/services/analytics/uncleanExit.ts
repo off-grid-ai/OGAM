@@ -16,6 +16,8 @@ export interface UncleanExitMarker {
   engine: string;
   backend: string;
   free_ram_gb?: number;
+  /** Our other models still in memory when the stage started. */
+  residents?: string;
   startedAt: number;
   appVersion: string;
   foreground: boolean;

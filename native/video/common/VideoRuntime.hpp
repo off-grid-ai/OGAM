@@ -7,6 +7,7 @@
 #endif
 #include "BlankImage.hpp"
 #include "EngineErrorLog.hpp"
+#include "GpuBudgets.hpp"
 #include <atomic>
 #include <cstdio>
 #include <sys/stat.h>
@@ -48,18 +49,15 @@ inline bool wanEncoderFitsGpu(const std::string &weight, const std::string &enco
   return fileGib(encoder) + fileGib(weight) + 2 + 1.5 <= availableGib;
 }
 inline std::string phoneGpuBudgets(const std::string &computeDevice) {
-  const long availableKb = availableRamKb();
-  std::string budgets = "HTP0=1.5";
+  // A positive budget is capped at what the driver reports; -1024 GiB leaves a device none.
+  std::vector<BudgetDevice> devices;
   for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
     auto device = ggml_backend_dev_get(i);
     const auto type = ggml_backend_dev_type(device);
-    if (type != GGML_BACKEND_DEVICE_TYPE_GPU && type != GGML_BACKEND_DEVICE_TYPE_IGPU) continue;
-    const std::string name = ggml_backend_dev_name(device);
-    // A positive budget is capped at what the driver reports; -1024 GiB leaves a device none.
-    const double gib = name == computeDevice && availableKb > 0 ? availableKb / (1024.0 * 1024.0) : -1024;
-    budgets += "," + name + "=" + std::to_string(gib);
+    devices.push_back({ggml_backend_dev_name(device),
+                       type == GGML_BACKEND_DEVICE_TYPE_GPU || type == GGML_BACKEND_DEVICE_TYPE_IGPU});
   }
-  return budgets;
+  return gpuBudgets(devices, computeDevice, availableRamKb());
 }
 #endif
 struct VideoRequest {

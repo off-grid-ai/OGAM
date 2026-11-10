@@ -101,7 +101,8 @@ function tierFromPersistedIntent(): AutoSetupTier {
   const mode = useAppStore.getState().settings.modelLoadingMode;
   if (mode === 'conservative') return 'lean';
   if (mode === 'aggressive') return 'extreme';
-  return 'balanced';
+  // A new person starts on Quick start: a first model under 1 GB that finishes downloading.
+  return 'lean';
 }
 
 export function autoSetupDownloadId(
@@ -328,6 +329,11 @@ export function createAutoSetupSession(
       publish({
         phase: 'ready',
         plans,
+        // The remembered tier may not be on offer (Extreme is dropped when it repeats Quick start):
+        // fall back to the largest plan that is, so a plan is picked and its download button shows.
+        selectedTier: plans.some(plan => plan.tier === state.selectedTier)
+          ? state.selectedTier
+          : plans.at(-1)?.tier ?? state.selectedTier,
         installedIds: [
           ...installed.filter(download => download.status === 'completed').map(download => download.id),
           ...installedEmbedding.filter((id): id is string => id !== null),

@@ -75,6 +75,8 @@ export interface ModelFacts {
   quant?: string;
   engine: string;
   backend: string;
+  /** Our other models still in memory when a load starts (residency keys), or `none`. */
+  residents?: string;
 }
 
 const CRASH_EVENTS = new Set(['$exception', 'unclean_exit']);
@@ -231,6 +233,9 @@ export function startAnalytics(
     if (state.activeVideoModelId && state.activeVideoModelId !== prev.activeVideoModelId) {
       modelSelected('video', state.activeVideoModelId);
     }
+    if (state.downloadedModels !== prev.downloadedModels || state.downloadedImageModels !== prev.downloadedImageModels) {
+      reportArrivedDownloads(state.downloadedModels, state.downloadedImageModels);
+    }
   });
   setScreenSink({ subScreen: trackSubScreen, sheetShown, sheetHidden });
   foregroundAt = Date.now();
@@ -250,6 +255,7 @@ export function startAnalytics(
           engine: unclean.engine,
           backend: unclean.backend,
           free_ram_gb: unclean.free_ram_gb,
+          residents: unclean.residents,
           elapsed_ms: ms(Date.now() - unclean.startedAt),
         });
       }
@@ -634,7 +640,12 @@ async function socLabel(): Promise<string> {
 }
 
 /** Run a model load and report `model_loaded` / `model_load_failed`. The result is unchanged. */
-export async function trackModelLoad<T>(facts: ModelFacts, run: () => Promise<T>): Promise<T> {
+export async function trackModelLoad<T>(
+  facts: ModelFacts,
+  run: () => Promise<T>,
+  /** Facts known only once the model has loaded (a chat model's `low_memory`). */
+  loadedFacts: () => Properties = () => ({}),
+): Promise<T> {
   const startedAt = Date.now();
   const free = freeRamGb();
   markStageStarted({ stage: 'load', ...facts, free_ram_gb: free, startedAt, appVersion: appVersion() });
@@ -646,7 +657,7 @@ export async function trackModelLoad<T>(facts: ModelFacts, run: () => Promise<T>
   try {
     const result = await run();
     markStageEnded('load');
-    report('model_loaded', {});
+    report('model_loaded', loadedFacts());
     flowStep('onboarding', 'model_loaded');
     return result;
   } catch (error) {
@@ -740,6 +751,9 @@ function setupFlow(modelType: DownloadFacts['modelType']): Flow | null {
 export function downloadStarted(key: string, facts: DownloadFacts): void {
   // Not opted in: no disk read, nothing kept.
   if (!client) return;
+  // One start per attempt. A queued row that gets its native id reports again while its attempt is
+  // still open, which counted every download twice; a real retry comes after the attempt ended.
+  if (downloads.has(key)) return;
   const base = Promise.resolve()
     .then(() => RNFS.getFSInfo())
     .then(info => bytesToGb(info.freeSpace))
@@ -756,6 +770,29 @@ export function downloadStarted(key: string, facts: DownloadFacts): void {
   base.then(props => capture('model_download_started', props)).catch(ignore);
   const flow = setupFlow(facts.modelType);
   if (flow) flowStep(flow, 'model_picked');
+}
+
+/**
+ * A download is done when its model is on the phone. Chat and image downloads finish by registering
+ * the model and dropping their row, never through the store's completed status, so for months no
+ * chat or image download ever reported finishing (PostHog, 2026-11-09: 0 of 2,300 GGUF starts). The
+ * arrival of the model is the one fact every finish path shares, so it is what ends the download.
+ */
+function reportArrivedDownloads(
+  textModels: ReadonlyArray<{ id: string }>,
+  imageModels: ReadonlyArray<{ id: string }>,
+): void {
+  if (downloads.size === 0) return;
+  const arrived = new Set([...textModels.map(m => m.id), ...imageModels.map(m => `image:${m.id}`)]);
+  // Ending a download deletes it from the map; deleting the current key while iterating is safe.
+  for (const key of downloads.keys()) {
+    if (arrived.has(key)) downloadEnded(key, 'done');
+  }
+}
+
+/** A download that stopped without finishing or failing (cancelled, removed): forget its attempt. */
+export function downloadDropped(key: string): void {
+  downloads.delete(key);
 }
 
 export function downloadEnded(key: string, outcome: 'done' | 'failed', error?: unknown): void {

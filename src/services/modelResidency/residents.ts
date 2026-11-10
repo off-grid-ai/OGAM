@@ -42,6 +42,16 @@ export interface ResidentSpec {
    *    so it never loads into swap.
    */
   dirtyMemory?: boolean;
+  /**
+   * The model runs fastest copied into dirty memory but loads mapped when a copy will not fit (an
+   * Android chat model, whose weights llama.cpp repacks). Eviction makes room for the copy in real
+   * free RAM when unloading our other models can. It is never refused on the budget: at worst every
+   * other model is unloaded and it loads mapped. Only the shared fit rule's "Too big" refuses it.
+   */
+  prefersCopy?: boolean;
+  /** A prefersCopy model that loads mapped from the start (it died loading as a copy before): it is
+   *  still never refused on the budget, but no room is made for a copy. */
+  startsMapped?: boolean;
 }
 
 export interface EnsureResult {

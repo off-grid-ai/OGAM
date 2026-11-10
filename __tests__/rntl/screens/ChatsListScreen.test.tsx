@@ -100,14 +100,15 @@ function rowTexts(app: App, view: ReturnType<Rtl['render']>, index: number): str
     .map(node => String(node.props.children));
 }
 
-/** The day headings and the chat titles of the list, top to bottom, as the person reads them. */
+/** The day headings and the chat titles of the list, top to bottom, as the person reads them. A
+ *  heading is Today, Yesterday, or the day itself ("Oct 27"), like Claude's chat list. */
 function readList(app: App, view: ReturnType<Rtl['render']>, titles: readonly string[]): string[] {
-  const headings = new Set(['Today', 'Yesterday', 'This week', 'Older']);
+  const heading = /^(Today|Yesterday|[A-Z][a-z]{2} \d{1,2}(, \d{4})?)$/;
   return app.rtl
     .within(view.getByTestId('conversation-list'))
     .queryAllByText(/./)
     .map(node => String(node.props.children))
-    .filter(text => headings.has(text) || titles.includes(text));
+    .filter(text => heading.test(text) || titles.includes(text));
 }
 
 /** The quiet kind icons (image, video) a row shows. */
@@ -257,8 +258,10 @@ describe('ChatsListScreen', () => {
       expect(readList(app, view, titles)).toEqual([
         'Today', 'Today Chat',
         'Yesterday', 'Yesterday Chat',
-        'This week', 'Recent Chat',
-        'Older', 'Last Week Chat', 'Two Weeks Chat', 'Old Chat',
+        'Oct 27', 'Recent Chat',
+        'Oct 22', 'Last Week Chat',
+        'Oct 16', 'Two Weeks Chat',
+        'Sep 1', 'Old Chat',
       ]);
       // Each row is its title alone: no clock time, weekday, "Last week", "N weeks ago" or date.
       titles.forEach((title, index) => expect(rowTexts(app, view, index)).toEqual([title]));
@@ -283,7 +286,7 @@ describe('ChatsListScreen', () => {
       expect(readList(app, view, ['Packing list', 'Lake picture', 'Beach clip'])).toEqual([
         'Today', 'Packing list',
         'Yesterday', 'Lake picture',
-        'This week', 'Beach clip',
+        'Oct 27', 'Beach clip',
       ]);
       // Title, then the project only on the project chat; no reply text and no time on any row.
       expect(rowTexts(app, view, 0)).toEqual(['Packing list']);

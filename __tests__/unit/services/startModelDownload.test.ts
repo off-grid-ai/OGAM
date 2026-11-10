@@ -91,6 +91,17 @@ describe('startModelDownload', () => {
     expect(row()).toEqual(expect.objectContaining({ status: 'failed', errorMessage: 'boom' }));
   });
 
+  it('a phone without room refuses before the transfer and says why, with the disk_full reason kept', async () => {
+    device.boundary.fs!.setFreeBytes(200 * 1024 * 1024);
+    const onError = jest.fn();
+    await startModelDownload(MODEL_ID, createModelFile({ name: 'model.gguf', size: 900 * 1024 * 1024 }), { onError });
+    await device.settle();
+
+    expect(device.nativeRows()).toHaveLength(0);
+    expect(row()).toEqual(expect.objectContaining({ status: 'failed', errorCode: 'disk_full' }));
+    expect(row()!.errorMessage).toMatch(/^Not enough space\. This needs/);
+  });
+
   it('swallows a cancellation of a still-queued start and removes the placeholder row', async () => {
     // Three other downloads fill the phone's download slots, so this one waits in the queue.
     for (const n of [1, 2, 3]) await startModelDownload(`other/m${n}`, createModelFile({ name: `m${n}.gguf`, size: SIZE }), {});

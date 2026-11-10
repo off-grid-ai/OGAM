@@ -9,6 +9,7 @@ import { useAppStore } from '../stores';
 import { activeModelService } from './activeModelService';
 import { makeModelKey } from '../utils/modelKey';
 import { statFile } from '../utils/fileStat';
+import { failureDetails } from '../utils/downloadErrors';
 import type { ModelFile, DownloadedModel } from '../types';
 
 /** Placeholder downloadId for a row that exists only to represent the QUEUED state
@@ -143,7 +144,9 @@ export async function startModelDownload(
   let currentDownloadId: string | undefined = queuedPlaceholderId(modelKey);
   const fail = (err: Error) => {
     if (currentDownloadId) {
-      useDownloadStore.getState().setStatus(currentDownloadId, 'failed', { message: err.message });
+      // Keep the error's code (disk_full from the space check): without it every refusal read as
+      // a bare "error" in the numbers and in the row's message.
+      useDownloadStore.getState().setStatus(currentDownloadId, 'failed', failureDetails(err));
     }
     opts.onError?.(err);
   };
@@ -154,8 +157,9 @@ export async function startModelDownload(
     // Cancelled (the row is gone) stops quietly. A failed file clears the row and says so; the next
     // tap fetches only what is still missing.
     const cancelled = (e as Error & { cancelled?: boolean }).cancelled || !useDownloadStore.getState().downloads[modelKey];
+    // A failure is recorded first (with its code, disk_full from the space check), then the row clears.
+    if (!cancelled) fail(e as Error);
     useDownloadStore.getState().remove(modelKey);
-    if (!cancelled) opts.onError?.(e as Error);
     return;
   }
 

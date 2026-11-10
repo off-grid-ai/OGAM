@@ -5,6 +5,7 @@ import { getActiveEngineService } from '../engines';
 import { localDreamGeneratorService as onnxImageGeneratorService } from '../localDreamGenerator';
 import { hardwareService } from '../hardware';
 import { modelResidencyManager } from '../modelResidency';
+import { startsInLowMemory } from '../lowMemoryLoads';
 import { OverridableMemoryError, ImageModelIncompleteError } from '../modelLoadErrors';
 import { validateImageModelDir } from '../imageModelIntegrity';
 import { remoteServerManager } from '../remoteServerManager';
@@ -28,6 +29,7 @@ import {
   checkMemoryForDualModel as _checkMemoryForDualModel,
   getCurrentlyLoadedMemoryGB as _getCurrentlyLoadedMemoryGB,
   estimateTextModelMemoryMB,
+  textPrefersCopy,
 } from './memory';
 import { doLoadTextModel, doLoadImageModel, checkImageModelCanLoad } from './loaders';
 import { modelSelected, trackModelLoad } from '../analytics/analytics';
@@ -36,7 +38,11 @@ import {
   getResourceUsage as _getResourceUsage,
   syncWithNativeState as _syncWithNativeState,
 } from './utils';
-;
+
+/** Our models in memory right now, for the load and crash records. */
+const residentKeys = (): string =>
+  modelResidencyManager.getResidents().map(resident => resident.key).join(',') || 'none';
+
 /** `utility`: a side-task load (the intent classifier) that borrows the engine without becoming the chat model. */
 type TextLoadOptions = { override?: boolean; utility?: boolean };
 
@@ -216,8 +222,10 @@ class ActiveModelService {
     if (!model) {
       throw new Error('Model not found');
     }
-    await trackModelLoad(downloadedModelFacts(model, store.settings), () =>
-      this.loadFoundTextModel(model, modelId, timeoutMs, opts),
+    await trackModelLoad(
+      { ...downloadedModelFacts(model, store.settings), residents: residentKeys() },
+      () => this.loadFoundTextModel(model, modelId, timeoutMs, opts),
+      () => (model.engine === 'llama' ? { low_memory: llmService.isLowMemoryMode() } : {}),
     );
   }
   private async loadFoundTextModel(
@@ -234,12 +242,15 @@ class ActiveModelService {
     // LiteRT weights + KV are dirty/accelerator memory → gated on REAL free RAM (mmap GGUF
     // stays clean/physical-cap). Derived once so makeRoomFor and register agree.
     const textIsDirty = model.engine === 'litert';
+    const prefersCopy = await textPrefersCopy(model);
+    const textSpec = {
+      key: 'text', type: 'text' as const, modelId, sizeMB: textSizeMB, dirtyMemory: textIsDirty, prefersCopy,
+      // A model that died loading as a copy loads mapped from the start (llm.ts): no room is made for a copy.
+      startsMapped: prefersCopy && await startsInLowMemory(model.filePath),
+    };
     // Residency manager is authoritative: evict other generation models to fit the budget.
     // Evicted unloads are the non-locking internal variants (we hold the lock), so no deadlock.
-    const room = await modelResidencyManager.makeRoomFor(
-      { key: 'text', type: 'text', modelId, sizeMB: textSizeMB, dirtyMemory: textIsDirty },
-      { override: opts?.override },
-    );
+    const room = await modelResidencyManager.makeRoomFor(textSpec, { override: opts?.override });
     // First refusal is OVERRIDABLE ("Load Anyway"); a refusal UNDER override is a hard limit → plain Error.
     if (!room.fits) {
       // A LiteRT model is refused on what free RAM can spare (budgetMB already holds back the OS
@@ -268,7 +279,8 @@ class ActiveModelService {
         this.setLoadedText(id);
         useAppStore.getState().setTextModelEvicted(false); // loaded → clear any prior eviction
         modelResidencyManager.register(
-          { key: 'text', type: 'text', modelId, sizeMB: textSizeMB, dirtyMemory: textIsDirty },
+          // Loaded as a copy (not in low-memory mode), the weights are dirty memory from now on.
+          { ...textSpec, dirtyMemory: textSpec.dirtyMemory || (textSpec.prefersCopy && !llmService.isLowMemoryMode()) },
           () => this.doUnloadTextModelLocked(true), // eviction keeps the selection
         );
       },
@@ -374,7 +386,7 @@ class ActiveModelService {
     if (!model) {
       throw new Error('Model not found');
     }
-    await trackModelLoad(imageModelFacts(model), () =>
+    await trackModelLoad({ ...imageModelFacts(model), residents: residentKeys() }, () =>
       this.loadFoundImageModel(model, modelId, imageThreads, needsThreadReload, timeoutMs, opts),
     );
   }

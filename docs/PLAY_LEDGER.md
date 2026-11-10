@@ -741,3 +741,35 @@ Bug to investigate: the paused "Wan 2.1 (1.3B), FP16" download is gone (Models >
 ## Supervisor 10:22 (hand test 97, composer follow-ups) — 3 of 3 pass
 - Pass: the assistant icon matches + and settings in height, weight and grey; a model that sees photos offers Photo, Document, Cancel with no note; a model that can't says "This model can't see photos. Choose one that can to add a photo." with Document and Cancel. Model left as it was.
 - Open: the photo-attached composer (needs Mac's own photo).
+
+## r07 downloads — 2026-11-09 13:18
+Feedback (PostHog, Mac): 89 of 330 new phone users finished a download; on iPhone, 1–2 GB models finished 12 times in 691 starts.
+- **Measurement:** chat and image downloads never sent "finished", because they end by registering the model, not through the completed status. Every GGUF chat model showed 0 finishes. Real arrival, measured by a later local load, is about 45% (Android 111/236 people, iPhone 31/70). Fixed: a download ends when its model arrives (`54c315d2b`). Each attempt counts once; starts were doubled (`ec82f8832`). A space refusal keeps `disk_full` (`2236e027b`).
+- **iPhone cause:** the downloader used only a foreground session, so a download died when the app was suspended or the phone locked. There was no resume, and no retry after a drop. Fix in progress: the fast session while on screen, a hand-off with resume data to a background session off screen, up to 5 automatic resumes after a drop, and reason codes matching Android.
+- **First model:** setup preselected Balanced, which on a 6–8 GB phone is a 3.4 GB download. Quick start (the best model under 1 GB, Qwen 3.5 0.8B) is now the default (`8a7465c37`).
+- **Not yet done:** an app force-quit by the person still needs a tap on retry. JS reconcile after a kill is still unwired.
+- **Device proof, 13:44, iPhone 17 Pro Max:**
+  - *Background:* app suspended 2 min, a 2.9 GB download went from 15% to 25%. Back on screen it kept its bytes and finished in about 16 min.
+  - *Airplane Mode:* 60 s offline left no failure; it continued from 36% when the network returned. After `f62bfb810`, a second run held 5% offline (it had dropped to 0% before) and went on to 8%.
+  - Commits `5093c9011`, `f62bfb810`.
+- **Screen review:** new link https://claude.ai/artifact/TH4eeVc9r6JKZ9wQfjFvtE (the old page belongs to the other account). New versions for Home, Models: Text, Models: Documents (incl. search), Storage, Model settings and Downloads, plus a new screen "Choose models (first run)". 4 marks are on Downloads (file names, the bar covering the second line) and Documents search ("Bge m3").
+
+## r08 errors and reviews — 2026-11-09 20:37
+Sources: in-app PostHog (30 days, mostly 0.0.120–0.0.122), App Store public feed (38 reviews, 17 rated 3 or lower), Play reviews (242, 96 rated 3 or lower). Store crash reports were not reachable: no App Store Connect or Play Console keys on this Mac (CI secrets only).
+- **Fixed — processing failure re-downloads (Play, 0.0.122):** any unzip failure deleted the zip. It is kept now; a retry unzips it again; a second failure drops it. Commit `bd9f47838`, tests fail on the old code.
+- **Fixed earlier this round:** iPhone background and resume (`5093c9011`); honest download numbers; Quick start under 1 GB.
+- **Re-check after the downloader clean-up:** the hand-off still keeps its bytes (3%→7% in under a minute back on screen). The background rate varies with iOS throttling (this run about 0.4 MB/s; the first about 2.4 MB/s).
+- **Open, needs a call — loading crashes on 7 GB Android:** most unclean exits on 0.0.122 are loading K2 Horizon 3.7B (11, 5 people), plus Gemma 4 and Qwen 3.5 4B. That model is the phone's Fast pick, under the shared fit rule (52% of RAM on Android).
+- **Open, needs a call — memory refusals:** about 570 of 749 load failures. About half of the refused people later loaded the same model, so the gate is often too cautious, yet some loads crash. One rule must decide both.
+- **Open — iPhone disk full:** exceptions "Failed to write value … POSIX 28": the app cannot save its own state when models fill the phone.
+- **Reviews, newest themes:** downloads failing in processing (fixed); crashes (0.0.119); remote LM Studio connected but not choosable (0.0.110 — check on today's build); no text-size option (Pixel 9 Pro); GPU "unavailable" on Dimensity 9500; iPad layout; Pro and paywall complaints, including "Removed access to unapproved models within a week of paying for lifetime pro" (0.0.119) — a product call.
+- **Chats:** a Group by / Sort by menu like Claude's, and headers that fold (`c633e98b8`, `e9b264c8b`, `293014aca`), checked on the iPhone.
+
+## r09 why 7 GB Android crashes on load — 2026-11-10
+Source: in-app PostHog, 30 days, 0.0.122. `free_ram_gb` is sampled when the load starts, for both outcomes.
+- **The crash follows free RAM, not total RAM.** K2 Horizon 3.7B on 7 GB Android: 49 loads (median 3.0 GB free), 11 crashes during load (1.9 GB free), 13 refusals (1.4 GB free). All Android chat loads: 1–2 GB free → 6 of 12 crash; 2–3 GB → 4 of 21; 3–4 GB → 3 of 25; 4 GB and up → 0 of 18.
+- **Root cause: neither gate reads free RAM for an Android chat model.** Android copies Q4_K-type weights into memory (`mobileUseMmap` is false on 6 GB and up), so they are dirty. But the pre-load check credits `max(free, 60% of RAM)` (`effectiveAvailableMB`, whose own comment says the credit is for mapped weights only), and the residency manager marks only LiteRT as dirty. On a 7.3 GB phone the check always sees at least 4.4 GB free.
+- **So the verdict does not match the outcome.** It refuses on size and context math alone: 60 of 83 refused people loaded the same model later with Load Anyway, at the same free RAM (median 2.9 GB vs 3.15 GB). And it passes loads at 1–2 GB free that then crash.
+- **The pick:** K2 Horizon 3.7B (3.16 GB) is "Runs well" on 7.3 GB under the Android budget (soft 0.52 → 3.8 GB). Copied, it needs about 3.8 GB with KV, more than most 8 GB phones have free.
+- **Proposed one rule:** a load's copied bytes (weights + KV + compute + headroom) must fit in live free RAM; mapped weights keep the fit-rule bound. Android's fit budget then measures RAM after the OS's share (e.g. 0.65 × (RAM − 2.5 GB): 3.1 GB on 7.3 GB, so K2 3.7B is Tight and not picked; 5.7 GB on 11.2 GB, so K2 7B still Runs well). Load Anyway stays.
+- Image models (ONNX, 298 refusals) already use live RAM; their refusals are a separate check.

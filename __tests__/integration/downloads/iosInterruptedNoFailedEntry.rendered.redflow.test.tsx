@@ -19,7 +19,7 @@ describe('D4 (rendered) — iOS interrupted download leaves no failed card', () 
     await hydrateDownloadStore();
 
     const before = render(React.createElement(DownloadManagerScreen, {}));
-    await waitFor(() => { expect(before.queryByText(/gemma-4b/)).not.toBeNull(); });
+    await waitFor(() => { expect(before.queryByText(/gemma[ -]?4b/i)).not.toBeNull(); });
     before.unmount();
 
     boundary.download!.simulateRelaunch(); // iOS URLSession drops the row
@@ -29,6 +29,6 @@ describe('D4 (rendered) — iOS interrupted download leaves no failed card', () 
     await waitFor(() => { expect(after.queryByText('Downloads')).not.toBeNull(); });
 
     // Correct: the stranded download survives as a failed/retriable card. Today it vanishes → RED.
-    expect(after.queryByText(/gemma-4b/)).not.toBeNull();
+    expect(after.queryByText(/gemma[ -]?4b/i)).not.toBeNull();
   });
 });

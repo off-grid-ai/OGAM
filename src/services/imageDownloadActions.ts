@@ -244,6 +244,54 @@ export async function registerAndNotify(
   deps.setAlertState(showAlert(`${modelName} is ready`));
 }
 
+/** A zip-downloaded image model's archive name, which a failed unzip leaves for a retry to reuse. */
+export function keptImageZipName(modelId: string): string {
+  return `${modelId}.zip`;
+}
+
+/** Whether a zip left on the phone holds the whole download (its size is the catalog's). */
+async function keptZipIsComplete(zipPath: string, expectedBytes: number): Promise<boolean> {
+  try {
+    if (!(await RNFS.exists(zipPath))) return false;
+    const { size } = await RNFS.stat(zipPath);
+    return expectedBytes > 0 ? Number(size) >= expectedBytes : Number(size) > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Unzip a downloaded image model, check every file arrived, and register it. A failure always clears
+ * the half-made model folder (a partial unzip must never read as installed); the zip is kept when
+ * `keepZipOnFailure`, so a retry processes it again instead of downloading it again.
+ */
+async function processDownloadedZip(opts: {
+  zipPath: string;
+  modelDir: string;
+  modelInfo: ImageModelDescriptor;
+  deps: ImageDownloadDeps;
+  keepZipOnFailure: boolean;
+}): Promise<void> {
+  const { zipPath, modelDir, modelInfo, deps, keepZipOnFailure } = opts;
+  try {
+    if (!(await RNFS.exists(modelDir))) await RNFS.mkdir(modelDir);
+    await RNFS.writeFile(`${modelDir}/_zip_name`, zipPath.split('/').pop() ?? '', 'utf8').catch(() => {});
+    const t1 = Date.now();
+    await unzip(zipPath, modelDir);
+    logger.log(`[ImageDownload] unzip took ${Date.now() - t1}ms modelId=${modelInfo.id}`);
+    // A partial unzip must NEVER be marked _ready (see ensureImageExtractionComplete).
+    await ensureImageExtractionComplete({ backend: modelInfo.backend, modelDir, zipPath, modelId: modelInfo.id });
+    const resolvedModelDir = modelInfo.backend === 'coreml' ? await resolveCoreMLModelDir(modelDir) : modelDir;
+    await RNFS.writeFile(`${modelDir}/_ready`, '', 'utf8').catch(() => {});
+    await RNFS.unlink(zipPath).catch(() => {});
+    await registerAndNotify(deps, { imageModel: buildImageModel(modelInfo, resolvedModelDir), modelName: modelInfo.name });
+  } catch (e) {
+    if (!keepZipOnFailure) await RNFS.unlink(zipPath).catch(() => {});
+    await RNFS.unlink(modelDir).catch(() => {});
+    throw e;
+  }
+}
+
 /** Add (or refuse-add) an image entry to the store. Returns true if a new entry was created. */
 function addImageEntry(opts: {
   modelId: string;
@@ -426,6 +474,25 @@ async function downloadCoreMLMultiFile(
   }
 }
 
+/** Unzip a kept zip again, shown as a download row. A second failure on the same zip means the
+ *  zip itself is bad: it is dropped, so the next retry downloads. */
+async function processKeptZip(args: {
+  modelInfo: ImageModelDescriptor; deps: ImageDownloadDeps; modelKey: string;
+  zipPath: string; modelDir: string; fileName: string; metadata: ImageMetadata;
+}): Promise<void> {
+  const { modelInfo, deps, modelKey, zipPath, modelDir, fileName, metadata } = args;
+  const localId = `local:${modelKey}`;
+  if (!addImageEntry({ modelId: modelInfo.id, downloadId: localId, fileName, totalBytes: modelInfo.size, metadata })) return;
+  useDownloadStore.getState().setProcessing(localId);
+  try {
+    await processDownloadedZip({ zipPath, modelDir, modelInfo, deps, keepZipOnFailure: false });
+  } catch (e: any) {
+    const message = e?.message || 'Failed to process model';
+    deps.setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(message)));
+    useDownloadStore.getState().setStatus(localId, 'failed', { message });
+  }
+}
+
 export async function proceedWithDownload(
   modelInfo: ImageModelDescriptor,
   deps: ImageDownloadDeps,
@@ -440,7 +507,7 @@ export async function proceedWithDownload(
   }
 
   // Zip flow: native WorkManager downloads; useDownloads routes progress; we wire completion.
-  const fileName = `${modelInfo.id}.zip`;
+  const fileName = keptImageZipName(modelInfo.id);
   const metadata: ImageMetadata = {
     imageDownloadType: 'zip',
     imageModelName: modelInfo.name,
@@ -462,6 +529,15 @@ export async function proceedWithDownload(
     const resolvedModelDir = modelInfo.backend === 'coreml' ? await resolveCoreMLModelDir(modelDir) : modelDir;
     logger.log(`[ImageDownload] proceedWithDownload zip - files exist on disk, registering directly modelId=${modelInfo.id}`);
     await registerAndNotify(deps, { imageModel: buildImageModel(modelInfo, resolvedModelDir), modelName: modelInfo.name });
+    return;
+  }
+
+  // A zip a failed unzip left behind is already the whole download: process it again instead of
+  // fetching it again ("fails during processing which for some reason requires a whole new
+  // download", Play review on 0.0.122).
+  const zipPath = `${imageModelsDir}/${fileName}`;
+  if (await keptZipIsComplete(zipPath, modelInfo.size)) {
+    await processKeptZip({ modelInfo, deps, modelKey, zipPath, modelDir, fileName, metadata });
     return;
   }
 
@@ -488,29 +564,13 @@ export async function proceedWithDownload(
     // complete / error events (routed via downloadIdIndex) reach this entry.
     useDownloadStore.getState().retryEntry(modelKey, downloadInfo.downloadId);
     wireZipListeners({ downloadId: downloadInfo.downloadId, modelId: modelInfo.id, deps }, async () => {
-      const zipPath = `${imageModelsDir}/${fileName}`;
-      try {
-        useDownloadStore.getState().setProcessing(downloadInfo.downloadId);
-        if (!(await RNFS.exists(imageModelsDir))) await RNFS.mkdir(imageModelsDir);
-        const t0 = Date.now();
-        await backgroundDownloadService.moveCompletedDownload(downloadInfo.downloadId, zipPath);
-        logger.log(`[ImageDownload] moveCompletedDownload took ${Date.now() - t0}ms modelId=${modelInfo.id}`);
-        if (!(await RNFS.exists(modelDir))) await RNFS.mkdir(modelDir);
-        await RNFS.writeFile(`${modelDir}/_zip_name`, fileName, 'utf8').catch(() => {});
-        const t1 = Date.now();
-        await unzip(zipPath, modelDir);
-        logger.log(`[ImageDownload] unzip took ${Date.now() - t1}ms modelId=${modelInfo.id}`);
-        // A partial unzip must NEVER be marked _ready (see ensureImageExtractionComplete).
-        await ensureImageExtractionComplete({ backend: modelInfo.backend, modelDir, zipPath, modelId: modelInfo.id });
-        const resolvedModelDir = modelInfo.backend === 'coreml' ? await resolveCoreMLModelDir(modelDir) : modelDir;
-        await RNFS.writeFile(`${modelDir}/_ready`, '', 'utf8').catch(() => {});
-        await RNFS.unlink(zipPath).catch(() => {});
-        await registerAndNotify(deps, { imageModel: buildImageModel(modelInfo, resolvedModelDir), modelName: modelInfo.name });
-      } catch (e) {
-        await RNFS.unlink(zipPath).catch(() => {});
-        await RNFS.unlink(modelDir).catch(() => {});
-        throw e;
-      }
+      useDownloadStore.getState().setProcessing(downloadInfo.downloadId);
+      if (!(await RNFS.exists(imageModelsDir))) await RNFS.mkdir(imageModelsDir);
+      const t0 = Date.now();
+      await backgroundDownloadService.moveCompletedDownload(downloadInfo.downloadId, zipPath);
+      logger.log(`[ImageDownload] moveCompletedDownload took ${Date.now() - t0}ms modelId=${modelInfo.id}`);
+      // The zip stays if unzipping fails (a full disk, the app closed mid-way), so a retry reuses it.
+      await processDownloadedZip({ zipPath, modelDir, modelInfo, deps, keepZipOnFailure: true });
     });
     backgroundDownloadService.startProgressPolling();
   } catch (error: any) {

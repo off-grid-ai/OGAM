@@ -14,6 +14,6 @@ describe('a Whisper download in Downloads (hand test 14)', () => {
   it('leaves other files as they are', () => {
     const item = entryToActiveItem(entry('Qwen3.5-0.8B-Q4_K_M.gguf', 'text'));
     expect(item.modelType).toBe('text');
-    expect(downloadDisplayName(item)).toBe('Qwen3.5-0.8B-Q4_K_M');
+    expect(downloadDisplayName(item)).toBe('Qwen 3.5 0.8B');
   });
 });

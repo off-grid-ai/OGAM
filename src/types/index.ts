@@ -551,6 +551,8 @@ export type BackgroundDownloadReasonCode =
   | 'http_416'
   | 'http_429'
   | 'client_error'
+  | 'save_failed'
+  | 'finalize_failed'
   | 'unknown_error';
 export interface BackgroundDownloadInfo {
   downloadId: string;

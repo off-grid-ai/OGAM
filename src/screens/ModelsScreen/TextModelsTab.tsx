@@ -326,6 +326,14 @@ const ModelDetailView: React.FC<DetailProps> = ({
   );
 };
 
+/** A catalog model's download, from the shared catalog's file sizes: what the phone fetches when
+ *  you tap download, before any Hugging Face details load (Mac, 2026-11-08: size on every card). */
+const catalogDownloadBytes = (id: string): number | undefined => {
+  const files = CATALOG.find(entry => entry.id === id)?.files;
+  const total = files?.reduce((sum, file) => sum + (file.sizeBytes ?? 0), 0) ?? 0;
+  return total > 0 ? total : undefined;
+};
+
 /** What a file costs the phone: its weights plus the vision projector that comes with it. */
 const downloadBytes = (file: ModelFile): number => file.size + (file.mmProjFile?.size ?? 0);
 
@@ -354,7 +362,7 @@ const ModelListItem: React.FC<ModelListItemProps> = ({ item, index, focusTrigger
     predicted: true,
     ...modelSpeedBadges(item),
   };
-  return <AnimatedEntry index={index} staggerMs={30} trigger={focusTrigger}><ModelCard model={cardModel} isDownloaded={isDownloaded} isActive={isActive} isDownloading={agg.downloading} isQueued={agg.queued} downloadProgress={agg.progress} downloadBytes={agg.bytes} downloadCount={agg.count} isCompatible={isCompatible} incompatibleReason={incompatibleReason} onPress={isCompatible ? onPress : undefined} onDownload={isCompatible ? onDownload : undefined} testID={`model-card-${index}`} compact facts={modelFactChips(item)} isTrending={isTrending} recommended={recommended} supportsAcceleration={!isLiteRTParent && modelSupportsNpuGpu(item)} capabilities={capabilities} style={rowStyle} /></AnimatedEntry>;
+  return <AnimatedEntry index={index} staggerMs={30} trigger={focusTrigger}><ModelCard model={cardModel} isDownloaded={isDownloaded} isActive={isActive} isDownloading={agg.downloading} isQueued={agg.queued} downloadProgress={agg.progress} downloadBytes={agg.bytes} downloadCount={agg.count} isCompatible={isCompatible} incompatibleReason={incompatibleReason} onPress={isCompatible ? onPress : undefined} onDownload={isCompatible ? onDownload : undefined} testID={`model-card-${index}`} compact facts={modelFactChips(item)} downloadSizeBytes={isLiteRTParent ? undefined : catalogDownloadBytes(item.id)} isTrending={isTrending} recommended={recommended} supportsAcceleration={!isLiteRTParent && modelSupportsNpuGpu(item)} capabilities={capabilities} style={rowStyle} /></AnimatedEntry>;
 };
 
 function applyBackNavigation(setSelectedModel: (m: ModelInfo | null) => void, setModelFiles: (f: ModelFile[]) => void): void {

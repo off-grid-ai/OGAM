@@ -13,7 +13,6 @@ import { ModelSelectorModal } from '../components';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
 import { AnimatedEntry } from '../components/AnimatedEntry';
 import { listRowStyle } from '../components/ListGroup';
-import { groupByRecency } from '@offgrid/ui';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ListSearchBar } from '../components/ListSearchBar';
@@ -30,6 +29,8 @@ import { deleteChatImages, imagesNotDeletedAlert } from '../services/chatImageCl
 import { Conversation } from '../types';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { byRecentActivity } from '../utils/conversationOrdering';
+import { groupChats, DEFAULT_CHAT_GROUP_BY, DEFAULT_CHAT_SORT_BY } from '../utils/chatGrouping';
+import { ChatListOptionsSheet } from '../components/ChatListOptionsSheet';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
 import { useIsFocused } from '@react-navigation/native';
 import { LivingField } from '../components/LivingField';
@@ -57,6 +58,14 @@ export const ChatsListScreen: React.FC = () => {
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [isModelLoading, setIsModelLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  // The view menu (Group by, Sort by), kept in settings so the list opens the way it was left.
+  const groupBy = useAppStore(s => s.settings.chatsGroupBy) ?? DEFAULT_CHAT_GROUP_BY;
+  const sortBy = useAppStore(s => s.settings.chatsSortBy) ?? DEFAULT_CHAT_SORT_BY;
+  const updateSettings = useAppStore(s => s.updateSettings);
+  const projects = useProjectStore(s => s.projects);
+  const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  // Folded sections, by key; a fold lasts while the tab is open.
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -183,7 +192,8 @@ export const ChatsListScreen: React.FC = () => {
   };
 
   const renderChat = ({ item }: { item: Conversation }) => {
-    const project = item.projectId ? getProject(item.projectId) : null;
+    // Grouped by project, the header already names it: no tag on each row.
+    const project = item.projectId && shownGroupBy !== 'project' ? getProject(item.projectId) : null;
     const selected = selectedIds.has(item.id);
     const index = listIndex.get(item.id) ?? 0;
     const kind = chatKind(item.messages);
@@ -260,17 +270,40 @@ export const ChatsListScreen: React.FC = () => {
       conversation.messages.some(message => message.content.toLowerCase().includes(query)),
     );
   }, [deferredQuery, sortedConversations]);
+  // The view menu ticks the choice at once; regrouping every chat (1280 on the test phone) follows
+  // when React has time, so the tick never waits on the list (it took ~7 s, Android 2026-11-10).
+  const shownGroupBy = useDeferredValue(groupBy);
+  const shownSortBy = useDeferredValue(sortBy);
+  const regrouping = shownGroupBy !== groupBy || shownSortBy !== sortBy;
+  const grouped = useMemo(() => {
+    const names = new Map(projects.map(project => [project.id, project.name]));
+    return groupChats(visibleConversations, { groupBy: shownGroupBy, sortBy: shownSortBy, projectName: id => names.get(id) });
+  }, [visibleConversations, shownGroupBy, shownSortBy, projects]);
+  // A folded section keeps its header and hides its chats; a search shows every match, folded or not.
+  const searching = deferredQuery.trim() !== '';
+  const shut = (key: string) => folded.has(key) && !searching;
+  const foldHint = (section: { key: string; count: number }): string | undefined => {
+    if (searching) return undefined;
+    return shut(section.key) ? `Shows ${section.count} chats` : 'Hides these chats';
+  };
   const sections = useMemo(
-    () =>
-      groupByRecency(visibleConversations, conversation => Date.parse(conversation.updatedAt)).map(group => ({
-        title: group.label,
-        data: group.items,
-      })),
-    [visibleConversations],
+    () => grouped.map(section => ({
+      ...section,
+      count: section.data.length,
+      data: folded.has(section.key) && !searching ? [] : section.data,
+    })),
+    [grouped, folded, searching],
   );
+  const toggleSection = (key: string) =>
+    setFolded(current => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   const listIndex = useMemo(
-    () => new Map(visibleConversations.map((conversation, index) => [conversation.id, index])),
-    [visibleConversations],
+    () => new Map(grouped.flatMap(section => section.data).map((conversation, index) => [conversation.id, index])),
+    [grouped],
   );
   const computerResults = selecting ? null : (
     <PairedComputerSearchFooter
@@ -310,6 +343,17 @@ export const ChatsListScreen: React.FC = () => {
             />
           ) : (
             <View style={styles.headerActions}>
+              {conversations.length > 0 ? (
+                <Button
+                  title=""
+                  accessibilityLabel="View options"
+                  variant="ghost"
+                  size="small"
+                  onPress={() => setViewMenuOpen(true)}
+                  icon={<Icon name="sliders" size={16} color={colors.text} />}
+                  testID="chats-view-options"
+                />
+              ) : null}
               {conversations.length > 0 ? (
                 <Button
                   title=""
@@ -392,11 +436,26 @@ export const ChatsListScreen: React.FC = () => {
             onScrollBeginDrag={closeOpenRow}
             sections={sections}
             renderItem={renderChat}
-            renderSectionHeader={({ section }) => (
-              <Text style={styles.sectionLabel} accessibilityRole="header">
-                {section.title}
-              </Text>
-            )}
+            renderSectionHeader={({ section }) =>
+              // An ungrouped list has one untitled section and no header.
+              section.title ? (
+                // While searching every match shows, so the header reads open, and a tap there cannot
+                // change the fold that comes back when the search is cleared.
+                <TouchableOpacity
+                  style={styles.sectionHeader}
+                  onPress={() => toggleSection(section.key)}
+                  disabled={searching}
+                  accessibilityRole="header"
+                  accessibilityLabel={section.title}
+                  accessibilityHint={foldHint(section)}
+                  accessibilityState={{ expanded: !shut(section.key), disabled: searching }}
+                  testID={`chats-section-${section.key}`}
+                >
+                  <Text style={styles.sectionLabel}>{section.title}</Text>
+                  <Icon name={shut(section.key) ? 'chevron-right' : 'chevron-down'} size={14} color={colors.textMuted} />
+                </TouchableOpacity>
+              ) : null
+            }
             stickySectionHeadersEnabled={false}
             // Day headings count as items: render enough on first paint for the first screenful of chats.
             initialNumToRender={20}
@@ -414,6 +473,17 @@ export const ChatsListScreen: React.FC = () => {
           />
         </>
       )}
+      <ChatListOptionsSheet
+        visible={viewMenuOpen}
+        onClose={() => setViewMenuOpen(false)}
+        groupBy={groupBy}
+        sortBy={sortBy}
+        working={regrouping}
+        onChange={next => {
+          setFolded(new Set());
+          updateSettings({ chatsGroupBy: next.groupBy, chatsSortBy: next.sortBy });
+        }}
+      />
       <CustomAlert
         visible={alertState.visible}
         title={alertState.title}
@@ -502,16 +572,22 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.textMuted,
     maxWidth: 120,
   },
-  // Desktop's group label: Today, Yesterday, This week, Older.
+  // A section's header: its name (a day or a project) and a chevron that folds it, like Claude's list.
+  sectionHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    alignSelf: 'flex-start' as const,
+    gap: SPACING.xs,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+  },
   sectionLabel: {
     ...TYPOGRAPHY.label,
     fontSize: 11,
     letterSpacing: 1,
     textTransform: 'uppercase' as const,
     color: colors.textMuted,
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
   },
   emptyState: {
     flex: 1,

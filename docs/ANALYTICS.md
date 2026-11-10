@@ -106,7 +106,7 @@ Estimate for an active user: 2 sessions (6), 12 screen views, 5 messages (10), 2
 | `model_download_started` | `model`, `quant`, `size_bucket`, `network` (`wifi`, `cellular`, `ethernet`, `unknown`), `free_storage_gb` |
 | `model_download_finished` | same + `duration_ms`, `mb_per_sec` |
 | `model_download_failed` | same + `error_code` |
-| `model_loaded` | `model`, `quant`, `engine`, `backend`, `soc`, `free_ram_gb`, `load_ms` |
+| `model_loaded` | `model`, `quant`, `engine`, `backend`, `soc`, `free_ram_gb`, `load_ms`, `residents` (our other models in memory at the start, or `none`); a chat model adds `low_memory` (loaded mapped because a copy would not fit) |
 | `model_load_failed` | same + `error_code` |
 
 A video model pack reports downloads once for the whole pack: `model` is its catalog ID and `quant` is empty. A video model loads inside each generation: OGAD sends `model_loaded` / `model_load_failed` for each clip's engine start; OGAM sends none.
@@ -167,7 +167,7 @@ All multi-step journeys use three events with a `flow` property, so every funnel
 | Event | Properties |
 |---|---|
 | `$exception` | SDK exception capture. Scrub message and frames before send: replace paths with the file name only, drop any quoted text, keep type, file name, line, function. A file name is kept only for the app's own code (e.g. `index.js`); a person's file, the home folder and the account name become `<file>` / `<user>`. |
-| `unclean_exit` | Sent on the next launch when the app died in the foreground during a model load or a generation. `stage` (`load`, `generate`; `generate` includes a video generation), `model`, `engine`, `backend`, `free_ram_gb`, `elapsed_ms`. Not sent after a background kill, an app update or a reboot. |
+| `unclean_exit` | Sent on the next launch when the app died in the foreground during a model load or a generation. `stage` (`load`, `generate`; `generate` includes a video generation), `model`, `engine`, `backend`, `free_ram_gb`, `residents`, `elapsed_ms`. Not sent after a background kill, an app update or a reboot. |
 | `llama_server_crashed` (OGAD) | `model`, `engine`, `backend`, `exit_code`, `classified` |
 
 ## Report a problem

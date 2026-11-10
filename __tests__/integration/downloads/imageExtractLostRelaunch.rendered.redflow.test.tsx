@@ -25,7 +25,7 @@ describe('D1 (rendered) — failed image extraction lost on relaunch', () => {
 
     // Before the kill: the DM shows the image download.
     const before = render(React.createElement(DownloadManagerScreen, {}));
-    await waitFor(() => { expect(before.queryByText(/anythingv5/)).not.toBeNull(); });
+    await waitFor(() => { expect(before.queryByText(/anything ?v5/i)).not.toBeNull(); });
     before.unmount();
 
     // Force-quit + relaunch: WorkManager pruned the completed row; disk survives; store rebuilt empty.
@@ -36,6 +36,6 @@ describe('D1 (rendered) — failed image extraction lost on relaunch', () => {
     await waitFor(() => { expect(after.queryByText('Downloads')).not.toBeNull(); }); // re-render proof
 
     // Correct: the incomplete image model is still surfaced (retriable). Today it vanishes → RED.
-    expect(after.queryByText(/anythingv5/)).not.toBeNull();
+    expect(after.queryByText(/anything ?v5/i)).not.toBeNull();
   });
 });

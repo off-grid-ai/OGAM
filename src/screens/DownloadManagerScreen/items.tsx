@@ -15,13 +15,17 @@ import { createStyles } from './styles';
 import { presentProgress } from '../../utils/progressPresentation';
 import { SPACING } from '../../constants';
 import { isMMProjFile } from '../../services/mmproj';
-import { splitGgufModelName } from '@offgrid/models';
+import { isRawModelName, modelDisplayName, splitGgufModelName } from '@offgrid/models';
 
-/** The name a person knows a download by: the model's own name, else its file name without the
- *  split-part suffix or extension (never `Qwen3.5-0.8B-Q4_K_M.gguf`). */
+/** The name a person knows a download by: the model's own name, else what the shared resolver
+ *  reads from its file ("K2 Horizon 3.7B", never `K2-Horizon-4B-Q4_K_M`). Stripping the extension
+ *  here first hid the file name from the resolver, so rows showed it raw (review page, Downloads). */
 export function downloadDisplayName(item: Pick<DownloadItem, 'name' | 'fileName'>): string {
-  if (item.name?.trim()) return item.name;
-  return splitGgufModelName(item.fileName).replace(/\.(gguf|bin|onnx|zip|tar|litertlm|task)$/i, '');
+  if (item.name?.trim() && !isRawModelName(item.name)) return item.name;
+  // The resolver matches the catalog by the full file name, so keep the extensions it knows (.gguf
+  // .bin); one it does not know (.pte, .litertlm) would stay in the name, so it goes first.
+  const file = (item.name?.trim() || item.fileName).replace(/\.(pte|litertlm|task|zip|tar)$/i, '');
+  return modelDisplayName(file) ?? splitGgufModelName(file).replace(/\.(gguf|bin|onnx)$/i, '');
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────

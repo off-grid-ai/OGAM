@@ -96,6 +96,12 @@ export const AutoSetupScreen: React.FC<Props> = ({
   const selected =
     snapshot.plans.find(plan => plan.tier === snapshot.selectedTier) ??
     snapshot.plans[0];
+  // Opened before the plans arrived on a tier that is not on offer: open the plan that was picked.
+  useEffect(() => {
+    if (expandedTier && snapshot.plans.length && !snapshot.plans.some(plan => plan.tier === expandedTier)) {
+      setExpandedTier(snapshot.selectedTier);
+    }
+  }, [expandedTier, snapshot.plans, snapshot.selectedTier]);
   const selectedItems = [...(selected?.items ?? []), ...(selected?.embedding ? [selected.embedding] : [])].filter(item =>
     snapshot.selectedKinds.includes(item.kind) &&
     autoSetupItemNeedsAction(item, snapshot.installedIds),

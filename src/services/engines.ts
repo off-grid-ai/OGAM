@@ -178,6 +178,13 @@ export function backendFallbackNotice(model: { engine?: string } | null | undefi
   return llmService.getBackendFallbackNotice();
 }
 
+/** The notice when a just-loaded chat model runs in low-memory mode (mapped, because a copy would
+ *  not fit in free RAM). Null = loaded at full speed. */
+export function lowMemoryNotice(model: { engine?: string } | null | undefined): string | null {
+  if (!model || model.engine === 'litert' || !llmService.isLowMemoryMode()) return null;
+  return 'Running in low-memory mode. Close other apps for full speed.';
+}
+
 /**
  * Live capabilities of the ACTIVE text model (remote OR local), read from the running services
  * and fed through the one pure rule (deriveEngineCapabilities). The imperative counterpart to the

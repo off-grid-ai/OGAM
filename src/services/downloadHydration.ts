@@ -146,6 +146,11 @@ function toDownloadEntry(
   };
 }
 
+/** A video pack's own row: its provider owns it, and each of its files is a separate native download. */
+function isVideoPackRow(entry: DownloadEntry): boolean {
+  return entry.modelType === 'video' && !entry.modelKey.startsWith(VIDEO_FILE_KEY_PREFIX);
+}
+
 /**
  * An in-flight entry we already knew about whose native download row is GONE from the
  * fresh snapshot was interrupted by an app-kill (iOS URLSession drops its task on
@@ -159,7 +164,12 @@ function toDownloadEntry(
  * reconcile path for every model type (text/image/stt) — no per-type fork.
  *
  * A prior entry that had already `completed`/`cancelled` is intentionally dropped (a
- * clean finish moved it to its domain store; nothing to strand).
+ * clean finish moved it to its domain store; nothing to strand). A `failed` or `paused`
+ * entry still waits for the person, so it is never dropped either: a failed one stays
+ * failed, a paused one whose native task is gone becomes failed/retriable (it says so),
+ * and a video pack's paused row stays paused — no native task ever backed it (its files
+ * are separate native downloads), and Resume re-checks the files on disk (device
+ * 2026-11-06: a paused Wan 2.1 FP16 vanished from Models and Downloads on every foreground).
  */
 function strandInterruptedEntries(
   hydratedKeys: Set<ModelKey>,
@@ -175,7 +185,16 @@ function strandInterruptedEntries(
   const stranded: DownloadEntry[] = [];
   for (const prior of priors.values()) {
     if (hydratedKeys.has(prior.modelKey)) continue; // still has a live native row (Android WorkManager survives → never stranded)
-    if (!isActiveStatus(prior.status)) continue;     // already completed/failed/cancelled
+    if (prior.status === 'failed' || (prior.status === 'paused' && isVideoPackRow(prior))) {
+      stranded.push(prior);
+      continue;
+    }
+    if (prior.status === 'paused') {
+      logger.log(`[DL-SM] ${prior.modelType}:${prior.modelId} hydrate: paused native row gone → failed/retriable`);
+      stranded.push({ ...prior, status: 'failed', errorMessage: prior.errorMessage ?? 'Paused download was lost. Tap retry.' });
+      continue;
+    }
+    if (!isActiveStatus(prior.status)) continue;     // already completed/cancelled
     logger.log(
       `[DL-SM] ${prior.modelType}:${prior.modelId} hydrate: native row gone (app-kill) → failed/retriable`,
     );

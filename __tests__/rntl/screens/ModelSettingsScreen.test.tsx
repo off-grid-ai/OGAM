@@ -5,7 +5,7 @@
  * settings open. Tests drive the real screen against the real app store and assert what the
  * person sees and the settings the store holds:
  * - Tabs and what each one shows
- * - General: fastest settings, hardware, model loading, generation details, system prompt
+ * - General: fastest settings (in the card), hardware, model loading, generation details, system prompt
  * - Text: sliders, advanced (threads, batch, flash attention, KV cache), remote-server footnote
  * - Image: picture detection, steps, size, advanced (guidance, threads, detection, enhance)
  * - Voice: transcription model and language
@@ -16,6 +16,7 @@ import React from 'react';
 import { render, fireEvent, within } from '@testing-library/react-native';
 import { APP_CONFIG } from '../../../src/constants';
 import { NavigationContainer } from '@react-navigation/native';
+import { StyleSheet } from 'react-native';
 import { useAppStore } from '../../../src/stores/appStore';
 import { useRemoteServerStore } from '../../../src/stores/remoteServerStore';
 import {
@@ -103,6 +104,18 @@ describe('ModelSettingsScreen', () => {
       expect(queryByText('Temperature')).toBeNull();
       expect(queryByText('Image steps')).toBeNull();
       expect(queryByText('Transcription model')).toBeNull();
+    });
+
+    it('shows Fastest settings as a setting in the card, with a full-width button like the ones below it', () => {
+      // Mac, 2026-11-08: a small button alone on the left above the card looked like it hung there.
+      const { getByText, getByTestId } = renderScreen();
+      expect(getByText('Fastest settings')).toBeTruthy();
+      const fastest = StyleSheet.flatten(getByTestId('fastest-settings-button').props.style);
+      const segment = StyleSheet.flatten(getByTestId('show-gen-details-off-button').props.style);
+      expect(fastest.flex).toBe(1);
+      expect(fastest.borderWidth).toBe(segment.borderWidth);
+      expect(fastest.borderRadius).toBe(segment.borderRadius);
+      expect(fastest.alignSelf).toBeUndefined();
     });
 
     it('shows section help text for image generation on the Image tab', () => {

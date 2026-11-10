@@ -17,6 +17,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   http_416:             'The server could not resume this download. Please retry it.',
   http_429:             'Server is rate-limiting. Please try again later.',
   client_error:         'A client error occurred. Please retry.',
+  save_failed:          'The download finished but could not be saved. Please retry.',
+  finalize_failed:      'The download finished but could not be saved. Tap Retry to save it.',
   unknown_error:        'The download stopped before it finished. Try again.',
 };
 
@@ -103,7 +105,7 @@ export function toUserMessage(reason?: string, code?: string): string {
 
 const RETRYABLE_CODES = new Set([
   'network_lost', 'network_timeout', 'server_unavailable', 'download_interrupted',
-  'http_416', 'http_429', 'empty_response', 'unknown_error',
+  'http_416', 'http_429', 'empty_response', 'unknown_error', 'save_failed', 'finalize_failed',
 ]);
 
 export function isRetryable(reasonCode?: string): boolean {
@@ -132,3 +134,30 @@ export function getDownloadStatusLabel(status: string, reasonCode?: string, reas
   return toUserMessage(reason, reasonCode);
 }
 
+
+/**
+ * A download failure that keeps its reason code. A native error event turned into a bare
+ * `new Error(reason)` lost the code, so every failure counted as a generic "error" in the numbers
+ * and read as free text in the row: build the Error here, and read it back with failureDetails.
+ */
+export class DownloadFailedError extends Error {
+  readonly code?: string;
+  readonly cancelled: boolean;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = 'DownloadFailedError';
+    this.code = code || undefined;
+    this.cancelled = code === 'user_cancelled';
+  }
+}
+
+export function downloadEventError(event: { reason?: string; reasonCode?: string }): DownloadFailedError {
+  return new DownloadFailedError(event.reason || 'Download failed', event.reasonCode);
+}
+
+/** The message and code a failed row records, from any thrown value. */
+export function failureDetails(error: unknown, fallbackCode?: string): { message: string; code?: string } {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = (error as { code?: unknown } | null)?.code;
+  return { message, code: typeof code === 'string' && code ? code : fallbackCode };
+}
