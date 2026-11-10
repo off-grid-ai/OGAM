@@ -2,7 +2,7 @@ import RNFS from 'react-native-fs';
 import { useProjectStore } from '../stores/projectStore';
 import { zip } from 'react-native-zip-archive';
 import { ATLAS_REPO } from '../constants';
-import { importZipFromPath, PackResult } from './packImport';
+import { importZipFromPath, MANIFEST_NAME, type PackManifest, type PackResult } from './packImport';
 import { packsForTier, type TierId } from './emergencyTiers';
 
 /** Atlas library packs, built automatically on GitHub (release "atlas-library") and downloaded on demand. */
@@ -86,6 +86,9 @@ export async function saveTierToDrive(tier: TierId, packs: AtlasPack[], onProgre
       const p = chosen[i];
       await downloadPack(p, `${stage}/${p.name}`, (m, f) => onProgress(`Pack ${i + 1} of ${chosen.length}: ${m}`, f === undefined ? undefined : (i + f) / chosen.length));
     }
+    const manifest: PackManifest = { tier, created: new Date().toISOString(), packs: [] };
+    for (const p of chosen) manifest.packs.push({ name: p.name, size: Number((await RNFS.stat(`${stage}/${p.name}`)).size) });
+    await RNFS.writeFile(`${stage}/${MANIFEST_NAME}`, JSON.stringify(manifest), 'utf8');
     onProgress('Putting the packs into one file...');
     await RNFS.unlink(out).catch(() => undefined);
     await zip(stage, out);
