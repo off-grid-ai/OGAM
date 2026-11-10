@@ -29,6 +29,7 @@ import type { ToolCall } from './tools/types';
 import type { MultimodalSupport, LLMPerformanceSettings, LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
 import { resolveReplyTokens } from './contextWindow';
+import { postLongMessageNotice } from './longMessageNotice';
 import { isGemma4Path, knownVerdict, recordVerdict, runOutputCheck, logOutputReport, describeBadOutput, primeFirstWord, estimatePromptTokens, scanPromptLengths, SHORT_PROMPT_TOKENS, type OutputCheck } from './outputHealth';
 ;
 import type { StreamToken } from './llmStreamTypes';
@@ -637,6 +638,7 @@ class LLMService {
         : this.formatMessages(items),
       countTokens: (text) => this.getTokenCount(text),
     });
+    if (managed.latestTruncated) postLongMessageNotice(managed.latestTokens ?? managed.promptTokens, managed.budgetTokens);
     if (managed.droppedMessages || managed.latestTruncated) {
       logger.log(`[LLM] Active context window: ${managed.promptTokens}/${managed.budgetTokens} prompt tokens; ${managed.droppedMessages} older messages omitted, latestTruncated=${managed.latestTruncated}`);
     }

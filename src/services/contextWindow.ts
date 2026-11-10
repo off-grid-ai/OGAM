@@ -12,6 +12,8 @@ export type ContextWindowResult<T> = {
   latestTruncated: boolean;
   promptTokens: number;
   budgetTokens: number;
+  /** How long the newest message was in tokens, when it had to be cut to fit. */
+  latestTokens?: number;
 };
 
 /** Smallest and largest reply the automatic length will choose. */
@@ -76,7 +78,8 @@ export async function fitMessagesToContext<T extends ContextMessage>(options: {
   }
   const newest = history[history.length - 1];
   const minimum = [...systems, newest];
-  if (await count(minimum) > budget) {
+  const minimumTokens = await count(minimum);
+  if (minimumTokens > budget) {
     if (await count(systems) >= budget - 32) {
       throw new Error('The system instructions leave no space for a message. Shorten the system prompt or increase context.');
     }
@@ -100,7 +103,7 @@ export async function fitMessagesToContext<T extends ContextMessage>(options: {
     return {
       messages: trimmed, droppedMessages: Math.max(0, history.length - 1),
       latestTruncated: low < newest.content.length,
-      promptTokens: tokens, budgetTokens: budget,
+      promptTokens: tokens, budgetTokens: budget, latestTokens: minimumTokens,
     };
   }
 
