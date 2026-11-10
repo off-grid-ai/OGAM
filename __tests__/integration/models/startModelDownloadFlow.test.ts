@@ -91,4 +91,17 @@ describe('startModelDownload flow (real stores)', () => {
 
     expect(useDownloadStore.getState().downloads[KEY].status).toBe('failed');
   });
+
+  it('keeps the native reason code on the failed row, so it is never a generic error', async () => {
+    // The watcher once rebuilt the native event as `new Error(reason)`: the code was lost, and every
+    // Android failure counted as a bare "error" (PostHog 0.0.122: 245 failures, 108 people).
+    await startModelDownload('author/model', FILE);
+    await device.settle();
+    const id = nativeDownloadId();
+    await device.reportProgress(id, 100, FILE.size);
+
+    await device.failDownload(id, 'The download was interrupted.', 'download_interrupted');
+
+    expect(useDownloadStore.getState().downloads[KEY]).toMatchObject({ status: 'failed', errorCode: 'download_interrupted' });
+  });
 });

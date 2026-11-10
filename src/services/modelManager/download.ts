@@ -13,6 +13,7 @@ import {
 } from './types';
 import { buildDownloadedModel, persistDownloadedModel } from './storage';
 import logger from '../../utils/logger';
+import { DownloadFailedError, downloadEventError, failureDetails } from '../../utils/downloadErrors';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { makeModelKey } from '../../utils/modelKey';
 import { extractBaseName } from './scan';
@@ -183,7 +184,7 @@ export async function performSidecarDownload(opts: SidecarDownloadOpts): Promise
     });
   } catch (error) {
     const row = useDownloadStore.getState().downloads[modelKey];
-    if (row) useDownloadStore.getState().setStatus(row.downloadId, 'failed', { message: (error as Error).message });
+    if (row) useDownloadStore.getState().setStatus(row.downloadId, 'failed', failureDetails(error));
     throw error;
   } finally {
     // The sidecar row is transient — remove it once settled so the completed model
@@ -721,7 +722,9 @@ export function watchBackgroundDownload(opts: WatchDownloadOpts): void {
         fileName: ctx.file.name,
         error: error instanceof Error ? error.message : String(error),
       });
-      onError?.(error as Error);
+      // The bytes arrived; saving the model failed. Its own code keeps it apart from a transfer failure.
+      const { message, code } = failureDetails(error, 'finalize_failed');
+      onError?.(new DownloadFailedError(message, code));
     }
   };
 
@@ -765,7 +768,7 @@ export function watchBackgroundDownload(opts: WatchDownloadOpts): void {
 
   const removeMainComplete = backgroundDownloadService.onComplete(downloadId, handleMainComplete);
   const removeMainError = backgroundDownloadService.onError(downloadId, (event) => {
-    handleError(new Error(event.reason || 'Download failed'));
+    handleError(downloadEventError(event));
   });
 
   if (ctx.mmProjDownloadId && !ctx.mmProjCompleted) {

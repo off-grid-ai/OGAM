@@ -9,6 +9,7 @@ import { useAppStore } from '../stores';
 import { activeModelService } from './activeModelService';
 import { makeModelKey } from '../utils/modelKey';
 import { statFile } from '../utils/fileStat';
+import { failureDetails } from '../utils/downloadErrors';
 import type { ModelFile, DownloadedModel } from '../types';
 
 /** Placeholder downloadId for a row that exists only to represent the QUEUED state
@@ -145,11 +146,7 @@ export async function startModelDownload(
     if (currentDownloadId) {
       // Keep the error's code (disk_full from the space check): without it every refusal read as
       // a bare "error" in the numbers and in the row's message.
-      const code = (err as Error & { code?: unknown }).code;
-      useDownloadStore.getState().setStatus(currentDownloadId, 'failed', {
-        message: err.message,
-        code: typeof code === 'string' ? code : undefined,
-      });
+      useDownloadStore.getState().setStatus(currentDownloadId, 'failed', failureDetails(err));
     }
     opts.onError?.(err);
   };

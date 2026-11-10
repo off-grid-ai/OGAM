@@ -132,3 +132,30 @@ export function getDownloadStatusLabel(status: string, reasonCode?: string, reas
   return toUserMessage(reason, reasonCode);
 }
 
+
+/**
+ * A download failure that keeps its reason code. A native error event turned into a bare
+ * `new Error(reason)` lost the code, so every failure counted as a generic "error" in the numbers
+ * and read as free text in the row: build the Error here, and read it back with failureDetails.
+ */
+export class DownloadFailedError extends Error {
+  readonly code?: string;
+  readonly cancelled: boolean;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = 'DownloadFailedError';
+    this.code = code || undefined;
+    this.cancelled = code === 'user_cancelled';
+  }
+}
+
+export function downloadEventError(event: { reason?: string; reasonCode?: string }): DownloadFailedError {
+  return new DownloadFailedError(event.reason || 'Download failed', event.reasonCode);
+}
+
+/** The message and code a failed row records, from any thrown value. */
+export function failureDetails(error: unknown, fallbackCode?: string): { message: string; code?: string } {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = (error as { code?: unknown } | null)?.code;
+  return { message, code: typeof code === 'string' && code ? code : fallbackCode };
+}
