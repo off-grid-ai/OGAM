@@ -74,6 +74,11 @@ export interface ModelLoadParams {
    *  user setting). The single source for the memory guard's KV-size estimate — read
    *  this instead of re-deriving from settings.cacheType, which misses the coercion. */
   usesF16Cache: boolean;
+  /** The weights are copied into memory (Android repacks them for its CPU), so the whole file
+   *  counts against free RAM. False when they are mapped from the file and the OS can page them. */
+  copiesWeights: boolean;
+  /** Loaded in low-memory mode (see the `lowMemory` load fact). */
+  lowMemory: boolean;
 }
 
 /**
@@ -96,7 +101,12 @@ export function buildModelParams(
   modelPath: string,
   settings: { nThreads?: number; nBatch?: number; contextLength?: number; flashAttn?: boolean; enableGpu?: boolean; gpuLayers?: number; cacheType?: string; inferenceBackend?: string; speculativeDecoding?: boolean; speculativeDraftMax?: number },
   /** Facts read from the GGUF header and the device at load time. */
-  load: { fileType?: number | null; totalRamGb?: number; mtpHeadPath?: string; stateCacheBudgetMb?: number } = {},
+  load: {
+    fileType?: number | null; totalRamGb?: number; mtpHeadPath?: string; stateCacheBudgetMb?: number;
+    /** Low-memory mode: map the weights from the file and skip the repack, so a model that would not
+     *  fit as a copy still loads (slower) and the OS pages it instead of killing the app. */
+    lowMemory?: boolean;
+  } = {},
 ): ModelLoadParams {
   const nThreads = settings.nThreads || getOptimalThreadCount();
   const nBatch = batchForBackend(settings.nBatch, settings.inferenceBackend);
@@ -115,18 +125,20 @@ export function buildModelParams(
   // OpenCL init on affected Adreno devices can fail when cache_type_k/v are passed.
   // effectiveCacheType coerces OpenCL/HTP to f16 (single source shared with the UI).
   const cacheType = effectiveCacheType(backend, requestedCache);
+  const useMmap = load.lowMemory || mobileUseMmap(Platform.OS === 'android' ? 'android' : 'ios', load.fileType ?? null, load.totalRamGb);
   return {
     baseParams: {
       model: modelPath, use_mlock: false, n_batch: nBatch, n_ubatch: nBatch, n_threads: nThreads,
       // mmap is off on Android for a quant llama.cpp repacks for ARM (read from the GGUF header):
       // the weights are copied into the repacked layout anyway.
-      use_mmap: mobileUseMmap(Platform.OS === 'android' ? 'android' : 'ios', load.fileType ?? null, load.totalRamGb), vocab_only: false, flash_attn_type,
+      // Low-memory mode maps them and skips the repack instead (no_extra_bufts below).
+      use_mmap: useMmap, vocab_only: false, flash_attn_type,
       // Do NOT force kv_unified — let llama.cpp pick it per architecture. Forcing
       // `true` (a marginal single-seq perf tweak) hung gemma3n (gemma-4 E2B/E4B):
       // its interleaved sliding-window + heterogeneous KV layers froze building the
       // unified KV-cache reuse map ("kv_cache: reusing layers"). The engine's
       // per-arch default (false) handles SWA models correctly and keeps GPU/Metal.
-      no_extra_bufts: false,
+      no_extra_bufts: !!load.lowMemory,
       // MTP speculative decoding, enabled at CONTEXT CREATION (llama.rn's NativeContextParams) —
       // it changes how the graph is built, so it cannot be toggled per completion. No draft model
       // is named on purpose: MTP models carry their own draft layers, and llama.rn falls back to
@@ -147,6 +159,8 @@ export function buildModelParams(
     // cacheType is already coerced to 'f16' above for OpenCL/HTP; OpenCL also omits the
     // explicit cache params and llama.cpp defaults to f16 — both are captured here.
     usesF16Cache: cacheType === 'f16',
+    copiesWeights: !useMmap,
+    lowMemory: !!load.lowMemory,
   };
 }
 export interface ContextInitResult {
