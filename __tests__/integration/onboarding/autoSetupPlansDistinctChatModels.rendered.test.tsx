@@ -75,7 +75,7 @@ function installHuggingFace(): () => void {
 
 /** Open Auto Setup on a phone with `totalGB` of RAM and read, plan by plan, the chat model each
  *  visible plan names. Returns the plan titles the person sees, in order, with their chat model. */
-async function plansSeenOnPhone(totalGB: number) {
+async function plansSeenOnPhone(totalGB: number, settings: Record<string, unknown> = {}, onOpen?: (ui: any, within: any) => void) {
   installNativeBoundary({
     fs: true,
     ram: { platform: 'ios', totalBytes: totalGB * GB, availBytes: totalGB * 0.5 * GB },
@@ -91,7 +91,7 @@ async function plansSeenOnPhone(totalGB: number) {
   // reads at boot, not the state under test.
   await AsyncStorage.setItem(
     'local-llm-app-storage',
-    JSON.stringify({ state: { hasCompletedOnboarding: true }, version: 0 }),
+    JSON.stringify({ state: { hasCompletedOnboarding: true, ...(Object.keys(settings).length ? { settings } : {}) }, version: 0 }),
   );
 
   const App = require('../../../App').default;
@@ -102,6 +102,7 @@ async function plansSeenOnPhone(totalGB: number) {
     expect(ui.queryByTestId('auto-setup-plan-lean')).toBeNull();
 
     await waitFor(() => expect(ui.getByTestId('auto-setup-plan-lean')).toBeTruthy(), RENDER_WAIT);
+    onOpen?.(ui, within);
     const seen: { tier: string; chatModel: string }[] = [];
     for (const tier of TIERS) {
       const card = ui.queryByTestId(`auto-setup-plan-${tier}`);
@@ -155,5 +156,19 @@ describe('Auto Setup plans by phone memory', () => {
     expect(small.map(plan => plan.tier)).toEqual(['lean', 'balanced', 'extreme']);
     expect(chatModels(small)).toEqual(['Qwen 3.5 0.8B', 'Qwen 3.5 4B', 'MiniCPM5 2B']);
     expect(new Set(chatModels(small)).size).toBe(small.length);
+  });
+
+  // Someone who chose the fullest loading mode starts on Extreme. A phone too small for anything past
+  // Quick start offers no Extreme: the plan on offer must open, with its download button, untouched.
+  it('a person who chose the fullest mode, on a phone with only Quick start, sees Quick start open', async () => {
+    let openOnArrival: string[] = [];
+    const plans = await plansSeenOnPhone(2.5, { modelLoadingMode: 'aggressive' }, (ui, within) => {
+      openOnArrival = TIERS.filter(tier => {
+        const card = ui.queryByTestId(`auto-setup-plan-${tier}`);
+        return card && within(card).queryByTestId('auto-setup-selected-plan');
+      });
+    });
+    expect(plans.map(plan => plan.tier)).toEqual(['lean']);
+    expect(openOnArrival).toEqual(['lean']);
   });
 });
