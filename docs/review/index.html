@@ -26,7 +26,8 @@ html, body { height: 100%; }
 body { background: var(--bg); color: var(--fg); font: 14px/1.45 var(--font); }
 button, textarea { font: inherit; color: inherit; }
 .app {
-  height: 100%; display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px;
+  --list-w: 220px; --notes-w: 300px; --chrome: 150px; /* --chrome: the stage's bar + hint, measured at run time */
+  height: 100%; display: grid; grid-template-columns: var(--list-w) minmax(0, 1fr) var(--notes-w);
   gap: 0; padding-left: max(0px, env(safe-area-inset-left, 0px)); padding-right: max(0px, env(safe-area-inset-right, 0px));
 }
 /* --- screen list --- */
@@ -50,14 +51,47 @@ button, textarea { font: inherit; color: inherit; }
 .screens .new { font: 600 9px/1 var(--mono); color: var(--gold-ink); background: var(--fg); border-radius: 3px; padding: 2px 4px; margin-left: 4px; text-transform: uppercase; letter-spacing: .04em; vertical-align: 1px; }
 .sorter { display: flex; gap: 6px; align-items: center; padding: 0 16px 10px; color: var(--muted); font-size: 11px; }
 .sorter select, .verpick select { background: var(--glass); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; color: var(--fg); font: 11px var(--mono); max-width: 100%; }
-.verpick { display: flex; gap: 6px; align-items: center; color: var(--muted); font: 11px var(--mono); }
+/* The version picker stays inside its own column: a long label truncates in the select, never under the notes. */
+.verpick { display: flex; gap: 6px; align-items: center; color: var(--muted); font: 11px var(--mono); flex: 1 1 220px; min-width: 0; max-width: 460px; }
+.verpick select { flex: 1 1 auto; min-width: 0; width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
 .verpick[hidden] { display: none; }
+/* --- folding: side panels to a rail, stage sections and notes to one line --- */
+.chev { flex: none; width: 22px; height: 22px; display: inline-grid; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 5px;
+  background: none; color: var(--muted); cursor: pointer; font: 15px/1 var(--font); }
+.chev:hover { color: var(--fg); border-color: var(--line); }
+.chev:focus-visible, .rail:focus-visible, .linkbtn:focus-visible, .ctl-head:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer; font: 11px/1.4 var(--mono); text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+.linkbtn:hover { color: var(--fg); }
+.rail { display: none; }
+.app.list-shut { --list-w: 40px; }
+.app.notes-shut { --notes-w: 40px; }
+.app.list-shut .list > :not(.rail), .app.notes-shut .notes > :not(.rail) { display: none; }
+.app.list-shut .list, .app.notes-shut .notes { padding: 0; overflow: hidden; }
+.app.list-shut .list .rail, .app.notes-shut .notes .rail {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; height: 100%; padding: 12px 0;
+  background: none; border: 0; color: var(--muted); cursor: pointer; font: 600 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase;
+}
+.rail:hover { color: var(--fg); background: var(--glass); }
+.rail .rail-label { writing-mode: vertical-rl; }
+.rail .rail-arrow { font: 14px/1 var(--font); }
 .pane .cap select { margin-left: 6px; }
 /* --- stage --- */
 .stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
-.bar h2 { margin: 0; font-size: 16px; font-weight: 600; text-wrap: balance; }
-.bar .what { color: var(--muted); font-size: 12px; flex: 1 1 220px; min-width: 0; }
+.bar { display: flex; flex-direction: column; gap: 6px; padding: 10px 18px; border-bottom: 1px solid var(--line); min-width: 0; }
+.bar .top { display: flex; align-items: center; gap: 8px 12px; min-width: 0; }
+.bar h2 { margin: 0; font-size: 16px; font-weight: 600; text-wrap: balance; flex: 1 1 auto; min-width: 0; }
+.fold-row { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.fold-row > span { flex: 1 1 auto; min-width: 0; padding-top: 2px; cursor: pointer; }
+.fold-row.shut > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar .what { color: var(--muted); font-size: 12px; }
+.ctl[hidden] { display: none; }
+.ctl-head { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; padding: 0; background: none; border: 0; cursor: pointer;
+  color: var(--muted); font: 11px/22px var(--mono); text-align: left; }
+.ctl-head .chev { pointer-events: none; }
+.ctl-head:hover { color: var(--fg); }
+.ctl-sum { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ctl-body { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 4px 0 0 28px; min-width: 0; }
+.ctl.shut .ctl-body { display: none; }
 .nav { display: flex; gap: 6px; }
 .btn {
   background: var(--glass); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer;
@@ -69,17 +103,17 @@ button, textarea { font: inherit; color: inherit; }
 .pane { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 0 1 auto; }
 .pane .cap { color: var(--muted); font: 11px/1.4 var(--mono); text-transform: uppercase; letter-spacing: .06em; }
 .shots.split .pane { flex: 1 1 0; }
-.shots.split .shot img { max-height: calc(100vh - 150px); }
+.shots.split .shot img { max-height: calc(100vh - var(--chrome)); }
 .pin.later { opacity: 0; pointer-events: none; }
 .shot { position: relative; max-width: 100%; max-height: 100%; cursor: crosshair; line-height: 0; }
-.shot img, .shot video { max-width: 100%; max-height: calc(100vh - 150px); border-radius: 6px; display: block; user-select: none; -webkit-user-drag: none; }
+.shot img, .shot video { max-width: 100%; max-height: calc(100vh - var(--chrome)); border-radius: 6px; display: block; user-select: none; -webkit-user-drag: none; }
 .shots.split .shot video { max-height: calc(100vh - 180px); }
 .play { display: flex; align-items: center; gap: 10px; font: 11px/1.4 var(--mono); color: var(--muted); }
 /* Clip controls: play, time, a seek bar with a frame preview on hover, and speed. */
 .play { flex-wrap: wrap; margin-top: 8px; width: 100%; min-width: 380px; box-sizing: border-box; }
 /* Room under a clip for its controls. */
-.shot video { max-height: calc(100vh - 240px); }
-.shots.split .shot video { max-height: calc(100vh - 270px); }
+.shot video { max-height: calc(100vh - var(--chrome) - 90px); }
+.shots.split .shot video { max-height: calc(100vh - var(--chrome) - 120px); }
 .seek { position: relative; flex: 1; min-width: 160px; display: flex; align-items: center; }
 .seek input[type=range] { width: 100%; accent-color: var(--gold); cursor: pointer; }
 .seek .ticks { position: absolute; left: 0; right: 0; top: -6px; height: 4px; pointer-events: none; }
@@ -92,7 +126,7 @@ button, textarea { font: inherit; color: inherit; }
 .play button { background: var(--glass); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; color: var(--fg); }
 .play button:hover { border-color: var(--gold); }
 .screens .clipmark { font: 10px/1 var(--mono); color: var(--gold); }
-.hint { color: var(--muted); font-size: 12px; padding: 0 18px 12px; }
+.hint { color: var(--muted); font-size: 12px; padding: 0 18px 10px 12px; }
 .empty { color: var(--muted); padding: 40px; text-align: center; line-height: 1.5; }
 /* pins: a numbered gold drop, tip on the clicked point */
 .pin {
@@ -111,10 +145,19 @@ button, textarea { font: inherit; color: inherit; }
 .pin.mk.done { background: var(--done); color: var(--gold-ink); }
 /* --- notes --- */
 .notes { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
-.notes header { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
-.notes h3 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.notes header { padding: 12px 10px 10px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+.notes h3 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); flex: 1 1 auto; min-width: 0; }
+.brand { display: flex; align-items: flex-start; gap: 6px; padding-right: 8px; }
+.brand > div { flex: 1 1 auto; min-width: 0; }
 .thread { flex: 1; overflow-y: auto; padding: 8px 0; }
-.note { padding: 10px 16px; display: grid; grid-template-columns: 26px minmax(0,1fr); gap: 10px; border-left: 2px solid transparent; }
+.note { padding: 10px 10px 10px 16px; display: grid; grid-template-columns: 26px minmax(0,1fr) 22px; gap: 10px; border-left: 2px solid transparent; }
+/* A folded note shows its title (a mark) or its first line; a folded reply its first line. */
+.note.shut .title, .note.shut .text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note.shut .title ~ .text, .note.shut .reply, .note.shut .meta { display: none; }
+.note .reply { display: flex; gap: 4px; align-items: flex-start; }
+.note .reply > span { flex: 1 1 auto; min-width: 0; }
+.note .reply .chev { width: 18px; height: 18px; margin: -1px 0 0 -4px; }
+.note .reply.shut > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .note.lit { background: var(--glass); border-left-color: var(--gold); }
 .note .num { font: 600 11px/22px var(--mono); text-align: center; min-width: 22px; padding: 0 3px; height: 22px; border-radius: 11px; background: var(--gold); color: var(--gold-ink); }
 .note.done .num { background: var(--done); }
@@ -154,13 +197,24 @@ button, textarea { font: inherit; color: inherit; }
   .notes { border-left: 0; }
   .canvas { padding: 12px 0; }
   .shot img { max-height: none; }
+  .bar { padding: 10px 0; }
+  .hint { padding: 0 0 10px; }
+  .play { min-width: 0; }
+  .seek { min-width: 120px; }
+  /* Stacked: a folded panel is a one-line bar instead of a side rail. */
+  .app.list-shut .list .rail, .app.notes-shut .notes .rail { flex-direction: row; height: auto; padding: 12px 0; justify-content: flex-start; }
+  .app.list-shut .list { border-bottom: 1px solid var(--line); }
+  .rail .rail-label { writing-mode: horizontal-tb; }
+  .rail .rail-arrow { transform: rotate(90deg); }
 }
 @media (prefers-reduced-motion: no-preference) { .pin { transition: transform .12s ease; } }
 </style>
 
 <div class="app">
   <nav class="list" aria-label="Screens">
-    <div class="brand"><h1>Off Grid AI Mobile</h1><p id="tally">Every screen, for review</p></div>
+    <button type="button" class="rail" id="list-rail" aria-label="Show screens ([)" title="Show screens ([)"><span class="rail-arrow">»</span><span class="rail-label">Screens</span></button>
+    <div class="brand"><div><h1>Off Grid AI Mobile</h1><p id="tally">Every screen, for review</p></div>
+      <button type="button" class="chev" id="list-fold" aria-label="Hide screens ([)" title="Hide screens ([)">«</button></div>
     <label class="sorter">Sort
       <select id="sort" aria-label="Sort screens">
         <option value="newest">Newest first</option>
@@ -172,30 +226,47 @@ button, textarea { font: inherit; color: inherit; }
   </nav>
 
   <main class="stage">
-    <div class="bar">
-      <h2 id="title">Loading screens…</h2>
-      <span class="what" id="what"></span>
-      <label class="verpick" id="verpick" hidden>Version <select id="ver" aria-label="Version"></select></label>
-      <div class="nav">
-        <div class="views" id="plats" role="group" aria-label="Phone" hidden>
-          <button type="button" id="plat-ios" aria-pressed="true">iPhone</button>
-          <button type="button" id="plat-android" aria-pressed="false">Android</button>
+    <div class="bar" id="bar">
+      <div class="top">
+        <h2 id="title">Loading screens…</h2>
+        <div class="nav">
+          <button class="btn" id="prev" aria-label="Previous screen">←</button>
+          <button class="btn" id="next" aria-label="Next screen">→</button>
         </div>
-        <div class="views" id="views" role="group" aria-label="Before or after">
-          <button type="button" id="view-before" aria-pressed="false">Before</button>
-          <button type="button" id="view-after" aria-pressed="true">After</button>
-          <button type="button" id="view-both" aria-pressed="false">Side by side</button>
+      </div>
+      <!-- Each section folds to one line; a folded description shows its first line. -->
+      <div class="fold-row" id="what-row">
+        <button type="button" class="chev" id="what-fold" aria-controls="what">▾</button>
+        <span class="what" id="what"></span>
+      </div>
+      <div class="ctl" id="ctl">
+        <button type="button" class="ctl-head" id="ctl-fold" aria-controls="ctl-body"><span class="chev" aria-hidden="true">▾</span><span class="ctl-sum" id="ctl-sum">View</span></button>
+        <div class="ctl-body" id="ctl-body">
+          <label class="verpick" id="verpick" hidden>Version <select id="ver" aria-label="Version"></select></label>
+          <div class="views" id="plats" role="group" aria-label="Phone" hidden>
+            <button type="button" id="plat-ios" aria-pressed="true">iPhone</button>
+            <button type="button" id="plat-android" aria-pressed="false">Android</button>
+          </div>
+          <div class="views" id="views" role="group" aria-label="Before or after">
+            <button type="button" id="view-before" aria-pressed="false">Before</button>
+            <button type="button" id="view-after" aria-pressed="true">After</button>
+            <button type="button" id="view-both" aria-pressed="false">Side by side</button>
+          </div>
         </div>
-        <button class="btn" id="prev" aria-label="Previous screen">←</button>
-        <button class="btn" id="next" aria-label="Next screen">→</button>
       </div>
     </div>
     <div class="canvas"><div class="shots" id="shot"></div></div>
-    <div class="hint">Click anywhere on the screen to pin a note there; on a clip, the click pauses it and the note keeps that moment. ⤢ or F expands a shot full screen · Arrow keys change screens · ⌘ Enter pins the note · Esc clears.</div>
+    <div class="fold-row hint" id="hint-row">
+      <button type="button" class="chev" id="hint-fold" aria-controls="hint">▾</button>
+      <span id="hint">Click anywhere on the screen to pin a note there; on a clip, the click pauses it and the note keeps that moment. ⤢ or F expands a shot full screen · Arrow keys change screens · [ hides or shows the screen list · ] hides or shows the notes · ⌘ Enter pins the note · Esc clears.</span>
+    </div>
   </main>
 
   <aside class="notes">
-    <header><h3>Notes on this screen</h3></header>
+    <button type="button" class="rail" id="notes-rail" aria-label="Show notes (])" title="Show notes (])"><span class="rail-arrow">«</span><span class="rail-label">Notes</span><span class="count" id="rail-count"></span></button>
+    <header><h3>Notes on this screen</h3>
+      <button type="button" class="linkbtn" id="fold-all" hidden>Collapse all</button>
+      <button type="button" class="chev" id="notes-fold" aria-label="Hide notes (])" title="Hide notes (])">»</button></header>
     <div class="thread" id="thread"></div>
     <div class="status" id="status" hidden></div>
     <form class="compose" id="compose">
@@ -363,6 +434,13 @@ function renderStage() {
     pick.append(o);
   }
   for (const v of ["before", "after", "both"]) $("view-" + v).setAttribute("aria-pressed", String(shownView(s) === v));
+  // The switches fold under one line that says what is showing; with nothing to switch, the block hides.
+  const sum = [];
+  if (vs.length > 1) sum.push(`v${vs[a].n}${vs[a].label ? " · " + vs[a].label : ""}`);
+  if (a > 0) sum.push({ before: "Before", after: "After", both: "Side by side" }[shownView(s)]);
+  if (!$("plats").hidden) sum.push(platform === "android" ? "Android" : "iPhone");
+  $("ctl").hidden = !sum.length;
+  $("ctl-sum").textContent = "View · " + sum.join(" · ");
   const list = panes(s);
   for (const k of Object.keys(players)) delete players[k];
   stage.classList.toggle("split", list.length > 1);
@@ -553,6 +631,8 @@ async function renderThread() {
   const box = $("thread");
   const list = onScreen(screenId());
   box.textContent = "";
+  $("rail-count").textContent = list.filter((n) => !n.done).length || "";
+  foldAllLabel(list);
   if (!list.length) {
     const e = document.createElement("div"); e.className = "empty";
     e.textContent = db ? "No notes here yet. Click the screen where something should change, then write what you want." : "Notes need you signed in to claude.ai.";
@@ -565,18 +645,32 @@ async function renderThread() {
   if (ticket !== threadTicket) return;
   list.forEach((n) => {
     const row = document.createElement("div");
-    row.className = "note" + (n.done ? " done" : "") + (lit === n.id ? " lit" : "");
+    const shut = noteShut(n);
+    row.className = "note" + (n.done ? " done" : "") + (lit === n.id ? " lit" : "") + (shut ? " shut" : "");
     const num = document.createElement("div"); num.className = "num"; num.textContent = label(n);
     const body = document.createElement("div");
     const t = document.createElement("div"); t.className = "text"; t.textContent = n.text;
     const parts = [t];
     if (n.title) { const h = document.createElement("div"); h.className = "title"; h.textContent = n.title; parts.unshift(h); }
     if (n.reply) {
-      const r = document.createElement("div"); r.className = "reply";
+      // Claude's reply folds on its own, to its first line.
+      const r = document.createElement("div"); r.className = "reply" + (replyShut(n) ? " shut" : "");
+      const rc = document.createElement("button"); rc.type = "button"; rc.className = "chev";
+      chevron(rc, replyShut(n), "Claude's reply");
+      rc.onclick = () => { const s = !r.classList.contains("shut"); folds.r[n.id] = s; saveFolds(); r.classList.toggle("shut", s); chevron(rc, s, "Claude's reply"); };
+      const say = document.createElement("span");
       const b = document.createElement("b"); b.textContent = "Claude: ";
-      r.append(b, document.createTextNode(n.reply));
+      say.append(b, document.createTextNode(n.reply));
+      r.append(rc, say);
       parts.push(r);
     }
+    // The note folds to its title (a mark) or its first line; done notes start folded.
+    const fold = document.createElement("button"); fold.type = "button"; fold.className = "chev";
+    chevron(fold, shut, "note");
+    fold.onclick = () => {
+      const s = !row.classList.contains("shut"); folds.n[n.id] = s; saveFolds();
+      row.classList.toggle("shut", s); chevron(fold, s, "note"); foldAllLabel(list);
+    };
     const meta = document.createElement("div"); meta.className = "meta";
     const who = document.createElement("span"); who.textContent = n.author === "claude" ? "Claude" : ((names[n.author]?.name) || "Someone");
     const at = document.createElement("span"); at.textContent = `${n.t != null ? "at " + fmt(n.t) + " · " : ""}${Math.round(n.x * 100)}%, ${Math.round(n.y * 100)}% · ${when(n.created)}`;
@@ -586,11 +680,81 @@ async function renderThread() {
     del.onclick = () => remove(n.id);
     meta.append(who, at, toggle, del);
     body.append(...parts, meta);
-    row.append(num, body);
-    row.onclick = (e) => { if (e.target.tagName === "BUTTON") return; lit = n.id; seek(n); renderPins(); renderThread(); };
+    row.append(num, body, fold);
+    row.onclick = (e) => { if (e.target.closest("button")) return; lit = n.id; seek(n); renderPins(); renderThread(); };
     box.append(row);
   });
+  foldAllLabel(list);
 }
+
+// --- Folding. What this viewer folded is remembered in this browser only. Storage can be
+// missing or throw (a private window, blocked site data, a preview): the page then starts
+// unfolded and works the same, it just forgets on reload.
+const FOLDS = "review-folds";
+let folds = { list: false, notes: false, what: false, ctl: false, hint: false, n: {}, r: {} };
+try {
+  const f = JSON.parse(localStorage.getItem(FOLDS) || "null");
+  if (f && typeof f === "object") folds = { ...folds, ...f, n: f.n && typeof f.n === "object" ? f.n : {}, r: f.r && typeof f.r === "object" ? f.r : {} };
+} catch (_) {}
+function saveFolds() { try { localStorage.setItem(FOLDS, JSON.stringify(folds)); } catch (_) {} }
+// A note the viewer never folded or opened follows its state: done notes start folded.
+function noteShut(n) { return folds.n[n.id] ?? !!n.done; }
+function replyShut(n) { return !!folds.r[n.id]; }
+function chevron(b, shut, what) {
+  b.textContent = shut ? "▸" : "▾";
+  b.setAttribute("aria-expanded", String(!shut));
+  b.setAttribute("aria-label", (shut ? "Expand " : "Collapse ") + what);
+  b.title = shut ? "Expand" : "Collapse";
+}
+function foldAllLabel(list) {
+  const b = $("fold-all");
+  b.hidden = !list.length;
+  const anyOpen = list.some((n) => !noteShut(n));
+  b.textContent = anyOpen ? "Collapse all" : "Expand all";
+  b.onclick = () => {
+    list.forEach((n) => { folds.n[n.id] = anyOpen; if (n.reply) folds.r[n.id] = anyOpen; });
+    saveFolds(); renderThread();
+  };
+}
+function applyFolds() {
+  const app = document.querySelector(".app");
+  app.classList.toggle("list-shut", !!folds.list);
+  app.classList.toggle("notes-shut", !!folds.notes);
+  $("list-rail").setAttribute("aria-expanded", "false"); $("list-fold").setAttribute("aria-expanded", "true");
+  $("notes-rail").setAttribute("aria-expanded", "false"); $("notes-fold").setAttribute("aria-expanded", "true");
+  $("what-row").classList.toggle("shut", !!folds.what); chevron($("what-fold"), !!folds.what, "description");
+  $("hint-row").classList.toggle("shut", !!folds.hint); chevron($("hint-fold"), !!folds.hint, "help");
+  $("ctl").classList.toggle("shut", !!folds.ctl);
+  $("ctl-fold").setAttribute("aria-expanded", String(!folds.ctl));
+  $("ctl-fold").querySelector(".chev").textContent = folds.ctl ? "▸" : "▾";
+  $("ctl-fold").title = folds.ctl ? "Show version and view switches" : "Fold version and view switches";
+}
+function toggleFold(k) {
+  // Keep focus on the panel's other button when the one pressed disappears.
+  const had = document.activeElement?.id;
+  folds[k] = !folds[k]; saveFolds(); applyFolds();
+  const swap = { "list-fold": "list-rail", "list-rail": "list-fold", "notes-fold": "notes-rail", "notes-rail": "notes-fold" };
+  if (swap[had]) $(swap[had]).focus();
+}
+$("list-fold").onclick = () => toggleFold("list");
+$("list-rail").onclick = () => toggleFold("list");
+$("notes-fold").onclick = () => toggleFold("notes");
+$("notes-rail").onclick = () => toggleFold("notes");
+$("what-fold").onclick = () => toggleFold("what");
+$("what").onclick = () => toggleFold("what");
+$("hint-fold").onclick = () => toggleFold("hint");
+$("hint").onclick = () => toggleFold("hint");
+$("ctl-fold").onclick = () => toggleFold("ctl");
+applyFolds();
+// The shot takes whatever height the bar and help line leave, and its pins re-settle when its size changes.
+let settle = 0;
+function measure() {
+  document.querySelector(".app").style.setProperty("--chrome", ($("bar").offsetHeight + $("hint-row").offsetHeight + 44) + "px");
+  cancelAnimationFrame(settle);
+  settle = requestAnimationFrame(() => { if (shown.length) renderPins(); });
+}
+if (window.ResizeObserver) { const ro = new ResizeObserver(measure); ro.observe($("bar")); ro.observe($("hint-row")); ro.observe(document.querySelector(".canvas")); }
+else measure();
 
 function renderCompose() {
   $("where").textContent = draft
@@ -681,6 +845,10 @@ document.addEventListener("keydown", (e) => {
   }
   if (e.key === "Escape" && shrink()) return;
   if (!$("lightbox").hidden) return;
+  // [ folds the screen list, ] the notes; typing in a box or a menu keeps the keys.
+  if ((e.key === "[" || e.key === "]") && !/^(TEXTAREA|INPUT|SELECT)$/.test(e.target.tagName)) {
+    e.preventDefault(); toggleFold(e.key === "[" ? "list" : "notes"); return;
+  }
   if ((e.key === "f" || e.key === "F") && e.target.id !== "text") {
     const s = shown[current]; if (s) { e.preventDefault(); expand(s, panes(s)[panes(s).length - 1]); }
     return;
