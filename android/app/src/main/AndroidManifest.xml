@@ -4,6 +4,8 @@
     <uses-sdk tools:overrideLibrary="com.tensai.llamakt" />
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Lets Atlas hand a downloaded update to Android's installer (the person still confirms the install) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 

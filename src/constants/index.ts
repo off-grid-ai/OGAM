@@ -8,6 +8,8 @@ export {
 } from './models';
 
 // External URLs
+/** The GitHub repository whose releases hold Atlas updates and library packs. */
+export const ATLAS_REPO = 'coolchan03/Atlas';
 
 // Off Grid AI Desktop: the free, open-source desktop app. Linked from remote-server discovery.
 export const OFF_GRID_DESKTOP_URL = 'https://getoffgridai.co/desktop';

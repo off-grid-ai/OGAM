@@ -47,6 +47,8 @@ jest.mock('../../../package.json', () => ({ version: '1.0.0' }), {
 });
 
 const mockSetOnboardingComplete = jest.fn();
+// The update card looks for a newer build on its own; the Settings tests do not need the network.
+jest.mock('../../../src/services/appUpdate', () => ({ installedBuild: () => 143, checkForUpdate: jest.fn(async () => ({ current: 143, update: null })), downloadAndInstall: jest.fn() }));
 const mockSetThemeMode = jest.fn();
 const mockCompleteChecklistStep = jest.fn();
 const mockResetChecklist = jest.fn();

@@ -293,6 +293,8 @@ function App() {
 
       // Show the UI immediately
       setIsInitializing(false);
+      // A little later, once a day: is a newer build published? (Settings > App updates turns this off.)
+      setTimeout(() => { void require('./src/services/appUpdate').announceUpdateOnce(); }, 8000);
 
       // Reconcile downloaded Whisper models against disk at startup. presentModelIds
       // isn't persisted (the filesystem is the source of truth), so it rehydrates

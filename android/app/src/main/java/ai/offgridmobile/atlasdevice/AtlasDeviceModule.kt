@@ -290,6 +290,29 @@ class AtlasDeviceModule(private val ctx: ReactApplicationContext) : ReactContext
         } catch (e: Exception) { promise.reject("OPEN", e.message ?: "Could not open the file", e) }
     }
 
+    /**
+     * Starts Android's installer for an APK the app downloaded (an update). Android asks the person to allow installs from
+     * Atlas once; until then this opens that setting and resolves "needs-permission" so the app can say what to do.
+     */
+    @ReactMethod
+    fun installApk(path: String, promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ctx.packageManager.canRequestPackageInstalls()) {
+                val allow = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                ctx.startActivity(allow)
+                promise.resolve("needs-permission")
+                return
+            }
+            val f = File(path.removePrefix("file://"))
+            val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.atlasfiles", f)
+            val install = Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(install)
+            promise.resolve("started")
+        } catch (e: Exception) { promise.reject("INSTALL", e.message ?: "Could not start the installer", e) }
+    }
+
     /** Events between start and end (ms since 1970). Needs READ_CALENDAR. */
     @ReactMethod
     fun calendarEvents(startMs: Double, endMs: Double, promise: Promise) {

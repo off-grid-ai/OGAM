@@ -27,6 +27,7 @@ import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
+import { AppUpdateCard } from '../components/settings/AppUpdateCard';
 import { useAppStore } from '../stores';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { appVersionLabel } from '../utils/appVersion';
@@ -267,6 +268,8 @@ export const SettingsScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         </AnimatedEntry>
+
+        <AppUpdateCard />
 
         {/* Sections registered at runtime through the settings section registry */}
         {settingsSections.map((Section, i) => <Section key={Section.displayName ?? String(i)} />)}
