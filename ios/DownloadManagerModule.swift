@@ -229,6 +229,9 @@ class DownloadManagerModule: RCTEventEmitter {
   /// Automatic retries after a dropped connection, per download. Reset by a fresh start.
   static let maxAutoRetries = 5
   var autoRetries: [String: Int] = [:]
+  /// Task keys the module let go of on purpose (a hand-off, a cancel, a retry, a failed multi-file
+  /// download). A late completion from one is not reattached from its description.
+  var retiredTaskKeys = Set<Int>()
   /// Whether the app is on screen. New tasks and hand-offs go to the fast session while it is, and to
   /// the background session while it is not.
   var isInForeground = true
@@ -425,6 +428,7 @@ class DownloadManagerModule: RCTEventEmitter {
           guard let url = old.originalRequest?.url ?? old.currentRequest?.url else { continue }
           // Drop the old key first: its cancellation then reaches handleError as an unknown task.
           self.taskToDownloadId.removeValue(forKey: oldKey)
+          self.retiredTaskKeys.insert(oldKey)
           group.enter()
           self.handOff(old, downloadId: downloadId, oldKey: oldKey, url: url, to: target) { group.leave() }
         }
@@ -457,8 +461,10 @@ class DownloadManagerModule: RCTEventEmitter {
       let next = resumeData.map { target.downloadTask(withResumeData: $0) }
         ?? target.downloadTask(with: self.makeDownloadRequest(url))
       next.taskDescription = old.taskDescription
+      // Paused while it waited (a retry's back-off): the new task stays suspended for Resume to start.
+      let paused = self.downloads[downloadId]?.status == "paused"
       self.replaceTask(downloadId: downloadId, oldKey: oldKey, with: next, in: target)
-      next.resume()
+      if !paused { next.resume() }
     }
   }
 
@@ -475,6 +481,7 @@ class DownloadManagerModule: RCTEventEmitter {
       info.task = next
       info.taskIdentifier = newKey
     }
+    if info.status != "paused" { info.status = "running" }
     downloads[downloadId] = info
     taskToDownloadId[newKey] = downloadId
     persistStateLocked()
@@ -750,6 +757,11 @@ class DownloadManagerModule: RCTEventEmitter {
         }
 
         self.persistStateLocked()
+        // Tasks that kept going in the background session while the app was closed come back to the
+        // fast one when the app is on screen: the first didBecomeActive after launch does not move them.
+        DispatchQueue.main.async {
+          if UIApplication.shared.applicationState == .active { self.handOffRunningTasks(toBackground: false) }
+        }
         NSLog("[DownloadManager] Restored %d URLSession tasks (%d downloads), %d orphaned → failed", self.taskToDownloadId.count, self.downloads.count, orphanedIds.count)
       }
     }
@@ -1016,11 +1028,13 @@ extension DownloadManagerModule {
         for (_, fileTask) in info.fileTasks {
           fileTask.task?.cancel()
           self.taskToDownloadId.removeValue(forKey: fileTask.taskIdentifier)
+          self.retiredTaskKeys.insert(fileTask.taskIdentifier)
         }
       } else {
         info.task?.cancel()
         if let taskId = info.taskIdentifier ?? info.task?.taskIdentifier {
           self.taskToDownloadId.removeValue(forKey: taskId)
+          self.retiredTaskKeys.insert(taskId)
         }
       }
       self.downloads[id]?.status = "failed"
@@ -1309,7 +1323,8 @@ extension DownloadManagerModule {
     queue.async(flags: .barrier) {
       // After a relaunch the background session can finish a task before restoration has mapped it.
       // The task's own description names its download, so attach it here instead of dropping it.
-      if self.taskToDownloadId[taskId] == nil, let task, let desc = self.decodeTaskDescription(task.taskDescription),
+      if self.taskToDownloadId[taskId] == nil, !self.retiredTaskKeys.contains(taskId),
+         let task, let desc = self.decodeTaskDescription(task.taskDescription),
          let attached = self.reattach(task, key: taskId, desc: desc) {
         NSLog("[DownloadManager] handleCompletion: task#%d mapped from its description to #%@", taskId, desc.downloadId)
         self.downloads[desc.downloadId] = attached
@@ -1527,6 +1542,12 @@ extension DownloadManagerModule {
          let url = old.originalRequest?.url ?? old.currentRequest?.url {
         self.autoRetries[downloadId] = attempts + 1
         self.taskToDownloadId.removeValue(forKey: taskId)
+        self.retiredTaskKeys.insert(taskId)
+        // While it waits, the finished task must not be polled: its state would read "completed".
+        if !info.isMultiFile { info.task = nil }
+        info.status = "pending"
+        self.downloads[downloadId] = info
+        self.persistStateLocked()
         let resumeData = (error as NSError?)?.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
         let delay = min(30.0, pow(2.0, Double(attempts + 1)))
         NSLog("[DownloadManager] Download #%@ stopped (%@); retry %d/%d in %.0fs %@ resume data",
@@ -1545,6 +1566,7 @@ extension DownloadManagerModule {
         for (_, fileTask) in info.fileTasks where !fileTask.completed {
           fileTask.task?.cancel()
           self.taskToDownloadId.removeValue(forKey: fileTask.taskIdentifier)
+          self.retiredTaskKeys.insert(fileTask.taskIdentifier)
         }
       } else {
         self.taskToDownloadId.removeValue(forKey: taskId)
