@@ -22,9 +22,10 @@ import { isRawModelName, modelDisplayName, splitGgufModelName } from '@offgrid/m
  *  here first hid the file name from the resolver, so rows showed it raw (review page, Downloads). */
 export function downloadDisplayName(item: Pick<DownloadItem, 'name' | 'fileName'>): string {
   if (item.name?.trim() && !isRawModelName(item.name)) return item.name;
-  const file = item.name?.trim() || item.fileName;
-  return modelDisplayName(file)
-    ?? splitGgufModelName(file).replace(/\.(gguf|bin|onnx|zip|tar|litertlm|task)$/i, '');
+  // The resolver matches the catalog by the full file name, so keep the extensions it knows (.gguf
+  // .bin); one it does not know (.pte, .litertlm) would stay in the name, so it goes first.
+  const file = (item.name?.trim() || item.fileName).replace(/\.(pte|litertlm|task|zip|tar)$/i, '');
+  return modelDisplayName(file) ?? splitGgufModelName(file).replace(/\.(gguf|bin|onnx)$/i, '');
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────

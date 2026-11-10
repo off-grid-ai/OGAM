@@ -160,7 +160,7 @@ describe('DownloadManagerScreen', () => {
         status: 'failed', reason: 'http_416',
       })]),
     );
-    expect(view.getByText('model')).toBeTruthy();
+    expect(view.getByText('Model')).toBeTruthy();
     expect(view.getByText('The server could not resume this download. Please retry it.')).toBeTruthy();
     expect(view.queryByText('No active downloads')).toBeNull();
     // Nothing is moving: no "0" beside Downloading (hand test 15), the words say why.
@@ -177,7 +177,7 @@ describe('DownloadManagerScreen', () => {
     const none = await openManager(ctx =>
       nativeDownloads(ctx, [runningText({ status: 'failed', reason: 'unknown_error', bytesDownloaded: 0 })]),
     );
-    expect(none.view.getByText('model-file')).toBeTruthy();
+    expect(none.view.getByText('Model file')).toBeTruthy();
     expect(bars(none.view)).toEqual([]);
     // Nor an empty "0 B / 4 KB" line: nothing arrived, so there is nothing to count.
     expect(none.view.queryByText(/ \/ 4 KB$/)).toBeNull();
@@ -201,7 +201,7 @@ describe('DownloadManagerScreen', () => {
       start('waiting.gguf').catch(() => {}); // resolves only when a slot frees
     });
     expect(boundary.download!.active().map(r => r.fileName)).toEqual(['one.gguf', 'two.gguf', 'three.gguf']);
-    expect(view.getByText('waiting')).toBeTruthy();
+    expect(view.getByText('Waiting')).toBeTruthy();
     // The word "Queued" was dropped in favor of the clock icon (a11y label "Queued").
     expect(view.queryByText('Queued')).toBeNull();
     expect(view.getByLabelText('Queued')).toBeTruthy();
@@ -248,7 +248,7 @@ describe('DownloadManagerScreen', () => {
         runningText({ downloadId: 'dl-stt', modelKey: 'w/whisper/ggml-base.en.bin', modelId: 'w/whisper', fileName: 'ggml-base.en.bin', modelType: 'stt' as never }),
       ]),
     );
-    const names = { 'dl-text': 'model-file', 'dl-video': 'wan-video', 'dl-tts': 'kokoro-voice.pte', 'dl-stt': 'Whisper Base (English)' };
+    const names = { 'dl-text': 'Model file', 'dl-video': 'Wan video', 'dl-tts': 'Kokoro voice', 'dl-stt': 'Whisper Base (English)' };
     const shown = () => Object.entries(names).filter(([, name]) => view.queryByText(name)).map(([id]) => id);
     // The Models tabs, in the Models order; vision models live under Text there, so there is no Vision tab.
     expect(['All', 'Text', 'Documents', 'Image', 'Video', 'Voice', 'Speech'].every(label => view.queryByText(label))).toBe(true);
@@ -274,7 +274,7 @@ describe('DownloadManagerScreen', () => {
     const { view } = await openManager(ctx =>
       nativeDownloads(ctx, [runningText({ bytesDownloaded: 2 * GB, totalBytes: 4 * GB, combinedTotalBytes: 4 * GB })]),
     );
-    expect(view.getByText('model-file')).toBeTruthy();
+    expect(view.getByText('Model file')).toBeTruthy();
     expect(view.getByText('Downloading')).toBeTruthy();
     expect(view.getByText('50%')).toBeTruthy();
   });
@@ -481,7 +481,7 @@ describe('DownloadManagerScreen', () => {
         fileName: 'bg-model.gguf', bytesDownloaded: 500, totalBytes: 2000, combinedTotalBytes: 2000,
       })]),
     );
-    expect(view.getByText('bg-model')).toBeTruthy();
+    expect(view.getByText('Bg model')).toBeTruthy();
     expect(view.getByText(/Q4_K_M · Text/)).toBeTruthy();
     // The publisher name is not repeated on the card.
     expect(view.queryByText('author')).toBeNull();
