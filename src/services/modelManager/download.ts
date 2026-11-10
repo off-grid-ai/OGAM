@@ -716,6 +716,9 @@ export function watchBackgroundDownload(opts: WatchDownloadOpts): void {
       if (!movedNatively) backgroundDownloadService.purgeNativeRecord(downloadId).catch(() => {});
     } catch (error) {
       ctx.isFinalizing = false;
+      // The bytes are on disk: keep the context, so Retry finalizes them again instead of
+      // downloading the whole model a second time (Play review, 0.0.122).
+      backgroundDownloadContext.set(downloadId, ctx);
       logger.error('[DownloadDebug] Finalization failed', {
         downloadId,
         modelId: ctx.modelId,

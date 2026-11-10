@@ -160,6 +160,13 @@ export const textProvider: DownloadProvider = {
   async retry(id: string): Promise<void> {
     const entry = findEntry(keyOf(id));
     if (!entry) return;
+    if (entry.errorCode === 'finalize_failed' && entry.downloadId) {
+      // The download finished and saving it failed: save it again from the bytes on disk. The native
+      // row is completed, so a native retry refused it and the person had to download it all again.
+      useDownloadStore.getState().setStatus(entry.downloadId, 'processing');
+      reattach(entry.downloadId);
+      return;
+    }
     if (Platform.OS === 'android') {
       // Android resumes the existing WorkManager job in place, so it genuinely needs the live
       // downloadId to reattach to.
