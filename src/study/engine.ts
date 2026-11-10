@@ -93,7 +93,8 @@ export const trimSources = (src: Source[]): Source[] => {
 const tidy = (t: string) => t.replace(/\*\*|__/g, '').replace(/^\s*(?:[-*•]|\d+[.)])\s+(?=(?:Q|A|ANSWER|WHY|SRC|TITLE|SAY|[A-D])\s*[:).])/gim, '');
 
 /** Sources for a topic (search) or, with no topic, a spread across all documents. */
-export async function gatherSources(projectId: string, topic: string, share = 1, cache: { all?: any[] } = {}): Promise<Source[]> {
+export async function gatherSources(projectId: string, topic: string, more: { share?: number; cache?: { all?: any[] } } = {}): Promise<Source[]> {
+  const { share = 1, cache = {} } = more;
   let raw: { name: string; content: string; position: number }[] = [];
   if (topic.trim()) {
     const r: any = await ragService.searchProject(projectId, topic.trim());
@@ -431,14 +432,14 @@ export async function generatePodcast(projectId: string, opts: PodcastOptions, o
   if (!learningActivitiesEnabled(projectId)) throw new Error('Enable Learning Activities in Project Settings before generating a podcast.');
   onStep('Reading your sources...');
   // With extra research on, leave room in the model's memory for the research sources.
-  let sources = await gatherSources(projectId, opts.prompt, opts.research ? 0.6 : 1);
+  let sources = await gatherSources(projectId, opts.prompt, { share: opts.research ? 0.6 : 1 });
   if (opts.research) {
     const extra = await researchSources(opts.prompt || sources.map((x) => x.doc).slice(0, 2).join(' '), sources.length + 1, onStep);
     sources = trimSources([...sources, ...extra]);
   }
   if (!sources.length) throw new Error('No sources: add documents to this project, or turn on extra research.');
   const chunkCache: { all?: any[] } = {};
-  return writeEpisode(sources, { ...opts, sourcesFor: opts.sourcesFor ?? ((topic) => gatherSources(projectId, topic, 1, chunkCache)) }, onStep);
+  return writeEpisode(sources, { ...opts, sourcesFor: opts.sourcesFor ?? ((topic) => gatherSources(projectId, topic, { cache: chunkCache })) }, onStep);
 }
 
 /** Writes the episode script from ready-made sources (projects, the daily briefing, ...). */

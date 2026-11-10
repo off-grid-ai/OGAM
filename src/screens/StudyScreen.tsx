@@ -249,7 +249,7 @@ export const StudyScreen: React.FC = () => {
     setBusy(label);
     keepScreenOn(true);
     try {
-      const r = await generateGame(projectId, type, topic, (m) => setBusy(m));
+      const r = await generateGame(projectId, type, { topic, onStep: (m) => setBusy(m) });
       // Review and daily read live progress; they are not worth saving as items.
       if (type !== 'review' && type !== 'daily') add(projectId, r);
       setResumeAt(0);
@@ -354,7 +354,7 @@ export const StudyScreen: React.FC = () => {
   const savePowerPoint = async (r: StudyResult) => {
     try {
       const title = r.title || r.topic || 'Atlas slides';
-      const name = await savePptx(safeFileName(title, 'pptx'), title, deckSlides(title, r.topic && r.topic !== title ? r.topic : '', r.slides ?? [], r.sources));
+      const name = await savePptx(safeFileName(title, 'pptx'), title, deckSlides(title, r.topic && r.topic !== title ? r.topic : '', { slides: r.slides ?? [], sources: r.sources }));
       if (name) Alert.alert('Saved', name);
     } catch (e: any) { Alert.alert('Could not save the PowerPoint', String(e?.message || e)); }
   };

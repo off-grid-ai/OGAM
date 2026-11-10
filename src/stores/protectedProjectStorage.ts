@@ -110,10 +110,10 @@ export async function protectProject(id: string, pin: string): Promise<void> {
   // Existing documents move into the encrypted vault first; the plain index is erased only after
   // the vault is written, read back and the project record is saved as locked.
   const docs = await ragService.exportProjectDocuments(id);
-  if (docs.length) await protectedVault.seal(id, pin, verifier, docs);
+  if (docs.length) await protectedVault.seal(id, { pin, verifier }, docs);
   // Study outputs move into their own encrypted file the same way, verified before locking.
   const study = useStudyStore.getState().saved[id] || [];
-  if (study.length) await protectedStudyVault.seal(id, pin, verifier, study);
+  if (study.length) await protectedStudyVault.seal(id, { pin, verifier }, study);
   const locked = stub({ ...project, pinVerifier: verifier }, blob);
   try {
     await writeReplacement(id, locked);
@@ -152,7 +152,7 @@ function watchProtectedStudy(): void {
       if (state.saved[pid] === prev.saved[pid]) continue;
       const verifier = useProjectStore.getState().projects.find((p: Project) => p.id === pid)?.pinVerifier;
       if (!verifier) continue;
-      protectedStudyVault.seal(pid, pin, verifier, state.saved[pid] || [])
+      protectedStudyVault.seal(pid, { pin, verifier }, state.saved[pid] || [])
         .catch((e) => logger.error('[ProtectedProject] study outputs could not be saved', e));
     }
   });
@@ -246,8 +246,8 @@ async function adoptPortableProject(p: Project, pin: string): Promise<void> {
   if (!p.pinVerifier || !await api.verifyChatPin(pin, p.pinVerifier)) throw new Error('Incorrect PIN.');
   const payload = JSON.parse(await api.decryptPortableBackup(p.protectedBlob!, portablePass(pin, p.id)));
   if (payload?.v !== 1 || payload.project?.id !== p.id) throw new Error('Protected project backup is damaged.');
-  if (Array.isArray(payload.docs) && payload.docs.length) await protectedVault.seal(p.id, pin, p.pinVerifier, payload.docs);
-  if (Array.isArray(payload.study) && payload.study.length) await protectedStudyVault.seal(p.id, pin, p.pinVerifier, payload.study);
+  if (Array.isArray(payload.docs) && payload.docs.length) await protectedVault.seal(p.id, { pin, verifier: p.pinVerifier }, payload.docs);
+  if (Array.isArray(payload.study) && payload.study.length) await protectedStudyVault.seal(p.id, { pin, verifier: p.pinVerifier }, payload.study);
   const plain = JSON.stringify(clearSecurity(payload.project));
   const blob = await api.encryptProtectedItem('project', p.id, plain, pin, p.pinVerifier);
   await writeReplacement(p.id, stub(p, blob));

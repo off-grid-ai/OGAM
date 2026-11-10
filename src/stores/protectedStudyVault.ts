@@ -44,7 +44,8 @@ async function read(projectId: string, pin: string, verifier: string): Promise<a
 
 export const protectedStudyVault = {
   /** Encrypts the project's study outputs and verifies the file reads back. */
-  seal(projectId: string, pin: string, verifier: string, results: any[]): Promise<void> {
+  seal(projectId: string, key: { pin: string; verifier: string }, results: any[]): Promise<void> {
+    const { pin, verifier } = key;
     return serial(async () => {
       const plain = JSON.stringify({ v: 1, results });
       const blob = await native().encryptProtectedItem('project', itemId(projectId), plain, pin, verifier);

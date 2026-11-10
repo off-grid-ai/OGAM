@@ -61,11 +61,11 @@ async function planSdcpp(mode: ImageComputeMode, probe: Probes, allowCpuFallback
 
 export async function selectImageAccelerator(
   backend: ImageBackend,
-  mode: ImageComputeMode,
+  request: { mode: ImageComputeMode; allowCpuFallback?: boolean },
   probe: Probes,
-  options: { allowCpuFallback?: boolean } = {},
 ): Promise<ImageComputeDecision> {
-  const { allowCpuFallback = false } = options;
+  const { allowCpuFallback = false } = request;
+  let { mode } = request;
   if (backend === 'coreml') {
     if (mode === 'cpu')
       throw new Error('Core ML CPU-only execution is not selectable in this image runtime.');

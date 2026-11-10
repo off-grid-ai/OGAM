@@ -114,7 +114,7 @@ export function ProjectLearningGame({ activity, onOpenSource }: Props) {
     });
     const tap = (index: number) => {
       if (firstCell === null) { setFirstCell(index); setNotice('Now tap the last letter of the word.'); return; }
-      const matching = wordSearch.entries.find(e => !solved.includes(e.id) && matchWordSearch(e, firstCell, index, wordSearch.size));
+      const matching = wordSearch.entries.find(e => !solved.includes(e.id) && matchWordSearch(e, { first: firstCell, last: index }, wordSearch.size));
       if (matching) { setSolved(ids => [...ids, matching.id]); setNotice(`Found ${matching.answer}!`); }
       else setNotice('No matching word along those cells. Try again.');
       setFirstCell(null);

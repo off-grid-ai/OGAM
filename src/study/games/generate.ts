@@ -75,7 +75,8 @@ async function askJson<T>(system: string, user: string): Promise<T> {
 const nums = (sources: Source[]) => sources.map((s) => s.n);
 
 /** Multiple-choice questions grounded in the sources, with shuffled options. */
-export async function mcQuestions(sources: Source[], count: number, topic: string, extra = ''): Promise<McQuestion[]> {
+export async function mcQuestions(sources: Source[], spec: { count: number; topic: string; extra?: string }): Promise<McQuestion[]> {
+  const { count, topic, extra = '' } = spec;
   const raw = await askJson<any>(
     `You write multiple-choice questions from documents. ${GROUND}`,
     `SOURCES:\n${sourceBlock(sources)}\n\n${topic ? `Focus: ${topic}\n` : ''}Write ${count} questions. Mix easy, medium and hard (difficulty 1-3). ${extra}\nJSON: {"questions":[{"q":"","options":["right answer","wrong","wrong","wrong"],"answer":0,"why":"one sentence","src":[1],"difficulty":1}]}`,
@@ -215,7 +216,8 @@ function latestPodcast(projectId: string): StudyResult | undefined {
 }
 
 /** Builds a project game. All AI output is grounded in the project's documents. */
-export async function generateGame(projectId: string, type: GameType, topic: string, onStep: (m: string) => void = () => undefined): Promise<StudyResult> {
+export async function generateGame(projectId: string, type: GameType, req: { topic: string; onStep?: (m: string) => void }): Promise<StudyResult> {
+  const { topic, onStep = () => undefined } = req;
   const info = PROJECT_GAMES.find((g) => g.type === type);
   const title = info?.label ?? 'Game';
   const make = (sources: Source[], data: any, extraTitle = ''): StudyResult => ({
@@ -268,7 +270,7 @@ export async function generateGame(projectId: string, type: GameType, topic: str
       onStep('Building your memory palace...');
       return make(sources, { terms, stations: await palace(sources, terms) });
     }
-    const items: ClozeItem[] = buildCloze(terms, sources, 10, Date.now());
+    const items: ClozeItem[] = buildCloze(terms, sources, { max: 10, seed: Date.now() });
     if (items.length < 3) throw new Error('Not enough sentences with key terms were found for fill-the-blanks. Try another topic.');
     return make(sources, { terms, items });
   }
@@ -287,13 +289,13 @@ export async function generateGame(projectId: string, type: GameType, topic: str
   if (type === 'jeopardy') return make(sources, { board: await jeopardyBoard(sources, topic, onStep) });
   if (type === 'boss') {
     onStep('Summoning the boss...');
-    const questions = await mcQuestions(sources, 9, topic);
+    const questions = await mcQuestions(sources, { count: 9, topic });
     return make(sources, { questions: questions.sort((a, b) => (a.difficulty ?? 2) - (b.difficulty ?? 2)), boss: Math.floor(Math.random() * 6) });
   }
   if (type === 'ladder') {
     onStep('Writing the ladder questions...');
     // 10 rungs plus 2 spares for the Skip lifeline.
-    const questions = await mcQuestions(sources, 12, topic);
+    const questions = await mcQuestions(sources, { count: 12, topic });
     if (questions.length < 6) throw new Error('The model did not write enough questions for a ladder. Try again.');
     const ordered = questions.slice(0, 10).sort((a, b) => (a.difficulty ?? 2) - (b.difficulty ?? 2));
     return make(sources, { questions: ordered, spares: questions.slice(10) });
@@ -306,12 +308,12 @@ export async function generateGame(projectId: string, type: GameType, topic: str
   }
   if (type === 'exam') {
     onStep('Writing multiple-choice questions...');
-    const mc = await mcQuestions(sources, 10, topic);
+    const mc = await mcQuestions(sources, { count: 10, topic });
     onStep('Writing true/false questions...');
     const tf = await statements(sources, 6, topic).catch(() => [] as Statement[]);
     onStep('Finding fill-the-blank sentences...');
     const terms = await termsFromSources(sources, topic, 1).catch(() => [] as LearningTerm[]);
-    const cloze = terms.length ? buildCloze(terms, sources, 4, Date.now()) : [];
+    const cloze = terms.length ? buildCloze(terms, sources, { max: 4, seed: Date.now() }) : [];
     return make(sources, { mc, tf, cloze, minutes: Math.max(5, Math.round((mc.length + tf.length + cloze.length) * 0.75)) });
   }
   if (type === 'conceptmap') {

@@ -41,20 +41,20 @@ function rng(seed: number) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-const money = (r: () => number, lo: number, hi: number, step = 100) => Math.round((lo + r() * (hi - lo)) / step) * step;
+const money = (r: () => number, range: { lo: number; hi: number; step?: number }) => { const { lo, hi, step = 100 } = range; return Math.round((lo + r() * (hi - lo)) / step) * step; };
 const fmt = (n: number) => `$${n.toLocaleString('en-US')}`;
 const TOPIC = 'Accounting drills';
 const ACCOUNTS = ['Cash', 'Accounts receivable', 'Inventory', 'Equipment', 'Accounts payable', 'Notes payable', 'Common stock', 'Retained earnings'];
 const withOptions = (rows: TableRow[]): TableRow[] => rows.map((row) => ({ ...row, options: ACCOUNTS }));
 
 function balanceSheet(r: () => number, id: string): Exercise {
-  const cash = money(r, 5000, 40000);
-  const ar = money(r, 3000, 25000);
-  const inv = money(r, 4000, 30000);
-  const eq = money(r, 20000, 90000);
-  const ap = money(r, 3000, 20000);
-  const np = money(r, 5000, 40000);
-  const stock = money(r, 10000, 50000);
+  const cash = money(r, { lo: 5000, hi: 40000 });
+  const ar = money(r, { lo: 3000, hi: 25000 });
+  const inv = money(r, { lo: 4000, hi: 30000 });
+  const eq = money(r, { lo: 20000, hi: 90000 });
+  const ap = money(r, { lo: 3000, hi: 20000 });
+  const np = money(r, { lo: 5000, hi: 40000 });
+  const stock = money(r, { lo: 10000, hi: 50000 });
   const assets = cash + ar + inv + eq;
   const retained = assets - ap - np - stock; // balances by construction
   const rows = withOptions([
@@ -75,8 +75,8 @@ function balanceSheet(r: () => number, id: string): Exercise {
 }
 
 function journalEntry(r: () => number, id: string): Exercise {
-  const price = money(r, 4000, 30000, 500);
-  const cashPaid = money(r, 1000, price - 1000, 500);
+  const price = money(r, { lo: 4000, hi: 30000, step: 500 });
+  const cashPaid = money(r, { lo: 1000, hi: price - 1000, step: 500 });
   const onAccount = price - cashPaid;
   const rows = withOptions([
     { label: 'Debit line', account: 'Equipment', amount: price, group: 'debit' },
@@ -92,10 +92,10 @@ function journalEntry(r: () => number, id: string): Exercise {
 }
 
 function netIncome(r: () => number, id: string): Exercise {
-  const sales = money(r, 40000, 150000);
+  const sales = money(r, { lo: 40000, hi: 150000 });
   const cogs = Math.round((sales * (0.4 + r() * 0.25)) / 100) * 100;
-  const rent = money(r, 3000, 15000);
-  const dep = money(r, 1000, 8000);
+  const rent = money(r, { lo: 3000, hi: 15000 });
+  const dep = money(r, { lo: 1000, hi: 8000 });
   const ni = sales - cogs - rent - dep;
   return {
     id, kind: 'calc', topic: TOPIC, answer: ni, unit: '$',
@@ -105,8 +105,8 @@ function netIncome(r: () => number, id: string): Exercise {
 }
 
 function depreciation(r: () => number, id: string): Exercise {
-  const cost = money(r, 20000, 120000, 1000);
-  const salvage = money(r, 0, cost * 0.2, 500);
+  const cost = money(r, { lo: 20000, hi: 120000, step: 1000 });
+  const salvage = money(r, { lo: 0, hi: cost * 0.2, step: 500 });
   const life = 3 + Math.floor(r() * 8);
   const yearly = Math.round(((cost - salvage) / life) * 100) / 100;
   return {
@@ -117,8 +117,8 @@ function depreciation(r: () => number, id: string): Exercise {
 }
 
 function currentRatio(r: () => number, id: string): Exercise {
-  const ca = money(r, 20000, 90000);
-  const cl = money(r, 10000, 60000);
+  const ca = money(r, { lo: 20000, hi: 90000 });
+  const cl = money(r, { lo: 10000, hi: 60000 });
   const ratio = Math.round((ca / cl) * 100) / 100;
   return {
     id, kind: 'calc', topic: TOPIC, answer: ratio, tolerance: 0.01,
@@ -127,42 +127,42 @@ function currentRatio(r: () => number, id: string): Exercise {
   };
 }
 
-const calc = (id: string, topic: string, prompt: string, answer: number, explain: string, tolerance = 0.01, unit?: string): Exercise =>
-  ({ id, kind: 'calc', topic, prompt, answer, tolerance, explain, ...(unit ? { unit } : {}) });
+const calc = (id: string, topic: string, q: { prompt: string; answer: number; explain: string; tolerance?: number; unit?: string }): Exercise =>
+  ({ id, kind: 'calc', topic, prompt: q.prompt, answer: q.answer, tolerance: q.tolerance ?? 0.01, explain: q.explain, ...(q.unit ? { unit: q.unit } : {}) });
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const pct = (x: number) => `${r2(x * 100)}%`;
 const FIN = 'Compound interest and loans';
 
 /** Compound interest: the missing one of future value, present value, rate or number of years is asked for. */
 function compoundSolve(r: () => number, id: string): Exercise {
-  const pv = money(r, 1000, 20000, 500);
+  const pv = money(r, { lo: 1000, hi: 20000, step: 500 });
   const rate = (2 + Math.floor(r() * 10)) / 100;
   const years = 2 + Math.floor(r() * 9);
   const fv = r2(pv * (1 + rate) ** years);
   const ask = Math.floor(r() * 4);
-  if (ask === 0) return calc(id, FIN, `${fmt(pv)} is invested at ${pct(rate)} compounded annually for ${years} years. What is it worth at the end?`, fv, `${fmt(pv)} x (1 + ${rate})^${years} = ${fmt(fv)}.`, 0.01, '$');
-  if (ask === 1) return calc(id, FIN, `How much must be invested today at ${pct(rate)} compounded annually to have ${fmt(fv)} in ${years} years?`, pv, `${fmt(fv)} / (1 + ${rate})^${years} = ${fmt(pv)}.`, 1, '$');
-  if (ask === 2) return calc(id, FIN, `${fmt(pv)} grows to ${fmt(fv)} in ${years} years, compounded annually. What is the annual rate, in percent?`, rate * 100, `(${fmt(fv)} / ${fmt(pv)})^(1/${years}) - 1 = ${pct(rate)}.`, 0.05, '%');
-  return calc(id, FIN, `${fmt(pv)} grows to ${fmt(fv)} at ${pct(rate)} compounded annually. How many years does that take?`, years, `ln(${fmt(fv)} / ${fmt(pv)}) / ln(1 + ${rate}) = ${years} years.`, 0.05, 'years');
+  if (ask === 0) return calc(id, FIN, { prompt: `${fmt(pv)} is invested at ${pct(rate)} compounded annually for ${years} years. What is it worth at the end?`, answer: fv, explain: `${fmt(pv)} x (1 + ${rate})^${years} = ${fmt(fv)}.`, tolerance: 0.01, unit: '$' });
+  if (ask === 1) return calc(id, FIN, { prompt: `How much must be invested today at ${pct(rate)} compounded annually to have ${fmt(fv)} in ${years} years?`, answer: pv, explain: `${fmt(fv)} / (1 + ${rate})^${years} = ${fmt(pv)}.`, tolerance: 1, unit: '$' });
+  if (ask === 2) return calc(id, FIN, { prompt: `${fmt(pv)} grows to ${fmt(fv)} in ${years} years, compounded annually. What is the annual rate, in percent?`, answer: rate * 100, explain: `(${fmt(fv)} / ${fmt(pv)})^(1/${years}) - 1 = ${pct(rate)}.`, tolerance: 0.05, unit: '%' });
+  return calc(id, FIN, { prompt: `${fmt(pv)} grows to ${fmt(fv)} at ${pct(rate)} compounded annually. How many years does that take?`, answer: years, explain: `ln(${fmt(fv)} / ${fmt(pv)}) / ln(1 + ${rate}) = ${years} years.`, tolerance: 0.05, unit: 'years' });
 }
 
 function loanPayment(r: () => number, id: string): Exercise {
-  const principal = money(r, 5000, 60000, 500);
+  const principal = money(r, { lo: 5000, hi: 60000, step: 500 });
   const annual = (3 + Math.floor(r() * 8)) / 100;
   const years = 2 + Math.floor(r() * 6);
   const pmt = -(tvm({ pv: principal, fv: 0, rate: annual / 12, nper: years * 12 }).pmt);
-  return calc(id, FIN, `A ${fmt(principal)} loan at ${pct(annual)} a year, paid monthly over ${years} years. What is the monthly payment?`, r2(pmt), `Payment = P x i / (1 - (1 + i)^-n) with i = ${r2(annual / 12 * 100)}% a month and n = ${years * 12}.`, 0.05, '$');
+  return calc(id, FIN, { prompt: `A ${fmt(principal)} loan at ${pct(annual)} a year, paid monthly over ${years} years. What is the monthly payment?`, answer: r2(pmt), explain: `Payment = P x i / (1 - (1 + i)^-n) with i = ${r2(annual / 12 * 100)}% a month and n = ${years * 12}.`, tolerance: 0.05, unit: '$' });
 }
 
 function effectiveRate(r: () => number, id: string): Exercise {
   const nominal = (4 + Math.floor(r() * 9)) / 100;
   const m = [2, 4, 12][Math.floor(r() * 3)];
   const ear = ((1 + nominal / m) ** m - 1) * 100;
-  return calc(id, FIN, `A nominal rate of ${pct(nominal)} is compounded ${m} times a year. What is the effective annual rate, in percent?`, r2(ear), `(1 + ${nominal}/${m})^${m} - 1 = ${r2(ear)}%.`, 0.01, '%');
+  return calc(id, FIN, { prompt: `A nominal rate of ${pct(nominal)} is compounded ${m} times a year. What is the effective annual rate, in percent?`, answer: r2(ear), explain: `(1 + ${nominal}/${m})^${m} - 1 = ${r2(ear)}%.`, tolerance: 0.01, unit: '%' });
 }
 
 function inventoryCost(r: () => number, id: string): Exercise {
-  const lots = [0, 1, 2].map(() => ({ units: money(r, 50, 200, 10), cost: 8 + Math.floor(r() * 10) }));
+  const lots = [0, 1, 2].map(() => ({ units: money(r, { lo: 50, hi: 200, step: 10 }), cost: 8 + Math.floor(r() * 10) }));
   const sold = Math.floor(lots.reduce((a, l) => a + l.units, 0) * 0.6 / 10) * 10;
   const method = ['FIFO', 'weighted-average'][Math.floor(r() * 2)];
   let cogs: number;
@@ -170,51 +170,51 @@ function inventoryCost(r: () => number, id: string): Exercise {
     const totalUnits = lots.reduce((a, l) => a + l.units, 0); const totalCost = lots.reduce((a, l) => a + l.units * l.cost, 0); cogs = sold * (totalCost / totalUnits);
   }
   const text = lots.map((l, i) => `purchase ${i + 1}: ${l.units} units at ${fmt(l.cost)}`).join('; ');
-  return calc(id, 'Inventory', `Purchases in order: ${text}. ${sold} units were sold. Using ${method}, what is cost of goods sold?`, r2(cogs), `${method} cost of ${sold} units = ${fmt(r2(cogs))}.`, 0.05, '$');
+  return calc(id, 'Inventory', { prompt: `Purchases in order: ${text}. ${sold} units were sold. Using ${method}, what is cost of goods sold?`, answer: r2(cogs), explain: `${method} cost of ${sold} units = ${fmt(r2(cogs))}.`, tolerance: 0.05, unit: '$' });
 }
 
 function doubleDeclining(r: () => number, id: string): Exercise {
-  const cost = money(r, 20000, 100000, 1000);
+  const cost = money(r, { lo: 20000, hi: 100000, step: 1000 });
   const life = 4 + Math.floor(r() * 6);
   const year = 1 + Math.floor(r() * 2);
   const rate = 2 / life;
   const bookStart = cost * (1 - rate) ** (year - 1);
-  return calc(id, 'Depreciation', `An asset costs ${fmt(cost)} with a ${life}-year life (no salvage). Using double-declining balance, what is depreciation in year ${year}?`, r2(bookStart * rate), `Rate ${r2(rate * 100)}% x book value at the start of year ${year} (${fmt(r2(bookStart))}).`, 0.5, '$');
+  return calc(id, 'Depreciation', { prompt: `An asset costs ${fmt(cost)} with a ${life}-year life (no salvage). Using double-declining balance, what is depreciation in year ${year}?`, answer: r2(bookStart * rate), explain: `Rate ${r2(rate * 100)}% x book value at the start of year ${year} (${fmt(r2(bookStart))}).`, tolerance: 0.5, unit: '$' });
 }
 
 function ratioDrill(r: () => number, id: string): Exercise {
   const kinds = ['debt-to-equity', 'return on equity', 'gross margin', 'quick ratio'] as const;
   const k = kinds[Math.floor(r() * kinds.length)];
-  const a = money(r, 20000, 90000);
-  const b = money(r, 10000, 70000);
-  const c = money(r, 5000, 30000);
-  if (k === 'debt-to-equity') return calc(id, 'Ratios', `Total liabilities are ${fmt(a)} and total equity is ${fmt(b)}. What is the debt-to-equity ratio (2 decimals)?`, r2(a / b), `${fmt(a)} / ${fmt(b)}.`);
-  if (k === 'return on equity') return calc(id, 'Ratios', `Net income is ${fmt(c)} and average equity is ${fmt(b)}. What is return on equity, in percent (2 decimals)?`, r2((c / b) * 100), `${fmt(c)} / ${fmt(b)} x 100.`, 0.01, '%');
-  if (k === 'gross margin') return calc(id, 'Ratios', `Sales were ${fmt(a + b)} and cost of goods sold was ${fmt(b)}. What is the gross margin, in percent (2 decimals)?`, r2((a / (a + b)) * 100), `(${fmt(a + b)} - ${fmt(b)}) / ${fmt(a + b)} x 100.`, 0.01, '%');
-  return calc(id, 'Ratios', `Cash ${fmt(c)}, receivables ${fmt(b)}, inventory ${fmt(a)}, current liabilities ${fmt(a + c)}. What is the quick ratio (2 decimals)?`, r2((c + b) / (a + c)), `(cash + receivables) / current liabilities = ${fmt(c + b)} / ${fmt(a + c)}.`);
+  const a = money(r, { lo: 20000, hi: 90000 });
+  const b = money(r, { lo: 10000, hi: 70000 });
+  const c = money(r, { lo: 5000, hi: 30000 });
+  if (k === 'debt-to-equity') return calc(id, 'Ratios', { prompt: `Total liabilities are ${fmt(a)} and total equity is ${fmt(b)}. What is the debt-to-equity ratio (2 decimals)?`, answer: r2(a / b), explain: `${fmt(a)} / ${fmt(b)}.` });
+  if (k === 'return on equity') return calc(id, 'Ratios', { prompt: `Net income is ${fmt(c)} and average equity is ${fmt(b)}. What is return on equity, in percent (2 decimals)?`, answer: r2((c / b) * 100), explain: `${fmt(c)} / ${fmt(b)} x 100.`, tolerance: 0.01, unit: '%' });
+  if (k === 'gross margin') return calc(id, 'Ratios', { prompt: `Sales were ${fmt(a + b)} and cost of goods sold was ${fmt(b)}. What is the gross margin, in percent (2 decimals)?`, answer: r2((a / (a + b)) * 100), explain: `(${fmt(a + b)} - ${fmt(b)}) / ${fmt(a + b)} x 100.`, tolerance: 0.01, unit: '%' });
+  return calc(id, 'Ratios', { prompt: `Cash ${fmt(c)}, receivables ${fmt(b)}, inventory ${fmt(a)}, current liabilities ${fmt(a + c)}. What is the quick ratio (2 decimals)?`, answer: r2((c + b) / (a + c)), explain: `(cash + receivables) / current liabilities = ${fmt(c + b)} / ${fmt(a + c)}.` });
 }
 
 function breakEven(r: () => number, id: string): Exercise {
   const price = 20 + Math.floor(r() * 40);
   const variable = Math.floor(price * (0.3 + r() * 0.3));
-  const fixed = money(r, 10000, 80000, 500);
+  const fixed = money(r, { lo: 10000, hi: 80000, step: 500 });
   const units = fixed / (price - variable);
-  return calc(id, 'Cost-volume-profit', `Price is ${fmt(price)} a unit, variable cost ${fmt(variable)} a unit, fixed costs ${fmt(fixed)}. How many units are needed to break even (2 decimals)?`, r2(units), `${fmt(fixed)} / (${fmt(price)} - ${fmt(variable)}).`, 0.05, 'units');
+  return calc(id, 'Cost-volume-profit', { prompt: `Price is ${fmt(price)} a unit, variable cost ${fmt(variable)} a unit, fixed costs ${fmt(fixed)}. How many units are needed to break even (2 decimals)?`, answer: r2(units), explain: `${fmt(fixed)} / (${fmt(price)} - ${fmt(variable)}).`, tolerance: 0.05, unit: 'units' });
 }
 
 function npv(r: () => number, id: string): Exercise {
-  const outlay = money(r, 10000, 40000, 500);
-  const flows = [money(r, 4000, 15000, 500), money(r, 4000, 15000, 500), money(r, 4000, 15000, 500)];
+  const outlay = money(r, { lo: 10000, hi: 40000, step: 500 });
+  const flows = [money(r, { lo: 4000, hi: 15000, step: 500 }), money(r, { lo: 4000, hi: 15000, step: 500 }), money(r, { lo: 4000, hi: 15000, step: 500 })];
   const rate = (6 + Math.floor(r() * 8)) / 100;
   const value = flows.reduce((a, f, i) => a + f / (1 + rate) ** (i + 1), 0) - outlay;
-  return calc(id, 'Capital budgeting', `A project costs ${fmt(outlay)} now and returns ${flows.map(fmt).join(', ')} at the end of years 1, 2 and 3. At a ${pct(rate)} discount rate, what is the NPV?`, r2(value), `Sum of each cash flow / (1 + ${rate})^t, minus ${fmt(outlay)}.`, 0.5, '$');
+  return calc(id, 'Capital budgeting', { prompt: `A project costs ${fmt(outlay)} now and returns ${flows.map(fmt).join(', ')} at the end of years 1, 2 and 3. At a ${pct(rate)} discount rate, what is the NPV?`, answer: r2(value), explain: `Sum of each cash flow / (1 + ${rate})^t, minus ${fmt(outlay)}.`, tolerance: 0.5, unit: '$' });
 }
 
 function incomeStatement(r: () => number, id: string): Exercise {
-  const sales = money(r, 50000, 160000);
+  const sales = money(r, { lo: 50000, hi: 160000 });
   const cogs = Math.round((sales * (0.35 + r() * 0.25)) / 100) * 100;
-  const wages = money(r, 5000, 20000);
-  const rent = money(r, 2000, 9000);
+  const wages = money(r, { lo: 5000, hi: 20000 });
+  const rent = money(r, { lo: 2000, hi: 9000 });
   const tax = Math.round(((sales - cogs - wages - rent) * 0.21) / 100) * 100;
   const ni = sales - cogs - wages - rent - tax;
   const rows = withOptions([
@@ -229,12 +229,12 @@ function incomeStatement(r: () => number, id: string): Exercise {
 }
 
 function cashFlow(r: () => number, id: string): Exercise {
-  const ni = money(r, 8000, 40000);
-  const dep = money(r, 1000, 8000);
-  const arChange = money(r, 500, 5000);
-  const capex = money(r, 5000, 30000);
-  const loan = money(r, 5000, 25000);
-  const dividends = money(r, 1000, 8000);
+  const ni = money(r, { lo: 8000, hi: 40000 });
+  const dep = money(r, { lo: 1000, hi: 8000 });
+  const arChange = money(r, { lo: 500, hi: 5000 });
+  const capex = money(r, { lo: 5000, hi: 30000 });
+  const loan = money(r, { lo: 5000, hi: 25000 });
+  const dividends = money(r, { lo: 1000, hi: 8000 });
   const cfo = ni + dep - arChange;
   const cfi = -capex;
   const cff = loan - dividends;
@@ -253,12 +253,12 @@ function cashFlow(r: () => number, id: string): Exercise {
 }
 
 function trialBalance(r: () => number, id: string): Exercise {
-  const cash = money(r, 5000, 30000);
-  const ar = money(r, 2000, 15000);
-  const equipment = money(r, 10000, 50000);
-  const ap = money(r, 2000, 15000);
-  const sales = money(r, 20000, 60000);
-  const rent = money(r, 2000, 9000);
+  const cash = money(r, { lo: 5000, hi: 30000 });
+  const ar = money(r, { lo: 2000, hi: 15000 });
+  const equipment = money(r, { lo: 10000, hi: 50000 });
+  const ap = money(r, { lo: 2000, hi: 15000 });
+  const sales = money(r, { lo: 20000, hi: 60000 });
+  const rent = money(r, { lo: 2000, hi: 9000 });
   const stock = cash + ar + equipment + rent - ap - sales;
   const opts = ['Cash', 'Accounts receivable', 'Equipment', 'Rent expense', 'Accounts payable', 'Sales revenue', 'Common stock'];
   const rows: TableRow[] = [
@@ -283,23 +283,23 @@ function bondPrice(r: () => number, id: string): Exercise {
   const years = 3 + Math.floor(r() * 8);
   const pay = face * coupon;
   const price = pay * ((1 - (1 + market) ** -years) / market) + face / (1 + market) ** years;
-  return calc(id, BONDS, `A ${years}-year bond with a face value of ${fmt(face)} pays ${pct(coupon)} interest once a year. The market rate is ${pct(market)}. What should it sell for?`, r2(price), `Coupons of ${fmt(pay)} for ${years} years discounted at ${pct(market)}, plus ${fmt(face)} discounted ${years} years.`, 0.5, '$');
+  return calc(id, BONDS, { prompt: `A ${years}-year bond with a face value of ${fmt(face)} pays ${pct(coupon)} interest once a year. The market rate is ${pct(market)}. What should it sell for?`, answer: r2(price), explain: `Coupons of ${fmt(pay)} for ${years} years discounted at ${pct(market)}, plus ${fmt(face)} discounted ${years} years.`, tolerance: 0.5, unit: '$' });
 }
 /** Lease liability: the present value of the lease payments at the incremental borrowing rate. */
 function leaseLiability(r: () => number, id: string): Exercise {
-  const payment = money(r, 2000, 20000, 500);
+  const payment = money(r, { lo: 2000, hi: 20000, step: 500 });
   const rate = (4 + Math.floor(r() * 7)) / 100;
   const years = 3 + Math.floor(r() * 6);
   const due = r() < 0.5;
   const ordinary = payment * ((1 - (1 + rate) ** -years) / rate);
   const value = due ? ordinary * (1 + rate) : ordinary;
-  return calc(id, BONDS, `A lease requires ${fmt(payment)} ${due ? 'at the start' : 'at the end'} of each year for ${years} years. The borrowing rate is ${pct(rate)}. What is the initial lease liability?`, r2(value), `Present value of ${years} payments of ${fmt(payment)} at ${pct(rate)}${due ? ', annuity due (multiply the ordinary annuity by 1 + rate)' : ', ordinary annuity'}.`, 0.5, '$');
+  return calc(id, BONDS, { prompt: `A lease requires ${fmt(payment)} ${due ? 'at the start' : 'at the end'} of each year for ${years} years. The borrowing rate is ${pct(rate)}. What is the initial lease liability?`, answer: r2(value), explain: `Present value of ${years} payments of ${fmt(payment)} at ${pct(rate)}${due ? ', annuity due (multiply the ordinary annuity by 1 + rate)' : ', ordinary annuity'}.`, tolerance: 0.5, unit: '$' });
 }
 /** First-year interest expense on a bond issued at a discount or premium, by the effective interest method. */
 function bondInterest(r: () => number, id: string): Exercise {
-  const carrying = money(r, 90000, 110000, 500);
+  const carrying = money(r, { lo: 90000, hi: 110000, step: 500 });
   const market = (4 + Math.floor(r() * 6)) / 100;
-  return calc(id, BONDS, `A bond is issued with a carrying amount of ${fmt(carrying)} and a market rate of ${pct(market)}. Using the effective interest method, what is interest expense for the first year?`, r2(carrying * market), `${fmt(carrying)} x ${pct(market)}.`, 0.5, '$');
+  return calc(id, BONDS, { prompt: `A bond is issued with a carrying amount of ${fmt(carrying)} and a market rate of ${pct(market)}. Using the effective interest method, what is interest expense for the first year?`, answer: r2(carrying * market), explain: `${fmt(carrying)} x ${pct(market)}.`, tolerance: 0.5, unit: '$' });
 }
 
 const MATH = 'Maths';
@@ -309,136 +309,136 @@ const int = (r: () => number, lo: number, hi: number) => lo + Math.floor(r() * (
 
 function linearEquation(r: () => number, id: string): Exercise {
   const x = int(r, -9, 12); const a = pick(r, [2, 3, 4, 5, 6, 7]); const b = int(r, -15, 15);
-  return calc(id, MATH, `Solve for x: ${a}x ${b < 0 ? '-' : '+'} ${Math.abs(b)} = ${a * x + b}`, x, `Subtract ${b} from both sides, then divide by ${a}: x = ${x}.`, 0.001);
+  return calc(id, MATH, { prompt: `Solve for x: ${a}x ${b < 0 ? '-' : '+'} ${Math.abs(b)} = ${a * x + b}`, answer: x, explain: `Subtract ${b} from both sides, then divide by ${a}: x = ${x}.`, tolerance: 0.001 });
 }
 function quadraticRoots(r: () => number, id: string): Exercise {
   const p = int(r, -6, 8); let q = int(r, -6, 8); if (q === p) q += 1;
   const sum = p + q; const prod = p * q;
-  return calc(id, MATH, `Find the larger root of x^2 ${sum === 0 ? '' : `${-sum < 0 ? '-' : '+'} ${Math.abs(sum)}x `}${prod < 0 ? '-' : '+'} ${Math.abs(prod)} = 0`, Math.max(p, q), `It factors as (x - ${p})(x - ${q}) = 0, so the roots are ${p} and ${q}.`, 0.001);
+  return calc(id, MATH, { prompt: `Find the larger root of x^2 ${sum === 0 ? '' : `${-sum < 0 ? '-' : '+'} ${Math.abs(sum)}x `}${prod < 0 ? '-' : '+'} ${Math.abs(prod)} = 0`, answer: Math.max(p, q), explain: `It factors as (x - ${p})(x - ${q}) = 0, so the roots are ${p} and ${q}.`, tolerance: 0.001 });
 }
 function systemEquations(r: () => number, id: string): Exercise {
   const x = int(r, -5, 8); const y = int(r, -5, 8); const a1 = int(r, 1, 4); const b1 = int(r, 1, 4); const a2 = int(r, 1, 4); let b2 = -int(r, 1, 4);
   if (a1 * b2 - a2 * b1 === 0) b2 -= 1;
-  return calc(id, MATH, `Solve the system: ${a1}x + ${b1}y = ${a1 * x + b1 * y} and ${a2}x - ${Math.abs(b2)}y = ${a2 * x + b2 * y}. What is x?`, x, `Eliminate y or substitute; x = ${x}, y = ${y}.`, 0.001);
+  return calc(id, MATH, { prompt: `Solve the system: ${a1}x + ${b1}y = ${a1 * x + b1 * y} and ${a2}x - ${Math.abs(b2)}y = ${a2 * x + b2 * y}. What is x?`, answer: x, explain: `Eliminate y or substitute; x = ${x}, y = ${y}.`, tolerance: 0.001 });
 }
 function fractionSum(r: () => number, id: string): Exercise {
   const a = int(r, 1, 5); const b = pick(r, [2, 3, 4, 5, 6, 8]); const c = int(r, 1, 5); const d = pick(r, [2, 3, 4, 5, 6, 8]);
-  return calc(id, MATH, `What is ${a}/${b} + ${c}/${d}? Give a decimal to 3 places.`, Math.round(((a / b) + (c / d)) * 1000) / 1000, `Common denominator ${b * d}: (${a * d} + ${c * b}) / ${b * d}.`, 0.002);
+  return calc(id, MATH, { prompt: `What is ${a}/${b} + ${c}/${d}? Give a decimal to 3 places.`, answer: Math.round(((a / b) + (c / d)) * 1000) / 1000, explain: `Common denominator ${b * d}: (${a * d} + ${c * b}) / ${b * d}.`, tolerance: 0.002 });
 }
 function percentChange(r: () => number, id: string): Exercise {
   const from = int(r, 20, 400); const to = Math.max(1, Math.round(from * (0.5 + r())));
-  return calc(id, MATH, `A price goes from ${from} to ${to}. What is the percent change (2 decimals; a fall is negative)?`, r2(((to - from) / from) * 100), `(${to} - ${from}) / ${from} x 100.`, 0.01, '%');
+  return calc(id, MATH, { prompt: `A price goes from ${from} to ${to}. What is the percent change (2 decimals; a fall is negative)?`, answer: r2(((to - from) / from) * 100), explain: `(${to} - ${from}) / ${from} x 100.`, tolerance: 0.01, unit: '%' });
 }
 function percentOf(r: () => number, id: string): Exercise {
   const pc = pick(r, [5, 8, 12, 15, 20, 25, 35, 45, 60, 75]); const v = int(r, 40, 900);
-  return calc(id, MATH, `What is ${pc}% of ${v}?`, r2((pc / 100) * v), `${pc}/100 x ${v}.`, 0.01);
+  return calc(id, MATH, { prompt: `What is ${pc}% of ${v}?`, answer: r2((pc / 100) * v), explain: `${pc}/100 x ${v}.`, tolerance: 0.01 });
 }
 function circleArea(r: () => number, id: string): Exercise {
   const rad = int(r, 2, 15);
-  return calc(id, MATH, `A circle has radius ${rad}. What is its area? (2 decimals)`, r2(Math.PI * rad * rad), `pi x ${rad}^2.`, 0.02);
+  return calc(id, MATH, { prompt: `A circle has radius ${rad}. What is its area? (2 decimals)`, answer: r2(Math.PI * rad * rad), explain: `pi x ${rad}^2.`, tolerance: 0.02 });
 }
 function rectangleArea(r: () => number, id: string): Exercise {
   const w = int(r, 3, 25); const h = int(r, 3, 25); const asked = pick(r, ['area', 'perimeter']);
-  return calc(id, MATH, `A rectangle is ${w} by ${h}. What is its ${asked}?`, asked === 'area' ? w * h : 2 * (w + h), asked === 'area' ? `${w} x ${h}.` : `2 x (${w} + ${h}).`, 0.001);
+  return calc(id, MATH, { prompt: `A rectangle is ${w} by ${h}. What is its ${asked}?`, answer: asked === 'area' ? w * h : 2 * (w + h), explain: asked === 'area' ? `${w} x ${h}.` : `2 x (${w} + ${h}).`, tolerance: 0.001 });
 }
 function pythagoras(r: () => number, id: string): Exercise {
   const [a, b, c] = pick(r, [[3, 4, 5], [5, 12, 13], [8, 15, 17], [7, 24, 25], [20, 21, 29]]);
-  return calc(id, MATH, `A right triangle has legs ${a} and ${b}. How long is the hypotenuse?`, c, `sqrt(${a}^2 + ${b}^2) = ${c}.`, 0.001);
+  return calc(id, MATH, { prompt: `A right triangle has legs ${a} and ${b}. How long is the hypotenuse?`, answer: c, explain: `sqrt(${a}^2 + ${b}^2) = ${c}.`, tolerance: 0.001 });
 }
 const gcdOf = (x: number, y: number): number => (y === 0 ? x : gcdOf(y, x % y));
 function gcdLcm(r: () => number, id: string): Exercise {
   const g = int(r, 2, 9); const a = g * int(r, 2, 9); let b = g * int(r, 2, 9); if (a === b) b += g;
   const gg = gcdOf(a, b);
   const asked = pick(r, ['greatest common divisor', 'least common multiple']);
-  return calc(id, MATH, `What is the ${asked} of ${a} and ${b}?`, asked.startsWith('greatest') ? gg : (a * b) / gg, `Their greatest common divisor is ${gg}; the least common multiple is ${(a * b) / gg}.`, 0.001);
+  return calc(id, MATH, { prompt: `What is the ${asked} of ${a} and ${b}?`, answer: asked.startsWith('greatest') ? gg : (a * b) / gg, explain: `Their greatest common divisor is ${gg}; the least common multiple is ${(a * b) / gg}.`, tolerance: 0.001 });
 }
 function lineSlope(r: () => number, id: string): Exercise {
   const x1 = int(r, -5, 5); const y1 = int(r, -5, 5); const dx = int(r, 1, 6); const m = pick(r, [-3, -2, -1, 1, 2, 3, 4]);
-  return calc(id, MATH, `What is the slope of the line through (${x1}, ${y1}) and (${x1 + dx}, ${y1 + m * dx})?`, m, `(${y1 + m * dx} - ${y1}) / (${x1 + dx} - ${x1}).`, 0.001);
+  return calc(id, MATH, { prompt: `What is the slope of the line through (${x1}, ${y1}) and (${x1 + dx}, ${y1 + m * dx})?`, answer: m, explain: `(${y1 + m * dx} - ${y1}) / (${x1 + dx} - ${x1}).`, tolerance: 0.001 });
 }
 function meanOfList(r: () => number, id: string): Exercise {
   const xs = Array.from({ length: 6 }, () => int(r, 4, 60)); const d = describeNumbers(xs); const asked = pick(r, ['mean', 'median']);
-  return calc(id, MATH, `What is the ${asked} of ${xs.join(', ')}? (2 decimals)`, asked === 'mean' ? r2(d.mean as number) : r2(d.median as number), `Mean ${d.mean}, median ${d.median}.`, 0.02);
+  return calc(id, MATH, { prompt: `What is the ${asked} of ${xs.join(', ')}? (2 decimals)`, answer: asked === 'mean' ? r2(d.mean as number) : r2(d.median as number), explain: `Mean ${d.mean}, median ${d.median}.`, tolerance: 0.02 });
 }
 function unitConversion(r: () => number, id: string): Exercise {
   const pairs: Array<[string, string, string, string]> = [['km', 'mi', 'kilometres', 'miles'], ['kg', 'lb', 'kilograms', 'pounds'], ['l', 'gal', 'litres', 'US gallons'], ['ft', 'm', 'feet', 'metres'], ['in', 'cm', 'inches', 'centimetres']];
   const [from, to, fromName, toName] = pick(r, pairs); const v = int(r, 5, 200);
-  return calc(id, MATH, `Convert ${v} ${fromName} to ${toName} (2 decimals).`, r2(convertUnits(v, from, to)), `Multiply by the conversion factor for ${fromName} to ${toName}.`, 0.05);
+  return calc(id, MATH, { prompt: `Convert ${v} ${fromName} to ${toName} (2 decimals).`, answer: r2(convertUnits(v, from, to)), explain: `Multiply by the conversion factor for ${fromName} to ${toName}.`, tolerance: 0.05 });
 }
 function combinationsDrill(r: () => number, id: string): Exercise {
   const n = int(r, 5, 12); const k = int(r, 2, 4); let c = 1; for (let i = 1; i <= k; i++) c = (c * (n - i + 1)) / i;
-  return calc(id, MATH, `How many ways can you choose ${k} items from ${n}, order not mattering?`, Math.round(c), `${n}! / (${k}! x ${n - k}!) = ${Math.round(c)}.`, 0.001);
+  return calc(id, MATH, { prompt: `How many ways can you choose ${k} items from ${n}, order not mattering?`, answer: Math.round(c), explain: `${n}! / (${k}! x ${n - k}!) = ${Math.round(c)}.`, tolerance: 0.001 });
 }
 
 function speedDrill(r: () => number, id: string): Exercise {
   const v = int(r, 4, 30); const t = int(r, 5, 90);
-  return calc(id, SCI, `A cyclist rides at ${v} m/s for ${t} seconds. How far does she go, in metres?`, v * t, `distance = speed x time = ${v} x ${t}.`, 0.01, 'm');
+  return calc(id, SCI, { prompt: `A cyclist rides at ${v} m/s for ${t} seconds. How far does she go, in metres?`, answer: v * t, explain: `distance = speed x time = ${v} x ${t}.`, tolerance: 0.01, unit: 'm' });
 }
 function forceDrill(r: () => number, id: string): Exercise {
   const m = int(r, 2, 80); const a = r2(1 + r() * 8);
-  return calc(id, SCI, `What force is needed to give a ${m} kg object an acceleration of ${a} m/s^2?`, r2(m * a), 'F = m x a.', 0.02, 'N');
+  return calc(id, SCI, { prompt: `What force is needed to give a ${m} kg object an acceleration of ${a} m/s^2?`, answer: r2(m * a), explain: 'F = m x a.', tolerance: 0.02, unit: 'N' });
 }
 function kineticEnergy(r: () => number, id: string): Exercise {
   const m = int(r, 2, 60); const v = int(r, 2, 25);
-  return calc(id, SCI, `What is the kinetic energy of a ${m} kg mass moving at ${v} m/s?`, r2(0.5 * m * v * v), `KE = 1/2 x ${m} x ${v}^2.`, 0.05, 'J');
+  return calc(id, SCI, { prompt: `What is the kinetic energy of a ${m} kg mass moving at ${v} m/s?`, answer: r2(0.5 * m * v * v), explain: `KE = 1/2 x ${m} x ${v}^2.`, tolerance: 0.05, unit: 'J' });
 }
 function ohmsLaw(r: () => number, id: string): Exercise {
   const i = int(r, 1, 9); const rr = int(r, 2, 60); const asked = pick(r, ['voltage', 'current']);
   return asked === 'voltage'
-    ? calc(id, SCI, `A ${rr} ohm resistor carries ${i} A. What is the voltage across it?`, rr * i, 'V = I x R.', 0.01, 'V')
-    : calc(id, SCI, `${rr * i} V is applied across a ${rr} ohm resistor. What current flows?`, i, 'I = V / R.', 0.01, 'A');
+    ? calc(id, SCI, { prompt: `A ${rr} ohm resistor carries ${i} A. What is the voltage across it?`, answer: rr * i, explain: 'V = I x R.', tolerance: 0.01, unit: 'V' })
+    : calc(id, SCI, { prompt: `${rr * i} V is applied across a ${rr} ohm resistor. What current flows?`, answer: i, explain: 'I = V / R.', tolerance: 0.01, unit: 'A' });
 }
 function densityDrill(r: () => number, id: string): Exercise {
   const vol = int(r, 5, 80); const dens = r2(0.5 + r() * 12);
-  return calc(id, SCI, `A sample has volume ${vol} cm^3 and mass ${r2(vol * dens)} g. What is its density?`, dens, 'density = mass / volume.', 0.02, 'g/cm^3');
+  return calc(id, SCI, { prompt: `A sample has volume ${vol} cm^3 and mass ${r2(vol * dens)} g. What is its density?`, answer: dens, explain: 'density = mass / volume.', tolerance: 0.02, unit: 'g/cm^3' });
 }
 function idealGas(r: () => number, id: string): Exercise {
   const n = r2(0.5 + r() * 3); const t = int(r, 250, 400); const v = r2(5 + r() * 40);
   const p = (n * 8.314462618 * t) / (v / 1000) / 1000;
-  return calc(id, SCI, `${n} mol of an ideal gas is at ${t} K in ${v} litres. What is its pressure in kPa? (R = 8.314 J/mol/K)`, r2(p), 'P = nRT / V, with V in cubic metres.', Math.max(0.5, p * 0.005), 'kPa');
+  return calc(id, SCI, { prompt: `${n} mol of an ideal gas is at ${t} K in ${v} litres. What is its pressure in kPa? (R = 8.314 J/mol/K)`, answer: r2(p), explain: 'P = nRT / V, with V in cubic metres.', tolerance: Math.max(0.5, p * 0.005), unit: 'kPa' });
 }
 const FORMULAS = ['H2O', 'CO2', 'NaCl', 'CaCO3', 'C6H12O6', 'H2SO4', 'Ca(OH)2', 'NH3', 'Mg(NO3)2', 'Al2O3', 'C2H5OH', 'KMnO4'];
 function molarMassDrill(r: () => number, id: string): Exercise {
   const f = pick(r, FORMULAS); const m = molarMass(f);
-  return calc(id, SCI, `What is the molar mass of ${f}? (g/mol, 1 decimal; use the periodic table)`, r2(m.mass), `Add the atomic masses of each atom: ${Object.entries(m.counts).map(([e, c]) => `${c} x ${e}`).join(', ')}.`, 0.15, 'g/mol');
+  return calc(id, SCI, { prompt: `What is the molar mass of ${f}? (g/mol, 1 decimal; use the periodic table)`, answer: r2(m.mass), explain: `Add the atomic masses of each atom: ${Object.entries(m.counts).map(([e, c]) => `${c} x ${e}`).join(', ')}.`, tolerance: 0.15, unit: 'g/mol' });
 }
 function molesFromGrams(r: () => number, id: string): Exercise {
   const f = pick(r, FORMULAS); const g = int(r, 5, 200); const m = molarMass(f).mass;
-  return calc(id, SCI, `How many moles are in ${g} g of ${f}? (2 decimals)`, r2(g / m), `moles = mass / molar mass = ${g} / ${m}.`, 0.02, 'mol');
+  return calc(id, SCI, { prompt: `How many moles are in ${g} g of ${f}? (2 decimals)`, answer: r2(g / m), explain: `moles = mass / molar mass = ${g} / ${m}.`, tolerance: 0.02, unit: 'mol' });
 }
 function phOfAcid(r: () => number, id: string): Exercise {
   const exp = int(r, 1, 6); const mant = pick(r, [1, 2, 5]); const c = mant * 10 ** -exp;
-  return calc(id, SCI, `What is the pH of a ${c} mol/L solution of a strong monoprotic acid? (2 decimals)`, r2(-Math.log10(c)), 'pH = -log10[H+].', 0.02);
+  return calc(id, SCI, { prompt: `What is the pH of a ${c} mol/L solution of a strong monoprotic acid? (2 decimals)`, answer: r2(-Math.log10(c)), explain: 'pH = -log10[H+].', tolerance: 0.02 });
 }
 
-const sample = (r: () => number, n: number, lo: number, hi: number) => Array.from({ length: n }, () => Math.round(lo + r() * (hi - lo)));
+const sample = (r: () => number, spec: { n: number; lo: number; hi: number }) => Array.from({ length: spec.n }, () => Math.round(spec.lo + r() * (spec.hi - spec.lo)));
 const RS = 'Research statistics';
 
 function stdDev(r: () => number, id: string): Exercise {
-  const x = sample(r, 6, 10, 40);
+  const x = sample(r, { n: 6, lo: 10, hi: 40 });
   const d = describeNumbers(x);
-  return calc(id, RS, `Find the sample standard deviation (2 decimals) of: ${x.join(', ')}.`, r2(d.sampleStdev as number), `Mean ${d.mean}; sample variance ${d.sampleVariance}; standard deviation = its square root.`, 0.02);
+  return calc(id, RS, { prompt: `Find the sample standard deviation (2 decimals) of: ${x.join(', ')}.`, answer: r2(d.sampleStdev as number), explain: `Mean ${d.mean}; sample variance ${d.sampleVariance}; standard deviation = its square root.`, tolerance: 0.02 });
 }
 
 function confidenceInterval(r: () => number, id: string): Exercise {
   const n = 25 + Math.floor(r() * 75);
   const sd = 5 + Math.floor(r() * 15);
   const z = 1.96;
-  return calc(id, RS, `A sample of ${n} has a standard deviation of ${sd}. Using z = 1.96, what is the margin of error of a 95% confidence interval for the mean (2 decimals)?`, r2((z * sd) / Math.sqrt(n)), `1.96 x ${sd} / sqrt(${n}).`, 0.02);
+  return calc(id, RS, { prompt: `A sample of ${n} has a standard deviation of ${sd}. Using z = 1.96, what is the margin of error of a 95% confidence interval for the mean (2 decimals)?`, answer: r2((z * sd) / Math.sqrt(n)), explain: `1.96 x ${sd} / sqrt(${n}).`, tolerance: 0.02 });
 }
 
 function tStatistic(r: () => number, id: string): Exercise {
-  const x = sample(r, 8, 40, 70);
+  const x = sample(r, { n: 8, lo: 40, hi: 70 });
   const mu = 50 + Math.floor(r() * 10);
   const d = describeNumbers(x);
   const t = ((d.mean as number) - mu) / ((d.sampleStdev as number) / Math.sqrt(x.length));
-  return calc(id, RS, `Test whether the mean of ${x.join(', ')} differs from ${mu}. What is the one-sample t statistic (2 decimals)?`, r2(t), `(${d.mean} - ${mu}) / (${d.sampleStdev} / sqrt(${x.length})), with ${x.length - 1} degrees of freedom.`, 0.02);
+  return calc(id, RS, { prompt: `Test whether the mean of ${x.join(', ')} differs from ${mu}. What is the one-sample t statistic (2 decimals)?`, answer: r2(t), explain: `(${d.mean} - ${mu}) / (${d.sampleStdev} / sqrt(${x.length})), with ${x.length - 1} degrees of freedom.`, tolerance: 0.02 });
 }
 
 function sampleSizeDrill(r: () => number, id: string): Exercise {
   const margin = [0.03, 0.04, 0.05, 0.1][Math.floor(r() * 4)];
   const conf = [0.9, 0.95, 0.99][Math.floor(r() * 3)];
-  return calc(id, RS, `How many people are needed to estimate a proportion within ${pct(margin)} at ${pct(conf)} confidence, assuming p = 0.5? (round up)`, sampleSize(margin, conf), 'n = z^2 x p(1-p) / margin^2, rounded up.', 0.5, 'people');
+  return calc(id, RS, { prompt: `How many people are needed to estimate a proportion within ${pct(margin)} at ${pct(conf)} confidence, assuming p = 0.5? (round up)`, answer: sampleSize(margin, conf), explain: 'n = z^2 x p(1-p) / margin^2, rounded up.', tolerance: 0.5, unit: 'people' });
 }
 
 function regressionSlope(r: () => number, id: string): Exercise {
@@ -446,7 +446,7 @@ function regressionSlope(r: () => number, id: string): Exercise {
   const slope = 1 + Math.floor(r() * 4);
   const y = x.map((v) => slope * v + Math.round(r() * 4 - 2) + 5);
   const fit = regression(x, y);
-  return calc(id, RS, `x = ${x.join(', ')} and y = ${y.join(', ')}. What is the slope of the least-squares line (2 decimals)?`, r2(fit.slope), `Slope = sum((x - mean x)(y - mean y)) / sum((x - mean x)^2); intercept ${fit.intercept}, r = ${fit.r}.`, 0.02);
+  return calc(id, RS, { prompt: `x = ${x.join(', ')} and y = ${y.join(', ')}. What is the slope of the least-squares line (2 decimals)?`, answer: r2(fit.slope), explain: `Slope = sum((x - mean x)(y - mean y)) / sum((x - mean x)^2); intercept ${fit.intercept}, r = ${fit.r}.`, tolerance: 0.02 });
 }
 
 const MAKERS: Record<DrillKind, (r: () => number, id: string) => Exercise> = {

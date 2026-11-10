@@ -207,7 +207,7 @@ export const ImageModelTestScreen: React.FC = () => {
 
       update('engine', 'run', 'Selecting and checking image accelerator...');
       const imageDecision = await selectImageAccelerator(
-        model.backend || 'mnn', imageComputeMode(useAppStore.getState().settings), {
+        model.backend || 'mnn', { mode: imageComputeMode(useAppStore.getState().settings) }, {
           vulkan: () => localDreamGeneratorService.getNativeImageGpuDiagnostics(),
           sdOpencl: () => localDreamGeneratorService.getNativeImageGpuDiagnostics('opencl'),
           opencl: () => hardwareService.getOpenCLCapability(),

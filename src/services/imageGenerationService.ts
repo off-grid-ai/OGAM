@@ -521,13 +521,12 @@ class ImageGenerationService {
     let imageBackend;
     try {
       imageBackend = await selectImageAccelerator(
-        activeImageModel.backend || 'mnn', imageComputeMode(settings), {
+        activeImageModel.backend || 'mnn', { mode: imageComputeMode(settings), allowCpuFallback: settings.imageAllowCpuFallback === true }, {
           vulkan: () => onnxImageGeneratorService.getNativeImageGpuDiagnostics(),
           sdOpencl: () => onnxImageGeneratorService.getNativeImageGpuDiagnostics('opencl'),
           opencl: () => hardwareService.getOpenCLCapability(),
           npu: async () => (await hardwareService.getSoCInfo()).hasNPU,
         },
-        { allowCpuFallback: settings.imageAllowCpuFallback === true },
       );
     } catch (error: any) {
       if (!this._isRequestCurrent(requestEpoch)) return null;

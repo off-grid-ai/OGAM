@@ -25,32 +25,36 @@ const rels = (items: string[]) => `${XML}<Relationships xmlns="http://schemas.op
 
 const emptyTree = '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>';
 
-function textBox(id: number, name: string, x: number, y: number, w: number, h: number, paragraphs: string, anchor = 't'): string {
+function textBox(box: { id: number; name: string; x: number; y: number; w: number; h: number; anchor?: string }, paragraphs: string): string {
+  const { id, name, x, y, w, h, anchor = 't' } = box;
   return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${name}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" anchor="${anchor}"><a:normAutofit/></a:bodyPr><a:lstStyle/>${paragraphs}</p:txBody></p:sp>`;
 }
 
-const run = (text: string, size: number, color: string, bold = false) =>
-  `<a:r><a:rPr lang="en-US" sz="${size * 100}" b="${bold ? 1 : 0}" dirty="0"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></a:rPr><a:t>${xmlEscape(text)}</a:t></a:r>`;
+const run = (text: string, style: { size: number; color: string; bold?: boolean }) => {
+  const { size, color, bold = false } = style;
+  return `<a:r><a:rPr lang="en-US" sz="${size * 100}" b="${bold ? 1 : 0}" dirty="0"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></a:rPr><a:t>${xmlEscape(text)}</a:t></a:r>`;
+};
 
 function accentBar(id: number): string {
   return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Accent"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="228600" cy="${SLIDE_H}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="10B981"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="en-US"/></a:p></p:txBody></p:sp>`;
 }
 
-function slideXml(slide: DeckSlide, index: number, total: number, titleSlide: boolean): string {
+function slideXml(slide: DeckSlide, where: { index: number; total: number; titleSlide: boolean }): string {
+  const { index, total, titleSlide } = where;
   const bg = '<p:bg><p:bgPr><a:solidFill><a:srgbClr val="0F172A"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>';
   let shapes = accentBar(2);
   if (titleSlide) {
-    shapes += textBox(3, 'Title', 914400, 2286000, 10363200, 1600200, `<a:p>${run(slide.title, 48, 'FFFFFF', true)}</a:p>`, 'b');
-    const sub = slide.bullets.map((b) => `<a:p><a:pPr><a:spcBef><a:spcPts val="600"/></a:spcBef></a:pPr>${run(b, 22, '94A3B8')}</a:p>`).join('');
-    if (sub) shapes += textBox(4, 'Subtitle', 914400, 4000500, 10363200, 1200000, sub);
+    shapes += textBox({ id: 3, name: 'Title', x: 914400, y: 2286000, w: 10363200, h: 1600200, anchor: 'b' }, `<a:p>${run(slide.title, { size: 48, color: 'FFFFFF', bold: true })}</a:p>`);
+    const sub = slide.bullets.map((b) => `<a:p><a:pPr><a:spcBef><a:spcPts val="600"/></a:spcBef></a:pPr>${run(b, { size: 22, color: '94A3B8' })}</a:p>`).join('');
+    if (sub) shapes += textBox({ id: 4, name: 'Subtitle', x: 914400, y: 4000500, w: 10363200, h: 1200000 }, sub);
   } else {
-    shapes += textBox(3, 'Title', 685800, 457200, 10820400, 1143000, `<a:p>${run(slide.title, 36, 'FFFFFF', true)}</a:p>`, 'ctr');
+    shapes += textBox({ id: 3, name: 'Title', x: 685800, y: 457200, w: 10820400, h: 1143000, anchor: 'ctr' }, `<a:p>${run(slide.title, { size: 36, color: 'FFFFFF', bold: true })}</a:p>`);
     const chars = slide.bullets.reduce((n, b) => n + b.length, 0);
     const size = chars > 600 ? 18 : chars > 380 ? 20 : chars > 220 ? 24 : 28;
     const paras = slide.bullets.map((b) =>
-      `<a:p><a:pPr marL="342900" indent="-342900"><a:spcBef><a:spcPts val="1000"/></a:spcBef><a:buClr><a:srgbClr val="10B981"/></a:buClr><a:buFont typeface="Arial"/><a:buChar char="&#8226;"/></a:pPr>${run(b, size, 'E2E8F0')}</a:p>`).join('');
-    shapes += textBox(4, 'Body', 685800, 1828800, 10820400, 4343400, paras || `<a:p>${run(' ', size, 'E2E8F0')}</a:p>`);
-    shapes += textBox(5, 'Number', 10515600, 6324600, 990600, 304800, `<a:p><a:pPr algn="r"/>${run(`${index} / ${total}`, 12, '64748B')}</a:p>`);
+      `<a:p><a:pPr marL="342900" indent="-342900"><a:spcBef><a:spcPts val="1000"/></a:spcBef><a:buClr><a:srgbClr val="10B981"/></a:buClr><a:buFont typeface="Arial"/><a:buChar char="&#8226;"/></a:pPr>${run(b, { size, color: 'E2E8F0' })}</a:p>`).join('');
+    shapes += textBox({ id: 4, name: 'Body', x: 685800, y: 1828800, w: 10820400, h: 4343400 }, paras || `<a:p>${run(' ', { size, color: 'E2E8F0' })}</a:p>`);
+    shapes += textBox({ id: 5, name: 'Number', x: 10515600, y: 6324600, w: 990600, h: 304800 }, `<a:p><a:pPr algn="r"/>${run(`${index} / ${total}`, { size: 12, color: '64748B' })}</a:p>`);
   }
   return `${XML}<p:sld xmlns:a="${NS_A}" xmlns:r="${NS_R}" xmlns:p="${NS_P}"><p:cSld>${bg}<p:spTree>${emptyTree}${shapes}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
 }
@@ -62,7 +66,8 @@ const MASTER = `${XML}<p:sldMaster xmlns:a="${NS_A}" xmlns:r="${NS_R}" xmlns:p="
 const LAYOUT = `${XML}<p:sldLayout xmlns:a="${NS_A}" xmlns:r="${NS_R}" xmlns:p="${NS_P}" type="blank" preserve="1"><p:cSld name="Blank"><p:spTree>${emptyTree}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>`;
 
 /** Slides to draw: a title slide, one per Study slide, and a sources slide when there are any. */
-export function deckSlides(title: string, subtitle: string, slides: Slide[], sources: Source[]): DeckSlide[] {
+export function deckSlides(title: string, subtitle: string, content: { slides: Slide[]; sources: Source[] }): DeckSlide[] {
+  const { slides, sources } = content;
   const deck: DeckSlide[] = [{ title, bullets: subtitle ? [subtitle] : [] }];
   for (const s of slides) deck.push({ title: s.title, bullets: s.bullets });
   const names = [...new Set(sources.map((s) => s.doc))].slice(0, 12);
@@ -95,7 +100,7 @@ export function buildPptxFiles(deck: DeckSlide[], title: string): Record<string,
   files['ppt/slideLayouts/_rels/slideLayout1.xml.rels'] = rels([rel('rId1', 'slideMaster', '../slideMasters/slideMaster1.xml')]);
   files['ppt/theme/theme1.xml'] = THEME;
   deck.forEach((s, i) => {
-    files[`ppt/slides/slide${i + 1}.xml`] = slideXml(s, i, n - 1, i === 0);
+    files[`ppt/slides/slide${i + 1}.xml`] = slideXml(s, { index: i, total: n - 1, titleSlide: i === 0 });
     files[`ppt/slides/_rels/slide${i + 1}.xml.rels`] = rels([rel('rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml')]);
   });
   return files;
