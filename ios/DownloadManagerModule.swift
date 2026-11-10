@@ -457,7 +457,9 @@ class DownloadManagerModule: RCTEventEmitter {
                         resumeData: Data?, in target: URLSession, then done: (() -> Void)? = nil) {
     queue.async(flags: .barrier) {
       defer { done?() }
-      guard self.downloads[downloadId] != nil else { return } // cancelled meanwhile
+      // Cancelled, failed or finished meanwhile (another file of a multi-file download can fail for
+      // good during a retry's back-off): nothing to continue.
+      guard let status = self.downloads[downloadId]?.status, status != "failed", status != "completed" else { return }
       let next = resumeData.map { target.downloadTask(withResumeData: $0) }
         ?? target.downloadTask(with: self.makeDownloadRequest(url))
       next.taskDescription = old.taskDescription

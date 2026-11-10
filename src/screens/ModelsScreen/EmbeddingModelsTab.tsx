@@ -138,6 +138,13 @@ export const EmbeddingModelsTab: React.FC = () => {
       } },
     ]));
   };
+  const removeFailed = (candidate: Candidate) => {
+    const forget = () => setDownloaded(previous => { const next = new Set(previous); next.delete(candidate.id); return next; });
+    const deleteIfThere = active?.id === candidate.id
+      ? Promise.resolve()
+      : embeddingService.hasModelFile(candidate).then(has => (has ? embeddingService.deleteModelFile(candidate).then(forget) : undefined));
+    deleteIfThere.catch(e => setError(String(e.message))).finally(embeddingModelChanger.dismiss);
+  };
   const activeInCandidates = active && candidates.some(candidate => candidate.id === active.id);
   // A change in progress shows once: on the row of the model being fetched, with its own cancel, as in
   // every model list. The line under the search field is only for a change with no row on screen
@@ -207,11 +214,9 @@ export const EmbeddingModelsTab: React.FC = () => {
           failedState={failedRow === candidate ? {
             errorMessage: status.error, bytesDownloaded: 0, totalBytes: 0,
             onRetry: () => { embeddingModelChanger.retry().catch(() => undefined); },
-            // "Remove download" also deletes a file that arrived but failed its check.
-            onRemove: () => {
-              embeddingModelChanger.dismiss();
-              if (downloaded.has(candidate.id) && active?.id !== candidate.id) remove(candidate);
-            },
+            // "Remove download" also deletes a file that arrived but failed its check, asked of the disk
+            // when pressed (the downloaded list may not have caught up). The failure stays until it is done.
+            onRemove: () => { removeFailed(candidate); },
           } : undefined}
           onDelete={downloaded.has(candidate.id) && active?.id !== candidate.id && !status.busy ? () => remove(candidate) : undefined}
           disabled={status.busy || !ready || active?.id === candidate.id}

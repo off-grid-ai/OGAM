@@ -279,7 +279,8 @@ class ActiveModelService {
         this.setLoadedText(id);
         useAppStore.getState().setTextModelEvicted(false); // loaded → clear any prior eviction
         modelResidencyManager.register(
-          textSpec,
+          // Loaded as a copy (not in low-memory mode), the weights are dirty memory from now on.
+          { ...textSpec, dirtyMemory: textSpec.dirtyMemory || (textSpec.prefersCopy && !llmService.isLowMemoryMode()) },
           () => this.doUnloadTextModelLocked(true), // eviction keeps the selection
         );
       },
