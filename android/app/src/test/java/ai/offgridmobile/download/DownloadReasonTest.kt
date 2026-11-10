@@ -43,4 +43,12 @@ class DownloadReasonTest {
         assertFalse(DownloadReason.resumesInPlace(DownloadReason.DISK_FULL, madeProgress = true))
         assertFalse(DownloadReason.resumesInPlace(DownloadReason.UNKNOWN_ERROR, madeProgress = true))
     }
+
+    @Test
+    fun `a full disk while writing is disk_full, not a network cut, and is never resumed in place`() {
+        val full = DiskWriteException(IOException("write failed: ENOSPC (No space left on device)"))
+        assertEquals(DownloadReason.DISK_FULL, DownloadReason.fromThrowable(full))
+        assertFalse(DownloadReason.resumesInPlace(DownloadReason.fromThrowable(full), madeProgress = true))
+        assertEquals(DownloadReason.UNKNOWN_ERROR, DownloadReason.fromThrowable(DiskWriteException(IOException("EIO"))))
+    }
 }

@@ -207,14 +207,20 @@ class WorkerDownload(
         var bytesWritten = currentFileBytes
         var lastProgressAt = 0L
 
-        FileOutputStream(targetFile, appendMode).buffered().use { output ->
+        // Unbuffered: the loop already writes whole buffers, and a full disk must fail on the write itself
+        // (as DiskWriteException), never later in a flush that reads like a network cut.
+        FileOutputStream(targetFile, appendMode).use { output ->
             input.use { src ->
-                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                val buffer = ByteArray(WRITE_CHUNK_BYTES)
                 var read = src.read(buffer)
                 while (read >= 0) {
                     if (isStopped) return handleStoppedState(downloadId, download, bytesWritten)
 
-                    output.write(buffer, 0, read)
+                    try {
+                        output.write(buffer, 0, read)
+                    } catch (e: java.io.IOException) {
+                        throw DiskWriteException(e)
+                    }
                     bytesWritten += read
 
                     val now = System.currentTimeMillis()
@@ -314,6 +320,7 @@ class WorkerDownload(
         private const val TAG = "WorkerDownload"
         private const val MAX_TRANSIENT_RETRIES = 5
         private const val RESUME_DELAY_MS = 1000L
+        private const val WRITE_CHUNK_BYTES = 64 * 1024
 
         val httpClient: OkHttpClient = OkHttpClient.Builder()
             .retryOnConnectionFailure(true)

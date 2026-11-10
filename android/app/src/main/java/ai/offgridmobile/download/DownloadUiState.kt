@@ -8,6 +8,14 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLException
 
+/** Writing downloaded bytes to the phone's storage failed (as opposed to reading them from the network). */
+class DiskWriteException(cause: IOException) : Exception(cause.message, cause) {
+    fun isOutOfSpace(): Boolean {
+        val text = generateSequence(cause) { it.cause }.joinToString(" ") { it.message.orEmpty() }
+        return text.contains("ENOSPC") || text.contains("No space left", ignoreCase = true)
+    }
+}
+
 data class DownloadUiState(
     val status: String,
     val reason: String? = null,
@@ -42,6 +50,9 @@ object DownloadReason {
 
     fun fromThrowable(error: Exception): String {
         return when (error) {
+            // A failed write to the phone's storage is not a network cut: a full disk says so, and any
+            // other write failure is not retried as if the connection had dropped.
+            is DiskWriteException -> if (error.isOutOfSpace()) DISK_FULL else UNKNOWN_ERROR
             is SocketTimeoutException -> NETWORK_TIMEOUT
             is InterruptedIOException -> NETWORK_TIMEOUT
             is UnknownHostException -> NETWORK_LOST
