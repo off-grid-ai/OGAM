@@ -363,6 +363,32 @@ describe('Engine updates setting', () => {
     expect((await service().getEngineUpdateInfo()).lastCheck).toBe(1 * DAY + 5);
   });
 
+  it('Check now tests the engine this launch runs on trial, when a model arrived after launch, and says it is the newest', async () => {
+    const w = await world({ model: false });
+    w.store.launch();
+    await w.start(1 * DAY);
+    w.store.launch();
+    await w.start(1 * DAY + 1000); // the pack runs, but there is no model to test it with yet
+    expect(w.store.state.trial).toBeDefined();
+    const { useAppStore } = require('../../../src/stores');
+    useAppStore.getState().setDownloadedModels([createDownloadedModel({ id: 'lfm3', engine: 'llama', fileSize: 1000 * 1024 * 1024, filePath: '/models/lfm3.gguf' })]);
+    w.boundary.fs!.seedFile('/models/lfm3.gguf', 1024);
+    w.boundary.llama!.scriptCompletion({ text: ' Paris.' });
+    expect(await service().checkEngineUpdatesNow(now(1 * DAY + 5000))).toBe('current');
+    expect(w.store.state.active).toBe(`${VERSION}-${sha(ZIP).slice(0, 12)}`);
+    expect(w.store.state.trial).toBeUndefined();
+  });
+
+  it('Check now with the running engine on trial and still nothing to test it with does not say a newer one waits', async () => {
+    const w = await world({ model: false });
+    w.store.launch();
+    await w.start(1 * DAY);
+    w.store.launch();
+    await w.start(1 * DAY + 1000);
+    expect(await service().checkEngineUpdatesNow(now(1 * DAY + 5000))).toBe('current');
+    expect(w.store.state.trial).toBeDefined(); // it is tested on a later launch
+  });
+
   it('Check now ignores the once-a-day limit and finds a pack', async () => {
     const w = await world();
     w.store.launch();
