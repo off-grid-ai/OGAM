@@ -92,7 +92,8 @@ export async function installModelManagerDevice(
       if (nextMoveError) {
         const message = nextMoveError;
         nextMoveError = undefined;
-        throw new Error(message);
+        // As the native module rejects it: a promise rejection carries its code.
+        throw Object.assign(new Error(message), { code: 'MOVE_FAILED' });
       }
       const row = rowOf(id);
       if (!row || row.status !== 'completed' || !row.localUri) {

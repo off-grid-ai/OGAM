@@ -726,8 +726,9 @@ export function watchBackgroundDownload(opts: WatchDownloadOpts): void {
         error: error instanceof Error ? error.message : String(error),
       });
       // The bytes arrived; saving the model failed. Its own code keeps it apart from a transfer failure.
-      const { message, code } = failureDetails(error, 'finalize_failed');
-      onError?.(new DownloadFailedError(message, code));
+      // Always finalize_failed, whatever the native code (an iOS MOVE_FAILED): it is what tells Retry
+      // to save the bytes on disk instead of downloading the model again.
+      onError?.(new DownloadFailedError(failureDetails(error).message, 'finalize_failed'));
     }
   };
 
