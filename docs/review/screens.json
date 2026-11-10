@@ -544,9 +544,11 @@
         "label": "Running downloads by model name",
         "at": "2026-11-10T10:40:00Z",
         "file": "screens/v/downloads-4.jpg",
-        "what": "A running or paused download now reads its model's name (Wan 2.1 (1.3B), FP16), as on Models. Finished models saved under a file stem still show it; that fix is in the shared resolver."
+        "what": "A paused download resumes: the row reads its model's name (Wan 2.1 (1.3B), FP16), the bar runs, and bytes and speed sit under it (115 → 150 MB at 2.5 MB/s), clear of the facts line. iPhone clip.",
+        "clip": "screens/v/downloads-4.mp4"
       }
-    ]
+    ],
+    "clip": "screens/v/downloads-4.mp4"
   },
   {
     "id": "gallery",
