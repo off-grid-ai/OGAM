@@ -69,7 +69,7 @@ const createEmbeddingStyles = (colors: ThemeColors) => ({
 /** Which language a search model is for, when its name or description says. */
 function languageFact(candidate: Candidate): string | undefined {
   if (candidate.name.toLowerCase().includes('multilingual')) return 'Multilingual';
-  const description = 'description' in candidate ? String(candidate.description ?? '') : '';
+  const description = 'description' in candidate && typeof candidate.description === 'string' ? candidate.description : '';
   if (description.includes('English')) return 'English';
   return undefined;
 }
