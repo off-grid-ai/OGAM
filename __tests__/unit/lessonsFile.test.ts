@@ -15,3 +15,22 @@ describe('lessons file', () => {
     expect(lessonsMarkdown('Jake', '')).toContain('(No lessons yet.)');
   });
 });
+
+import { reportsFileName, reportsMarkdown } from '../../src/learning/lessonsFile';
+
+describe('reports file', () => {
+  const r = (over: object = {}) => ({ q: 'How long to boil water?', text: 'ANSWER: three minutes.', status: 'pass', score: 8, why: 'Matches the source', sources: 'WHO note', at: Date.parse('2026-11-10T09:30:00Z'), ...over });
+  it('is named after the expert', () => expect(reportsFileName('Taxes')).toBe('taxes-reports.md'));
+  it('lists every report in full with the judge verdict and sources', () => {
+    const md = reportsMarkdown('Taxes', [r(), r({ q: 'Second?', status: 'fail', score: 3, why: 'No source', sources: '' })]);
+    expect(md).toContain('# Reports on Taxes');
+    expect(md).toContain('2 reports, newest first.');
+    expect(md).toContain('## How long to boil water?');
+    expect(md).toContain('Judge passed it (8/10) · 2026-11-10 09:30');
+    expect(md).toContain('ANSWER: three minutes.');
+    expect(md).toContain('Judge: Matches the source');
+    expect(md).toContain('Sources it had');
+    expect(md).toContain('Judge failed it (3/10)');
+  });
+  it('says so when there are none', () => expect(reportsMarkdown('', [])).toContain('0 reports'));
+});

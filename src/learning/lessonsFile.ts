@@ -18,6 +18,28 @@ export function lessonsMarkdown(name: string, lessons: string, when: Date = new 
   ].join('\n');
 }
 
+export const reportsFileName = (name: string): string => lessonsFileName(name).replace(/-lessons\.md$/, '-reports.md');
+
+/** Every report the AI wrote on a subject, in full, with what the judge said about each. */
+export function reportsMarkdown(name: string, reports: Array<{ q: string; text: string; status: string; score?: number; why?: string; sources?: string; at: number }>): string {
+  const verdict = (r: { status: string; score?: number }) => (r.status === 'pass' ? 'Judge passed it' : r.status === 'fail' ? 'Judge failed it' : 'Not judged yet') + (r.score !== undefined ? ` (${r.score}/10)` : '');
+  return [
+    `# Reports on ${name || 'General'}`,
+    '',
+    `${reports.length} ${reports.length === 1 ? 'report' : 'reports'}, newest first.`,
+    '',
+    ...reports.flatMap((r) => [
+      `## ${r.q}`,
+      `${verdict(r)} · ${new Date(r.at).toISOString().slice(0, 16).replace('T', ' ')}`,
+      '',
+      r.text.trim(),
+      ...(r.why ? ['', `Judge: ${r.why}`] : []),
+      ...(r.sources ? ['', '<details><summary>Sources it had</summary>', '', r.sources.trim(), '', '</details>'] : []),
+      '',
+    ]),
+  ].join('\n');
+}
+
 /** Saves the file. Never throws: a full disk or missing permission must not stop learning. */
 export async function writeLessonsFile(name: string, lessons: string): Promise<string | null> {
   try {
@@ -27,6 +49,21 @@ export async function writeLessonsFile(name: string, lessons: string): Promise<s
     await RNFS.mkdir(dir);
     const path = `${dir}/${lessonsFileName(name)}`;
     await RNFS.writeFile(path, lessonsMarkdown(name, lessons), 'utf8');
+    return path;
+  } catch {
+    return null;
+  }
+}
+
+/** Saves the reports as Learning/<name>-reports.md. Never throws. */
+export async function writeReportsFile(name: string, reports: Parameters<typeof reportsMarkdown>[1]): Promise<string | null> {
+  try {
+    const RNFS = require('react-native-fs');
+    const { workspaceDir } = require('../atlasTools/deviceTools');
+    const dir = `${await workspaceDir()}/Learning`;
+    await RNFS.mkdir(dir);
+    const path = `${dir}/${reportsFileName(name)}`;
+    await RNFS.writeFile(path, reportsMarkdown(name, reports), 'utf8');
     return path;
   } catch {
     return null;

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Switch, View, Text, TextInput, TouchableOpacity, ScrollView, useWindowDimensions } from 'react-native';
+import { Alert, Share, Switch, View, Text, TextInput, TouchableOpacity, ScrollView, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -8,6 +8,7 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useAgentStore } from '../stores/agentStore';
 import { NO_AGENT, isNoAgent, setLessons, expertName } from '../learning/agents';
+import { reportsMarkdown, writeReportsFile } from '../learning/lessonsFile';
 import { useProjectStore, useAppStore } from '../stores';
 import { useLearningStore, LearnEvent, defaultLearnConfig, newItem, BankStatus } from '../learning/store';
 import { startLearning, stopLearning, isLearning, onLearningStatus, auditNow, keepSession, newRound } from '../learning/engine';
@@ -80,6 +81,13 @@ export const LearningScreen: React.FC = () => {
   }, []);
   useEffect(() => { keepScreenOn(running); return () => keepScreenOn(false); }, [running]);
 
+  const shareReports = async () => {
+    const reports = st?.reportLog ?? [];
+    const name = expertName(agentId);
+    const path = await writeReportsFile(name, reports);
+    try { await Share.share({ title: `Reports on ${name}`, message: reportsMarkdown(name, reports) }); } catch { /* closed */ }
+    if (path) Alert.alert('Saved as a file too', path);
+  };
   const start = () => { setRunning(true); setStatusText('Starting...'); startLearning(agentId).catch((e) => setStatusText(String(e?.message || e))).finally(() => setRunning(false)); };
 
   const settings = (
@@ -172,7 +180,14 @@ export const LearningScreen: React.FC = () => {
       </View>
 
 
-      <Text style={styles.label}>Reports it wrote</Text>
+      <View style={styles.reportsHead}>
+        <Text style={[styles.label, { flex: 1 }]}>Reports it wrote</Text>
+        {(st?.reportLog ?? []).length > 0 && (
+          <TouchableOpacity onPress={shareReports} style={styles.smallBtn} testID="share-reports" accessibilityRole="button">
+            <Text style={styles.smallBtnText}>Share reports</Text>
+          </TouchableOpacity>
+        )}
+      </View>
       <Text style={styles.note}>Every report the AI writes while it learns, in full, with what the judge said. Tap one to read it.</Text>
       {(st?.reportLog ?? []).length === 0 && <Text style={styles.counts}>None yet. Reports appear here as it works.</Text>}
       {(st?.reportLog ?? []).slice(0, 30).map((r) => {
@@ -377,6 +392,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   smallBtn: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
   smallBtnText: { color: colors.text, fontSize: 13 },
   textbookCard: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, borderWidth: 1, borderColor: colors.primary, borderRadius: 10, padding: SPACING.md, marginTop: SPACING.sm },
+  reportsHead: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
   expertRow: { marginTop: 4 },
   advToggle: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
   resetBtn: { marginTop: SPACING.sm, paddingVertical: 8 },
