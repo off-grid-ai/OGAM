@@ -112,6 +112,7 @@ export const LearningScreen: React.FC = () => {
           </TouchableOpacity>
         ))}
       </ScrollView>
+      {experts.length === 0 && <Text style={styles.counts} testID="no-experts-hint">No experts yet. Type a subject below (Taxes, Law, Psychology) and press Add expert, so the AI learns one field at a time.</Text>}
       <View style={styles.row}>
         <TextInput style={[styles.input, { flex: 1 }]} value={newExpert} onChangeText={setNewExpert} placeholder="New expert, e.g. Taxes, Law, Psychology" placeholderTextColor={colors.textMuted} editable={!running} testID="new-expert-input" />
         <TouchableOpacity disabled={running || !newExpert.trim()} onPress={() => { setAgentId(addExpert(newExpert)); setNewExpert(''); }} style={styles.smallBtn} testID="new-expert-add" accessibilityRole="button">
@@ -190,7 +191,7 @@ export const LearningScreen: React.FC = () => {
         )}
       </View>
       <Text style={styles.note}>Every report the AI writes while it learns, in full, with what the judge said. Tap one to read it.</Text>
-      {(st?.reportLog ?? []).length === 0 && <Text style={styles.counts}>None yet. Reports appear here as it works.</Text>}
+      {(st?.reportLog ?? []).length === 0 && <Text style={styles.counts}>No reports yet. Describe a task above and press Start: each report it writes appears here, with its numbered sources.</Text>}
       {(st?.reportLog ?? []).slice(0, 30).map((r) => {
         const isOpen = openReport === r.id;
         const color = r.status === 'pass' ? '#4D7C0F' : r.status === 'fail' ? colors.error : colors.textMuted;
