@@ -276,6 +276,20 @@ class ModelResidencyManager {
    * (e.g. activeModelService) but want the manager to enforce memory. Returns
    * the evicted keys.
    */
+  /**
+   * The eviction plan for `spec`. A model that prefers a copy first tries to fit as one in real free
+   * RAM, unloading our other models if that is enough; otherwise it plans as mapped weights (physical
+   * RAM). It never waits on the budget: when even that does not fit, everything else is unloaded and
+   * it loads mapped. Only the shared fit rule's "Too big" refuses it (the llm pre-load check).
+   */
+  private planFor(spec: ResidentSpec, residents: Resident[], budgetMB: number, singleModel: boolean) {
+    if (!spec.prefersCopy || spec.dirtyMemory) return planEviction(residents, spec, budgetMB, { singleModel });
+    const copyPlan = planEviction(residents, spec, this.budgetForSpec({ ...spec, dirtyMemory: true }), { singleModel });
+    if (copyPlan.fits) return copyPlan;
+    const mappedPlan = planEviction(residents, spec, budgetMB, { singleModel });
+    return mappedPlan.fits ? mappedPlan : { ...planEviction(residents, spec, budgetMB, { singleModel: true }), fits: true };
+  }
+
   async makeRoomFor(
     spec: ResidentSpec,
     opts?: { override?: boolean },
@@ -297,15 +311,7 @@ class ModelResidencyManager {
     // also evicts everything to free maximum RAM. Aggressive is NOT single-model — it
     // co-resides like balanced, just with a larger RAM budget.
     const singleModel = this.loadPolicy === 'conservative' || override;
-    // A model that prefers a copy first tries to fit as one in real free RAM, unloading our other
-    // models if that is enough; otherwise it plans as mapped weights (physical RAM) and loads mapped.
-    const copyPlan = spec.prefersCopy && !spec.dirtyMemory
-      ? planEviction(residents, spec, this.budgetForSpec({ ...spec, dirtyMemory: true }), { singleModel })
-      : null;
-    let plan = copyPlan?.fits ? copyPlan : planEviction(residents, spec, budgetMB, { singleModel });
-    // It never waits on the budget: when even that does not fit, everything else is unloaded and the
-    // model loads mapped. Only the shared fit rule's "Too big" refuses it (the llm pre-load check).
-    if (spec.prefersCopy && !plan.fits) plan = { ...planEviction(residents, spec, budgetMB, { singleModel: true }), fits: true };
+    const plan = this.planFor(spec, residents, budgetMB, singleModel);
     // [MEM-SM] trace (kept forever): the exact numbers behind every fit decision.
     // budgetForSpec already folds in the live os_proc budget under dirty pressure, so
     // there's one owner of the memory math - planEviction enforces it. Also log the raw

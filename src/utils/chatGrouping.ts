@@ -46,6 +46,22 @@ function dayTitle(dayStart: number, now: number): string {
   return day.getFullYear() === new Date(now).getFullYear() ? label : `${label}, ${day.getFullYear()}`;
 }
 
+/** A chat's section key and title; null for a chat outside any project (or a deleted one). */
+function sectionHeading(
+  conversation: Conversation,
+  groupBy: 'date' | 'project',
+  sortBy: ChatSortBy,
+  projectName: (projectId: string) => string | undefined,
+  now: number,
+): { key: string; title: string } | null {
+  if (groupBy === 'date') {
+    const day = startOfLocalDay(stamp(conversation, sortBy));
+    return { key: `day:${day}`, title: dayTitle(day, now) };
+  }
+  const name = conversation.projectId ? projectName(conversation.projectId) : undefined;
+  return conversation.projectId && name ? { key: `project:${conversation.projectId}`, title: name } : null;
+}
+
 /**
  * The Chats list's sections. Sorts first, so every section is newest first and sections follow the
  * newest chat in each: by date, a section per local calendar day; by project, a section per project
@@ -67,22 +83,12 @@ export function groupChats(
   const sections = new Map<string, ChatSection>();
   const outside: Conversation[] = [];
   for (const conversation of sorted) {
-    let key: string;
-    let title: string;
-    if (options.groupBy === 'date') {
-      const day = startOfLocalDay(stamp(conversation, options.sortBy));
-      key = `day:${day}`;
-      title = dayTitle(day, now);
-    } else {
-      const name = conversation.projectId ? options.projectName(conversation.projectId) : undefined;
-      // A chat whose project was deleted reads as having none.
-      if (!conversation.projectId || !name) {
-        outside.push(conversation);
-        continue;
-      }
-      key = `project:${conversation.projectId}`;
-      title = name;
+    const heading = sectionHeading(conversation, options.groupBy, options.sortBy, options.projectName, now);
+    if (!heading) {
+      outside.push(conversation);
+      continue;
     }
+    const { key, title } = heading;
     const section = sections.get(key);
     if (section) section.data.push(conversation);
     else sections.set(key, { key, title, data: [conversation] });

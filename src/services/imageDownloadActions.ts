@@ -474,6 +474,25 @@ async function downloadCoreMLMultiFile(
   }
 }
 
+/** Unzip a kept zip again, shown as a download row. A second failure on the same zip means the
+ *  zip itself is bad: it is dropped, so the next retry downloads. */
+async function processKeptZip(args: {
+  modelInfo: ImageModelDescriptor; deps: ImageDownloadDeps; modelKey: string;
+  zipPath: string; modelDir: string; fileName: string; metadata: ImageMetadata;
+}): Promise<void> {
+  const { modelInfo, deps, modelKey, zipPath, modelDir, fileName, metadata } = args;
+  const localId = `local:${modelKey}`;
+  if (!addImageEntry({ modelId: modelInfo.id, downloadId: localId, fileName, totalBytes: modelInfo.size, metadata })) return;
+  useDownloadStore.getState().setProcessing(localId);
+  try {
+    await processDownloadedZip({ zipPath, modelDir, modelInfo, deps, keepZipOnFailure: false });
+  } catch (e: any) {
+    const message = e?.message || 'Failed to process model';
+    deps.setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(message)));
+    useDownloadStore.getState().setStatus(localId, 'failed', { message });
+  }
+}
+
 export async function proceedWithDownload(
   modelInfo: ImageModelDescriptor,
   deps: ImageDownloadDeps,
@@ -518,16 +537,7 @@ export async function proceedWithDownload(
   // download", Play review on 0.0.122).
   const zipPath = `${imageModelsDir}/${fileName}`;
   if (await keptZipIsComplete(zipPath, modelInfo.size)) {
-    const localId = `local:${modelKey}`;
-    if (!addImageEntry({ modelId: modelInfo.id, downloadId: localId, fileName, totalBytes: modelInfo.size, metadata })) return;
-    useDownloadStore.getState().setProcessing(localId);
-    try {
-      // A second failure on the same zip means the zip itself is bad: drop it, so the next retry downloads.
-      await processDownloadedZip({ zipPath, modelDir, modelInfo, deps, keepZipOnFailure: false });
-    } catch (e: any) {
-      deps.setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(e?.message || 'Failed to process model')));
-      useDownloadStore.getState().setStatus(localId, 'failed', { message: e?.message || 'Failed to process model' });
-    }
+    await processKeptZip({ modelInfo, deps, modelKey, zipPath, modelDir, fileName, metadata });
     return;
   }
 
