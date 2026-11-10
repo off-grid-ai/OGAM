@@ -1,5 +1,10 @@
+/** The numbered sources a reply was written from, as lines to put under it. */
+function sourceLines(m: Message): string[] {
+  return (m.generationMeta?.sources ?? []).map((s, i) => `${i + 1}. ${s.title}`);
+}
+
 /** Plain-text (Markdown) copy of a chat for sharing: user and assistant turns only. */
-import type { Conversation } from '../types';
+import type { Conversation, Message } from '../types';
 
 export function conversationToText(conversation: Pick<Conversation, 'title' | 'messages'>): string {
   const turns = conversation.messages
@@ -7,7 +12,8 @@ export function conversationToText(conversation: Pick<Conversation, 'title' | 'm
     .map(m => {
       const images = m.attachments?.filter(a => a.type === 'image').length ?? 0;
       const note = images ? `\n_(${images} image${images > 1 ? 's' : ''} not included)_` : '';
-      return `**${m.role === 'user' ? 'You' : 'Atlas'}:** ${m.content.trim()}${note}`;
+      const src = sourceLines(m);
+      return `**${m.role === 'user' ? 'You' : 'Atlas'}:** ${m.content.trim()}${note}${src.length ? `\n\nSources:\n${src.join('\n')}` : ''}`;
     });
   return `# ${conversation.title.trim() || 'Chat'}\n\n${turns.join('\n\n')}\n`;
 }
@@ -19,7 +25,8 @@ export function conversationToPlainText(conversation: Pick<Conversation, 'title'
     .map(m => {
       const images = m.attachments?.filter(a => a.type === 'image').length ?? 0;
       const note = images ? `\n(${images} image${images > 1 ? 's' : ''} not included)` : '';
-      return `${m.role === 'user' ? 'You' : 'Atlas'}: ${m.content.trim()}${note}`;
+      const src = sourceLines(m);
+      return `${m.role === 'user' ? 'You' : 'Atlas'}: ${m.content.trim()}${note}${src.length ? `\nSources: ${src.join('; ')}` : ''}`;
     });
   return `${conversation.title.trim() || 'Chat'}\n\n${turns.join('\n\n')}\n`;
 }

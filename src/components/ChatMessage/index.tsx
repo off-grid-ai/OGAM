@@ -1,8 +1,9 @@
 import { CitationChips } from '../CitationChips';
 import { sourcesFromSearch, type CheckedCitation } from '../../study/citations';
+import { whyThisReply } from '../../study/whyReply';
 import { sourcesBefore, citedNumbers, markSources } from '../../study/replySources';
 import React, { useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, Clipboard } from 'react-native';
+import { Alert, View, Text, TouchableOpacity, Clipboard } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useUiModeStore, useAccordionExpanded, useAppStore, useChatStore } from '../../stores';
@@ -415,6 +416,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     usePins.getState().add({ id: message.id, text: displayContent, role: message.role, conversationId: conversation?.id ?? null, conversationTitle: conversation?.title ?? 'Chat' });
     triggerHaptic('notificationSuccess');
   };
+  const handleWhy = () => {
+    setShowActionMenu(false);
+    const why = whyThisReply(message.generationMeta);
+    Alert.alert('Why this reply', why || 'Nothing was recorded about what this reply was written from.');
+  };
   const handleCheck = () => {
     setShowActionMenu(false);
     setTimeout(() => onCheckAnswer?.(message), 350); // let the menu finish closing
@@ -546,7 +552,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         onRetry={handleRetry}
         onDelete={handleDelete}
         onSaveToProject={handleSaveToProject}
-        extras={{ pinned, onPin: handlePin, onSlides: isStreaming ? undefined : handleSlides, onCheck: isStreaming || !onCheckAnswer ? undefined : handleCheck }}
+        extras={{ pinned, onPin: handlePin, onSlides: isStreaming ? undefined : handleSlides, onCheck: isStreaming || !onCheckAnswer ? undefined : handleCheck, onWhy: isStreaming ? undefined : handleWhy }}
         onGenerateImage={handleGenerateImage}
         onSpeak={handleSpeak}
         onSelectText={handleSelectText}

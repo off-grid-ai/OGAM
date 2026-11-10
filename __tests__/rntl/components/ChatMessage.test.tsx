@@ -1726,3 +1726,21 @@ describe('ChatMessage: source numbers for project documents', () => {
     expect(view.getAllByTestId(/^chip-/).length).toBe(2);
   });
 });
+
+describe('ChatMessage: why this reply', () => {
+  it('lists the lessons and numbered excerpts the reply was written from', () => {
+    const alert = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => undefined);
+    const message = { ...createAssistantMessage('The rate is 5% [1].'), generationMeta: { gpu: false, lessonsUsed: ['General'], sources: [{ title: 'Tax guide (part 2)', quote: 'The rate is 5%.' }] } } as any;
+    const { getByTestId } = render(<ChatMessage message={message} showActions={true} />);
+    fireEvent(getByTestId('assistant-message'), 'longPress');
+    fireEvent.press(getByTestId('action-why'));
+    expect(alert).toHaveBeenCalledWith('Why this reply', expect.stringContaining('1. Tax guide (part 2): "The rate is 5%."'));
+    expect(alert.mock.calls[0][1]).toContain('Lessons used: General');
+    alert.mockRestore();
+  });
+  it('is not offered on your own message', () => {
+    const { getByTestId, queryByTestId } = render(<ChatMessage message={createUserMessage('hi')} showActions={true} />);
+    fireEvent(getByTestId('user-message'), 'longPress');
+    expect(queryByTestId('action-why')).toBeNull();
+  });
+});

@@ -39,7 +39,7 @@ interface MessageOverlaysProps {
   onSaveEditOnly?: () => void;
   onCancelEdit: () => void;
   onCloseAlert: () => void;
-  extras?: { pinned: boolean; onPin: () => void; onSlides?: () => void; onCheck?: () => void };
+  extras?: { pinned: boolean; onPin: () => void; onSlides?: () => void; onCheck?: () => void; onWhy?: () => void };
 }
 
 export const MessageOverlays: React.FC<MessageOverlaysProps> = ({
