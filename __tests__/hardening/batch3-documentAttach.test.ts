@@ -30,6 +30,7 @@ jest.mock('../../src/services/pdfExtractor', () => ({
 jest.mock('../../src/services/officeExtract', () => ({
   OFFICE_EXTENSIONS: ['.docx', '.pptx', '.xlsx', '.odt', '.ods', '.odp', '.epub', '.rtf'],
   extractOffice: jest.fn(async () => 'office body'),
+  extractOfficeMarkdown: jest.fn(async () => 'office body'),
 }));
 
 import { documentService } from '../../src/services/documentService';
@@ -57,7 +58,6 @@ describe('Batch3 · document attach validation (real documentService)', () => {
       'notes.txt',
       'readme.md',
       'data.json',
-      'table.csv',
       'script.py',
       'index.ts',
     ];
@@ -82,6 +82,13 @@ describe('Batch3 · document attach validation (real documentService)', () => {
     it('accepts supported Word and Excel files', () => {
       expect(documentService.isSupported('report.docx')).toBe(true);
       expect(documentService.isSupported('sheet.xlsx')).toBe(true);
+    });
+
+    it('turns a CSV file into a Markdown table for the AI', async () => {
+      stubReadableFile('Item,Qty\nBandage,4', 19);
+      const att = await documentService.processDocumentFromPath('/docs/table.csv', 'table.csv');
+      expect(att!.textContent).toBe('| Item | Qty |\n| --- | --- |\n| Bandage | 4 |');
+      expect(documentService.isSupported('table.csv')).toBe(true);
     });
 
     it('extracts an Office file into a document attachment', async () => {

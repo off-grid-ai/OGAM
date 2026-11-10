@@ -29,6 +29,7 @@ export const ChatContextSection: React.FC = () => {
   const ctxValue = useAppStore((s) => (s.settings as any)[ctxKey] as number) || 4096;
   const contextMode = useAppStore((s) => s.settings.contextMode ?? 'manual');
   const modelMax = useAppStore((s) => s.modelMaxContext);
+  const toMarkdown = useAppStore((s) => s.settings.convertToMarkdown !== false);
   const readLong = useAppStore((s) => s.settings.readLongInParts !== false);
   const replyMode = useAppStore((s) => s.settings.maxTokensMode ?? 'auto');
   const replyTokens = useAppStore((s) => s.settings.maxTokens);
@@ -110,6 +111,13 @@ export const ChatContextSection: React.FC = () => {
           style={{ color: colors.text, backgroundColor: colors.background, borderRadius: 8, padding: 10, marginTop: 8, minHeight: 60, textAlignVertical: 'top' }} />
       </View>
       <View style={box}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={{ color: colors.text, fontWeight: '600' }}>Convert documents to Markdown</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>Web pages, Word, PowerPoint, Excel, EPUB, CSV and PDF text are turned into Markdown (headings, lists, tables) before the AI reads them. The AI follows structure better this way.</Text>
+          </View>
+          <Switch value={toMarkdown} onValueChange={(v) => updateSettings({ convertToMarkdown: v })} testID="convert-to-markdown" />
+        </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
           <View style={{ flex: 1, paddingRight: 8 }}>
             <Text style={{ color: colors.text, fontWeight: '600' }}>Read very long messages in parts</Text>

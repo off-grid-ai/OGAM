@@ -9,7 +9,8 @@ import { MediaAttachment } from '../types';
 import { pdfExtractor } from './pdfExtractor';
 import { useAppStore } from '../stores/appStore';
 import { APP_CONFIG } from '../constants';
-import { OFFICE_EXTENSIONS, extractOffice } from './officeExtract';
+import { OFFICE_EXTENSIONS, extractOffice, extractOfficeMarkdown } from './officeExtract';
+import { toMarkdown } from './markdownConvert';
 
 // File extensions we can read as text
 const TEXT_EXTENSIONS = ['.txt', '.md', '.csv', '.json', '.xml', '.html', '.log', '.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.c', '.cpp', '.h', '.swift', '.kt', '.go', '.rs', '.rb', '.php', '.sql', '.sh', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf'];
@@ -118,16 +119,19 @@ class DocumentService {
   private async readContent(resolvedPath: string, isPdf: boolean, maxChars: number): Promise<string> {
     console.log(`[DocumentService] readContent called - isPdf: ${isPdf}, maxChars: ${maxChars}`);
     const ext = `.${resolvedPath.split('.').pop()?.toLowerCase()}`;
-    if (OFFICE_EXTENSIONS.includes(ext)) return extractOffice(resolvedPath, ext, maxChars);
+    // The AI reads Markdown (headings, lists, tables) better than flat text, so documents are converted to it (Chat settings).
+    const markdown = useAppStore.getState().settings.convertToMarkdown !== false;
+    if (OFFICE_EXTENSIONS.includes(ext)) return markdown ? extractOfficeMarkdown(resolvedPath, ext, maxChars) : extractOffice(resolvedPath, ext, maxChars);
     try {
       const raw = isPdf
         ? await pdfExtractor.extractText(resolvedPath, maxChars)
         : await RNFS.readFile(resolvedPath, 'utf8');
       console.log(`[DocumentService] Successfully read ${raw.length} characters`);
-      if (raw.length > maxChars) {
-        return `${raw.substring(0, maxChars)}\n\n... [Content truncated due to length]`;
+      const text = markdown ? toMarkdown(raw, ext) : raw;
+      if (text.length > maxChars) {
+        return `${text.substring(0, maxChars)}\n\n... [Content truncated due to length]`;
       }
-      return raw;
+      return text;
     } catch (error: any) {
       console.error(`[DocumentService] Error reading content:`, error?.message || error);
       throw error;
