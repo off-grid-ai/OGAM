@@ -10,7 +10,7 @@ import { LoadModelSheet } from '../../components/LoadModelSheet';
 import { arrangeTiles, moveTile, toggleTile } from './homeTiles';
 
 type Props = { navigation: any; mode: LayoutMode };
-type Destination = { key: string; label: string; hint: string; icon: string; tab?: string; screen?: string; action?: 'load'; tint: string; tintDark: string; color: [string, string] };
+type Destination = { key: string; label: string; hint: string; icon: string; tab?: string; screen?: string; action?: 'load'; optional?: boolean; tint: string; tintDark: string; color: [string, string] };
 const destinations: Destination[] = [
   { key: 'chat', label: 'Chat', hint: 'Talk with your local AI', icon: 'message-circle', tab: 'ChatsTab', tint: '#DBF0FF', tintDark: '#12283A', color: ['#1D4ED8', '#60A5FA'] },
   { key: 'projects', label: 'Projects', hint: 'Your organized work', icon: 'folder', tab: 'ProjectsTab', tint: '#E1F6E8', tintDark: '#12291C', color: ['#047857', '#34D399'] },
@@ -20,6 +20,11 @@ const destinations: Destination[] = [
   { key: 'recorder', label: 'Recorder', hint: 'Record a talk, get a transcript with speakers', icon: 'mic', screen: 'Recorder', tint: '#FDE7E2', tintDark: '#3A1A15', color: ['#B91C1C', '#F87171'] },
   { key: 'language', label: 'Learn a language', hint: 'Lessons, games and practice calls', icon: 'book', screen: 'Language', tint: '#E4F2F0', tintDark: '#10302C', color: ['#0F766E', '#2DD4BF'] },
   { key: 'topics', label: 'Learn a topic', hint: 'Any subject, on a board the AI designs', icon: 'compass', screen: 'Topics', tint: '#E6EEFB', tintDark: '#14243D', color: ['#1D4ED8', '#60A5FA'] },
+  { key: 'teach', label: 'Teach the AI', hint: 'Let it study a subject and write reports you can read', icon: 'trending-up', screen: 'Learning', tint: '#E4F2F0', tintDark: '#10302C', color: ['#0F766E', '#2DD4BF'] },
+  { key: 'emergency', label: 'Emergency', hint: 'Offline emergency cards and first aid', icon: 'alert-triangle', screen: 'Emergency', optional: true, tint: '#FDE7E2', tintDark: '#3A1A15', color: ['#B91C1C', '#F87171'] },
+  { key: 'survival', label: 'Survival manual', hint: 'The field manual, offline', icon: 'life-buoy', screen: 'SurvivalManual', optional: true, tint: '#E1F6E8', tintDark: '#12291C', color: ['#047857', '#34D399'] },
+  { key: 'library', label: 'Offline library', hint: 'Medical and general reference, offline', icon: 'book-open', screen: 'OfflineLibrary', optional: true, tint: '#EDE5FF', tintDark: '#241A3D', color: ['#6D28D9', '#A78BFA'] },
+  { key: 'atlashub', label: 'Atlas tools', hint: 'Maps, phrases, compass, off-grid mode', icon: 'compass', screen: 'AtlasHub', optional: true, tint: '#E6EEFB', tintDark: '#14243D', color: ['#1D4ED8', '#60A5FA'] },
   { key: 'settings', label: 'Settings', hint: 'Personalize Atlas', icon: 'settings', tab: 'SettingsTab', tint: '#FBE8F0', tintDark: '#381827', color: ['#BE185D', '#F472B6'] },
 ];
 const FOCUS = ['chat', 'language', 'brief'];
@@ -33,11 +38,13 @@ export const QuickHomeScreen: React.FC<Props> = ({ navigation, mode }) => {
   const colorful = mode === 'colorful';
   const simple = mode === 'simple' || focus;
   const tiles = compact || grid;
-  const prefs = useAppStore((st) => st.settings.homeTiles);
+  const savedPrefs = useAppStore((st) => st.settings.homeTiles);
   const updateSettings = useAppStore((st) => st.updateSettings);
   const [editing, setEditing] = React.useState(false);
   const [loadOpen, setLoadOpen] = React.useState(false);
   const keys = destinations.map((d) => d.key);
+  // Tiles marked optional (the emergency tools) are off until the person turns them on under Customize.
+  const prefs = { ...savedPrefs, hidden: savedPrefs?.hidden ?? destinations.filter((d) => d.optional).map((d) => d.key) };
   const byKey = (k: string) => destinations.find((d) => d.key === k)!;
   const shownKeys = arrangeTiles(keys, prefs, editing);
   const items = (focus ? shownKeys.filter((k) => FOCUS.includes(k)) : shownKeys).map(byKey);

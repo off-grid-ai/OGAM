@@ -29,3 +29,18 @@ it('names the tiles clearly: models to get, a model to load, a language or a top
   expect(view.getByText('Learn a language')).toBeTruthy();
   expect(view.getByText('Learn a topic')).toBeTruthy();
 });
+
+it('offers the Atlas emergency tools as tiles that are off until turned on under Customize', () => {
+  const { useAppStore } = require('../../../src/stores/appStore');
+  useAppStore.getState().updateSettings({ homeTiles: undefined });
+  const parentNavigate = jest.fn();
+  const navigation = { navigate: jest.fn(), getParent: () => ({ navigate: parentNavigate }) };
+  const view = render(<QuickHomeScreen navigation={navigation} mode="simple" />);
+  expect(view.queryByTestId('quick-home-emergency')).toBeNull();
+  expect(view.getByTestId('quick-home-teach')).toBeTruthy();
+  fireEvent.press(view.getByTestId('home-customize'));
+  fireEvent.press(view.getByTestId('tile-toggle-emergency'));
+  fireEvent.press(view.getByTestId('home-customize')); // Done
+  fireEvent.press(view.getByTestId('quick-home-emergency'));
+  expect(parentNavigate).toHaveBeenCalledWith('Emergency');
+});
