@@ -48,3 +48,33 @@ describe('merging chats with the same title', () => {
     expect(merged.agentId).toBeUndefined();
   });
 });
+
+describe('undoing a merge', () => {
+  it('puts every original chat back exactly as it was', () => {
+    const { mergeWithUndo, undoMerge, undoableMerge } = require('../../src/chats/undoMerge');
+    const a = chat('a', 'Plan 5 days', 1, { agentId: 'teacher' });
+    const b = chat('b', 'Add Kyoto', 2);
+    useChatStore.setState({ conversations: [a, b] });
+    expect(mergeWithUndo()).toBe(1);
+    expect(useChatStore.getState().conversations).toHaveLength(1);
+    expect(undoableMerge()).toBe(1);
+    undoMerge();
+    const back = useChatStore.getState().conversations;
+    expect(back.map((c) => c.id).sort()).toEqual(['a', 'b']);
+    expect(back.find((c) => c.id === 'a')!.messages).toHaveLength(1);
+    expect(back.find((c) => c.id === 'a')!.agentId).toBe('teacher');
+    expect(undoableMerge()).toBeNull();
+  });
+  it('shows the Undo bar after a merge', () => {
+    const { mergeWithUndo, undoMerge } = require('../../src/chats/undoMerge');
+    const { UndoBar } = require('../../src/chats/UndoBar');
+    useChatStore.setState({ conversations: [chat('a', 'x', 1), chat('b', 'y', 2)] });
+    const view = render(<UndoBar />);
+    expect(view.queryByTestId('undo-merge')).toBeNull();
+    require('@testing-library/react-native').act(() => { mergeWithUndo(); });
+    expect(view.getByTestId('undo-merge')).toBeTruthy();
+    fireEvent.press(view.getByTestId('undo-merge'));
+    expect(useChatStore.getState().conversations).toHaveLength(2);
+    void undoMerge;
+  });
+});

@@ -4,7 +4,8 @@ import { AppSheet } from '../components/AppSheet';
 import { useTheme } from '../theme';
 import { useChatStore, useProjectStore } from '../stores';
 import { useAgentStore } from '../stores/agentStore';
-import { duplicateGroups, mergeAllDuplicates, mergedMessageCount, summarizeChat, type MergeChoice } from './mergeDuplicates';
+import { duplicateGroups, mergedMessageCount, summarizeChat, type MergeChoice } from './mergeDuplicates';
+import { mergeWithUndo } from './undoMerge';
 
 /**
  * Review chats that share a title, then merge them one set at a time (or all at once). For each set it shows every chat:
@@ -24,7 +25,7 @@ export const MergeChatsSheet: React.FC<{ visible: boolean; onClose: () => void }
   };
   const set = (key: string, patch: MergeChoice) => setChoices((c) => ({ ...c, [key]: { ...c[key], ...patch } }));
   const mergeSets = (only?: string[]) => {
-    useChatStore.setState((s) => ({ conversations: mergeAllDuplicates(s.conversations, { only, choices }).chats }));
+    mergeWithUndo({ only, choices });
     if (only && groups.length <= 1) onClose();
     if (!only) onClose();
   };
