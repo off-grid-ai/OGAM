@@ -6,7 +6,7 @@ import Darwin
 
 // MARK: - Test Constants
 
-private enum TestPaths {
+enum TestPaths {
   static let nonexistentPDF = "/tmp/nonexistent.pdf"
   static let tmpModelBin = "/tmp/model.bin"
   static let exampleModelURL = "https://example.com/model.gguf"

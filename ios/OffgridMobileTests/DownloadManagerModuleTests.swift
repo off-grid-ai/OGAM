@@ -11,7 +11,12 @@ final class DownloadManagerModuleTests: XCTestCase {
     // Every module shares one URLSession, so a download an earlier test started is still in it, and
     // a new module restores it in the background: "initially empty" then saw 1 now and then.
     // A cancelled task stays listed until it winds down, so wait until the session holds none.
-    if let session = DownloadManagerModule.sharedSession {
+    // Both sessions: the background one keeps tasks across runs, and it exists only once a module
+    // has set the sessions up, so the first test makes one before clearing them.
+    if DownloadManagerModule.sharedSession == nil || DownloadManagerModule.backgroundSession == nil {
+      _ = DownloadManagerModule()
+    }
+    for session in [DownloadManagerModule.sharedSession, DownloadManagerModule.backgroundSession].compactMap({ $0 }) {
       let deadline = Date().addingTimeInterval(5)
       var remaining = 1
       while remaining > 0 && Date() < deadline {
