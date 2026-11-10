@@ -207,7 +207,11 @@ export const EmbeddingModelsTab: React.FC = () => {
           failedState={failedRow === candidate ? {
             errorMessage: status.error, bytesDownloaded: 0, totalBytes: 0,
             onRetry: () => { embeddingModelChanger.retry().catch(() => undefined); },
-            onRemove: embeddingModelChanger.dismiss,
+            // "Remove download" also deletes a file that arrived but failed its check.
+            onRemove: () => {
+              embeddingModelChanger.dismiss();
+              if (downloaded.has(candidate.id) && active?.id !== candidate.id) remove(candidate);
+            },
           } : undefined}
           onDelete={downloaded.has(candidate.id) && active?.id !== candidate.id && !status.busy ? () => remove(candidate) : undefined}
           disabled={status.busy || !ready || active?.id === candidate.id}

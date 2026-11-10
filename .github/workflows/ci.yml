@@ -323,8 +323,15 @@ jobs:
             native=false
             if grep -Eq '^(ios/|android/|patches/|pro$|\.github/|package(-lock)?\.json$|Gemfile|react-native\.config\.js$|app\.json$|scripts/video/|scripts/(test-ios|test-android|ios-simulator-id|download-prebuilt-binaries|xcode-ccache)[^/]*$)' "$RUNNER_TEMP/files.txt"; then native=true; fi
             # CI builds pro's matching branch, whose native changes this pull request's files do not list.
-            if [ -n "$PRO_TOKEN" ] && git -c http.https://github.com/.extraheader= ls-remote --exit-code --heads \
-              "https://x-access-token:${PRO_TOKEN}@github.com/off-grid-ai/mobile-pro.git" "$HEAD_REF" >/dev/null 2>&1; then native=true; fi
+            # Fail-safe: no token (a fork) or a failed lookup runs the native tests; only "no such branch" (2) skips.
+            if [ -z "$PRO_TOKEN" ]; then
+              native=true
+            else
+              status=0
+              git -c http.https://github.com/.extraheader= ls-remote --exit-code --heads \
+                "https://x-access-token:${PRO_TOKEN}@github.com/off-grid-ai/mobile-pro.git" "$HEAD_REF" >/dev/null 2>&1 || status=$?
+              [ "$status" = 2 ] || native=true
+            fi
           fi
           echo "video=$video" | tee -a "$GITHUB_OUTPUT"
           echo "native=$native" | tee -a "$GITHUB_OUTPUT"

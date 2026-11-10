@@ -35,6 +35,8 @@ const sharedNodeModulesPath = path.resolve(sharedRoot, 'node_modules');
 // indexes files by their real path, so it must also watch the folder those links point into.
 const linkedNodeModulesPaths = (() => {
   const own = path.resolve(__dirname, 'node_modules');
+  // No react-native yet (a fresh checkout before npm ci): nothing linked to watch.
+  if (!fs.existsSync(path.resolve(own, 'react-native'))) return [];
   const real = path.dirname(fs.realpathSync(path.resolve(own, 'react-native')));
   return real === own ? [] : [real];
 })();

@@ -43,7 +43,7 @@ export const ChatListOptionsSheet: React.FC<{
   const [touched, setTouched] = useState<'group' | 'sort' | null>(null);
   const isDefault = groupBy === DEFAULT_CHAT_GROUP_BY && sortBy === DEFAULT_CHAT_SORT_BY;
   return (
-    <AppSheet sheet="chat-list-options" visible={visible} onClose={onClose} enableDynamicSizing title="View">
+    <AppSheet sheet="chat-list-options" visible={visible} onClose={() => { setTouched(null); onClose(); }} enableDynamicSizing title="View">
       <View style={styles.body}>
         <Text style={styles.label}>Group by</Text>
         <ListGroup testID="chats-group-by">
@@ -62,7 +62,7 @@ export const ChatListOptionsSheet: React.FC<{
         <TouchableOpacity
           style={styles.reset}
           disabled={isDefault}
-          onPress={() => onChange({ groupBy: DEFAULT_CHAT_GROUP_BY, sortBy: DEFAULT_CHAT_SORT_BY })}
+          onPress={() => { setTouched(null); onChange({ groupBy: DEFAULT_CHAT_GROUP_BY, sortBy: DEFAULT_CHAT_SORT_BY }); }}
           accessibilityRole="button"
           accessibilityState={{ disabled: isDefault }}
           testID="chats-view-reset"
