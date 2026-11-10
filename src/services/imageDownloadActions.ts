@@ -8,7 +8,7 @@ import { unzip } from 'react-native-zip-archive';
 import { showAlert } from '../utils/alertState';
 import { modelManager, hardwareService, backgroundDownloadService } from '../services';
 import { resolveCoreMLModelDir, downloadCoreMLTokenizerFiles } from '../utils/coreMLModelUtils';
-import { getUserFacingDownloadMessage } from '../utils/downloadErrors';
+import { failureDetails, getUserFacingDownloadMessage } from '../utils/downloadErrors';
 import { ONNXImageModel } from '../types';
 import { useDownloadStore, isActiveStatus } from '../stores/downloadStore';
 import { makeImageModelKey } from '../utils/modelKey';
@@ -156,6 +156,7 @@ function setMultifileFailed(syntheticId: string, deps: ImageDownloadDeps, messag
   deps.setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(message)));
   useDownloadStore.getState().setStatus(syntheticId, 'failed', {
     message: message || 'Multi-file download failed',
+    code: 'multifile_failed',
   });
 }
 
@@ -337,7 +338,7 @@ function wireZipListeners(
     unsubComplete(); unsubError();
     try { await onCompleteWork(); } catch (e: any) {
       deps.setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(e?.message || 'Failed to process model')));
-      useDownloadStore.getState().setStatus(downloadId, 'failed', { message: e?.message || 'Failed to process model' });
+      useDownloadStore.getState().setStatus(downloadId, 'failed', { ...failureDetails(e, 'extract_failed'), message: e?.message || 'Failed to process model' });
     }
   });
   const unsubError = backgroundDownloadService.onError(downloadId, (ev) => {
@@ -467,6 +468,7 @@ async function downloadCoreMLMultiFile(
     if (isCancelledError(error)) return;
     deps.setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(error?.message)));
     useDownloadStore.getState().setStatus(syntheticId, 'failed', {
+      ...failureDetails(error, 'download_failed'),
       message: error?.message || 'CoreML download failed',
     });
   } finally {
@@ -489,7 +491,7 @@ async function processKeptZip(args: {
   } catch (e: any) {
     const message = e?.message || 'Failed to process model';
     deps.setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(message)));
-    useDownloadStore.getState().setStatus(localId, 'failed', { message });
+    useDownloadStore.getState().setStatus(localId, 'failed', { ...failureDetails(e, 'extract_failed'), message });
   }
 }
 
@@ -581,7 +583,7 @@ export async function proceedWithDownload(
       return;
     }
     // Native start failed: fail the placeholder row so the card/Manager offer retry.
-    useDownloadStore.getState().setStatus(placeholderId, 'failed', { message: error?.message || 'Download failed' });
+    useDownloadStore.getState().setStatus(placeholderId, 'failed', { ...failureDetails(error, 'download_failed'), message: error?.message || 'Download failed' });
     deps.setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(error?.message)));
   }
 }

@@ -188,7 +188,7 @@ export const imageProvider: DownloadProvider = {
       const resumableOnRelaunch = !isMultifile(e) && Platform.OS === 'android';
       if (resumableOnRelaunch) continue;
       logger.log(`[DL-SM] image:${bareId(e.modelId)} reconcile: interrupted (multifile/iOS) → failed`);
-      store.setStatus(e.downloadId, 'failed', { message: 'Interrupted — app closed. Tap retry.' });
+      store.setStatus(e.downloadId, 'failed', { message: 'Interrupted — app closed. Tap retry.', code: 'download_interrupted' });
     }
   },
 };
