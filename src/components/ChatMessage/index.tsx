@@ -376,7 +376,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     const searched = sourcesBefore(msgs as any, message.id);
     if (searched.length) return searched;
     // No web search led to this reply: the numbers refer to the project-document excerpts it was written from.
-    return (message.generationMeta?.sources ?? []).map((s) => ({ title: s.title, quote: s.quote, verified: true }));
+    return (message.generationMeta?.sources ?? []).map((s) => ({ title: s.title, quote: s.quote, file: s.file, verified: true }));
   }, [message.id, message.role, rawParsed.response, message.generationMeta?.sources]);
   const cited = citedNumbers(rawParsed.response ?? '', sources.length).length > 0;
   const parsedContent = cited ? { ...rawParsed, response: markSources(rawParsed.response ?? '', sources.length) } : rawParsed;

@@ -369,7 +369,7 @@ export async function injectRagContext(projectId: string | undefined, query: str
     const r = await ragService.searchProject(projectId, query);
     if (r.chunks.length > 0) {
       kbPrompt += `\n\n${retrievalService.formatForPrompt(r)}`;
-      setTurnSources(sourcesFromChunks(r.chunks)); // numbered as in the prompt, for the source list under the reply
+      setTurnSources(sourcesFromChunks(r.chunks, enabledDocs)); // numbered as in the prompt, for the source list under the reply
     }
     return prompt + kbPrompt;
   } catch (err) {

@@ -44,6 +44,11 @@ describe('document excerpts as numbered sources', () => {
     expect(s[0]).toEqual({ title: 'tax-guide.pdf (part 3)', quote: 'Returns are due April 15.' });
     expect(s[1].quote).toHaveLength(200);
   });
+  it('remembers which project document an excerpt came from, so it can be opened', () => {
+    const s = sourcesFromChunks([{ name: 'tax-guide.pdf', position: 0, content: 'x' }, { name: 'gone.md', position: 1, content: 'y' }], [{ name: 'tax-guide.pdf', path: '/docs/tax-guide.pdf', size: 900 }]);
+    expect(s[0].file).toEqual({ path: '/docs/tax-guide.pdf', name: 'tax-guide.pdf', size: 900 });
+    expect(s[1].file).toBeUndefined();
+  });
   it('keeps the latest turn sources until they are replaced', () => {
     setTurnSources([{ title: 'a', quote: 'q' }]);
     expect(turnSources()).toHaveLength(1);

@@ -2,7 +2,7 @@
  * One citation format for chat, study results, briefings and exercises: title, page or section, link, date read and the exact quote.
  * A citation is "verified" only when its quote really appears in the source text it points to; anything else is shown as unverified.
  */
-export interface Citation { title: string; page?: number; section?: string; url?: string; readAt?: string; quote: string; author?: string; year?: string; publisher?: string }
+export interface Citation { title: string; page?: number; section?: string; url?: string; readAt?: string; quote: string; author?: string; year?: string; publisher?: string; /** A document in the app that the source can be opened from. */ file?: { path: string; name: string; size: number } }
 export type CheckedCitation = Citation & { verified: boolean };
 
 const squash = (s: string) => s.replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim().toLowerCase();

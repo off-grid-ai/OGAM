@@ -31,3 +31,19 @@ it('marks a quote found in the source as verified', () => {
   rtl.fireEvent.press(r.getByTestId('chip-0'));
   expect(r.getByTestId('chip-status').props.children).toBe('Quote found in the source.');
 });
+
+it('offers to open the project document a source came from', () => {
+  const rtl = requireRTL();
+  const React = require('react');
+  const { CitationChips } = require('../../src/components/CitationChips');
+  const { navigationRef } = require('../../src/navigation/navigationRef');
+  const navigate = jest.spyOn(navigationRef, 'navigate').mockImplementation(() => undefined);
+  const cites = [{ title: 'tax-guide.pdf (part 3)', quote: 'Returns are due April 15.', verified: true, file: { path: '/docs/tax-guide.pdf', name: 'tax-guide.pdf', size: 900 } }, { title: 'No file', quote: 'q', verified: true }];
+  const r = rtl.render(React.createElement(CitationChips, { cites }));
+  rtl.fireEvent.press(r.getByTestId('chip-1'));
+  expect(r.queryByTestId('chip-open-document')).toBeNull();
+  rtl.fireEvent.press(r.getByTestId('chip-0'));
+  rtl.fireEvent.press(r.getByTestId('chip-open-document'));
+  expect(navigate).toHaveBeenCalledWith('DocumentPreview', { filePath: '/docs/tax-guide.pdf', fileName: 'tax-guide.pdf', fileSize: 900 });
+  navigate.mockRestore();
+});
