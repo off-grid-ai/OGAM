@@ -32,6 +32,7 @@ import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import org.json.JSONObject
 
 class WorkerDownload(
@@ -70,16 +71,30 @@ class WorkerDownload(
 
         downloadDao.updateStatus(downloadId, DownloadStatus.RUNNING)
 
-        val call = client.newCall(buildRequest(download.url, existingBytes))
-        val cancelHandle = coroutineContext[Job]?.invokeOnCompletion { call.cancel() }
-        return try {
-            call.execute().use { response ->
-                handleResponse(response, existingBytes, download, downloadId, targetFile, progressInterval)
+        // A transfer cut after new bytes (a CDN stream reset, a dropped connection) resumes here with a
+        // Range request: the download is still moving. Only a request that wrote nothing ends the
+        // worker, so WorkManager's bounded retries count stalls, not every hiccup of a long download.
+        var requestStartBytes = existingBytes
+        while (true) {
+            val call = client.newCall(buildRequest(download.url, requestStartBytes))
+            val cancelHandle = coroutineContext[Job]?.invokeOnCompletion { call.cancel() }
+            try {
+                return call.execute().use { response ->
+                    handleResponse(response, requestStartBytes, download, downloadId, targetFile, progressInterval)
+                }
+            } catch (e: Exception) {
+                if (isStopped) return handleStoppedState(downloadId, download, download.downloadedBytes)
+                val reason = DownloadReason.fromThrowable(e)
+                val bytesNow = if (targetFile.exists()) targetFile.length() else 0L
+                if (!DownloadReason.resumesInPlace(reason, bytesNow > requestStartBytes)) {
+                    return handleDownloadException(downloadId, download, e)
+                }
+                Log.w(TAG, "Transfer cut id=$downloadId at $bytesNow bytes reason=$reason (${e.javaClass.simpleName}); resuming")
+                requestStartBytes = bytesNow
+            } finally {
+                cancelHandle?.dispose()
             }
-        } catch (e: Exception) {
-            handleDownloadException(downloadId, download, e)
-        } finally {
-            cancelHandle?.dispose()
+            delay(RESUME_DELAY_MS)
         }
     }
 
@@ -298,6 +313,7 @@ class WorkerDownload(
     companion object {
         private const val TAG = "WorkerDownload"
         private const val MAX_TRANSIENT_RETRIES = 5
+        private const val RESUME_DELAY_MS = 1000L
 
         val httpClient: OkHttpClient = OkHttpClient.Builder()
             .retryOnConnectionFailure(true)

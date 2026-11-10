@@ -1,5 +1,6 @@
 package ai.offgridmobile.download
 
+import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.ConnectException
 import java.net.SocketException
@@ -47,9 +48,20 @@ object DownloadReason {
             is ConnectException -> NETWORK_LOST
             is SocketException -> NETWORK_LOST
             is SSLException -> NETWORK_LOST
+            // Any other I/O failure mid-transfer (a CDN stream reset, "unexpected end of stream") is an
+            // interrupted transfer, not an unknown one: the partial file is kept and resumes with Range.
+            // As UNKNOWN_ERROR it was never retried, so one reset failed the whole download.
+            is IOException -> DOWNLOAD_INTERRUPTED
             else -> UNKNOWN_ERROR
         }
     }
+
+    /**
+     * Resume straight away, in the same worker, after a retryable failure that came after new bytes:
+     * the download is still moving, so it costs none of WorkManager's retries (the file is finite, so
+     * this ends). Only a request that wrote nothing waits for a WorkManager retry.
+     */
+    fun resumesInPlace(code: String, madeProgress: Boolean): Boolean = madeProgress && isRetryable(code)
 
     fun fromHttpCode(code: Int): String {
         return when (code) {
