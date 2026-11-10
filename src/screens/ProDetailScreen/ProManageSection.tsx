@@ -32,6 +32,8 @@ import {
 } from '../../services/proLicenseService';
 import { loadProFeatures } from '../../bootstrap/loadProFeatures';
 import logger from '../../utils/logger';
+import { cardSurface } from '../../theme/surface';
+import { SectionLabel } from '../../components/SectionLabel';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '';
@@ -150,8 +152,10 @@ export const ProManageSection: React.FC = () => {
   const renewing = tierMeta?.renews === true;
 
   return (
+    <>
+    {/* The label above the card, as every other group (hand test 66 found it inside). */}
+    <SectionLabel title="Your licence" style={styles.cardLabel} />
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Your licence</Text>
       <View style={[styles.row, hasSyncScreen || renewing ? null : styles.lastRow]}>
         <Icon name="check-circle" size={18} color={colors.primary} />
         <Text style={styles.rowTitle}>{statusLine}</Text>
@@ -165,7 +169,7 @@ export const ProManageSection: React.FC = () => {
           accessibilityRole="button"
           accessibilityLabel="Manage licensed devices in Sync"
         >
-          <Icon name="monitor" size={18} color={colors.primary} />
+          <Icon name="monitor" size={18} color={colors.textSecondary} />
           <View style={styles.rowText}>
             <Text style={styles.rowTitle}>Licensed devices</Text>
             <Text style={styles.rowDescription}>View or deactivate from Sync</Text>
@@ -177,7 +181,7 @@ export const ProManageSection: React.FC = () => {
       {/* Web Billing authenticates by email, so the only real path to cancelling is that link. */}
       {renewing ? (
         <View style={styles.row}>
-          <Icon name="mail" size={18} color={colors.primary} />
+          <Icon name="mail" size={18} color={colors.textSecondary} />
           <View style={styles.rowText}>
             <Text style={styles.rowTitle}>Manage subscription</Text>
             <Text style={styles.rowDescription}>
@@ -198,7 +202,7 @@ export const ProManageSection: React.FC = () => {
         accessibilityRole="button"
         accessibilityLabel="Reset Pro on this phone"
       >
-        <Icon name="rotate-ccw" size={18} color={colors.primary} />
+        <Icon name="rotate-ccw" size={18} color={colors.textSecondary} />
         <View style={styles.rowText}>
           <Text style={styles.rowTitle}>
             {resetting ? 'Resetting…' : 'Reset Pro'}
@@ -210,29 +214,21 @@ export const ProManageSection: React.FC = () => {
         {resetting ? <LoadingDots color={colors.primary} /> : null}
       </TouchableOpacity>
     </View>
+    </>
   );
 };
 
 // The same card as the rest of the app: one surface, an uppercase title, hairline-divided rows.
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) =>
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) =>
   ({
     card: {
-      backgroundColor: colors.surface,
-      borderRadius: 12,
+      ...cardSurface(colors),
       paddingHorizontal: SPACING.md,
       paddingVertical: SPACING.xs,
       marginHorizontal: SPACING.xl,
       marginBottom: SPACING.xl,
-      ...shadows.small,
     },
-    cardTitle: {
-      ...TYPOGRAPHY.label,
-      color: colors.textMuted,
-      textTransform: 'uppercase' as const,
-      letterSpacing: 0.3,
-      paddingTop: SPACING.md,
-      paddingBottom: SPACING.xs,
-    },
+    cardLabel: { marginLeft: SPACING.xl + SPACING.xs },
     row: {
       minHeight: 44,
       flexDirection: 'row' as const,
@@ -245,5 +241,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) =>
     lastRow: { borderBottomWidth: 0 },
     rowText: { flex: 1, gap: SPACING.xs },
     rowTitle: { ...TYPOGRAPHY.bodySmall, color: colors.text, flex: 1 },
-    rowDescription: { ...TYPOGRAPHY.meta, color: colors.textMuted },
+    // A sentence, so Geist (reading text), not the Mono kept for labels and numbers.
+    rowDescription: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
   });

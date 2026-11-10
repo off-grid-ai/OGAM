@@ -1,4 +1,7 @@
 import { videoSeam } from '../../bootstrap/videoSeam';
+import { mediaStyle } from '@offgrid/models';
+import { adoptDraftStyles, chatStyleId } from '../../stores/mediaStyleStore';
+import type { MediaStyleIds } from '../../services/generationService';
 /* eslint-disable max-lines -- cohesive generation-action orchestrator (send/regenerate/dispatch/route share the same GenerationDeps + session state); splitting it would scatter tightly-coupled turn logic. */
 import { Dispatch, SetStateAction } from 'react';
 import { AlertState, showAlert, hideAlert } from '../../components';
@@ -7,6 +10,7 @@ import { APP_CONFIG } from '../../constants';
 import {
   llmService,
   intentClassifier,
+  isVideoRequest,
   generationService,
   imageGenerationService,
   ImageGenerationState,
@@ -20,6 +24,8 @@ import {
   wantsLeadingThinkToken,
   localModelAcceptsImages,
   stopAllTextEngines,
+  activeLiteRTContextTokens,
+  summarizeWithActiveEngine,
 } from '../../services/engines';
 import { needsVisionRepair } from '../../utils/visionRepair';
 import { ensureDefaultClassifier } from '../../services/classifierProvisioning';
@@ -57,6 +63,8 @@ import {
 } from '../../services/documents/chatTurn';
 import { useDocumentTurnStatusStore } from '../../services/documents/progressStore';
 import { shownMessages } from '../../utils/chatThread';
+import { hasSearchableKnowledge, toolsForTurn } from '../../services/documents/searchableKnowledge';
+import { resolveSystemPrompt } from '../../utils/systemPrompt';
 type SetState<T> = Dispatch<SetStateAction<T>>;
 const FALLBACK_RECENT_MESSAGE_COUNT = 2;
 
@@ -171,7 +179,7 @@ function blockedImageForNonVisionModel(
     showAlert(
       repair ? 'Vision File Missing' : 'Vision Not Supported',
       repair
-        ? 'This model supports vision, but its vision file has not been installed.\n\nOpen Download Manager and tap the wrench next to the model to download it.'
+        ? 'This model supports vision, but its vision file has not been installed.\n\nOpen Downloads and tap the wrench next to the model to download it.'
         : 'This model does not support image input.\n\nSwitch to a vision-capable model to send images.',
     ),
   );
@@ -295,6 +303,13 @@ async function resolveTurnKind(
   if (input.recordedKind) return input.recordedKind; // replay: the recorded fact wins
   if (input.forceVideoMode) return 'video';
   if (input.imageEnabled === false) return 'text'; // image route explicitly disabled for this turn
+  // "Create a video of…" makes a video in auto mode, as "draw a…" makes an image. Checked before the
+  // image rule, which would read "make a video of a sunset scene" as a picture. Manual mode leaves it
+  // to the video toggle, and free builds (no video) fall through to the image/text rule.
+  if (deps.settings.imageGenerationMode !== 'manual' && videoSeam.available() && isVideoRequest(input.text)) {
+    logger.log('[ROUTE-SM] → video: the message asks for a video');
+    return 'video';
+  }
   return (await shouldRouteToImageGenerationFn(
     deps,
     input.text,
@@ -428,6 +443,8 @@ async function shouldRouteToImageGenerationFn(
 export type ImageGenCall = {
   prompt: string;
   conversationId: string;
+  /** The turn's style: its words go after the prompt, and the user message records it. */
+  styleId?: string;
   skipUserMessage?: boolean;
   attachments?: MediaAttachment[]; // kept on the user message (e.g. a voice note)
 };
@@ -442,7 +459,7 @@ export async function handleImageGenerationFn(
   >,
   call: ImageGenCall,
 ): Promise<void> {
-  const { prompt, conversationId, skipUserMessage = false, attachments } = call;
+  const { prompt, conversationId, skipUserMessage = false, attachments, styleId } = call;
   if (!deps.activeImageModel) {
     deps.setAlertState(showAlert('Error', 'No image model loaded.'));
     return;
@@ -456,6 +473,7 @@ export async function handleImageGenerationFn(
       content: prompt,
       attachments,
       turnKind: 'image',
+      ...(styleId ? { mediaStyleId: styleId } : {}),
     });
   }
   // Do NOT thread steps/guidanceScale from deps.settings — that is a React render snapshot, one
@@ -465,6 +483,7 @@ export async function handleImageGenerationFn(
   // didn't). Passing nothing here makes all four tunables read from the one fresh source.
   const image = await imageGenerationService.generateImage({
     prompt,
+    styleWords: mediaStyle('image', styleId)?.words,
     conversationId,
     previewInterval: 2,
   });
@@ -573,11 +592,14 @@ async function generateWithCompactionRetry(
           contextUsage,
         );
   };
-  const contextWindowTokens = useRemoteServerStore.getState().activeServerId
-    ? useAppStore.getState().settings.contextLength ||
-      APP_CONFIG.maxContextLength
-    : llmService.getPerformanceSettings().contextLength ||
-      APP_CONFIG.maxContextLength;
+  const liteRTContextTokens = activeLiteRTContextTokens();
+  const contextWindowTokens =
+    liteRTContextTokens ??
+    (useRemoteServerStore.getState().activeServerId
+      ? useAppStore.getState().settings.contextLength ||
+        APP_CONFIG.maxContextLength
+      : llmService.getPerformanceSettings().contextLength ||
+        APP_CONFIG.maxContextLength);
   const estimatedPromptTokens = Math.ceil(
     JSON.stringify(
       opts.messages.map(m => ({ role: m.role, content: m.content })),
@@ -594,6 +616,8 @@ async function generateWithCompactionRetry(
       systemPrompt: opts.prompt,
       allMessages: opts.messages,
       previousSummary: conversation?.compactionSummary,
+      contextLength: liteRTContextTokens,
+      summarize: summarizeWithActiveEngine,
     }).catch(() => opts.messages);
     if (!generationSession.isGeneratingFor(opts.id)) return true;
   }
@@ -619,6 +643,8 @@ async function generateWithCompactionRetry(
         systemPrompt: opts.prompt,
         allMessages: messagesForFirstAttempt,
         previousSummary,
+        contextLength: liteRTContextTokens,
+        summarize: summarizeWithActiveEngine,
       })
       .catch(async () => {
         await llmService.clearKVCache(true).catch(() => {});
@@ -740,10 +766,7 @@ function resolveToolsAndPrompt(
   // The user enables KB search explicitly when they want it.
   const enabledTools = canUseTools ? deps.settings.enabledTools || [] : [];
 
-  const rawPrompt =
-    project?.systemPrompt ||
-    deps.settings.systemPrompt ||
-    APP_CONFIG.defaultSystemPrompt;
+  const rawPrompt = resolveSystemPrompt(project?.systemPrompt, deps.settings.systemPrompt);
   return { enabledTools, rawPrompt, localToolSupport };
 }
 export async function startGenerationFn(
@@ -756,7 +779,7 @@ export async function startGenerationFn(
   const { setDebugInfo, targetConversationId, messageText, assistantEnabled } = call;
   if (!deps.hasActiveModel) return;
   // Pure text executor — image-vs-text routing happens upstream in dispatchGenerationFn.
-  generationSession.begin(targetConversationId);
+  const turn = generationSession.begin(targetConversationId);
   // For remote models, skip local model loading
   if (
     !deps.activeModelInfo?.isRemote &&
@@ -766,6 +789,11 @@ export async function startGenerationFn(
     }))
   ) {
     generationSession.end('not-ready');
+    return;
+  }
+  // Stop pressed while the model loaded ends the turn; the reply it was waiting to start never runs.
+  if (!generationSession.isCurrent(turn)) {
+    logger.log('[GEN-SM] turn stopped during model load; not generating');
     return;
   }
   const conversation = useChatStore
@@ -784,7 +812,8 @@ export async function startGenerationFn(
     callHook<string>(HOOKS.audioAugmentPrompt, basePrompt) ?? basePrompt;
 
   const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;
-  const activeTools = enabledTools;
+  // Knowledge search only when this chat or its project holds something to search.
+  const activeTools = toolsForTurn(enabledTools, await hasSearchableKnowledge(targetConversationId));
   // Text hint only when the LOCAL engine lacks native tool-calling (llama without Jinja); LiteRT
   // and remote pass tools natively, so injecting a hint would double-inject. localToolSupport is
   // the engine-registry answer — no engine === 'litert' branch here.
@@ -901,7 +930,7 @@ export async function startGenerationFn(
         ),
       );
     }
-    generationSession.end('error');
+    generationSession.end('error', turn);
     return;
   }
   // The model produced NO output (0 tokens) — finalizeStreamingMessage only appends an
@@ -929,7 +958,7 @@ export async function startGenerationFn(
       },
     });
   }
-  generationSession.end();
+  generationSession.end('done', turn);
 }
 let _msgIdSeq = 0;
 const nextMsgId = () => `${Date.now()}-${(++_msgIdSeq).toString(36)}`;
@@ -966,6 +995,8 @@ async function dispatchResolvedTurn(
     conversationId: string;
     /** True on resend: the user message already exists in history, so the image path must not re-add it. */
     imageSkipsUserMessage: boolean;
+    /** The style a picture or clip is made with: the chat's choice on send, the turn's own on resend. */
+    styleId?: string;
     /** Called when the text route needs a text model (image-only device) but none could be provisioned —
      *  send stashes a pending message here; resend just bails. Return value is ignored (the turn is handled). */
     onTextModelUnavailable: () => void;
@@ -987,12 +1018,14 @@ async function dispatchResolvedTurn(
         content: opts.text,
         attachments: opts.attachments,
         turnKind: 'video',
+        ...(opts.styleId ? { mediaStyleId: opts.styleId } : {}),
       });
     const shownBefore = videoFailureShown();
     try {
       await videoSeam.generate({
         prompt: opts.text,
         conversationId: opts.conversationId,
+        ...(opts.styleId ? { styleId: opts.styleId } : {}),
       });
     } catch (error) {
       // A clip that ran and failed is on its own failure card. One refused before it started (the
@@ -1015,6 +1048,7 @@ async function dispatchResolvedTurn(
       conversationId: opts.conversationId,
       attachments: opts.attachments,
       skipUserMessage: opts.imageSkipsUserMessage,
+      styleId: opts.styleId,
     });
     return { handled: true };
   }
@@ -1047,6 +1081,8 @@ export type DispatchCall = {
   conversationId: string;
   imageMode?: 'auto' | 'force' | 'disabled' | 'video';
   assistantEnabled?: boolean;
+  /** Fixed when a queued turn was sent; absent for a send that goes at once, which reads the chat's style now. */
+  styleIds?: MediaStyleIds;
 };
 /**
  * THE routing layer: the single place a message is classified and dispatched to
@@ -1083,6 +1119,7 @@ export async function dispatchGenerationFn(
     attachments,
     conversationId,
     imageSkipsUserMessage: false,
+    styleId: kind === 'text' ? undefined : call.styleIds ? call.styleIds[kind] : chatStyleId(conversationId, kind),
     onTextModelUnavailable: () => {
       deps.setPendingMessage?.(text, attachments);
     },
@@ -1143,6 +1180,7 @@ export async function handleSendFn(
       undefined,
       deps.pendingProjectId,
     );
+    adoptDraftStyles(targetConversationId);
     deps.setActiveConversation(targetConversationId);
   }
   reportMessageSent(attachments);
@@ -1164,6 +1202,10 @@ export async function handleSendFn(
       messageText,
       imageMode,
       assistantEnabled,
+      styleIds: {
+        image: chatStyleId(targetConversationId, 'image'),
+        video: chatStyleId(targetConversationId, 'video'),
+      },
     });
     if (call.sendNow) await sendQueuedNowFn(deps, queuedId);
     return;
@@ -1278,7 +1320,7 @@ export async function regenerateResponseFn(
   const targetConversationId = deps.activeConversationId;
   // Resend starts before memory reclaim, routing, and remote preparation. Publish that fact now so
   // the existing thinking loader covers the full wait instead of appearing only when generation starts.
-  generationSession.begin(targetConversationId);
+  const resendTurn = generationSession.begin(targetConversationId);
   await modelResidencyManager.reclaimSttForGeneration(); // free idle Whisper before the LLM reload (memory-tight)
   const messageTextForRoute = userMessage.content;
   // Same decision seam as dispatch (resolveTurnKind): a replay passes the RECORDED kind, which wins
@@ -1300,6 +1342,7 @@ export async function regenerateResponseFn(
     attachments: userMessage.attachments,
     conversationId: targetConversationId,
     imageSkipsUserMessage: true,
+    styleId: userMessage.mediaStyleId,
     onTextModelUnavailable: () => {
       deps.setPendingMessage?.(userMessage.content, userMessage.attachments);
     },
@@ -1327,6 +1370,10 @@ export async function regenerateResponseFn(
     generationSession.end('not-ready');
     return;
   }
+  if (!generationSession.isCurrent(resendTurn)) {
+    logger.log('[RESEND-SM] turn stopped during model load; not generating');
+    return;
+  }
   logger.log('[RESEND-SM] regenerate → reached LLM generate path');
   track('reply_regenerated');
   // LiteRT: native history must be rewound to match the JS messages we're about to replay.
@@ -1347,7 +1394,8 @@ export async function regenerateResponseFn(
     messageText,
   );
   const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;
-  const activeTools = enabledTools;
+  // Knowledge search only when this chat or its project holds something to search.
+  const activeTools = toolsForTurn(enabledTools, await hasSearchableKnowledge(targetConversationId));
   const useTextHint = !isRemote && !localToolSupport && activeTools.length > 0;
   // MCP/extension hints come solely from augmentSystemPromptForTools in the tool loop
   // (see the send path above) — adding them here too would double-inject.
@@ -1451,7 +1499,7 @@ export async function regenerateResponseFn(
       deps.setAlertState(showAlert('Generation Error', msg));
     }
   }
-  generationSession.end();
+  generationSession.end('done', resendTurn);
 }
 export type SelectProjectDeps = {
   activeConversationId: string | null | undefined;

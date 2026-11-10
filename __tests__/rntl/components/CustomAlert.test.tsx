@@ -77,6 +77,28 @@ describe('CustomAlert', () => {
     expect(queryByText('Loading')).toBeTruthy();
   });
 
+  it('lists a recommended answer first among three, each one a button that runs its action', () => {
+    const choose = jest.fn();
+    const anyway = jest.fn();
+    const { getAllByRole, getByRole } = render(
+      <CustomAlert
+        visible={true}
+        title="Insufficient Memory"
+        buttons={[
+          { text: 'Choose another model', style: 'primary', onPress: choose },
+          { text: 'Load Anyway', onPress: anyway },
+          { text: 'Cancel', style: 'cancel' },
+        ]}
+      />,
+    );
+    expect(getAllByRole('button').map(b => b.props.accessibilityLabel)).toEqual(
+      expect.arrayContaining(['Choose another model', 'Load Anyway', 'Cancel']),
+    );
+    fireEvent.press(getByRole('button', { name: 'Choose another model' }));
+    expect(choose).toHaveBeenCalledTimes(1);
+    expect(anyway).not.toHaveBeenCalled();
+  });
+
   it('renders destructive button with style', () => {
     const { getByText } = render(
       <CustomAlert

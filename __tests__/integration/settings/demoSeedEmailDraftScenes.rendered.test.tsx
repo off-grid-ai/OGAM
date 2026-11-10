@@ -126,7 +126,7 @@ describe('demo email-draft handoff scenes (rendered, real App)', () => {
     // The mail tool is still running, and there is no finished answer yet.
     // It reads as the call being made, addressed to Sam with the pilot subject.
     await rtl.waitFor(() => expect(view.getByTestId('tool-call-label-send_email'))
-      .toHaveTextContent(/^Using send_email: sam@acme\.example, Acme Corp pilot — 14 November/));
+      .toHaveTextContent(/^Writing the email: sam@acme\.example, Acme Corp pilot — 14 November/));
     expect(view.queryByTestId('tool-result-label-send_email')).toBeNull();
     expect(view.queryByText(/No email has been sent/)).toBeNull();
     expect(view.queryByText(/Mail app opened with a draft/)).toBeNull();
@@ -154,14 +154,17 @@ describe('demo email-draft handoff scenes (rendered, real App)', () => {
 
     // A demo text document opens from the project and shows its text.
     await view.findByTestId('project-detail-screen');
-    await rtl.waitFor(() => expect(view.getByTestId('project-knowledge-base-count')).toHaveTextContent('3'));
+    await rtl.waitFor(() => expect(view.getByTestId('project-knowledge-base-count')).toHaveTextContent('3 files'));
     expect(view.queryByText(/Sam Okafor is the customer contact at Acme Corp/)).toBeNull();
-    rtl.fireEvent.press(view.getByTestId('project-tab-knowledge'));
-    rtl.fireEvent.press(view.getByLabelText('Knowledge document Acme pilot brief.txt'));
+    rtl.fireEvent.press(view.getByTestId('project-files'));
+    await view.findByTestId('knowledge-base-screen');
+    rtl.fireEvent.press(await rtl.waitFor(() => view.getByLabelText('File Acme pilot brief.txt')));
     expect(await view.findByText(/Sam Okafor is the customer contact at Acme Corp/)).toBeTruthy();
     rtl.fireEvent.press(view.getByTestId('document-preview-back'));
-    await view.findByTestId('project-detail-screen');
-    expect(view.queryByText(/Sam Okafor is the customer contact at Acme Corp/)).toBeNull();
+    await rtl.waitFor(() => expect(view.queryByText(/Sam Okafor is the customer contact at Acme Corp/)).toBeNull());
+    rtl.fireEvent.press(view.getByTestId('knowledge-base-back'));
+    await rtl.waitFor(() => expect(view.queryByTestId('knowledge-base-screen')).toBeNull());
+    expect(view.getByTestId('project-detail-screen')).toBeTruthy();
     // The demo PDF (Acme_rollout_v3.pdf) is a real PDF; the harness's PDF reader only reads its own
     // test format, so opening it here cannot show its pages. Its content is a device check.
   }, 60_000);

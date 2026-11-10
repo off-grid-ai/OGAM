@@ -5,7 +5,8 @@ set -euo pipefail
 # testing) and cut a GitHub PRERELEASE tag. Same fundamental as scripts/release.sh (build
 # locally, generate grouped release notes, tag on GitHub) - but flavored as a beta:
 #
-#   * Beta version = <NEXT patch>-beta.<N> (e.g. current live 0.0.102 → 0.0.103-beta.1). A
+#   * Beta version = <NEXT patch>-beta.<N> once the current version is live (0.0.102 live →
+#     0.0.103-beta.1), else another beta of the version still in test (0.0.103-beta.2). A
 #     beta is a PRE-RELEASE OF THE NEXT version, never the current one: the current version
 #     is already LIVE on the stores, so its TestFlight train is CLOSED to new builds
 #     ("Invalid Pre-Release Train"). N auto-increments from the last matching prerelease tag.
@@ -70,6 +71,16 @@ if [ "$MODE" = build ] || [ "$MODE" = upload ] || [ "$MODE" = finalize ]; then
 fi
 stage() { for wanted in "$@"; do [ "$MODE" = "$wanted" ] && return 0; done; return 1; }
 # GNU sed (Linux runners) and BSD sed (macOS) spell in-place editing differently.
+# The version the next beta targets: the next patch once CURRENT has shipped to production (its plain
+# tag exists), else CURRENT itself.
+next_beta_target() {
+  local current="$1" released_tag="$2"
+  if [ -n "$released_tag" ]; then
+    node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); console.log(a+"."+b+"."+(c+1))' "$current"
+  else
+    echo "$current"
+  fi
+}
 sed_in_place() { if sed --version >/dev/null 2>&1; then sed -i "$@"; else sed -i '' "$@"; fi; }
 
 # ── pre-flight ─────────────────────────────────────────────────────
@@ -125,9 +136,9 @@ fi
 
 # ── compute the beta version ───────────────────────────────────────
 # A beta targets the NEXT version, not the live one (the live train is closed - see header).
-# EVERY uat build takes its OWN version, so the number on the GitHub release is the number the app
-# shows on both stores. package.json is bumped to it below and committed with the build, which is what
-# makes the next cut compute the next version rather than rebuilding 0.0.103 four times.
+# The cut's version is the number the GitHub release, both stores and the app show. package.json is set
+# to it below and committed with the build; successive betas of one release share it and differ by their
+# beta number (the tag) and their store build number (what the app's About shows in brackets).
 CURRENT_VERSION=$(node -p "require('./package.json').version")
 if [ -n "${UAT_VERSION:-}" ] && ! stage all plan; then
 TARGET_VERSION="$UAT_VERSION"
@@ -140,12 +151,16 @@ if stage finalize && git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/
   error "Tag $TAG is already on origin. Run a new --plan."
 fi
 else
-TARGET_VERSION=$(node -e "const [a,b,c]=require('./package.json').version.split('.').map(Number); console.log(a+'.'+b+'.'+(c+1))")
 # --no-recurse-submodules: this fetch only needs CORE tags to pick the next beta number. Recursing
 # into the pro submodule made it try to fetch pro commits referenced by old tag history that are no
 # longer on pro's remote (e.g. after a pro branch was deleted/rebased) → "not our ref" → the whole
 # tag refresh failed and blocked the build. The submodule is already checked out at the pinned commit.
 git fetch --tags --no-recurse-submodules --quiet || error "Could not refresh tags. Refusing to pick a beta number from stale tag history (would risk reusing an already-published beta tag and failing the tag push after the store uploads)."
+# A version that reached production has its plain tag (promote.sh pushes v<version>): its train is
+# closed, so the next beta is the next patch. A version not promoted yet is still the release being
+# tested, so the next cut is another beta of it (0.0.123-beta.1 then 0.0.123-beta.2, never 0.0.124-beta.1
+# for the same release). Each cut still has its own store build number.
+TARGET_VERSION=$(next_beta_target "$CURRENT_VERSION" "$(git tag -l "v${CURRENT_VERSION}")")
 LAST_N=$(git tag -l "v${TARGET_VERSION}-beta.*" | sed -E "s/.*-beta\.([0-9]+)$/\1/" | sort -n | tail -1)
 N=$(( ${LAST_N:-0} + 1 ))
 BETA_VERSION="${TARGET_VERSION}-beta.${N}"

@@ -746,18 +746,13 @@ describe('Pro mobile saved-device management journey', () => {
 
     fireEvent.press(ui.getByLabelText('Back'));
     await waitFor(() => expect(ui!.getByTestId('sync-home-card')).toBeTruthy());
-    // The card counts the mesh: one saved device, none connected now that it has been disconnected.
-    // It said "1 connected - 1 saved" a moment ago, so this is the transition and not a still frame.
-    //
-    // Not asserted: a "needs attention" line. The card prefers the local discoverability title, so it
-    // says "Discoverable" here - true of this device, and silent about the peer that just dropped.
+    // The card counts the mesh on one line: one saved device, none connected now that it has been
+    // disconnected, and this phone still visible to others. It said "1 connected · 1 saved" a moment
+    // ago, so this is the transition and not a still frame.
     expect(
       within(ui!.getByTestId('sync-home-card')).getByText(
-        /0 connected - 1 saved/,
+        '0 connected · 1 saved · visible',
       ),
-    ).toBeTruthy();
-    expect(
-      within(ui!.getByTestId('sync-home-card')).getByText(/Discoverable/),
     ).toBeTruthy();
     fireEvent.press(ui.getByTestId('open-sync-from-home'));
 
@@ -775,7 +770,7 @@ describe('Pro mobile saved-device management journey', () => {
     await waitFor(() =>
       expect(
         within(ui!.getByTestId('sync-home-card')).getByText(
-          /1 connected - 1 saved/,
+          /1 connected · 1 saved/,
         ),
       ).toBeTruthy(),
     );

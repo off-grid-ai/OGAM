@@ -26,7 +26,7 @@ import logger from '../../../utils/logger';
 import { mapStoreStatus } from '../storeStatus';
 import { uniformDownloadId } from '../uniformId';
 import { startImageModelDownload } from '../../imageModelDownloadOwner';
-import { pauseSyntheticImageDownload, resumeSyntheticImageDownload } from '../../imageDownloadActions';
+import { keptImageZipName, pauseSyntheticImageDownload, resumeSyntheticImageDownload } from '../../imageDownloadActions';
 import type { DownloadProvider, ModelDownload } from '../types';
 
 /**
@@ -160,6 +160,9 @@ export const imageProvider: DownloadProvider = {
         .catch(err => logger.log(`[DL-SM] image:${modelId} remove: native cancel failed err=${msg(err)}`));
       useDownloadStore.getState().remove(entry.modelKey);
     }
+    // A failed unzip keeps its zip for a retry; removing the download removes that too.
+    const keptZip = `${modelManager.getImageModelsDirectory()}/${keptImageZipName(modelId)}`;
+    if (await RNFS.exists(keptZip)) await RNFS.unlink(keptZip).catch(() => {});
     await activeModelService.unloadImageModel()
       .catch(err => logger.log(`[DL-SM] image:${modelId} remove: unload failed err=${msg(err)}`));
     // The files leave first. If the disk refuses, the model stays the person's (still listed, still on

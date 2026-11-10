@@ -17,6 +17,7 @@
 		0A7B3D042F3A0B1200CC5FA1 /* PDFExtractorModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7B3D022F3A0B1200CC5FA1 /* PDFExtractorModule.swift */; };
 		0A7B3D062F3A0B1200CC5FA1 /* all-MiniLM-L6-v2-Q8_0.gguf in Resources */ = {isa = PBXBuildFile; fileRef = 0A7B3D052F3A0B1200CC5FA1 /* all-MiniLM-L6-v2-Q8_0.gguf */; };
 		0A7B3D072F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7B3D082F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift */; };
+		0A7B3D092F3A0B1200CC5FA1 /* DownloadManagerModuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7B3D0A2F3A0B1200CC5FA1 /* DownloadManagerModuleTests.swift */; };
 		0ADE3D052F3A0B1200CC5FA1 /* DeviceMemoryModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0ADE3D012F3A0B1200CC5FA1 /* DeviceMemoryModule.m */; };
 		0ADE3D062F3A0B1200CC5FA1 /* DeviceMemoryModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ADE3D022F3A0B1200CC5FA1 /* DeviceMemoryModule.swift */; };
 		0ADE3D152F3A0B1200CC5FA1 /* ProblemReportModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0ADE3D112F3A0B1200CC5FA1 /* ProblemReportModule.m */; };
@@ -93,6 +94,7 @@
 		0A7B3D022F3A0B1200CC5FA1 /* PDFExtractorModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFExtractorModule.swift; sourceTree = "<group>"; };
 		0A7B3D052F3A0B1200CC5FA1 /* all-MiniLM-L6-v2-Q8_0.gguf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "all-MiniLM-L6-v2-Q8_0.gguf"; sourceTree = "<group>"; };
 		0A7B3D082F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbeddingModelBundleTests.swift; sourceTree = "<group>"; };
+		0A7B3D0A2F3A0B1200CC5FA1 /* DownloadManagerModuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadManagerModuleTests.swift; sourceTree = "<group>"; };
 		0ADE3D012F3A0B1200CC5FA1 /* DeviceMemoryModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DeviceMemoryModule.m; sourceTree = "<group>"; };
 		0ADE3D022F3A0B1200CC5FA1 /* DeviceMemoryModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceMemoryModule.swift; sourceTree = "<group>"; };
 		0ADE3D112F3A0B1200CC5FA1 /* ProblemReportModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ProblemReportModule.m; sourceTree = "<group>"; };
@@ -266,6 +268,7 @@
 			children = (
 				AABB000200000000000002AA /* OffgridMobileTests.swift */,
 				0A7B3D082F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift */,
+				0A7B3D0A2F3A0B1200CC5FA1 /* DownloadManagerModuleTests.swift */,
 			);
 			path = OffgridMobileTests;
 			sourceTree = "<group>";
@@ -562,6 +565,7 @@
 			files = (
 				AABB000100000000000001AA /* OffgridMobileTests.swift in Sources */,
 				0A7B3D072F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift in Sources */,
+				0A7B3D092F3A0B1200CC5FA1 /* DownloadManagerModuleTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -597,7 +601,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = OffgridMobile/OffgridMobile.entitlements;
-				CURRENT_PROJECT_VERSION = 1793102561;
+				CURRENT_PROJECT_VERSION = 1794312517;
 				DEVELOPMENT_TEAM = 84V6KCAC49;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = OffgridMobile/Info.plist;
@@ -608,7 +612,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.0.119;
+				MARKETING_VERSION = 0.0.124;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -630,7 +634,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = OffgridMobile/OffgridMobile.entitlements;
-				CURRENT_PROJECT_VERSION = 1793102561;
+				CURRENT_PROJECT_VERSION = 1794312517;
 				DEVELOPMENT_TEAM = 84V6KCAC49;
 				INFOPLIST_FILE = OffgridMobile/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Off Grid AI";
@@ -640,7 +644,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.0.119;
+				MARKETING_VERSION = 0.0.124;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",

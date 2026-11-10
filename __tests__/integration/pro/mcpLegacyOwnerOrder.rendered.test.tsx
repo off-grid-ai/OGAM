@@ -51,13 +51,13 @@ it.each([['Alpha first', alpha, beta], ['Beta first', beta, alpha]] as const)(
       await rtl.waitFor(() => expect(ui.getByTestId(`mcp-server-status-${first.id}`)).toHaveTextContent('Active'));
       rtl.fireEvent(ui.getByTestId(`mcp-server-toggle-${second.id}`), 'valueChange', true);
       await rtl.waitFor(() => expect(ui.getByTestId(`mcp-server-status-${second.id}`)).toHaveTextContent('Active'));
-      expect(ui.getByTestId(`mcp-server-tool-count-${alpha.id}`)).toHaveTextContent('0/1 tools');
-      expect(ui.getByTestId(`mcp-server-tool-count-${beta.id}`)).toHaveTextContent('1/1 tools');
-      rtl.fireEvent.press(ui.getAllByText('Edit Tools')[1]);
+      expect(ui.getByTestId(`mcp-server-tool-count-${alpha.id}`)).toHaveTextContent(/\b0 of 1 tools$/);
+      expect(ui.getByTestId(`mcp-server-tool-count-${beta.id}`)).toHaveTextContent(/\b1 of 1 tools$/);
+      rtl.fireEvent.press(ui.getByLabelText(new RegExp(`^${beta.name}, Active, `)));
       expect(await ui.findByText('Beta Docs')).toBeTruthy();
       expect(ui.getByRole('switch', { checked: true })).toBeTruthy();
-      expect(ui.getByText('Disable All')).toBeEnabled();
-      expect(ui.getByText('Enable All')).toBeDisabled();
+      // Its one tool is on, so the one action turns all off.
+      expect(ui.getByTestId('mcp-tools-toggle-all')).toHaveTextContent('Turn all off');
     } finally {
       ui.unmount();
       const { disconnectServer } = require('../../../pro/mcp/mcpService');

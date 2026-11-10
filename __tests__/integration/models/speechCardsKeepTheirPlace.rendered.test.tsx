@@ -100,10 +100,10 @@ describe('Speech model cards keep their place', () => {
     // multilingual Tiny (4), Small (6) and Large v3 (9) are not in the list, and the cards around them
     // keep their own numbers.
     const expected = [
-      'transcription-model-card-0: Tiny',
-      'transcription-model-card-1: Base',
-      'transcription-model-card-2: Small',
-      'transcription-model-card-3: Medium',
+      'transcription-model-card-0: Tiny English',
+      'transcription-model-card-1: Base English',
+      'transcription-model-card-2: Small English',
+      'transcription-model-card-3: Medium English',
       'transcription-model-card-5: Base',
       'transcription-model-card-7: Medium',
       'transcription-model-card-8: Large v3 Turbo',

@@ -20,7 +20,7 @@ it('uses the selected GGUF header for context before loading and updates on sele
   const AsyncStorage = require('@react-native-async-storage/async-storage').default
     ?? require('@react-native-async-storage/async-storage');
   const { HomeScreen } = require('../../../src/screens/HomeScreen');
-  const { GenerationSettingsModal } = require('../../../src/components/GenerationSettingsModal');
+  const { ModelSettingsScreen } = require('../../../src/screens/ModelSettingsScreen');
   const { useAppStore } = require('../../../src/stores');
 
   const docs = boundary.fs!.DocumentDirectoryPath;
@@ -52,9 +52,10 @@ it('uses the selected GGUF header for context before loading and updates on sele
   fireEvent.press(await waitFor(() => home.getByTestId('text-model-row-ling')));
   await waitFor(() => expect(useAppStore.getState().activeModelId).toBe('ling'));
 
-  const settings = render(withNavigator(React.createElement(GenerationSettingsModal, { visible: true, onClose: () => {} })));
-  fireEvent.press(settings.getByText('TEXT GENERATION'));
-  await waitFor(() => expect(settings.getByTestId('setting-contextLength-slider').props.maximumValue).toBe(131072));
+  // Model settings (the chat sheet's "Model settings" row opens this screen) → Text tab.
+  const settings = render(withNavigator(React.createElement(ModelSettingsScreen)));
+  fireEvent.press(settings.getByTestId('model-settings-tab-text'));
+  await waitFor(() => expect(settings.getByTestId('llama-context-length-slider').props.maximumValue).toBe(131072));
   expect(useAppStore.getState().loadedTextModelId).toBeNull();
   settings.unmount();
   home.unmount();
@@ -63,9 +64,9 @@ it('uses the selected GGUF header for context before loading and updates on sele
   fireEvent.press(await waitFor(() => nextHome.getByTestId('models-summary')));
   fireEvent.press(await waitFor(() => nextHome.getByTestId('models-row-text')));
   fireEvent.press(await waitFor(() => nextHome.getByTestId('text-model-row-small')));
-  const nextSettings = render(withNavigator(React.createElement(GenerationSettingsModal, { visible: true, onClose: () => {} })));
-  fireEvent.press(nextSettings.getByText('TEXT GENERATION'));
-  await waitFor(() => expect(nextSettings.getByTestId('setting-contextLength-slider').props.maximumValue).toBe(4096));
+  const nextSettings = render(withNavigator(React.createElement(ModelSettingsScreen)));
+  fireEvent.press(nextSettings.getByTestId('model-settings-tab-text'));
+  await waitFor(() => expect(nextSettings.getByTestId('llama-context-length-slider').props.maximumValue).toBe(4096));
   expect(useAppStore.getState().loadedTextModelId).toBeNull();
   nextSettings.unmount();
   nextHome.unmount();

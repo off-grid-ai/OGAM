@@ -64,7 +64,7 @@ it('Make it real while the stills are drawn waits for them, then makes the film'
     finished += await downloads.finishRunning();
     expect(finished).toBe(VIDEO.files);
   }, { timeout: 15_000 });
-  await rtl.waitFor(() => expect(view.getAllByLabelText('Delete model').length).toBeGreaterThan(0), { timeout: 10_000 });
+  await rtl.waitFor(() => expect(view.getAllByLabelText(/^Delete /).length).toBeGreaterThan(0), { timeout: 10_000 });
 
   // Home: pick the image model and the video model.
   rtl.fireEvent.press(await view.findByTestId('home-tab'));

@@ -7,6 +7,27 @@ import { DownloadedModel, ModelFile, PersistedDownloadInfo } from '../../types';
 import { backgroundDownloadService } from '../backgroundDownloadService';
 import { buildDownloadedModel, persistDownloadedModel } from './storage';
 import { sizeToBytes } from '../../utils/fileSize';
+import { mtpHeadForPrimaryFile } from '@offgrid/models';
+
+/**
+ * Every file a model owns besides its vision projector: the main file, the later parts of a model
+ * split into several files (`-00001-of-00003` loads `-00002-` and `-00003-` beside it), and its
+ * published MTP head (the shared catalog's rule, the same one the loader uses). None of these is
+ * ever an orphan while the model is on the phone.
+ */
+function filesOfModel(mainFile: string): string[] {
+  const names = [mainFile];
+  const split = /^(.*)-(\d{5})-of-(\d{5})(\.gguf)$/i.exec(mainFile);
+  if (split) {
+    const total = Number(split[3]);
+    for (let part = 1; part <= total; part++) {
+      names.push(`${split[1]}-${String(part).padStart(5, '0')}-of-${split[3]}${split[4]}`);
+    }
+  }
+  const head = mtpHeadForPrimaryFile(mainFile);
+  if (head) names.push(head.name);
+  return names;
+}
 
 export async function getOrphanedTextFiles(
   modelsDir: string,
@@ -19,14 +40,19 @@ export async function getOrphanedTextFiles(
   const files = await RNFS.readDir(modelsDir);
   const models = await modelsGetter();
 
-  const trackedPaths = new Set<string>();
+  // Tracked by file NAME, not full path: the app's container path changes across installs, so a
+  // stored path can differ from the one on disk for the same file. A model's vision projector is
+  // tracked whatever its engine field says (older entries have none): calling it orphaned offered
+  // a delete that would break image reading.
+  const fileName = (path: string) => path.split('/').pop() ?? path;
+  const trackedNames = new Set<string>();
   for (const model of models) {
-    trackedPaths.add(model.filePath);
-    if (model.engine === 'llama' && model.mmProjPath) trackedPaths.add(model.mmProjPath);
+    for (const name of filesOfModel(fileName(model.filePath))) trackedNames.add(name);
+    if ('mmProjPath' in model && model.mmProjPath) trackedNames.add(fileName(model.mmProjPath));
   }
 
   for (const file of files) {
-    if (file.isFile() && !trackedPaths.has(file.path)) {
+    if (file.isFile() && !trackedNames.has(file.name)) {
       orphaned.push({
         name: file.name,
         path: file.path,
@@ -69,10 +95,18 @@ export async function getOrphanedImageDirs(
 
   const items = await RNFS.readDir(imageModelsDir);
   const imageModels = await imageModelsGetter();
-  const trackedImagePaths = imageModels.map(m => m.modelPath);
+  // Compared by the path INSIDE the image-models folder, not the full path: the app's container
+  // path changes across installs, so a stored modelPath can name an old container for the same
+  // folder. Comparing full paths listed the image model in use as orphaned (hand test 8).
+  const folderName = imageModelsDir.replace(/\/+$/, '').split('/').pop() ?? '';
+  const insideFolder = (path: string) => {
+    const at = path.lastIndexOf(`/${folderName}/`);
+    return at === -1 ? path : path.slice(at + folderName.length + 2);
+  };
+  const trackedImagePaths = imageModels.map(m => insideFolder(m.modelPath));
 
   for (const item of items) {
-    if (isItemTracked(item.path, trackedImagePaths)) continue;
+    if (isItemTracked(item.name, trackedImagePaths)) continue;
 
     const totalSize = item.isDirectory()
       ? await calculateDirectorySize(item.path)

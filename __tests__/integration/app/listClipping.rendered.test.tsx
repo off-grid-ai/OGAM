@@ -4,7 +4,8 @@
  *
  * FlatList turns removeClippedSubviews ON by default on Android, and Fabric's clipping detaches
  * rows out of step with the native child index. Every list spreads LIST_CLIPPING_PROPS, so the
- * native scroll view a real screen renders must never clip on Android, and still clips on iOS.
+ * native scroll view a real screen renders must never clip. iOS clips no more either: a clipped
+ * row unmounting under a different view aborts in RCTViewComponentView (device 2026-11-05).
  */
 import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
 
@@ -30,10 +31,10 @@ describe('list clipping', () => {
     expect(values.every(v => v === false)).toBe(true);
   });
 
-  it('keeps clipping subviews on iOS', () => {
+  it('never clips subviews on iOS', () => {
     const values = renderedClipping('ios');
     expect(values.length).toBeGreaterThan(0);
-    expect(values.every(v => v === true)).toBe(true);
+    expect(values.every(v => v === false)).toBe(true);
   });
 });
 

@@ -5,8 +5,12 @@ import { withNavigator } from '../../harness/realNavigation';
 // Real navigation: the screen renders inside a real React Navigation stack (harness/realNavigation).
 jest.unmock('@react-navigation/native');
 
-describe('Download Manager model capabilities', () => {
-  it('shows vision, tool calling, and thinking for downloaded and downloading GGUFs', async () => {
+/**
+ * Downloads lists what is stored (size, quant, date). The predicted capability tags (tools, thinks)
+ * belong to Models, where you choose a model; on a Downloads row they were cut off (hand test 85).
+ */
+describe('Download Manager rows', () => {
+  it('list downloaded and downloading GGUFs without capability tags', async () => {
     installNativeBoundary({ download: true, fs: true });
     const React = require('react');
     const { render, waitFor } = requireRTL();
@@ -41,10 +45,10 @@ describe('Download Manager model capabilities', () => {
     });
 
     const screen = render(withNavigator(React.createElement(DownloadManagerScreen)));
-    await waitFor(() => {
-      expect(screen.getAllByLabelText('Vision')).toHaveLength(2);
-      expect(screen.getAllByLabelText('Tool calling likely')).toHaveLength(2);
-      expect(screen.getAllByLabelText('Thinking likely')).toHaveLength(2);
-    });
+    // Both rows are there: the stored model and the one still downloading.
+    await waitFor(() => expect(screen.getAllByText(/Q4_K_M/)).toHaveLength(2));
+    // No tools or thinking tag on either. (The card's own vision mark, from the mmproj on disk, stays.)
+    expect(screen.queryAllByLabelText(/^Tool calling/)).toHaveLength(0);
+    expect(screen.queryAllByLabelText(/^Thinking/)).toHaveLength(0);
   });
 });

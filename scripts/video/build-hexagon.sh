@@ -5,11 +5,20 @@ BUILD="$ROOT/.video-build"
 SDK_VERSION=6.4.0.2
 SDK_SHA256=b4a57a774795cf12da19a777a5d306e970905bf9758a4c4765e5e4593428ae0b
 SDK="$BUILD/hexagon-sdk/$SDK_VERSION"
+# The headers the app's NDK compile reads (scripts/video/hexagon-prebuilt.cmake), copied out of the
+# 3.1 GB SDK so CI can cache the runtime without the SDK. Cheap: redone whenever the SDK is present.
+copy_sdk_headers() {
+  rm -rf "$BUILD/hexagon-runtime/sdk"
+  mkdir -p "$BUILD/hexagon-runtime/sdk/ipc/fastrpc/rpcmem"
+  cp -R "$SDK/incs" "$BUILD/hexagon-runtime/sdk/incs"
+  cp -R "$SDK/ipc/fastrpc/rpcmem/inc" "$BUILD/hexagon-runtime/sdk/ipc/fastrpc/rpcmem/inc"
+}
+if [ -f "$SDK/hexagon_sdk.json" ] && [ -d "$BUILD/hexagon-runtime" ]; then copy_sdk_headers; fi
 # Reuse the DSP artifacts when their source revision and SDK match.
 REVISION="$(cat "$ROOT/scripts/video/revision")"
 READY="$BUILD/hexagon-runtime/ready"
 COMPLETE=true
-for file in htp_iface_stub.c htp_iface.h; do
+for file in htp_iface_stub.c htp_iface.h sdk/incs/stddef/AEEStdDef.h sdk/ipc/fastrpc/rpcmem/inc/rpcmem.h; do
   [ -s "$BUILD/hexagon-runtime/$file" ] || COMPLETE=false
 done
 for arch in v73 v75 v79 v81; do
@@ -46,5 +55,6 @@ docker run --rm --platform linux/amd64 -v "$BUILD:/work" -w /work ubuntu:22.04 b
   done
   cp hexagon-build/v73/htp_iface_stub.c hexagon-build/v73/htp_iface.h hexagon-runtime/
 '
+copy_sdk_headers
 cp "$ROOT/scripts/video/revision" "$BUILD/hexagon-runtime/revision"
 printf '%s:%s\n' "$REVISION" "$SDK_VERSION" > "$READY"

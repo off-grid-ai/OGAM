@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { ScrollView, StyleSheet, View, Text } from 'react-native';
 import { LoadingDots } from '../LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { useTheme, useThemedStyles } from '../../theme';
-import type { ThemeColors, ThemeShadows } from '../../theme';
+import type { ThemeColors } from '../../theme';
+import { cardFill } from '../../theme/surface';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import type { ModelRowLabels, ModelRowType } from './ModelsManagerSheet';
 
@@ -18,6 +19,9 @@ type Props = {
   onPressType?: (type: ModelRowType) => void;
 };
 
+/** Chips are 34 px tall to sit like desktop's; the slop makes each a 44 px touch target. */
+const CHIP_SLOP = { top: 5, bottom: 5, left: 2, right: 2 };
+
 const TYPE_ICONS: { type: ModelRowType; icon: string; caption: string }[] = [
   { type: 'text', icon: 'message-square', caption: 'Text' },
   { type: 'image', icon: 'image', caption: 'Image' },
@@ -28,9 +32,9 @@ const TYPE_ICONS: { type: ModelRowType; icon: string; caption: string }[] = [
 ];
 
 /**
- * Collapsed Models control. A labelled strip with one captioned icon per model
- * type — emerald + bright caption when that type has an active model, dimmed +
- * muted when not. Tap → manager sheet.
+ * The models as desktop's composer chips: no box. The first chip names the text model you talk to
+ * (emerald, the one thing in use); every other kind is a chip with its count that opens that kind's
+ * picker; the last chip opens the model manager. Active kinds read bright, the rest muted.
  */
 export const ModelsSummaryRow: React.FC<Props> = ({
   labels,
@@ -43,114 +47,111 @@ export const ModelsSummaryRow: React.FC<Props> = ({
   const styles = useThemedStyles(createStyles);
 
   return (
-    <AnimatedPressable
-      style={styles.container}
-      hapticType="selection"
-      testID="models-summary"
-      onPress={onPress}
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.strip}
+      contentContainerStyle={styles.chips}
+      testID="models-chips"
     >
-      <View style={styles.header}>
-        <Text style={styles.label}>Models</Text>
-        {isLoading
-          ? <LoadingDots color={colors.primary} />
-          : <Icon name="chevron-down" size={14} color={colors.textMuted} />}
-      </View>
-      <View style={styles.icons}>
-        {TYPE_ICONS.map(({ type, icon, caption }) => {
-          const active = !!labels[type] && labels[type] !== '—';
-          const count = counts?.[type];
-          return (
-            <AnimatedPressable
-              key={type}
-              testID={`model-summary-${type}-open`}
-              hapticType="selection"
-              onPress={event => {
-                event?.stopPropagation?.();
-                (onPressType ?? onPress)(type);
-              }}
+      <AnimatedPressable
+        testID="models-summary"
+        hapticType="selection"
+        accessibilityRole="button"
+        accessibilityLabel="All models"
+        onPress={onPress}
+        hitSlop={CHIP_SLOP}
+      >
+        <View style={styles.chip}>
+          <Icon name="sliders" size={14} color={colors.textSecondary} />
+          <Text style={styles.chipText}>Models</Text>
+        </View>
+      </AnimatedPressable>
+      {TYPE_ICONS.map(({ type, icon, caption }) => {
+        const active = !!labels[type] && labels[type] !== '—';
+        const count = counts?.[type];
+        const isText = type === 'text';
+        const inUse = isText && active;
+        // With no text model there is nothing to chat with: the first chip asks for one.
+        const needsText = isText && !active;
+        return (
+          <AnimatedPressable
+            key={type}
+            testID={`model-summary-${type}-open`}
+            hapticType="selection"
+            accessibilityRole="button"
+            accessibilityLabel={inUse ? `Text model: ${labels.text}` : needsText ? 'Pick a text model' : `${caption} models`}
+            onPress={() => (onPressType ?? onPress)(type)}
+            hitSlop={CHIP_SLOP}
+          >
+            <View
+              testID={`model-summary-${type}`}
+              // `selected`: this kind has an active model (tests read it rather than colours).
+              accessibilityState={{ selected: active }}
+              style={[styles.chip, inUse && styles.chipInUse]}
             >
-              <View
-                testID={`model-summary-${type}`}
-                // `selected` reflects "this model type has an active model" — the same signal the
-                // caption/icon colour encodes visually. Exposed so a test can observe active-vs-dimmed
-                // state without inspecting colours (e.g. a remote text model active while local count = 0).
-                accessibilityState={{ selected: active }}
-                style={[styles.iconCol, !active && styles.inactive]}
+              {inUse ? (
+                <View style={styles.liveDot} />
+              ) : (
+                <Icon name={icon} size={14} color={active || needsText ? colors.text : colors.textMuted} />
+              )}
+              <Text
+                numberOfLines={1}
+                style={[styles.chipText, (active || needsText) && styles.chipTextActive, inUse && styles.chipTextInUse]}
               >
-                <View style={styles.typeStack}>
-                  <Icon
-                    name={icon}
-                    size={18}
-                    color={active ? colors.primary : colors.textMuted}
-                  />
-                  <Text
-                    style={[styles.caption, active && styles.captionActive]}
-                  >
-                    {caption}
-                  </Text>
-                </View>
-                {typeof count === 'number' && (
-                  // Big numeral to the RIGHT of the icon+label, tall enough to span
-                  // both — fills the gap between types so the row reads at a glance.
-                  <Text
-                    testID={`model-summary-count-${type}`}
-                    style={[styles.count, count > 0 && styles.countActive]}
-                  >
-                    {count}
-                  </Text>
-                )}
-              </View>
-            </AnimatedPressable>
-          );
-        })}
-      </View>
-    </AnimatedPressable>
+                {inUse ? labels.text : needsText ? 'Pick a text model' : caption}
+              </Text>
+              {isText && isLoading ? <LoadingDots size={4} color={colors.primary} /> : null}
+              {!inUse && !needsText && typeof count === 'number' && (
+                <Text testID={`model-summary-count-${type}`} style={styles.count}>
+                  {count}
+                </Text>
+              )}
+            </View>
+          </AnimatedPressable>
+        );
+      })}
+    </ScrollView>
   );
 };
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
-  container: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    paddingVertical: SPACING.sm,
+const createStyles = (colors: ThemeColors) => ({
+  strip: {
+    flexGrow: 0,
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.lg,
+    // Bleed to the screen edges so chips scroll out of view rather than clip at the padding.
+    marginHorizontal: -SPACING.xl,
+  },
+  chips: {
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.xl,
+  },
+  chip: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    height: 34,
     paddingHorizontal: SPACING.md,
-    gap: SPACING.sm,
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.md,
-    ...shadows.small,
+    // brand Mobile profile: controls use an 8px radius.
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
+    backgroundColor: cardFill(colors),
   },
-  header: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'space-between' as const,
+  // In use: desktop's selected chip, an emerald outline and text on a faint emerald fill.
+  chipInUse: {
+    borderColor: colors.heroBorder,
+    backgroundColor: colors.selectedFill,
   },
-  label: {
-    ...TYPOGRAPHY.label,
-    textTransform: 'uppercase' as const,
-    color: colors.textMuted,
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
   },
-  icons: {
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    paddingHorizontal: SPACING.xs,
-  },
-  iconCol: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: SPACING.sm,
-  },
-  inactive: { opacity: 0.35 },
-  typeStack: { alignItems: 'center' as const, gap: SPACING.xs },
-  caption: { ...TYPOGRAPHY.metaSmall, color: colors.textMuted },
-  captionActive: { color: colors.textSecondary },
-  // Numeral to the right of the icon+label. Thin (weight 200) and only modestly
-  // larger than the icon so it reads as a quiet secondary count, not a loud hero —
-  // matches the restrained terminal look. lineHeight spans the stack for centering.
-  count: {
-    ...TYPOGRAPHY.display,
-    fontSize: 18,
-    lineHeight: 34,
-    color: colors.textMuted,
-  },
-  countActive: { color: colors.primary },
+  chipText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
+  chipTextActive: { color: colors.text },
+  chipTextInUse: { color: colors.primary, fontWeight: '500' as const },
+  count: { ...TYPOGRAPHY.meta, fontSize: 11, color: colors.textMuted },
 });

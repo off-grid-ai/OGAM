@@ -170,7 +170,7 @@ it('lets a phone with no chats yet search its paired computer', async () => {
   const { view, rtl } = app;
   rtl.fireEvent.press(await view.findByTestId('chats-tab'));
   // BEFORE: nothing paired, no chats: the empty state and no search.
-  await view.findByText('No Chats Yet');
+  await view.findByText('No chats yet');
   expect(view.queryByTestId('chat-search-input')).toBeNull();
 
   desktop = serveDesktopSearch({ apiKey: KEY, records: [MEETING] });
@@ -188,5 +188,5 @@ it('lets a phone with no chats yet search its paired computer', async () => {
   rtl.fireEvent.changeText(await view.findByTestId('chat-search-input'), 'budget');
   await view.findByText(`On ${COMPUTER}`);
   await view.findByText('Budget review', {}, { timeout: 5000 });
-  expect(view.queryByText('No Chats Yet')).toBeNull();
+  expect(view.queryByText('No chats yet')).toBeNull();
 }, 60_000);

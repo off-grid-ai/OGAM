@@ -1,0 +1,914 @@
+<title>Off Grid AI Mobile</title>
+<meta charset="utf-8">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: the game's own chrome. A screen list on the left, the screen itself
+   in the middle with pins where people clicked, its notes on the right. One
+   dark look on purpose: the screenshots are a dark, warm game. */
+:root {
+  color-scheme: dark;
+  --bg: #15120e;          /* the hall at night */
+  --glass: #221d17;       /* warm smoked glass, the game's panels */
+  --glass-2: #2b251d;
+  --line: #3a3228;
+  --fg: #ece4d4;          /* parchment */
+  --muted: #a39782;
+  --gold: #c9a45c;        /* the game's one accent */
+  --gold-ink: #1b150c;
+  --done: #7d9a6a;        /* a settled note */
+  --mark: #e5484d;        /* Claude's marks: a problem it points out */
+  --font: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.45 var(--font); }
+button, textarea { font: inherit; color: inherit; }
+.app {
+  --list-w: 220px; --notes-w: 300px; --chrome: 150px; /* --chrome: the stage's bar + hint, measured at run time */
+  height: 100%; display: grid; grid-template-columns: var(--list-w) minmax(0, 1fr) var(--notes-w);
+  gap: 0; padding-left: max(0px, env(safe-area-inset-left, 0px)); padding-right: max(0px, env(safe-area-inset-right, 0px));
+}
+/* --- screen list --- */
+.list { border-right: 1px solid var(--line); overflow-y: auto; padding-block: 14px; }
+.brand { padding: 0 16px 12px; }
+.brand h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: 0.01em; }
+.brand p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+.screens { list-style: none; margin: 0; padding: 0; }
+.screens button {
+  width: 100%; display: grid; grid-template-columns: 64px minmax(0,1fr) auto; gap: 10px; align-items: center;
+  padding: 7px 16px; background: none; border: 0; text-align: left; cursor: pointer;
+}
+.screens button:hover { background: var(--glass); }
+.screens button[aria-current="true"] { background: var(--glass-2); box-shadow: inset 2px 0 0 var(--gold); }
+.screens img { width: 64px; aspect-ratio: 16/9; object-fit: cover; border-radius: 3px; display: block; background: var(--glass); }
+.screens .name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.screens .group { display: block; color: var(--muted); font-size: 11px; }
+.count { font: 500 11px/1 var(--mono); color: var(--gold-ink); background: var(--gold); border-radius: 9px; padding: 3px 6px; font-variant-numeric: tabular-nums; }
+.count:empty { display: none; }
+.screens .ver { font: 10px/1.3 var(--mono); color: var(--muted); }
+.screens .new { font: 600 9px/1 var(--mono); color: var(--gold-ink); background: var(--fg); border-radius: 3px; padding: 2px 4px; margin-left: 4px; text-transform: uppercase; letter-spacing: .04em; vertical-align: 1px; }
+.sorter { display: flex; gap: 6px; align-items: center; padding: 0 16px 10px; color: var(--muted); font-size: 11px; }
+.sorter select, .verpick select { background: var(--glass); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; color: var(--fg); font: 11px var(--mono); max-width: 100%; }
+/* The version picker stays inside its own column: a long label truncates in the select, never under the notes. */
+.verpick { display: flex; gap: 6px; align-items: center; color: var(--muted); font: 11px var(--mono); flex: 1 1 220px; min-width: 0; max-width: 460px; }
+.verpick select { flex: 1 1 auto; min-width: 0; width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+.verpick[hidden] { display: none; }
+/* --- folding: side panels to a rail, stage sections and notes to one line --- */
+.chev { flex: none; width: 22px; height: 22px; display: inline-grid; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 5px;
+  background: none; color: var(--muted); cursor: pointer; font: 15px/1 var(--font); }
+.chev:hover { color: var(--fg); border-color: var(--line); }
+.chev:focus-visible, .rail:focus-visible, .linkbtn:focus-visible, .ctl-head:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer; font: 11px/1.4 var(--mono); text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+.linkbtn:hover { color: var(--fg); }
+.rail { display: none; }
+.app.list-shut { --list-w: 40px; }
+.app.notes-shut { --notes-w: 40px; }
+.app.list-shut .list > :not(.rail), .app.notes-shut .notes > :not(.rail) { display: none; }
+.app.list-shut .list, .app.notes-shut .notes { padding: 0; overflow: hidden; }
+.app.list-shut .list .rail, .app.notes-shut .notes .rail {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; height: 100%; padding: 12px 0;
+  background: none; border: 0; color: var(--muted); cursor: pointer; font: 600 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase;
+}
+.rail:hover { color: var(--fg); background: var(--glass); }
+.rail .rail-label { writing-mode: vertical-rl; }
+.rail .rail-arrow { font: 14px/1 var(--font); }
+.pane .cap select { margin-left: 6px; }
+/* --- stage --- */
+.stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.bar { display: flex; flex-direction: column; gap: 6px; padding: 10px 18px; border-bottom: 1px solid var(--line); min-width: 0; }
+.bar .top { display: flex; align-items: center; gap: 8px 12px; min-width: 0; }
+.bar h2 { margin: 0; font-size: 16px; font-weight: 600; text-wrap: balance; flex: 1 1 auto; min-width: 0; }
+.fold-row { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.fold-row > span { flex: 1 1 auto; min-width: 0; padding-top: 2px; cursor: pointer; }
+.fold-row.shut > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar .what { color: var(--muted); font-size: 12px; }
+.ctl[hidden] { display: none; }
+.ctl-head { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; padding: 0; background: none; border: 0; cursor: pointer;
+  color: var(--muted); font: 11px/22px var(--mono); text-align: left; }
+.ctl-head .chev { pointer-events: none; }
+.ctl-head:hover { color: var(--fg); }
+.ctl-sum { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ctl-body { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 4px 0 0 28px; min-width: 0; }
+.ctl.shut .ctl-body { display: none; }
+.nav { display: flex; gap: 6px; }
+.btn {
+  background: var(--glass); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer;
+}
+.btn:hover { border-color: var(--gold); }
+.btn:focus-visible, .screens button:focus-visible, .pin:focus-visible, textarea:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.canvas { flex: 1; min-height: 0; overflow: auto; display: grid; place-items: center; padding: 18px; }
+.shots { display: flex; gap: 18px; align-items: flex-start; justify-content: center; max-width: 100%; }
+.pane { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 0 1 auto; }
+.pane .cap { color: var(--muted); font: 11px/1.4 var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+.shots.split .pane { flex: 1 1 0; }
+.shots.split .shot img { max-height: calc(100vh - var(--chrome)); }
+.pin.later { opacity: 0; pointer-events: none; }
+.shot { position: relative; max-width: 100%; max-height: 100%; cursor: crosshair; line-height: 0; }
+.shot img, .shot video { max-width: 100%; max-height: calc(100vh - var(--chrome)); border-radius: 6px; display: block; user-select: none; -webkit-user-drag: none; }
+.shots.split .shot video { max-height: calc(100vh - 180px); }
+.play { display: flex; align-items: center; gap: 10px; font: 11px/1.4 var(--mono); color: var(--muted); }
+/* Clip controls: play, time, a seek bar with a frame preview on hover, and speed. */
+.play { flex-wrap: wrap; margin-top: 8px; width: 100%; min-width: 380px; box-sizing: border-box; }
+/* Room under a clip for its controls. */
+.shot video { max-height: calc(100vh - var(--chrome) - 90px); }
+.shots.split .shot video { max-height: calc(100vh - var(--chrome) - 120px); }
+.seek { position: relative; flex: 1; min-width: 160px; display: flex; align-items: center; }
+.seek input[type=range] { width: 100%; accent-color: var(--gold); cursor: pointer; }
+.seek .ticks { position: absolute; left: 0; right: 0; top: -6px; height: 4px; pointer-events: none; }
+.seek .ticks i { position: absolute; width: 3px; height: 4px; margin-left: -1px; background: var(--gold); border-radius: 1px; }
+.seek .peek { position: absolute; bottom: 26px; transform: translateX(-50%); display: none; pointer-events: none;
+  background: var(--panel, #111); border: 1px solid var(--line); border-radius: 6px; padding: 3px; z-index: 5; }
+.seek .peek canvas { display: block; width: 120px; border-radius: 4px; }
+.seek .peek span { display: block; text-align: center; font: 10px/1.4 var(--mono); color: var(--fg); }
+.play select { background: var(--glass); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; color: var(--fg); font: 11px var(--mono); }
+.play button { background: var(--glass); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; color: var(--fg); }
+.play button:hover { border-color: var(--gold); }
+.screens .clipmark { font: 10px/1 var(--mono); color: var(--gold); }
+.hint { color: var(--muted); font-size: 12px; padding: 0 18px 10px 12px; }
+.empty { color: var(--muted); padding: 40px; text-align: center; line-height: 1.5; }
+/* pins: a numbered gold drop, tip on the clicked point */
+.pin {
+  position: absolute; min-width: 26px; height: 26px; margin: -26px 0 0 0; transform-origin: 0 100%;
+  border-radius: 13px 13px 13px 2px; background: var(--gold); color: var(--gold-ink); border: 2px solid var(--gold-ink);
+  font: 600 11px/22px var(--mono); text-align: center; cursor: pointer; padding: 0 4px; box-shadow: 0 2px 6px rgba(0,0,0,.5);
+}
+.pin.done { background: var(--done); }
+.pin.draft { background: var(--fg); }
+.pin.lit { transform: scale(1.25); z-index: 2; }
+/* marks: a box Claude draws round a problem, its numbered pin on the top right corner */
+.mark { position: absolute; border: 2px solid var(--mark); border-radius: 4px; pointer-events: none; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
+.mark.lit { border-width: 3px; background: color-mix(in srgb, var(--mark) 14%, transparent); }
+.mark.later { opacity: 0; }
+.pin.mk { background: var(--mark); color: #fff; z-index: 4; }
+.pin.mk.done { background: var(--done); color: var(--gold-ink); }
+/* --- notes --- */
+.notes { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.notes header { padding: 12px 10px 10px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+.notes h3 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); flex: 1 1 auto; min-width: 0; }
+.brand { display: flex; align-items: flex-start; gap: 6px; padding-right: 8px; }
+.brand > div { flex: 1 1 auto; min-width: 0; }
+.thread { flex: 1; overflow-y: auto; padding: 8px 0; }
+.note { padding: 10px 10px 10px 16px; display: grid; grid-template-columns: 26px minmax(0,1fr) 22px; gap: 10px; border-left: 2px solid transparent; }
+/* A folded note shows its title (a mark) or its first line; a folded reply its first line. */
+.note.shut .title, .note.shut .text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note.shut .title ~ .text, .note.shut .reply, .note.shut .meta { display: none; }
+.note .reply { display: flex; gap: 4px; align-items: flex-start; }
+.note .reply > span { flex: 1 1 auto; min-width: 0; }
+.note .reply .chev { width: 18px; height: 18px; margin: -1px 0 0 -4px; }
+.note .reply.shut > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note.lit { background: var(--glass); border-left-color: var(--gold); }
+.note .num { font: 600 11px/22px var(--mono); text-align: center; min-width: 22px; padding: 0 3px; height: 22px; border-radius: 11px; background: var(--gold); color: var(--gold-ink); }
+.note.done .num { background: var(--done); }
+.note.done .text { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
+.note .text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.note .title { font-weight: 600; color: var(--mark); margin-bottom: 2px; }
+.note.done .title { color: inherit; }
+.note .reply { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 6px; padding: 6px 8px; border-left: 2px solid var(--line); color: var(--muted); }
+.note .reply b { color: inherit; font-weight: 600; }
+.note.done .reply { text-decoration: none; }
+.views { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-right: 8px; }
+.views button { background: transparent; border: 0; padding: 6px 12px; color: var(--muted); font: inherit; cursor: pointer; }
+.views button[aria-pressed="true"] { background: var(--line); color: inherit; }
+.views[hidden] { display: none; }
+.note .meta { color: var(--muted); font: 11px/1.4 var(--mono); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
+.note .meta button { background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.note .meta button:hover { color: var(--fg); }
+.compose { border-top: 1px solid var(--line); padding: 12px 16px 16px; display: grid; gap: 8px; }
+.compose .where { font: 11px/1.4 var(--mono); color: var(--muted); }
+.compose textarea { width: 100%; min-height: 76px; resize: vertical; background: var(--glass); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; box-sizing: border-box; }
+.compose .row { display: flex; gap: 8px; justify-content: flex-end; }
+.btn.primary { background: var(--gold); color: var(--gold-ink); border-color: var(--gold); font-weight: 600; }
+.btn:disabled { opacity: .5; cursor: default; }
+.status { font-size: 12px; color: var(--muted); padding: 0 16px 10px; }
+/* Expand: any shot or clip full screen, to look closely; Esc or a click outside closes it. */
+.grow { position: absolute; top: 8px; right: 8px; z-index: 3; width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line);
+  background: rgba(21,18,14,.75); color: var(--fg); cursor: pointer; font: 15px/1 var(--font); display: grid; place-items: center; }
+.grow:hover { border-color: var(--gold); }
+.lightbox { position: fixed; inset: 0; z-index: 50; background: rgba(8,7,5,.92); display: grid; place-items: center; padding: 24px; }
+.lightbox[hidden] { display: none; }
+.lightbox img, .lightbox video { max-width: 100%; max-height: calc(100vh - 80px); border-radius: 6px; display: block; }
+.lightbox .cap { position: absolute; top: 14px; left: 18px; color: var(--muted); font: 12px/1.4 var(--mono); }
+.lightbox .shut { position: absolute; top: 10px; right: 14px; }
+@media (max-width: 900px) {
+  .app { grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto auto; height: auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .list { border-right: 0; border-bottom: 1px solid var(--line); max-height: 220px; }
+  .notes { border-left: 0; }
+  .canvas { padding: 12px 0; }
+  .shot img { max-height: none; }
+  .bar { padding: 10px 0; }
+  .hint { padding: 0 0 10px; }
+  .play { min-width: 0; }
+  .seek { min-width: 120px; }
+  /* Stacked: a folded panel is a one-line bar instead of a side rail. */
+  .app.list-shut .list .rail, .app.notes-shut .notes .rail { flex-direction: row; height: auto; padding: 12px 0; justify-content: flex-start; }
+  .app.list-shut .list { border-bottom: 1px solid var(--line); }
+  .rail .rail-label { writing-mode: horizontal-tb; }
+  .rail .rail-arrow { transform: rotate(90deg); }
+}
+@media (prefers-reduced-motion: no-preference) { .pin { transition: transform .12s ease; } }
+</style>
+
+<div class="app">
+  <nav class="list" aria-label="Screens">
+    <button type="button" class="rail" id="list-rail" aria-label="Show screens ([)" title="Show screens ([)"><span class="rail-arrow">»</span><span class="rail-label">Screens</span></button>
+    <div class="brand"><div><h1>Off Grid AI Mobile</h1><p id="tally">Every screen, for review</p></div>
+      <button type="button" class="chev" id="list-fold" aria-label="Hide screens ([)" title="Hide screens ([)">«</button></div>
+    <label class="sorter">Sort
+      <select id="sort" aria-label="Sort screens">
+        <option value="newest">Newest first</option>
+        <option value="journey">In the order you meet them</option>
+        <option value="open">Most open notes first</option>
+      </select>
+    </label>
+    <ul class="screens" id="screens"></ul>
+  </nav>
+
+  <main class="stage">
+    <div class="bar" id="bar">
+      <div class="top">
+        <h2 id="title">Loading screens…</h2>
+        <div class="nav">
+          <button class="btn" id="prev" aria-label="Previous screen">←</button>
+          <button class="btn" id="next" aria-label="Next screen">→</button>
+        </div>
+      </div>
+      <!-- Each section folds to one line; a folded description shows its first line. -->
+      <div class="fold-row" id="what-row">
+        <button type="button" class="chev" id="what-fold" aria-controls="what">▾</button>
+        <span class="what" id="what"></span>
+      </div>
+      <div class="ctl" id="ctl">
+        <button type="button" class="ctl-head" id="ctl-fold" aria-controls="ctl-body"><span class="chev" aria-hidden="true">▾</span><span class="ctl-sum" id="ctl-sum">View</span></button>
+        <div class="ctl-body" id="ctl-body">
+          <label class="verpick" id="verpick" hidden>Version <select id="ver" aria-label="Version"></select></label>
+          <div class="views" id="plats" role="group" aria-label="Phone" hidden>
+            <button type="button" id="plat-ios" aria-pressed="true">iPhone</button>
+            <button type="button" id="plat-android" aria-pressed="false">Android</button>
+          </div>
+          <div class="views" id="views" role="group" aria-label="Before or after">
+            <button type="button" id="view-before" aria-pressed="false">Before</button>
+            <button type="button" id="view-after" aria-pressed="true">After</button>
+            <button type="button" id="view-both" aria-pressed="false">Side by side</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="canvas"><div class="shots" id="shot"></div></div>
+    <div class="fold-row hint" id="hint-row">
+      <button type="button" class="chev" id="hint-fold" aria-controls="hint">▾</button>
+      <span id="hint">Click anywhere on the screen to pin a note there; on a clip, the click pauses it and the note keeps that moment. ⤢ or F expands a shot full screen · Arrow keys change screens · [ hides or shows the screen list · ] hides or shows the notes · ⌘ Enter pins the note · Esc clears.</span>
+    </div>
+  </main>
+
+  <aside class="notes">
+    <button type="button" class="rail" id="notes-rail" aria-label="Show notes (])" title="Show notes (])"><span class="rail-arrow">«</span><span class="rail-label">Notes</span><span class="count" id="rail-count"></span></button>
+    <header><h3>Notes on this screen</h3>
+      <button type="button" class="linkbtn" id="fold-all" hidden>Collapse all</button>
+      <button type="button" class="chev" id="notes-fold" aria-label="Hide notes (])" title="Hide notes (])">»</button></header>
+    <div class="thread" id="thread"></div>
+    <div class="status" id="status" hidden></div>
+    <form class="compose" id="compose">
+      <div class="where" id="where">Click the screen to choose where this note points.</div>
+      <textarea id="text" placeholder="What should change here?" aria-label="Note"></textarea>
+      <div class="row">
+        <button type="button" class="btn" id="cancel">Clear pin</button>
+        <button type="submit" class="btn primary" id="save">Pin note</button>
+      </div>
+    </form>
+  </aside>
+</div>
+
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Expanded shot">
+  <span class="cap" id="lb-cap"></span>
+  <button type="button" class="btn shut" id="lb-shut" aria-label="Close">Close (Esc)</button>
+  <div id="lb-body"></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let screens = [];      // the manifest, in the order a user meets the screens
+let shown = [];        // the same screens in the chosen sort
+let notes = [];        // every note, all screens
+let current = 0;       // index into shown
+let draft = null;      // {x, y, on, v} in 0..1 of the shot
+let lit = null;        // id of the highlighted note
+let view = "after";   // "before", "after" or "both"
+// The phone a shot comes from. A version may carry an Android shot beside its main one
+// ({android, androidClip}); with none, Android shows the main shot and says so.
+let platform = "ios";
+let sortBy = "newest"; // "newest", "journey" or "open"
+let lastVisit = 0;     // epoch ms of this viewer's previous visit: screens updated since are New
+const sel = {};        // screen id -> index of the version shown as After (default: the latest)
+let db = null, user = null, me = null;
+const names = {};
+
+function screenId() { return shown[current]?.id; }
+function screenOf(id) { return screens.find((x) => x.id === id); }
+// Every screen is a list of versions, oldest first: {n, label, at, file, clip, what}.
+// A manifest without `versions` reads as one shot, or Before (v1) and After (v2).
+function versions(s) {
+  if (!s) return [];
+  if (s._v) return s._v;
+  let v;
+  if (Array.isArray(s.versions) && s.versions.length) {
+    v = s.versions.map((x, i) => ({ n: x.v ?? i + 1, label: x.label || "", at: x.at ? +new Date(x.at) : 0, file: x.file, clip: x.clip, what: x.what, android: x.android, androidClip: x.androidClip }));
+  } else {
+    v = [];
+    if (s.before) v.push({ n: 1, label: "Before", at: 0, file: s.before, clip: s.beforeClip });
+    v.push({ n: v.length + 1, label: s.before ? "After" : "", at: s.updated ? +new Date(s.updated) : 0, file: s.file, clip: s.clip });
+  }
+  return (s._v = v);
+}
+function updated(s) { const v = versions(s); return v[v.length - 1]?.at || 0; }
+function afterIdx(s) { const v = versions(s); const i = sel[s.id]; return i != null && i < v.length ? i : v.length - 1; }
+// The shot in a pane: After is the chosen version, Before the one just before it.
+function shotOf(s, pane) { const v = versions(s), a = afterIdx(s); return pane === "before" ? v[a - 1] : v[a]; }
+function shownView(s) { return s && afterIdx(s) > 0 ? view : "after"; }
+// The shots on the stage: one, or Before and After side by side.
+function panes(s) { const v = shownView(s); return v === "both" ? ["before", "after"] : [v]; }
+function fileFor(s, v) { const sh = shotOf(s, v); return platform === "android" && sh?.android ? sh.android : sh?.file; }
+function hasAndroid(s) { return versions(s).some((x) => x.android); }
+// A screen can carry a short clip for anything that moves (a bar draining, a
+// number counting, a card arriving): it plays on a loop, and a note on it keeps
+// the moment it points at.
+function clipFor(s, v) {
+  const sh = shotOf(s, v);
+  if (platform === "android" && sh?.android) return sh.androidClip;
+  return sh?.clip;
+}
+// The version a note was pinned on. Notes from before versions existed: Before
+// means the version before the latest, anything else the latest.
+function noteVersion(n) {
+  if (n.v != null) return n.v;
+  const v = versions(screenOf(n.screen));
+  return (n.on === "before" || (!n.on && v.length > 1) ? v[v.length - 2] : v[v.length - 1])?.n;
+}
+// Which pane on the stage a note shows in, or null when its version isn't shown.
+function paneOf(n) {
+  const s = screenOf(n.screen);
+  return panes(s).find((p) => shotOf(s, p)?.n === noteVersion(n)) || null;
+}
+const players = {};    // view -> its <video>, while a clip is on the stage
+function fmt(t) { return (Math.round(t * 10) / 10).toFixed(1) + "s"; }
+function inView(id, v) {
+  const n = shotOf(screenOf(id), v)?.n;
+  return notes.filter((x) => x.screen === id && noteVersion(x) === n).sort((a, b) => a.created - b.created);
+}
+function onScreen(id) {
+  const s = screenOf(id);
+  return panes(s).flatMap((v) => inView(id, v));
+}
+// A note's number on its shot; side by side, B1 / A1 say which shot.
+function label(n) {
+  const s = screenOf(n.screen);
+  const v = paneOf(n) || "after";
+  const i = inView(n.screen, v).findIndex((x) => x.id === n.id) + 1;
+  return panes(s).length > 1 ? (v === "before" ? "B" : "A") + i : String(i);
+}
+function allOnScreen(id) { return notes.filter((n) => n.screen === id); }
+function openOn(id) { return allOnScreen(id).filter((n) => !n.done).length; }
+function vname(x, latest) { return `v${x.n}${x.label ? " · " + x.label : ""}${x.at ? " · " + when(x.at) : ""}${latest ? " (latest)" : ""}`; }
+
+// The list in the chosen order: newest change first, the order a user meets
+// them, or the screens with most open notes first.
+function sortScreens() {
+  const id = screenId();
+  shown = screens.slice();
+  if (sortBy === "newest") shown.sort((a, b) => updated(b) - updated(a));
+  else if (sortBy === "open") shown.sort((a, b) => openOn(b.id) - openOn(a.id));
+  const k = shown.findIndex((s) => s.id === id);
+  if (k >= 0) current = k;
+}
+
+function renderList() {
+  const ul = $("screens");
+  ul.textContent = "";
+  shown.forEach((s, i) => {
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.setAttribute("aria-current", i === current ? "true" : "false");
+    const img = document.createElement("img");
+    img.src = versions(s).at(-1).file; img.alt = ""; img.loading = "lazy";
+    const label = document.createElement("span");
+    const nm = document.createElement("span"); nm.className = "name"; nm.textContent = s.name;
+    const gp = document.createElement("span"); gp.className = "group"; gp.textContent = s.group || "";
+    label.append(nm, gp);
+    const vs = versions(s), top = vs[vs.length - 1];
+    if (top.clip) { const m = document.createElement("span"); m.className = "clipmark"; m.textContent = " ▶ clip"; gp.append(m); }
+    // The version and when it changed; New if it changed since this viewer last came.
+    const ver = document.createElement("span"); ver.className = "ver";
+    ver.textContent = `v${top.n}${top.at ? " · " + when(top.at) : ""}`;
+    if (lastVisit && top.at > lastVisit) { const nw = document.createElement("span"); nw.className = "new"; nw.textContent = "New"; ver.append(nw); }
+    label.append(ver);
+    const c = document.createElement("span"); c.className = "count";
+    const open = openOn(s.id);
+    c.textContent = open ? String(open) : "";
+    b.append(img, label, c);
+    b.onclick = () => go(i);
+    li.append(b);
+    ul.append(li);
+  });
+  const all = notes.filter((n) => !n.done).length;
+  $("tally").textContent = `${screens.length} screens · ${all} open note${all === 1 ? "" : "s"}`;
+}
+
+function renderStage() {
+  const s = shown[current];
+  const stage = $("shot");
+  stage.textContent = "";
+  if (!s) { $("title").textContent = "No screens yet"; return; }
+  $("title").textContent = s.name;
+  const vs = versions(s), a = afterIdx(s);
+  // On Android, a version with no Android shot says the shot is the iPhone's (judged per version:
+  // an older version's Android shot does not cover the latest one).
+  // Judged on the panes shown: Before shows the version before the chosen one, Side by side both.
+  const shownVersions = view === "before" && a > 0 ? [vs[a - 1]] : view === "both" && a > 0 ? [vs[a - 1], vs[a]] : [vs[a]];
+  const noAndroid = platform === "android" && shownVersions.some((v) => !v.android) ? " (iPhone shot: no Android one for this version)" : "";
+  $("what").textContent = (vs[a].what || s.what || "") + noAndroid;
+  $("views").hidden = a === 0;
+  // The version picker: every version of this screen, newest first.
+  $("verpick").hidden = vs.length < 2;
+  const pick = $("ver"); pick.textContent = "";
+  for (let i = vs.length - 1; i >= 0; i--) {
+    const o = document.createElement("option"); o.value = i; o.textContent = vname(vs[i], i === vs.length - 1);
+    if (i === a) o.selected = true;
+    pick.append(o);
+  }
+  for (const v of ["before", "after", "both"]) $("view-" + v).setAttribute("aria-pressed", String(shownView(s) === v));
+  // The switches fold under one line that says what is showing; with nothing to switch, the block hides.
+  const sum = [];
+  if (vs.length > 1) sum.push(`v${vs[a].n}${vs[a].label ? " · " + vs[a].label : ""}`);
+  if (a > 0) sum.push({ before: "Before", after: "After", both: "Side by side" }[shownView(s)]);
+  if (!$("plats").hidden) sum.push(platform === "android" ? "Android" : "iPhone");
+  $("ctl").hidden = !sum.length;
+  $("ctl-sum").textContent = "View · " + sum.join(" · ");
+  const list = panes(s);
+  for (const k of Object.keys(players)) delete players[k];
+  stage.classList.toggle("split", list.length > 1);
+  for (const v of list) {
+    const pane = document.createElement("div"); pane.className = "pane";
+    if (list.length > 1) { const c = document.createElement("div"); c.className = "cap"; c.textContent = `${v === "before" ? "Before" : "After"} · v${shotOf(s, v).n}`; pane.append(c); }
+    const shot = document.createElement("div"); shot.className = "shot"; shot.dataset.view = v;
+    const clip = clipFor(s, v);
+    let media;
+    if (clip) {
+      media = document.createElement("video");
+      media.src = clip; media.poster = fileFor(s, v) || ""; media.muted = true; media.loop = true;
+      media.autoplay = true; media.playsInline = true; media.setAttribute("aria-label", `${s.name} (${v}), clip`);
+      players[v] = media;
+      media.addEventListener("timeupdate", renderPins);
+    } else {
+      media = document.createElement("img");
+      media.src = fileFor(s, v); media.alt = `${s.name} (${v})`; media.draggable = false;
+      delete players[v];
+    }
+    shot.append(media);
+    // Expand: the shot or clip full screen (a clip carries on from where it is).
+    const grow = document.createElement("button");
+    grow.type = "button"; grow.className = "grow"; grow.textContent = "⤢";
+    grow.title = "Expand (F)"; grow.setAttribute("aria-label", `Expand ${v === "before" ? "Before" : "After"}`);
+    grow.onclick = (e) => { e.stopPropagation(); expand(s, v); };
+    shot.append(grow);
+    // Click to pin: on a clip, it pauses there, and the note keeps that moment.
+    media.addEventListener("click", (e) => {
+      const r = media.getBoundingClientRect();
+      draft = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height, on: v };
+      if (clip) { media.pause(); draft.t = +media.currentTime.toFixed(2); }
+      lit = null;
+      renderPins(); renderCompose(); playLabel();
+      $("text").focus();
+    });
+    pane.append(shot);
+    if (clip) {
+      const bar = document.createElement("div"); bar.className = "play";
+      const b = document.createElement("button"); b.type = "button"; b.dataset.view = v;
+      b.onclick = () => { media.paused ? media.play() : media.pause(); draft = null; renderPins(); renderCompose(); };
+      const time = document.createElement("span"); time.className = "time";
+      media.addEventListener("play", playLabel); media.addEventListener("pause", playLabel);
+      const showTime = () => { time.textContent = `${fmt(media.currentTime)} / ${fmt(media.duration || 0)}`; };
+      media.addEventListener("timeupdate", showTime); media.addEventListener("loadedmetadata", showTime);
+      // Seek bar: drag to any moment (it pauses there); notes on this clip show as ticks above it.
+      const seekWrap = document.createElement("div"); seekWrap.className = "seek";
+      const range = document.createElement("input"); range.type = "range"; range.min = 0; range.step = 0.01; range.value = 0;
+      range.setAttribute("aria-label", "Seek");
+      const ticks = document.createElement("div"); ticks.className = "ticks";
+      const drawTicks = () => {
+        ticks.textContent = "";
+        const d = media.duration || 0; if (!d) return;
+        inView(s.id, v).filter((n) => n.t != null).forEach((n) => {
+          const i = document.createElement("i"); i.style.left = (n.t / d * 100) + "%"; ticks.append(i);
+        });
+      };
+      media.addEventListener("loadedmetadata", () => { range.max = media.duration || 0; drawTicks(); });
+      media.addEventListener("timeupdate", () => { if (document.activeElement !== range) range.value = media.currentTime; });
+      range.addEventListener("input", () => { media.pause(); media.currentTime = +range.value; showTime(); renderPins(); });
+      // Hover preview: a small frame of the moment under the pointer, drawn from a second copy of the clip.
+      const peek = document.createElement("div"); peek.className = "peek";
+      const cv = document.createElement("canvas"); const pt = document.createElement("span"); peek.append(cv, pt);
+      const ghost = document.createElement("video"); ghost.src = clip; ghost.muted = true; ghost.preload = "auto"; ghost.playsInline = true;
+      ghost.addEventListener("seeked", () => {
+        const w = 240, h = Math.round(w * (ghost.videoHeight || 16) / (ghost.videoWidth || 9));
+        cv.width = w; cv.height = h; cv.getContext("2d").drawImage(ghost, 0, 0, w, h);
+      });
+      // The copy may still be loading on the first hover: remember the moment and draw it once it can.
+      let wanted = 0;
+      ghost.addEventListener("loadeddata", () => { ghost.currentTime = wanted; });
+      range.addEventListener("mousemove", (e) => {
+        const r = range.getBoundingClientRect(), f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+        const t = f * (media.duration || 0);
+        peek.style.display = "block"; peek.style.left = (f * 100) + "%"; pt.textContent = fmt(t);
+        wanted = t;
+        if (ghost.readyState >= 2 && Math.abs((ghost.currentTime || 0) - t) > 0.05) ghost.currentTime = t;
+      });
+      range.addEventListener("mouseleave", () => { peek.style.display = "none"; });
+      seekWrap.append(ticks, range, peek);
+      // Speed: watch the whole clip fast, or slow a moment down.
+      const speed = document.createElement("select"); speed.setAttribute("aria-label", "Playback speed");
+      [0.25, 0.5, 1, 1.5, 2, 4].forEach((r) => { const o = document.createElement("option"); o.value = r; o.textContent = r + "×"; if (r === 1) o.selected = true; speed.append(o); });
+      speed.onchange = () => { media.playbackRate = +speed.value; };
+      bar.append(b, time, seekWrap, speed);
+      pane.append(bar);
+    }
+    stage.append(pane);
+  }
+  renderPins(); playLabel();
+}
+
+function expand(s, v) {
+  const box = $("lb-body"); box.textContent = "";
+  const clip = clipFor(s, v), shot = shotOf(s, v);
+  let m;
+  if (clip) {
+    m = document.createElement("video");
+    m.src = clip; m.poster = shot?.file || ""; m.controls = true; m.muted = true; m.loop = true; m.autoplay = true; m.playsInline = true;
+    const from = players[v];
+    if (from) { m.currentTime = from.currentTime; m.playbackRate = from.playbackRate; from.pause(); playLabel(); }
+  } else {
+    m = document.createElement("img"); m.src = fileFor(s, v); m.alt = `${s.name} (${v})`;
+  }
+  box.append(m);
+  $("lb-cap").textContent = `${s.name} · ${v === "before" ? "Before" : "After"} · v${shot?.n ?? ""}`;
+  $("lightbox").hidden = false;
+  $("lb-shut").focus();
+}
+function shrink() {
+  const lb = $("lightbox"); if (lb.hidden) return false;
+  lb.hidden = true; $("lb-body").textContent = "";
+  return true;
+}
+$("lb-shut").onclick = shrink;
+$("lightbox").addEventListener("click", (e) => { if (e.target.id === "lightbox" || e.target.id === "lb-body") shrink(); });
+
+function playLabel() {
+  document.querySelectorAll(".play button").forEach((b) => { const m = players[b.dataset.view]; b.textContent = m && !m.paused ? "Pause" : "Play"; });
+}
+
+function pinAt(x, y, label, cls, onclick) {
+  const p = document.createElement("button");
+  p.className = "pin " + cls;
+  p.style.left = (x * 100) + "%";
+  p.style.top = (y * 100) + "%";
+  p.textContent = label;
+  p.type = "button";
+  if (onclick) p.onclick = (e) => { e.stopPropagation(); onclick(); };
+  return p;
+}
+
+function renderPins() {
+  $("shot").querySelectorAll(".shot").forEach((shot) => {
+    const v = shot.dataset.view;
+    shot.querySelectorAll(".pin, .mark").forEach((p) => p.remove());
+    const m = players[v];
+    inView(screenId(), v).forEach((n) => {
+      const away = m && n.t != null && Math.abs(m.currentTime - n.t) > 0.75;
+      // A mark (a note with a box) draws the box, and its pin sits on the box's top right corner.
+      const b = n.box;
+      if (b) {
+        const m = document.createElement("div");
+        m.className = "mark" + (lit === n.id ? " lit" : "") + (away ? " later" : "");
+        Object.assign(m.style, { left: b.x * 100 + "%", top: b.y * 100 + "%", width: b.w * 100 + "%", height: b.h * 100 + "%" });
+        shot.append(m);
+      }
+      // A short box gets its pin halfway down its right edge; a tall one at its top right corner.
+      const px = b ? b.x + b.w : n.x, py = b ? (b.h > 0.08 ? b.y : b.y + b.h / 2 + 0.01) : n.y;
+      const p = pinAt(px, py, label(n), (b ? "mk " : "") + (n.done ? "done" : "") + (lit === n.id ? " lit" : "") + (away ? " later" : ""), () => { lit = n.id; seek(n); renderPins(); renderThread(); });
+      p.setAttribute("aria-label", `Note ${label(n)}`);
+      shot.append(p);
+    });
+    if (draft && draft.on === v) shot.append(pinAt(draft.x, draft.y, "+", "draft"));
+    unstack(shot);
+  });
+}
+
+// Pins that would cover each other move down, in number order, until each one is clear.
+function unstack(shot) {
+  const placed = [];
+  shot.querySelectorAll(".pin").forEach((p) => {
+    const r = p.getBoundingClientRect();
+    let dy = 0;
+    const hits = (q) => r.left < q.right && q.left < r.right && r.top + dy < q.bottom && q.top < r.bottom + dy;
+    while (placed.some(hits)) dy += r.height + 2;
+    if (dy) p.style.top = `calc(${p.style.top} + ${dy}px)`;
+    placed.push({ left: r.left, right: r.right, top: r.top + dy, bottom: r.bottom + dy });
+  });
+}
+
+// A note on a clip takes the clip back to its moment.
+function seek(n) {
+  const m = players[paneOf(n)];
+  if (m && n.t != null) { m.pause(); m.currentTime = n.t; playLabel(); }
+}
+
+function when(t) {
+  const d = new Date(t);
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+// Each render takes a ticket; one that finishes after a newer one started draws nothing, so a slow
+// profile lookup never adds a second copy of the notes, or the last screen's notes, to the panel.
+let threadTicket = 0;
+async function renderThread() {
+  const ticket = ++threadTicket;
+  const box = $("thread");
+  const list = onScreen(screenId());
+  box.textContent = "";
+  $("rail-count").textContent = list.filter((n) => !n.done).length || "";
+  foldAllLabel(list);
+  if (!list.length) {
+    const e = document.createElement("div"); e.className = "empty";
+    e.textContent = db ? "No notes here yet. Click the screen where something should change, then write what you want." : "Notes need you signed in to claude.ai.";
+    box.append(e);
+    return;
+  }
+  if (user && list.length) {
+    try { Object.assign(names, await user.profiles([...new Set(list.map((n) => n.author).filter((a) => a && a !== "claude"))])); } catch (_) {}
+  }
+  if (ticket !== threadTicket) return;
+  list.forEach((n) => {
+    const row = document.createElement("div");
+    const shut = noteShut(n);
+    row.className = "note" + (n.done ? " done" : "") + (lit === n.id ? " lit" : "") + (shut ? " shut" : "");
+    const num = document.createElement("div"); num.className = "num"; num.textContent = label(n);
+    const body = document.createElement("div");
+    const t = document.createElement("div"); t.className = "text"; t.textContent = n.text;
+    const parts = [t];
+    if (n.title) { const h = document.createElement("div"); h.className = "title"; h.textContent = n.title; parts.unshift(h); }
+    if (n.reply) {
+      // Claude's reply folds on its own, to its first line.
+      const r = document.createElement("div"); r.className = "reply" + (replyShut(n) ? " shut" : "");
+      const rc = document.createElement("button"); rc.type = "button"; rc.className = "chev";
+      chevron(rc, replyShut(n), "Claude's reply");
+      rc.onclick = () => { const s = !r.classList.contains("shut"); folds.r[n.id] = s; saveFolds(); r.classList.toggle("shut", s); chevron(rc, s, "Claude's reply"); };
+      const say = document.createElement("span");
+      const b = document.createElement("b"); b.textContent = "Claude: ";
+      say.append(b, document.createTextNode(n.reply));
+      r.append(rc, say);
+      parts.push(r);
+    }
+    // The note folds to its title (a mark) or its first line; done notes start folded.
+    const fold = document.createElement("button"); fold.type = "button"; fold.className = "chev";
+    chevron(fold, shut, "note");
+    fold.onclick = () => {
+      const s = !row.classList.contains("shut"); folds.n[n.id] = s; saveFolds();
+      row.classList.toggle("shut", s); chevron(fold, s, "note"); foldAllLabel(list);
+    };
+    const meta = document.createElement("div"); meta.className = "meta";
+    const who = document.createElement("span"); who.textContent = n.author === "claude" ? "Claude" : ((names[n.author]?.name) || "Someone");
+    const at = document.createElement("span"); at.textContent = `${n.t != null ? "at " + fmt(n.t) + " · " : ""}${Math.round(n.x * 100)}%, ${Math.round(n.y * 100)}% · ${when(n.created)}`;
+    const toggle = document.createElement("button"); toggle.type = "button"; toggle.textContent = n.done ? "Reopen" : "Mark done";
+    toggle.onclick = () => write(n.id, { done: !n.done });
+    const del = document.createElement("button"); del.type = "button"; del.textContent = "Delete";
+    del.onclick = () => remove(n.id);
+    meta.append(who, at, toggle, del);
+    body.append(...parts, meta);
+    row.append(num, body, fold);
+    row.onclick = (e) => { if (e.target.closest("button")) return; lit = n.id; seek(n); renderPins(); renderThread(); };
+    box.append(row);
+  });
+  foldAllLabel(list);
+}
+
+// --- Folding. What this viewer folded is remembered in this browser only. Storage can be
+// missing or throw (a private window, blocked site data, a preview): the page then starts
+// unfolded and works the same, it just forgets on reload.
+const FOLDS = "review-folds";
+let folds = { list: false, notes: false, what: false, ctl: false, hint: false, n: {}, r: {} };
+try {
+  const f = JSON.parse(localStorage.getItem(FOLDS) || "null");
+  if (f && typeof f === "object") folds = { ...folds, ...f, n: f.n && typeof f.n === "object" ? f.n : {}, r: f.r && typeof f.r === "object" ? f.r : {} };
+} catch (_) {}
+function saveFolds() { try { localStorage.setItem(FOLDS, JSON.stringify(folds)); } catch (_) {} }
+// A note the viewer never folded or opened follows its state: done notes start folded.
+function noteShut(n) { return folds.n[n.id] ?? !!n.done; }
+function replyShut(n) { return !!folds.r[n.id]; }
+function chevron(b, shut, what) {
+  b.textContent = shut ? "▸" : "▾";
+  b.setAttribute("aria-expanded", String(!shut));
+  b.setAttribute("aria-label", (shut ? "Expand " : "Collapse ") + what);
+  b.title = shut ? "Expand" : "Collapse";
+}
+function foldAllLabel(list) {
+  const b = $("fold-all");
+  b.hidden = !list.length;
+  const anyOpen = list.some((n) => !noteShut(n));
+  b.textContent = anyOpen ? "Collapse all" : "Expand all";
+  b.onclick = () => {
+    list.forEach((n) => { folds.n[n.id] = anyOpen; if (n.reply) folds.r[n.id] = anyOpen; });
+    saveFolds(); renderThread();
+  };
+}
+function applyFolds() {
+  const app = document.querySelector(".app");
+  app.classList.toggle("list-shut", !!folds.list);
+  app.classList.toggle("notes-shut", !!folds.notes);
+  $("list-rail").setAttribute("aria-expanded", "false"); $("list-fold").setAttribute("aria-expanded", "true");
+  $("notes-rail").setAttribute("aria-expanded", "false"); $("notes-fold").setAttribute("aria-expanded", "true");
+  $("what-row").classList.toggle("shut", !!folds.what); chevron($("what-fold"), !!folds.what, "description");
+  $("hint-row").classList.toggle("shut", !!folds.hint); chevron($("hint-fold"), !!folds.hint, "help");
+  $("ctl").classList.toggle("shut", !!folds.ctl);
+  $("ctl-fold").setAttribute("aria-expanded", String(!folds.ctl));
+  $("ctl-fold").querySelector(".chev").textContent = folds.ctl ? "▸" : "▾";
+  $("ctl-fold").title = folds.ctl ? "Show version and view switches" : "Fold version and view switches";
+}
+function toggleFold(k) {
+  // Keep focus on the panel's other button when the one pressed disappears.
+  const had = document.activeElement?.id;
+  folds[k] = !folds[k]; saveFolds(); applyFolds();
+  const swap = { "list-fold": "list-rail", "list-rail": "list-fold", "notes-fold": "notes-rail", "notes-rail": "notes-fold" };
+  if (swap[had]) $(swap[had]).focus();
+}
+$("list-fold").onclick = () => toggleFold("list");
+$("list-rail").onclick = () => toggleFold("list");
+$("notes-fold").onclick = () => toggleFold("notes");
+$("notes-rail").onclick = () => toggleFold("notes");
+$("what-fold").onclick = () => toggleFold("what");
+$("what").onclick = () => toggleFold("what");
+$("hint-fold").onclick = () => toggleFold("hint");
+$("hint").onclick = () => toggleFold("hint");
+$("ctl-fold").onclick = () => toggleFold("ctl");
+applyFolds();
+// The shot takes whatever height the bar and help line leave, and its pins re-settle when its size changes.
+let settle = 0;
+function measure() {
+  document.querySelector(".app").style.setProperty("--chrome", ($("bar").offsetHeight + $("hint-row").offsetHeight + 44) + "px");
+  cancelAnimationFrame(settle);
+  settle = requestAnimationFrame(() => { if (shown.length) renderPins(); });
+}
+if (window.ResizeObserver) { const ro = new ResizeObserver(measure); ro.observe($("bar")); ro.observe($("hint-row")); ro.observe(document.querySelector(".canvas")); }
+else measure();
+
+function renderCompose() {
+  $("where").textContent = draft
+    ? `Pinned at ${Math.round(draft.x * 100)}% across, ${Math.round(draft.y * 100)}% down${draft.t != null ? ", at " + fmt(draft.t) + " in the clip" : ""}`
+    : "Click the screen to choose where this note points.";
+  $("save").disabled = !db;
+}
+
+function go(i) {
+  if (!shown.length) return;
+  current = (i + shown.length) % shown.length;
+  draft = null; lit = null;
+  try { localStorage.setItem("goc-review-screen", screenId()); } catch (_) {}
+  if (location.hash.slice(1) !== screenId()) history.replaceState(null, "", "#" + screenId());
+  renderList(); renderStage(); renderThread(); renderCompose();
+  $("screens").children[current]?.scrollIntoView({ block: "nearest" });
+}
+
+function status(msg) {
+  const s = $("status");
+  s.hidden = !msg; s.textContent = msg || "";
+}
+
+async function write(id, patch) {
+  try { await db.collection("comments").doc(id).update(patch); }
+  catch (e) { status("That change didn't save: " + (e?.message || "try again.")); }
+}
+async function remove(id) {
+  try { await db.collection("comments").doc(id).delete(); }
+  catch (e) { status("That note couldn't be deleted: " + (e?.message || "try again.")); }
+}
+
+$("compose").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = $("text").value.trim();
+  if (!db) return;
+  if (!draft) { status("Click the screen first to show where the note points."); return; }
+  if (!text) { status("Write the note first."); return; }
+  const s = shown[current];
+  const doc = { screen: s.id, screenName: s.name, x: +draft.x.toFixed(4), y: +draft.y.toFixed(4), text, created: Date.now(), done: false, on: draft.on, v: shotOf(s, draft.on).n , platform};
+  if (draft.t != null) doc.t = draft.t;
+  if (me) doc.author = me;
+  const sent = draft;
+  $("save").disabled = true;
+  try {
+    await db.collection("comments").add(doc);
+    // Clear only what was sent: a pin or words chosen while the save ran stay put.
+    if (draft === sent && $("text").value.trim() === text) { $("text").value = ""; draft = null; }
+    status("");
+  } catch (err) {
+    status("The note didn't save: " + (err?.message || "try again."));
+  }
+  renderPins(); renderCompose();
+});
+$("cancel").onclick = () => { draft = null; renderPins(); renderCompose(); };
+function setView(v) {
+  view = v; draft = null; lit = null;
+  try { localStorage.setItem("goc-review-view", v); } catch (_) {}
+  renderStage(); renderThread(); renderCompose();
+}
+$("view-before").onclick = () => setView("before");
+$("view-after").onclick = () => setView("after");
+$("view-both").onclick = () => setView("both");
+function setPlatform(p) {
+  platform = p; draft = null;
+  try { localStorage.setItem("review-platform", p); } catch (_) {}
+  $("plat-ios").setAttribute("aria-pressed", String(p === "ios"));
+  $("plat-android").setAttribute("aria-pressed", String(p === "android"));
+  renderStage(); renderThread(); renderCompose();
+}
+$("plat-ios").onclick = () => setPlatform("ios");
+$("plat-android").onclick = () => setPlatform("android");
+$("ver").onchange = () => { sel[screenId()] = +$("ver").value; draft = null; lit = null; renderStage(); renderThread(); renderCompose(); };
+$("sort").onchange = () => {
+  sortBy = $("sort").value;
+  try { localStorage.setItem("review-sort", sortBy); } catch (_) {}
+  sortScreens(); renderList(); $("screens").children[current]?.scrollIntoView({ block: "nearest" });
+};
+$("prev").onclick = () => go(current - 1);
+$("next").onclick = () => go(current + 1);
+// Arrows move between screens from anywhere, including the note box while it's empty.
+// Once a note has text, arrows edit it; Cmd/Ctrl+Enter pins it, Esc lets go of the box.
+const step = { ArrowLeft: -1, ArrowUp: -1, k: -1, ArrowRight: 1, ArrowDown: 1, j: 1 };
+document.addEventListener("keydown", (e) => {
+  // Ctrl+Alt is AltGr on Windows: some layouts type [ and ] with it, so it reaches the fold keys below.
+  const altGrBracket = e.ctrlKey && e.altKey && !e.metaKey && (e.key === "[" || e.key === "]");
+  if ((e.metaKey || e.ctrlKey || e.altKey) && !altGrBracket) {
+    if (e.key === "Enter" && e.target.id === "text") { e.preventDefault(); $("compose").requestSubmit(); }
+    return;
+  }
+  if (e.key === "Escape" && shrink()) return;
+  if (!$("lightbox").hidden) return;
+  // [ folds the screen list, ] the notes; typing in a box or a menu keeps the keys.
+  // ⌘[ / ⌘] (and Ctrl+[ / ] without Alt) are the browser's Back and Forward: leave them alone.
+  // Ctrl+Alt is AltGr on Windows, which some layouts need to type [ and ].
+  const navChord = e.metaKey || (e.ctrlKey && !e.altKey);
+  if ((e.key === "[" || e.key === "]") && !navChord && !/^(TEXTAREA|INPUT|SELECT)$/.test(e.target.tagName)) {
+    e.preventDefault(); toggleFold(e.key === "[" ? "list" : "notes"); return;
+  }
+  if ((e.key === "f" || e.key === "F") && e.target.id !== "text") {
+    const s = shown[current]; if (s) { e.preventDefault(); expand(s, panes(s)[panes(s).length - 1]); }
+    return;
+  }
+  if (e.key === "Escape") {
+    e.target.blur?.();
+    draft = null; lit = null; renderPins(); renderThread(); renderCompose();
+    return;
+  }
+  if (e.target.id === "text" && (e.target.value !== "" || e.key === "j" || e.key === "k")) return;
+  if (e.key in step) { e.preventDefault(); go(current + step[e.key]); }
+  else if (e.key === "Home") { e.preventDefault(); go(0); }
+  else if (e.key === "End") { e.preventDefault(); go(shown.length - 1); }
+});
+
+async function boot() {
+  try {
+    const r = await fetch("screens.json");
+    screens = await r.json();
+  } catch (_) { screens = []; }
+  // The phone switch shows only when some screen has an Android shot.
+  if (screens.some(hasAndroid)) {
+    $("plats").hidden = false;
+    $("plat-ios").setAttribute("aria-pressed", String(platform === "ios"));
+    $("plat-android").setAttribute("aria-pressed", String(platform === "android"));
+  } else platform = "ios";
+  try { const v = localStorage.getItem("goc-review-view"); view = v === "before" || v === "both" ? v : "after"; } catch (_) {}
+  try { const v = localStorage.getItem("review-sort"); if (["newest", "journey", "open"].includes(v)) sortBy = v; } catch (_) {}
+  try { if (localStorage.getItem("review-platform") === "android") platform = "android"; } catch (_) {}
+  $("sort").value = sortBy;
+  // New since last time: remember this visit for the next one.
+  try { lastVisit = +localStorage.getItem("review-last-visit") || 0; localStorage.setItem("review-last-visit", String(Date.now())); } catch (_) {}
+  sortScreens();
+  let start = 0;
+  const want = location.hash.slice(1) || (() => { try { return localStorage.getItem("goc-review-screen"); } catch (_) { return null; } })();
+  const k = shown.findIndex((s) => s.id === want);
+  if (k >= 0) start = k;
+  go(start);
+
+  if (!window.claude?.use) { renderThread(); return; }
+  db = await window.claude.use("db");
+  user = await window.claude.use("user");
+  if (user) { try { me = await user.id(); } catch (_) {} }
+  renderCompose();
+  if (!db) { renderThread(); return; }
+  const slow = setTimeout(() => status("Notes can't be reached yet. They'll appear when the connection returns."), 10000);
+  db.collection("comments").onSnapshot((snap) => {
+    if (!snap.metadata.fromCache) { clearTimeout(slow); status(""); }
+    notes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (sortBy === "open") sortScreens();
+    renderList(); renderPins(); renderThread();
+  }, (err) => { clearTimeout(slow); status("Notes stopped updating: " + (err?.message || "reload the page.")); });
+}
+boot();
+</script>

@@ -1,19 +1,13 @@
-import { exportGeneratedMedia } from '../../services/exportGeneratedMedia';
-import { deleteGeneratedVideo } from '../../services/generatedVideoFiles';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import React, { useMemo, useState } from 'react';
-import { Modal } from 'react-native';
-import Video from 'react-native-video';
 import { useAppStore } from '../../stores/appStore';
-import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
-import type { GeneratedVideo } from '../../types';
-import { View, Text, Image, FlatList, Platform } from 'react-native';
+import { View, Text, Image, FlatList } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import Icon from 'react-native-vector-icons/Feather';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { CustomAlert, hideAlert, showAlert, type AlertState } from '../../components/CustomAlert';
+import { AliveScreen } from '../../components/AliveScreen';
+import { useNavigation, useRoute, RouteProp, type NavigationProp } from '@react-navigation/native';
+import { CustomAlert, hideAlert } from '../../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../../theme';
 import { GeneratedImage } from '../../types';
 import { RootStackParamList } from '../../navigation/types';
@@ -21,38 +15,22 @@ import { useHasRegisteredScreen } from '../../navigation/screenRegistry';
 import { createStyles, COLUMN_COUNT } from './styles';
 import { useGalleryActions } from './useGalleryActions';
 import { GalleryGridItem } from './GridItem';
-import { FullscreenViewer } from './FullscreenViewer';
+import { UnderlineTabs } from '../../components/UnderlineTabs';
 import { SCROLL_DEPTH_PROPS } from '../../constants/scrollDepth';
 
 type GalleryScreenRouteProp = RouteProp<RootStackParamList, 'Gallery'>;
 
-/** The alert, shown only in the place it belongs: over the open video, or over the Gallery. */
-const shownWhere = (state: AlertState, here: boolean): AlertState => ({ ...state, visible: state.visible && here });
-
-/** Deleting a video asks first, as the Studio's viewer does; a failure says so in the same sheet. */
-function askDeleteVideo(videoId: string, setAlertState: (state: AlertState) => void, onDeleted: () => void): void {
-  setAlertState(
-    showAlert('Delete this video?', 'It is removed from this phone and its chat.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          deleteGeneratedVideo(videoId)
-            .then(onDeleted)
-            .catch(error => setAlertState(showAlert('Could not delete video', String(error.message))));
-        },
-      },
-    ]),
-  );
-}
+/** A hairline between video rows, inset to the row's text. */
+const VideoDivider: React.FC = () => {
+  const styles = useThemedStyles(createStyles);
+  return <View style={styles.videoDivider} />;
+};
 
 export const GalleryScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const route = useRoute<GalleryScreenRouteProp>();
   const conversationId = route.params?.conversationId;
   const [kind, setKind] = useState<'images' | 'videos'>('images');
-  const [selectedVideo, setSelectedVideo] = useState<GeneratedVideo | null>(null);
   const videos = useAppStore(state => state.generatedVideos);
   // Video is Pro: making and tracking videos fills these slots. Watching saved videos stays free.
   const VideoStatus = useSlot(SLOTS.videoStatus);
@@ -73,23 +51,16 @@ export const GalleryScreen: React.FC = () => {
   const {
     isSelectMode,
     selectedIds,
-    selectedImage,
-    setSelectedImage,
-    showDetails,
-    setShowDetails,
     alertState,
     setAlertState,
     imageGenState,
     displayImages,
-    handleDelete,
     handleRemoveUnavailable,
     toggleSelectMode,
     toggleImageSelection,
     handleDeleteSelected,
     selectAll,
-    handleSaveImage,
     handleCancelGeneration,
-    closeViewer,
   } = useGalleryActions(conversationId);
 
   const screenTitle = conversationId ? 'Chat Media' : 'Gallery';
@@ -110,7 +81,7 @@ export const GalleryScreen: React.FC = () => {
         if (isSelectMode) {
           toggleImageSelection(item.id);
         } else {
-          setSelectedImage(item);
+          navigation.navigate('GalleryImage', { imageId: item.id });
         }
       }}
       onRemove={() => handleRemoveUnavailable(item)}
@@ -123,12 +94,25 @@ export const GalleryScreen: React.FC = () => {
     />
   );
 
+  // The Pro library (films, clips to extend) is reached from the Videos tab, with or without Gallery clips.
+  const libraryRow = hasVideoLibrary ? (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('VideoLibrary' as never)}
+                accessibilityRole="button"
+                style={styles.videoRow}
+                testID="gallery-open-video-library"
+              >
+                <Icon name="film" size={20} color={colors.textSecondary} />
+                <View style={styles.videoRowBody}>
+                  <Text style={styles.videoRowTitle}>Stories and clips</Text>
+                  <Text style={styles.videoRowMeta}>Your films, and clips to extend</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+  ) : null;
+
   return (
-    <SafeAreaView
-      testID="gallery-screen"
-      style={styles.container}
-      edges={['top']}
-    >
+    <AliveScreen testID="gallery-screen" style={styles.container}>
       <View style={styles.header}>
         {isSelectMode ? (
           <>
@@ -170,7 +154,6 @@ export const GalleryScreen: React.FC = () => {
               <Icon name="arrow-left" size={24} color={colors.text} />
             </TouchableOpacity>
             <Text style={styles.title}>{screenTitle}</Text>
-            <Text style={styles.countBadge}>{kind === 'images' ? displayImages.length : displayVideos.length}</Text>
             {/* Select mode picks images only, so it is offered on the Images tab alone. */}
             {kind === 'images' && displayImages.length > 0 && (
               <TouchableOpacity
@@ -187,17 +170,20 @@ export const GalleryScreen: React.FC = () => {
         )}
       </View>
 
-      <View style={styles.mediaTabs}>
-        {(['images', 'videos'] as const).map(tab => <TouchableOpacity key={tab} onPress={() => {
+      <UnderlineTabs
+        tabs={[
+          { key: 'images' as const, label: `Images (${displayImages.length})`, testID: 'gallery-tab-images' },
+          { key: 'videos' as const, label: `Videos (${displayVideos.length})`, testID: 'gallery-tab-videos' },
+        ]}
+        active={kind}
+        onChange={tab => {
           // Leaving Images ends image select mode: the Videos list cannot show what is selected.
           if (tab === 'videos' && isSelectMode) toggleSelectMode();
-          if (tab === 'videos' && hasVideoLibrary) navigation.navigate('VideoLibrary' as never);
-          else setKind(tab);
-        }} accessibilityRole="button" testID={`gallery-tab-${tab}`}
-          style={[styles.mediaTab, kind === tab && styles.mediaTabActive]}>
-          <Text style={kind === tab ? styles.mediaTabTextActive : styles.mediaTabText}>{tab === 'images' ? `Images (${displayImages.length})` : `Videos (${displayVideos.length})`}</Text>
-        </TouchableOpacity>)}
-      </View>
+          // Videos stay in Gallery and open in its viewer, like images (hand test 81). The Pro library,
+          // with stories, is one row at the top of this tab rather than where the tab leads.
+          setKind(tab);
+        }}
+      />
 
       {kind === 'videos' && VideoStatus && (
         <VideoStatus conversationId={conversationId} />
@@ -253,24 +239,33 @@ export const GalleryScreen: React.FC = () => {
 
       {kind === 'videos' ? (
         displayVideos.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Icon name="video" size={48} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>No videos in this gallery</Text>
+          <View style={styles.videoList}>
+            {/* With no clips here, the library row still leads: films may live only there. */}
+            {libraryRow ? <View style={styles.videoGroup}>{libraryRow}</View> : null}
+            <View style={styles.emptyContainer}>
+              <Icon name="video" size={48} color={colors.textMuted} />
+              <Text style={styles.emptyTitle}>No videos in this gallery</Text>
+            </View>
           </View>
         ) : (
           <FlatList
+            // Its own key: the image grid has 3 columns, and a FlatList cannot change columns in place.
+            key="gallery-videos"
             {...SCROLL_DEPTH_PROPS}
             data={displayVideos}
             keyExtractor={item => item.id}
-            contentContainerStyle={styles.videoList}
+            style={styles.videoList}
+            contentContainerStyle={styles.videoGroup}
+            ItemSeparatorComponent={VideoDivider}
+            ListHeaderComponent={libraryRow}
             {...LIST_CLIPPING_PROPS}
             renderItem={({ item }) => (
               <TouchableOpacity
-                onPress={() => setSelectedVideo(item)}
+                onPress={() => navigation.navigate('GalleryVideo', { videoId: item.id })}
                 accessibilityRole="button"
                 style={styles.videoRow}
               >
-                <Icon name="play-circle" size={28} color={colors.primary} />
+                <Icon name="play-circle" size={24} color={colors.textSecondary} />
                 <View style={styles.videoRowBody}>
                   <Text numberOfLines={2} style={styles.videoRowTitle}>
                     {item.prompt}
@@ -298,6 +293,7 @@ export const GalleryScreen: React.FC = () => {
         </View>
       ) : (
         <FlatList
+          key="gallery-images"
           data={displayImages}
           renderItem={renderGridItem}
           keyExtractor={item => item.id}
@@ -309,81 +305,7 @@ export const GalleryScreen: React.FC = () => {
         />
       )}
 
-      <Modal
-        visible={!!selectedVideo}
-        animationType="slide"
-        onRequestClose={() => setSelectedVideo(null)}
-      >
-        <SafeAreaView style={styles.container}>
-          <View style={styles.videoViewerHeader}>
-            <TouchableOpacity onPress={() => setSelectedVideo(null)}>
-              <Text style={styles.videoViewerText}>Close</Text>
-            </TouchableOpacity>
-            {selectedVideo ? (
-              <TouchableOpacity
-                onPress={() => {
-                  void exportGeneratedMedia(
-                    selectedVideo.videoPath,
-                    `${selectedVideo.id}.mp4`,
-                    'video/mp4',
-                  )
-                    .then(() => {
-                      if (Platform.OS === 'android')
-                        setAlertState(showAlert('Saved to Downloads'));
-                    })
-                    .catch(error =>
-                      setAlertState(
-                        showAlert('Save failed', String(error.message)),
-                      ),
-                    );
-                }}
-              >
-                <Text style={{ color: colors.primary }}>
-                  {Platform.OS === 'ios' ? 'Share' : 'Save'}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-          {selectedVideo ? (
-            <>
-              <Video
-                source={{
-                  uri: `file://${resolveDocumentPath(selectedVideo.videoPath)}`,
-                }}
-                controls
-                paused
-                resizeMode="contain"
-                style={[
-                  styles.videoPlayer,
-                  { aspectRatio: selectedVideo.width / selectedVideo.height },
-                ]}
-              />
-              <Text style={styles.videoPrompt}>
-                {selectedVideo.prompt}
-              </Text>
-              <TouchableOpacity
-                onPress={() =>
-                  askDeleteVideo(selectedVideo.id, setAlertState, () => setSelectedVideo(null))
-                }
-                style={styles.videoDelete}
-              >
-                <Text style={styles.videoDeleteText}>Delete video</Text>
-              </TouchableOpacity>
-            </>
-          ) : null}
-        </SafeAreaView>
-        {/* Inside the video's Modal, so its sheet shows above the video, not behind it. */}
-        <CustomAlert {...shownWhere(alertState, !!selectedVideo)} onClose={() => setAlertState(hideAlert())} />
-      </Modal>
-      <FullscreenViewer
-        image={selectedImage}
-        showDetails={showDetails}
-        onClose={closeViewer}
-        onToggleDetails={() => setShowDetails(prev => !prev)}
-        onSave={handleSaveImage}
-        onDelete={handleDelete}
-      />
-      <CustomAlert {...shownWhere(alertState, !selectedVideo)} onClose={() => setAlertState(hideAlert())} />
-    </SafeAreaView>
+      <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
+    </AliveScreen>
   );
 };

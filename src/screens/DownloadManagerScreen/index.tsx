@@ -1,35 +1,44 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, ScrollView } from 'react-native';
-import { TouchableOpacity } from '../../components/Touchable';
+import { View, Text, FlatList } from 'react-native';
 import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { Card } from '../../components';
+import { ListGroup } from '../../components/ListGroup';
 import { CustomAlert, hideAlert } from '../../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
 import { ActiveDownloadCard, CompletedDownloadCard, formatBytes, type DownloadItem } from './items';
 import { useDownloadManager } from './useDownloadManager';
 import { isQueuedStatus, isDownloadingStatus, isFailedStatus, type DownloadStatus } from '../../stores/downloadStore';
+import { UnderlineTabs, type UnderlineTab } from '../../components/UnderlineTabs';
+import { AliveScreen } from '../../components/AliveScreen';
+import { ScreenHeader } from '../../components/ScreenHeader';
 
-type FilterType = 'all' | 'text' | 'vision' | 'image' | 'voice';
+type FilterType = 'all' | 'text' | 'documents' | 'image' | 'video' | 'voice' | 'transcription';
 
+// The Models tabs, the same names in the same order, so a model sits under the same tab in both places
+// (hand test 91: Downloads had Vision and no Documents). Vision models are Text models, as on Models.
 const FILTERS: { id: FilterType; label: string }[] = [
-  { id: 'all',    label: 'All' },
-  { id: 'text',   label: 'Text' },
-  { id: 'vision', label: 'Vision' },
-  { id: 'image',  label: 'Image Gen' },
-  // Voice covers both text-to-speech and speech-to-text models.
-  { id: 'voice',  label: 'Voice Models' },
+  { id: 'all',           label: 'All' },
+  { id: 'text',          label: 'Text' },
+  { id: 'documents',     label: 'Documents' },
+  { id: 'image',         label: 'Image' },
+  { id: 'video',         label: 'Video' },
+  { id: 'voice',         label: 'Voice' },
+  { id: 'transcription', label: 'Speech' },
 ];
+
+const FILTER_TABS: UnderlineTab<FilterType>[] = FILTERS.map(f => ({ key: f.id, label: f.label, testID: `downloads-filter-${f.id}` }));
 
 function matchesFilter(item: DownloadItem, filter: FilterType): boolean {
   if (filter === 'all')    return true;
-  if (filter === 'vision') return item.modelType === 'text' && !!item.isVisionModel;
-  if (filter === 'text')   return item.modelType === 'text' && !item.isVisionModel;
+  if (filter === 'text')   return item.modelType === 'text';
+  if (filter === 'documents') return item.modelType === 'embedding';
   if (filter === 'image')  return item.modelType === 'image';
-  if (filter === 'voice')  return item.modelType === 'tts' || item.modelType === 'stt';
+  if (filter === 'video')  return item.modelType === 'video';
+  if (filter === 'voice')  return item.modelType === 'tts';
+  if (filter === 'transcription') return item.modelType === 'stt';
   return true;
 }
 
@@ -68,35 +77,14 @@ export const DownloadManagerScreen: React.FC = () => {
   const activeFailedCount = filteredActive.filter(i => isFailedStatus(i.status as DownloadStatus)).length;
   const activePausedCount = filteredActive.filter(i => i.status === 'paused').length;
 
+  // The same underline tabs as Models and Gallery (design philosophy: one look for every tab row).
   const renderHeader = useCallback(() => (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.filterBarContent}
-    >
-      {FILTERS.map(f => {
-        const active = activeFilter === f.id;
-        return (
-          <TouchableOpacity
-            key={f.id}
-            style={[styles.filterChip, active && styles.filterChipActive]}
-            onPress={() => setActiveFilter(f.id)}
-          >
-            <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{f.label}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
-  ), [activeFilter, styles]);
+    <UnderlineTabs tabs={FILTER_TABS} active={activeFilter} onChange={setActiveFilter} />
+  ), [activeFilter]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']} testID="downloaded-models-screen">
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} testID="back-button">
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Download Manager</Text>
-      </View>
+    <AliveScreen style={styles.container} testID="downloaded-models-screen">
+      <ScreenHeader title="Downloads" onBack={() => navigation.goBack()} backTestID="back-button" />
 
       <FlatList
         {...LIST_CLIPPING_PROPS}
@@ -108,11 +96,13 @@ export const DownloadManagerScreen: React.FC = () => {
             {filteredActive.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Icon name="download" size={16} color={colors.primary} />
-                  <Text style={styles.sectionTitle}>Active Downloads</Text>
-                  <View style={styles.countBadge}>
-                    <Text testID="dm-active-downloading-count" style={styles.countText}>{activeDownloadingCount}</Text>
-                  </View>
+                  <Text style={styles.sectionTitle}>Downloading</Text>
+                  {/* The count is what is moving; with nothing moving, the words beside it say why. */}
+                  {activeDownloadingCount > 0 && (
+                    <View style={styles.countBadge}>
+                      <Text testID="dm-active-downloading-count" style={styles.countText}>{activeDownloadingCount}</Text>
+                    </View>
+                  )}
                   {activeQueuedCount > 0 && (
                     <Text testID="dm-active-queued-count" style={[styles.countText, { color: colors.textSecondary }]}>
                       {activeQueuedCount} queued
@@ -129,29 +119,28 @@ export const DownloadManagerScreen: React.FC = () => {
                     </Text>
                   )}
                 </View>
-                {filteredActive.map(item => (
-                  <View key={`active-${item.modelId}-${item.fileName}`} style={styles.downloadCardInset}>
-                    <ActiveDownloadCard item={item} onRemove={handleRemoveDownload} onRetry={handleRetryDownload} onPause={handlePauseDownload} onResume={handleResumeDownload} />
-                  </View>
-                ))}
+                <ListGroup style={styles.downloadCardInset}>
+                  {filteredActive.map(item => (
+                    <ActiveDownloadCard key={`active-${item.modelId}-${item.fileName}`} item={item} onRemove={handleRemoveDownload} onRetry={handleRetryDownload} onPause={handlePauseDownload} onResume={handleResumeDownload} />
+                  ))}
+                </ListGroup>
               </View>
             )}
 
             {/* Downloaded Models */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Icon name="check-circle" size={16} color={colors.success} />
-                <Text style={styles.sectionTitle}>Downloaded Models</Text>
+                <Text style={styles.sectionTitle}>On this phone</Text>
                 <View style={styles.countBadge}>
                   <Text style={styles.countText}>{filteredCompleted.length}</Text>
                 </View>
               </View>
               {filteredCompleted.length > 0 ? (
-                filteredCompleted.map(item => (
-                  <View key={`completed-${item.modelId}-${item.fileName}`}>
-                    <CompletedDownloadCard item={item} onDelete={handleDeleteItem} onRepairVision={handleRepairVision} onPauseRepair={handlePauseDownload} onResumeRepair={handleResumeDownload} onCancelRepair={handleRemoveDownload} isRepairingVision={isRepairingVision(item.modelId)} />
-                  </View>
-                ))
+                <ListGroup style={styles.downloadCardInset}>
+                  {filteredCompleted.map(item => (
+                    <CompletedDownloadCard key={`completed-${item.modelId}-${item.fileName}`} item={item} onDelete={handleDeleteItem} onRepairVision={handleRepairVision} onPauseRepair={handlePauseDownload} onResumeRepair={handleResumeDownload} onCancelRepair={handleRemoveDownload} isRepairingVision={isRepairingVision(item.modelId)} />
+                  ))}
+                </ListGroup>
               ) : (
                 <Card style={styles.emptyCard}>
                   <Icon name="package" size={24} color={colors.textMuted} />
@@ -168,7 +157,7 @@ export const DownloadManagerScreen: React.FC = () => {
                 <View style={styles.storageRow}>
                   <Icon name="hard-drive" size={16} color={colors.textMuted} />
                   <Text style={styles.storageText}>
-                    Total storage used: {formatBytes(totalStorageUsed)}
+                    {formatBytes(totalStorageUsed)} used on this phone
                   </Text>
                 </View>
               </View>
@@ -186,6 +175,6 @@ export const DownloadManagerScreen: React.FC = () => {
         buttons={alertState.buttons}
         onClose={() => setAlertState(hideAlert())}
       />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };

@@ -27,7 +27,7 @@ jest.mock('@react-native-community/slider', () => ({
 }));
 
 /** The CPU's description, inside the backend row's sentence. */
-const CPU_DESC = /Always available\. Stable, predictable performance\./;
+const CPU_DESC = /Always works, at a steady speed\./;
 
 type Harness = Awaited<ReturnType<typeof setupChatScreen>>;
 
@@ -42,14 +42,13 @@ function npuPhone() {
   });
 }
 
-/** Open Model Settings → Text Generation → Advanced. */
+/** Open Model Settings on its General tab (the one it opens on), where the backend shows. */
 async function openModelSettingsAdvanced(h: Harness) {
   // Model Settings opens inside the app, on its own route.
   const screen = await h.openScreen('ModelSettings');
-  // The backend is a shared General control; the fastest-settings run is in Text > Advanced.
-  h.rtl.fireEvent.press(screen.getByTestId('general-generation-accordion'));
-  h.rtl.fireEvent.press(screen.getByTestId('text-generation-accordion'));
-  h.rtl.fireEvent.press(screen.getByTestId('text-advanced-toggle'));
+  // It places every modality, so it leads the General tab: nothing has to open to reach it.
+  h.rtl.fireEvent.press(screen.getByTestId('model-settings-tab-general'));
+  expect(screen.getByTestId('fastest-settings-button')).toBeTruthy();
   return screen;
 }
 
@@ -62,15 +61,18 @@ describe('Use fastest settings', () => {
     // BEFORE: the CPU is selected (its description shows, no NPU layer control).
     await h.rtl.waitFor(() => expect(screen.getByTestId('backend-htp-button')).toBeTruthy());
     expect(screen.queryByText(CPU_DESC)).not.toBeNull();
-    expect(screen.queryByText('Text NPU Layers')).toBeNull();
+    expect(screen.queryByText('NPU layers')).toBeNull();
 
     h.rtl.fireEvent.press(screen.getByTestId('fastest-settings-button'));
     await h.rtl.waitFor(() => expect(screen.queryByTestId('fastest-settings-cancel')).not.toBeNull());
     await h.rtl.waitFor(() => expect(screen.queryByTestId('fastest-settings-button')).not.toBeNull(), { timeout: 8000 });
 
     // AFTER: the NPU is selected and the batch follows it.
-    expect(screen.queryByText('Text NPU Layers')).not.toBeNull();
+    expect(screen.queryByText('NPU layers')).not.toBeNull();
     expect(screen.queryByText(CPU_DESC)).toBeNull();
+    // The batch it set is a text control, on the Text tab › Advanced.
+    h.rtl.fireEvent.press(screen.getByTestId('model-settings-tab-text'));
+    h.rtl.fireEvent.press(screen.getByTestId('text-advanced-toggle'));
     expect(String(screen.getByTestId('batch-size-stepper-value').props.children)).toBe('Auto (128)');
     // Every backend this device class may run was really measured, each on its own load.
     expect(h.boundary.llama!.calls.bench.map(b => b.backend)).toEqual(['cpu', 'htp', 'opencl']);
@@ -86,7 +88,7 @@ describe('Use fastest settings', () => {
 
     // BEFORE: the user had picked the GPU.
     h.rtl.fireEvent.press(screen.getByTestId('backend-opencl-button'));
-    await h.rtl.waitFor(() => expect(screen.queryByText('Text GPU Layers (OpenCL)')).not.toBeNull());
+    await h.rtl.waitFor(() => expect(screen.queryByText('GPU layers')).not.toBeNull());
     expect(screen.queryByText(CPU_DESC)).toBeNull();
 
     h.rtl.fireEvent.press(screen.getByTestId('fastest-settings-button'));
@@ -96,8 +98,8 @@ describe('Use fastest settings', () => {
     // AFTER: the CPU, the only backend that really ran — all three were tried.
     expect(h.boundary.llama!.calls.bench.map(b => b.backend)).toEqual(['cpu', 'htp', 'opencl']);
     expect(screen.queryByText(CPU_DESC)).not.toBeNull();
-    expect(screen.queryByText('Text GPU Layers (OpenCL)')).toBeNull();
-    expect(screen.queryByText('Text NPU Layers')).toBeNull();
+    expect(screen.queryByText('GPU layers')).toBeNull();
+    expect(screen.queryByText('NPU layers')).toBeNull();
   });
 
   it('a phone under 6 GB goes to the CPU without measuring anything', async () => {
@@ -111,13 +113,13 @@ describe('Use fastest settings', () => {
     });
     const screen = await openModelSettingsAdvanced(h);
     h.rtl.fireEvent.press(screen.getByTestId('backend-opencl-button'));
-    await h.rtl.waitFor(() => expect(screen.queryByText('Text GPU Layers (OpenCL)')).not.toBeNull());
+    await h.rtl.waitFor(() => expect(screen.queryByText('GPU layers')).not.toBeNull());
 
     await h.rtl.act(async () => {
       h.rtl.fireEvent.press(screen.getByTestId('fastest-settings-button'));
     });
     await h.rtl.waitFor(() => expect(screen.queryByText(CPU_DESC)).not.toBeNull());
-    expect(screen.queryByText('Text GPU Layers (OpenCL)')).toBeNull();
+    expect(screen.queryByText('GPU layers')).toBeNull();
     expect(h.boundary.llama!.calls.bench).toHaveLength(0);
     expect(h.boundary.llama!.calls.initLlama).toHaveLength(0);
   });
@@ -129,7 +131,7 @@ describe('Use fastest settings', () => {
     const screen = await openModelSettingsAdvanced(h);
 
     h.rtl.fireEvent.press(screen.getByTestId('backend-opencl-button'));
-    await h.rtl.waitFor(() => expect(screen.queryByText('Text GPU Layers (OpenCL)')).not.toBeNull());
+    await h.rtl.waitFor(() => expect(screen.queryByText('GPU layers')).not.toBeNull());
 
     h.rtl.fireEvent.press(screen.getByTestId('fastest-settings-button'));
     const cancel = await h.rtl.waitFor(() => screen.getByTestId('fastest-settings-cancel'));
@@ -141,8 +143,8 @@ describe('Use fastest settings', () => {
     await h.rtl.waitFor(() => expect(screen.queryByTestId('fastest-settings-button')).not.toBeNull(), { timeout: 8000 });
     // Nothing else was measured and nothing changed: still the GPU the user picked.
     expect(h.boundary.llama!.calls.bench).toHaveLength(1);
-    expect(screen.queryByText('Text GPU Layers (OpenCL)')).not.toBeNull();
-    expect(screen.queryByText('Text NPU Layers')).toBeNull();
+    expect(screen.queryByText('GPU layers')).not.toBeNull();
+    expect(screen.queryByText('NPU layers')).toBeNull();
     expect(h.useAppStore.getState().speedBenchmarkBackend).toBeNull();
   });
 });

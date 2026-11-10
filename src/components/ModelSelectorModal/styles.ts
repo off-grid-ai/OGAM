@@ -5,7 +5,7 @@ import { createRemoteStyles } from './remoteStyles';
 const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   tabBar: {
     flexDirection: 'row' as const,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.xs,
     gap: SPACING.sm,
@@ -45,8 +45,10 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderRadius: 4,
     backgroundColor: colors.primary,
   },
+  // The same gutter as the transcription and voice pickers (hand test 88: 12 pt here, 24 pt there).
   content: {
-    padding: SPACING.md,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.sm,
   },
   contentContainer: {
     paddingBottom: SPACING.md,
@@ -89,18 +91,23 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
   },
-  unloadButton: {
+  showAllRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: `${colors.error}15`,
-    gap: 6,
+    justifyContent: 'space-between' as const,
+    minHeight: 44,
+    paddingHorizontal: SPACING.md,
   },
-  unloadButtonText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.error,
+  showAllText: {
+    ...TYPOGRAPHY.body,
+    color: colors.textSecondary,
+  },
+  // A plain icon button: unloading frees memory and loses nothing, so it is not red (hand test 89).
+  unloadButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   sectionTitle: {
     ...TYPOGRAPHY.label,

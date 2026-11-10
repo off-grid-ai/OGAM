@@ -12,7 +12,8 @@
   ],
   "ignoreBinaries": [
     "swiftlint",
-    "c\\+\\+"
+    "c\\+\\+",
+    "llama-embedding"
   ],
   "ignoreDependencies": [
     "@offgrid/pro",

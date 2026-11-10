@@ -8,6 +8,7 @@
  * which refuses one unlink as a locked or permission-protected file does on device.
  */
 import { setupChatScreen } from '../../harness/chatHarness';
+import { deleteOpenImage, galleryWithRoutes } from '../../harness/galleryRoutes';
 import {
   REMOTE_IMAGE_URL,
   chooseRemoteImageModel,
@@ -50,7 +51,7 @@ describe('deleting the open chat when an image file cannot be removed', () => {
 
     // Delete the chat from its own menu and confirm.
     h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByTestId('chat-settings-icon')));
-    h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByText(/Delete Chat|Delete Conversation/)));
+    h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByText(/Delete chat/)));
     const confirm = await h.rtl.waitFor(() => h.view!.getByText(/^Delete$/));
     await h.rtl.act(async () => { h.rtl.fireEvent.press(confirm); });
 
@@ -67,15 +68,12 @@ describe('deleting the open chat when an image file cannot be removed', () => {
 
     // Retry from the Gallery: the image that stayed is listed, and deleting it now succeeds.
     locked = false;
-    const React = require('react');
-    const { GalleryScreen } = require('../../../src/screens/GalleryScreen');
-    const gallery = h.renderAside(React.createElement(GalleryScreen));
+    // The Gallery with its image route, as the app's stack has it.
+    const gallery = h.rtl.render(galleryWithRoutes());
     const tiles = await gallery.findAllByTestId(/^gallery-image-/);
     expect(tiles).toHaveLength(1);
     h.rtl.fireEvent.press(tiles[0]);
-    h.rtl.fireEvent.press(gallery.getByText('Delete'));
-    await gallery.findByText('Delete Image');
-    await h.rtl.act(async () => { h.rtl.fireEvent.press(gallery.getAllByText('Delete')[1]); });
+    await deleteOpenImage(h.rtl, gallery);
 
     await h.rtl.waitFor(() => {
       expect(gallery.queryAllByTestId(/^gallery-image-/)).toHaveLength(0);

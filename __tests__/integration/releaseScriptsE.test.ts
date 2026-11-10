@@ -138,7 +138,24 @@ it('M4: refuses a clean shared commit that differs from origin/main', () => {
   expect(result.stdout).toContain('../shared HEAD must equal origin/main');
 });
 
+/** 0.0.1 is live: promote.sh pushed its plain tag, so the next beta is of 0.0.2. */
+function markLive() {
+  git(mobile, 'tag', 'v0.0.1');
+  git(mobile, 'push', 'origin', 'v0.0.1');
+}
+
+it('a second cut of a version not yet promoted is its next beta, not a new version', () => {
+  // Ali, 2026-11-10: the second beta of an unreleased 0.0.123 shipped as 0.0.124-beta.1.
+  git(mobile, 'tag', '-a', 'v0.0.1-beta.1', '-m', 'Beta\n\nBuild: 100');
+  git(mobile, 'push', 'origin', 'v0.0.1-beta.1');
+  const result = run('uat', ['--ios']);
+  if (result.status !== 0) throw new Error(result.stdout + result.stderr);
+  const create = readFileSync(join(root, 'gh-calls.log'), 'utf8').split('\n').find(line => line.startsWith('release create'));
+  expect(create).toContain('v0.0.1-beta.2');
+});
+
 it('attaches the IPA that went to TestFlight to the GitHub prerelease', () => {
+  markLive();
   const result = run('uat', ['--ios']);
   if (result.status !== 0) throw new Error(result.stdout + result.stderr);
   const create = readFileSync(join(root, 'gh-calls.log'), 'utf8').split('\n').find(line => line.startsWith('release create'));
@@ -152,6 +169,7 @@ it.each(['', 'release/candidate'])('M3/M4: records shared source in the beta tag
     git(mobile, 'push', '-u', 'origin', branch);
     save(mobile, 'candidate.txt', 'Explicit release branch');
   }
+  markLive();
   const result = run('uat', ['--ios'], { RELEASE_BRANCH: branch });
   if (result.status !== 0) throw new Error(result.stdout + result.stderr);
   expect(result.status).toBe(0);

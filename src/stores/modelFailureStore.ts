@@ -28,6 +28,10 @@ export interface ModelFailure {
   /** When set (and `overridable`), the card shows a "Load Anyway" button that runs
    *  this — re-attempts the load forcing past the budget ({ override: true }). */
   onLoadAnyway?: () => void;
+  /** Runs when the PERSON closes the card (not when code clears it after a retry), so the owner
+   *  can let go of what the card was about. Without it, an interrupted video kept its job and the
+   *  card came back on every launch, in whatever chat was open (hand test 2026-11-07). */
+  onDismiss?: () => void;
 }
 
 interface ModelFailureState {

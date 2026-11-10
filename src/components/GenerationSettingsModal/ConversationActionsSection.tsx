@@ -67,8 +67,8 @@ export const ConversationActionsSection: React.FC<ConversationActionsSectionProp
       )}
       {onDeleteConversation && (
         <TouchableOpacity style={styles.actionRow} onPress={handleDeleteConversation}>
-          <Icon name="trash-2" size={16} color={colors.error} />
-          <Text style={styles.actionTextError}>Delete Conversation</Text>
+          <Icon name="trash-2" size={16} color={colors.textMuted} />
+          <Text style={styles.actionTextError}>Delete chat</Text>
         </TouchableOpacity>
       )}
     </View>

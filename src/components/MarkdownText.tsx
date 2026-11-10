@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from 'react';
 import { Linking, Text } from 'react-native';
 import Markdown, { MarkdownIt } from '@ronradtke/react-native-markdown-display';
 import { preprocessChatMarkdown, safeChatExternalUrl } from '@offgrid/sync';
+import { plainMath } from '../utils/visibleMessages';
 import { useTheme } from '../theme';
 import type { ThemeColors } from '../theme';
 import { TYPOGRAPHY, SPACING, FONTS } from '../constants';
@@ -14,7 +15,31 @@ const chatMarkdownParser = MarkdownIt({ typographer: true, linkify: true });
  * Lookahead handles chains like 5*5*5*5 in a single pass.
  */
 export function preprocessMarkdown(text: string): string {
-  return preprocessChatMarkdown(text);
+  return dropDanglingBold(plainMathSpans(preprocessChatMarkdown(text)));
+}
+
+/**
+ * Maths a small model writes as LaTeX ("$$37 \\times 43$$") reads as text ("37 × 43"): only spans
+ * between $ signs that hold a LaTeX command are touched, so a price like "$5" stays as it is.
+ */
+function plainMathSpans(text: string): string {
+  const spanHasLatex = (inner: string) => /\\[a-zA-Z]/.test(inner);
+  return text
+    .replace(/\$\$([^$]+)\$\$/g, (whole, inner: string) => (spanHasLatex(inner) ? plainMath(inner) : whole))
+    .replace(/\$([^$\n]+)\$/g, (whole, inner: string) => (spanHasLatex(inner) ? plainMath(inner) : whole))
+    .replace(/\\\((.+?)\\\)/g, (_whole, inner: string) => plainMath(inner))
+    .replace(/\\\[([\s\S]+?)\\\]/g, (_whole, inner: string) => plainMath(inner));
+}
+
+/**
+ * A reply cut off mid-bold (Stop, or still streaming) ends with an unclosed `**`, which markdown
+ * shows as raw asterisks ("**Yamuna"). An odd count means the last marker never closes: drop it.
+ */
+export function dropDanglingBold(text: string): string {
+  const markers = text.match(/(?<!\\)\*\*/g);
+  if (!markers || markers.length % 2 === 0) return text;
+  const at = text.lastIndexOf('**');
+  return text.slice(0, at) + text.slice(at + 2);
 }
 
 /** Custom link rule — renders as inline Text so it wraps correctly inside list items */
@@ -133,7 +158,7 @@ function createMarkdownStyles(
     },
     heading1: {
       ...TYPOGRAPHY.h2,
-      fontWeight: '600' as const,
+      fontWeight: '500' as const,
       color: textColor,
       marginTop: SPACING.sm,
       marginBottom: SPACING.xs,
@@ -146,7 +171,7 @@ function createMarkdownStyles(
     },
     heading3: {
       ...TYPOGRAPHY.h3,
-      fontWeight: '600' as const,
+      fontWeight: '500' as const,
       color: textColor,
       marginTop: SPACING.xs,
       marginBottom: 2,
@@ -158,7 +183,7 @@ function createMarkdownStyles(
       marginBottom: 2,
     },
     strong: {
-      fontWeight: '700' as const,
+      fontWeight: '500' as const,
     },
     em: {
       fontStyle: 'italic' as const,
@@ -230,7 +255,7 @@ function createMarkdownStyles(
       padding: SPACING.sm,
       borderWidth: 0.5,
       borderColor: colors.border,
-      fontWeight: '600' as const,
+      fontWeight: '500' as const,
     },
     td: {
       padding: SPACING.sm,
@@ -247,7 +272,7 @@ function createMarkdownStyles(
       marginVertical: SPACING.md,
     },
     link: {
-      color: colors.primary,
+      color: colors.text,
       textDecorationLine: 'underline' as const,
     },
     paragraph: {

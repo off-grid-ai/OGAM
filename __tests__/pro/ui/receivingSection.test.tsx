@@ -189,6 +189,17 @@ describePro('the Receiving section', () => {
     }
   });
 
+  it('draws the optional-data switch as the app\'s switch: a white knob while it is on', () => {
+    const { Switch } = require('react-native');
+    const view = render(
+      <ReceivingSection policy={policyWith()} devices={[]} {...handlers()} />,
+    );
+
+    const master = view.UNSAFE_getByType(Switch);
+    expect(master.props.value).toBe(true);
+    expect(master.props.thumbColor).toBe('#FFFFFF');
+  });
+
   it('exports the all-device scope sentinel', () => {
     expect(RECEIVE_ANY_SOURCE).toBe('any');
   });

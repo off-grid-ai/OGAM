@@ -79,6 +79,11 @@ async function resolveMmProjPath(
 // Text model loader
 // ---------------------------------------------------------------------------
 
+/** The selection writer for a load: the context's own, else the store's. */
+function recordSelection(ctx: TextLoadContext): (modelId: string | null) => void {
+  return ctx.recordSelection ?? ctx.store.setActiveModelId;
+}
+
 export interface TextLoadContext {
   model: DownloadedModel;
   modelId: string;
@@ -88,6 +93,9 @@ export interface TextLoadContext {
   /** User forced this load ("Load Anyway"/continue) — skip the conservative native
    *  memory gate so the loader's own fallbacks try instead of a hard block. */
   override?: boolean;
+  /** Records the chat selection. A utility load (the intent classifier) passes a no-op: borrowing the
+   *  text engine for a side task must never make that model the person's chat model. */
+  recordSelection?: (modelId: string | null) => void;
   onLoaded: (modelId: string) => void;
   onError: () => void;
   onFinally: () => void;
@@ -167,10 +175,10 @@ async function doLoadLiteRTModel(ctx: TextLoadContext): Promise<void> {
     });
 
     ctx.onLoaded(ctx.modelId);
-    ctx.store.setActiveModelId(ctx.modelId);
+    recordSelection(ctx)(ctx.modelId);
   } catch (error) {
     ctx.onError();
-    ctx.store.setActiveModelId(null); // load FAILED → no active model, consistently (never a stale selection)
+    recordSelection(ctx)(null); // load FAILED → no active model, consistently (never a stale selection)
     throw error;
   } finally {
     ctx.onFinally();
@@ -247,16 +255,16 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
     ctx.store.setLoadedSettings(reloadSettings);
 
     ctx.onLoaded(ctx.modelId);
-    ctx.store.setActiveModelId(ctx.modelId);
+    recordSelection(ctx)(ctx.modelId);
   } catch (error) {
     // A refused switch can leave the previous llama model loaded: it stays the active model.
     const previous = ctx.store.downloadedModels.find(m => m.id === ctx.loadedTextModelId);
     if (previous && previous.engine !== 'litert' && llmService.isModelLoaded() && llmService.getLoadedModelPath() === previous.filePath) {
-      ctx.store.setActiveModelId(previous.id);
+      recordSelection(ctx)(previous.id);
       throw error;
     }
     ctx.onError();
-    ctx.store.setActiveModelId(null); // load FAILED → no active model, consistently (never a stale selection)
+    recordSelection(ctx)(null); // load FAILED → no active model, consistently (never a stale selection)
     throw error;
   } finally {
     ctx.onFinally();

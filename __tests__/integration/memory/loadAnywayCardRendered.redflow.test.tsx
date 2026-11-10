@@ -72,7 +72,7 @@ describe('memory refusal shows "Load Anyway" on the rendered alert, not a dead-e
     await h.rtl.waitFor(() => {
       expect(h.view!.queryByText('Load Anyway')).not.toBeNull();
     }, { timeout: 20000 });
-    expect(h.view!.queryByText(/it needs ~/)).not.toBeNull();
+    expect(h.view!.queryByText(/needs about [\d.]+ GB of memory/)).not.toBeNull();
     expect(h.view!.queryByText(/Failed to load model/)).toBeNull();
 
     await h.rtl.act(async () => {

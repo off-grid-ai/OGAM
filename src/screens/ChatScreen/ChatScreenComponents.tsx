@@ -14,6 +14,7 @@ import { AnimatedEntry } from '../../components/AnimatedEntry';
 import { createStyles } from './styles';
 import { useTheme } from '../../theme';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import { chatTitle, NEW_CHAT_TITLE } from '../../utils/chatTitle';
 
 type StylesType = ReturnType<typeof createStyles>;
 type ColorsType = ReturnType<typeof useTheme>['colors'];
@@ -41,7 +42,7 @@ export const NoModelScreen: React.FC<{
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerLeft}>
-          <Text style={styles.headerTitle}>New Chat</Text>
+          <Text style={styles.headerTitle}>New chat</Text>
         </View>
         <View style={styles.headerActions} />
       </View>
@@ -72,6 +73,13 @@ export const NoModelScreen: React.FC<{
   </SafeAreaView>
 );
 
+/** What a new person can ask straight away: everyday, answered well by a small on-device model. */
+export const STARTER_PROMPTS = [
+  'Plan a relaxed weekend near the mountains',
+  'Explain how compound interest works',
+  'Write a short, kind thank-you note',
+] as const;
+
 export const ChatHeader: React.FC<{
   styles: StylesType;
   colors: ColorsType;
@@ -85,7 +93,10 @@ export const ChatHeader: React.FC<{
   /** Documents attached in this chat; the Documents button shows only when there are some. */
   documentCount?: number;
   onOpenDocuments?: () => void;
-}> = ({ styles, colors, activeConversation, activeProject, navigation, onOpenModels, setShowSettingsPanel, setShowProjectSelector, isRemote, documentCount, onOpenDocuments }) => (
+  /** The model that answers in this chat. The selector names it, so you always see what you talk to;
+   *  it still opens the manager for every kind of model. */
+  modelName?: string;
+}> = ({ styles, colors, activeConversation, activeProject, navigation, onOpenModels, setShowSettingsPanel, setShowProjectSelector, isRemote, documentCount, onOpenDocuments, modelName }) => (
   <View style={styles.header}>
     <View style={styles.headerRow}>
       <TouchableOpacity
@@ -98,23 +109,34 @@ export const ChatHeader: React.FC<{
       </TouchableOpacity>
       <View style={styles.headerLeft}>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          {activeConversation?.title || 'New Chat'}
+          {chatTitle(activeConversation?.title || NEW_CHAT_TITLE)}
         </Text>
         <View style={styles.headerSubtitleRow}>
-          <TouchableOpacity style={styles.modelSelector} onPress={onOpenModels} testID="model-selector">
+          <TouchableOpacity
+            style={styles.modelSelector}
+            onPress={onOpenModels}
+            testID="model-selector"
+            accessibilityRole="button"
+            accessibilityLabel={`Model: ${modelName || 'none'}${isRemote ? ', on a remote server' : ''}. Change model`}
+          >
             {isRemote && (
               <Icon name="cloud" size={12} color={colors.primary} style={styles.remoteIcon} />
             )}
             <Icon name="layers" size={12} color={colors.textSecondary} style={styles.remoteIcon} />
             <Text style={styles.headerSubtitle} numberOfLines={1} testID="model-loaded-indicator">
-              Models
+              {modelName || 'Models'}
             </Text>
             <Text style={styles.modelSelectorArrow}>▼</Text>
           </TouchableOpacity>
           <Text style={styles.headerSubtitleDivider}>·</Text>
-          <TouchableOpacity style={styles.headerProjectRow} onPress={() => setShowProjectSelector(true)}>
-            <Icon name="folder" size={11} color={activeProject ? colors.primary : colors.textMuted} />
-            <Text style={[styles.headerSubtitle, { color: activeProject ? colors.primary : colors.textMuted }]} numberOfLines={1}>
+          <TouchableOpacity
+            style={[styles.headerProjectRow, styles.headerProjectTarget]}
+            onPress={() => setShowProjectSelector(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Project: ${activeProject ? activeProject.name : 'Default'}. Change project`}
+          >
+            <Icon name="folder" size={11} color={colors.textMuted} />
+            <Text style={[styles.headerSubtitle, { color: colors.textMuted }]} numberOfLines={1}>
               {activeProject ? activeProject.name : 'Default'}
             </Text>
           </TouchableOpacity>
@@ -134,7 +156,7 @@ export const ChatHeader: React.FC<{
             <Icon name="file-text" size={16} color={colors.textSecondary} />
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={styles.iconButton} onPress={() => setShowSettingsPanel(true)} testID="chat-settings-icon">
+        <TouchableOpacity style={styles.iconButton} onPress={() => setShowSettingsPanel(true)} testID="chat-settings-icon" accessibilityRole="button" accessibilityLabel="Chat settings" hitSlop={7}>
           <Icon name="sliders" size={16} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
@@ -150,7 +172,9 @@ export const EmptyChat: React.FC<{
   activeProject: any;
   setShowProjectSelector: (v: boolean) => void;
   isRemote?: boolean;
-}> = ({ styles, colors, activeModel, activeModelName, activeProject, setShowProjectSelector, isRemote }) => (
+  /** Sends a starter prompt through the same path as the composer. */
+  onStarter?: (prompt: string) => void;
+}> = ({ styles, colors, activeModel, activeModelName, activeProject, setShowProjectSelector, isRemote, onStarter }) => (
   <View style={styles.emptyChat}>
     <AnimatedEntry index={0} staggerMs={60}>
       <View style={styles.emptyChatIconContainer}>
@@ -158,33 +182,47 @@ export const EmptyChat: React.FC<{
       </View>
     </AnimatedEntry>
     <AnimatedEntry index={1} staggerMs={60}>
-      <Text style={styles.emptyChatTitle}>Start a Conversation</Text>
+      <Text style={styles.emptyChatTitle}>What's on your mind?</Text>
     </AnimatedEntry>
     <AnimatedEntry index={2} staggerMs={60}>
       <Text style={styles.emptyChatText} testID="empty-chat-hint">
         {/* With no model chosen yet, no name: never "Unknown". */}
         {activeModelName || activeModel?.name
-          ? `Type a message below to begin chatting with ${activeModelName || activeModel?.name}.`
-          : 'Type a message below to begin.'}
+          ? `Ask anything. ${activeModelName || activeModel?.name} answers.`
+          : 'Ask anything.'}
       </Text>
     </AnimatedEntry>
-    <AnimatedEntry index={3} staggerMs={60}>
-      <TouchableOpacity style={styles.projectHint} onPress={() => setShowProjectSelector(true)}>
-        <View style={styles.projectHintIcon}>
-          <Text style={styles.projectHintIconText}>
-            {activeProject?.name?.charAt(0).toUpperCase() || 'D'}
-          </Text>
+    {onStarter && (
+      <AnimatedEntry index={3} staggerMs={60}>
+        {/* A new person sees what they can ask: one tap sends it. */}
+        <View style={styles.starterList} testID="chat-starters">
+          {STARTER_PROMPTS.map((prompt, index) => (
+            <TouchableOpacity
+              key={prompt}
+              style={[styles.starterChip, index === STARTER_PROMPTS.length - 1 && styles.starterChipLast]}
+              onPress={() => onStarter(prompt)}
+              accessibilityRole="button"
+              accessibilityLabel={prompt}
+            >
+              <Text style={styles.starterText}>{prompt}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
+      </AnimatedEntry>
+    )}
+    <AnimatedEntry index={4} staggerMs={60}>
+      <TouchableOpacity style={styles.projectHint} onPress={() => setShowProjectSelector(true)}>
+        <Icon name="folder" size={13} color={colors.textMuted} />
         <Text style={styles.projectHintText}>
-          Project: {activeProject?.name || 'Default'} — tap to change
+          Project: {activeProject?.name || 'Default'} · Change
         </Text>
       </TouchableOpacity>
     </AnimatedEntry>
-    <AnimatedEntry index={4} staggerMs={60}>
+    <AnimatedEntry index={5} staggerMs={60}>
       <Text style={styles.privacyText}>
         {isRemote
           ? 'This chat runs on a remote server, not on this phone.'
-          : 'This conversation is completely private. All processing happens on your device.'}
+          : 'Your chats and files never leave your device.'}
       </Text>
     </AnimatedEntry>
   </View>

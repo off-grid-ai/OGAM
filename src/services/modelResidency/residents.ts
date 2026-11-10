@@ -12,12 +12,6 @@ export type UnloadFn = () => Promise<void>;
 
 /** Physical-budget floor for clean, pageable models; never force dirty loads past live RAM. */
 export const MIN_BUDGET_MB = 1024;
-/** For DIRTY-memory models (CoreML/ONNX image): keep this much real RAM free for the
- *  OS + other apps so a dirty load never spills into swap. (Not applied to mmap'd
- *  GGUF - their clean weights don't pressure this limit.) */
-export const DIRTY_AVAILABILITY_HEADROOM_MB = 1024;
-/** Aggressive-mode dirty headroom - leaner, still non-zero (lenient safeguard). */
-export const AGGRESSIVE_DIRTY_HEADROOM_MB = 512;
 
 export interface RegisteredResident extends Resident {
   unload: UnloadFn;
@@ -48,6 +42,16 @@ export interface ResidentSpec {
    *    so it never loads into swap.
    */
   dirtyMemory?: boolean;
+  /**
+   * The model runs fastest copied into dirty memory but loads mapped when a copy will not fit (an
+   * Android chat model, whose weights llama.cpp repacks). Eviction makes room for the copy in real
+   * free RAM when unloading our other models can. It is never refused on the budget: at worst every
+   * other model is unloaded and it loads mapped. Only the shared fit rule's "Too big" refuses it.
+   */
+  prefersCopy?: boolean;
+  /** A prefersCopy model that loads mapped from the start (it died loading as a copy before): it is
+   *  still never refused on the budget, but no room is made for a copy. */
+  startsMapped?: boolean;
 }
 
 export interface EnsureResult {

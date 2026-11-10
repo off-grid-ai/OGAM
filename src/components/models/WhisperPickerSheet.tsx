@@ -9,12 +9,14 @@ import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { WHISPER_MODELS } from '../../services/whisperService';
+import { whisperDisplayName } from '../../services/whisperModels';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { useSttDownloadState } from '../../hooks/useSttDownloadState';
 import { RemoteModelOptionsSection } from './RemoteModelOptionsSection';
 import { remoteServerManager } from '../../services/remoteServerManager';
 import { ModelCard } from '../ModelCard';
+import { GROUPED_CARD_ROW, ListGroup } from '../ListGroup';
 import { hardwareService } from '../../services/hardware';
 import { isQwenAsrModelId, isQwenAsrOffered, qwenAsrCardFor, QWEN_ASR_MODEL_ID } from '../../services/qwenAsrModel';
 
@@ -84,11 +86,11 @@ export const WhisperPickerSheet: React.FC<Props> = ({
         style={styles.scrollView}
         contentContainerStyle={styles.content}
       >
-        <RemoteModelOptionsSection
-          category="transcription"
-          onSelect={onClose}
-        />
-        <Text style={styles.sectionLabel}>On-device models</Text>
+        {/* This phone's models first, then other devices', the same order as the text and image pickers
+            (hand test 86: the Talk card opened on a list of Mac servers). */}
+        <Text style={styles.sectionLabel}>On this phone</Text>
+        {/* One glass group with hairlines between rows, as in the text picker (hand test 87). */}
+        <ListGroup>
         {models.map(m => {
           const active = downloadedModelId === m.id;
           const present = presentModelIds.includes(m.id);
@@ -100,7 +102,8 @@ export const WhisperPickerSheet: React.FC<Props> = ({
             <ModelCard
               key={m.id}
               compact
-              model={{ id: m.id, name: m.name, author: 'On device', description: m.description }}
+              style={GROUPED_CARD_ROW}
+              model={{ id: m.id, name: whisperDisplayName(m), author: 'On device', description: m.description }}
               file={{ name: m.name, size: m.size * 1024 * 1024, quantization: '', downloadUrl: '' }}
               facts={[languagesFact(m), 'Transcription']}
               isActive={active}
@@ -175,6 +178,11 @@ export const WhisperPickerSheet: React.FC<Props> = ({
             />
           );
         })}
+        </ListGroup>
+        <RemoteModelOptionsSection
+          category="transcription"
+          onSelect={onClose}
+        />
       </ScrollView>
     </AppSheet>
     <CustomAlert
@@ -193,7 +201,7 @@ const createStyles = (colors: ThemeColors) => ({
     flexShrink: 1,
   },
   content: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.xl,
     // No gap: each card brings its own bottom margin, the same spacing as the text and image pickers.
@@ -212,7 +220,7 @@ const createStyles = (colors: ThemeColors) => ({
   rowInfo: { flex: 1, gap: 2 as number },
   name: { ...TYPOGRAPHY.body, color: colors.text },
   desc: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
-  meta: { ...TYPOGRAPHY.meta, color: colors.textMuted },
+  meta: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
   sectionLabel: {
     ...TYPOGRAPHY.label,
     color: colors.textMuted,

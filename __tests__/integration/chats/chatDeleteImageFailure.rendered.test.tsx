@@ -6,6 +6,7 @@
  * diffusion module are the in-memory native boundary; the filesystem refuses one unlink, as a
  * locked or permission-protected file does on device.
  */
+import { deleteOpenImage, galleryWithRoutes } from '../../harness/galleryRoutes';
 import {
   installNativeBoundary,
   requireRTL,
@@ -94,15 +95,10 @@ describe.each<DeleteGesture>(['swipe delete', 'select and delete'])('Deleting a 
 
     // Retry from the Gallery: the image that stayed is listed, and deleting it now succeeds.
     locked = false;
-    const { GalleryScreen } = require('../../../src/screens/GalleryScreen');
-    const gallery = rtl.render(withNavigator(React.createElement(GalleryScreen)));
+    const gallery = rtl.render(galleryWithRoutes());
     rtl.fireEvent.press(await gallery.findByTestId('gallery-image-img-locked'));
     expect(gallery.queryByTestId('gallery-image-img-free')).toBeNull();
-    rtl.fireEvent.press(gallery.getByText('Delete'));
-    await gallery.findByText('Delete Image');
-    await rtl.act(async () => {
-      rtl.fireEvent.press(gallery.getAllByText('Delete')[1]);
-    });
+    await deleteOpenImage(rtl, gallery);
 
     await rtl.waitFor(() => {
       expect(gallery.queryByTestId('gallery-image-img-locked')).toBeNull();
@@ -130,14 +126,14 @@ describe.each<DeleteSurface>(['Home recents', 'project detail'])('Deleting a cha
       const form = await h.openScreen('ProjectEdit');
       rtl.fireEvent.changeText(form.getByTestId('project-edit-name'), 'Trip');
       rtl.fireEvent.changeText(
-        form.getByPlaceholderText('Enter the instructions or context for the AI...'),
+        form.getByPlaceholderText('How should chats here answer, and what should they know?'),
         'You help plan trips.',
       );
       rtl.fireEvent.press(form.getByTestId('project-edit-save'));
       const projects = await h.openTab('ProjectsTab');
       rtl.fireEvent.press(await rtl.waitFor(() => projects.getByText('Trip')));
       await rtl.waitFor(() => expect(h.currentRoute()).toBe('ProjectDetail'));
-      rtl.fireEvent.press(await rtl.waitFor(() => projects.getByTestId('project-start-chat')));
+      rtl.fireEvent.press(await rtl.waitFor(() => projects.getByTestId('project-new-chat')));
       await rtl.waitFor(() => expect(h.currentRoute()).toBe('Chat'));
     }
     h.render();

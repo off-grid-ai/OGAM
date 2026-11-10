@@ -193,7 +193,7 @@ describe('Download buttons say which model they download', () => {
 
     const cards = downloadCards(models.toJSON(), /^transcription-model-card-\d+$/);
     // Every speech model in the list below the picks offers a download on a fresh phone.
-    expect(cards.map(c => c.shows)).toEqual(['Tiny', 'Base', 'Small', 'Medium', 'Base', 'Medium', 'Large v3 Turbo']);
+    expect(cards.map(c => c.shows)).toEqual(['Tiny English', 'Base English', 'Small English', 'Medium English', 'Base', 'Medium', 'Large v3 Turbo']);
     for (const { shows, says } of cards) expect(says).toBe(`Download ${shows}`);
     expect(models.queryAllByRole('button', { name: 'Download model' })).toHaveLength(0);
 

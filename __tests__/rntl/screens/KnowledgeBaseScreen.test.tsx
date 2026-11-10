@@ -23,11 +23,37 @@ const pages = (count: number) =>
   );
 
 describe('KnowledgeBaseScreen', () => {
-  it('shows the project name, and an empty state until a file is added', async () => {
+  it('is titled Files under the project name, and is empty with one add until a file is added', async () => {
     const kb = await openKnowledgeBase({ projectName: 'Field Ops' });
+    const screen = kb.rtl.within(kb.view.getByTestId('knowledge-base-screen'));
 
-    expect(kb.view.getByText('Field Ops')).toBeTruthy();
-    expect(kb.view.getByText('No documents yet')).toBeTruthy();
+    expect(screen.getByText('Files')).toBeTruthy();
+    expect(screen.getByText('Field Ops')).toBeTruthy();
+    expect(screen.getByText('No files yet')).toBeTruthy();
+    expect(screen.getByText('Add a file')).toBeTruthy();
+    expect(screen.getByTestId('kb-add-first')).toBeTruthy();
+    expect(screen.getByTestId('kb-paste-first')).toBeTruthy();
+    // The empty state adds a file or pasted text. The header's + waits until something is listed.
+    expect(screen.queryByLabelText('Add files')).toBeNull();
+  });
+
+  it('shows the header add once a file is listed, and it adds more', async () => {
+    const kb = await openKnowledgeBase();
+    kb.engine.seedText('/docs/Downloads/a.txt', 'Alpha notes.');
+    kb.engine.seedText('/docs/Downloads/b.txt', 'Beta notes.');
+    await kb.addFiles([{ path: '/docs/Downloads/a.txt', name: 'a.txt' }]);
+
+    expect(kb.view.queryByTestId('kb-add-first')).toBeNull();
+    // The header's + asks what to add; Cancel adds nothing.
+    kb.rtl.fireEvent.press(kb.view.getByLabelText('Add files'));
+    expect(kb.dialogTitle()).toBe('Add to Files');
+    await kb.answerDialog('Cancel');
+    expect(kb.view.queryByText('b.txt')).toBeNull();
+
+    await kb.addFiles([{ path: '/docs/Downloads/b.txt', name: 'b.txt' }]);
+
+    expect(kb.view.getByText('a.txt')).toBeTruthy();
+    expect(kb.view.getByText('b.txt')).toBeTruthy();
   });
 
   it('lists an added file with its size, and its status reads the page count once it is read', async () => {
@@ -36,7 +62,7 @@ describe('KnowledgeBaseScreen', () => {
 
     await kb.addFiles([{ path: '/docs/Downloads/manual.pdf', name: 'manual.pdf' }]);
 
-    expect(kb.view.queryByText('No documents yet')).toBeNull();
+    expect(kb.view.queryByText('No files yet')).toBeNull();
     const status = await kb.statusOf('/docs/Downloads/manual.pdf');
     await kb.rtl.waitFor(() => expect(status.props.children).toMatch(/^\d+(\.\d)? (B|KB) · 3 pages$/));
   });
@@ -106,15 +132,17 @@ describe('KnowledgeBaseScreen', () => {
     const kb = await openKnowledgeBase();
     kb.engine.seedText('/docs/Downloads/notes.txt', 'Field notes.');
     await kb.addFiles([{ path: '/docs/Downloads/notes.txt', name: 'notes.txt' }]);
-    const toggle = kb.view.getByLabelText('Use notes.txt, ON');
+    // One switch named for what it does; its on/off is its own checked state.
+    const toggle = () => kb.view.getByRole('switch', { name: 'Use in answers: notes.txt' });
+    expect(toggle()).toBeChecked();
 
-    kb.rtl.fireEvent(toggle, 'valueChange', false);
+    kb.rtl.fireEvent(toggle(), 'valueChange', false);
 
-    await kb.rtl.waitFor(() => expect(kb.view.getByLabelText('Use notes.txt, OFF')).toBeTruthy());
+    await kb.rtl.waitFor(() => expect(toggle()).not.toBeChecked());
 
-    kb.rtl.fireEvent(kb.view.getByLabelText('Use notes.txt, OFF'), 'valueChange', true);
+    kb.rtl.fireEvent(toggle(), 'valueChange', true);
 
-    await kb.rtl.waitFor(() => expect(kb.view.getByLabelText('Use notes.txt, ON')).toBeTruthy());
+    await kb.rtl.waitFor(() => expect(toggle()).toBeChecked());
   });
 
   it('removes a file after the person confirms, and keeps it when they cancel', async () => {
@@ -130,7 +158,7 @@ describe('KnowledgeBaseScreen', () => {
     kb.rtl.fireEvent.press(kb.view.getByLabelText('Remove notes.txt'));
     await kb.answerDialog('Remove');
 
-    await kb.rtl.waitFor(() => expect(kb.view.getByText('No documents yet')).toBeTruthy());
+    await kb.rtl.waitFor(() => expect(kb.view.getByText('No files yet')).toBeTruthy());
     expect(kb.view.queryByText('notes.txt')).toBeNull();
   });
 
@@ -139,18 +167,21 @@ describe('KnowledgeBaseScreen', () => {
     kb.engine.seedPdf('/docs/Downloads/manual.pdf', ['Setup steps.', 'Torque the bolts to 40 Nm.']);
     await kb.addFiles([{ path: '/docs/Downloads/manual.pdf', name: 'manual.pdf' }]);
 
-    kb.rtl.fireEvent.press(kb.view.getByLabelText('Knowledge document manual.pdf'));
+    kb.rtl.fireEvent.press(kb.view.getByLabelText('File manual.pdf'));
 
     await kb.rtl.waitFor(() => expect(kb.view.getByText('Torque the bolts to 40 Nm.')).toBeTruthy());
     expect(kb.view.getByText('Page 2')).toBeTruthy();
   });
 
-  it('goes back to the project', async () => {
+  it('goes back to the project, whose files row counts what was added', async () => {
     const kb = await openKnowledgeBase();
+    kb.engine.seedText('/docs/Downloads/notes.txt', 'Field notes.');
+    await kb.addFiles([{ path: '/docs/Downloads/notes.txt', name: 'notes.txt' }]);
 
     kb.rtl.fireEvent.press(kb.view.getByLabelText('Back'));
 
     await kb.rtl.waitFor(() => expect(kb.view.queryByTestId('knowledge-base-screen')).toBeNull());
-    expect(kb.view.getByText('Open knowledge base')).toBeTruthy();
+    expect(kb.view.getByTestId('project-detail-screen')).toBeTruthy();
+    await kb.rtl.waitFor(() => expect(kb.view.getByTestId('project-knowledge-base-count')).toHaveTextContent('1 file'));
   });
 });

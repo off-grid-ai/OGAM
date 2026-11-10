@@ -5,6 +5,7 @@ import { providerRegistry } from './providers';
 import { isLiteRTModel, type DownloadedModel, type Message } from '../types';
 import { predictGgufCapabilities, type PredictedGgufCapabilities } from '../utils/ggufCapabilities';
 import logger from '../utils/logger';
+import { parseModelOutput } from '../utils/messageContent';
 
 /** Every text-generation engine, defined ONCE here so callers never hardcode the concrete set. */
 const TEXT_ENGINES = [liteRTService, llmService];
@@ -177,6 +178,13 @@ export function backendFallbackNotice(model: { engine?: string } | null | undefi
   return llmService.getBackendFallbackNotice();
 }
 
+/** The notice when a just-loaded chat model runs in low-memory mode (mapped, because a copy would
+ *  not fit in free RAM). Null = loaded at full speed. */
+export function lowMemoryNotice(model: { engine?: string } | null | undefined): string | null {
+  if (!model || model.engine === 'litert' || !llmService.isLowMemoryMode()) return null;
+  return 'Running in low-memory mode. Close other apps for full speed.';
+}
+
 /**
  * Live capabilities of the ACTIVE text model (remote OR local), read from the running services
  * and fed through the one pure rule (deriveEngineCapabilities). The imperative counterpart to the
@@ -261,6 +269,26 @@ export function getActiveEngineService(): typeof llmService | typeof liteRTServi
 }
 
 /**
+ * The context the loaded LiteRT engine holds, when LiteRT is the active text engine; otherwise undefined.
+ * Native clamps the requested budget to free RAM, so the context setting can be far larger than this.
+ */
+export function activeLiteRTContextTokens(): number | undefined {
+  if (isRemoteTextModelActive()) return undefined;
+  if (getActiveEngineService() !== liteRTService || !liteRTService.isModelLoaded()) return undefined;
+  return liteRTService.getContextUsage().max;
+}
+
+/**
+ * Writes a compaction summary on the active local engine. llama.cpp is not loaded beside a LiteRT model,
+ * so a loaded LiteRT model writes it.
+ */
+export function summarizeWithActiveEngine(messages: Message[], maxTokens: number): Promise<string> {
+  return getActiveEngineService() === liteRTService
+    ? generateStandalone(messages)
+    : llmService.generateWithMaxTokens(messages, maxTokens);
+}
+
+/**
  * Is a REMOTE (gateway / OpenAI-compatible) text model the ACTIVE text engine right now?
  *
  * THE single source of truth for "route text to a remote provider" — the exact rule
@@ -314,11 +342,23 @@ export async function stopStandalone(): Promise<void> {
  * Callers depend on this seam, never on a concrete engine (the enhancement path used to
  * hardcode llmService, so a LiteRT text model reported "not loaded" and enhancement was
  * skipped even though the model was resident).
+ *
+ * Returns the answer only. Thinking is asked off, yet some models reason anyway (a `<think>` block,
+ * Gemma/Qwen channels, or one cut off mid-thought); that text became a video's prompt and title.
+ * A reply that was all reasoning returns '' and each caller keeps what it had. `onToken` still
+ * streams the raw text, for live progress.
  */
 export async function generateStandalone(
   messages: Message[],
   onToken?: (token: string) => void,
   options: { maxTokens?: number } = {},
+): Promise<string> {
+  return parseModelOutput(await standaloneRaw(messages, onToken)).answer.trim();
+}
+
+async function standaloneRaw(
+  messages: Message[],
+  onToken?: (token: string) => void,
 ): Promise<string> {
   // Remote/gateway text model active with no local engine loaded: enhancement used to
   // fall through to the (unloaded) local llama and throw, so it was silently skipped

@@ -127,7 +127,7 @@ async function addGatewayPickModelOpenChat({ view, rtl }: App) {
   expect(await view.findByText(/Connected \(\d+ms\)\s+1 model available/)).toBeTruthy();
   rtl.fireEvent.press(view.getByTestId('save-server'));
   expect(await view.findByText(SERVER_NAME)).toBeTruthy();
-  expect(await view.findByText('Connected')).toBeTruthy();
+  expect(await view.findByText(/^Connected · /)).toBeTruthy();
   rtl.fireEvent.press(view.getByLabelText('Back'));
 
   rtl.fireEvent.press(await view.findByTestId('browse-models-button'));
@@ -184,8 +184,7 @@ describe('a gateway saved with a /v1 address', () => {
 
     // Attach a photo through the real attach gesture.
     rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('attach-button')));
-    rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('attach-photo')));
-    rtl.fireEvent.press(await rtl.waitFor(() => view.getByText('Photo Library')));
+    rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('attach-library')));
     await rtl.waitFor(() => expect(view.queryByTestId('attachments-container')).not.toBeNull(),
       { timeout: 3000 });
 

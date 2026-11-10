@@ -7,11 +7,13 @@
  * Faked: only the device boundary (harness/nativeBoundary): the diffusion native module (the native
  * image store, generation and cancel), react-native-fs over an in-memory disk, the OS share sheet, RAM.
  * Images enter the way the app adds them (the store's addGeneratedImage, or the native gallery scan),
- * with their PNG on the disk where the native module saves it.
+ * with their PNG on the disk where the native module saves it. An image or a video opens on its own
+ * real route (GalleryImage, GalleryVideo) in the same stack.
  */
 import type { NativeBoundary } from '../../harness/nativeBoundary';
 import { GB, installNativeBoundary, requireRTL } from '../../harness/nativeBoundary';
 import { withNavigatorRoutes } from '../../harness/realNavigation';
+import { galleryScreens } from '../../harness/galleryRoutes';
 
 jest.unmock('@react-navigation/native');
 
@@ -75,7 +77,7 @@ async function openGallery(opts: {
   }
   const params = (await opts.before?.({ boundary, useAppStore, imagePath })) ?? opts.params;
   const view = rtl.render(
-    withNavigatorRoutes(React.createElement(GalleryScreen), { params, openedFrom: 'Home' }),
+    withNavigatorRoutes(React.createElement(GalleryScreen), { params, openedFrom: 'Home', screens: galleryScreens() }),
   );
   await view.findByTestId('gallery-screen');
   // The mount's scan of the native image store settles before the test acts.
@@ -98,6 +100,30 @@ async function startHeldGeneration(g: Gallery, prompt: string) {
   await g.rtl.waitFor(() => expect(g.boundary.diffusion.generationHeld()).toBe(true));
   // Wrapped: an async function returning the bare promise would wait for the generation to end.
   return { run };
+}
+
+/** The Android storage dialog is the OS's: the person allows it. */
+function allowStorage() {
+  const { PermissionsAndroid } = require('react-native');
+  PermissionsAndroid.request = async () => PermissionsAndroid.RESULTS.GRANTED;
+}
+
+/** Taps an image in the grid: it opens full screen on its own route. */
+async function openImage(g: Gallery, id: string) {
+  g.rtl.fireEvent.press(g.view.getByTestId(`gallery-image-${id}`));
+  await g.view.findByTestId('gallery-image-screen');
+}
+
+/** More, over the open image: the sheet with its actions and details. */
+async function openSheet(g: Gallery) {
+  g.rtl.fireEvent.press(g.view.getByTestId('gallery-image-more'));
+  await g.view.findByText('PROMPT');
+}
+
+/** The open image screen is gone and the grid is the screen again. */
+async function backOnGrid(g: Gallery) {
+  await g.rtl.waitFor(() => expect(g.view.queryByTestId('gallery-image-screen')).toBeNull());
+  expect(g.view.getByTestId('gallery-screen')).toBeTruthy();
 }
 
 describe('GalleryScreen', () => {
@@ -124,46 +150,10 @@ describe('GalleryScreen', () => {
     for (const image of sampleImages) expect(view.getByTestId(`gallery-image-${image.id}`)).toBeTruthy();
   });
 
-  it('shows image count badge when images exist', async () => {
+  it('counts the images once, on the tab, with no bare count in the header', async () => {
     const { view } = await openGallery({ images: sampleImages });
-    expect(view.getByText('3')).toBeTruthy();
-  });
-
-  it('tapping an image opens the viewer modal', async () => {
-    const { view, rtl } = await openGallery({ images: sampleImages });
-    rtl.fireEvent.press(view.getByTestId('gallery-image-img-1'));
-    expect(view.getByText('Info')).toBeTruthy();
-    expect(view.getByText('Save')).toBeTruthy();
-    expect(view.getByText('Delete')).toBeTruthy();
-    expect(view.getByText('Close')).toBeTruthy();
-  });
-
-  it('pressing delete in viewer asks for confirmation and deletes nothing yet', async () => {
-    const g = await openGallery({ images: sampleImages });
-    g.rtl.fireEvent.press(g.view.getByTestId('gallery-image-img-1'));
-    g.rtl.fireEvent.press(g.view.getByText('Delete'));
-
-    expect(await g.view.findByText('Delete Image')).toBeTruthy();
-    expect(g.view.getByText('Are you sure you want to delete this image?')).toBeTruthy();
-    expect(await g.boundary.fs!.exists(g.imagePath('img-1'))).toBe(true);
-    expect(g.useAppStore.getState().generatedImages).toHaveLength(3);
-  });
-
-  it('pressing close in viewer closes the modal', async () => {
-    const { view, rtl } = await openGallery({ images: sampleImages });
-    rtl.fireEvent.press(view.getByTestId('gallery-image-img-1'));
-    rtl.fireEvent.press(view.getByText('Close'));
-    expect(view.queryByText('Save')).toBeNull();
-  });
-
-  it('pressing Info toggles details view', async () => {
-    const { view, rtl } = await openGallery({ images: sampleImages });
-    rtl.fireEvent.press(view.getByTestId('gallery-image-img-1'));
-    rtl.fireEvent.press(view.getByText('Info'));
-    expect(view.getByText('Image Details')).toBeTruthy();
-    expect(view.getByText('PROMPT')).toBeTruthy();
-    // The prompt shows in the grid item's label and in the details sheet.
-    expect(view.getByText('A sunset over mountains')).toBeTruthy();
+    expect(view.getByText('Images (3)')).toBeTruthy();
+    expect(view.queryByText('3')).toBeNull();
   });
 
   it('shows "Chat Media" title when conversationId is provided', async () => {
@@ -208,26 +198,9 @@ describe('GalleryScreen', () => {
       ],
       params: { conversationId: 'conv-123' },
     });
-    expect(view.getByText('1')).toBeTruthy();
+    expect(view.getByText('Images (1)')).toBeTruthy();
     expect(view.getByTestId('gallery-image-img-1')).toBeTruthy();
     expect(view.queryByTestId('gallery-image-img-2')).toBeNull();
-  });
-
-  it('confirming delete removes the image from the Gallery, the store and the disk', async () => {
-    const g = await openGallery({ images: sampleImages });
-    g.rtl.fireEvent.press(g.view.getByTestId('gallery-image-img-1'));
-    g.rtl.fireEvent.press(g.view.getByText('Delete'));
-    await g.view.findByText('Delete Image');
-    await g.rtl.act(async () => {
-      g.rtl.fireEvent.press(g.view.getByLabelText('Delete'));
-    });
-
-    await g.rtl.waitFor(() => expect(g.view.queryByTestId('gallery-image-img-1')).toBeNull());
-    expect(g.useAppStore.getState().generatedImages.map((i: { id: string }) => i.id)).toEqual(['img-3', 'img-2']);
-    expect(await g.boundary.fs!.exists(g.imagePath('img-1'))).toBe(false);
-    expect(await g.boundary.fs!.exists(g.imagePath('img-2'))).toBe(true);
-    // The viewer closed with it.
-    expect(g.view.queryByText('Save')).toBeNull();
   });
 
   it('toggling select mode off clears the selection', async () => {
@@ -267,7 +240,7 @@ describe('GalleryScreen', () => {
     expect(g.view.getByText('Are you sure you want to delete 3 images?')).toBeTruthy();
 
     await g.rtl.act(async () => {
-      g.rtl.fireEvent.press(g.view.getByLabelText('Delete'));
+      g.rtl.fireEvent.press(g.rtl.within(g.view.getByTestId('app-alert')).getByLabelText('Delete'));
     });
 
     await g.rtl.waitFor(() => expect(g.view.getByText('No generated images yet')).toBeTruthy());
@@ -303,25 +276,7 @@ describe('GalleryScreen', () => {
 
     expect(await g.view.findByTestId('gallery-image-disk-img-1')).toBeTruthy();
     expect(g.useAppStore.getState().generatedImages.map((i: { id: string }) => i.id).sort()).toEqual(['disk-img-1', 'img-1']);
-    expect(g.view.getByText('2')).toBeTruthy();
-  });
-
-  it('on iOS, Save hands the image file to the share sheet', async () => {
-    const g = await openGallery({ images: sampleImages, platform: 'ios' });
-    const { Share } = require('react-native');
-    // The OS share sheet is the device boundary: record what reached it.
-    const shared: unknown[] = [];
-    Share.share = async (content: unknown) => {
-      shared.push(content);
-      return { action: 'sharedAction' };
-    };
-
-    g.rtl.fireEvent.press(g.view.getByTestId('gallery-image-img-1'));
-    await g.rtl.act(async () => {
-      g.rtl.fireEvent.press(g.view.getByText('Save'));
-    });
-
-    expect(shared).toEqual([{ url: `file://${g.imagePath('img-1')}` }]);
+    expect(g.view.getByText('Images (2)')).toBeTruthy();
   });
 
   it('shows the generating banner with the prompt and the native progress', async () => {
@@ -371,46 +326,6 @@ describe('GalleryScreen', () => {
     expect(g.view.getByText('No generated images yet')).toBeTruthy();
   });
 
-  it('the system back gesture closes the viewer', async () => {
-    const { view, rtl } = await openGallery({ images: sampleImages });
-    const { Modal } = require('react-native');
-    rtl.fireEvent.press(view.getByTestId('gallery-image-img-1'));
-    expect(view.getByText('Info')).toBeTruthy();
-
-    const viewer = view.UNSAFE_getAllByType(Modal).find((m: any) => m.props.visible && m.props.transparent);
-    rtl.fireEvent(viewer!, 'requestClose');
-    expect(view.queryByText('Save')).toBeNull();
-  });
-
-  it('details sheet shows negative prompt when present', async () => {
-    const { view, rtl } = await openGallery({ images: sampleImages });
-    rtl.fireEvent.press(view.getByTestId('gallery-image-img-2'));
-    rtl.fireEvent.press(view.getByText('Info'));
-    expect(view.getByText('NEGATIVE')).toBeTruthy();
-    expect(view.getByText('ugly, blurry')).toBeTruthy();
-  });
-
-  it('details sheet Done button closes details', async () => {
-    const { view, rtl } = await openGallery({ images: sampleImages });
-    rtl.fireEvent.press(view.getByTestId('gallery-image-img-1'));
-    rtl.fireEvent.press(view.getByText('Info'));
-    expect(view.getByText('Image Details')).toBeTruthy();
-    rtl.fireEvent.press(view.getByText('Done'));
-    expect(view.queryByText('Image Details')).toBeNull();
-  });
-
-  it('cancelling the delete alert closes it and keeps the image', async () => {
-    const g = await openGallery({ images: sampleImages });
-    g.rtl.fireEvent.press(g.view.getByTestId('gallery-image-img-1'));
-    g.rtl.fireEvent.press(g.view.getByText('Delete'));
-    await g.view.findByText('Delete Image');
-
-    g.rtl.fireEvent.press(g.view.getByLabelText('Cancel'));
-    await g.rtl.waitFor(() => expect(g.view.queryByText('Delete Image')).toBeNull());
-    expect(g.useAppStore.getState().generatedImages).toHaveLength(3);
-    expect(await g.boundary.fs!.exists(g.imagePath('img-1'))).toBe(true);
-  });
-
   it('in a chat, includes images attached to its messages', async () => {
     const { view } = await openGallery({
       images: sampleImages,
@@ -426,19 +341,9 @@ describe('GalleryScreen', () => {
         return { conversationId };
       },
     });
-    expect(view.getByText('1')).toBeTruthy();
+    expect(view.getByText('Images (1)')).toBeTruthy();
     expect(view.getByTestId('gallery-image-img-1')).toBeTruthy();
     expect(view.queryByTestId('gallery-image-img-2')).toBeNull();
-  });
-
-  it('shows the date of an image saved with a numeric timestamp', async () => {
-    const createdAt = String(Date.UTC(2026, 0, 15, 10));
-    const { view, rtl } = await openGallery({ images: [{ ...sampleImages[0], createdAt }] });
-    const { formatDate } = require('../../../src/screens/GalleryScreen/useGalleryActions');
-    rtl.fireEvent.press(view.getByTestId('gallery-image-img-1'));
-    rtl.fireEvent.press(view.getByText('Info'));
-    expect(view.getByText(formatDate(createdAt))).toBeTruthy();
-    expect(formatDate(createdAt)).toContain('2026');
   });
 
   it('long press does not re-enter select mode if already in select mode', async () => {
@@ -447,5 +352,380 @@ describe('GalleryScreen', () => {
     expect(view.getByText('1 selected')).toBeTruthy();
     rtl.fireEvent(view.getByTestId('gallery-image-img-2'), 'onLongPress');
     expect(view.getByText('1 selected')).toBeTruthy();
+  });
+});
+
+describe('Gallery image, full screen on its own route', () => {
+  it('a tapped image opens full screen, with no row of buttons until the sheet opens', async () => {
+    const g = await openGallery({ images: sampleImages });
+    await openImage(g, 'img-1');
+    expect(g.view.getByTestId('gallery-image-picture')).toBeTruthy();
+    expect(g.view.queryByLabelText('Save')).toBeNull();
+    expect(g.view.queryByLabelText('Delete')).toBeNull();
+  });
+
+  it('More opens one sheet with the actions and the details', async () => {
+    const g = await openGallery({ images: sampleImages });
+    await openImage(g, 'img-2');
+    await openSheet(g);
+    expect(g.view.getByLabelText('Save')).toBeTruthy();
+    expect(g.view.getByLabelText('Delete')).toBeTruthy();
+    expect(g.view.getByText('A cat sitting on a chair')).toBeTruthy();
+    expect(g.view.getByText('NEGATIVE')).toBeTruthy();
+    expect(g.view.getByText('ugly, blurry')).toBeTruthy();
+    expect(g.view.getByText('25 steps')).toBeTruthy();
+    expect(g.view.getByText('512x512')).toBeTruthy();
+    expect(g.view.getByText('Seed: 67890')).toBeTruthy();
+  });
+
+  it('a tap on the picture opens the same sheet; an image with no negative prompt shows none', async () => {
+    const g = await openGallery({ images: sampleImages });
+    await openImage(g, 'img-1');
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-image-picture'));
+    expect(await g.view.findByText('PROMPT')).toBeTruthy();
+    expect(g.view.queryByText('NEGATIVE')).toBeNull();
+  });
+
+  it('Done closes the sheet and leaves the image open', async () => {
+    const g = await openGallery({ images: sampleImages });
+    await openImage(g, 'img-1');
+    await openSheet(g);
+    g.rtl.fireEvent.press(g.view.getByTestId('app-sheet-close'));
+    await g.rtl.waitFor(() => expect(g.view.queryByText('PROMPT')).toBeNull());
+    expect(g.view.getByTestId('gallery-image-screen')).toBeTruthy();
+  });
+
+  it('shows the date of an image saved with a numeric timestamp', async () => {
+    const createdAt = String(Date.UTC(2026, 0, 15, 10));
+    const g = await openGallery({ images: [{ ...sampleImages[0], createdAt }] });
+    const { formatDate } = require('../../../src/screens/GalleryScreen/useGalleryActions');
+    await openImage(g, 'img-1');
+    await openSheet(g);
+    expect(g.view.getByText(formatDate(createdAt))).toBeTruthy();
+    expect(formatDate(createdAt)).toContain('2026');
+  });
+
+  it('Back returns to the grid', async () => {
+    const g = await openGallery({ images: sampleImages });
+    await openImage(g, 'img-1');
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-image-back'));
+    await backOnGrid(g);
+  });
+
+  it('Delete closes the sheet and asks first; nothing is deleted yet', async () => {
+    const g = await openGallery({ images: sampleImages });
+    await openImage(g, 'img-1');
+    await openSheet(g);
+    g.rtl.fireEvent.press(g.view.getByLabelText('Delete'));
+
+    expect(await g.view.findByText('Delete Image')).toBeTruthy();
+    expect(g.view.getByText('Are you sure you want to delete this image?')).toBeTruthy();
+    expect(g.view.queryByText('PROMPT')).toBeNull();
+    expect(await g.boundary.fs!.exists(g.imagePath('img-1'))).toBe(true);
+    expect(g.useAppStore.getState().generatedImages).toHaveLength(3);
+  });
+
+  it('cancelling the delete keeps the image, open', async () => {
+    const g = await openGallery({ images: sampleImages });
+    await openImage(g, 'img-1');
+    await openSheet(g);
+    g.rtl.fireEvent.press(g.view.getByLabelText('Delete'));
+    await g.view.findByText('Delete Image');
+
+    g.rtl.fireEvent.press(g.view.getByLabelText('Cancel'));
+    await g.rtl.waitFor(() => expect(g.view.queryByText('Delete Image')).toBeNull());
+    expect(g.useAppStore.getState().generatedImages).toHaveLength(3);
+    expect(await g.boundary.fs!.exists(g.imagePath('img-1'))).toBe(true);
+    expect(g.view.getByTestId('gallery-image-screen')).toBeTruthy();
+  });
+
+  it('confirming delete removes the image from the store and the disk, and returns to the grid without it', async () => {
+    const g = await openGallery({ images: sampleImages });
+    await openImage(g, 'img-1');
+    await openSheet(g);
+    g.rtl.fireEvent.press(g.view.getByLabelText('Delete'));
+    await g.view.findByText('Delete Image');
+    await g.rtl.act(async () => {
+      g.rtl.fireEvent.press(g.rtl.within(g.view.getByTestId('app-alert')).getByLabelText('Delete'));
+    });
+
+    await backOnGrid(g);
+    expect(g.view.queryByTestId('gallery-image-img-1')).toBeNull();
+    expect(g.useAppStore.getState().generatedImages.map((i: { id: string }) => i.id)).toEqual(['img-3', 'img-2']);
+    expect(await g.boundary.fs!.exists(g.imagePath('img-1'))).toBe(false);
+    expect(await g.boundary.fs!.exists(g.imagePath('img-2'))).toBe(true);
+  });
+
+  it('an image whose file cannot be removed stays, open, and says so', async () => {
+    const g = await openGallery({
+      images: sampleImages,
+      before: ({ boundary, imagePath }) => {
+        // The disk refuses this one file, as a locked file does.
+        const unlink = boundary.fs!.module.unlink.getMockImplementation()!;
+        boundary.fs!.module.unlink.mockImplementation(async (path: string) => {
+          if (path === imagePath('img-1')) throw new Error('EACCES: permission denied');
+          return unlink(path);
+        });
+      },
+    });
+    await openImage(g, 'img-1');
+    await openSheet(g);
+    g.rtl.fireEvent.press(g.view.getByLabelText('Delete'));
+    await g.view.findByText('Delete Image');
+    await g.rtl.act(async () => {
+      g.rtl.fireEvent.press(g.rtl.within(g.view.getByTestId('app-alert')).getByLabelText('Delete'));
+    });
+
+    expect(await g.view.findByText('Image was not deleted')).toBeTruthy();
+    expect(g.view.getByTestId('gallery-image-screen')).toBeTruthy();
+    expect(g.useAppStore.getState().generatedImages).toHaveLength(3);
+    expect(await g.boundary.fs!.exists(g.imagePath('img-1'))).toBe(true);
+  });
+
+  it('on iOS, Save hands the image file to the share sheet, over the open sheet', async () => {
+    const g = await openGallery({ images: sampleImages, platform: 'ios' });
+    const { Share } = require('react-native');
+    // The OS share sheet is the device boundary: record what reached it.
+    const shared: unknown[] = [];
+    Share.share = async (content: unknown) => {
+      shared.push(content);
+      return { action: 'sharedAction' };
+    };
+
+    await openImage(g, 'img-1');
+    await openSheet(g);
+    await g.rtl.act(async () => {
+      g.rtl.fireEvent.press(g.view.getByLabelText('Save'));
+    });
+
+    expect(shared).toEqual([{ url: `file://${g.imagePath('img-1')}` }]);
+    // The share sheet presents from the open sheet, which stays.
+    expect(g.view.getByText('PROMPT')).toBeTruthy();
+  });
+
+  it('on Android, Save copies the image to Pictures/OffgridMobile and says where', async () => {
+    const g = await openGallery({ images: sampleImages });
+    allowStorage();
+    await openImage(g, 'img-1');
+    await openSheet(g);
+    await g.rtl.act(async () => {
+      g.rtl.fireEvent.press(g.view.getByLabelText('Save'));
+    });
+
+    expect(await g.view.findByText('Image Saved')).toBeTruthy();
+    // Shared storage, where the app's file system puts it on this phone.
+    const external = require('react-native-fs').ExternalStorageDirectoryPath;
+    const pictures = `${external}/Pictures/OffgridMobile`;
+    const saved = g.boundary.fs!.listFiles(pictures);
+    expect(saved).toHaveLength(1);
+    expect(g.view.getByText(`Saved to Pictures/OffgridMobile/${saved[0].split('/').pop()}`)).toBeTruthy();
+
+    // A second Save goes into the same folder, beside the first.
+    g.rtl.fireEvent.press(g.view.getByText('OK'));
+    await g.rtl.waitFor(() => expect(g.view.queryByText('Image Saved')).toBeNull());
+    await new Promise(resolve => setTimeout(resolve, 5));
+    await openSheet(g);
+    await g.rtl.act(async () => {
+      g.rtl.fireEvent.press(g.view.getByLabelText('Save'));
+    });
+    expect(await g.view.findByText('Image Saved')).toBeTruthy();
+    expect(g.boundary.fs!.listFiles(pictures)).toHaveLength(2);
+  });
+
+  it('a Save that fails says why', async () => {
+    const g = await openGallery({
+      images: sampleImages,
+      before: ({ boundary }) => {
+        boundary.fs!.module.copyFile.mockImplementation(async () => { throw new Error('No space left'); });
+      },
+    });
+    allowStorage();
+    await openImage(g, 'img-1');
+    await openSheet(g);
+    await g.rtl.act(async () => {
+      g.rtl.fireEvent.press(g.view.getByLabelText('Save'));
+    });
+
+    expect(await g.view.findByText('Failed to save image: No space left')).toBeTruthy();
+  });
+
+  it('a Save that fails with no reason says the error is unknown', async () => {
+    const g = await openGallery({
+      images: sampleImages,
+      before: ({ boundary }) => {
+        boundary.fs!.module.copyFile.mockImplementation(async () => { throw undefined; });
+      },
+    });
+    allowStorage();
+    await openImage(g, 'img-1');
+    await openSheet(g);
+    await g.rtl.act(async () => {
+      g.rtl.fireEvent.press(g.view.getByLabelText('Save'));
+    });
+
+    expect(await g.view.findByText('Failed to save image: Unknown error')).toBeTruthy();
+  });
+
+  it('an image no longer in the Gallery says so, and Back still leaves', async () => {
+    const g = await openGallery({ images: sampleImages });
+    await openImage(g, 'img-1');
+    // Removed elsewhere (a chat delete, a sync) while it is open.
+    await g.rtl.act(async () => { g.useAppStore.getState().removeGeneratedImage('img-1'); });
+
+    expect(g.view.getByText('This image is no longer in your Gallery.')).toBeTruthy();
+    expect(g.view.queryByTestId('gallery-image-more')).toBeNull();
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-image-back'));
+    await backOnGrid(g);
+  });
+});
+
+describe('Gallery video, played on its own route', () => {
+  /** A saved video, its file on the disk where the app writes it. */
+  const seedVideo = (boundary: NativeBoundary, useAppStore: any, id = 'vid-1') => {
+    const videoPath = `${boundary.fs!.DocumentDirectoryPath}/generated-videos/${id}.mp4`;
+    boundary.fs!.seedFile(videoPath, 4096);
+    useAppStore.getState().addGeneratedVideo({
+      id, prompt: 'a fox in snow', videoPath, width: 480, height: 832, fps: 16, frames: 33, durationSeconds: 2,
+      steps: 20, guidance: 5, seed: 1, modelId: 'wan', createdAt: '2026-01-15T10:00:00.000Z',
+    });
+    return videoPath;
+  };
+
+  async function openVideo(platform: 'ios' | 'android' = 'android') {
+    let videoPath = '';
+    const g = await openGallery({
+      platform,
+      before: ({ boundary, useAppStore }) => { videoPath = seedVideo(boundary, useAppStore); },
+    });
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-tab-videos'));
+    g.rtl.fireEvent.press(await g.view.findByText('a fox in snow'));
+    await g.view.findByTestId('gallery-video-screen');
+    return { ...g, videoPath };
+  }
+
+  /** More, over the open video: the one sheet with Share or Save, Delete and the details. */
+  async function openVideoSheet(g: Gallery) {
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-video-more'));
+    await g.view.findByText('PROMPT');
+  }
+
+  it('switches Images, Videos and back to Images without breaking the grid (each tab its own list)', async () => {
+    const g = await openGallery({
+      images: sampleImages,
+      before: ({ boundary, useAppStore }) => { seedVideo(boundary, useAppStore); },
+    });
+    expect(g.view.getByTestId('gallery-image-img-1')).toBeTruthy();
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-tab-videos'));
+    expect(await g.view.findByText('a fox in snow')).toBeTruthy();
+    // The tab stays in Gallery.
+    expect(g.view.getByTestId('gallery-screen')).toBeTruthy();
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-tab-images'));
+    expect(await g.view.findByTestId('gallery-image-img-1')).toBeTruthy();
+    expect(g.view.queryByText('a fox in snow')).toBeNull();
+  });
+
+  it('a tapped video opens its player on its own route; Back returns to the list', async () => {
+    const g = await openVideo();
+    expect(g.view.getByLabelText('a fox in snow')).toBeTruthy();
+    // The actions live behind More, not in the header or as a link on the page.
+    expect(g.view.queryByText('Delete video')).toBeNull();
+    expect(g.view.queryByTestId('gallery-video-save')).toBeNull();
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-video-back'));
+    await g.rtl.waitFor(() => expect(g.view.queryByTestId('gallery-video-screen')).toBeNull());
+    expect(g.view.getByText('Videos (1)')).toBeTruthy();
+  });
+
+  it('More opens one sheet with Share or Save, Delete and the video\'s details', async () => {
+    const g = await openVideo();
+    await openVideoSheet(g);
+    expect(g.view.getByTestId('gallery-video-save')).toHaveTextContent('Save');
+    expect(g.view.getByTestId('gallery-video-delete')).toBeTruthy();
+    expect(g.view.getAllByText('a fox in snow').length).toBeGreaterThan(0);
+    expect(g.view.getByText('480x832')).toBeTruthy();
+    expect(g.view.getByText('33 frames')).toBeTruthy();
+    expect(g.view.getByText('2.0s')).toBeTruthy();
+  });
+
+  it('on iOS, Share hands the video file to the share sheet', async () => {
+    const g = await openVideo('ios');
+    await openVideoSheet(g);
+    const { Share } = require('react-native');
+    const shared: unknown[] = [];
+    Share.share = async (content: unknown) => {
+      shared.push(content);
+      return { action: 'sharedAction' };
+    };
+    expect(g.view.getByTestId('gallery-video-save')).toHaveTextContent('Share');
+    await g.rtl.act(async () => { g.rtl.fireEvent.press(g.view.getByTestId('gallery-video-save')); });
+    expect(shared).toEqual([{ url: `file://${g.videoPath}` }]);
+  });
+
+  it('on Android, Save puts the video in Downloads and says so; a failed save says why', async () => {
+    const g = await openVideo();
+    const { NativeModules } = require('react-native');
+    const downloads = `${require('react-native-fs').ExternalStorageDirectoryPath}/Download`;
+    // The Downloads writer is the device boundary: it copies the file, or the OS refuses it.
+    let refuse = false;
+    NativeModules.SyncDownloadsModule = {
+      saveFileToDownloads: async (source: string, fileName: string) => {
+        if (refuse) throw new Error('Storage full');
+        await g.boundary.fs!.module.copyFile(source, `${downloads}/${fileName}`);
+      },
+    };
+
+    await openVideoSheet(g);
+    await g.rtl.act(async () => { g.rtl.fireEvent.press(g.view.getByTestId('gallery-video-save')); });
+    expect(await g.view.findByText('Saved to Downloads')).toBeTruthy();
+    expect(await g.boundary.fs!.exists(`${downloads}/vid-1.mp4`)).toBe(true);
+    g.rtl.fireEvent.press(g.view.getByText('OK'));
+    await g.rtl.waitFor(() => expect(g.view.queryByText('Saved to Downloads')).toBeNull());
+
+    refuse = true;
+    await g.rtl.act(async () => { g.rtl.fireEvent.press(g.view.getByTestId('gallery-video-save')); });
+    expect(await g.view.findByText('Save failed')).toBeTruthy();
+    expect(g.view.getByText('Storage full')).toBeTruthy();
+  });
+
+  it('Delete asks first; Delete removes the file and the record and returns to the list', async () => {
+    const g = await openVideo();
+    await openVideoSheet(g);
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-video-delete'));
+    // The sheet closes first, then the confirmation asks.
+    expect(await g.view.findByText('Delete this video?')).toBeTruthy();
+    expect(g.view.queryByText('PROMPT')).toBeNull();
+    expect(await g.boundary.fs!.exists(g.videoPath)).toBe(true);
+    await g.rtl.act(async () => {
+      g.rtl.fireEvent.press(g.rtl.within(g.view.getByTestId('app-alert')).getByLabelText('Delete'));
+    });
+
+    await g.rtl.waitFor(() => expect(g.view.queryByTestId('gallery-video-screen')).toBeNull());
+    expect(g.useAppStore.getState().generatedVideos).toEqual([]);
+    expect(await g.boundary.fs!.exists(g.videoPath)).toBe(false);
+    expect(g.view.getByText('No videos in this gallery')).toBeTruthy();
+  });
+
+  it('a video whose file cannot be removed stays, and says so', async () => {
+    const g = await openVideo();
+    g.boundary.fs!.module.unlink.mockImplementation(async () => { throw new Error('EACCES: permission denied'); });
+    await openVideoSheet(g);
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-video-delete'));
+    await g.view.findByText('Delete this video?');
+    await g.rtl.act(async () => {
+      g.rtl.fireEvent.press(g.rtl.within(g.view.getByTestId('app-alert')).getByLabelText('Delete'));
+    });
+
+    expect(await g.view.findByText('Could not delete video')).toBeTruthy();
+    expect(g.view.getByTestId('gallery-video-screen')).toBeTruthy();
+    expect(g.useAppStore.getState().generatedVideos).toHaveLength(1);
+    expect(await g.boundary.fs!.exists(g.videoPath)).toBe(true);
+  });
+
+  it('a video no longer in the Gallery says so', async () => {
+    const g = await openVideo();
+    await g.rtl.act(async () => { g.useAppStore.getState().removeGeneratedVideo('vid-1'); });
+    expect(g.view.getByText('This video is no longer in your Gallery.')).toBeTruthy();
+    expect(g.view.queryByTestId('gallery-video-more')).toBeNull();
+    g.rtl.fireEvent.press(g.view.getByTestId('gallery-video-back'));
+    await g.rtl.waitFor(() => expect(g.view.queryByTestId('gallery-video-screen')).toBeNull());
   });
 });

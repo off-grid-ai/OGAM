@@ -33,6 +33,7 @@ import {
 } from '../services/sync/mutation';
 import { appendPlaceFor, neighbourMessage, versionParent } from '../utils/chatThread';
 import { itemDeleted, track } from '../services/analytics/analytics';
+import { NEW_CHAT_TITLE, isUntitledChat } from '../utils/chatTitle';
 
 /**
  * The portion of the in-progress stream that is safe to SPEAK in voice mode —
@@ -65,7 +66,7 @@ function deriveTitle(
   role: string,
   content: string,
 ): string {
-  if (currentTitle !== 'New Conversation' || role !== 'user')
+  if (!isUntitledChat(currentTitle) || role !== 'user')
     return currentTitle;
   const truncated = content.slice(0, 50);
   return content.length > 50 ? `${truncated}...` : truncated;
@@ -344,7 +345,7 @@ export const useChatStore = create<ChatState>()(
         const id = generateId();
         const conversation: Conversation = {
           id,
-          title: title || 'New Conversation',
+          title: title || NEW_CHAT_TITLE,
           modelId,
           messages: [],
           createdAt: new Date().toISOString(),

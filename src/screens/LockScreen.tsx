@@ -7,6 +7,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LivingField } from '../components/LivingField';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button, CustomAlert } from '../components';
 import {
@@ -120,6 +121,9 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* The living field, as every screen. Lock shows before navigation exists, so it uses the field
+          directly rather than AliveScreen (which needs a focused route). */}
+      <LivingField />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.content}
@@ -128,7 +132,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
           <View style={styles.lockIconContainer}>
             <Icon name="lock" size={48} color={colors.primary} />
           </View>
-          <Text style={styles.title}>App Locked</Text>
+          <Text style={styles.title}>App locked</Text>
           <Text style={styles.subtitle}>
             Enter your passphrase to unlock
           </Text>

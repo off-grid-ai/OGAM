@@ -454,11 +454,12 @@ describe('Pro mobile knowledge document sync journey', () => {
         expect(view!.queryByText('OGAD')).not.toBeNull();
       });
       rtl.fireEvent.press(view.getByText('OGAD'));
-      // A project opens on Chats; its documents are behind the Knowledge base tab.
-      rtl.fireEvent.press(await view.findByTestId('project-tab-knowledge'));
+      // A project's files open on their own screen from its page's files row.
+      rtl.fireEvent.press(await view.findByTestId('project-files'));
+      await view.findByTestId('knowledge-base-screen');
       await rtl.waitFor(() => {
         expect(view!.queryByText('launch-brief.txt')).not.toBeNull();
-        expect(view!.queryByLabelText('Use launch-brief.txt, ON')).not.toBeNull();
+        expect(view!.getByRole('switch', { name: 'Use in answers: launch-brief.txt' })).toBeChecked();
         expect(
           view!.queryByLabelText('Remove launch-brief.txt'),
         ).not.toBeNull();
@@ -477,13 +478,21 @@ describe('Pro mobile knowledge document sync journey', () => {
           size: 65,
         },
       ]);
-      // The tab row's + adds to the open tab: File, then the picker.
-      rtl.fireEvent.press(view.getByTestId('kb-add'));
-      rtl.fireEvent.press(await view.findByText('File'));
+      // The Files screen's add asks A file or Paste text; A file opens the picker.
+      const { Alert } = require('react-native');
+      const ask = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      rtl.fireEvent.press(view.getByLabelText('Add files'));
+      const [title, , buttons] = ask.mock.calls[0] as [string, unknown, { text: string; onPress?: () => void }[]];
+      ask.mockRestore();
+      expect(title).toBe('Add to Files');
+      expect(buttons.map(button => button.text)).toEqual(['A file', 'Paste text', 'Cancel']);
+      await rtl.act(async () => {
+        buttons.find(button => button.text === 'A file')!.onPress!();
+      });
       await rtl.waitFor(
         () => {
           expect(view!.queryByText('phone-notes.txt')).not.toBeNull();
-          expect(view!.queryByLabelText('Use phone-notes.txt, ON')).not.toBeNull();
+          expect(view!.getByRole('switch', { name: 'Use in answers: phone-notes.txt' })).toBeChecked();
           expect(
             view!.queryByLabelText('Remove phone-notes.txt'),
           ).not.toBeNull();
@@ -530,12 +539,13 @@ describe('Pro mobile knowledge document sync journey', () => {
           ),
         'Mobile did not apply the Desktop knowledge tombstone',
       );
-      rtl.fireEvent.press(view.getByLabelText('Back'));
+      // Back to the project page, and its files again.
+      rtl.fireEvent.press(view.getByTestId('knowledge-base-back'));
       await rtl.waitFor(() => {
-        expect(view!.queryByText('OGAD')).not.toBeNull();
+        expect(view!.queryByTestId('knowledge-base-screen')).toBeNull();
       });
-      rtl.fireEvent.press(view.getByText('OGAD'));
-      rtl.fireEvent.press(await view.findByTestId('project-tab-knowledge'));
+      rtl.fireEvent.press(await view.findByTestId('project-files'));
+      await view.findByTestId('knowledge-base-screen');
       await rtl.waitFor(() => {
         expect(view!.queryByText('launch-brief.txt')).toBeNull();
         expect(view!.queryByText('phone-notes.txt')).not.toBeNull();

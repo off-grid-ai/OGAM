@@ -20,7 +20,7 @@
 import React from 'react';
 import { voiceSession } from '../../../src/services/voiceSession';
 import { recordingController } from '../../../src/services/recordingController';
-import { Keyboard, PermissionsAndroid, Platform } from 'react-native';
+import { ActionSheetIOS, Keyboard, PermissionsAndroid, Platform } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { ChatInput } from '../../../src/components/ChatInput';
 import { useAppStore } from '../../../src/stores/appStore';
@@ -152,6 +152,15 @@ describe('ChatInput', () => {
   const pressAttachPhoto = (fns: { getByTestId: any }) => {
     openAttachPicker(fns);
     fireEvent.press(fns.getByTestId('attach-photo'));
+  };
+  // A model that sees photos: the + goes straight to the picker, one step.
+  const pressChoosePhoto = (fns: { getByTestId: any }) => {
+    openAttachPicker(fns);
+    fireEvent.press(fns.getByTestId('attach-library'));
+  };
+  const pressTakePhoto = (fns: { getByTestId: any }) => {
+    openAttachPicker(fns);
+    fireEvent.press(fns.getByTestId('attach-camera'));
   };
   const openQuickSettings = (fns: { getByTestId: any }) => {
     fireEvent.press(fns.getByTestId('quick-settings-button'));
@@ -563,15 +572,35 @@ describe('ChatInput', () => {
       expect(result.getByText('Vision Not Supported')).toBeTruthy();
     });
 
-    it('opens image picker when pressing photo with vision support', () => {
+    it('a model that sees photos offers Take photo, Choose photo and Document, and no second menu', () => {
       const result = render(
         <ChatInput {...defaultProps} supportsVision={true} />
       );
 
-      pressAttachPhoto(result);
+      openAttachPicker(result);
 
-      // Should show the Add Image alert with camera/library options
-      expect(result.getByText('Add Image')).toBeTruthy();
+      expect(result.getByTestId('attach-camera')).toHaveTextContent('Take photo');
+      expect(result.getByTestId('attach-library')).toHaveTextContent('Choose photo');
+      expect(result.getByTestId('attach-document')).toHaveTextContent('Document');
+      expect(result.queryByTestId('attach-photo')).toBeNull();
+    });
+
+    it("a model that can't see photos offers Photo and Document, and Photo says why", () => {
+      const result = render(
+        <ChatInput {...defaultProps} supportsVision={false} />
+      );
+
+      openAttachPicker(result);
+
+      expect(result.getByTestId('attach-photo')).toHaveTextContent('Photo');
+      expect(result.getByTestId('attach-document')).toHaveTextContent('Document');
+      expect(result.queryByTestId('attach-camera')).toBeNull();
+      expect(result.queryByTestId('attach-library')).toBeNull();
+
+      fireEvent.press(result.getByTestId('attach-photo'));
+
+      expect(result.getByText('Vision Not Supported')).toBeTruthy();
+      expect(result.queryByTestId('attachments-container')).toBeNull();
     });
 
     it('attach button is present when vision is supported', () => {
@@ -587,17 +616,71 @@ describe('ChatInput', () => {
   // Attachments
   // ============================================================================
   describe('attachments', () => {
-    it('shows custom alert when photo is pressed via attach picker', async () => {
-      const result = render(
-        <ChatInput {...defaultProps} supportsVision={true} />
-      );
+    // iPhone: one sheet, one step (Mac, 2026-11-07). The native sheet is the platform's, so the test
+    // reads what the composer asks it to show and answers the way a tap on a row does.
+    describe('on iPhone', () => {
+      const realOS = Platform.OS;
+      let sheet: jest.SpyInstance;
+      beforeEach(() => {
+        Platform.OS = 'ios';
+        sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions').mockImplementation(() => undefined);
+      });
+      afterEach(() => {
+        Platform.OS = realOS;
+        sheet.mockRestore();
+      });
+      const shown = () => sheet.mock.calls[0][0];
+      const tapRow = (label: string) => sheet.mock.calls[0][1](shown().options.indexOf(label));
 
-      pressAttachPhoto(result);
+      it('a model that sees photos offers Take photo, Choose photo and Document in one sheet', async () => {
+        const { launchImageLibrary } = require('react-native-image-picker');
+        launchImageLibrary.mockResolvedValue({
+          assets: [{ uri: 'file:///chosen.jpg', type: 'image/jpeg', width: 800, height: 600 }],
+        });
+        const result = render(<ChatInput {...defaultProps} supportsVision={true} />);
+        fireEvent.press(result.getByTestId('attach-button'));
 
-      // Should show CustomAlert with camera/library options
-      await waitFor(() => {
-        expect(result.getByText('Add Image')).toBeTruthy();
-        expect(result.getByText('Choose image source')).toBeTruthy();
+        expect(shown().options).toEqual(['Take photo', 'Choose photo', 'Document', 'Cancel']);
+        await act(async () => { tapRow('Choose photo'); });
+        await waitFor(() => expect(result.queryByTestId('attachments-container')).toBeTruthy());
+        expect(sheet).toHaveBeenCalledTimes(1);
+      });
+
+      it('Take photo opens the camera and Document opens the file picker, each straight from the sheet', async () => {
+        const { launchCamera } = require('react-native-image-picker');
+        launchCamera.mockResolvedValue({ assets: [{ uri: 'file:///taken.jpg', type: 'image/jpeg', width: 800, height: 600 }] });
+        mockPick.mockResolvedValue([]);
+        const result = render(<ChatInput {...defaultProps} supportsVision={true} />);
+        fireEvent.press(result.getByTestId('attach-button'));
+        await act(async () => { tapRow('Take photo'); });
+        await waitFor(() => expect(result.queryByTestId('attachments-container')).toBeTruthy());
+
+        sheet.mockClear();
+        fireEvent.press(result.getByTestId('attach-button'));
+        await act(async () => { tapRow('Document'); });
+        expect(mockPick).toHaveBeenCalled();
+      });
+
+      it("a model that can't see photos offers Photo and Document, and Photo says why", async () => {
+        const result = render(<ChatInput {...defaultProps} supportsVision={false} />);
+        fireEvent.press(result.getByTestId('attach-button'));
+
+        expect(shown().options).toEqual(['Photo', 'Document', 'Cancel']);
+        expect(shown().cancelButtonIndex).toBe(2);
+        await act(async () => { tapRow('Photo'); });
+        expect(result.getByText('Vision Not Supported')).toBeTruthy();
+        expect(result.queryByTestId('attachments-container')).toBeNull();
+      });
+
+      it('Cancel runs nothing', async () => {
+        mockPick.mockClear();
+        const result = render(<ChatInput {...defaultProps} supportsVision={true} />);
+        fireEvent.press(result.getByTestId('attach-button'));
+
+        expect(shown().cancelButtonIndex).toBe(3);
+        await act(async () => { tapRow('Cancel'); });
+        expect(result.queryByTestId('attachments-container')).toBeNull();
+        expect(mockPick).not.toHaveBeenCalled();
       });
     });
 
@@ -616,14 +699,7 @@ describe('ChatInput', () => {
         <ChatInput {...defaultProps} supportsVision={true} />
       );
 
-      pressAttachPhoto(result);
-
-      // Wait for CustomAlert to appear and press Photo Library button
-      await waitFor(() => {
-        expect(result.getByText('Photo Library')).toBeTruthy();
-      });
-
-      fireEvent.press(result.getByText('Photo Library'));
+      pressChoosePhoto(result);
 
       await waitFor(() => {
         expect(result.queryByTestId('attachments-container')).toBeTruthy();
@@ -648,13 +724,7 @@ describe('ChatInput', () => {
       );
 
       // Add attachment via attach picker → photo
-      pressAttachPhoto(result);
-
-      await waitFor(() => {
-        expect(result.getByText('Photo Library')).toBeTruthy();
-      });
-
-      fireEvent.press(result.getByText('Photo Library'));
+      pressChoosePhoto(result);
 
       await waitFor(() => {
         expect(result.getByTestId('attachments-container')).toBeTruthy();
@@ -857,19 +927,12 @@ describe('ChatInput', () => {
       });
 
       const onSend = jest.fn();
-      const { getByTestId, getByText, queryByTestId } = render(
+      const { getByTestId, queryByTestId } = render(
         <ChatInput {...defaultProps} onSend={onSend} supportsVision={true} />
       );
 
       // Add attachment via attach picker
-      pressAttachPhoto({ getByTestId });
-
-      // Wait for CustomAlert and press Photo Library
-      await waitFor(() => {
-        expect(getByText('Photo Library')).toBeTruthy();
-      });
-
-      fireEvent.press(getByText('Photo Library'));
+      pressChoosePhoto({ getByTestId });
 
       await waitFor(() => {
         expect(queryByTestId('attachments-container')).toBeTruthy();
@@ -1013,17 +1076,22 @@ describe('ChatInput', () => {
   // Additional branch coverage tests
   // ============================================================================
   describe('camera flow', () => {
-    it('shows Camera option in alert when photo is pressed via attach picker', async () => {
+    it('Choose photo closes the menu and attaches the picked image, with no alert in between', async () => {
+      const { launchImageLibrary } = require('react-native-image-picker');
+      launchImageLibrary.mockResolvedValue({
+        assets: [{ uri: 'file:///chosen.jpg', type: 'image/jpeg', width: 800, height: 600 }],
+      });
       const result = render(
         <ChatInput {...defaultProps} supportsVision={true} />
       );
 
-      pressAttachPhoto(result);
+      pressChoosePhoto(result);
 
+      expect(result.queryByTestId('attach-library')).toBeNull();
       await waitFor(() => {
-        expect(result.getByText('Camera')).toBeTruthy();
-        expect(result.getByText('Photo Library')).toBeTruthy();
+        expect(result.queryByTestId('attachments-container')).toBeTruthy();
       });
+      expect(result.queryByText('Choose image source')).toBeNull();
     });
   });
 
@@ -1202,14 +1270,12 @@ describe('ChatInput', () => {
       });
 
       const onSend = jest.fn();
-      const { getByTestId, getByText } = render(
+      const { getByTestId } = render(
         <ChatInput {...defaultProps} onSend={onSend} supportsVision={true} />
       );
 
       // Add attachment via attach picker
-      pressAttachPhoto({ getByTestId });
-      await waitFor(() => expect(getByText('Photo Library')).toBeTruthy());
-      fireEvent.press(getByText('Photo Library'));
+      pressChoosePhoto({ getByTestId });
 
       await waitFor(() => {
         expect(getByTestId('attachments-container')).toBeTruthy();
@@ -1359,20 +1425,7 @@ describe('ChatInput', () => {
       );
 
       // Open attach picker, press photo
-      pressAttachPhoto(result);
-
-      // Wait for alert
-      await waitFor(() => {
-        expect(result.getByText('Camera')).toBeTruthy();
-      });
-
-      // Press Camera option
-      fireEvent.press(result.getByText('Camera'));
-
-      // Advance timer for the 300ms delay before pickFromCamera
-      await act(async () => {
-        jest.advanceTimersByTime(350);
-      });
+      pressTakePhoto(result);
 
       await waitFor(() => {
         expect(launchCamera).toHaveBeenCalled();
@@ -1391,17 +1444,7 @@ describe('ChatInput', () => {
         <ChatInput {...defaultProps} supportsVision={true} />
       );
 
-      pressAttachPhoto(result);
-
-      await waitFor(() => {
-        expect(result.getByText('Camera')).toBeTruthy();
-      });
-
-      fireEvent.press(result.getByText('Camera'));
-
-      await act(async () => {
-        jest.advanceTimersByTime(350);
-      });
+      pressTakePhoto(result);
 
       await waitFor(() => {
         expect(launchCamera).toHaveBeenCalled();
@@ -1419,17 +1462,7 @@ describe('ChatInput', () => {
         <ChatInput {...defaultProps} supportsVision={true} />
       );
 
-      pressAttachPhoto(result);
-
-      await waitFor(() => {
-        expect(result.getByText('Camera')).toBeTruthy();
-      });
-
-      fireEvent.press(result.getByText('Camera'));
-
-      await act(async () => {
-        jest.advanceTimersByTime(350);
-      });
+      pressTakePhoto(result);
 
       await waitFor(() => {
         expect(launchCamera).toHaveBeenCalled();
@@ -1454,17 +1487,7 @@ describe('ChatInput', () => {
         <ChatInput {...defaultProps} supportsVision={true} />
       );
 
-      pressAttachPhoto(result);
-
-      await waitFor(() => {
-        expect(result.getByText('Photo Library')).toBeTruthy();
-      });
-
-      fireEvent.press(result.getByText('Photo Library'));
-
-      await act(async () => {
-        jest.advanceTimersByTime(350);
-      });
+      pressChoosePhoto(result);
 
       await waitFor(() => {
         expect(launchImageLibrary).toHaveBeenCalled();
@@ -1531,17 +1554,7 @@ describe('ChatInput', () => {
         <ChatInput {...defaultProps} supportsVision={true} />
       );
 
-      pressAttachPhoto(result);
-
-      await waitFor(() => {
-        expect(result.getByText('Photo Library')).toBeTruthy();
-      });
-
-      fireEvent.press(result.getByText('Photo Library'));
-
-      await act(async () => {
-        jest.advanceTimersByTime(350);
-      });
+      pressChoosePhoto(result);
 
       await waitFor(() => {
         expect(launchImageLibrary).toHaveBeenCalled();
@@ -1561,17 +1574,7 @@ describe('ChatInput', () => {
         <ChatInput {...defaultProps} supportsVision={true} />
       );
 
-      pressAttachPhoto(result);
-
-      await waitFor(() => {
-        expect(result.getByText('Photo Library')).toBeTruthy();
-      });
-
-      fireEvent.press(result.getByText('Photo Library'));
-
-      await act(async () => {
-        jest.advanceTimersByTime(350);
-      });
+      pressChoosePhoto(result);
 
       await waitFor(() => {
         expect(launchImageLibrary).toHaveBeenCalled();

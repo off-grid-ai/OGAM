@@ -1,3 +1,6 @@
+import { StyleSheet } from 'react-native';
+import { listRowStyle } from '../components/ListGroup';
+import { cardSurface } from '../theme/surface';
 import type { ThemeColors, ThemeShadows } from '../theme/palettes';
 import { SPACING, TYPOGRAPHY } from '../constants';
 
@@ -5,19 +8,15 @@ import { SPACING, TYPOGRAPHY } from '../constants';
  * Remote Servers, on the same tokens as the rest of the app.
  *
  * Every text style here used to carry a hardcoded fontSize and no fontFamily, so all of it
- * rendered in the platform sans while the app around it is Menlo - which is why the screen read
- * as belonging to a different product. TYPOGRAPHY tokens carry the family, so using them fixes
- * the typeface and the size at once. Cards use the shared surface, border, and subtle
- * elevation so this screen has the same depth as the other settings screens.
+ * rendered in the platform sans while the rest of the app used its brand face. TYPOGRAPHY tokens
+ * carry the family, so using them fixes the typeface and the size at once. Cards use the shared
+ * card surface, so this screen has the same depth as the other settings screens.
  */
-export function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
+export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
+  // The one card surface (brand: translucent, hairline edge), not a shadowed box of its own.
   const card = {
+    ...cardSurface(colors),
     padding: SPACING.md,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    ...shadows.small,
   };
 
   return {
@@ -29,7 +28,7 @@ export function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
       flex: 1,
     },
     content: {
-      padding: SPACING.lg,
+      padding: SPACING.xl,
       paddingBottom: SPACING.xxl,
       gap: SPACING.md,
     },
@@ -42,6 +41,11 @@ export function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
     },
 
     card,
+    cardDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderLight,
+      marginVertical: SPACING.md,
+    },
     cardRow: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
@@ -63,24 +67,25 @@ export function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
       marginBottom: SPACING.xs,
     },
     cardDesc: {
-      ...TYPOGRAPHY.meta,
+      ...TYPOGRAPHY.bodySmall,
       color: colors.textSecondary,
-      lineHeight: 15,
+      lineHeight: 18,
     },
 
     /* Scan and Add sit side by side: they are two ways to do one job, not a ranked pair. */
     actionRow: {
       flexDirection: 'row' as const,
       gap: SPACING.sm,
+      alignItems: 'center' as const,
     },
     actionButton: {
       flex: 1,
     },
     /* What the scan actually did, in place, instead of a modal that has to be dismissed. */
     scanNote: {
-      ...TYPOGRAPHY.meta,
+      ...TYPOGRAPHY.bodySmall,
       color: colors.textMuted,
-      lineHeight: 15,
+      lineHeight: 18,
     },
 
     sectionLabel: {
@@ -101,10 +106,10 @@ export function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
       color: colors.text,
     },
     emptyText: {
-      ...TYPOGRAPHY.meta,
+      ...TYPOGRAPHY.bodySmall,
       color: colors.textSecondary,
       textAlign: 'center' as const,
-      lineHeight: 16,
+      lineHeight: 18,
     },
     desktopLink: {
       flexDirection: 'row' as const,
@@ -113,21 +118,22 @@ export function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
       paddingVertical: SPACING.xs,
     },
     desktopLinkText: {
-      ...TYPOGRAPHY.meta,
+      ...TYPOGRAPHY.bodySmall,
       color: colors.primary,
     },
 
+    // A row of the servers group; the one in use says "In use" in emerald, so no border is needed.
     serverCard: {
-      ...card,
+      ...listRowStyle,
       gap: SPACING.sm,
     },
-    /* The one in use is marked by its border, so the list reads at a glance. */
-    serverCardActive: {
-      borderColor: colors.primary,
-    },
     serverIdentity: {
-      gap: SPACING.xs,
+      flex: 1,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: SPACING.md,
     },
+    serverText: { flex: 1, gap: 2 },
     serverTopRow: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
@@ -141,8 +147,10 @@ export function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
     statusDotActive: {
       backgroundColor: colors.success,
     },
+    // A server that is not answering is a fact, not an alarm: a dim dot; the status line says why.
     statusDotInactive: {
-      backgroundColor: colors.error,
+      backgroundColor: colors.textMuted,
+      opacity: 0.5,
     },
     statusDotUnknown: {
       backgroundColor: colors.textMuted,
@@ -165,36 +173,19 @@ export function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
     serverEndpoint: {
       ...TYPOGRAPHY.meta,
       color: colors.textSecondary,
+      flexShrink: 1,
     },
     serverStatus: {
       ...TYPOGRAPHY.meta,
       color: colors.textMuted,
     },
 
-    serverActions: {
-      flexDirection: 'row' as const,
-      alignItems: 'center' as const,
-      gap: SPACING.lg,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-      paddingTop: SPACING.sm,
-    },
+    // The row's one action: a 44 pt box on its right edge.
     serverAction: {
-      flexDirection: 'row' as const,
+      width: 44,
+      height: 44,
       alignItems: 'center' as const,
-      gap: SPACING.xs,
-      paddingVertical: SPACING.xs,
-    },
-    serverActionText: {
-      ...TYPOGRAPHY.meta,
-      color: colors.textSecondary,
-    },
-    /* Destructive, so it sits at the far end and is the only coloured one. */
-    serverActionDanger: {
-      marginLeft: 'auto' as const,
-    },
-    serverActionDangerText: {
-      color: colors.error,
+      justifyContent: 'center' as const,
     },
   };
 }

@@ -225,6 +225,17 @@ export async function checkMemoryForModel(
   }
 }
 
+/**
+ * The refusal in plain words: what the model needs and what is free, in GB, with the ways forward.
+ * The need rounds up and the free amount rounds down, so the copy can never read as if it fits.
+ */
+export function memoryShortfallCopy(requiredMB: number, availableMB: number, contextLength: number): string {
+  const needGB = Math.ceil(requiredMB / 102.4) / 10;
+  const freeGB = Math.floor(availableMB / 102.4) / 10;
+  return `Not enough memory: this model needs about ${needGB.toFixed(1)} GB of memory and ${freeGB.toFixed(1)} GB is free. ` +
+    `Close other apps, choose a smaller model, or lower the context length (now ${contextLength.toLocaleString()}).`;
+}
+
 /** Check the selected context without changing it. A memory refusal can be overridden by the user. */
 export async function resolveSafeContext(args: {
   fileSize: number;
@@ -257,7 +268,7 @@ export async function resolveSafeContext(args: {
   });
   if (!memCheck.safe && !override) {
     throw new OverridableMemoryError(
-      `Not enough memory to load this model at ${requestedCtx.toLocaleString()} context tokens: it needs ~${Math.round(memCheck.requiredMB)}MB but only ${Math.round(memCheck.availableMB)}MB is available. Close other apps or choose a smaller model.`,
+      memoryShortfallCopy(memCheck.requiredMB, memCheck.availableMB, requestedCtx),
     );
   }
   if (!memCheck.safe && override) {

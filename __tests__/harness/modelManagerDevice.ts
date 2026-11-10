@@ -58,6 +58,8 @@ export interface ModelManagerDevice {
   holdNextCopy(): { release(): void };
   /** The next copy writes half the bytes, then the disk refuses the rest. */
   failNextCopy(message: string): void;
+  /** The next native move of a finished download fails, leaving the file where it was (disk full). */
+  failNextMove(message: string): void;
   /** Let pending promise chains and native-event handlers settle. */
   settle(): Promise<void>;
 }
@@ -84,8 +86,15 @@ export async function installModelManagerDevice(
   const rowOf = (id: string): NativeRow | undefined =>
     download?.active().find(row => row.downloadId === id) as NativeRow | undefined;
 
+  let nextMoveError: string | undefined;
   if (download) {
     download.module.moveCompletedDownload.mockImplementation(async (id: string, target: string) => {
+      if (nextMoveError) {
+        const message = nextMoveError;
+        nextMoveError = undefined;
+        // As the native module rejects it: a promise rejection carries its code.
+        throw Object.assign(new Error(message), { code: 'MOVE_FAILED' });
+      }
       const row = rowOf(id);
       if (!row || row.status !== 'completed' || !row.localUri) {
         throw new Error(`Download ${id} not completed yet`);
@@ -190,6 +199,9 @@ export async function installModelManagerDevice(
         await copyFromDisk(contentDocuments.get(from) ?? from, to);
       };
       return { release: () => release() };
+    },
+    failNextMove: message => {
+      nextMoveError = message;
     },
     failNextCopy: message => {
       nextCopy = async (from, to) => {

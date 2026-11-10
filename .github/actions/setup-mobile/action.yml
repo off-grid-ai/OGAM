@@ -133,7 +133,7 @@ runs:
         mv _shared ../shared
         echo "dir=$(cd ../shared && pwd)" >> "$GITHUB_OUTPUT"
         # Every shared package this app consumes; a package this shared commit lacks is skipped.
-        echo "packages=automation sync rag models speech ui writing notes" >> "$GITHUB_OUTPUT"
+        echo "packages=design automation sync rag models speech ui writing notes" >> "$GITHUB_OUTPUT"
     - name: Restore the built shared packages
       id: shared_cache
       if: ${{ inputs.workspace == 'true' && inputs.private-token != '' && inputs.shared == 'true' }}

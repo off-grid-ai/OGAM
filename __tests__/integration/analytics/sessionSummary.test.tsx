@@ -77,15 +77,15 @@ it('taps, a long-press, a switch, an error, a scroll, settings and a sheet add u
   analytics.trackScreen('KnowledgeBase');
   const view = rtl.render(
     <>
-      <TouchableOpacity testID="kb-document-remove-My Diary 2024.pdf" onPress={onPress} onLongPress={() => {}} />
-      <Switch testID="kb-document-toggle-Diary.pdf" value={false} onValueChange={() => {}} />
+      <TouchableOpacity testID="knowledge-document-remove-My Diary 2024.pdf" onPress={onPress} onLongPress={() => {}} />
+      <Switch testID="knowledge-document-toggle-Diary.pdf" value={false} onValueChange={() => {}} />
     </>,
   );
-  const remove = view.getByTestId('kb-document-remove-My Diary 2024.pdf');
+  const remove = view.getByTestId('knowledge-document-remove-My Diary 2024.pdf');
   rtl.fireEvent.press(remove);
   rtl.fireEvent.press(remove);
   rtl.fireEvent(remove, 'longPress');
-  rtl.fireEvent(view.getByTestId('kb-document-toggle-Diary.pdf'), 'valueChange', true);
+  rtl.fireEvent(view.getByTestId('knowledge-document-toggle-Diary.pdf'), 'valueChange', true);
   reportScroll(0.3);
   reportScroll(0.6);
   reportScroll(0.1);
@@ -111,8 +111,8 @@ it('taps, a long-press, a switch, an error, a scroll, settings and a sheet add u
     screens: 2,
     screen_views: 3,
     max_scroll_pct: { 'knowledge-base': 50 },
-    actions: { 'knowledge-base:kb-document-remove': 2, 'knowledge-base:kb-document-toggle': 1 },
-    long_press: { 'knowledge-base:kb-document-remove': 1 },
+    actions: { 'knowledge-base:knowledge-document-remove': 2, 'knowledge-base:knowledge-document-toggle': 1 },
+    long_press: { 'knowledge-base:knowledge-document-remove': 1 },
     errors_shown: { 'knowledge-base:alert': 1 },
     settings_changed: { [expectedDetails]: 1, temperature: 1, system_prompt: 1, 'theme=dark': 1 },
   });

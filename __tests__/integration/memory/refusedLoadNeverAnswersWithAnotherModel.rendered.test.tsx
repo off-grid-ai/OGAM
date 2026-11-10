@@ -51,7 +51,7 @@ it('a refused chat model is never replaced by the classifier: the error shows ag
 
   // An image model is chosen and image mode is back on Auto, so a message with no chat model loaded
   // runs the image-intent classifier, as on the phone.
-  await rtl.waitFor(() => expect(view().queryByText(/chatting with Big Chat/)).not.toBeNull());
+  await rtl.waitFor(() => expect(view().queryByText(/Big Chat answers/)).not.toBeNull());
   await h.placeImageModel();
   await h.cycleImageMode();
   await h.cycleImageMode();

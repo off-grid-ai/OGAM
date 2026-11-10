@@ -1,4 +1,5 @@
 import type { ThemeColors, ThemeShadows } from '../../theme/palettes';
+import { FONTS } from '../../constants';
 
 export function createStyles(_colors: ThemeColors, _shadows: ThemeShadows) {
   const colors = _colors;
@@ -17,7 +18,7 @@ export function createStyles(_colors: ThemeColors, _shadows: ThemeShadows) {
     },
     title: {
       fontSize: 16,
-      fontWeight: '600' as const,
+      fontWeight: '500' as const,
       color: colors.text,
     },
     subtitle: {
@@ -86,19 +87,19 @@ export function createStyles(_colors: ThemeColors, _shadows: ThemeShadows) {
     logTime: {
       fontSize: 12,
       color: colors.textSecondary,
-      fontFamily: 'monospace',
+      fontFamily: FONTS.mono,
       minWidth: 80,
     },
     logLevel: {
       fontSize: 12,
-      fontWeight: '600' as const,
-      fontFamily: 'monospace',
+      fontWeight: '500' as const,
+      fontFamily: FONTS.mono,
       minWidth: 54,
     },
     logMessage: {
       flex: 1 as const,
       fontSize: 12,
-      fontFamily: 'monospace',
+      fontFamily: FONTS.mono,
     },
     emptyContainer: {
       flex: 1 as const,

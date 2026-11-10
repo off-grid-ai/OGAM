@@ -1,3 +1,6 @@
+jest.unmock('@react-navigation/native');
+
+import { deleteOpenImage, galleryWithRoutes } from '../../harness/galleryRoutes';
 import { GB, installNativeBoundary, requireRTL } from '../../harness/nativeBoundary';
 
 describe('iOS Gallery with an already-missing generated image', () => {
@@ -31,19 +34,13 @@ describe('iOS Gallery with an already-missing generated image', () => {
       }),
     );
 
-    const React = require('react');
     const rtl = requireRTL();
     const { useAppStore } = require('../../../src/stores/appStore');
     await useAppStore.persist.rehydrate();
-    const { GalleryScreen } = require('../../../src/screens/GalleryScreen');
-    const gallery = rtl.render(React.createElement(GalleryScreen));
+    const gallery = rtl.render(galleryWithRoutes());
 
     rtl.fireEvent.press(await gallery.findByTestId('gallery-image-missing-image'));
-    rtl.fireEvent.press(gallery.getByText('Delete'));
-    await gallery.findByText('Delete Image');
-    await rtl.act(async () => {
-      rtl.fireEvent.press(gallery.getAllByText('Delete')[1]);
-    });
+    await deleteOpenImage(rtl, gallery);
 
     await rtl.waitFor(() => {
       expect(gallery.queryByTestId('gallery-image-missing-image')).toBeNull();

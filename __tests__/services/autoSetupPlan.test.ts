@@ -9,7 +9,7 @@ const candidate = (
   sizeBytes: number,
   fitScore: number,
   parameterCountB?: number,
-  pick?: 'fast' | 'balanced' | 'best',
+  pick?: 'fast' | 'balanced' | 'best' | 'starter',
 ) => ({
   id: `${kind}-${name}`,
   name,
@@ -89,6 +89,38 @@ test("text plans are the phone's Fast, Balanced and Best picks, not file-size or
     'Gemma 2B',
     'Gemma 4B',
     'Qwen 9B',
+  ]);
+});
+
+test('Quick start takes the starter (under 1 GB), and a phone with none falls back to its Fast pick', () => {
+  const picks = [
+    candidate('text', 'Qwen 9B', 500, 3, 9, 'best'),
+    candidate('text', 'Gemma 4B', 900, 2, 4, 'balanced'),
+    candidate('text', 'Gemma 2B', 700, 1, 2, 'fast'),
+  ];
+  const others = { image: [candidate('image', 'image', 10, 0)], stt: [candidate('stt', 'speech', 1, 0)] };
+
+  const withStarter = selectAutoSetupPlans({ text: [candidate('text', 'Qwen 0.8B', 80, 0, 0.8, 'starter'), ...picks], ...others } as AutoSetupCompatibleCatalog);
+  expect(withStarter.map(plan => plan.items[0].name)).toEqual(['Qwen 0.8B', 'Gemma 4B', 'Qwen 9B']);
+  expect(withStarter[0].title).toBe('Quick start');
+
+  const without = selectAutoSetupPlans({ text: picks, ...others } as AutoSetupCompatibleCatalog);
+  expect(without[0].items[0].name).toBe('Gemma 2B');
+});
+
+test('a small phone whose best model is the starter keeps Quick start (the default) and drops the repeat', () => {
+  // The best chat model this phone runs is under 1 GB, so the starter and the Best pick are one model.
+  const text = [
+    candidate('text', 'Qwen 0.8B', 80, 0, 0.8, 'starter'),
+    candidate('text', 'Qwen 0.8B', 80, 0, 0.8, 'best'),
+    candidate('text', 'SmolLM 360M', 40, 1, 0.36, 'balanced'),
+  ];
+  const plans = selectAutoSetupPlans({
+    text, image: [candidate('image', 'image', 10, 0)], stt: [candidate('stt', 'speech', 1, 0)],
+  } as AutoSetupCompatibleCatalog);
+  expect(plans.map(plan => [plan.title, plan.items[0].name])).toEqual([
+    ['Quick start', 'Qwen 0.8B'],
+    ['Balanced', 'SmolLM 360M'],
   ]);
 });
 

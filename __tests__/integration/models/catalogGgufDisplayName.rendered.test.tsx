@@ -144,7 +144,7 @@ describe('catalog GGUF model names', () => {
       // Downloads lists the stored file under its own name, and no repo id leaks in beside it.
       fireEvent.press(ui.getByTestId('downloads-icon'));
       const downloads = await waitFor(() => ui.getByTestId('downloaded-models-screen'), RENDER_WAIT);
-      await waitFor(() => expect(within(downloads).getByText(FILE_NAME)).toBeTruthy(), RENDER_WAIT);
+      await waitFor(() => expect(within(downloads).getByText(CATALOG_NAME)).toBeTruthy(), RENDER_WAIT);
       expectNoRepoId(within(downloads));
       fireEvent.press(within(downloads).getByTestId('back-button'));
 
@@ -165,7 +165,7 @@ describe('catalog GGUF model names', () => {
       // The chat started with it.
       fireEvent.press(await waitFor(() => ui.getByTestId('new-chat-button'), RENDER_WAIT));
       await waitFor(
-        () => expect(ui.getByText(new RegExp(`begin chatting with ${CATALOG_NAME}`))).toBeTruthy(),
+        () => expect(ui.getByText(new RegExp(`Ask anything\\. ${CATALOG_NAME} answers`))).toBeTruthy(),
         RENDER_WAIT,
       );
       expectNoRepoId(ui);
@@ -247,7 +247,7 @@ describe('catalog GGUF model names', () => {
 
       fireEvent.press(await waitFor(() => ui.getByTestId('new-chat-button'), RENDER_WAIT));
       await waitFor(
-        () => expect(ui.getByText(new RegExp(`begin chatting with ${CATALOG_NAME}`))).toBeTruthy(),
+        () => expect(ui.getByText(new RegExp(`Ask anything\\. ${CATALOG_NAME} answers`))).toBeTruthy(),
         RENDER_WAIT,
       );
       expectNoRepoId(ui);

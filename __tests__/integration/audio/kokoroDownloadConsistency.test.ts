@@ -19,10 +19,10 @@ it('mid-download: all prior files present must not make either screen report com
     expect(app.view.queryByTestId('voice-model-kokoro-delete')).toBeNull();
     await downloads(app);
     expect(await app.view.findByText('61%')).toBeTruthy();
-    expect(app.view.getByText('Active Downloads')).toBeTruthy();
+    expect(app.view.getByText('Downloading')).toBeTruthy();
     expect(app.view.getByTestId('dm-active-downloading-count')).toHaveTextContent('1');
     expect(app.view.getByLabelText('Remove Kokoro TTS')).toBeTruthy();
-    expect(app.rtl.within(app.view.getByLabelText('Kokoro TTS')).queryByLabelText('Delete model')).toBeNull();
+    expect(app.rtl.within(app.view.getByLabelText('Kokoro TTS')).queryByLabelText(/^Delete /)).toBeNull();
     await app.rtl.act(async () => { finish(); });
   } finally {
     finish();
@@ -36,9 +36,9 @@ it('genuinely complete: a resolved transfer reads as completed in both screens',
     await app.voicePanel();
     await app.downloadVoice();
     await downloads(app);
-    expect(app.rtl.within(await app.view.findByLabelText('Kokoro TTS')).getByLabelText('Delete model')).toBeTruthy();
-    expect(app.view.getByText('Downloaded Models')).toBeTruthy();
-    expect(app.view.queryByText('Active Downloads')).toBeNull();
+    expect(app.rtl.within(await app.view.findByLabelText('Kokoro TTS')).getByLabelText(/^Delete /)).toBeTruthy();
+    expect(app.view.getByText('On this phone')).toBeTruthy();
+    expect(app.view.queryByText('Downloading')).toBeNull();
   } finally { await app.close(); }
 });
 
@@ -52,7 +52,7 @@ it('persisted completion and its files still read as completed after boot', asyn
     await app.voicePanel();
     expect(await app.view.findByTestId('voice-model-kokoro-delete')).toBeTruthy();
     await downloads(app);
-    expect(app.rtl.within(await app.view.findByLabelText('Kokoro TTS')).getByLabelText('Delete model')).toBeTruthy();
+    expect(app.rtl.within(await app.view.findByLabelText('Kokoro TTS')).getByLabelText(/^Delete /)).toBeTruthy();
   } finally { await app.close(); }
 });
 

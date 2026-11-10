@@ -76,10 +76,10 @@ describe('SettingsScreen', () => {
 
   it('renders navigation items', () => {
     const { getByText } = renderSettings();
-    expect(getByText('Model Settings')).toBeTruthy();
-    expect(getByText('Remote Servers')).toBeTruthy();
+    expect(getByText('Model settings')).toBeTruthy();
+    expect(getByText('Remote servers')).toBeTruthy();
     expect(getByText('Security')).toBeTruthy();
-    expect(getByText('Device Information')).toBeTruthy();
+    expect(getByText('Device information')).toBeTruthy();
     expect(getByText('Storage')).toBeTruthy();
   });
 
@@ -92,23 +92,25 @@ describe('SettingsScreen', () => {
 
   it('renders navigation item descriptions', () => {
     const { getByText } = renderSettings();
-    expect(getByText('System prompt, generation, and performance')).toBeTruthy();
-    expect(getByText('Connect to Off Grid AI Desktop, Ollama, LM Studio, and more')).toBeTruthy();
+    expect(getByText('Instructions, replies, and speed')).toBeTruthy();
+    expect(getByText('How chats find the right part of a file')).toBeTruthy();
+    expect(getByText('Your computer, Ollama or LM Studio')).toBeTruthy();
     expect(getByText('Passphrase and app lock')).toBeTruthy();
     expect(getByText('Hardware and compatibility')).toBeTruthy();
     expect(getByText('Models and data usage')).toBeTruthy();
+    expect(getByText('What runs your models')).toBeTruthy();
   });
 
   it('navigates to correct screen when nav item is pressed', async () => {
     const { getByText, findByTestId } = renderSettings();
-    fireEvent.press(getByText('Model Settings'));
+    fireEvent.press(getByText('Model settings'));
     expect(await findByTestId('route-ModelSettings')).toBeTruthy();
   });
 
   it.each([
-    ['Remote Servers', 'RemoteServers'],
+    ['Remote servers', 'RemoteServers'],
     ['Security', 'SecuritySettings'],
-    ['Device Information', 'DeviceInfo'],
+    ['Device information', 'DeviceInfo'],
     ['Storage', 'StorageSettings'],
   ])('navigates to its settings screen when %s is pressed', async (label, route) => {
     const { getByText, findByTestId } = renderSettings();
@@ -136,9 +138,9 @@ describe('SettingsScreen', () => {
     expect(getByText(/Version/)).toBeTruthy();
   });
 
-  it('renders the "Stay in the loop" card with the Follow-on-X and Join-Slack items', () => {
-    const { getByText, getByTestId } = renderSettings();
-    expect(getByText('Stay in the loop')).toBeTruthy();
+  it('renders the Community group with the Follow-on-X and Join-Slack items', () => {
+    const { getByText, getByTestId, getByRole } = renderSettings();
+    expect(getByRole('header', { name: 'Community' })).toBeTruthy();
     expect(getByText('Follow @alichherawalla on X')).toBeTruthy();
     // The two affordances are present and tappable.
     expect(getByTestId('follow-on-x')).toBeTruthy();
@@ -166,7 +168,7 @@ describe('SettingsScreen', () => {
     const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
     const { getByText } = renderSettings();
 
-    fireEvent.press(getByText('Send Feedback'));
+    fireEvent.press(getByText('Send feedback'));
 
     await waitFor(() => {
       expect(openURL.mock.calls[0]?.[0]).toContain(`mailto:${SUPPORT_EMAIL}?`);
@@ -177,18 +179,18 @@ describe('SettingsScreen', () => {
   it('no longer renders the removed Pro Tools row', () => {
     const { queryByText } = renderSettings();
     // Pro Tools was removed from Settings — it must not surface (mirrors the Voice/TTS removal guard).
-    expect(queryByText('Pro Tools')).toBeNull();
+    expect(queryByText('Pro tools')).toBeNull();
   });
 
   it('keeps Reset Onboarding in development mode without the removed checklist reset', () => {
     const { getByText, queryByText } = renderSettings();
-    expect(getByText('Reset Onboarding')).toBeTruthy();
+    expect(getByText('Reset onboarding')).toBeTruthy();
     expect(queryByText('Reset Onboarding Checklist')).toBeNull();
   });
 
   it('resets onboarding and returns the root stack to Onboarding on Reset Onboarding press', async () => {
     const { getByText, findByTestId } = renderSettings();
-    fireEvent.press(getByText('Reset Onboarding'));
+    fireEvent.press(getByText('Reset onboarding'));
 
     expect(useAppStore.getState().hasCompletedOnboarding).toBe(false);
     expect(await findByTestId('route-Onboarding')).toBeTruthy();

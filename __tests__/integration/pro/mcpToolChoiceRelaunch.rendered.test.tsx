@@ -60,26 +60,25 @@ async function launch() {
     ),
   );
 
-  /** The switch on the tool card that shows `toolName` on the open Tools screen. */
+  /** The switch beside the tool named `toolName` on the open Tools screen (shown in words: "search" reads "Search"). */
   const toolSwitch = (toolName: string) => {
-    let node = ui.getByText(toolName).parent;
+    let node = ui.getByText(toolName.charAt(0).toUpperCase() + toolName.slice(1)).parent;
     while (node && node.findAllByType(Switch).length === 0) node = node.parent;
     if (!node) throw new Error(`no switch beside ${toolName}`);
     return node.findAllByType(Switch)[0];
   };
 
-  /** Cards render in the order the user added the servers: Alpha, then Beta. */
+  /** A connected server's status line opens its tools. */
   const openTools = async (serverName: string) => {
-    const index = [ALPHA.name, BETA.name].indexOf(serverName);
-    rtl.fireEvent.press(ui.getAllByText('Edit Tools')[index]);
-    await rtl.waitFor(() => expect(ui.getByText(/TOOLS AVAILABLE/)).toBeTruthy());
+    rtl.fireEvent.press(ui.getByLabelText(new RegExp(`^${serverName}, Active, `)));
+    await rtl.waitFor(() => expect(ui.getByText('Its tools')).toBeTruthy());
     // The list behind is hidden from the user, so the visible name is the Tools screen's header.
     expect(ui.getByText(serverName)).toBeTruthy();
   };
 
   const goBack = async () => {
     rtl.fireEvent.press(ui.getByLabelText('Back'));
-    await rtl.waitFor(() => expect(ui.queryByText(/TOOLS AVAILABLE/)).toBeNull());
+    await rtl.waitFor(() => expect(ui.queryByText('Its tools')).toBeNull());
   };
 
   const quit = async () => {
@@ -125,8 +124,8 @@ describe('the per-server tool choice survives a relaunch', () => {
     await addServerThroughForm(first, BETA);
 
     // Alpha connected first, so search is on there and off on Beta.
-    expect(first.ui.getByLabelText(`${ALPHA.name}, 1/1 tools`)).toBeTruthy();
-    expect(first.ui.getByLabelText(`${BETA.name}, 1/2 tools`)).toBeTruthy();
+    expect(first.ui.getByLabelText(`${ALPHA.name}, Active, 1 of 1 tools`)).toBeTruthy();
+    expect(first.ui.getByLabelText(`${BETA.name}, Active, 1 of 2 tools`)).toBeTruthy();
 
     await first.openTools(BETA.name);
     expect(first.toolSwitch('search').props.value).toBe(false);
@@ -138,16 +137,16 @@ describe('the per-server tool choice survives a relaunch', () => {
     await first.openTools(ALPHA.name);
     expect(first.toolSwitch('search').props.value).toBe(false);
     await first.goBack();
-    expect(first.ui.getByLabelText(`${ALPHA.name}, 0/1 tools`)).toBeTruthy();
-    expect(first.ui.getByLabelText(`${BETA.name}, 2/2 tools`)).toBeTruthy();
+    expect(first.ui.getByLabelText(`${ALPHA.name}, Active, 0 of 1 tools`)).toBeTruthy();
+    expect(first.ui.getByLabelText(`${BETA.name}, Active, 2 of 2 tools`)).toBeTruthy();
     await first.quit();
 
     // --- Relaunch: same storage, fresh process. Boot reconnects both saved servers. ---
     const second = await launch();
     await second.rtl.waitFor(() => expect(second.ui.getByLabelText(`${ALPHA.name}, Active`)).toBeTruthy());
     await second.rtl.waitFor(() => expect(second.ui.getByLabelText(`${BETA.name}, Active`)).toBeTruthy());
-    expect(second.ui.getByLabelText(`${ALPHA.name}, 0/1 tools`)).toBeTruthy();
-    expect(second.ui.getByLabelText(`${BETA.name}, 2/2 tools`)).toBeTruthy();
+    expect(second.ui.getByLabelText(`${ALPHA.name}, Active, 0 of 1 tools`)).toBeTruthy();
+    expect(second.ui.getByLabelText(`${BETA.name}, Active, 2 of 2 tools`)).toBeTruthy();
 
     await second.openTools(BETA.name);
     expect(second.toolSwitch('search').props.value).toBe(true);

@@ -61,6 +61,8 @@ it('a film the computer was making when the app closed carries on and arrives', 
   app.stories.release();
   rtl.fireEvent.press(await view.findByTestId('home-gallery-card', {}, { timeout: 10_000 }));
   rtl.fireEvent.press(await view.findByTestId('gallery-tab-videos'));
+  // Videos stay in Gallery; the Pro library is the row at the top of the tab.
+  rtl.fireEvent.press(await view.findByTestId('gallery-open-video-library', {}, { timeout: 10_000 }));
   await view.findByTestId('library-grid', {}, { timeout: 10_000 });
   rtl.fireEvent.press(view.getByTestId('library-tab-stories'));
   rtl.fireEvent.press((await view.findAllByTestId(/^library-item-/, {}, { timeout: 10_000 }))[0]);

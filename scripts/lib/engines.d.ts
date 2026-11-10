@@ -55,7 +55,7 @@ export function mavenRelease(metadataXml: string): string | null;
 export function gradlePin(gradle: string, group: string, artifact: string): string | null;
 export function setGradlePin(gradle: string, group: string, artifact: string, version: string): string;
 export function summaryMarkdown(results: EngineResult[]): string;
-export function githubDecision(input: { current: string | null; latest: string | null; status: string | null }): Decision;
+export function githubDecision(input: { current: string | null; latest: string | null; status: string | null; patchProblem?: string | null }): Decision;
 export function heldSince(times: Record<string, string> | undefined, current: string | null): string | null;
 export const HELD_ISSUE_DAYS: number;
 export function heldIssueTitle(id: string): string;
@@ -73,5 +73,7 @@ export interface BumpPr {
   statusCheckRollup: Array<{ name?: string; context?: string; conclusion?: string | null; state?: string | null }>;
 }
 export function bumpMergeDecision(pr: BumpPr, sha: string): { action: 'merge' | 'skip' | 'refuse'; reason?: string };
+export const VIDEO_RUNTIME_CHECKS: string[];
+export function videoRuntimeMoved(path: string): boolean;
 export const RELEASE_WORKFLOWS: string[];
 export function unfinishedRuns<T extends { status: string }>(runs: T[]): T[];

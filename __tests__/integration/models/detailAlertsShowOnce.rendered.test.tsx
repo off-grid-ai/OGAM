@@ -77,7 +77,7 @@ describe("alerts from a model's detail view", () => {
     const { rtl, screen } = await openDetail(boundary);
 
     // BEFORE: the downloaded size offers Delete; no alert is on screen.
-    const deleteButton = await rtl.waitFor(() => screen.getByLabelText('Delete model'));
+    const deleteButton = await rtl.waitFor(() => screen.getByLabelText(/^Delete /));
     expect(screen.queryByText('Delete Model')).toBeNull();
 
     rtl.fireEvent.press(deleteButton);
@@ -91,7 +91,7 @@ describe("alerts from a model's detail view", () => {
     // One answer: the alert is gone, and the size is deleted (it offers a download again).
     rtl.fireEvent.press(screen.getByLabelText('Delete'));
     await rtl.waitFor(() => expect(screen.queryByText('Delete Model')).toBeNull());
-    await rtl.waitFor(() => expect(screen.queryByLabelText('Delete model')).toBeNull());
+    await rtl.waitFor(() => expect(screen.queryByLabelText(/^Delete /)).toBeNull());
     expect(await boundary.fs!.exists(smallPath)).toBe(false);
     expect(screen.getByLabelText('Download granite-4.0-micro-Q4_K_M')).toBeTruthy();
     screen.unmount();

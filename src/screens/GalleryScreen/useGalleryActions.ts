@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Platform, PermissionsAndroid, Share } from 'react-native';
-import RNFS from 'react-native-fs';
 import { showAlert, hideAlert, AlertState, initialAlertState } from '../../components/CustomAlert';
 import { useAppStore, useChatStore } from '../../stores';
 import { imageGenerationService, onnxImageGeneratorService } from '../../services';
 import type { ImageGenerationState } from '../../services';
 import { GeneratedImage } from '../../types';
-import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
+import { deleteGalleryImage } from './galleryMedia';
 
 export const formatDate = (dateStr: string): string => {
   const ts = Number(dateStr);
@@ -26,8 +24,6 @@ export const useGalleryActions = (conversationId: string | undefined) => {
 
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
-  const [showDetails, setShowDetails] = useState(false);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const [imageGenState, setImageGenState] = useState<ImageGenerationState>(
     imageGenerationService.getState()
@@ -81,34 +77,6 @@ export const useGalleryActions = (conversationId: string | undefined) => {
     );
   }, [generatedImages, conversationId, chatImageIds]);
 
-  const handleDelete = useCallback((image: GeneratedImage) => {
-    const doDelete = async () => {
-      setAlertState(hideAlert());
-      const deleted = await onnxImageGeneratorService.deleteGeneratedImage(
-        image.id,
-        image.imagePath,
-      ).catch(() => false);
-      if (deleted) {
-        removeGeneratedImage(image.id);
-        if (selectedImage?.id === image.id) setSelectedImage(null);
-      } else {
-        setAlertState(showAlert('Image was not deleted', 'The image could not be removed. Its record is still in your Gallery.'));
-      }
-    };
-    setAlertState(showAlert(
-      'Delete Image',
-      'Are you sure you want to delete this image?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => { doDelete(); },
-        },
-      ]
-    ));
-  }, [selectedImage, removeGeneratedImage]);
-
   const handleRemoveUnavailable = useCallback((image: GeneratedImage) => {
     setAlertState(showAlert(
       'Remove Image',
@@ -159,12 +127,7 @@ export const useGalleryActions = (conversationId: string | undefined) => {
               const selectedImages = displayImages.filter(image => selectedIds.has(image.id));
               let notDeleted = 0;
               for (const image of selectedImages) {
-                const deleted = await onnxImageGeneratorService.deleteGeneratedImage(
-                  image.id,
-                  image.imagePath,
-                ).catch(() => false);
-                if (deleted) removeGeneratedImage(image.id);
-                else notDeleted += 1;
+                if (!(await deleteGalleryImage(image))) notDeleted += 1;
               }
               setSelectedIds(new Set());
               setIsSelectMode(false);
@@ -180,70 +143,28 @@ export const useGalleryActions = (conversationId: string | undefined) => {
         },
       ]
     ));
-  }, [selectedIds, displayImages, removeGeneratedImage]);
+  }, [selectedIds, displayImages]);
 
   const selectAll = useCallback(() => {
     setSelectedIds(new Set(displayImages.map(img => img.id)));
   }, [displayImages]);
 
-  const handleSaveImage = useCallback(async (image: GeneratedImage) => {
-    try {
-      const imagePath = resolveDocumentPath(image.imagePath);
-      if (Platform.OS === 'ios') {
-        await Share.share({ url: `file://${imagePath}` });
-        return;
-      }
-      await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-        {
-          title: 'Storage Permission',
-          message: 'App needs access to save images',
-          buttonNeutral: 'Ask Later',
-          buttonNegative: 'Cancel',
-          buttonPositive: 'OK',
-        }
-      );
-      const picturesDir = `${RNFS.ExternalStorageDirectoryPath}/Pictures/OffgridMobile`;
-      if (!(await RNFS.exists(picturesDir))) {
-        await RNFS.mkdir(picturesDir);
-      }
-      const timestamp = new Date().toISOString().replaceAll(/[:.]/g, '-');
-      const fileName = `generated_${timestamp}.png`;
-      await RNFS.copyFile(imagePath, `${picturesDir}/${fileName}`);
-      setAlertState(showAlert('Image Saved', `Saved to Pictures/OffgridMobile/${fileName}`));
-    } catch (error: any) {
-      setAlertState(showAlert('Error', `Failed to save image: ${error?.message || 'Unknown error'}`));
-    }
-  }, []);
-
   const handleCancelGeneration = useCallback(() => {
     imageGenerationService.cancelGeneration().catch(() => {});
-  }, []);
-
-  const closeViewer = useCallback(() => {
-    setSelectedImage(null);
-    setShowDetails(false);
   }, []);
 
   return {
     isSelectMode,
     selectedIds,
-    selectedImage,
-    setSelectedImage,
-    showDetails,
-    setShowDetails,
     alertState,
     setAlertState,
     imageGenState,
     displayImages,
-    handleDelete,
     handleRemoveUnavailable,
     toggleSelectMode,
     toggleImageSelection,
     handleDeleteSelected,
     selectAll,
-    handleSaveImage,
     handleCancelGeneration,
-    closeViewer,
   };
 };

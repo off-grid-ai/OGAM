@@ -1,10 +1,10 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, TextInput, StyleSheet } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Platform } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
 import Slider from '@react-native-community/slider';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../theme';
-import { TYPOGRAPHY, SPACING } from '../../constants';
+import { TYPOGRAPHY, SPACING, FONTS } from '../../constants';
 
 interface SliderSettingProps {
   label: string;
@@ -110,7 +110,7 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
         {allowValueEditing && editing ? (
           <TextInput
             testID={testID ? `${testID}-input` : undefined}
-            style={[styles.value, { color: colors.primary, borderColor: colors.primary, backgroundColor: colors.surfaceLight }]}
+            style={[styles.value, { color: colors.text, borderColor: colors.heroBorder, backgroundColor: colors.surface }]}
             value={editText}
             onChangeText={setEditText}
             onSubmitEditing={commitEdit}
@@ -128,7 +128,7 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
           >
             <Text
               testID={testID ? `${testID}-value` : undefined}
-              style={[styles.value, { color: colors.primary, borderColor: colors.border, backgroundColor: colors.surfaceLight }]}
+              style={[styles.value, styles.valueBare, { color: colors.text }]}
             >
               {display}
             </Text>
@@ -136,7 +136,7 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
         ) : (
           <Text
             testID={testID ? `${testID}-value` : undefined}
-            style={[styles.value, { color: colors.primary, borderColor: colors.border, backgroundColor: colors.surfaceLight }]}
+            style={[styles.value, styles.valueBare, { color: colors.text }]}
           >
             {display}
           </Text>
@@ -170,9 +170,12 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
           setDragValue(null);
           commitFromSlider(v);
         }}
-        minimumTrackTintColor={colors.primary}
+        // A calm grey slider (desktop's): the value, not colour, says where it is; emerald is for the
+        // one main action and what is in use.
+        minimumTrackTintColor={colors.textSecondary}
         maximumTrackTintColor={colors.surfaceLight}
-        thumbTintColor={colors.primary}
+        // The platform's own knob (white, softly shadowed on iOS): calm, not a dark capsule.
+        thumbTintColor={Platform.OS === 'ios' ? undefined : colors.textSecondary}
       />
     </View>
   );
@@ -203,17 +206,22 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
     marginRight: SPACING.sm,
   },
+  // A figure in Mono on a hairline field, not an emerald pill.
   value: {
     ...TYPOGRAPHY.body,
+    fontFamily: FONTS.mono,
     fontWeight: '400',
     minWidth: 72,
     textAlign: 'center',
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
+  // The value as a figure on its own (no box) until you tap to type one. It ends on the card's right
+  // edge, so "50" and "512x512" line up (centred in the 72 pt box, a short value sat inside it).
+  valueBare: { borderWidth: 0, textAlign: 'right', paddingHorizontal: 0 },
   description: {
     ...TYPOGRAPHY.bodySmall,
     marginBottom: SPACING.md,

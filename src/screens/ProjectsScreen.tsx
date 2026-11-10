@@ -4,6 +4,7 @@ import {
   Text,
   FlatList,
 } from 'react-native';
+import { ListGroupSeparator, listGroupRowEnds, listRowStyle } from '../components/ListGroup';
 import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,12 +22,16 @@ import { ListSearchBar } from '../components/ListSearchBar';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
-import { TYPOGRAPHY, SPACING } from '../constants';
+import { FONTS, TYPOGRAPHY, SPACING } from '../constants';
+import { formatWhen } from '../utils/localTime';
 import { useProjectStore, useChatStore } from '../stores';
 import { Project } from '../types';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { PROJECT_DELETE_FALLBACK_REASON } from '../stores/projectDeleteOutcome';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
+import { useIsFocused } from '@react-navigation/native';
+import { LivingField } from '../components/LivingField';
+import { useProjectDocumentCounts } from '../hooks/useProjectDocumentCounts';
 
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'ProjectsTab'>,
@@ -38,6 +43,7 @@ export const ProjectsScreen: React.FC = () => {
   const focusTrigger = useFocusTrigger();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const isFocused = useIsFocused();
   const projects = useProjectStore(state => state.projects);
   const deleteProject = useProjectStore(state => state.deleteProject);
   const conversations = useChatStore(state => state.conversations);
@@ -52,15 +58,21 @@ export const ProjectsScreen: React.FC = () => {
     );
   }, [projects, searchQuery]);
 
-  const chatCounts = useMemo(() => {
+  const { chatCounts, lastUsed } = useMemo(() => {
     const counts: Record<string, number> = {};
+    const latest: Record<string, string> = {};
     for (const conversation of conversations) {
       if (conversation.projectId) {
         counts[conversation.projectId] = (counts[conversation.projectId] ?? 0) + 1;
+        const previous = latest[conversation.projectId];
+        if (!previous || conversation.updatedAt > previous) latest[conversation.projectId] = conversation.updatedAt;
       }
     }
-    return counts;
+    return { chatCounts: counts, lastUsed: latest };
   }, [conversations]);
+
+  const projectIds = useMemo(() => projects.map(project => project.id), [projects]);
+  const documentCounts = useProjectDocumentCounts(projectIds, isFocused);
 
   const handleProjectPress = (project: Project) => {
     navigation.navigate('ProjectDetail', { projectId: project.id });
@@ -98,6 +110,8 @@ export const ProjectsScreen: React.FC = () => {
     <TouchableOpacity
       style={styles.deleteAction}
       onPress={() => handleDeleteProject(project)}
+      accessibilityRole="button"
+      accessibilityLabel={`Delete ${project.name}`}
     >
       <Icon name="trash-2" size={16} color={colors.error} />
     </TouchableOpacity>
@@ -109,6 +123,8 @@ export const ProjectsScreen: React.FC = () => {
 
   const renderProject = ({ item, index }: { item: Project; index: number }) => {
     const chatCount = chatCounts[item.id] ?? 0;
+    const documentCount = documentCounts[item.id] ?? 0;
+    const when = formatWhen(lastUsed[item.id] ?? item.updatedAt);
 
     return (
       <Swipeable
@@ -119,35 +135,26 @@ export const ProjectsScreen: React.FC = () => {
         <AnimatedListItem
           index={index}
           trigger={focusTrigger}
-          style={styles.projectItem}
+          style={[styles.projectItem, listGroupRowEnds(index, visibleProjects.length)]}
           onPress={() => handleProjectPress(item)}
           testID={`project-row-${item.id}`}
           accessibilityRole="button"
           accessibilityLabel={item.name}
-          accessibilityHint={
-            item.description
-              ? `${chatCount} chats. ${item.description}`
-              : `${chatCount} chats`
-          }
+          accessibilityHint={`${chatCount} chats, ${documentCount} documents, last used ${when}`}
         >
-          <View style={styles.projectIcon}>
-            <Text style={styles.projectIconText}>
-              {item.name.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+          {/* Every row the same two lines (screen review: one-line and two-line rows broke the
+              list's rhythm): the name, then what is in it and when it was last used. The
+              description lives on the project's own page. */}
           <View style={styles.projectContent}>
-            <View style={styles.projectNameRow}>
-              <Text style={styles.projectName} numberOfLines={1}>{item.name}</Text>
-              <View style={styles.chatCountTag}>
-                <Icon name="message-circle" size={8} color={colors.textMuted} />
-                <Text style={styles.chatCountText}>{chatCount}</Text>
-              </View>
+            <Text style={styles.projectName} numberOfLines={1}>{item.name}</Text>
+            <View style={styles.projectStats}>
+              <Icon name="message-circle" size={12} color={colors.textMuted} />
+              <Text style={styles.projectMeta} testID={`project-chats-${item.id}`}>{chatCount}</Text>
+              <Icon name="file-text" size={12} color={colors.textMuted} />
+              <Text style={styles.projectMeta} testID={`project-documents-${item.id}`}>{documentCount}</Text>
+              <Icon name="clock" size={12} color={colors.textMuted} />
+              <Text style={styles.projectMeta}>{when}</Text>
             </View>
-            {item.description ? (
-              <Text style={styles.projectDescription} numberOfLines={1}>
-                {item.description}
-              </Text>
-            ) : null}
           </View>
           <Icon name="chevron-right" size={14} color={colors.textMuted} />
         </AnimatedListItem>
@@ -157,6 +164,8 @@ export const ProjectsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']} testID="projects-screen">
+      {/* The living field behind the tab, resting while the tab is hidden. */}
+      <LivingField active={isFocused} />
       <ScreenHeader
         title="Projects"
         variant="tab"
@@ -184,18 +193,22 @@ export const ProjectsScreen: React.FC = () => {
             </View>
           </AnimatedEntry>
           <AnimatedEntry index={1} staggerMs={60} trigger={focusTrigger}>
-            <Text style={styles.emptyTitle}>No Projects Yet</Text>
+            <Text style={styles.emptyTitle}>No projects yet</Text>
           </AnimatedEntry>
           <AnimatedEntry index={2} staggerMs={60} trigger={focusTrigger}>
             <Text style={styles.emptyText}>
-              Create a project to organize your chats by topic, like "Spanish Learning" or "Code Review".
+              Keep related chats together, with notes and instructions they all share.
             </Text>
           </AnimatedEntry>
           <AnimatedEntry index={3} staggerMs={60} trigger={focusTrigger}>
-            <TouchableOpacity style={styles.emptyButton} onPress={handleNewProject} testID="new-project-empty-button">
-              <Icon name="plus" size={14} color={colors.primary} />
-              <Text style={styles.emptyButtonText}>Create Project</Text>
-            </TouchableOpacity>
+            <Button
+              title="New project"
+              variant="hero"
+              size="small"
+              icon={<Icon name="plus" size={16} color={colors.onHero} />}
+              onPress={handleNewProject}
+              testID="new-project-empty-button"
+            />
           </AnimatedEntry>
         </View>
       ) : (
@@ -212,6 +225,7 @@ export const ProjectsScreen: React.FC = () => {
             {...SCROLL_DEPTH_PROPS}
             data={visibleProjects}
             renderItem={renderProject}
+            ItemSeparatorComponent={ListGroupSeparator}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
@@ -228,7 +242,7 @@ export const ProjectsScreen: React.FC = () => {
   );
 };
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -239,12 +253,12 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   subtitle: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.xs,
   },
   list: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.sm,
   },
   // The subtitle sits above the search bar, so the bar needs less space on top than on Chats.
@@ -257,61 +271,32 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     textAlign: 'center' as const,
     paddingVertical: SPACING.xxl,
   },
+  // A row of the projects group: one surface with hairlines between rows (ListGroupSeparator).
   projectItem: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    backgroundColor: colors.surface,
-    paddingHorizontal: SPACING.md,
+    ...listRowStyle,
     paddingVertical: SPACING.sm,
-    borderRadius: 10,
-    marginBottom: SPACING.sm,
-    ...shadows.small,
-  },
-  projectIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 4,
-    backgroundColor: colors.surfaceLight,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    marginRight: SPACING.sm,
-  },
-  projectIconText: {
-    ...TYPOGRAPHY.meta,
-    color: colors.textMuted,
+    backgroundColor: colors.surfaceGlass,
   },
   projectContent: {
     flex: 1,
   },
-  projectNameRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-  },
   projectName: {
-    ...TYPOGRAPHY.bodySmall,
+    ...TYPOGRAPHY.body,
     color: colors.text,
     fontWeight: '400' as const,
     flexShrink: 1,
   },
-  projectDescription: {
-    ...TYPOGRAPHY.meta,
-    color: colors.textSecondary,
-    marginTop: 1,
-  },
-  chatCountTag: {
+  projectStats: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: 3,
-    backgroundColor: colors.surfaceLight,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginLeft: SPACING.sm,
-    flexShrink: 0,
+    gap: 4,
+    marginTop: 2,
   },
-  chatCountText: {
+  projectMeta: {
     ...TYPOGRAPHY.metaSmall,
+    fontFamily: FONTS.mono,
     color: colors.textMuted,
+    marginRight: SPACING.sm,
   },
   emptyState: {
     flex: 1,
@@ -320,11 +305,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingHorizontal: SPACING.md,
   },
   emptyIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     marginBottom: SPACING.lg,

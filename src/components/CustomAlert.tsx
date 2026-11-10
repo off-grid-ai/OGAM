@@ -71,13 +71,16 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
           <LoadingDots color={colors.primary} style={styles.loadingIndicator} />
         ) : null}
         {message ? <Text style={[styles.message, prominentMessage && styles.messageProminent]} testID="app-alert-message">{message}</Text> : null}
-        <View style={styles.buttonContainer}>
+        {/* Three or more answers stack, so no label wraps and the recommended one reads first. */}
+        <View style={[styles.buttonContainer, buttons.length > 2 && styles.buttonContainerStacked]}>
           {buttons.map((button, index) => (
             <TouchableOpacity
               key={index}
               style={[
                 styles.button,
+                buttons.length > 2 && styles.buttonStacked,
                 button.style === 'destructive' && styles.destructiveButton,
+                button.style === 'primary' && styles.primaryButton,
               ]}
               accessibilityRole="button"
               accessibilityLabel={button.text}
@@ -88,6 +91,7 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
                   styles.buttonText,
                   button.style === 'cancel' && styles.cancelButtonText,
                   button.style === 'destructive' && styles.destructiveButtonText,
+                  button.style === 'primary' && styles.primaryButtonText,
                 ]}
               >
                 {button.text}
@@ -147,6 +151,20 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   cancelButtonText: {
     color: colors.textMuted,
+  },
+  buttonContainerStacked: {
+    flexDirection: 'column' as const,
+  },
+  buttonStacked: {
+    flex: 0,
+    alignSelf: 'stretch' as const,
+  },
+  primaryButton: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  primaryButtonText: {
+    color: colors.onPrimary,
   },
   destructiveButton: {
     borderColor: colors.error,

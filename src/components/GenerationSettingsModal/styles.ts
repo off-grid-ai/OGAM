@@ -1,3 +1,5 @@
+import { cardSurface } from '../../theme/surface';
+import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 
@@ -9,7 +11,8 @@ const createLayoutStyles = (_colors: ThemeColors) => ({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: SPACING.lg,
+    // The 24 pt gutter Model settings uses, so the sheet and the screen read as one surface.
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.lg,
   },
   bottomPadding: {
@@ -34,8 +37,8 @@ const createStatsStyles = (colors: ThemeColors) => ({
   },
   statsValue: {
     ...TYPOGRAPHY.meta,
-    color: colors.primary,
-    fontWeight: '600' as const,
+    color: colors.textSecondary,
+    fontWeight: '500' as const,
   },
   statsSeparator: {
     ...TYPOGRAPHY.meta,
@@ -43,7 +46,8 @@ const createStatsStyles = (colors: ThemeColors) => ({
   },
 });
 
-const createAccordionStyles = (colors: ThemeColors) => ({
+/** The settings section header and card, shared by chat settings and Model Settings so their rows line up. */
+export const createAccordionStyles = (colors: ThemeColors) => ({
   accordionHeaderNoMargin: {
     marginTop: 0,
   },
@@ -61,12 +65,10 @@ const createAccordionStyles = (colors: ThemeColors) => ({
     textTransform: 'uppercase' as const,
     letterSpacing: 1,
   },
+  // Glass like every card (Mac, 2026-11-06).
   sectionCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
+    ...cardSurface(colors),
     padding: SPACING.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     marginBottom: SPACING.sm,
   },
   sectionLabel: {
@@ -95,7 +97,7 @@ const createSliderStyles = (colors: ThemeColors) => ({
   },
   settingValue: {
     ...TYPOGRAPHY.body,
-    color: colors.primary,
+    color: colors.text,
     fontWeight: '400' as const,
   },
   settingDescription: {
@@ -103,6 +105,19 @@ const createSliderStyles = (colors: ThemeColors) => ({
     color: colors.textSecondary,
     marginBottom: SPACING.md,
     lineHeight: 18,
+  },
+  /** A text field in a settings card: the same filled box the system prompt uses. */
+  settingInput: {
+    ...TYPOGRAPHY.bodySmall,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: SPACING.md,
+    minHeight: 44,
+    color: colors.text,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.sm,
   },
   settingWarning: {
     ...TYPOGRAPHY.bodySmall,
@@ -132,13 +147,13 @@ const createSliderStyles = (colors: ThemeColors) => ({
 });
 
 const createActionStyles = (colors: ThemeColors) => ({
+  // The sheet's actions are rows with a hairline between them, not separate boxes.
   actionRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    backgroundColor: colors.background,
-    padding: SPACING.md,
-    borderRadius: 8,
-    marginBottom: SPACING.sm,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
     gap: SPACING.md,
   },
   actionText: {
@@ -146,22 +161,25 @@ const createActionStyles = (colors: ThemeColors) => ({
     color: colors.text,
     flex: 1,
   },
+  // Deleting is a quiet action here; the confirm that follows is where it is weighed.
   actionTextError: {
     ...TYPOGRAPHY.body,
-    color: colors.error,
+    color: colors.textSecondary,
     flex: 1,
   },
+  // A quiet text action sized to its words, not a full-width slab.
   resetButton: {
-    backgroundColor: colors.surface,
-    padding: SPACING.md,
-    borderRadius: 8,
-    alignItems: 'center' as const,
-    borderWidth: 1,
-    borderColor: colors.border,
+    alignSelf: 'flex-start' as const,
+    minHeight: 44,
+    justifyContent: 'center' as const,
   },
   resetButtonText: {
     ...TYPOGRAPHY.body,
     color: colors.textSecondary,
+  },
+  deleteChatText: {
+    ...TYPOGRAPHY.body,
+    color: colors.error,
   },
   remoteNotice: {
     flexDirection: 'row' as const,
@@ -179,9 +197,8 @@ const createActionStyles = (colors: ThemeColors) => ({
   },
 });
 
-const createModelPickerStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createModelPickerStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   modelPickerButton: {
-    ...shadows.small,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
@@ -202,7 +219,7 @@ const createModelPickerStyles = (colors: ThemeColors, shadows: ThemeShadows) => 
   },
   modelPickerValue: {
     ...TYPOGRAPHY.bodySmall,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
     color: colors.text,
   },
   modelPickerList: {
@@ -222,14 +239,14 @@ const createModelPickerStyles = (colors: ThemeColors, shadows: ThemeShadows) => 
     borderBottomColor: colors.border,
   },
   modelPickerItemActive: {
-    backgroundColor: `${colors.primary}25`,
+    backgroundColor: colors.selectedFill,
   },
   modelPickerItemText: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.text,
   },
   modelPickerItemDesc: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,
     marginTop: 2,
   },
@@ -240,7 +257,7 @@ const createModelPickerStyles = (colors: ThemeColors, shadows: ThemeShadows) => 
     textAlign: 'center' as const,
   },
   classifierNote: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,
     fontStyle: 'italic' as const,
     marginTop: SPACING.sm,

@@ -1,7 +1,7 @@
 /**
- * T035 / Q6 (checklist Area 4, full-UI upgrade) — the thinking-box header must read "Thinking..." WHILE the
+ * T035 / Q6 (checklist Area 4, full-UI upgrade) — the thinking-box header must read "Thinking" WHILE the
  * reasoning is still streaming (separate reasoning channel: litert/remote). Device (Q6): on litert/remote it
- * reads the DONE label ("Thought process") while reasoning is still coming — because for a separate channel
+ * reads the DONE label ("Thought") while reasoning is still coming — because for a separate channel
  * the message CONTENT is empty, and parseMessageContent('') returns isThinkingComplete=true (no open <think>
  * to keep it "in progress"), so the header flips to done prematurely. llama's inline <think> is correct (its
  * open tag keeps isThinkingComplete=false).
@@ -11,7 +11,7 @@
  * the exact moment the user sees "still thinking".
  *
  * RED (Q6): while the streaming-thinking-hint is on screen (reasoning still streaming), the header reads
- * "Thought process", not "Thinking...". Falsify/spec: it should read "Thinking..." mid-stream.
+ * "Thought", not "Thinking". Falsify/spec: it should read "Thinking" mid-stream.
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 import { installRemoteModel, installRemoteStream } from '../../harness/remoteHarness';
@@ -29,7 +29,7 @@ const OLLAMA_PAUSED =
   '{"message":{"role":"assistant","content":""},"done":true}\n';
 
 describe('T035 (rendered) — thinking-box header while reasoning still streams (Q6)', () => {
-  it('reads "Thinking..." while the reasoning is still streaming (RED: reads the DONE label)', async () => {
+  it('reads "Thinking" while the reasoning is still streaming (RED: reads the DONE label)', async () => {
     const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     await installRemoteModel({ name: 'Ollama', endpoint: 'http://localhost:11434', caps: { supportsThinking: false } });
     const stream = installRemoteStream(OLLAMA_PAUSED);

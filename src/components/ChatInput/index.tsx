@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useStopTapGuard } from './useStopTapGuard';
 import { View, Text, TextInput, Animated, Platform, ActionSheetIOS } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
@@ -16,7 +17,7 @@ import { QueueRow, type QueueActions, type QueueView } from './Toolbar';
 import { AttachmentPreview, useAttachments } from './Attachments';
 import { useVoiceInput } from './Voice';
 import { buildVoiceNoteHandlers } from './voiceNoteSend';
-import { QuickSettingsPopover, AttachPickerPopover } from './Popovers';
+import { QuickSettingsPopover, AttachPickerPopover, type AttachChoice } from './Popovers';
 import { useKeyboardAwarePopover } from './useKeyboardAwarePopover';
 import { useAppStore } from '../../stores';
 import { useRemoteServerStore } from '../../stores/remoteServerStore';
@@ -29,6 +30,8 @@ import { hardwareService } from '../../services/hardware';
 import { bestInstalledVideoModel, videoPacksForPhone } from '../../services/phoneVideoPacks';
 import { AppSheet } from '../AppSheet';
 import { Button } from '../Button';
+import { StyleRow } from '../MediaStyles/StyleRow';
+import { NEW_CHAT_STYLE_KEY, useMediaStyleStore } from '../../stores/mediaStyleStore';
 
 type AssistantAvailability = 'no-pro' | 'needs-sync' | 'unavailable' | 'ready';
 
@@ -41,6 +44,8 @@ interface ChatInputProps {
   placeholder?: string;
   supportsVision?: boolean;
   conversationId?: string | null;
+  /** Space under the bar for the home indicator or nav bar; the composer's box runs down through it. */
+  bottomInset?: number;
   imageModelLoaded?: boolean;
   onImageModeChange?: (mode: ImageModeState) => void;
   /** Video is Pro. Called instead of turning video on when Pro is not active. */
@@ -129,13 +134,13 @@ const buildNoVisionAlert = (opts: {
   if (opts.needsRepair) {
     return showAlert(
       'Vision File Missing',
-      'This model supports vision, but its vision file has not been installed.\n\nOpen Download Manager and tap the wrench next to the model to download it.',
+      'This model supports vision, but its vision file has not been installed.\n\nOpen Downloads and tap the wrench next to the model to download it.',
       [
         { text: 'Cancel', onPress: opts.dismiss },
         ...(opts.onRepairVision
           ? [
               {
-                text: 'Go to Download Manager',
+                text: 'Open Downloads',
                 onPress: () => {
                   opts.dismiss();
                   opts.onRepairVision!();
@@ -164,6 +169,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   supportsVision = false,
   visionNeedsRepair = false,
   conversationId,
+  bottomInset = 0,
   imageModelLoaded = false,
   onImageModeChange,
   onVideoUpgrade,
@@ -193,6 +199,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const styles = useThemedStyles(createStyles);
   const [message, setMessage] = useState('');
   const [selection, setSelection] = useState({ start: 0, end: 0 });
+  // Focus draws light to the field (brand: its edge glows while you are inside it).
+  const [isFocused, setIsFocused] = useState(false);
   const [localAssistantEnabled, setLocalAssistantEnabled] = useState(false);
   const assistantEnabled = assistantSelected ?? localAssistantEnabled;
   const setAssistantEnabled = (selected: boolean) => {
@@ -202,6 +210,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [assistantTransitioning, setAssistantTransitioning] = useState(false);
   const [assistantGateOpen, setAssistantGateOpen] = useState(false);
   const [imageMode, setImageMode] = useState<ImageModeState>('auto');
+  // Image or video mode shows the styles for that kind; the chat remembers the one it chose.
+  const styleKind = imageMode === 'force' ? 'image' : imageMode === 'video' ? 'video' : null;
+  const styleChatKey = conversationId ?? NEW_CHAT_STYLE_KEY;
+  const chosenStyle = useMediaStyleStore(state =>
+    styleKind ? state.byChat[styleChatKey]?.[styleKind] : undefined,
+  );
+  const setChatStyle = useMediaStyleStore(state => state.setStyle);
+  // A pick folds the row to the line that names it; turning the mode off and on, or Clear, opens it again.
+  const [stylesShown, setStylesShown] = useState(true);
+  useEffect(() => {
+    if (styleKind) setStylesShown(true);
+  }, [styleKind]);
+  const pickStyle = (kind: 'image' | 'video', styleId: string | null) => {
+    setChatStyle(styleChatKey, kind, styleId);
+    setStylesShown(!styleId);
+  };
   const [voiceInteractionMode, setVoiceInteractionMode] = useState<VoiceRecordInteractionMode>('idle');
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const quickSettings = useKeyboardAwarePopover();
@@ -227,7 +251,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, []);
 
-  const { attachments, removeAttachment, clearAttachments, handlePickImage, handlePickDocument, addAudioAttachment } = useAttachments(setAlertState);
+  const { attachments, removeAttachment, clearAttachments, handlePickImage, pickFromCamera, pickFromLibrary, handlePickDocument, addAudioAttachment } = useAttachments(setAlertState);
   attachmentsRef.current = attachments;
   const interfaceMode = useUiModeStore((s) => s.interfaceMode);
   const isAudioMode = interfaceMode === 'audio';
@@ -275,7 +299,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     onTranscript: voiceHandlers.onTranscript,
     onAudioAttachment: voiceHandlers.onAudioAttachment,
     onAutoSend: voiceHandlers.onAutoSend,
-  });
+  });  // The mic takes Stop's place when a reply ends; a late Stop tap must not start recording.
+  const { start: startRecordingAfterStop, resting: micResting } = useStopTapGuard(isGenerating, startRecording);
+
   const voiceProcessingState = deriveVoiceProcessingState({
     isRecording,
     isModelLoading,
@@ -483,22 +509,30 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             onPress: onAssistantSetupSync,
           };
 
+  // Each picker reports its own failure to the user; a rejection here is only logged.
+  const settle = (picking: Promise<unknown>) => {
+    picking.catch(reason => logger.warn('[COMPOSER-SM] attach failed:', reason));
+  };
+  // One list, one step, on both phones: a photo is taken or chosen right here, not behind a second
+  // menu (Mac, 2026-11-07: Photo, then Camera or Photo Library, asked twice). A model that can't see
+  // keeps a Photo row, which says why and offers the repair when the vision file is broken.
+  const attachChoices: AttachChoice[] = supportsVision
+    ? [
+        { key: 'camera', label: 'Take photo', icon: 'camera', onPress: () => settle(pickFromCamera()) },
+        { key: 'library', label: 'Choose photo', icon: 'image', onPress: () => settle(pickFromLibrary()) },
+        { key: 'document', label: 'Document', icon: 'file', onPress: () => settle(handlePickDocument()) },
+      ]
+    : [
+        { key: 'photo', label: 'Photo', icon: 'image', onPress: handleVisionPress },
+        { key: 'document', label: 'Document', icon: 'file', onPress: () => settle(handlePickDocument()) },
+      ];
+
   const handleAttachPress = () => {
     logger.log(`[COMPOSER-SM] attach pressed platform=${Platform.OS} supportsVision=${supportsVision}`);
     if (Platform.OS === 'ios') {
-      const options = supportsVision
-        ? ['Photo', 'Document', 'Cancel']
-        : ['Document', 'Cancel'];
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options, cancelButtonIndex: options.length - 1 },
-        index => {
-          if (supportsVision) {
-            if (index === 0) handleVisionPress();
-            else if (index === 1) handlePickDocument();
-          } else {
-            if (index === 0) handlePickDocument();
-          }
-        },
+      const options = [...attachChoices.map(choice => choice.label), 'Cancel'];
+      ActionSheetIOS.showActionSheetWithOptions({ options, cancelButtonIndex: options.length - 1 }, index =>
+        attachChoices[index]?.onPress(),
       );
     } else {
       attachPicker.show();
@@ -515,6 +549,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   if (isAudioMode && AudioInput) {
     return (
       <>
+      {/* The composer owns the footer inset; this branch returns before it, so it clears the home indicator here. */}
+      <View style={{ paddingBottom: bottomInset }}>
       <AudioInput
         styles={styles}
         disabled={disabled}
@@ -537,7 +573,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         isTranscribing={isTranscribing}
         partialResult={partialResult}
         error={error}
-        onStartRecording={startRecording}
+        onStartRecording={startRecordingAfterStop}
         onStopRecording={stopRecording}
         onCancelRecording={cancelRecording}
         onStop={onStop}
@@ -547,18 +583,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         onToolsPress={onToolsPress}
         onMcpPress={onMcpPress}
         mcpToolCount={mcpToolCount}
-        onVisionPress={handleVisionPress}
-        onPickDocument={handlePickDocument}
+        attachChoices={attachChoices}
         onAttachPress={handleAttachPress}
         attachPicker={attachPicker}
         voicePicker={voicePicker}
         quickSettings={quickSettings}
-        supportsVision={supportsVision}
         alertState={alertState}
         setAlertState={setAlertState}
         assistantSelected={assistantEnabled}
         onAssistantPress={handleAssistantPress}
       />
+      </View>
       <AppSheet
         sheet="assistant-gate"
         visible={assistantGateOpen}
@@ -596,10 +631,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   ) : isGenerating && onStop ? (
     <TouchableOpacity
       testID="stop-button"
+      accessibilityRole="button"
+      accessibilityLabel="Stop reply"
       style={[styles.circleButton, styles.circleButtonStop]}
       onPress={handleStop}
     >
-      <Icon name="square" size={18} color={colors.background} />
+      <Icon name="square" size={16} color={colors.text} />
     </TouchableOpacity>
   ) : (
     <VoiceRecordButton
@@ -610,8 +647,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       asSendButton
       partialResult={partialResult}
       error={error}
-      disabled={disabled}
-      onStartRecording={startRecording}
+      disabled={disabled || micResting}
+      onStartRecording={startRecordingAfterStop}
       onStopRecording={stopRecording}
       onCancelRecording={cancelRecording}
       onInteractionModeChange={setVoiceInteractionMode}
@@ -620,18 +657,36 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <View style={styles.container}>
+      <View style={styles.aboveComposer}>
+        <QueueRow queue={queue} actions={queueActions} />
+        {transcriptionNotice ? (
+          <Text style={styles.transcriptionNotice} testID="transcription-notice">
+            {transcriptionNotice}
+          </Text>
+        ) : null}
+      </View>
+      {/* One box across the full width, down to the screen's bottom edge; in image or video mode the styles
+          are its top, the input and send below. */}
+      {/* Full width down to the screen's bottom edge: the home-indicator inset is padding inside it. */}
+      <View style={[styles.composer, isFocused && styles.composerFocused, { paddingBottom: 8 + bottomInset }]}>
+      {/* What you attach sits inside the box it goes with, on the same surface (brand Mobile profile;
+          Mac, 2026-11-06: a photo above the composer read as a separate white tile). */}
       <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
-      <QueueRow queue={queue} actions={queueActions} />
+      {styleKind && (stylesShown || chosenStyle) ? (
+        <StyleRow
+          attached
+          collapsed={!stylesShown}
+          kind={styleKind}
+          selectedId={chosenStyle}
+          onChange={styleId => pickStyle(styleKind, styleId)}
+        />
+      ) : null}
+      {/* Scribe's fix for the word at the caret, or Improve for a selection: inside the box it acts on. */}
       {ScribeBar && !showVoiceStatus ? (
         <ScribeBar text={message} selection={selection} onChangeText={setMessage} />
       ) : null}
-      {transcriptionNotice ? (
-        <Text style={styles.transcriptionNotice} testID="transcription-notice">
-          {transcriptionNotice}
-        </Text>
-      ) : null}
       <View style={styles.mainRow}>
-        <View style={styles.pill}>
+        <View style={[styles.pill, styles.pillInComposer]} testID="composer-pill" accessibilityState={{ selected: isFocused }}>
           {showVoiceStatus ? (
             <RecordingHint
               awaitingSpeech={isAwaitingSpeech}
@@ -655,11 +710,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 loading={assistantTransitioning}
                 style={styles.assistantButton}
                 icon={<GodIcon
-                  size={16}
+                  size={19}
                   fill={assistantEnabled ? colors.primary : 'none'}
-                  stroke={assistantEnabled ? 'none' : colors.textDisabled}
-                  strokeWidth={1}
-                  color={assistantEnabled ? colors.primary : colors.textDisabled}
+                  stroke={assistantEnabled ? 'none' : colors.textSecondary}
+                  strokeWidth={1.5}
+                  color={assistantEnabled ? colors.primary : colors.textSecondary}
                 />}
               />
               <TextInput
@@ -670,7 +725,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onChangeText={setMessage}
                 onSelectionChange={e => setSelection(e.nativeEvent.selection)}
                 placeholder={
-                  imageMode === 'video' ? 'Describe a video' : placeholder
+                  imageMode === 'video' ? 'Describe a video' : imageMode === 'force' ? 'Describe a picture' : placeholder
                 }
                 placeholderTextColor={colors.textMuted}
                 multiline
@@ -678,6 +733,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 editable={!disabled}
                 blurOnSubmit={false}
                 returnKeyType="default"
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
               >
                 {ScribeText ? <ScribeText text={message} /> : null}
               </TextInput>
@@ -698,6 +755,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
         {actionButton}
       </View>
+      </View>
 
       {Platform.OS !== 'ios' && (
         <AttachPickerPopover
@@ -705,9 +763,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           onClose={attachPicker.hide}
           anchorY={attachPicker.anchor.y}
           anchorX={attachPicker.anchor.x}
-          supportsVision={supportsVision}
-          onPhoto={handleVisionPress}
-          onDocument={handlePickDocument}
+          choices={attachChoices}
         />
       )}
 

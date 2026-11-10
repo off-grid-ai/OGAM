@@ -5,13 +5,13 @@ import {
   hideAlert,
 } from '../../components';
 import { llmService, activeModelService, modelManager, generationService } from '../../services';
-import { isModelReady, activeLocalTextCapabilities, activeTextCapabilities, backendFallbackNotice } from '../../services/engines';
-import { useAppStore } from '../../stores';
+import { isModelReady, activeLocalTextCapabilities, activeTextCapabilities, backendFallbackNotice, lowMemoryNotice } from '../../services/engines';
+import { useAppStore, useChatStore } from '../../stores';
 import { DownloadedModel, RemoteModel, ONNXImageModel, isLiteRTModel } from '../../types';
 import logger from '../../utils/logger';
 import { ModelReadyOutcome, reasonFromLoadError } from './modelReadiness';
 import { isOverridableMemoryError } from '../../services/modelLoadErrors';
-import { loadModelWithOverride } from '../../services/loadModelWithOverride';
+import { loadModelWithOverride, memoryRefusalAlert } from '../../services/loadModelWithOverride';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
 
@@ -63,25 +63,29 @@ function addSystemMsg(
   if (!deps.activeConversationId || !deps.settings.showGenerationDetails) return;
   deps.addMessage(deps.activeConversationId, {
     role: 'assistant',
-    content: `_${content}_`,
+    content,
     isSystemInfo: true,
   });
 }
 
 /**
- * Surface a silent backend downgrade after a successful load — NOT gated on showGenerationDetails:
+ * Surface a silent backend downgrade, or low-memory mode, after a successful load — NOT gated on showGenerationDetails:
  * a user who explicitly selected GPU and got CPU must see it without any debug setting (the
  * device-reported "Backend=GPU but the turn ran on CPU" class). The verdict is owned by the
  * engine layer (engines.backendFallbackNotice); this only renders it.
  */
-function addBackendFallbackMsg(deps: Pick<ModelActionDeps, 'activeModel' | 'activeConversationId' | 'addMessage'>) {
-  const notice = backendFallbackNotice(deps.activeModel);
-  if (!notice || !deps.activeConversationId) return;
-  deps.addMessage(deps.activeConversationId, {
-    role: 'assistant',
-    content: `_${notice}_`,
-    isSystemInfo: true,
-  });
+function addBackendFallbackMsg(deps: Pick<ModelActionDeps, 'activeModel' | 'addMessage'>) {
+  // The chat as it is now: a first send creates the chat after these deps were taken, so their id is
+  // still null and the notice was dropped.
+  const conversationId = useChatStore.getState().activeConversationId;
+  for (const notice of [backendFallbackNotice(deps.activeModel), lowMemoryNotice(deps.activeModel)]) {
+    if (!notice || !conversationId) continue;
+    deps.addMessage(conversationId, {
+      role: 'assistant',
+      content: notice,
+      isSystemInfo: true,
+    });
+  }
 }
 
 async function doLoadTextModel(deps: ModelActionDeps, opts?: { override?: boolean }): Promise<boolean> {
@@ -150,32 +154,29 @@ export async function initiateModelLoad(
       // That is overridable — offer "Load Anyway" (force the load) rather than a
       // dead-end "Failed to load model" the user can only dismiss.
       if (isOverridableMemoryError(error)) {
-        deps.setAlertState(showAlert(
-          'Insufficient Memory',
-          `${detail}\n\nWould you like to override these safeguards and load it anyway?`,
-          [
-            {
-              text: 'Cancel', style: 'cancel', onPress: () => {
-                deps.setAlertState(hideAlert());
-                activeModelService.keepLoadedTextModelSelected();
-              },
-            },
-            {
-              text: 'Load Anyway', style: 'destructive', onPress: () => {
-                deps.setAlertState(hideAlert());
-                deps.setIsModelLoading(true);
-                deps.setLoadingModel(activeModel);
-                deps.modelLoadStartTimeRef.current = Date.now();
-                waitForRenderFrame()
-                  .then(() => doLoadTextModel(deps, { override: true }))
-                  // Resume once the load resolves — don't gate on isModelLoaded() (races
-                  // false after a multimodal load, dropping the resume). See the sibling path.
-                  .then(loaded => { if (loaded) onLoadedResume?.(); })
-                  .catch((e) => logger.error('[ModelLoad] Load Anyway resume failed:', e));
-              },
-            },
-          ],
-        ));
+        deps.setAlertState(memoryRefusalAlert(detail, {
+          onCancel: () => {
+            deps.setAlertState(hideAlert());
+            activeModelService.keepLoadedTextModelSelected();
+          },
+          onChooseModel: () => {
+            deps.setAlertState(hideAlert());
+            activeModelService.keepLoadedTextModelSelected();
+            deps.setShowModelSelector(true);
+          },
+          onTryAnyway: () => {
+            deps.setAlertState(hideAlert());
+            deps.setIsModelLoading(true);
+            deps.setLoadingModel(activeModel);
+            deps.modelLoadStartTimeRef.current = Date.now();
+            waitForRenderFrame()
+              .then(() => doLoadTextModel(deps, { override: true }))
+              // Resume once the load resolves — don't gate on isModelLoaded() (races
+              // false after a multimodal load, dropping the resume). See the sibling path.
+              .then(loaded => { if (loaded) onLoadedResume?.(); })
+              .catch((e) => logger.error('[ModelLoad] Load Anyway resume failed:', e));
+          },
+        }));
         return { ok: false, reason: 'insufficient-memory', detail, alerted: true };
       }
       deps.setAlertState(showAlert('Error', `Failed to load model: ${detail}`));
@@ -230,6 +231,12 @@ export async function ensureTextModelForChatFn(deps: {
       onSuccess: () => {
         if (retrying) deps.resumePendingMessage();
         else loadedNow = true;
+      },
+      // The way forward from a refusal: pick a model that fits. The waiting turn goes out after the pick.
+      onChooseModel: () => {
+        deps.setAlertState(hideAlert());
+        activeModelService.keepLoadedTextModelSelected();
+        deps.setShowModelSelector(true);
       },
     },
   );

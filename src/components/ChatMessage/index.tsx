@@ -1,7 +1,7 @@
 import { useAppStore } from '../../stores';
 import { videoGenerationMeta } from '../../utils/modelHelpers';
 import React, { useEffect, useState } from 'react';
-import { View, Text, Clipboard } from 'react-native';
+import { View, Text, Clipboard, Keyboard } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -21,16 +21,18 @@ import { createStyles } from './styles';
 import { MessageAttachments } from './components/MessageAttachments';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { MessageContent } from './components/MessageContent';
-import { GenerationMeta } from './components/GenerationMeta';
+import { TurnDetails, TurnDetailsToggle } from './components/GenerationMeta';
 import { MessageOverlays } from './components/MessageOverlays';
 import { MarkdownText } from '../MarkdownText';
 import { formatTime, formatDuration, buildMessageData } from './utils';
+import { RestyleButton } from '../MediaStyles/RestyleButton';
+import { mediaStyle } from '@offgrid/models';
+import { useChatStore } from '../../stores/chatStore';
 import { ThinkingBlock } from './components/ThinkingBlock';
 import {
   ToolResultMessage,
   ToolCallMessage,
   SystemInfoMessage,
-  RoutedToolsRow,
   SyncedToolArtifacts,
 } from './components/ToolMessages';
 import type { ChatMessageProps } from './types';
@@ -48,6 +50,27 @@ type MetaRowProps = {
   metaExtra?: React.ReactNode;
 };
 
+/** A picture this chat made, as opposed to one the person attached. */
+function isChatGeneratedImage(message: Message): boolean {
+  return (
+    message.role === 'assistant' &&
+    !!message.attachments?.some(attachment => attachment.type === 'image') &&
+    /^Generated image for:/i.test(message.content.trim())
+  );
+}
+
+/** The style a picture or clip turn was made with, by its shared name. */
+function turnStyleName(message: Message): string | undefined {
+  if (!message.mediaStyleId || (message.turnKind !== 'image' && message.turnKind !== 'video')) return undefined;
+  return mediaStyle(message.turnKind, message.mediaStyleId)?.name;
+}
+
+const ImageRestyle: React.FC<{ show: boolean; conversationId: string | null; messageId: string }> = ({
+  show,
+  conversationId,
+  messageId,
+}) => (show && conversationId ? <RestyleButton kind="image" conversationId={conversationId} messageId={messageId} /> : null);
+
 const MessageMetaRow: React.FC<MetaRowProps> = ({
   message,
   styles,
@@ -58,6 +81,9 @@ const MessageMetaRow: React.FC<MetaRowProps> = ({
 }) => (
   <View testID="message-meta-row" style={styles.metaRow}>
     <Text style={styles.timestamp}>{formatTime(message.timestamp)}</Text>
+    {turnStyleName(message) ? (
+      <Text testID="message-style" style={styles.timestamp}>{turnStyleName(message)}</Text>
+    ) : null}
     {message.generationTimeMs != null && message.role === 'assistant' && (
       <Text style={styles.generationTime}>
         {formatDuration(message.generationTimeMs)}
@@ -65,7 +91,12 @@ const MessageMetaRow: React.FC<MetaRowProps> = ({
     )}
     {metaExtra}
     {showActions && !isStreaming && (
-      <TouchableOpacity style={styles.actionHint} onPress={onMenuOpen}>
+      <TouchableOpacity
+        style={styles.actionHint}
+        onPress={onMenuOpen}
+        accessibilityRole="button"
+        accessibilityLabel="Message actions"
+      >
         <Text style={styles.actionHintText}>•••</Text>
       </TouchableOpacity>
     )}
@@ -120,9 +151,9 @@ const ToolCallWithThinking: React.FC<{
 const TimelineThinkingBlock: React.FC<{
   text: string;
   styles: ReturnType<typeof createStyles>;
-  isStreaming: boolean;
-}> = ({ text, styles, isStreaming }) => {
-  const [expanded, setExpanded] = useState(isStreaming);
+}> = ({ text, styles }) => {
+  // Open by default, the same as a plain turn's reasoning and as on Desktop.
+  const [expanded, setExpanded] = useState(true);
   return (
     <ThinkingBlock
       parsedContent={{
@@ -141,8 +172,7 @@ const SyncedAssistantTimeline: React.FC<{
   message: Message;
   styles: ReturnType<typeof createStyles>;
   colors: ReturnType<typeof useTheme>['colors'];
-  isStreaming: boolean;
-}> = ({ message, styles, colors, isStreaming }) => (
+}> = ({ message, styles, colors }) => (
   <>
     {message.timeline?.map((entry, index) => {
       if (entry.kind === 'thinking') {
@@ -151,7 +181,6 @@ const SyncedAssistantTimeline: React.FC<{
             key={`thinking:${index}`}
             text={entry.text}
             styles={styles}
-            isStreaming={isStreaming}
           />
         );
       }
@@ -260,6 +289,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       message.attachments?.length &&
       message.attachments.every(attachment => attachment.type === 'video'),
   );
+  // A picture this chat made (not one the person attached): Restyle remakes it in another style.
+  const isGeneratedImage = isChatGeneratedImage(message);
+  const conversationId = useChatStore(state => state.activeConversationId);
   // Video is Pro: Continue / New shot / Make it a story, and film cards, fill this slot.
   const VideoActions = useSlot(SLOTS.messageVideoActions);
   const showVideoActions = Boolean(
@@ -279,14 +311,25 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const showTurnFooter =
     !hideProse && !isUser && !isStreaming && hasVisibleAnswer;
   const cutoffNote = cutoffNoteFor(message.generationMeta);
+  const routedToolNames = message.generationMeta?.routedToolNames;
+  // How the reply was made and the tools it was offered are developer detail: one "Details" in the
+  // time row opens both, instead of two rows under every reply (hand test 64).
+  const hasTurnDetails = showTurnFooter && showGenerationDetails && Boolean(generationMeta || routedToolNames?.length);
   return (
     <TouchableOpacity
       testID={isUser ? 'user-message' : 'assistant-message'}
+      // Not one accessible block: that folded "Message actions" into the message's label, so a
+      // screen reader could not reach it as a button (hand test 39). The parts are read in order.
+      accessible={false}
       style={[
         styles.container,
         isUser ? styles.userContainer : styles.assistantContainer,
       ]}
       activeOpacity={0.8}
+      // The row fills the list's width, so it catches most taps on the list. With the list's
+      // keyboardShouldPersistTaps="handled" a tap the row swallows kept the keyboard up; a tap on
+      // the message closes it, as a tap on the empty list does. Controls inside take their own taps.
+      onPress={() => Keyboard.dismiss()}
       onLongPress={onLongPress}
       delayLongPress={300}
     >
@@ -294,6 +337,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         <View style={styles.toolCallReplyContent}>
           <Accordion
             key={isStreaming ? 'live' : 'done'}
+            // Desktop's words for the work behind a reply (ChatToolRows STATE_LABELS).
             title={
               isStreaming
                 ? 'Working'
@@ -312,7 +356,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 message={message}
                 styles={styles}
                 colors={colors}
-                isStreaming={Boolean(isStreaming)}
               />
             )}
             {!!message.toolArtifacts?.length && !timelineHasTools && (
@@ -389,6 +432,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       )}
 
       {showVideoActions && VideoActions && <VideoActions message={message} />}
+      <ImageRestyle show={isGeneratedImage && !isStreaming} conversationId={conversationId} messageId={message.id} />
 
       {!message.isThinking && !isStreaming && !hideProse && hasVisibleAnswer && (
         <MessageMetaRow
@@ -397,17 +441,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           isStreaming={isStreaming}
           showActions={showActions}
           onMenuOpen={onMenuOpen}
-          metaExtra={metaExtra}
-        />
-      )}
-
-      {showTurnFooter && (
-        <RoutedToolsRow
-          message={message}
-          isUser={isUser}
-          isStreaming={isStreaming}
-          styles={styles}
-          colors={colors}
+          metaExtra={hasTurnDetails ? (
+            <>
+              {metaExtra}
+              <TurnDetailsToggle messageId={message.id} styles={styles} colors={colors} />
+            </>
+          ) : metaExtra}
         />
       )}
 
@@ -418,12 +457,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         </View>
       )}
 
-      {showTurnFooter && showGenerationDetails && generationMeta && (
-        <GenerationMeta
+      {hasTurnDetails && (
+        <TurnDetails
           messageId={message.id}
           generationMeta={generationMeta}
+          toolNames={routedToolNames}
           styles={styles}
-          colors={colors}
         />
       )}
     </TouchableOpacity>
@@ -466,7 +505,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     return () => { current = false; };
   }, [showActionMenu]);
   const [isEditing, setIsEditing] = useState(false);
-  const [showThinking, setShowThinking] = useState(!!isStreaming);
+  // Open by default, as on Desktop: opening the turn's Working / Work done row shows the reasoning
+  // straight away; the Thinking row still folds it away.
+  const [showThinking, setShowThinking] = useState(true);
   const [showSupportingContext, setShowSupportingContext] = useState(false);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 

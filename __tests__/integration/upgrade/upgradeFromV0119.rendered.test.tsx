@@ -85,7 +85,8 @@ const QUESTION = 'Who killed Hector?';
 const ANSWER = 'Achilles killed Hector outside the walls of Troy [S1].';
 
 const WHISPER_ID = 'base.en';
-const WHISPER_NAME = 'Base';
+// The English-only build says so on screen; its stored name stays 'Base'.
+const WHISPER_NAME = 'Base English';
 const WHISPER_FILE = `${DOCS}/whisper-models/ggml-${WHISPER_ID}.bin`;
 const SPOKEN = 'remind me to reread book twenty two';
 
@@ -448,7 +449,7 @@ describe('an install upgraded from v0.0.119', () => {
     noCrash();
 
     // ── Gallery: the image v0.0.119 drew is there, and it loads from its file.
-    fireEvent.press(view.getByText('Image Gallery'));
+    fireEvent.press(view.getByText('Gallery'));
     await view.findByTestId('gallery-screen', {}, WAIT);
     const tile = await view.findByTestId(`gallery-image-${IMAGE_ID}`, {}, WAIT);
     expect(tile.props.accessibilityLabel).toBe(`Generated image loading: ${IMAGE_PROMPT}`);
@@ -484,11 +485,11 @@ describe('an install upgraded from v0.0.119', () => {
     expect(view.getByLabelText('Anonymous stats').props.value).toBe(false);
     expect(view.getByLabelText('Crash reports').props.value).toBe(false);
 
-    // ── Settings → Model Settings → Image Generation: the custom Image Steps value is kept.
+    // ── Settings → Model Settings → Image tab: the custom Image Steps value is kept.
     fireEvent.press(view.getByTestId('open-model-settings'));
-    const imageAccordion = await view.findByTestId('image-generation-accordion', {}, WAIT);
+    const imageTab = await view.findByTestId('model-settings-tab-image', {}, WAIT);
     expect(view.queryByTestId('image-steps-value')).toBeNull();
-    fireEvent.press(imageAccordion);
+    fireEvent.press(imageTab);
     const steps = await view.findByTestId('image-steps-value', {}, WAIT);
     expect(steps.props.children).toBe(String(CUSTOM_IMAGE_STEPS));
     noCrash();
@@ -496,21 +497,21 @@ describe('an install upgraded from v0.0.119', () => {
 
     // ── Settings → Storage opens.
     fireEvent.press(await waitFor(() => view.getByText('Storage'), WAIT));
-    await view.findByText('Storage Usage', {}, WAIT);
+    await view.findByText('Space on this phone', {}, WAIT);
     noCrash();
     // Its header's arrow (the button carries no label): the pressable beside the screen's title.
     const title = view.getAllByText('Storage').at(-1)!;
     let header = title.parent;
     while (header && !header.findAll(node => typeof node.props.onPress === 'function').length) header = header.parent;
     fireEvent.press(header!.findAll(node => typeof node.props.onPress === 'function')[0]!);
-    await waitFor(() => expect(view.queryByText('Storage Usage')).toBeNull(), WAIT);
+    await waitFor(() => expect(view.queryByText('Space on this phone')).toBeNull(), WAIT);
 
     // ── Home → Models: the speech-to-text model v0.0.119 downloaded is the one chosen.
     fireEvent.press(await waitFor(() => view.getByTestId('home-tab'), WAIT));
     expect(view.getByTestId('model-summary-speech').props.accessibilityState).toEqual({ selected: true });
     fireEvent.press(view.getByTestId('model-summary-speech-open'));
     await view.findByText('TRANSCRIPTION MODEL', {}, WAIT);
-    // English-only Base is the chosen row (the multilingual one shares its name and is not).
+    // English-only Base is the chosen row (the multilingual Base is a different model and is not).
     await waitFor(() =>
       expect(
         view.getAllByLabelText(WHISPER_NAME).filter(card => card.props.accessibilityState?.selected),
@@ -521,9 +522,15 @@ describe('an install upgraded from v0.0.119', () => {
 
     // ── The project's PDF answers a question in a project chat, and the answer cites it.
     await app.openProject(PROJECT);
-    fireEvent.press(view.getByTestId('project-tab-knowledge'));
-    expect(view.getByText(PDF_NAME)).toBeTruthy();
-    await app.newProjectChat();
+    // The project page's files row opens the knowledge base on its own screen; Back returns to the page.
+    fireEvent.press(view.getByTestId('project-files'));
+    const knowledgeBase = await view.findByTestId('knowledge-base-screen', {}, WAIT);
+    expect(rtl.within(knowledgeBase).getByText(PDF_NAME)).toBeTruthy();
+    fireEvent.press(rtl.within(knowledgeBase).getByLabelText('Back'));
+    await waitFor(() => expect(view.queryByTestId('knowledge-base-screen')).toBeNull(), WAIT);
+    // The project page's New chat.
+    fireEvent.press(await waitFor(() => view.getByTestId('project-new-chat'), WAIT));
+    await view.findByTestId('chat-input', {}, WAIT);
     expect(view.queryAllByRole('link')).toHaveLength(0);
     await app.ask(QUESTION, /Achilles killed Hector/, [
       {
@@ -549,6 +556,10 @@ describe('an install upgraded from v0.0.119', () => {
     const mic = await waitFor(() => view.getByTestId('voice-record-button'), WAIT);
     expect(mic.props.accessibilityLabel).toBe('Start voice recording');
     boundary.whisper!.setFileTranscript(SPOKEN);
+    // A mic tap right as a reply ends is taken as a late Stop tap and ignored (useStopTapGuard);
+    // a person reaching for the mic takes longer than that grace.
+    const { STOP_TAP_GRACE_MS } = require('../../../src/components/ChatInput/useStopTapGuard');
+    await new Promise(resolve => setTimeout(resolve, STOP_TAP_GRACE_MS));
     fireEvent(mic, 'responderGrant', MIC_GRANT);
     await waitFor(() => expect(boundary.whisper!.hasRealtimeSubscriber()).toBe(true), WAIT);
     await waitFor(

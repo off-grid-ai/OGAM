@@ -6,6 +6,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { Message } from '../../../types';
 import { useAccordionExpanded } from '../../../stores';
 import { useTheme } from '../../../theme';
+import { toolDisplayName } from '../../../services/tools/toolDisplayName';
 
 interface GenerationMetaProps {
   messageId: string;
@@ -20,38 +21,44 @@ function formatOptionalMeta(meta: NonNullable<Message['generationMeta']>, tps: n
   const m = meta;
   const contextLabel = m.contextPromptTokens
     ? m.contextWindowTokens
-      ? `Context: ${m.contextEstimate ? '~' : ''}${Math.round((m.contextPromptTokens / m.contextWindowTokens) * 100)}% used`
-      : `Context: ${m.contextEstimate ? '~' : ''}${m.contextPromptTokens} tokens used (limit unknown)`
+      ? `${m.contextEstimate ? '~' : ''}${Math.round((m.contextPromptTokens / m.contextWindowTokens) * 100)}% of its memory used`
+      : `${m.contextEstimate ? '~' : ''}${m.contextPromptTokens} tokens of memory used`
     : undefined;
   const entries: Array<[string, string | undefined, number?]> = [
     ['context', contextLabel],
     ['model', m.modelName, 1],
-    ['load', m.modelLoadTimeSeconds != null && m.modelLoadTimeSeconds > 0 ? `load ${m.modelLoadTimeSeconds.toFixed(1)}s` : undefined],
-    ['prefill', m.prefillTokensPerSecond != null && m.prefillTokensPerSecond > 0 ? `prefill ${m.prefillTokensPerSecond.toFixed(0)} tok/s` : undefined],
-    ['tps', tps != null && tps > 0 ? `${tps.toFixed(1)} tok/s` : undefined],
-    ['ttft', m.timeToFirstToken != null && m.timeToFirstToken > 0 ? `TTFT ${m.timeToFirstToken.toFixed(2)}s` : undefined],
-    ['tokens', m.tokenCount != null && m.tokenCount > 0 ? `${m.tokenCount} tokens` : undefined],
+    ['load', m.modelLoadTimeSeconds != null && m.modelLoadTimeSeconds > 0 ? `loaded in ${m.modelLoadTimeSeconds.toFixed(1)}s` : undefined],
+    ['prefill', m.prefillTokensPerSecond != null && m.prefillTokensPerSecond > 0 ? `read your message at ${m.prefillTokensPerSecond.toFixed(0)} tokens a second` : undefined],
+    ['tps', tps != null && tps > 0 ? `wrote ${tps.toFixed(1)} tokens a second` : undefined],
+    ['ttft', m.timeToFirstToken != null && m.timeToFirstToken > 0 ? `first word in ${m.timeToFirstToken.toFixed(2)}s` : undefined],
+    ['tokens', m.tokenCount != null && m.tokenCount > 0 ? `${m.tokenCount} tokens long` : undefined],
     ['steps', m.steps == null ? undefined : `${m.steps} steps`],
     ['cfg', m.guidanceScale == null ? undefined : `cfg ${m.guidanceScale}`],
     ['res', m.resolution],
     ['frames', m.frames == null ? undefined : `${m.frames} frames`],
     ['fps', m.fps == null ? undefined : `${m.fps} fps`],
-    ['seed', m.seed == null ? undefined : `Seed: ${m.seed}`],
-    ['cache', m.cacheType ? `KV ${m.cacheType}` : undefined],
+    ['seed', m.seed == null ? undefined : `seed ${m.seed}`],
   ];
   return entries
     .filter((e): e is [string, string, number?] => e[1] != null)
     .map(([key, label, maxLines]) => ({ key, label, maxLines }));
 }
 
+const parenthesised = (text: string) => ` (${text})`;
+/** The line reads as a sentence: it starts with a capital (hand test 71). */
+const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
 function buildMetaItems(
   meta: NonNullable<Message['generationMeta']>,
   tps: number | null | undefined,
 ): MetaItem[] {
-  const layers = meta.gpuLayers != null && meta.gpuLayers > 0 ? ` (${meta.gpuLayers}L)` : '';
-  const backend = meta.gpuBackend || (meta.gpu === undefined ? undefined : meta.gpu ? 'GPU' : 'CPU');
+  // Where it ran, in words: "ran on the GPU (Metal)", not "Metal (99L)" (hand test 69).
+  const onGpu = meta.gpu ?? Boolean(meta.gpuBackend);
+  const engine = meta.gpuBackend && onGpu ? parenthesised(meta.gpuBackend) : '';
+  const where = meta.gpu === undefined && !meta.gpuBackend ? undefined
+    : `ran on the ${onGpu ? 'GPU' : 'CPU'}${engine}`;
   return [
-    ...(backend ? [{ key: 'backend', label: `${backend}${layers}` }] : []),
+    ...(where ? [{ key: 'backend', label: where }] : []),
     ...formatOptionalMeta(meta, tps),
   ];
 }
@@ -93,6 +100,56 @@ export function GenerationMeta({ messageId, generationMeta, styles, colors }: Re
           </View>
         )}
       </View>
+    </Animated.View>
+  );
+}
+
+const turnDetailsKey = (messageId: string) => `turn-details:${messageId}`;
+
+/**
+ * Details in the time row: an icon with an accessible name, so the whole meta stays one line
+ * (screen review: no words under every reply). Its panel is TurnDetails below.
+ */
+export function TurnDetailsToggle({ messageId, styles, colors }: Readonly<{ messageId: string; styles: any; colors: ReturnType<typeof useTheme>['colors'] }>) {
+  const [expanded, toggle] = useAccordionExpanded(turnDetailsKey(messageId));
+  return (
+    <TouchableOpacity
+      testID="generation-details-toggle"
+      accessibilityRole="button"
+      accessibilityLabel="Details"
+      accessibilityState={{ expanded }}
+      style={styles.detailsToggle}
+      onPress={toggle}
+      activeOpacity={0.6}
+    >
+      <Icon name="info" size={14} color={expanded ? colors.text : colors.textMuted} />
+    </TouchableOpacity>
+  );
+}
+
+/** What the time row's "Details" opens, on a quiet surface: how the reply was made, then the tools it was offered. */
+export function TurnDetails({ messageId, generationMeta, toolNames, styles }: Readonly<{
+  messageId: string;
+  generationMeta?: Message['generationMeta'];
+  toolNames?: string[];
+  styles: any;
+}>) {
+  const [expanded] = useAccordionExpanded(turnDetailsKey(messageId));
+  if (!expanded) return null;
+  const rawTps = generationMeta?.decodeTokensPerSecond ?? generationMeta?.tokensPerSecond;
+  const items = generationMeta ? buildMetaItems(generationMeta, rawTps && rawTps > 0 ? rawTps : undefined) : [];
+  return (
+    <Animated.View entering={FadeIn.duration(200)} style={styles.turnDetails}>
+      {items.length > 0 && (
+        <Text testID="generation-meta" style={styles.turnDetailsText}>
+          {sentence(items.map(item => item.label).join(' · '))}
+        </Text>
+      )}
+      {toolNames?.length ? (
+        <Text testID="tools-sent-list" style={styles.turnDetailsText}>
+          {`Tools it had for this reply: ${toolNames.map(toolDisplayName).join(', ')}`}
+        </Text>
+      ) : null}
     </Animated.View>
   );
 }

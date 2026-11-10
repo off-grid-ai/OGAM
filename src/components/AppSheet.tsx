@@ -481,11 +481,14 @@ export const AppSheet: React.FC<AppSheetProps> = ({
               {closeLabel ? (
                 <TouchableOpacity
                   testID="app-sheet-close"
+                  style={styles.headerCloseButton}
                   onPress={() => {
                     if (!dismissibleRef.current) return;
                     (onHeaderClosePress || dismiss)();
                   }}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  // A 44 pt frame, whatever the word's size (hand test 34 measured 34 x 16).
+                  accessibilityRole="button"
+                  accessibilityLabel={closeLabel}
                 >
                   <Text style={styles.headerClose}>{closeLabel}</Text>
                 </TouchableOpacity>

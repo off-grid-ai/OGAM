@@ -11,12 +11,13 @@
  *
  * See docs/design/MODEL_ROUTING.md §5.1–5.2.
  */
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { hardwareService } from '../hardware';
 import logger from '../../utils/logger';
 import {
   planEviction,
   admissionBudgetMB,
+  dirtyHeadroomMB,
   hasDirtyPressure,
   exceedsDirtyCeiling,
   fitsWithoutEviction,
@@ -34,8 +35,6 @@ import {
 import {
   UnloadFn,
   MIN_BUDGET_MB,
-  DIRTY_AVAILABILITY_HEADROOM_MB,
-  AGGRESSIVE_DIRTY_HEADROOM_MB,
   RegisteredResident,
   ResidentSpec,
   EnsureResult,
@@ -220,10 +219,7 @@ class ModelResidencyManager {
       dirtyPressure: hasDirtyPressure(residents, spec),
       residentMB: residents.reduce((sum, r) => sum + r.sizeMB, 0),
       availableMB: hardwareService.getAvailableMemoryGB() * 1024,
-      headroomMB:
-        this.loadPolicy === 'aggressive'
-          ? AGGRESSIVE_DIRTY_HEADROOM_MB
-          : DIRTY_AVAILABILITY_HEADROOM_MB,
+      headroomMB: dirtyHeadroomMB(hardwareService.getTotalMemoryGB() * 1024, this.loadPolicy, Platform.OS),
     });
   }
 
@@ -280,6 +276,22 @@ class ModelResidencyManager {
    * (e.g. activeModelService) but want the manager to enforce memory. Returns
    * the evicted keys.
    */
+  /**
+   * The eviction plan for `spec`. A model that prefers a copy first tries to fit as one in real free
+   * RAM, unloading our other models if that is enough; otherwise it plans as mapped weights (physical
+   * RAM). It never waits on the budget: when even that does not fit, everything else is unloaded and
+   * it loads mapped. Only the shared fit rule's "Too big" refuses it (the llm pre-load check).
+   */
+  private planFor(spec: ResidentSpec, residents: Resident[], budgetMB: number, singleModel: boolean) {
+    if (!spec.prefersCopy || spec.dirtyMemory) return planEviction(residents, spec, budgetMB, { singleModel });
+    if (!spec.startsMapped) {
+      const copyPlan = planEviction(residents, spec, this.budgetForSpec({ ...spec, dirtyMemory: true }), { singleModel });
+      if (copyPlan.fits) return copyPlan;
+    }
+    const mappedPlan = planEviction(residents, spec, budgetMB, { singleModel });
+    return mappedPlan.fits ? mappedPlan : { ...planEviction(residents, spec, budgetMB, { singleModel: true }), fits: true };
+  }
+
   async makeRoomFor(
     spec: ResidentSpec,
     opts?: { override?: boolean },
@@ -301,7 +313,7 @@ class ModelResidencyManager {
     // also evicts everything to free maximum RAM. Aggressive is NOT single-model — it
     // co-resides like balanced, just with a larger RAM budget.
     const singleModel = this.loadPolicy === 'conservative' || override;
-    const plan = planEviction(residents, spec, budgetMB, { singleModel });
+    const plan = this.planFor(spec, residents, budgetMB, singleModel);
     // [MEM-SM] trace (kept forever): the exact numbers behind every fit decision.
     // budgetForSpec already folds in the live os_proc budget under dirty pressure, so
     // there's one owner of the memory math - planEviction enforces it. Also log the raw

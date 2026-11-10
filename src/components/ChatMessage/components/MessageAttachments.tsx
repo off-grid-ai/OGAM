@@ -218,7 +218,7 @@ function AudioAttachment({
       ]}
     >
       <View style={styles.audioBadgeHeader}>
-        <Icon name="mic" size={14} color={isUser ? colors.background : colors.textSecondary} />
+        <Icon name="mic" size={14} color={colors.textSecondary} />
         <Text
           style={[styles.documentBadgeText, isUser ? styles.documentBadgeTextUser : styles.documentBadgeTextAssistant]}
         >
@@ -259,7 +259,7 @@ function ArrivingAttachment({
     >
       <LoadingDots
         size={5}
-        color={isUser ? colors.background : colors.textSecondary}
+        color={colors.textSecondary}
         testID={`attachment-pending-dots-${index}`}
       />
       <Text
@@ -344,7 +344,7 @@ export function MessageAttachments({
             }}
             activeOpacity={0.7}
           >
-            <Icon name="file-text" size={14} color={isUser ? colors.background : colors.textSecondary} />
+            <Icon name="file-text" size={14} color={colors.textSecondary} />
             <Text
               style={[
                 styles.documentBadgeText,

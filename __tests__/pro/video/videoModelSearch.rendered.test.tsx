@@ -70,7 +70,7 @@ async function videoTab(): Promise<AnalyticsApp> {
 it('a failed search says why', async () => {
   serveHuggingFace({ status: 503 });
   const { view, rtl } = await videoTab();
-  rtl.fireEvent.changeText(view.getByLabelText('Search video models on Hugging Face'), 'wan');
+  rtl.fireEvent.changeText(view.getByLabelText('Search video models'), 'wan');
   await view.findByText('Hugging Face search failed: HTTP 503', {}, { timeout: 10_000 });
 }, 60_000);
 

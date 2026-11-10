@@ -4,9 +4,13 @@
  * chat stores. ProjectDetail is a plain screen that names the project it was opened for, so a test
  * reads where a tap went. Only the device is faked (nativeBoundary).
  *
+ * `files: true` also runs the real knowledge base over the document engine's device boundary
+ * (harness/documentEngine), so a project's file count is read from real documents.
+ *
  * The test file must `jest.unmock('@react-navigation/native')`.
  */
 import { installNativeBoundary, requireRTL, GB } from './nativeBoundary';
+import { installDocumentEngine } from './documentEngine';
 
 type Rtl = ReturnType<typeof requireRTL>;
 
@@ -18,6 +22,8 @@ export interface ProjectsApp {
   open(name: string, params?: Record<string, unknown>): void;
   useProjectStore: typeof import('../../src/stores/projectStore').useProjectStore;
   useChatStore: typeof import('../../src/stores/chatStore').useChatStore;
+  /** The real knowledge base (only with `files: true`). */
+  knowledgeBase: typeof import('../../src/services/rag').knowledgeBase;
   /** Fill the editor's fields (only those given) and press Save. */
   fillAndSave(fields: { name?: string; description?: string; systemPrompt?: string }): Promise<void>;
 }
@@ -25,16 +31,22 @@ export interface ProjectsApp {
 export const PROJECT_FIELDS = {
   name: 'e.g., Spanish Learning, Code Review',
   description: 'Brief description of this project',
-  systemPrompt: 'Enter the instructions or context for the AI...',
+  systemPrompt: 'How should chats here answer, and what should they know?',
 } as const;
 
 export async function mountProjectsApp(opts: {
   /** The person removed the starter projects (through the store's own delete). */
   noStarterProjects?: boolean;
+  /** Run the real knowledge base, so projects can hold files. */
+  files?: boolean;
   /** Before the screens mount: write state through the stores' own actions. */
-  seed?: (stores: Pick<ProjectsApp, 'useProjectStore' | 'useChatStore'>) => void | Promise<void>;
+  seed?: (stores: Pick<ProjectsApp, 'useProjectStore' | 'useChatStore' | 'knowledgeBase'>) => void | Promise<void>;
 } = {}): Promise<ProjectsApp> {
-  installNativeBoundary({ ram: { platform: 'ios', totalBytes: 8 * GB, availBytes: 4 * GB } });
+  const boundary = installNativeBoundary({
+    fs: opts.files,
+    ram: { platform: 'ios', totalBytes: 8 * GB, availBytes: 4 * GB },
+  });
+  if (opts.files) installDocumentEngine(boundary.fs!);
   const React = require('react');
   const rtl = requireRTL();
   const nav = require('@react-navigation/native');
@@ -44,11 +56,12 @@ export async function mountProjectsApp(opts: {
   const { useChatStore } = require('../../src/stores/chatStore');
   const { ProjectsScreen } = require('../../src/screens/ProjectsScreen');
   const { ProjectEditScreen } = require('../../src/screens/ProjectEditScreen');
+  const { knowledgeBase } = require('../../src/services/rag');
 
   if (opts.noStarterProjects) {
     for (const project of [...useProjectStore.getState().projects]) await useProjectStore.getState().deleteProject(project.id);
   }
-  await opts.seed?.({ useProjectStore, useChatStore });
+  await opts.seed?.({ useProjectStore, useChatStore, knowledgeBase });
 
   const Stack = createNativeStackNavigator();
   const ref = nav.createNavigationContainerRef();
@@ -75,6 +88,7 @@ export async function mountProjectsApp(opts: {
     open: (name, params) => { rtl.act(() => { ref.navigate(name, params); }); },
     useProjectStore,
     useChatStore,
+    knowledgeBase,
     fillAndSave: async fields => {
       for (const key of ['name', 'description', 'systemPrompt'] as const) {
         const value = fields[key];

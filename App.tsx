@@ -12,6 +12,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { openPendingImprove, startScribeEntry } from './src/services/scribeEntry';
+import { AliveProvider } from './src/components/AliveProvider';
 import { AppNavigator } from './src/navigation';
 import { getRegisteredScreens } from './src/navigation/screenRegistry';
 import {
@@ -476,6 +477,8 @@ function App() {
   return (
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
+        {/* The alive layer hears every touch and scroll on the UI thread so the living field answers. */}
+        <AliveProvider>
         <SystemBars style={isDark ? 'light' : 'dark'} />
         {AppRoot ? <AppRoot /> : null}
         <NavigationContainer
@@ -523,6 +526,7 @@ function App() {
         </NavigationContainer>
         <AnalyticsConsentPrompt />
         {__DEV__ && showSyncStatusBar ? <DevSyncStrip /> : null}
+        </AliveProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

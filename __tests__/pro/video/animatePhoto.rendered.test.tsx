@@ -113,8 +113,29 @@ it('the Gallery\'s full-screen picture offers the same muted Animate and sheet',
   rtl.fireEvent.press(await view.findByTestId('home-tab'));
   rtl.fireEvent.press(await view.findByTestId('home-gallery-card', {}, { timeout: 10_000 }));
   rtl.fireEvent.press((await view.findAllByTestId(/^gallery-image-/, {}, { timeout: 10_000 }))[0]);
+  // The picture opens full screen; Animate sits in its sheet, with Save and Delete.
+  rtl.fireEvent.press(await view.findByTestId('gallery-image-more', {}, { timeout: 10_000 }));
   const animate = (await view.findAllByTestId('animate-photo', {}, { timeout: 10_000 })).pop()!;
   expect(animate.props.accessibilityHint).toMatch(/^Needs /);
   rtl.fireEvent.press(animate);
   await view.findByText('Animate needs Wan 2.2 (5B), Light, a 7.9 GB download.', {}, { timeout: 10_000 });
+}, 90_000);
+
+it('from the Gallery\'s picture, Animate opens the Animate screen over it; Back returns to the picture', async () => {
+  const app = await pictureInViewer();
+  const { view, rtl } = app;
+  app.models.install(LIGHT);
+  rtl.fireEvent.press(view.getAllByLabelText('Back').pop()!);
+  rtl.fireEvent.press(await view.findByTestId('home-tab'));
+  rtl.fireEvent.press(await view.findByTestId('home-gallery-card', {}, { timeout: 10_000 }));
+  rtl.fireEvent.press((await view.findAllByTestId(/^gallery-image-/, {}, { timeout: 10_000 }))[0]);
+  rtl.fireEvent.press(await view.findByTestId('gallery-image-more', {}, { timeout: 10_000 }));
+  rtl.fireEvent.press((await view.findAllByTestId('animate-photo', {}, { timeout: 10_000 })).pop()!);
+  rtl.fireEvent.press(await view.findByTestId('start-picture-use', {}, { timeout: 10_000 }));
+  await view.findByTestId('video-animate', {}, { timeout: 15_000 });
+  // The sheet closed as Animate opened.
+  expect(view.queryByText('PROMPT')).toBeNull();
+  rtl.fireEvent.press(view.getByTestId('animate-close'));
+  await rtl.waitFor(() => expect(view.queryByTestId('video-animate')).toBeNull());
+  expect(view.getByTestId('gallery-image-screen')).toBeTruthy();
 }, 90_000);

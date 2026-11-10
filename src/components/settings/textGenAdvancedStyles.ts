@@ -32,10 +32,13 @@ export const createTextGenAdvancedStyles = (colors: ThemeColors) => ({
     flexDirection: 'row' as const,
     gap: SPACING.sm,
   },
+  // A segment is a third of the card: a long label ("Aggressive") broke mid-word on Android's wider
+  // metrics behind 16 pt of side padding, so the padding is small and the label stays one line.
   button: {
     flex: 1,
     paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xs,
+    justifyContent: 'center' as const,
     borderRadius: 8,
     backgroundColor: 'transparent' as const,
     alignItems: 'center' as const,
@@ -49,6 +52,7 @@ export const createTextGenAdvancedStyles = (colors: ThemeColors) => ({
   buttonText: {
     ...TYPOGRAPHY.body,
     color: colors.textSecondary,
+    textAlign: 'center' as const,
   },
   buttonTextActive: {
     color: colors.primary,

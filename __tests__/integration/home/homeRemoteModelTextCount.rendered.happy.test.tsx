@@ -96,9 +96,11 @@ describe('T097 (rendered) — Home Text count with a remote model active is not 
     await rtl.waitFor(() => { expect(useRemoteServerStore.getState().activeRemoteTextModelId).toBe('llama-3-8b'); }, { timeout: 4000 });
 
     // ── Assert the rendered Home "Text" surface (ModelsSummaryRow) — the finding's exact surface ──
-    // (a) The count numeral is the LITERAL local count: 0. It is a LOCAL-download count, not the remote model.
-    const textCount = await rtl.waitFor(() => home.getByTestId('model-summary-count-text'), { timeout: 4000 });
-    expect(textCount.props.children).toBe(0);
+    // (a) Home's text chip NAMES the remote model in use rather than showing a local count of 0 beside
+    // it, which is the misleading pair the device finding was about.
+    const textChip = await rtl.waitFor(() => home.getByTestId('model-summary-text'), { timeout: 4000 });
+    expect(home.queryByTestId('model-summary-count-text')).toBeNull();
+    expect(rtl.within(textChip).queryByText('Text')).toBeNull();
 
     // (b) The "Text" type reads ACTIVE (a remote text model IS represented/usable) — NOT the dimmed "no model"
     // state. This is what makes the 0 correct rather than a misleading desync.

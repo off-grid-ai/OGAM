@@ -1,7 +1,9 @@
+import { cardSurface } from '../theme/surface';
+import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 
-export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -10,35 +12,24 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    // The tab row below continues this surface and casts the bar's shadow.
-    backgroundColor: colors.surface,
+    // On the living field like every header: no surface slab.
     zIndex: 2,
   },
+  // 44pt targets for the header's controls.
   backButton: {
-    padding: SPACING.xs,
-    marginRight: SPACING.md,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center' as const,
+    marginRight: SPACING.sm,
   },
   headerCenter: {
     flex: 1,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
   },
-  projectIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: colors.surface,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    marginRight: SPACING.sm,
-  },
-  projectIconText: {
-    ...TYPOGRAPHY.body,
-    color: colors.textMuted,
-    fontWeight: '400' as const,
-  },
+  projectIcon: { marginRight: SPACING.sm },
   headerTitle: {
     ...TYPOGRAPHY.h2,
     color: colors.text,
@@ -46,7 +37,10 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flex: 1,
   },
   editButton: {
-    padding: SPACING.sm,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   projectInfo: {
     padding: SPACING.lg,
@@ -115,10 +109,10 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   tabRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.lg,
-    // One raised bar with the header: the header's surface, a shadow under it, above the list.
-    backgroundColor: colors.surface,
-    ...shadows.edge,
+    paddingHorizontal: SPACING.xl,
+    // The tabs sit on the field under a hairline, not on a raised bar with a shadow.
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
     zIndex: 1,
   },
   tabs: {
@@ -155,42 +149,71 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     paddingVertical: SPACING.xl,
+    paddingHorizontal: SPACING.xl,
   },
   emptyStateText: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,
     marginTop: SPACING.sm,
+    textAlign: 'center' as const,
   },
   emptyStateButton: {
     marginTop: SPACING.md,
   },
   chatList: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
   },
   chatItem: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: SPACING.md,
-    borderRadius: 6,
-    marginBottom: SPACING.sm,
-    ...shadows.small,
+    // A chat is a row on the field with a hairline under it, not a shadowed card.
+    paddingVertical: SPACING.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
+  },
+  chatGroup: {
+    ...cardSurface(colors),
+    overflow: 'hidden' as const,
+    marginHorizontal: SPACING.xl,
+    marginBottom: SPACING.xl,
   },
   chatItemWrapper: {
     paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.sm,
   },
-  chatIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.surface,
+  // A bare glyph, as on Chats: no grey disc behind it.
+  purposeRow: {
+    flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    marginRight: SPACING.md,
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.xl,
+    marginBottom: SPACING.lg,
   },
+  projectPurpose: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  newChatButton: { paddingVertical: 6, paddingHorizontal: SPACING.md },
+  knowsGroup: {
+    ...cardSurface(colors),
+    overflow: 'hidden' as const,
+    marginHorizontal: SPACING.xl,
+    marginBottom: SPACING.lg,
+  },
+  knowsRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    minHeight: 56,
+  },
+  knowsRowDivided: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderLight },
+  knowsText: { flex: 1, gap: 2 },
+  knowsTitle: { ...TYPOGRAPHY.body, color: colors.text },
+  knowsDesc: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
+  chatsLabel: { marginLeft: SPACING.xl + SPACING.xs },
+  emptyChatsText: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, marginHorizontal: SPACING.xl + SPACING.xs },
   chatContent: {
     flex: 1,
   },
@@ -259,7 +282,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   kbDocRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -269,7 +292,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     marginRight: SPACING.sm,
   },
   kbDocDelete: {
-    padding: SPACING.sm,
+    padding: 13,
     marginLeft: SPACING.sm,
   },
   kbTransferIcon: {

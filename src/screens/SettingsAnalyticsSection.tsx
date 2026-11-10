@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { AppSwitch } from '../components/AppSwitch';
 import { Text, View } from 'react-native';
-import { Switch, TouchableOpacity } from '../components/Touchable';
+import { TouchableOpacity } from '../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedEntry } from '../components/AnimatedEntry';
+import { SectionLabel } from '../components/SectionLabel';
 import { DebugLogsScreen } from '../components/DebugLogsScreen';
 import { useAppStore } from '../stores/appStore';
 import { setAnalyticsConsent } from '../services/analytics/analytics';
@@ -30,35 +32,36 @@ export const SettingsAnalyticsSection: React.FC<SettingsAnalyticsSectionProps> =
   const [showLog, setShowLog] = useState(false);
 
   // Each toggle carries an icon so its words line up with the rows below.
-  const toggle = (label: string, icon: string, value: boolean, onChange: (next: boolean) => void) => (
+  // Each row has one line under its name, like every row in the list (hand test 84: these two were shorter).
+  const toggle = (label: string, desc: string, icon: string, value: boolean, onChange: (next: boolean) => void) => (
     <View style={styles.navItem}>
-      <View style={styles.navItemIcon}>
+      {/* Decoration: hidden, or a screen reader reads its glyph. The switch carries the name. */}
+      <View style={styles.navItemIcon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <Icon name={icon} size={16} color={colors.textSecondary} />
       </View>
       <View style={styles.navItemContent}>
-        <Text style={styles.navItemTitle}>{label}</Text>
+        <Text style={styles.navItemTitle} importantForAccessibility="no" accessibilityElementsHidden>{label}</Text>
+        <Text style={styles.navItemDesc} numberOfLines={1}>{desc}</Text>
       </View>
-      <Switch
+      <AppSwitch
         accessibilityLabel={label}
         value={value}
         onValueChange={onChange}
-        trackColor={{ false: colors.surfaceLight, true: `${colors.primary}80` }}
-        thumbColor={value ? colors.primary : colors.textMuted}
       />
     </View>
   );
 
   return (
     <AnimatedEntry index={10} staggerMs={40} trigger={focusTrigger}>
-      <Text style={styles.sectionLabel}>Analytics</Text>
+      <SectionLabel title="Analytics" />
       <View style={styles.navSection} testID="settings-analytics">
-        {toggle('Anonymous stats', 'bar-chart-2', usage, next => {
+        {toggle('Anonymous stats', 'Counts, never your words. Off by default.', 'bar-chart-2', usage, next => {
           setAnalyticsConsent({ usage: next }, 'settings').catch(ignore);
         })}
-        {toggle('Crash reports', 'activity', crashes, next => {
+        {toggle('Crash reports', 'What broke, so we can fix it.', 'activity', crashes, next => {
           setAnalyticsConsent({ crashes: next }, 'settings').catch(ignore);
         })}
-        <TouchableOpacity style={styles.navItem} onPress={onWhatWeShare} testID="settings-what-we-share">
+        <TouchableOpacity style={styles.navItem} onPress={onWhatWeShare} testID="settings-what-we-share" accessibilityRole="button" accessibilityLabel="What we share. Your chats and files never leave your device">
           <View style={styles.navItemIcon}>
             <Icon name="eye" size={16} color={colors.textSecondary} />
           </View>
@@ -72,6 +75,8 @@ export const SettingsAnalyticsSection: React.FC<SettingsAnalyticsSectionProps> =
           style={[styles.navItem, styles.navItemLast]}
           onPress={() => setShowLog(true)}
           testID="settings-report-problem"
+          accessibilityRole="button"
+          accessibilityLabel="Report a problem. Check the debug log, then send it to us"
         >
           <View style={styles.navItemIcon}>
             <Icon name="alert-circle" size={16} color={colors.textSecondary} />

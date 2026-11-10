@@ -43,20 +43,24 @@ export const ComposerIconsRow: React.FC<ComposerIconsRowProps> = ({
       <TouchableOpacity
         ref={attachTriggerRef}
         testID="attach-button"
+        accessibilityRole="button"
+        accessibilityLabel="Attach"
         style={styles.pillIconButton}
         onPress={onAttachPress}
         disabled={disabled}
-        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
       >
         <Icon name="plus" size={20} color={disabled ? colors.textMuted : colors.textSecondary} />
       </TouchableOpacity>
       <TouchableOpacity
         ref={quickSettingsTriggerRef}
         testID="quick-settings-button"
+        accessibilityRole="button"
+        accessibilityLabel="Chat options"
         style={styles.pillIconButton}
         onPress={onQuickSettingsPress}
         disabled={disabled}
-        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
       >
         <View style={styles.iconWrapper}>
           <Icon name="settings" size={18} color={disabled ? colors.textMuted : colors.textSecondary} />

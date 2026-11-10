@@ -3,35 +3,43 @@ set -euo pipefail
 # Gradle shows only the exit code, so name the command that failed.
 trap 'echo "prepare-video-runtime.sh: line $LINENO failed: $BASH_COMMAND" >&2' ERR
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SOURCE="$ROOT/.video-build/source"
-REVISION="$(cat "$ROOT/scripts/video/revision")"
-mkdir -p "$ROOT/.video-build"
+# The engine-update job checks a newer release here before it bumps the pin (--patches-only).
+# That check resets the tree for each platform, so it never runs on the build's own checkout.
+if [ "${1:-}" = "--patches-only" ] && [ -z "${OFFGRID_SD_SOURCE:-}" ]; then
+  echo "--patches-only resets its checkout: set OFFGRID_SD_SOURCE to a scratch directory" >&2
+  exit 2
+fi
+SOURCE="${OFFGRID_SD_SOURCE:-$ROOT/.video-build/source}"
+REVISION="${OFFGRID_SD_REVISION:-$(cat "$ROOT/scripts/video/revision")}"
+mkdir -p "$(dirname "$SOURCE")"
 if [ ! -d "$SOURCE/.git" ]; then
   git clone --filter=blob:none --no-checkout https://github.com/leejet/stable-diffusion.cpp.git "$SOURCE"
 fi
 git -C "$SOURCE" fetch origin "$REVISION"
 git -C "$SOURCE" checkout --detach "$REVISION"
 git -C "$SOURCE" submodule update --init --depth 1 ggml
-# Use the initialized Vulkan dispatcher for Vulkan 1.1 features. Direct symbols
-# are absent from Android API 24's loader even when the device supports them.
-PATCH="$ROOT/scripts/video/android-vulkan-dispatch.patch"
-if ! git -C "$SOURCE/ggml" apply --reverse --check "$PATCH" 2>/dev/null; then
-  git -C "$SOURCE/ggml" apply "$PATCH"
+if [ "${1:-}" = "--patches-only" ]; then
+  # Every platform's patches, each on a clean tree of the revision, as each build applies them.
+  for platform in android ios; do
+    git -C "$SOURCE" checkout --force --detach "$REVISION"
+    git -C "$SOURCE" clean -fdq
+    git -C "$SOURCE" submodule update --init --force --depth 1 ggml
+    git -C "$SOURCE/ggml" clean -fdq
+    bash "$ROOT/scripts/video/apply-patches.sh" "$platform" "$SOURCE"
+  done
+  exit 0
 fi
-# This overlay extends the scheduler inserted by android-hardware-fallback.patch.
-# Remove it before checking the base patch, then apply it again in order below.
-# Do not reset the source tree: other platform patches must remain intact.
+# Use the initialized Vulkan dispatcher for Vulkan 1.1 features (android-vulkan-dispatch.patch).
+# Direct symbols are absent from Android API 24's loader even when the device supports them.
+#
+# android-attention-query-routing.patch extends the scheduler inserted by
+# android-hardware-fallback.patch. Remove it before checking the base patch; the list applies it
+# again after it. Do not reset the source tree: other platform patches must remain intact.
 ROUTING_PATCH="$ROOT/scripts/video/android-attention-query-routing.patch"
 if git -C "$SOURCE" apply --reverse --check "$ROUTING_PATCH" 2>/dev/null; then
   git -C "$SOURCE" apply --reverse "$ROUTING_PATCH"
 fi
-for entry in "ggml:android-vulkan-device-fault.patch" "ggml:android-vulkan-pipeline-diagnostics.patch" "ggml:android-vulkan-matvec-fallback.patch" "ggml:android-vulkan-attention-fallback.patch" "ggml:android-hexagon.patch" "ggml:android-hexagon-buffer-validation.patch" "ggml:android-hexagon-precision.patch" ".:android-hardware-fallback.patch" ".:conditioning-errors.patch" ".:android-attention-buffer-ownership.patch" ".:android-attention-query-chunks.patch" ".:android-attention-query-routing.patch" ".:video-decode-observer.patch" ".:android-video-numerics.patch"; do
-  target="${entry%%:*}"
-  patch="$ROOT/scripts/video/${entry#*:}"
-  if ! git -C "$SOURCE/$target" apply --reverse --check "$patch" 2>/dev/null; then
-    git -C "$SOURCE/$target" apply "$patch"
-  fi
-done
+bash "$ROOT/scripts/video/apply-patches.sh" android "$SOURCE"
 # Match the header versions used by the runtime's Vulkan build. These are build
 # inputs only; the device still supplies its Vulkan driver.
 prepare_headers() {

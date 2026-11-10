@@ -3,7 +3,7 @@
  *
  * Drives the REAL McpToolsScreen against the REAL useMcpStore. Only genuine boundaries
  * are mocked: the Feather icon shim and navigation; the real theme runs. Everything the tests assert
- * (the enabled-tools set, per-tool toggle, bulk enable/disable, search filter, empty
+ * (the enabled-tools set, per-tool toggle, Turn all on/off, search filter, empty
  * states, header/back) exercises the real component + real store state.
  *
  * Lives in the private pro/ submodule, loaded via a computed path so the suite skips in
@@ -105,7 +105,7 @@ const seed = (opts: {
     seed({ serverId: 'srv-1', serverTools: {} });
     const { getByText, getByTestId } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
     expect(getByText('This server was removed.')).toBeTruthy();
-    expect(getByText('0 TOOLS AVAILABLE')).toBeTruthy();
+    expect(getByTestId('mcp-tools-summary')).toHaveTextContent('0 of 0 on · ~0 tokens');
     fireEvent.press(getByTestId('mcp-tools-go-back'));
     expect(getByTestId('route-Previous')).toBeTruthy();
   });
@@ -121,17 +121,17 @@ const seed = (opts: {
     expect(getByTestId('mcp-tools-go-back')).toBeTruthy();
   });
 
-  it('lists tools with the available count and a per-tool token chip', () => {
+  it('lists tools with how many are on and a quiet token line under each', () => {
     seed({
       serverId: 'srv-1',
       serverTools: { 'srv-1': [tool('lookup', 'find things'), tool('create', 'make things')] },
     });
-    const { getByText, getAllByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
-    expect(getByText('2 TOOLS AVAILABLE')).toBeTruthy();
-    expect(getByText('lookup')).toBeTruthy();
-    expect(getByText('create')).toBeTruthy();
-    // Each tool renders an estimated-tokens chip.
-    expect(getAllByText(/~\d+ tks/).length).toBe(2);
+    const { getByText, getAllByText, getByTestId } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
+    expect(getByTestId('mcp-tools-summary')).toHaveTextContent('0 of 2 on · ~0 tokens');
+    expect(getByText('Lookup')).toBeTruthy();
+    expect(getByText('Create')).toBeTruthy();
+    // Each tool says what it would cost.
+    expect(getAllByText(/^~\d+ tokens$/).length).toBe(2);
   });
 
   it('reflects enabled state per tool and toggling one tool updates the store (not the other)', () => {
@@ -189,60 +189,66 @@ const seed = (opts: {
     expect(UNSAFE_getAllByType(Switch).map(item => item.props.value)).toEqual([true, false]);
   });
 
-  it('Enable All adds every server tool; Enable All is disabled once all are enabled', () => {
+  it('Turn all on adds every server tool, then the one action offers Turn all off', () => {
     seed({
       serverId: 'srv-1',
       serverTools: { 'srv-1': [tool('a'), tool('b')] },
       enabledTools: ['a'],
     });
-    const { getByText, rerender } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
-    fireEvent.press(getByText('Enable All'));
+    const { getByTestId, queryByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
+    expect(getByTestId('mcp-tools-toggle-all')).toHaveTextContent('Turn all on');
+    fireEvent.press(getByTestId('mcp-tools-toggle-all'));
     expect(useMcpStore.getState().enabledTools.sort()).toEqual(['a', 'b']);
 
-    rerender(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
-    // All enabled -> the Enable All button is disabled.
-    const enableAll = getByText('Enable All');
-    // Walk up to the pressable ancestor to read `disabled`.
-    expect(enableAll.parent?.parent?.props.accessibilityState?.disabled).toBe(true);
+    // All on: the same action now turns them off, and the summary counts both.
+    expect(getByTestId('mcp-tools-toggle-all')).toHaveTextContent('Turn all off');
+    expect(queryByText('Turn all on')).toBeNull();
+    expect(getByTestId('mcp-tools-summary')).toHaveTextContent(/^2 of 2 on · /);
   });
 
-  it('Disable All removes only this server tools; disabled when nothing enabled', () => {
+  it('Turn all off removes only this server tools', () => {
     seed({
       serverId: 'srv-1',
       serverTools: { 'srv-1': [tool('a'), tool('b')] },
       enabledTools: ['a', 'b', 'other-server-tool'],
     });
     const { getByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
-    fireEvent.press(getByText('Disable All'));
+    fireEvent.press(getByText('Turn all off'));
     // Foreign tool survives; this server's tools are removed.
     expect(useMcpStore.getState().enabledTools).toEqual(['other-server-tool']);
   });
 
-  it('Disable All is disabled when none of this server tools are enabled', () => {
+  it('offers Turn all on, not off, when none of this server tools are on', () => {
     seed({
       serverId: 'srv-1',
       serverTools: { 'srv-1': [tool('a')] },
       enabledTools: [],
     });
-    const { getByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
-    const disableAll = getByText('Disable All');
-    expect(disableAll.parent?.parent?.props.accessibilityState?.disabled).toBe(true);
+    const { getByTestId, queryByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
+    expect(getByTestId('mcp-tools-toggle-all')).toHaveTextContent('Turn all on');
+    expect(queryByText('Turn all off')).toBeNull();
   });
 
-  it('filters tools by query and shows a clear (x) button that resets the filter', () => {
+  it('offers no Turn all action when the server has no tools', () => {
+    seed({ serverId: 'srv-1', servers: [{ id: 'srv-1', name: 'Notion', url: 'https://x/mcp' }], serverTools: { 'srv-1': [] } });
+    const { queryByTestId } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
+    expect(queryByTestId('mcp-tools-toggle-all')).toBeNull();
+  });
+
+  it('filters tools by query and shows a clear button that resets the filter', () => {
     seed({
       serverId: 'srv-1',
       serverTools: { 'srv-1': [tool('lookup', 'find'), tool('create', 'make')] },
     });
-    const { getByPlaceholderText, getByText, queryByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
-    const input = getByPlaceholderText('Filter tools by name...');
+    const { getByPlaceholderText, getByText, queryByText, getByLabelText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
+    const input = getByPlaceholderText('Find a tool');
     fireEvent.changeText(input, 'look');
-    expect(getByText('lookup')).toBeTruthy();
-    expect(queryByText('create')).toBeNull();
+    expect(getByText('Lookup')).toBeTruthy();
+    expect(queryByText('Create')).toBeNull();
 
-    // Clear button (x icon) appears and resets.
-    fireEvent.press(getByText('x'));
-    expect(getByText('create')).toBeTruthy();
+    // The clear button appears and resets.
+    fireEvent.press(getByLabelText('Clear search'));
+    expect(getByText('Create')).toBeTruthy();
   });
 
   it('filters by description too, and shows the no-match empty message', () => {
@@ -251,12 +257,12 @@ const seed = (opts: {
       serverTools: { 'srv-1': [tool('lookup', 'find things'), tool('create', 'make things')] },
     });
     const { getByPlaceholderText, getByText, queryByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
-    const input = getByPlaceholderText('Filter tools by name...');
+    const input = getByPlaceholderText('Find a tool');
 
     // Matches by description.
     fireEvent.changeText(input, 'make');
-    expect(getByText('create')).toBeTruthy();
-    expect(queryByText('lookup')).toBeNull();
+    expect(getByText('Create')).toBeTruthy();
+    expect(queryByText('Lookup')).toBeNull();
 
     // No match -> the filter message, not the server state.
     fireEvent.changeText(input, 'zzzz');
@@ -268,13 +274,13 @@ const seed = (opts: {
     const noProps: McpTool = { name: 'bare', description: 'x', inputSchema: { type: 'object' } };
     seed({ serverId: 'srv-1', serverTools: { 'srv-1': [noProps] } });
     const { getByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
-    // description len 1 -> descTokens 1, propCount 0 -> round((1+0+15)/5)*5 = 15 tks.
-    expect(getByText('~15 tks')).toBeTruthy();
+    // description len 1 -> descTokens 1, propCount 0 -> round((1+0+15)/5)*5 = 15 tokens.
+    expect(getByText('~15 tokens')).toBeTruthy();
   });
 
-  it('does not render the clear (x) button while the query is empty', () => {
+  it('does not render the clear button while the query is empty', () => {
     seed({ serverId: 'srv-1', serverTools: { 'srv-1': [tool('lookup')] } });
-    const { queryByText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
-    expect(queryByText('x')).toBeNull();
+    const { queryByLabelText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
+    expect(queryByLabelText('Clear search')).toBeNull();
   });
 });

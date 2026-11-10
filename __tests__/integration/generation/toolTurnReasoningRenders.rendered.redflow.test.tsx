@@ -45,15 +45,9 @@ describe('tool turn reasoning renders (rendered) — device log 21:11', () => {
     // The raw reasoning delimiter NEVER appears in the visible transcript.
     expect(view.queryByText(/<\|channel/)).toBeNull();
 
-    // The reasoning is shown as a thinking block (expand it and read the content).
+    // The reasoning is shown as a thinking block: opening the turn's work row shows it at once.
     rtl.fireEvent.press(view.getByTestId('assistant-work-toggle'));
     const block = await rtl.waitFor(() => view.getByTestId('thinking-block'), { timeout: 4000 });
-    const toggle = view.getByTestId('thinking-block-toggle');
-    await rtl.act(async () => {
-      type N = { props?: Record<string, unknown>; parent?: N | null } | null;
-      let n = toggle as unknown as N;
-      for (let d = 0; n && d < 12; d++) { const op = n.props?.onPress; if (typeof op === 'function') { (op as () => void)(); break; } n = n.parent ?? null; }
-    });
     await rtl.waitFor(() => {
       const content = view.queryAllByTestId('thinking-block-content');
       expect(content.some(c => rtl.within(c).queryByText(/friendly manner/) != null)).toBe(true);

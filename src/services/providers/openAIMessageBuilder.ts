@@ -9,6 +9,7 @@ import { imageToBase64DataUrl } from '../httpClient';
 import { useAppStore } from '../../stores/appStore';
 import logger from '../../utils/logger';
 import { generateId } from '../../utils/generateId';
+import { firstPrompt } from '../../utils/systemPrompt';
 
 /** Build multimodal content array for a vision-capable user message */
 async function buildVisionContent(
@@ -59,7 +60,7 @@ export async function buildOpenAIMessagesImpl(
   const hasSystemMessage = messages.some(m => m.role === 'system');
 
   // Add system prompt if provided and no system message exists in messages
-  const systemPrompt = options.systemPrompt || useAppStore.getState().settings.systemPrompt;
+  const systemPrompt = firstPrompt(options.systemPrompt, useAppStore.getState().settings.systemPrompt);
   if (systemPrompt && !hasSystemMessage) {
     openaiMessages.push({ role: 'system', content: [{ type: 'text', text: systemPrompt }] });
   }

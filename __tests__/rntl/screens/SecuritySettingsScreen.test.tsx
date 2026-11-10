@@ -58,11 +58,11 @@ describe('SecuritySettingsScreen', () => {
     const { view } = mount();
 
     expect(view.getByText('Security')).toBeTruthy();
-    expect(view.getByText('App Lock')).toBeTruthy();
-    expect(view.getByText('Passphrase Lock')).toBeTruthy();
-    expect(view.getByText('Require passphrase to open app')).toBeTruthy();
-    expect(view.getByText(/the app will lock automatically/i)).toBeTruthy();
-    expect(view.getByText(/stored securely on device and never transmitted/i)).toBeTruthy();
+    expect(view.getByText('App lock')).toBeTruthy();
+    expect(view.getByText('Passphrase lock')).toBeTruthy();
+    expect(view.getByText('Ask for your passphrase when the app opens.')).toBeTruthy();
+    expect(view.getByText(/The app locks when you leave it/)).toBeTruthy();
+    expect(view.getByText(/Your passphrase stays on this phone/)).toBeTruthy();
   });
 
   it('Back returns to the screen it was opened from', async () => {
@@ -79,7 +79,7 @@ describe('SecuritySettingsScreen', () => {
       const { view } = mount();
 
       expect(lockSwitch(view).props.value).toBe(false);
-      expect(view.queryByText('Change Passphrase')).toBeNull();
+      expect(view.queryByText('Change passphrase')).toBeNull();
     });
 
     it('opens the passphrase sheet; saving a passphrase turns the lock on and keeps the passphrase', async () => {
@@ -89,7 +89,7 @@ describe('SecuritySettingsScreen', () => {
       await enableLock(view, 'river stone 42');
 
       expect(lockSwitch(view).props.value).toBe(true);
-      expect(view.getByText('Change Passphrase')).toBeTruthy();
+      expect(view.getByText('Change passphrase')).toBeTruthy();
       expect(await authService.verifyPassphrase('river stone 42')).toBe(true);
     });
 
@@ -139,7 +139,7 @@ describe('SecuritySettingsScreen', () => {
       await act(async () => { fireEvent.press(view.getByText('Disable')); });
 
       await waitFor(() => expect(lockSwitch(view).props.value).toBe(false));
-      expect(view.queryByText('Change Passphrase')).toBeNull();
+      expect(view.queryByText('Change passphrase')).toBeNull();
       expect(await authService.hasPassphrase()).toBe(false);
     });
   });
@@ -149,7 +149,7 @@ describe('SecuritySettingsScreen', () => {
       const { view } = mount();
       await enableLock(view, 'river stone 42');
 
-      fireEvent.press(view.getByText('Change Passphrase'));
+      fireEvent.press(view.getByText('Change passphrase'));
       await waitFor(() => expect(view.getByText('Enter your current passphrase and then set a new one.')).toBeTruthy());
       await submitPassphraseForm(rtl, view, { current: 'river stone 42', next: 'ocean leaf 77' });
 
@@ -162,7 +162,7 @@ describe('SecuritySettingsScreen', () => {
       const { view } = mount();
       await enableLock(view, 'river stone 42');
 
-      fireEvent.press(view.getByText('Change Passphrase'));
+      fireEvent.press(view.getByText('Change passphrase'));
       await waitFor(() => expect(view.getByText('Enter your current passphrase and then set a new one.')).toBeTruthy());
       await submitPassphraseForm(rtl, view, { current: 'wrong guess', next: 'ocean leaf 77' });
 

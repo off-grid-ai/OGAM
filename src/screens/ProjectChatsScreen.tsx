@@ -7,7 +7,9 @@ import {
 } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../components/AliveScreen';
+import { ListGroupSeparator, listGroupRowEnds } from '../components/ListGroup';
+import { cardSurface } from '../theme/surface';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
@@ -23,13 +25,15 @@ import { Conversation } from '../types';
 import { RootStackParamList } from '../navigation/types';
 import { byRecentActivity } from '../utils/conversationOrdering';
 import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
+import { chatTitle } from '../utils/chatTitle';
+import { ScreenHeader } from '../components/ScreenHeader';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProjectChats'>;
 
 const formatDate = (dateString: string): string => formatWhen(dateString);
 
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -40,12 +44,10 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-    ...shadows.small,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.borderLight,
     zIndex: 1,
   },
   backButton: {
@@ -64,29 +66,22 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     padding: SPACING.sm,
   },
   listContent: {
-    padding: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.lg,
     paddingBottom: SPACING.xxl,
   },
+  // The chats are rows of one surface with hairlines (ListGroup), like Chats.
   chatItem: {
+    ...cardSurface(colors),
+    borderRadius: 0,
+    borderWidth: 0,
+    boxShadow: [],
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: SPACING.md,
-    borderRadius: 8,
-    marginBottom: SPACING.sm,
-    ...shadows.small,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
   },
-  chatIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.surfaceLight,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    marginRight: SPACING.md,
-  },
+  chatIcon: { marginRight: SPACING.md },
   chatContent: {
     flex: 1,
   },
@@ -228,7 +223,7 @@ export const ProjectChatsScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
-  const renderChat = ({ item }: { item: Conversation }) => {
+  const renderChat = ({ item, index }: { item: Conversation; index: number }) => {
     const preview = previewLine(item.messages);
 
     return (
@@ -238,16 +233,14 @@ export const ProjectChatsScreen: React.FC = () => {
         containerStyle={styles.swipeableContainer}
       >
         <TouchableOpacity
-          style={styles.chatItem}
+          style={[styles.chatItem, listGroupRowEnds(index, projectChats.length)]}
           onPress={() => handleChatPress(item)}
         >
-          <View style={styles.chatIcon}>
-            <Icon name="message-circle" size={14} color={colors.textMuted} />
-          </View>
+          <Icon name="message-circle" size={15} color={colors.textMuted} style={styles.chatIcon} />
           <View style={styles.chatContent}>
             <View style={styles.chatHeader}>
               <Text style={styles.chatTitle} numberOfLines={1}>
-                {item.title}
+                {chatTitle(item.title)}
               </Text>
               <Text style={styles.chatDate}>{formatDate(item.updatedAt)}</Text>
             </View>
@@ -264,20 +257,22 @@ export const ProjectChatsScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Back">
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {project?.name || 'Chats'}
-          </Text>
-        </View>
-        <TouchableOpacity onPress={handleNewChat} style={styles.addButton} disabled={!hasModels}>
-          <Icon name="plus" size={20} color={hasModels ? colors.primary : colors.textMuted} />
-        </TouchableOpacity>
-      </View>
+    <AliveScreen style={styles.container}>
+      <ScreenHeader
+        title={project?.name || 'Chats'}
+        onBack={() => navigation.goBack()}
+        right={
+          <TouchableOpacity
+            onPress={handleNewChat}
+            style={styles.addButton}
+            disabled={!hasModels}
+            accessibilityRole="button"
+            accessibilityLabel="New chat"
+          >
+            <Icon name="plus" size={20} color={hasModels ? colors.text : colors.textMuted} />
+          </TouchableOpacity>
+        }
+      />
 
       {projectChats.length === 0 ? (
         <View style={styles.emptyState}>
@@ -292,7 +287,7 @@ export const ProjectChatsScreen: React.FC = () => {
           </Text>
           {hasModels && (
             <Button
-              title="New Chat"
+              title="New chat"
               variant="primary"
               size="medium"
               onPress={handleNewChat}
@@ -304,12 +299,13 @@ export const ProjectChatsScreen: React.FC = () => {
           data={projectChats}
           renderItem={renderChat}
           keyExtractor={(item) => item.id}
+          ItemSeparatorComponent={ListGroupSeparator}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           {...LIST_CLIPPING_PROPS}
         />
       )}
       <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };

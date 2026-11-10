@@ -19,7 +19,9 @@ jest.unmock('@react-navigation/native');
 jest.mock('react-native-bootsplash', () => ({ hide: jest.fn(async () => {}) }), { virtual: true });
 
 const RENDER_WAIT = { timeout: 8000 };
-const PLAN_TO_PICK = { lean: 'fast', balanced: 'balanced', extreme: 'best' } as const;
+const PLAN_TO_PICK = { balanced: 'balanced', extreme: 'best' } as const;
+/** Quick start (lean) is the starter: the best model under 1 GB, so a first download finishes. */
+const STARTER = 'Qwen 3.5 0.8B';
 
 /** Hugging Face as the phone sees it: every Core ML image repo has one compiled zip; anything else
  *  is empty. */
@@ -53,7 +55,7 @@ describe('Auto Setup plans are the phone picks', () => {
   it.each([
     ['android', 12],
     ['ios', 8],
-  ] as const)('on a %s phone with %i GB, Lean, Balanced and Extreme name Fast, Balanced and Best', async (platform, totalGB) => {
+  ] as const)('on a %s phone with %i GB, Quick start names a model under 1 GB, Balanced and Extreme name Balanced and Best', async (platform, totalGB) => {
     installNativeBoundary({ fs: true, ram: { platform, totalBytes: totalGB * GB, availBytes: totalGB * 0.5 * GB } });
     const restoreFetch = installHuggingFace();
     const React = require('react');
@@ -73,8 +75,8 @@ describe('Auto Setup plans are the phone picks', () => {
       const app = render(React.createElement(App));
       expect(app.queryByTestId('auto-setup-plan-lean')).toBeNull();
       await waitFor(() => expect(app.getByTestId('auto-setup-plan-lean')).toBeTruthy(), RENDER_WAIT);
-      const planModels: Partial<Record<keyof typeof PLAN_TO_PICK, string>> = {};
-      for (const tier of Object.keys(PLAN_TO_PICK) as Array<keyof typeof PLAN_TO_PICK>) {
+      const planModels: Partial<Record<keyof typeof PLAN_TO_PICK | 'lean', string>> = {};
+      for (const tier of ['lean', ...Object.keys(PLAN_TO_PICK)] as Array<keyof typeof PLAN_TO_PICK | 'lean'>) {
         const card = app.queryByTestId(`auto-setup-plan-${tier}`);
         if (!card) continue;
         if (!within(card).queryByTestId('auto-setup-selected-plan')) {
@@ -113,10 +115,10 @@ describe('Auto Setup plans are the phone picks', () => {
       }
       models.unmount();
 
-      // Every plan shown names its pick, and every pick has its plan.
-      const shownPlans = Object.keys(planModels) as Array<keyof typeof PLAN_TO_PICK>;
-      expect(shownPlans.length).toBeGreaterThan(0);
-      for (const tier of shownPlans) expect(planModels[tier]).toBe(pickModels[PLAN_TO_PICK[tier]]);
+      // Quick start is the starter; every other plan shown names its pick, and every pick has its plan.
+      expect(planModels.lean).toBe(STARTER);
+      const shownPlans = Object.keys(planModels) as Array<keyof typeof PLAN_TO_PICK | 'lean'>;
+      for (const tier of shownPlans) if (tier !== 'lean') expect(planModels[tier]).toBe(pickModels[PLAN_TO_PICK[tier]]);
       for (const [tier, slot] of Object.entries(PLAN_TO_PICK)) {
         if (pickModels[slot]) expect(planModels[tier as keyof typeof PLAN_TO_PICK]).toBe(pickModels[slot]);
       }

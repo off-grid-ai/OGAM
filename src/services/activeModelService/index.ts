@@ -5,6 +5,7 @@ import { getActiveEngineService } from '../engines';
 import { localDreamGeneratorService as onnxImageGeneratorService } from '../localDreamGenerator';
 import { hardwareService } from '../hardware';
 import { modelResidencyManager } from '../modelResidency';
+import { startsInLowMemory } from '../lowMemoryLoads';
 import { OverridableMemoryError, ImageModelIncompleteError } from '../modelLoadErrors';
 import { validateImageModelDir } from '../imageModelIntegrity';
 import { remoteServerManager } from '../remoteServerManager';
@@ -28,6 +29,7 @@ import {
   checkMemoryForDualModel as _checkMemoryForDualModel,
   getCurrentlyLoadedMemoryGB as _getCurrentlyLoadedMemoryGB,
   estimateTextModelMemoryMB,
+  textPrefersCopy,
 } from './memory';
 import { doLoadTextModel, doLoadImageModel, checkImageModelCanLoad } from './loaders';
 import { modelSelected, trackModelLoad } from '../analytics/analytics';
@@ -36,7 +38,14 @@ import {
   getResourceUsage as _getResourceUsage,
   syncWithNativeState as _syncWithNativeState,
 } from './utils';
-;
+
+/** Our models in memory right now, for the load and crash records. */
+const residentKeys = (): string =>
+  modelResidencyManager.getResidents().map(resident => resident.key).join(',') || 'none';
+
+/** `utility`: a side-task load (the intent classifier) that borrows the engine without becoming the chat model. */
+type TextLoadOptions = { override?: boolean; utility?: boolean };
+
 class ActiveModelService {
   private readonly listeners: Set<ModelChangeListener> = new Set();
   private readonly loadingState = { text: false, image: false };
@@ -118,7 +127,11 @@ class ActiveModelService {
    */
   keepLoadedTextModelSelected(): void {
     const loaded = this.loadedTextModelId;
-    if (loaded && useAppStore.getState().activeModelId !== loaded) this.markSelected(loaded);
+    const store = useAppStore.getState();
+    // The classifier can still be resident after a side task; it is kept as the chat pick only when the
+    // person picked it (lastTextModelId is written by real picks only).
+    if (loaded === store.settings.classifierModelId && store.lastTextModelId !== loaded) return;
+    if (loaded && store.activeModelId !== loaded) this.markSelected(loaded);
   }
   /**
    * Runs `work` on a utility text model (the image-intent classifier) without making it the person's
@@ -133,7 +146,7 @@ class ActiveModelService {
     const chatModelId = this.resolveSelectedTextModel()?.id ?? null;
     try {
       // Inside the try: a failed or partial load still gets its selection put back.
-      await this.loadTextModel(modelId);
+      await this.loadTextModel(modelId, undefined, { utility: true });
       return await work();
     } finally {
       try {
@@ -175,12 +188,12 @@ class ActiveModelService {
   async loadTextModel(
     modelId: string,
     timeoutMs: number = 120000,
-    opts?: { override?: boolean },
+    opts?: TextLoadOptions,
   ): Promise<void> {
     // Fast path — model already loaded (no lock; just sync the store).
     if (this.isTextModelCurrent(modelId)) {
       const store = useAppStore.getState();
-      if (store.activeModelId !== modelId) {
+      if (!opts?.utility && store.activeModelId !== modelId) {
         store.setActiveModelId(modelId);
       }
       return;
@@ -194,12 +207,12 @@ class ActiveModelService {
   private async doLoadTextModelLocked(
     modelId: string,
     timeoutMs: number,
-    opts?: { override?: boolean },
+    opts?: TextLoadOptions,
   ): Promise<void> {
     // Re-check after acquiring — a queued call may have loaded it already.
     if (this.isTextModelCurrent(modelId)) {
       const store = useAppStore.getState();
-      if (store.activeModelId !== modelId) {
+      if (!opts?.utility && store.activeModelId !== modelId) {
         store.setActiveModelId(modelId);
       }
       return;
@@ -209,15 +222,17 @@ class ActiveModelService {
     if (!model) {
       throw new Error('Model not found');
     }
-    await trackModelLoad(downloadedModelFacts(model, store.settings), () =>
-      this.loadFoundTextModel(model, modelId, timeoutMs, opts),
+    await trackModelLoad(
+      { ...downloadedModelFacts(model, store.settings), residents: residentKeys() },
+      () => this.loadFoundTextModel(model, modelId, timeoutMs, opts),
+      () => (model.engine === 'llama' ? { low_memory: llmService.isLowMemoryMode() } : {}),
     );
   }
   private async loadFoundTextModel(
     model: DownloadedModel,
     modelId: string,
     timeoutMs: number,
-    opts?: { override?: boolean },
+    opts?: TextLoadOptions,
   ): Promise<void> {
     const store = useAppStore.getState();
     // Use estimated runtime RAM (file size + overhead), not just file size,
@@ -227,17 +242,28 @@ class ActiveModelService {
     // LiteRT weights + KV are dirty/accelerator memory → gated on REAL free RAM (mmap GGUF
     // stays clean/physical-cap). Derived once so makeRoomFor and register agree.
     const textIsDirty = model.engine === 'litert';
+    const prefersCopy = await textPrefersCopy(model);
+    const textSpec = {
+      key: 'text', type: 'text' as const, modelId, sizeMB: textSizeMB, dirtyMemory: textIsDirty, prefersCopy,
+      // A model that died loading as a copy loads mapped from the start (llm.ts): no room is made for a copy.
+      startsMapped: prefersCopy && await startsInLowMemory(model.filePath),
+    };
     // Residency manager is authoritative: evict other generation models to fit the budget.
     // Evicted unloads are the non-locking internal variants (we hold the lock), so no deadlock.
-    const room = await modelResidencyManager.makeRoomFor(
-      { key: 'text', type: 'text', modelId, sizeMB: textSizeMB, dirtyMemory: textIsDirty },
-      { override: opts?.override },
-    );
+    const room = await modelResidencyManager.makeRoomFor(textSpec, { override: opts?.override });
     // First refusal is OVERRIDABLE ("Load Anyway"); a refusal UNDER override is a hard limit → plain Error.
     if (!room.fits) {
+      // A LiteRT model is refused on what free RAM can spare (budgetMB already holds back the OS
+      // headroom), so the two numbers say how far off the phone is. They are quoted only when they
+      // plainly disagree, so the copy can never say the model fits while refusing it.
+      const needGB = (textSizeMB / 1024).toFixed(1);
+      const spareGB = (room.budgetMB / 1024).toFixed(1);
+      const shortfall = textIsDirty && Number(needGB) > Number(spareGB)
+        ? `: it needs about ${needGB} GB and the phone can spare ${spareGB} GB right now`
+        : '';
       throw opts?.override
-        ? new Error('Not enough free memory to load this model, even after freeing other models. Close other apps or choose a smaller model.')
-        : new OverridableMemoryError('Not enough free memory to load this model. Close other apps or choose a smaller model.');
+        ? new Error(`Not enough free memory to load this model, even after freeing other models${shortfall}. Close other apps or choose a smaller model.`)
+        : new OverridableMemoryError(`Not enough free memory to load this model${shortfall}. Close other apps or choose a smaller model.`);
     }
     this.loadingState.text = true;
     this.notifyListeners();
@@ -248,11 +274,13 @@ class ActiveModelService {
       timeoutMs,
       override: !!opts?.override || modelResidencyManager.hasSessionOverride(modelId),
       loadedTextModelId: this.loadedTextModelId,
+      recordSelection: opts?.utility ? () => {} : id => useAppStore.getState().setActiveModelId(id),
       onLoaded: id => {
         this.setLoadedText(id);
         useAppStore.getState().setTextModelEvicted(false); // loaded → clear any prior eviction
         modelResidencyManager.register(
-          { key: 'text', type: 'text', modelId, sizeMB: textSizeMB, dirtyMemory: textIsDirty },
+          // Loaded as a copy (not in low-memory mode), the weights are dirty memory from now on.
+          { ...textSpec, dirtyMemory: textSpec.dirtyMemory || (textSpec.prefersCopy && !llmService.isLowMemoryMode()) },
           () => this.doUnloadTextModelLocked(true), // eviction keeps the selection
         );
       },
@@ -358,7 +386,7 @@ class ActiveModelService {
     if (!model) {
       throw new Error('Model not found');
     }
-    await trackModelLoad(imageModelFacts(model), () =>
+    await trackModelLoad({ ...imageModelFacts(model), residents: residentKeys() }, () =>
       this.loadFoundImageModel(model, modelId, imageThreads, needsThreadReload, timeoutMs, opts),
     );
   }

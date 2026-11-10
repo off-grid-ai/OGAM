@@ -3,7 +3,7 @@
  * pending files the conversation under that project, and it SHOWS in the project's chat list.
  *
  * Real handleSendFn threads deps.pendingProjectId into chatStore.createConversation; then the REAL
- * ProjectChatsScreen is mounted over the real stores. GREEN regression guard: the new "New Conversation"
+ * ProjectChatsScreen is mounted over the real stores. GREEN regression guard: the new "New chat"
  * appears under "Research". If a future change drops pendingProjectId on the send path, the chat won't be
  * listed here and this fails.
  */

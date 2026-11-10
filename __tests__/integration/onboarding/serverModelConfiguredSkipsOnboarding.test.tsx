@@ -78,7 +78,7 @@ async function addAndConnectServerViaUI(ui: ReturnType<typeof render>) {
 
   // Real gesture: open the Add Server modal from the onboarding screen.
   // The onboarding screen's own button, which is not the Remote Servers screen's one.
-  fireEvent.press(await waitFor(() => ui.getByText('Add Server')));
+  fireEvent.press(await waitFor(() => ui.getByText('Add server')));
 
   // Fill the real modal (targeted by placeholders, like the RemoteServersScreen flow).
   fireEvent.changeText(await waitFor(() => ui.getByPlaceholderText('Off Grid AI Desktop')), 'My Desktop');

@@ -28,6 +28,13 @@ import {
 
 // Mock the stripControlTokens utility
 
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+/** One item of the Details line ("a · b"): the line reads as a sentence, so its first item starts with a capital. */
+const metaItem = (item: string) => {
+  const first = item.charAt(0).toUpperCase() + item.slice(1);
+  return new RegExp(`(^${escapeRegExp(first)}| · ${escapeRegExp(item)})( · |$)`);
+};
+
 describe('ChatMessage', () => {
   const _defaultProps = {
     message: createUserMessage('Hello world'),
@@ -80,6 +87,19 @@ describe('ChatMessage', () => {
 
       expect(getByTestId('system-info-message')).toBeTruthy();
       expect(getByText('Model loaded successfully')).toBeTruthy();
+    });
+
+    it('shows a note saved as "_x_" by an older build as plain "x"', () => {
+      const message = createMessage({ role: 'system', content: '_GPU failed, running on CPU._', isSystemInfo: true });
+      const { getByText, queryByText } = render(<ChatMessage message={message} />);
+      expect(getByText('GPU failed, running on CPU.')).toBeTruthy();
+      expect(queryByText(/_/)).toBeNull();
+    });
+
+    it('keeps underscores inside a note', () => {
+      const message = createMessage({ role: 'system', content: 'Loaded model_v2 on GPU', isSystemInfo: true });
+      const { getByText } = render(<ChatMessage message={message} />);
+      expect(getByText('Loaded model_v2 on GPU')).toBeTruthy();
     });
 
     it('renders empty content gracefully', () => {
@@ -150,7 +170,7 @@ describe('ChatMessage', () => {
       const view = render(<ChatMessage message={message} isStreaming />);
       const tree = JSON.stringify(view.toJSON());
 
-      expect(view.getByText('Using Generated image...')).toBeTruthy();
+      expect(view.getByText('Making the picture…')).toBeTruthy();
       expect(tree.indexOf('tool-message')).toBeLessThan(
         tree.indexOf('message-bubble'),
       );
@@ -166,7 +186,7 @@ describe('ChatMessage', () => {
       });
       const view = render(<ChatMessage message={message} isStreaming />);
 
-      expect(view.getAllByText('Thinking...').length).toBeGreaterThan(0);
+      expect(view.getAllByText('Thinking').length).toBeGreaterThan(0);
       expect(view.getByText('I am deciding which source to use next.')).toBeTruthy();
       expect(view.getByTestId('tool-message')).toBeTruthy();
     });
@@ -237,7 +257,7 @@ describe('ChatMessage', () => {
       expect(getByTestId('thinking-block')).toBeTruthy();
     });
 
-    it('shows Thought process header when thinking is complete', () => {
+    it('shows the Thought header when thinking is complete', () => {
       const message = createAssistantMessage(
         '<think>Internal reasoning here</think>Final answer.',
       );
@@ -248,27 +268,12 @@ describe('ChatMessage', () => {
       fireEvent.press(getByTestId('assistant-work-toggle'));
 
       expect(getByTestId('thinking-block-title')).toBeTruthy();
-      expect(getByText('Thought process')).toBeTruthy();
+      expect(getByText('Thought')).toBeTruthy();
     });
 
-    it('shows the collapsed thinking preview as plain text, without Markdown syntax', () => {
+    it('shows the reasoning once the work row is open, and the Thinking row folds it, as on Desktop', () => {
       const message = createAssistantMessage(
         '<think>**Drafting Email Response**\nI am composing a direct reply.</think>Done.',
-      );
-
-      const { getByTestId, getByText, queryByText } = render(
-        <ChatMessage message={message} />,
-      );
-      fireEvent.press(getByTestId('assistant-work-toggle'));
-
-      expect(getByTestId('thinking-block-preview')).toBeTruthy();
-      expect(getByText('Drafting Email Response I am composing a direct reply.')).toBeTruthy();
-      expect(queryByText(/\*\*Drafting Email Response\*\*/)).toBeNull();
-    });
-
-    it('expands thinking block when toggle is pressed', () => {
-      const message = createAssistantMessage(
-        '<think>Step 1: Check input\nStep 2: Process</think>Done!',
       );
 
       const { getByTestId, queryByTestId } = render(
@@ -276,17 +281,37 @@ describe('ChatMessage', () => {
       );
       fireEvent.press(getByTestId('assistant-work-toggle'));
 
-      // Initially collapsed
-      expect(queryByTestId('thinking-block-content')).toBeNull();
-
-      // Press toggle
-      fireEvent.press(getByTestId('thinking-block-toggle'));
-
-      // Content should be visible
+      expect(queryByTestId('thinking-block-preview')).toBeNull();
       expect(getByTestId('thinking-block-content')).toBeTruthy();
+      fireEvent.press(getByTestId('thinking-block-toggle'));
+      expect(queryByTestId('thinking-block-content')).toBeNull();
     });
 
-    it('shows Thinking... header when thinking is incomplete', () => {
+    it('folds and unfolds the reasoning when the Thinking row is pressed', () => {
+      const message = createAssistantMessage(
+        '<think>Step 1: Check input\nStep 2: Process</think>Done!',
+      );
+
+      const { getByTestId, queryByTestId, queryByText } = render(
+        <ChatMessage message={message} />,
+      );
+      fireEvent.press(getByTestId('assistant-work-toggle'));
+
+      // Open by default once the work row is open, as on Desktop.
+      expect(getByTestId('thinking-block-content')).toBeTruthy();
+      expect(queryByText(/Step 1: Check input/)).not.toBeNull();
+
+      // Press the row: the reasoning folds away.
+      fireEvent.press(getByTestId('thinking-block-toggle'));
+      expect(queryByTestId('thinking-block-content')).toBeNull();
+      expect(queryByText(/Step 1: Check input/)).toBeNull();
+
+      // Press again: it comes back.
+      fireEvent.press(getByTestId('thinking-block-toggle'));
+      expect(queryByText(/Step 1: Check input/)).not.toBeNull();
+    });
+
+    it('shows the Thinking header when thinking is incomplete', () => {
       const message = createMessage({
         role: 'assistant',
         content: '<think>Thinking in progress...',
@@ -297,10 +322,10 @@ describe('ChatMessage', () => {
         <ChatMessage message={message} isStreaming={true} />,
       );
 
-      // Thinking block exists and shows "Thinking..." in the title
+      // Thinking block exists and shows "Thinking" in the title
       expect(getByTestId('thinking-block')).toBeTruthy();
-      // At least one element shows "Thinking..." (may be multiple due to indicator)
-      expect(getAllByText('Thinking...').length).toBeGreaterThan(0);
+      // At least one element shows "Thinking" (may be multiple due to indicator)
+      expect(getAllByText('Thinking').length).toBeGreaterThan(0);
     });
 
     it('shows thinking indicator when message.isThinking is true', () => {
@@ -795,13 +820,13 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByTestId, getByText } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
       expect(getByTestId('generation-meta')).toBeTruthy();
-      expect(getByText('Metal')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('ran on the GPU (Metal)'));
     });
 
     it('shows GPU backend when GPU was used', () => {
@@ -814,12 +839,14 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText(/Metal.*32L/)).toBeTruthy();
+      // Where it ran, in words; the layer count is no longer shown.
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('ran on the GPU (Metal)'));
+      expect(getByTestId('generation-meta')).not.toHaveTextContent(/32L/);
     });
 
     it('shows CPU when GPU was not used', () => {
@@ -831,12 +858,12 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('CPU')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('ran on the CPU'));
     });
 
     it('displays tokens per second', () => {
@@ -848,12 +875,12 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('22.3 tok/s')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('wrote 22.3 tokens a second'));
     });
 
     it('displays time to first token', () => {
@@ -869,7 +896,7 @@ describe('ChatMessage', () => {
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText(/TTFT.*0\.45s/)).toBeTruthy();
+      expect(getByText(/first word in 0\.45s/)).toBeTruthy();
     });
 
     it('displays model name', () => {
@@ -880,12 +907,12 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('Phi-3-mini-Q4_K_M')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('Phi-3-mini-Q4_K_M'));
     });
 
     it('displays image generation metadata', () => {
@@ -898,14 +925,14 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('20 steps')).toBeTruthy();
-      expect(getByText('cfg 7.5')).toBeTruthy();
-      expect(getByText('512x512')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('20 steps'));
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('cfg 7.5'));
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('512x512'));
     });
 
     it('hides metadata when showGenerationDetails is false', () => {
@@ -1077,12 +1104,12 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('150 tokens')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('150 tokens long'));
     });
 
     it('does not display token count when 0', () => {
@@ -1537,7 +1564,7 @@ describe('ChatMessage', () => {
   // Thinking block with Enhanced label (covers line 388 branch)
   // ============================================================================
   describe('thinking block Enhanced label', () => {
-    it('shows E icon for Enhanced thinking label', () => {
+    it('names an Enhanced thinking step by its label', () => {
       const message = createAssistantMessage(
         '<think>__LABEL:Enhanced Reasoning__\nDeep analysis here</think>The enhanced answer.',
       );
@@ -1549,7 +1576,6 @@ describe('ChatMessage', () => {
 
       expect(getByTestId('thinking-block')).toBeTruthy();
       expect(getByText('Enhanced Reasoning')).toBeTruthy();
-      expect(getByText('E')).toBeTruthy();
     });
   });
 
@@ -1566,12 +1592,12 @@ describe('ChatMessage', () => {
         generationMeta: meta,
       });
 
-      const { getByText, getByTestId } = render(
+      const { getByTestId } = render(
         <ChatMessage message={message} showGenerationDetails={true} />,
       );
 
       fireEvent.press(getByTestId('generation-details-toggle'));
-      expect(getByText('GPU')).toBeTruthy();
+      expect(getByTestId('generation-meta')).toHaveTextContent(metaItem('ran on the GPU'));
     });
   });
 
@@ -1659,7 +1685,7 @@ describe('ChatMessage', () => {
       expect(getByText(/\*\*not bold\*\*/)).toBeTruthy();
     });
 
-    it('renders markdown in thinking block content when expanded', () => {
+    it('renders markdown in thinking block content when the work row is open', () => {
       const message = createAssistantMessage(
         '<think>Step 1: Check the `input` value\nStep 2: **Process** it</think>Done!',
       );
@@ -1668,9 +1694,6 @@ describe('ChatMessage', () => {
         <ChatMessage message={message} />,
       );
       fireEvent.press(getByTestId('assistant-work-toggle'));
-
-      // Expand thinking block
-      fireEvent.press(getByTestId('thinking-block-toggle'));
 
       expect(getByTestId('thinking-block-content')).toBeTruthy();
       expect(getByText(/input/)).toBeTruthy();
@@ -1704,7 +1727,7 @@ describe('ChatMessage', () => {
       );
       fireEvent.press(getByTestId('assistant-work-toggle'));
 
-      expect(getByTestId('thinking-block-preview')).toBeTruthy();
+      expect(getByTestId('thinking-block-content')).toBeTruthy();
       expect(getByText(longThinking)).toBeTruthy();
     });
 
@@ -1717,7 +1740,6 @@ describe('ChatMessage', () => {
       const { getByText, getByTestId } = render(<ChatMessage message={message} />);
       fireEvent.press(getByTestId('assistant-work-toggle'));
 
-      // Preview should show the full text without '...'
       expect(getByText(shortThinking)).toBeTruthy();
     });
   });

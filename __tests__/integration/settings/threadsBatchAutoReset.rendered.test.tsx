@@ -2,7 +2,7 @@
  * UI integration — CPU Threads and Batch Size can go back to Auto, and typing a thread count starts
  * from the automatic one.
  *
- * Real ModelSettingsScreen → Text Generation → Advanced, real CpuThreadsSlider / BatchSizeSlider, real
+ * Real ModelSettingsScreen → Text tab → Advanced, real CpuThreadsSlider / BatchSizeSlider, real
  * SliderSetting, real useTextGenerationAdvanced, real hardwareService + cpu topology reader, real store.
  * Faked only at the native line: react-native-fs serves the OnePlus CPH2707 sysfs topology (four
  * performance cores → Auto (4)), and the native slider is a View whose onSlidingComplete is the drag
@@ -37,14 +37,14 @@ function serveTopology(capacities: number[]): void {
   });
 }
 
-/** Open Model Settings → Text Generation → Advanced, as the user does. */
+/** Open Model Settings → Text tab → Advanced, as the user does. */
 function openAdvanced() {
   const screen = render(
     <NavigationContainer>
       <ModelSettingsScreen />
     </NavigationContainer>,
   );
-  fireEvent.press(screen.getByTestId('text-generation-accordion'));
+  fireEvent.press(screen.getByTestId('model-settings-tab-text'));
   fireEvent.press(screen.getByTestId('text-advanced-toggle'));
   return screen;
 }

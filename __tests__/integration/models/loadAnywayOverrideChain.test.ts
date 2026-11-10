@@ -133,7 +133,7 @@ describe('Load Anyway override chain (UI helper → service → residency)', () 
 
     const prompt = ui.lastVisible();
     expect(prompt?.title).toBe('Insufficient Memory');
-    expect(prompt?.buttons?.map(b => b.text)).toEqual(['Cancel', 'Load Anyway']);
+    expect(prompt?.buttons?.map(b => b.text)).toEqual(['Load Anyway', 'Cancel']);
     // A refusal is NOT a load and NOT an eviction — the victim must survive so the
     // user's Load-Anyway retry still has room to reclaim.
     expect(textLoads()).toBe(0);

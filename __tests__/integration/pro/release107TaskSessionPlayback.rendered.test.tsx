@@ -333,7 +333,7 @@ describe('Release 107 task session playback', () => {
       />,
     );
 
-    expect(screen.getByText('Using computer_use: Review the desktop app')).toBeTruthy();
+    expect(screen.getByText('Working on your task: Review the desktop app…')).toBeTruthy();
     expect(screen.getByTestId('task-chat-card')).toBeTruthy();
     expect(screen.getByText('LIVE VIEW')).toBeTruthy();
     measureTaskSessionFrame(screen);
@@ -458,7 +458,7 @@ describe('Release 107 task session playback', () => {
 
     expect(screen.queryByTestId('task-chat-card')).toBeNull();
     fireEvent.press(screen.getByTestId('assistant-work-toggle'));
-    expect(screen.getByText('Using Web Use...')).toBeTruthy();
+    expect(screen.getByText('Working on your task…')).toBeTruthy();
     expect(screen.getByTestId('task-session-frame')).toBeTruthy();
     measureTaskSessionFrame(screen);
     expect(screen.getByLabelText('Live view from Studio Mac')).toBeTruthy();

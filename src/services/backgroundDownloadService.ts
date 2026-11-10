@@ -2,6 +2,7 @@
 import { NativeModules, NativeEventEmitter, Platform, Alert } from 'react-native';
 import { BackgroundDownloadInfo, BackgroundDownloadStatus } from '../types';
 import logger from '../utils/logger';
+import { downloadEventError } from '../utils/downloadErrors';
 import { assertFreeSpace } from './freeSpace';
 import { serializeQueue, saveQueuedDownloads } from './queuedDownloadPersistence';
 import type {
@@ -607,11 +608,8 @@ class BackgroundDownloadService {
       });
       const removeError = this.onError(downloadId, err => {
         done();
-        const error = new Error(err.reason || 'Download failed') as Error & { cancelled?: boolean };
-        // Let callers distinguish a user cancel from a real failure so they can
-        // clean up quietly instead of surfacing a "download failed" error.
-        if (err.reasonCode === 'user_cancelled') error.cancelled = true;
-        reject(error);
+        // Carries the code; `cancelled` lets callers clean up a user cancel quietly.
+        reject(downloadEventError(err));
       });
       this.startProgressPolling();
     });

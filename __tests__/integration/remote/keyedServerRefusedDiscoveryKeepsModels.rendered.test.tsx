@@ -110,7 +110,7 @@ describe('a keyed server that refuses discovery', () => {
     expect(await view.findByText(/Connected \(\d+ms\)\s+1 model available/)).toBeTruthy();
     rtl.fireEvent.press(view.getByTestId('save-server'));
     expect(await view.findByText(SERVER_NAME)).toBeTruthy();
-    expect(await view.findByText('Connected')).toBeTruthy();
+    expect(await view.findByText(/^Connected · /)).toBeTruthy();
     rtl.fireEvent.press(view.getByLabelText('Back'));
 
     // The picker lists the server's model with Tool calling, learned from the keyed probes.
@@ -141,7 +141,9 @@ describe('a keyed server that refuses discovery', () => {
     next.rtl.fireEvent.press(next.view.getByTestId('app-sheet-close'));
     await next.rtl.waitFor(() => expect(next.view.queryByTestId('app-sheet-close')).toBeNull());
     next.rtl.fireEvent.press(next.view.getByTestId('add-server-button'));
-    next.rtl.fireEvent.press(await next.view.findByText('Test'));
-    expect(await next.view.findByText(/rejected the API key \(HTTP 401\)/)).toBeTruthy();
+    // The row's one action opens the server's screen, which checks it with the saved key.
+    next.rtl.fireEvent.press(await next.view.findByLabelText(`Edit ${SERVER_NAME}`));
+    next.rtl.fireEvent.press(await next.view.findByTestId('test-connection'));
+    expect(await next.view.findByText(/rejected the (saved )?API key \(HTTP 401\)/)).toBeTruthy();
   });
 });

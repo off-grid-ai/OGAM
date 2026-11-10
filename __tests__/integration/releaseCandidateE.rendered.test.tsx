@@ -1,4 +1,5 @@
 /** Release-candidate journeys on the production navigation stack. Only device boundaries are faked. */
+import { pressImageAction } from '../harness/galleryRoutes';
 import { GB, installNativeBoundary, requireRTL } from '../harness/nativeBoundary';
 import { createDownloadedModel } from '../utils/factories';
 import type { LicensedMesh } from '../harness/licensedMesh';
@@ -141,7 +142,7 @@ async function send(app: App, prompt: string, answer: string) {
 }
 
 async function openGallery(app: App) {
-  app.rtl.fireEvent.press(app.view.getByText('Image Gallery'));
+  app.rtl.fireEvent.press(app.view.getByText('Gallery'));
   await app.view.findByTestId('gallery-screen');
 }
 
@@ -201,19 +202,22 @@ it('M6: Gallery deletes a synced copy and reports an unsafe path for single and 
   const { view, rtl } = app;
   await openGallery(app);
   rtl.fireEvent.press(view.getByTestId('gallery-image-synced'));
-  rtl.fireEvent.press((await view.findByText('Delete')));
+  await pressImageAction(rtl, view, 'Delete');
   await view.findByText('Delete Image');
   await confirmDelete(app);
-  await rtl.waitFor(() => expect(view.queryByTestId('gallery-image-synced')).toBeNull());
+  // A deleted image's route closes, back to the grid without it.
+  await rtl.waitFor(() => expect(view.queryByTestId('gallery-image-screen')).toBeNull());
+  expect(view.queryByTestId('gallery-image-synced')).toBeNull();
   rtl.fireEvent.press(view.getByTestId('gallery-image-outside'));
-  rtl.fireEvent.press((await view.findByText('Delete')));
+  await pressImageAction(rtl, view, 'Delete');
   await view.findByText('Delete Image');
   await confirmDelete(app);
   expect(await view.findByText('Image was not deleted')).toBeTruthy();
   rtl.fireEvent.press(view.getByText('OK'));
   await rtl.waitFor(() => expect(view.queryByText('Image was not deleted')).toBeNull());
-  // Close the full-screen viewer through its real dismiss control.
-  rtl.fireEvent.press(view.getByText('Close'));
+  // Leave the full-screen image through its real Back.
+  rtl.fireEvent.press(view.getByTestId('gallery-image-back'));
+  await rtl.waitFor(() => expect(view.queryByTestId('gallery-image-screen')).toBeNull());
   rtl.fireEvent(view.getByTestId('gallery-image-outside'), 'longPress');
   rtl.fireEvent.press(view.getByLabelText('Delete selected images'));
   await view.findByText('Delete Images');
@@ -237,17 +241,19 @@ it('M24: an unavailable Gallery image explains the missing file and offers Remov
   view.unmount();
 });
 
-it('M9: the collapsed thinking preview keeps inline code, fenced code, and identifiers', async () => {
+it('M9: the opened reasoning keeps inline code, fenced code, and identifiers', async () => {
   const app = await launch();
   await selectTextAndOpenChat(app);
   await send(app, 'Explain the variable.', '<think># Plan\n**Keep** _this_ my_var_x and `some_code`.\n```python\nmy_var_x = some_code + 1\n```\nDone.</think>The code is ready.');
   const { view, rtl } = app;
   if (view.queryByTestId('assistant-work-toggle')) rtl.fireEvent.press(view.getByTestId('assistant-work-toggle'));
-  const toggle = await view.findByTestId('thinking-block-toggle');
-  if (!view.queryByTestId('thinking-block-preview')) rtl.fireEvent.press(toggle);
-  expect(rtl.within(view.getByTestId('thinking-block-preview')).getByText(
-    'Plan Keep this my_var_x and some_code. my_var_x = some_code + 1 Done.',
-  )).toBeTruthy();
+  expect(await view.findByTestId('thinking-block-toggle')).toBeTruthy();
+  // Opening the work row shows the reasoning at once (Desktop's row, no collapsed preview), with
+  // code and identifiers intact: my_var_x appears in the prose AND in the fenced code.
+  const content = view.getByTestId('thinking-block-content');
+  expect(rtl.within(content).getAllByText(/my_var_x/).length).toBeGreaterThanOrEqual(2);
+  expect(rtl.within(content).getByText(/my_var_x = some_code \+ 1/)).toBeTruthy();
+  expect(rtl.within(content).getAllByText(/some_code/).length).toBeGreaterThan(0);
   view.unmount();
 });
 
@@ -310,7 +316,7 @@ it('M15: the Pro purchase action opens the canonical payment page', async () => 
   Linking.openURL = async (url: string) => { browserAddress = url; };
   try {
     app.rtl.fireEvent.press(app.view.getByTestId('settings-tab'));
-    app.rtl.fireEvent.press(await app.view.findByText('Off Grid AI PRO'));
+    app.rtl.fireEvent.press(await app.view.findByLabelText(/^Off Grid AI Pro\. /));
     app.rtl.fireEvent.press(await app.view.findByRole('button', { name: 'Get Pro' }));
     await app.rtl.waitFor(() => expect(browserAddress).toMatch(/^https:\/\/getoffgridai\.co\/pro\/\?utm_source=off-grid-mobile-app.*#buy$/));
   } finally {

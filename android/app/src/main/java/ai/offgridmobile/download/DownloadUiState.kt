@@ -1,11 +1,20 @@
 package ai.offgridmobile.download
 
+import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.ConnectException
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLException
+
+/** Writing downloaded bytes to the phone's storage failed (as opposed to reading them from the network). */
+class DiskWriteException(cause: IOException) : Exception(cause.message, cause) {
+    fun isOutOfSpace(): Boolean {
+        val text = generateSequence(cause) { it.cause }.joinToString(" ") { it.message.orEmpty() }
+        return text.contains("ENOSPC") || text.contains("No space left", ignoreCase = true)
+    }
+}
 
 data class DownloadUiState(
     val status: String,
@@ -41,15 +50,35 @@ object DownloadReason {
 
     fun fromThrowable(error: Exception): String {
         return when (error) {
+            // A failed write to the phone's storage is not a network cut: a full disk says so, and any
+            // other write failure is not retried as if the connection had dropped.
+            is DiskWriteException -> if (error.isOutOfSpace()) DISK_FULL else UNKNOWN_ERROR
             is SocketTimeoutException -> NETWORK_TIMEOUT
             is InterruptedIOException -> NETWORK_TIMEOUT
             is UnknownHostException -> NETWORK_LOST
             is ConnectException -> NETWORK_LOST
             is SocketException -> NETWORK_LOST
             is SSLException -> NETWORK_LOST
+            // Any other I/O failure mid-transfer (a CDN stream reset, "unexpected end of stream") is an
+            // interrupted transfer, not an unknown one: the partial file is kept and resumes with Range.
+            // As UNKNOWN_ERROR it was never retried, so one reset failed the whole download.
+            is IOException -> DOWNLOAD_INTERRUPTED
             else -> UNKNOWN_ERROR
         }
     }
+
+    /**
+     * Resume straight away, in the same worker, after a retryable failure that came after new bytes:
+     * the download is still moving, so it costs none of WorkManager's retries (the file is finite, so
+     * this ends). Only a request that wrote nothing, or a run past MAX_IN_PLACE_RESUMES, waits for a
+     * WorkManager retry.
+     */
+    fun resumesInPlace(code: String, madeProgress: Boolean, resumesSoFar: Int = 0): Boolean =
+        madeProgress && isRetryable(code) && resumesSoFar < MAX_IN_PLACE_RESUMES
+
+    /** A connection that writes a little and drops every time still ends the worker, so WorkManager's
+     *  bounded retries apply: a long download on a bad network resumes this often per run. */
+    const val MAX_IN_PLACE_RESUMES = 20
 
     fun fromHttpCode(code: Int): String {
         return when (code) {

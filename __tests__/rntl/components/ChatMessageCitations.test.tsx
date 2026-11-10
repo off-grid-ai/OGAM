@@ -111,6 +111,6 @@ describe('the row a knowledge-base search leaves in the chat', () => {
 
     const view = render(<ChatMessage message={toolResult(text)} />);
 
-    expect(view.getByText('Searched documents (no passages)')).toBeTruthy();
+    expect(view.getByText('Searched your documents: nothing matched')).toBeTruthy();
   });
 });

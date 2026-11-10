@@ -267,7 +267,7 @@ describe('Gallery record repointed at its synced copy', () => {
     });
 
     // BEFORE: the Gallery holds the record, and its tile is blank - the file it names is gone.
-    fireEvent.press(await waitFor(() => ui!.getByText('Image Gallery')));
+    fireEvent.press(await waitFor(() => ui!.getByText('Gallery')));
     const tile = await waitFor(() => ui!.getByTestId(`gallery-image-${IMAGE_ID}`));
     expect(await modelTransferFsBoundary.module.exists(ORIGINAL_PATH)).toBe(false);
     const before = await decodeRenderedImages(tile, modelTransferFsBoundary.module);
@@ -345,7 +345,7 @@ describe('Gallery record repointed at its synced copy', () => {
     // AFTER: back on Home, the user opens the Gallery again and the picture loads.
     fireEvent.press(ui.getByLabelText('Back'));
     fireEvent.press(await waitFor(() => ui!.getByTestId('home-tab')));
-    fireEvent.press(await waitFor(() => ui!.getByText('Image Gallery')));
+    fireEvent.press(await waitFor(() => ui!.getByText('Gallery')));
     await waitFor(async () => {
       const shown = ui!.getByTestId(`gallery-image-${IMAGE_ID}`);
       const decoded = await decodeRenderedImages(shown, modelTransferFsBoundary.module);

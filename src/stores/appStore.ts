@@ -18,6 +18,7 @@ import {
 } from '@offgrid/speech';
 import { DEFAULT_MAX_TOOL_CALLS, MOBILE_MTP_DRAFT_TOKENS, REASONING_BUDGET_AUTO } from '@offgrid/models';
 import { APP_CONFIG } from '../constants';
+import type { ChatGroupBy, ChatSortBy } from '../utils/chatGrouping';
 import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
 import {
   VoiceTurnMode,
@@ -44,6 +45,7 @@ import {
   isSuspiciousRecoveredImageModel,
 } from '../utils/modelSelectorFilters';
 import { migratePersistedState } from './appStoreMigrations';
+import { repairedTextSelection } from '../services/activeModelService/selectedTextModel';
 import { defaultImageSteps } from '../utils/imageGenAdvice';
 
 type OnboardingChecklist = {
@@ -104,6 +106,10 @@ export type AppSettings = {
    *  'conservative' = one model at a time; 'balanced' = co-reside within budget;
    *  'aggressive' = co-reside with a larger RAM commitment. */
   modelLoadingMode?: 'conservative' | 'balanced' | 'aggressive';
+  /** How the Chats list groups and orders chats (its menu, like Claude's). Optional: absent means
+   *  the default, so settings saved before these existed need no migration. */
+  chatsGroupBy?: ChatGroupBy;
+  chatsSortBy?: ChatSortBy;
   cacheType: CacheType;
   showGenerationDetails: boolean;
   /**
@@ -375,7 +381,18 @@ export const useAppStore = create<AppState>()(
       setModelRecommendation: rec => set({ modelRecommendation: rec }),
       downloadedModels: [],
       setDownloadedModels: models =>
-        set({ downloadedModels: models.filter(m => !isExcludedTextModel(m)) }),
+        set(state => {
+          const downloadedModels = models.filter(m => !isExcludedTextModel(m));
+          return {
+            downloadedModels,
+            activeModelId: repairedTextSelection({
+              activeModelId: state.activeModelId,
+              lastTextModelId: state.lastTextModelId,
+              classifierModelId: state.settings.classifierModelId,
+              models: downloadedModels,
+            }),
+          };
+        }),
       addDownloadedModel: model =>
         set(state => {
           if (isExcludedTextModel(model)) return state;

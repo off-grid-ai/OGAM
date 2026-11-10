@@ -26,6 +26,8 @@ async function openLibrary(app: StudioApp): Promise<void> {
   rtl.fireEvent.press(await view.findByTestId('home-gallery-card', {}, { timeout: 10_000 }));
   await view.findByTestId('gallery-screen');
   rtl.fireEvent.press(view.getByTestId('gallery-tab-videos'));
+  // Videos stay in Gallery; the Pro library is the row at the top of the tab.
+  rtl.fireEvent.press(await view.findByTestId('gallery-open-video-library', {}, { timeout: 10_000 }));
   await view.findByTestId('library-grid', {}, { timeout: 10_000 });
 }
 
@@ -86,7 +88,9 @@ it('the viewer pauses on a tap and saves the clip to Downloads', async () => {
   await makeClipInChat(app, CLIP);
   await openLibrary(app);
   rtl.fireEvent.press(view.getAllByTestId(/^expand-library-item-/)[0]);
-  const toggle = await view.findByTestId('play-viewer', {}, { timeout: 10_000 });
+  // It plays with nothing over the picture; a tap on the picture brings Pause.
+  rtl.fireEvent.press(await view.findByTestId('frame-viewer', {}, { timeout: 10_000 }));
+  const toggle = view.getByTestId('play-viewer');
   expect(toggle.props.accessibilityLabel).toBe('Pause');
   rtl.fireEvent.press(toggle);
   await rtl.waitFor(() => expect(view.getByTestId('play-viewer').props.accessibilityLabel).toBe('Play'));

@@ -38,6 +38,8 @@ async function makeCharacter(app: StudioApp, name: string): Promise<void> {
   expect(view.getByTestId('character-save').props.accessibilityState?.disabled).toBe(true);
   rtl.fireEvent(view.getByTestId('character-consent'), 'valueChange', true);
   await rtl.waitFor(() => expect(view.getByTestId('character-save').props.accessibilityState?.disabled).toBe(false));
+  // The app's one switch: on is a white knob on the emerald track.
+  expect(view.getByTestId('character-consent').props.thumbTintColor).toBe('#FFFFFF');
   rtl.fireEvent.press(view.getByTestId('character-save'));
   await view.findByLabelText(`Stop keeping ${name}`, {}, { timeout: 10_000 });
 }
@@ -119,6 +121,7 @@ it('deleting a person asks first; Cancel keeps them, Delete removes them', async
   rtl.fireEvent.press(await view.findByTestId('home-gallery-card', {}, { timeout: 10_000 }));
   await view.findByTestId('gallery-screen');
   rtl.fireEvent.press(view.getByTestId('gallery-tab-videos'));
+  rtl.fireEvent.press(await view.findByTestId('gallery-open-video-library', {}, { timeout: 10_000 }));
   rtl.fireEvent.press(await view.findByLabelText('Character Leo', {}, { timeout: 10_000 }));
   const remove = await view.findByLabelText('Delete character', {}, { timeout: 10_000 });
 

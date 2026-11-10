@@ -1,5 +1,6 @@
 // swiftlint:disable file_length
 import Foundation
+import UIKit
 import React
 
 @objc(DownloadManagerModule)
@@ -217,6 +218,24 @@ class DownloadManagerModule: RCTEventEmitter {
 
   static var sharedSession: URLSession?
   static var sessionDelegate: DownloadSessionDelegate?
+  /// The background session: it keeps downloading after the app leaves the screen, is suspended or
+  /// is closed by the system. Its tasks are keyed `taskIdentifier + backgroundKeyOffset`, since each
+  /// session numbers its tasks from 1.
+  static var backgroundSession: URLSession?
+  static let backgroundIdentifier = "ai.offgridmobile.model-downloads"
+  static let backgroundKeyOffset = 1 << 40
+  /// The handler iOS gives the app when it wakes it for background download events.
+  static var backgroundEventsCompletionHandler: (() -> Void)?
+  /// Automatic retries after a dropped connection, per download. Reset by a fresh start.
+  static let maxAutoRetries = 5
+  var autoRetries: [String: Int] = [:]
+  /// Task keys the module let go of on purpose (a hand-off, a cancel, a retry, a failed multi-file
+  /// download). A late completion from one is not reattached from its description.
+  var retiredTaskKeys = Set<Int>()
+  /// Whether the app is on screen. New tasks and hand-offs go to the fast session while it is, and to
+  /// the background session while it is not.
+  var isInForeground = true
+  private var lifecycleObserved = false
 
   var downloads: [String: DownloadInfo] = [:]
   var taskToDownloadId: [Int: String] = [:] // URLSessionTask.taskIdentifier -> downloadId
@@ -333,8 +352,152 @@ class DownloadManagerModule: RCTEventEmitter {
       DownloadManagerModule.sessionDelegate?.module = self
     }
 
+    if DownloadManagerModule.backgroundSession == nil, let delegate = DownloadManagerModule.sessionDelegate {
+      // The fast session above stops when the app is suspended, which is how most iPhone downloads
+      // died (PostHog 2026-11-09). Running tasks move here when the app leaves the screen, and back
+      // when it returns, so a download keeps going without giving up the fast session's speed.
+      let config = URLSessionConfiguration.background(withIdentifier: DownloadManagerModule.backgroundIdentifier)
+      config.isDiscretionary = false
+      config.sessionSendsLaunchEvents = true
+      config.allowsCellularAccess = true
+      config.timeoutIntervalForRequest = 60
+      config.timeoutIntervalForResource = 60 * 60 * 24 * 7
+      config.urlCache = nil
+      config.requestCachePolicy = .reloadIgnoringLocalCacheData
+      DownloadManagerModule.backgroundSession = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+    }
+
+    observeLifecycle()
     loadPersistedState()
     restoreTasksFromSession()
+  }
+
+  /// The session's key for a task: its own id in the fast session, offset in the background one.
+  func taskKey(_ task: URLSessionTask, in session: URLSession) -> Int {
+    session === DownloadManagerModule.backgroundSession
+      ? task.taskIdentifier + DownloadManagerModule.backgroundKeyOffset
+      : task.taskIdentifier
+  }
+
+  /// Where new and handed-off tasks run now.
+  var currentSession: URLSession {
+    if !isInForeground, let background = DownloadManagerModule.backgroundSession { return background }
+    return session
+  }
+
+  private func observeLifecycle() {
+    guard !lifecycleObserved else { return }
+    lifecycleObserved = true
+    DispatchQueue.main.async {
+      self.isInForeground = UIApplication.shared.applicationState != .background
+      let center = NotificationCenter.default
+      center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+        self?.isInForeground = false
+        self?.handOffRunningTasks(toBackground: true)
+      }
+      center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+        guard let self, !self.isInForeground else { return }
+        self.isInForeground = true
+        self.handOffRunningTasks(toBackground: false)
+      }
+    }
+  }
+
+  /// Moves every running task to the other session, keeping its bytes: the old task is cancelled with
+  /// resume data and a new one continues from there. Without resume data (a server that cannot
+  /// resume) the new task starts the file again, which is still better than the download dying.
+  func handOffRunningTasks(toBackground: Bool) {
+    guard let background = DownloadManagerModule.backgroundSession else { return }
+    let source = toBackground ? session : background
+    let target = toBackground ? background : session
+    let app = UIApplication.shared
+    var assertion = UIBackgroundTaskIdentifier.invalid
+    assertion = app.beginBackgroundTask(withName: "model-download-handoff") {
+      app.endBackgroundTask(assertion)
+      assertion = .invalid
+    }
+    let group = DispatchGroup()
+    queue.async(flags: .barrier) {
+      for (downloadId, info) in self.downloads where info.status == "running" || info.status == "pending" {
+        let tasks: [URLSessionDownloadTask] = info.isMultiFile
+          ? info.fileTasks.values.filter { !$0.completed }.compactMap { $0.task }
+          : [info.task].compactMap { $0 }
+        for old in tasks {
+          let oldKey = self.taskKey(old, in: source)
+          guard self.taskToDownloadId[oldKey] == downloadId else { continue } // not in the source session
+          guard let url = old.originalRequest?.url ?? old.currentRequest?.url else { continue }
+          // Drop the old key first: its cancellation then reaches handleError as an unknown task.
+          self.taskToDownloadId.removeValue(forKey: oldKey)
+          self.retiredTaskKeys.insert(oldKey)
+          // And the old task itself: while it cancels its state reads .canceling/.completed, and a
+          // progress poll would mark the download failed or completed, so the hand-off never continued.
+          self.detachTask(downloadId: downloadId, oldKey: oldKey)
+          group.enter()
+          self.handOff(old, downloadId: downloadId, oldKey: oldKey, url: url, to: target) { group.leave() }
+        }
+      }
+      self.persistStateLocked()
+      group.notify(queue: .main) {
+        if assertion != .invalid { app.endBackgroundTask(assertion) }
+      }
+    }
+  }
+
+  /// Cancels `old` with its resume data and continues the download in `target` from there.
+  private func handOff(_ old: URLSessionDownloadTask, downloadId: String, oldKey: Int, url: URL,
+                       to target: URLSession, then done: @escaping () -> Void) {
+    let toBackground = target === DownloadManagerModule.backgroundSession
+    old.cancel(byProducingResumeData: { data in
+      NSLog("[DownloadManager] Handing off download #%@ to the %@ session (%@ resume data)",
+            downloadId, toBackground ? "background" : "fast", data == nil ? "no" : "with")
+      self.continueDownload(downloadId, from: old, oldKey: oldKey, url: url, resumeData: data, in: target, then: done)
+    })
+  }
+
+  /// Continues a download in `target` from where `old` stopped: from its resume data when there is
+  /// some, else from the start of the file. Shared by the hand-off and the automatic retry.
+  func continueDownload(_ downloadId: String, from old: URLSessionDownloadTask, oldKey: Int, url: URL,
+                        resumeData: Data?, in target: URLSession, then done: (() -> Void)? = nil) {
+    queue.async(flags: .barrier) {
+      defer { done?() }
+      // Cancelled, failed or finished meanwhile (another file of a multi-file download can fail for
+      // good during a retry's back-off): nothing to continue.
+      guard let status = self.downloads[downloadId]?.status, status != "failed", status != "completed" else { return }
+      let next = resumeData.map { target.downloadTask(withResumeData: $0) }
+        ?? target.downloadTask(with: self.makeDownloadRequest(url))
+      next.taskDescription = old.taskDescription
+      // Paused while it waited (a retry's back-off): the new task stays suspended for Resume to start.
+      let paused = self.downloads[downloadId]?.status == "paused"
+      self.replaceTask(downloadId: downloadId, oldKey: oldKey, with: next, in: target)
+      if !paused { next.resume() }
+    }
+  }
+
+  /// Forgets the task a download is leaving (a hand-off), until replaceTask gives it the next one.
+  /// Call on `queue` with a barrier.
+  func detachTask(downloadId: String, oldKey: Int) {
+    guard var info = downloads[downloadId] else { return }
+    if info.isMultiFile { info.fileTasks[oldKey]?.task = nil } else { info.task = nil }
+    downloads[downloadId] = info
+  }
+
+  /// Points a download at a new task in place of an old one (a hand-off or an automatic retry).
+  /// Call on `queue` with a barrier.
+  func replaceTask(downloadId: String, oldKey: Int, with next: URLSessionDownloadTask, in target: URLSession) {
+    guard var info = downloads[downloadId] else { return }
+    let newKey = taskKey(next, in: target)
+    if info.isMultiFile, var file = info.fileTasks.removeValue(forKey: oldKey) {
+      file.task = next
+      file.taskIdentifier = newKey
+      info.fileTasks[newKey] = file
+    } else {
+      info.task = next
+      info.taskIdentifier = newKey
+    }
+    if info.status != "paused" { info.status = "running" }
+    downloads[downloadId] = info
+    taskToDownloadId[newKey] = downloadId
+    persistStateLocked()
   }
 
   var session: URLSession {
@@ -482,6 +645,7 @@ class DownloadManagerModule: RCTEventEmitter {
 
   private func restoreMultiFileTask(
     _ downloadTask: URLSessionDownloadTask,
+    key: Int,
     desc: TaskDescription,
     relativePath: String,
     destinationDir: String,
@@ -497,12 +661,12 @@ class DownloadManagerModule: RCTEventEmitter {
       relativePath: relativePath,
       destinationDir: destinationDir,
       task: downloadTask,
-      taskIdentifier: downloadTask.taskIdentifier,
+      taskIdentifier: key,
       bytesDownloaded: downloadTask.countOfBytesReceived,
       totalBytes: totalBytes,
       completed: false
     )
-    info.fileTasks[downloadTask.taskIdentifier] = fileTask
+    info.fileTasks[key] = fileTask
     info.multiFileDestDir = destinationDir
     var aggregateBytes: Int64 = 0
     for (_, file) in info.fileTasks { aggregateBytes += file.bytesDownloaded }
@@ -514,58 +678,80 @@ class DownloadManagerModule: RCTEventEmitter {
     }
   }
 
+  /// The download a live task belongs to, rebuilt from the task's own description and attached to
+  /// it: the persisted entry when there is one, else a fresh one. Nil for a multi-file task whose
+  /// description lacks its path. Caller holds the barrier.
+  private func reattach(_ downloadTask: URLSessionDownloadTask, key: Int, desc: TaskDescription) -> DownloadInfo? {
+    var info = downloads[desc.downloadId] ?? DownloadInfo(
+      downloadId: desc.downloadId,
+      fileName: desc.fileName,
+      modelId: desc.modelId,
+      totalBytes: desc.totalBytes ?? 0,
+      bytesDownloaded: 0,
+      status: statusString(from: downloadTask.state),
+      startedAt: Date().timeIntervalSince1970 * 1000,
+      modelKey: nil,
+      modelType: "text",
+      combinedTotalBytes: 0,
+      metadataJson: nil,
+      task: nil,
+      taskIdentifier: nil,
+      localUri: nil,
+      fileTasks: [:],
+      multiFileDestDir: desc.destinationDir,
+      isMultiFile: desc.isMultiFile
+    )
+    if desc.isMultiFile {
+      guard let relativePath = desc.relativePath, let destinationDir = desc.destinationDir else { return nil }
+      restoreMultiFileTask(downloadTask, key: key, desc: desc, relativePath: relativePath, destinationDir: destinationDir, info: &info)
+    } else {
+      info.task = downloadTask
+      info.taskIdentifier = key
+      info.bytesDownloaded = downloadTask.countOfBytesReceived
+      if downloadTask.countOfBytesExpectedToReceive > 0 {
+        info.totalBytes = downloadTask.countOfBytesExpectedToReceive
+      }
+    }
+    return info
+  }
+
+  /// After a relaunch, tasks that ran in the background session move back to the fast one when the
+  /// app is on screen (the first didBecomeActive after launch does not move them). Main queue.
+  private func returnRestoredTasksIfActive() {
+    if UIApplication.shared.applicationState == .active { handOffRunningTasks(toBackground: false) }
+  }
+
   private func restoreTasksFromSession() {
-    session.getAllTasks { [weak self] tasks in
+    // Tasks from both sessions: background tasks survive suspension and a system kill.
+    var found: [(URLSessionTask, URLSession)] = []
+    let group = DispatchGroup()
+    let lock = NSLock()
+    for owner in [session, DownloadManagerModule.backgroundSession].compactMap({ $0 }) {
+      group.enter()
+      owner.getAllTasks { tasks in
+        lock.lock(); found += tasks.map { ($0, owner) }; lock.unlock()
+        group.leave()
+      }
+    }
+    group.notify(queue: .global()) { [weak self] in
       guard let self else { return }
       self.queue.async(flags: .barrier) {
         var maxId: Int64 = self.nextDownloadId - 1
         self.taskToDownloadId = [:]
 
-        for task in tasks {
+        for (task, owner) in found {
           guard let downloadTask = task as? URLSessionDownloadTask else { continue }
+          let key = self.taskKey(downloadTask, in: owner)
           guard let desc = self.decodeTaskDescription(downloadTask.taskDescription) else {
             NSLog("[DownloadManager] Task #%d missing taskDescription; cancelling stale task", downloadTask.taskIdentifier)
             downloadTask.cancel()
             continue
           }
 
-          var info = self.downloads[desc.downloadId] ?? DownloadInfo(
-            downloadId: desc.downloadId,
-            fileName: desc.fileName,
-            modelId: desc.modelId,
-            totalBytes: desc.totalBytes ?? 0,
-            bytesDownloaded: 0,
-            status: self.statusString(from: downloadTask.state),
-            startedAt: Date().timeIntervalSince1970 * 1000,
-            modelKey: nil,
-            modelType: "text",
-            combinedTotalBytes: 0,
-            metadataJson: nil,
-            task: nil,
-            taskIdentifier: nil,
-            localUri: nil,
-            fileTasks: [:],
-            multiFileDestDir: desc.destinationDir,
-            isMultiFile: desc.isMultiFile
-          )
-
-          if desc.isMultiFile {
-            guard let relativePath = desc.relativePath, let destinationDir = desc.destinationDir else {
-              continue
-            }
-            self.restoreMultiFileTask(downloadTask, desc: desc, relativePath: relativePath, destinationDir: destinationDir, info: &info)
-          } else {
-            info.task = downloadTask
-            info.taskIdentifier = downloadTask.taskIdentifier
-            info.bytesDownloaded = downloadTask.countOfBytesReceived
-            if downloadTask.countOfBytesExpectedToReceive > 0 {
-              info.totalBytes = downloadTask.countOfBytesExpectedToReceive
-            }
-          }
-
+          guard var info = self.reattach(downloadTask, key: key, desc: desc) else { continue }
           info.status = self.statusString(from: downloadTask.state)
           self.downloads[desc.downloadId] = info
-          self.taskToDownloadId[downloadTask.taskIdentifier] = desc.downloadId
+          self.taskToDownloadId[key] = desc.downloadId
           if let numericId = Int64(desc.downloadId), numericId > maxId { maxId = numericId }
         }
 
@@ -590,6 +776,7 @@ class DownloadManagerModule: RCTEventEmitter {
         }
 
         self.persistStateLocked()
+        DispatchQueue.main.async(execute: self.returnRestoredTasksIfActive)
         NSLog("[DownloadManager] Restored %d URLSession tasks (%d downloads), %d orphaned → failed", self.taskToDownloadId.count, self.downloads.count, orphanedIds.count)
       }
     }
@@ -628,7 +815,9 @@ extension DownloadManagerModule {
     NSLog("[DownloadManager] Starting download #%@: url=%@, fileName=%@, modelId=%@, totalBytes=%lld, modelType=%@",
           downloadId, urlString, fileName, modelId, totalBytes, modelType)
 
-    let task = session.downloadTask(with: makeDownloadRequest(url))
+    let owner = currentSession
+    let task = owner.downloadTask(with: makeDownloadRequest(url))
+    let key = taskKey(task, in: owner)
     task.taskDescription = encodeTaskDescription(TaskDescription(
       downloadId: downloadId,
       fileName: fileName,
@@ -654,7 +843,7 @@ extension DownloadManagerModule {
       combinedTotalBytes: combinedTotalBytes,
       metadataJson: metadataJson,
       task: task,
-      taskIdentifier: task.taskIdentifier,
+      taskIdentifier: key,
       localUri: nil,
       fileTasks: [:],
       multiFileDestDir: nil,
@@ -663,7 +852,8 @@ extension DownloadManagerModule {
 
     queue.sync(flags: .barrier) {
       self.downloads[downloadId] = info
-      self.taskToDownloadId[task.taskIdentifier] = downloadId
+      self.taskToDownloadId[key] = downloadId
+      self.autoRetries[downloadId] = 0
       self.persistStateLocked()
       NSLog("[DownloadManager] Stored download #%@ in state (total: %d, taskMap: %d)",
             downloadId, self.downloads.count, self.taskToDownloadId.count)
@@ -708,7 +898,8 @@ extension DownloadManagerModule {
     try? fileManager.createDirectory(atPath: destinationDir, withIntermediateDirectories: true)
 
     var fileTasks: [Int: FileTask] = [:]
-    var tasks: [URLSessionDownloadTask] = []
+    var tasks: [(URLSessionDownloadTask, Int)] = []
+    let owner = currentSession
 
     for (index, fileInfo) in filesArray.enumerated() {
       guard let urlString = fileInfo["url"] as? String,
@@ -719,7 +910,8 @@ extension DownloadManagerModule {
       }
 
       let fileSize = (fileInfo["size"] as? NSNumber)?.int64Value ?? 0
-      let task = session.downloadTask(with: makeDownloadRequest(url))
+      let task = owner.downloadTask(with: makeDownloadRequest(url))
+      let key = taskKey(task, in: owner)
       task.taskDescription = encodeTaskDescription(TaskDescription(
         downloadId: downloadId,
         fileName: fileName,
@@ -739,14 +931,14 @@ extension DownloadManagerModule {
         relativePath: relativePath,
         destinationDir: destinationDir,
         task: task,
-        taskIdentifier: task.taskIdentifier,
+        taskIdentifier: key,
         bytesDownloaded: 0,
         totalBytes: fileSize,
         completed: false
       )
 
-      fileTasks[task.taskIdentifier] = fileTask
-      tasks.append(task)
+      fileTasks[key] = fileTask
+      tasks.append((task, key))
     }
 
     let info = DownloadInfo(
@@ -771,15 +963,16 @@ extension DownloadManagerModule {
 
     queue.sync(flags: .barrier) {
       self.downloads[downloadId] = info
-      for task in tasks {
-        self.taskToDownloadId[task.taskIdentifier] = downloadId
+      for (_, key) in tasks {
+        self.taskToDownloadId[key] = downloadId
       }
+      self.autoRetries[downloadId] = 0
       self.persistStateLocked()
       NSLog("[DownloadManager] Stored multi-file download #%@ in state (taskMap entries: %d)",
             downloadId, self.taskToDownloadId.count)
     }
 
-    for task in tasks {
+    for (task, _) in tasks {
       task.resume()
     }
     NSLog("[DownloadManager] Resumed all %d tasks for multi-file download #%@", tasks.count, downloadId)
@@ -850,11 +1043,13 @@ extension DownloadManagerModule {
         for (_, fileTask) in info.fileTasks {
           fileTask.task?.cancel()
           self.taskToDownloadId.removeValue(forKey: fileTask.taskIdentifier)
+          self.retiredTaskKeys.insert(fileTask.taskIdentifier)
         }
       } else {
         info.task?.cancel()
         if let taskId = info.taskIdentifier ?? info.task?.taskIdentifier {
           self.taskToDownloadId.removeValue(forKey: taskId)
+          self.retiredTaskKeys.insert(taskId)
         }
       }
       self.downloads[id]?.status = "failed"
@@ -1051,7 +1246,9 @@ extension DownloadManagerModule {
           var aggregateBytes: Int64 = 0
           var aggregateTotal: Int64 = 0
           for (taskId, var fileTask) in info.fileTasks {
-            if let task = fileTask.task {
+            // A task that has received nothing yet (a resume waiting for the network) keeps the
+            // count it had, so the bar does not drop to 0% while the phone is offline.
+            if let task = fileTask.task, task.countOfBytesReceived > 0 || fileTask.bytesDownloaded == 0 {
               fileTask.bytesDownloaded = task.countOfBytesReceived
               if task.countOfBytesExpectedToReceive > 0 {
                 fileTask.totalBytes = task.countOfBytesExpectedToReceive
@@ -1064,7 +1261,7 @@ extension DownloadManagerModule {
           info.bytesDownloaded = aggregateBytes
           if info.totalBytes <= 0 { info.totalBytes = aggregateTotal }
         } else if let task = info.task {
-          info.bytesDownloaded = task.countOfBytesReceived
+          if task.countOfBytesReceived > 0 { info.bytesDownloaded = task.countOfBytesReceived }
           if task.countOfBytesExpectedToReceive > 0 {
             info.totalBytes = task.countOfBytesExpectedToReceive
           }
@@ -1116,7 +1313,8 @@ extension DownloadManagerModule {
         var totalDown: Int64 = 0
         for (_, fileTask) in info.fileTasks { totalDown += fileTask.bytesDownloaded }
         info.bytesDownloaded = totalDown
-        info.status = "running"
+        // A late progress callback after a pause must not undo it (Resume would then refuse the download).
+        if info.status != "paused" { info.status = "running" }
         if totalBytesWritten % (5 * 1024 * 1024) < bytesWritten || totalBytesWritten == bytesWritten {
           NSLog("[DownloadManager] Multi-file progress: download#%@ task#%d: %lld/%lld (aggregate: %lld/%lld)",
                 downloadId, taskId, totalBytesWritten, totalBytesExpected, info.bytesDownloaded, info.totalBytes)
@@ -1136,9 +1334,18 @@ extension DownloadManagerModule {
     }
   }
 
-  fileprivate func handleCompletion(taskId: Int, location: URL) {
+  fileprivate func handleCompletion(taskId: Int, location: URL, task: URLSessionDownloadTask? = nil) {
     NSLog("[DownloadManager] handleCompletion: task#%d, location=%@", taskId, location.path)
     queue.async(flags: .barrier) {
+      // After a relaunch the background session can finish a task before restoration has mapped it.
+      // The task's own description names its download, so attach it here instead of dropping it.
+      if self.taskToDownloadId[taskId] == nil, !self.retiredTaskKeys.contains(taskId),
+         let task, let desc = self.decodeTaskDescription(task.taskDescription),
+         let attached = self.reattach(task, key: taskId, desc: desc) {
+        NSLog("[DownloadManager] handleCompletion: task#%d mapped from its description to #%@", taskId, desc.downloadId)
+        self.downloads[desc.downloadId] = attached
+        self.taskToDownloadId[taskId] = desc.downloadId
+      }
       guard let downloadId = self.taskToDownloadId[taskId],
             var info = self.downloads[downloadId] else {
         NSLog("[DownloadManager] handleCompletion: task#%d NOT FOUND in taskToDownloadId", taskId)
@@ -1292,10 +1499,54 @@ extension DownloadManagerModule {
           "bytesDownloaded": NSNumber(value: info.bytesDownloaded),
           "totalBytes": NSNumber(value: info.totalBytes),
           "status": "failed",
-          "reason": "Failed to save download: \(error.localizedDescription)"
+          "reason": "Failed to save download: \(error.localizedDescription)",
+          // A code of its own: without one this counted as a generic "error". The temporary file is
+          // gone, so this is not finalize_failed (whose bytes stay on disk for Retry to save).
+          "reasonCode": DownloadManagerModule.saveFailureCode(for: error)
         ] as [String: Any])
       }
     }
+  }
+
+  /// The reason a download stopped, in the codes Android sends (src/utils/downloadErrors.ts).
+  /// Moving a finished file into place failed: a full disk, or another save error.
+  static func saveFailureCode(for error: Error) -> String {
+    let code = reasonCode(for: error)
+    return code == "disk_full" ? code : "save_failed"
+  }
+
+  static func reasonCode(for error: Error?) -> String {
+    guard let error = error as NSError? else { return "unknown_error" }
+    if error.domain == NSURLErrorDomain {
+      switch error.code {
+      case NSURLErrorNetworkConnectionLost, NSURLErrorNotConnectedToInternet,
+           NSURLErrorDataNotAllowed, NSURLErrorInternationalRoamingOff:
+        return "network_lost"
+      case NSURLErrorTimedOut:
+        return "network_timeout"
+      case NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost, NSURLErrorDNSLookupFailed,
+           NSURLErrorBadServerResponse:
+        return "server_unavailable"
+      case NSURLErrorCancelled:
+        return error.userInfo[NSURLErrorBackgroundTaskCancelledReasonKey] != nil ? "download_interrupted" : "user_cancelled"
+      case NSURLErrorCannotWriteToFile, NSURLErrorCannotCreateFile:
+        return "disk_full"
+      default:
+        return "unknown_error"
+      }
+    }
+    if (error.domain == NSCocoaErrorDomain && error.code == NSFileWriteOutOfSpaceError)
+      || (error.domain == NSPOSIXErrorDomain && error.code == Int(ENOSPC)) {
+      return "disk_full"
+    }
+    return "unknown_error"
+  }
+
+  /// A stop worth trying again on its own: a dropped or slow connection, or the system ending a
+  /// background transfer (the app was closed). Never a cancel by the person or a full disk.
+  static func isTransient(_ code: String) -> Bool {
+    code == "network_lost" || code == "network_timeout" || code == "server_unavailable"
+      || code == "download_interrupted"
   }
 
   fileprivate func handleError(taskId: Int, error: Error?) {
@@ -1304,6 +1555,32 @@ extension DownloadManagerModule {
       guard let downloadId = self.taskToDownloadId[taskId],
             var info = self.downloads[downloadId] else {
         NSLog("[DownloadManager] handleError: task#%d NOT FOUND in taskToDownloadId", taskId)
+        return
+      }
+      let code = DownloadManagerModule.reasonCode(for: error)
+
+      // A dropped connection retries by itself from the bytes already here, up to five times with a
+      // growing wait, before the person is asked to tap retry.
+      let attempts = self.autoRetries[downloadId] ?? 0
+      if DownloadManagerModule.isTransient(code), attempts < DownloadManagerModule.maxAutoRetries,
+         let old = info.isMultiFile ? info.fileTasks[taskId]?.task : info.task,
+         let url = old.originalRequest?.url ?? old.currentRequest?.url {
+        self.autoRetries[downloadId] = attempts + 1
+        self.taskToDownloadId.removeValue(forKey: taskId)
+        self.retiredTaskKeys.insert(taskId)
+        // While it waits, the finished task must not be polled: its state would read "completed".
+        if !info.isMultiFile { info.task = nil }
+        // A pause the person made stays: the retry then waits suspended for Resume (continueDownload).
+        if info.status != "paused" { info.status = "pending" }
+        self.downloads[downloadId] = info
+        self.persistStateLocked()
+        let resumeData = (error as NSError?)?.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
+        let delay = min(30.0, pow(2.0, Double(attempts + 1)))
+        NSLog("[DownloadManager] Download #%@ stopped (%@); retry %d/%d in %.0fs %@ resume data",
+              downloadId, code, attempts + 1, DownloadManagerModule.maxAutoRetries, delay, resumeData == nil ? "without" : "with")
+        DispatchQueue.global().asyncAfter(deadline: .now() + delay) {
+          self.continueDownload(downloadId, from: old, oldKey: taskId, url: url, resumeData: resumeData, in: self.currentSession)
+        }
         return
       }
 
@@ -1315,6 +1592,7 @@ extension DownloadManagerModule {
         for (_, fileTask) in info.fileTasks where !fileTask.completed {
           fileTask.task?.cancel()
           self.taskToDownloadId.removeValue(forKey: fileTask.taskIdentifier)
+          self.retiredTaskKeys.insert(fileTask.taskIdentifier)
         }
       } else {
         self.taskToDownloadId.removeValue(forKey: taskId)
@@ -1333,7 +1611,8 @@ extension DownloadManagerModule {
           "bytesDownloaded": NSNumber(value: info.bytesDownloaded),
           "totalBytes": NSNumber(value: info.totalBytes),
           "status": "failed",
-          "reason": error?.localizedDescription ?? "Unknown error"
+          "reason": error?.localizedDescription ?? "Unknown error",
+          "reasonCode": code
         ] as [String: Any])
       } else {
         NSLog("[DownloadManager] Download#%@ errored but hasListeners=false, NOT sending event!", downloadId)
@@ -1353,22 +1632,24 @@ class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
     NSLog("[DownloadManager] DownloadSessionDelegate created")
   }
 
-  func urlSession(_: URLSession,
+  func urlSession(_ session: URLSession,
                   downloadTask: URLSessionDownloadTask,
                   didWriteData bytesWritten: Int64,
                   totalBytesWritten: Int64,
                   totalBytesExpectedToWrite: Int64) {
-    module?.handleProgress(
-      taskId: downloadTask.taskIdentifier,
+    guard let module else { return }
+    module.handleProgress(
+      taskId: module.taskKey(downloadTask, in: session),
       bytesWritten: bytesWritten,
       totalBytesWritten: totalBytesWritten,
       totalBytesExpected: totalBytesExpectedToWrite
     )
   }
 
-  func urlSession(_: URLSession,
+  func urlSession(_ session: URLSession,
                   downloadTask: URLSessionDownloadTask,
                   didFinishDownloadingTo location: URL) {
+    let key = module?.taskKey(downloadTask, in: session) ?? downloadTask.taskIdentifier
     NSLog("[DownloadManager] Delegate: didFinishDownloadingTo for task#%d at %@",
           downloadTask.taskIdentifier, location.path)
 
@@ -1384,21 +1665,29 @@ class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
     do {
       try fileManager.copyItem(at: location, to: safeURL)
       NSLog("[DownloadManager] Delegate: copied temp file to safe location: %@", safeTmp)
-      module?.handleCompletion(taskId: downloadTask.taskIdentifier, location: safeURL)
+      module?.handleCompletion(taskId: key, location: safeURL, task: downloadTask)
     } catch {
       NSLog("[DownloadManager] Delegate: FAILED to copy temp file: %@", error.localizedDescription)
-      module?.handleError(taskId: downloadTask.taskIdentifier, error: error)
+      module?.handleError(taskId: key, error: error)
     }
   }
 
-  func urlSession(_: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+  func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
     if let error = error {
       NSLog("[DownloadManager] Delegate: didCompleteWithError for task#%d: %@",
             task.taskIdentifier, error.localizedDescription)
-      module?.handleError(taskId: task.taskIdentifier, error: error)
+      module?.handleError(taskId: module?.taskKey(task, in: session) ?? task.taskIdentifier, error: error)
     } else {
       NSLog("[DownloadManager] Delegate: didCompleteWithError for task#%d: NO error (success)",
             task.taskIdentifier)
+    }
+  }
+
+  /// iOS woke the app for background download events and they are all delivered: tell it so.
+  func urlSessionDidFinishEvents(forBackgroundURLSession _: URLSession) {
+    DispatchQueue.main.async {
+      DownloadManagerModule.backgroundEventsCompletionHandler?()
+      DownloadManagerModule.backgroundEventsCompletionHandler = nil
     }
   }
 }

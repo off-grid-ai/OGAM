@@ -6,14 +6,15 @@ import {
   View,
 } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../components/AliveScreen';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Button } from '../components/Button';
-import { CustomAlert } from '../components/CustomAlert';
+import { CustomAlert, AlertState, initialAlertState, showAlert } from '../components/CustomAlert';
+import { remoteServerManager } from '../services/remoteServerManager';
 import { useRemoteServerStore } from '../stores';
 import { useTheme, useThemedStyles } from '../theme';
 import type { RootStackParamList } from '../navigation/types';
@@ -39,9 +40,31 @@ export const RemoteServerEditorScreen: React.FC = () => {
   const theme = useTheme();
   const styles = useThemedStyles(createStyles);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [removeAlert, setRemoveAlert] = useState<AlertState>(initialAlertState);
   const close = () => navigation.goBack();
   const form = useRemoteServerForm({ server, visible: true, onClose: close });
   const needsKey = route.params?.needsKey === true;
+  // Remove lives here, beside Test connection, so the list keeps one action per row (hand test 64).
+  const confirmRemove = () => {
+    if (!server) return;
+    setRemoveAlert(showAlert(
+      'Remove this server',
+      `"${server.name}" will be removed from this phone. The server itself is not touched.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            const { activeServerId, setActiveServerId } = useRemoteServerStore.getState();
+            if (activeServerId === server.id) setActiveServerId(null);
+            await remoteServerManager.removeServer(server.id);
+            close();
+          },
+        },
+      ],
+    ));
+  };
   const apiKeyInput = useRef<TextInput>(null);
   // autoFocus during the push animation marks the field focused but leaves the iOS keyboard
   // down, so the key field takes focus once the screen has finished arriving.
@@ -51,7 +74,7 @@ export const RemoteServerEditorScreen: React.FC = () => {
   }, [navigation, needsKey]);
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
+    <AliveScreen style={styles.screen} edges={['top']}>
       <ScreenHeader
         title={server ? 'Edit server' : 'Add a server'}
         onBack={close}
@@ -240,8 +263,17 @@ export const RemoteServerEditorScreen: React.FC = () => {
             testID="save-server"
           />
         </View>
+        {server ? (
+          <Button
+            title="Remove server"
+            variant="ghost"
+            onPress={confirmRemove}
+            testID="remove-server"
+          />
+        ) : null}
       </ScrollView>
       <CustomAlert {...form.alertState} onClose={form.dismissAlert} />
-    </SafeAreaView>
+      <CustomAlert {...removeAlert} onClose={() => setRemoveAlert(initialAlertState)} />
+    </AliveScreen>
   );
 };

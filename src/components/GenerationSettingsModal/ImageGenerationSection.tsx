@@ -9,6 +9,7 @@ import { hardwareService } from '../../services';
 import { isRemoteTextModelActive } from '../../services/engines';
 import { createStyles } from './styles';
 import { ImageQualityBasicSliders, ImageQualityAdvancedSliders } from './ImageQualitySliders';
+import { ChatStyleSetting } from '../MediaStyles/ChatStyleSetting';
 
 // ─── Auto-Detect Method Toggle ────────────────────────────────────────────────
 
@@ -19,7 +20,7 @@ const AutoDetectMethodToggle: React.FC = () => {
   return (
     <View style={styles.modeToggleContainer}>
       <View style={styles.modeToggleInfo}>
-        <Text style={styles.modeToggleLabel}>Detection Method</Text>
+        <Text style={styles.modeToggleLabel}>Detection method</Text>
         <Text style={styles.modeToggleDesc}>
           {settings.autoDetectMethod === 'pattern'
             ? 'Fast keyword matching ("draw", "create image", etc.)'
@@ -87,7 +88,7 @@ const ClassifierModelPicker: React.FC = () => {
         onPress={() => setShowPicker(!showPicker)}
       >
         <View style={styles.modelPickerContent}>
-          <Text style={styles.modelPickerLabel}>Classifier Model</Text>
+          <Text style={styles.modelPickerLabel}>Classifier model</Text>
           <Text style={styles.modelPickerValue}>
             {classifierModel?.name || 'Use current model'}
           </Text>
@@ -177,6 +178,7 @@ export const ImageGenerationSection: React.FC = () => {
 
   return (
     <View style={styles.sectionCard}>
+      <ChatStyleSetting kind="image" />
       {/* Image Generation Mode Toggle */}
       <View style={styles.modeToggleContainer}>
         <View style={styles.modeToggleInfo}>
@@ -215,7 +217,7 @@ export const ImageGenerationSection: React.FC = () => {
 
       <View style={[styles.modeToggleContainer, !hasTextModel && styles.dimmed]}>
         <View style={styles.modeToggleInfo}>
-          <Text style={styles.modeToggleLabel}>Enhance Image Prompts</Text>
+          <Text style={styles.modeToggleLabel}>Enhance image prompts</Text>
           <Text style={styles.modeToggleDesc}>
             {!hasTextModel
               ? 'Select a text model to enable prompt enhancement'

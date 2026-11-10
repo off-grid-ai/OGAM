@@ -2,36 +2,26 @@ import { TYPOGRAPHY, SPACING } from '../../constants';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 
 const createImageModelsStylesPart1 = (colors: ThemeColors, _shadows: ThemeShadows) => ({
-  recToggle: {
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-  },
-  recToggleActive: {
-    backgroundColor: `${colors.primary}15`,
-  },
+  // A bare toolbar glyph like the Text tab's; the star itself says when it is on.
+  recToggle: { padding: 12 },
+  recToggleActive: {},
   recHint: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 5,
-    paddingHorizontal: 10,
     paddingVertical: 6,
     marginBottom: 8,
-    backgroundColor: `${colors.primary}10`,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: `${colors.primary}30`,
   },
   recHintText: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
     flex: 1,
   },
   imageModelsSection: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
   },
   imageModelsList: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     marginBottom: 24,
   },
   recommendedBadge: {
@@ -47,7 +37,7 @@ const createImageModelsStylesPart1 = (colors: ThemeColors, _shadows: ThemeShadow
   recommendedBadgeText: {
     ...TYPOGRAPHY.meta,
     color: colors.background,
-    fontWeight: '700' as const,
+    fontWeight: '500' as const,
     fontSize: 10,
     letterSpacing: 0.5,
   },
@@ -61,7 +51,7 @@ const createImageModelsStylesPart1 = (colors: ThemeColors, _shadows: ThemeShadow
   imageModelInfo: { flex: 1 },
   imageModelName: { ...TYPOGRAPHY.h2, color: colors.text, marginBottom: 4 },
   imageModelDesc: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, marginBottom: 4 },
-  imageModelSize: { ...TYPOGRAPHY.meta, color: colors.textMuted },
+  imageModelSize: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
   activeBadge: {
     backgroundColor: `${colors.info}25`,
     paddingHorizontal: 10,
@@ -96,7 +86,7 @@ const createImageModelsStylesPart1 = (colors: ThemeColors, _shadows: ThemeShadow
     gap: 8,
   },
   imageModelCompactInfo: { flex: 1, gap: 2 },
-  imageModelCompactName: { ...TYPOGRAPHY.bodySmall, color: colors.text, fontWeight: '600' as const },
+  imageModelCompactName: { ...TYPOGRAPHY.bodySmall, color: colors.text, fontWeight: '500' as const },
   imageModelCompactMeta: { ...TYPOGRAPHY.metaSmall, color: colors.textMuted },
   activeBadgeCompact: {
     backgroundColor: `${colors.info}25`,
@@ -104,14 +94,14 @@ const createImageModelsStylesPart1 = (colors: ThemeColors, _shadows: ThemeShadow
     paddingVertical: 3,
     borderRadius: 10,
   },
-  activeBadgeCompactText: { ...TYPOGRAPHY.metaSmall, color: colors.info, fontWeight: '600' as const },
+  activeBadgeCompactText: { ...TYPOGRAPHY.metaSmall, color: colors.info, fontWeight: '500' as const },
   setActiveButtonCompact: {
     backgroundColor: `${colors.primary}20`,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  setActiveButtonCompactText: { ...TYPOGRAPHY.metaSmall, color: colors.primary, fontWeight: '600' as const },
+  setActiveButtonCompactText: { ...TYPOGRAPHY.metaSmall, color: colors.primary, fontWeight: '500' as const },
   deleteImageButtonCompact: { padding: 4 },
   availableTitle: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, marginBottom: 8 },
 });

@@ -38,6 +38,15 @@ describe('SliderSetting', () => {
     expect(queryByText('Higher = more creative')).toBeNull();
   });
 
+  it('ends a short and a long value on the same right edge', () => {
+    const { StyleSheet } = require('react-native');
+    const short = render(<SliderSetting {...baseProps} testID="steps" value={50} step={1} />);
+    const long = render(<SliderSetting {...baseProps} testID="size" value={512} step={64} formatValue={v => `${v}x${v}`} />);
+    for (const value of [short.getByTestId('steps-value'), long.getByTestId('size-value')]) {
+      expect(StyleSheet.flatten(value.props.style)).toMatchObject({ textAlign: 'right', paddingHorizontal: 0 });
+    }
+  });
+
   it('formats the displayed value with formatValue', () => {
     const { getByTestId } = render(
       <SliderSetting {...baseProps} formatValue={(v) => `${v.toFixed(2)}x`} />,

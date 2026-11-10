@@ -4,11 +4,12 @@ import { TouchableOpacity } from '../../../components/Touchable';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedListItem } from '../../../components/AnimatedListItem';
+import { ListGroup } from '../../../components/ListGroup';
 import { useTheme, useThemedStyles } from '../../../theme';
 import { createStyles } from '../styles';
 import { Conversation } from '../../../types';
 import { formatWhen } from '../../../utils/localTime';
-import { useConversationPreviewLine } from '../../../hooks/useConversationPreviewLine';
+import { chatTitle } from '../../../utils/chatTitle';
 
 const formatDate = (dateStr: string): string => formatWhen(dateStr);
 
@@ -32,13 +33,14 @@ export const RecentConversations: React.FC<Props> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const previewLine = useConversationPreviewLine();
 
   const renderRightActions = (conversation: Conversation) => (
     <TouchableOpacity
       style={styles.deleteAction}
       onPress={() => onDeleteConversation(conversation)}
       testID="delete-conversation-button"
+      accessibilityRole="button"
+      accessibilityLabel={`Delete ${conversation.title}`}
     >
       <Icon name="trash-2" size={16} color={colors.error} />
     </TouchableOpacity>
@@ -54,6 +56,7 @@ export const RecentConversations: React.FC<Props> = ({
           </Text>
         </TouchableOpacity>
       </View>
+      <ListGroup testID="recent-conversations">
       {conversations.map((conv, index) => (
         <Swipeable
           key={conv.id}
@@ -68,29 +71,20 @@ export const RecentConversations: React.FC<Props> = ({
             style={styles.conversationItem}
             onPress={() => onContinueChat(conv.id)}
             testID={`conversation-item-${index}`}
+            // In words: grouped, the row also read its chevron glyph aloud (hand test 41).
+            accessibilityRole="button"
+            accessibilityLabel={`${chatTitle(conv.title)}, ${formatDate(conv.updatedAt)}`}
           >
-            <View style={styles.conversationInfo}>
-              <View style={styles.conversationHeader}>
-                <Text style={styles.conversationTitle} numberOfLines={1}>
-                  {conv.title}
-                </Text>
-                <Text style={styles.conversationMeta}>
-                  {formatDate(conv.updatedAt)}
-                </Text>
-              </View>
-              {(() => {
-                const preview = previewLine(conv.messages);
-                return preview ? (
-                  <Text style={styles.conversationPreview} numberOfLines={1}>
-                    {preview}
-                  </Text>
-                ) : null;
-              })()}
-            </View>
-            <Icon name="chevron-right" size={14} color={colors.textMuted} />
+            {/* One line, as on Chats: the title and when. No reply preview and no chevron; a short
+                group of four keeps its card (Mac, 2026-11-07: the two-line chat rows read like settings). */}
+            <Text style={styles.conversationTitle} numberOfLines={1}>
+              {chatTitle(conv.title)}
+            </Text>
+            <Text style={styles.conversationMeta}>{formatDate(conv.updatedAt)}</Text>
           </AnimatedListItem>
         </Swipeable>
       ))}
+      </ListGroup>
     </View>
   );
 };

@@ -25,6 +25,7 @@ import { createMessage } from '../../utils/factories';
 import type { Message } from '../../../src/types';
 
 
+
 const makeToolResult = (overrides: Partial<Message>): Message =>
   createMessage({
     id: 'streaming',
@@ -44,7 +45,7 @@ describe('Tool accordion — expand-state persistence across remount', () => {
     it('KEEPS expanded state when the message id changes streaming→finalized (regression)', () => {
       // Render the in-progress tool result (id === 'streaming') and expand it.
       const streaming = makeToolResult({ id: 'streaming', toolCallId: 'tc-stable-1' });
-      const first = render(<ChatMessage message={streaming} />);
+      const first = render(<ChatMessage showGenerationDetails message={streaming} />);
       fireEvent.press(first.getByTestId('tool-result-label-web_search'));
       expect(first.getByText('Detailed search results')).toBeTruthy();
 
@@ -53,7 +54,7 @@ describe('Tool accordion — expand-state persistence across remount', () => {
       // fresh mount mimics the keyExtractor 'streaming' → realId transition.
       first.unmount();
       const finalized = makeToolResult({ id: 'assistant-real-42', toolCallId: 'tc-stable-1' });
-      const second = render(<ChatMessage message={finalized} />);
+      const second = render(<ChatMessage showGenerationDetails message={finalized} />);
 
       // Old local-useState would reset to collapsed here (detail region gone).
       // With the store keyed by toolCallId, it stays expanded.
@@ -62,7 +63,7 @@ describe('Tool accordion — expand-state persistence across remount', () => {
 
     it('toggles open and closed on tap', () => {
       const msg = makeToolResult({ id: 'm1', toolCallId: 'tc-a' });
-      const { getByTestId, queryByText, getByText } = render(<ChatMessage message={msg} />);
+      const { getByTestId, queryByText, getByText } = render(<ChatMessage showGenerationDetails message={msg} />);
 
       // Starts collapsed: detail content not shown.
       expect(queryByText('Detailed search results')).toBeNull();
@@ -80,8 +81,8 @@ describe('Tool accordion — expand-state persistence across remount', () => {
       // Render both in one tree so a single store update projects to both rows.
       const { getAllByTestId, getByText, queryByText } = render(
         <>
-          <ChatMessage message={makeToolResult({ id: 'ma', toolCallId: 'tc-a', content: 'Result A body' })} />
-          <ChatMessage message={makeToolResult({ id: 'mb', toolCallId: 'tc-b', content: 'Result B body' })} />
+          <ChatMessage showGenerationDetails message={makeToolResult({ id: 'ma', toolCallId: 'tc-a', content: 'Result A body' })} />
+          <ChatMessage showGenerationDetails message={makeToolResult({ id: 'mb', toolCallId: 'tc-b', content: 'Result B body' })} />
         </>,
       );
 
@@ -109,7 +110,7 @@ describe('Tool accordion — expand-state persistence across remount', () => {
       const first = render(
         <ToolsSentCollapsible names={names} stableKey="assistant-real-7" styles={styles} colors={colors} />,
       );
-      fireEvent.press(first.getByText(/Tools sent in request/));
+      fireEvent.press(first.getByText(/Tools it could use/));
       expect(first.getByText('• web_search')).toBeTruthy();
 
       // Remount with the SAME stable key (survives the finalize).
@@ -126,9 +127,9 @@ describe('Tool accordion — expand-state persistence across remount', () => {
         <ToolsSentCollapsible names={names} stableKey="k1" styles={styles} colors={colors} />,
       );
       expect(queryByText('• web_search')).toBeNull();
-      fireEvent.press(getByText(/Tools sent in request/));
+      fireEvent.press(getByText(/Tools it could use/));
       expect(getByText('• web_search')).toBeTruthy();
-      fireEvent.press(getByText(/Tools sent in request/));
+      fireEvent.press(getByText(/Tools it could use/));
       expect(queryByText('• web_search')).toBeNull();
     });
 
@@ -140,7 +141,7 @@ describe('Tool accordion — expand-state persistence across remount', () => {
         </>,
       );
       // Expand only the first collapsible.
-      fireEvent.press(getAllByText(/Tools sent in request/)[0]);
+      fireEvent.press(getAllByText(/Tools it could use/)[0]);
       expect(getByText('• web_search')).toBeTruthy();
       expect(queryByText('• calculator')).toBeNull();
     });

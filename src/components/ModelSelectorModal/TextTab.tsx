@@ -9,6 +9,7 @@ import { textOverheadMultiplier } from '../../services/activeModelService/types'
 import { estimateTextModelMemoryMB } from '../../services/activeModelService/memory';
 import { useAppStore } from '../../stores';
 import { ModelCard } from '../ModelCard';
+import { GROUPED_CARD_ROW, ListGroup } from '../ListGroup';
 import { RemoteModelServerGroup } from '../models/RemoteModelServerGroup';
 import { createAllStyles } from './styles';
 import { fileExceedsBudget, textModelBudget } from '../../services/memoryBudget';
@@ -134,9 +135,14 @@ export const TextTab: React.FC<TextTabProps> = ({
                   : hardwareService.formatModelRam(activeLocalModel, ramMultiplier)} RAM`]
               : []}
             isActive
-            trailing={<TouchableOpacity style={styles.unloadButton} onPress={onUnloadModel} disabled={isAnyLoading}>
-              <Icon name="power" size={16} color={colors.error} />
-              <Text style={styles.unloadButtonText}>Unload</Text>
+            trailing={<TouchableOpacity
+              style={styles.unloadButton}
+              onPress={onUnloadModel}
+              disabled={isAnyLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Unload"
+            >
+              <Icon name="power" size={18} color={colors.textSecondary} />
             </TouchableOpacity>}
           />
         </View>
@@ -200,6 +206,7 @@ export const TextTab: React.FC<TextTabProps> = ({
             <Icon name="hard-drive" size={14} color={colors.textMuted} />
             <Text style={styles.sectionSubTitle}>Local Models</Text>
           </View>
+          <ListGroup>
           {downloadedModels.map(model => {
             const fileSize = (model.fileSize || 0) + ('mmProjFileSize' in model ? (model.mmProjFileSize || 0) : 0);
             const memoryFits = !fileExceedsBudget(fileSize, hardwareService.getTotalMemoryGB(), textModelBudget());
@@ -219,11 +226,17 @@ export const TextTab: React.FC<TextTabProps> = ({
               trailing = <LoadingDots color={colors.primary} testID="model-row-loading" />;
             } else if (row.showLoadedCheck) {
               trailing = <View style={styles.checkmark}><Icon name="check" size={16} color={colors.background} /></View>;
+            } else if (row.isActive) {
+              // Selected, loads on the first message. Inside a group a row has no border to show it, so
+              // it carries the same check as the loaded and the image picker's current model: one mark
+              // for "your model" (hand tests 90, 91).
+              trailing = <View style={styles.checkmark} accessibilityLabel="Selected"><Icon name="check" size={16} color={colors.background} /></View>;
             }
             return (
               <ModelCard
                 key={model.id}
                 compact
+                style={GROUPED_CARD_ROW}
                 testID={`text-model-row-${model.id}`}
                 model={{ id: model.id, name: model.name, author: model.author || 'On device',
                   modelType: predictedCapabilities?.vision ? 'vision' : 'text' }}
@@ -239,6 +252,7 @@ export const TextTab: React.FC<TextTabProps> = ({
               />
             );
           })}
+          </ListGroup>
         </>
       )}
 

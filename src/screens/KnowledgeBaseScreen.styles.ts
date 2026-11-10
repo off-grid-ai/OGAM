@@ -1,3 +1,4 @@
+import { cardSurface } from '../theme/surface';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 
@@ -9,11 +10,10 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.borderLight,
   },
   backButton: {
     padding: SPACING.xs,
@@ -27,8 +27,13 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.text,
     fontWeight: '500' as const,
   },
+  // A 44 pt target (it was 36), pulled back so the header keeps its height.
   addButton: {
-    padding: SPACING.sm,
+    width: 44,
+    height: 44,
+    margin: -6,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   errorCard: {
     flexDirection: 'row' as const,
@@ -78,6 +83,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   emptySubtext: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,
+    textAlign: 'center' as const,
     marginTop: SPACING.xs,
     marginBottom: SPACING.lg,
   },
@@ -92,8 +98,13 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.surface,
     fontWeight: '500' as const,
   },
+  // The files on one glass surface, as every list (hand test 84: rows sat bare on the field).
   listContent: {
-    paddingBottom: SPACING.xxl,
+    ...cardSurface(colors),
+    overflow: 'hidden' as const,
+    marginHorizontal: SPACING.xl,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xxl,
   },
   list: {
     flex: 1,

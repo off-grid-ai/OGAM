@@ -219,12 +219,15 @@ describe('Fast, Balanced and Best on the Models screen', () => {
     expect(within(models.getByTestId('pick-best')).getByText('Large v3')).toBeTruthy();
     expect(models.getByTestId('pick-fast-download')).toBeTruthy();
     // The list below leaves out exactly the picked models: the multilingual Tiny, Small and Large v3
-    // are not repeated, while the English-only Tiny and Small (different models) and the
-    // multilingual Medium stay.
-    expect(models.getAllByText('Tiny')).toHaveLength(2);
-    expect(models.getAllByText('Small')).toHaveLength(2);
+    // are not repeated, while the English-only Tiny and Small (different models, named English) and
+    // the multilingual Medium stay.
+    expect(models.getAllByText('Tiny')).toHaveLength(1);
+    expect(models.getAllByText('Tiny English')).toHaveLength(1);
+    expect(models.getAllByText('Small')).toHaveLength(1);
+    expect(models.getAllByText('Small English')).toHaveLength(1);
     expect(models.getAllByText('Large v3')).toHaveLength(1);
-    expect(models.getAllByText('Medium')).toHaveLength(2);
+    expect(models.getAllByText('Medium')).toHaveLength(1);
+    expect(models.getAllByText('Medium English')).toHaveLength(1);
     expect(models.queryByText('Fastest, 99 languages')).toBeNull();
     expect(models.getByText('Fastest, English only')).toBeTruthy();
   });

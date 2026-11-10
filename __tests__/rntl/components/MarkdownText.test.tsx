@@ -12,7 +12,7 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 import { Linking } from 'react-native';
-import { MarkdownText, preprocessMarkdown } from '../../../src/components/MarkdownText';
+import { MarkdownText, dropDanglingBold, preprocessMarkdown } from '../../../src/components/MarkdownText';
 
 describe('MarkdownText', () => {
   afterEach(() => {
@@ -163,5 +163,34 @@ describe('preprocessMarkdown', () => {
     expect(preprocessMarkdown('The result of 3*4 is *twelve*')).toBe(
       String.raw`The result of 3\*4 is *twelve*`
     );
+  });
+});
+
+describe('dropDanglingBold (a reply cut off mid-bold)', () => {
+  it('drops an unclosed bold marker', () => {
+    expect(dropDanglingBold('1. **Ganges**\n2. **Yamuna')).toBe('1. **Ganges**\n2. Yamuna');
+  });
+  it('keeps closed bold as it is', () => {
+    expect(dropDanglingBold('**Ganges** and **Yamuna**')).toBe('**Ganges** and **Yamuna**');
+  });
+  it('keeps text with no bold', () => {
+    expect(dropDanglingBold('No markers here.')).toBe('No markers here.');
+  });
+  it('renders without raw asterisks', () => {
+    const view = render(<MarkdownText>{'2. **Yamuna'}</MarkdownText>);
+    expect(view.queryByText(/\*\*/)).toBeNull();
+    expect(view.getByText(/Yamuna/)).toBeTruthy();
+  });
+});
+
+describe('plainMathSpans (maths in an answer reads as text, hand test 22)', () => {
+  // Through the one entry point the renderer uses.
+  const plainMathSpans = preprocessMarkdown;
+  it('turns LaTeX spans into plain symbols', () => {
+    expect(plainMathSpans('Working: $$37 \\times 43 = ?$$')).toBe('Working: 37 × 43 = ?');
+    expect(plainMathSpans('So $30 \\times 43 = 1290$ and')).toBe('So 30 × 43 = 1290 and');
+  });
+  it('leaves prices alone', () => {
+    expect(plainMathSpans('It costs $5 or $10 a month')).toBe('It costs $5 or $10 a month');
   });
 });

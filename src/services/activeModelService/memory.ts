@@ -3,8 +3,10 @@
  * All functions are pure/standalone — they receive state via parameter objects.
  */
 
+import { Platform } from 'react-native';
+import { mobileUseMmap } from '@offgrid/models';
 import { DownloadedModel, ONNXImageModel } from '../../types';
-import { loadLlamaModelInfo } from 'llama.rn';
+import { readModelFileType, readModelHeader } from '../modelHeader';
 import { buildModelParams } from '../llmHelpers';
 import { hardwareService } from '../hardware';
 import { llmService } from '../llm';
@@ -49,7 +51,9 @@ export async function estimateTextModelMemoryMB(model: DownloadedModel): Promise
   );
   if (model.engine !== 'llama') return Math.ceil(fallback / (1024 * 1024));
   try {
-    const metadata = await loadLlamaModelInfo(model.filePath) as Record<string, unknown>;
+    // The header is read once per file and shared (modelHeader). Reading it fresh here for every
+    // downloaded model held the JS thread for ~2.5 s each time the text picker opened (hand test 89).
+    const metadata = (await readModelHeader(model.filePath)) ?? {};
     const architecture = metadata['general.architecture'];
     if (typeof architecture !== 'string') return Math.ceil(fallback / (1024 * 1024));
     const number = (field: string): number | undefined => {
@@ -79,6 +83,13 @@ export async function estimateTextModelMemoryMB(model: DownloadedModel): Promise
   } catch {
     return Math.ceil(fallback / (1024 * 1024));
   }
+}
+
+/** True for a chat model this phone copies into memory (Android repacks its weights): it runs
+ *  fastest as a copy, and loads mapped when the copy will not fit in free RAM. */
+export async function textPrefersCopy(model: DownloadedModel): Promise<boolean> {
+  if (Platform.OS !== 'android' || model.engine !== 'llama') return false;
+  return !mobileUseMmap('android', await readModelFileType(model.filePath), hardwareService.getTotalMemoryGB());
 }
 
 async function estimateModelMemoryGB(

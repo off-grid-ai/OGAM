@@ -13,6 +13,7 @@ import {
 } from './types';
 import { buildDownloadedModel, persistDownloadedModel } from './storage';
 import logger from '../../utils/logger';
+import { DownloadFailedError, downloadEventError, failureDetails } from '../../utils/downloadErrors';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { makeModelKey } from '../../utils/modelKey';
 import { extractBaseName } from './scan';
@@ -183,7 +184,7 @@ export async function performSidecarDownload(opts: SidecarDownloadOpts): Promise
     });
   } catch (error) {
     const row = useDownloadStore.getState().downloads[modelKey];
-    if (row) useDownloadStore.getState().setStatus(row.downloadId, 'failed', { message: (error as Error).message });
+    if (row) useDownloadStore.getState().setStatus(row.downloadId, 'failed', failureDetails(error));
     throw error;
   } finally {
     // The sidecar row is transient — remove it once settled so the completed model
@@ -715,13 +716,19 @@ export function watchBackgroundDownload(opts: WatchDownloadOpts): void {
       if (!movedNatively) backgroundDownloadService.purgeNativeRecord(downloadId).catch(() => {});
     } catch (error) {
       ctx.isFinalizing = false;
+      // The bytes are on disk: keep the context, so Retry finalizes them again instead of
+      // downloading the whole model a second time (Play review, 0.0.122).
+      backgroundDownloadContext.set(downloadId, ctx);
       logger.error('[DownloadDebug] Finalization failed', {
         downloadId,
         modelId: ctx.modelId,
         fileName: ctx.file.name,
         error: error instanceof Error ? error.message : String(error),
       });
-      onError?.(error as Error);
+      // The bytes arrived; saving the model failed. Its own code keeps it apart from a transfer failure.
+      // Always finalize_failed, whatever the native code (an iOS MOVE_FAILED): it is what tells Retry
+      // to save the bytes on disk instead of downloading the model again.
+      onError?.(new DownloadFailedError(failureDetails(error).message, 'finalize_failed'));
     }
   };
 
@@ -765,7 +772,7 @@ export function watchBackgroundDownload(opts: WatchDownloadOpts): void {
 
   const removeMainComplete = backgroundDownloadService.onComplete(downloadId, handleMainComplete);
   const removeMainError = backgroundDownloadService.onError(downloadId, (event) => {
-    handleError(new Error(event.reason || 'Download failed'));
+    handleError(downloadEventError(event));
   });
 
   if (ctx.mmProjDownloadId && !ctx.mmProjCompleted) {

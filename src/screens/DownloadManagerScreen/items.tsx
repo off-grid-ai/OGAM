@@ -3,18 +3,30 @@ import { View, Text } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { ModelCard } from '../../components/ModelCard';
+import { GROUPED_CARD_ROW } from '../../components/ListGroup';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { BackgroundDownloadReasonCode } from '../../types';
 import { needsVisionRepair as checkNeedsVisionRepair } from '../../utils/visionRepair';
 import { getDownloadStatusLabel, isRetryable } from '../../utils/downloadErrors';
+import { formatShortDate } from '../../utils/localTime';
 import { downloadStatusIcon } from '../../utils/downloadStatusIcon';
 import { createStyles } from './styles';
 import { presentProgress } from '../../utils/progressPresentation';
 import { SPACING } from '../../constants';
 import { isMMProjFile } from '../../services/mmproj';
-import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
-import { splitGgufModelName } from '@offgrid/models';
+import { isRawModelName, modelDisplayName, splitGgufModelName } from '@offgrid/models';
+
+/** The name a person knows a download by: the model's own name, else what the shared resolver
+ *  reads from its file ("K2 Horizon 3.7B", never `K2-Horizon-4B-Q4_K_M`). Stripping the extension
+ *  here first hid the file name from the resolver, so rows showed it raw (review page, Downloads). */
+export function downloadDisplayName(item: Pick<DownloadItem, 'name' | 'fileName'>): string {
+  if (item.name?.trim() && !isRawModelName(item.name)) return item.name;
+  // The resolver matches the catalog by the full file name, so keep the extensions it knows (.gguf
+  // .bin); one it does not know (.pte, .litertlm) would stay in the name, so it goes first.
+  const file = (item.name?.trim() || item.fileName).replace(/\.(pte|litertlm|task|zip|tar)$/i, '');
+  return modelDisplayName(file) ?? splitGgufModelName(file).replace(/\.(gguf|bin|onnx)$/i, '');
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -61,15 +73,6 @@ export function getStatusText(status: string): string {
   return status;
 }
 
-function textCapabilities(item: DownloadItem) {
-  if (item.modelType !== 'text' || !item.fileName.toLowerCase().endsWith('.gguf')) return undefined;
-  const predicted = predictGgufCapabilities({
-    id: item.modelId,
-    name: item.name,
-    fileName: item.fileName,
-  });
-  return { ...predicted, vision: !!item.isVisionModel, predicted: true };
-}
 
 function getStatusLabel(item: DownloadItem): string {
   if (item.status === 'running') return '';
@@ -130,18 +133,92 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
     return colors.textMuted;
   };
 
+  // Failed or paused before a byte arrived: there is no progress to draw, so no bar and no "0 B" line
+  // (hand test 47: a paused row said 6.28 GB, then 0 B / 6.3 GB 0%, then Paused).
+  const nothingReceived =
+    (item.status === 'failed' || item.status === 'paused') && percentage === 0;
+
+  // On the title line, as on a downloaded row, so a failed or paused row has no line of its own
+  // for two icons (hand test 46).
+  const transferActions = (
+      <View style={styles.transferActions}>
+        {item.status === 'failed' ? (
+          <>
+            {isRetryable(item.reasonCode) &&
+              !item.modelKey?.startsWith('model-download:') && (
+                <TouchableOpacity
+                  style={styles.transferIconButton}
+                  hitSlop={SPACING.md}
+                  testID="failed-retry-button"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Retry ${downloadDisplayName(item)}`}
+                  onPress={() => onRetry(item)}
+                >
+                  <Icon
+                    name="refresh-cw"
+                    size={14}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              )}
+            <TouchableOpacity
+              style={styles.transferIconButton}
+              hitSlop={SPACING.md}
+              testID="failed-remove-button"
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${downloadDisplayName(item)}`}
+              onPress={() => onRemove(item)}
+            >
+              <Icon name="trash-2" size={14} color={colors.textMuted} />
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            {(item.canPause || item.canResume) && (
+              <TouchableOpacity
+                style={styles.transferIconButton}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.canResume ? 'Resume' : 'Pause'} ${item.fileName}`}
+                hitSlop={6}
+                onPress={() =>
+                  item.canResume ? onResume(item) : onPause(item)
+                }
+              >
+                <Icon
+                  name={item.canResume ? 'play' : 'pause'}
+                  size={14}
+                  color={colors.textSecondary}
+                />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.transferIconButton}
+              testID="remove-download-button"
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${downloadDisplayName(item)}`}
+              hitSlop={6}
+              onPress={() => onRemove(item)}
+            >
+              <Icon name="x" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+  );
+
   return (
     <ModelCard
       compact
-      model={{ id: item.modelId, name: splitGgufModelName(item.fileName), author: item.author,
+      style={GROUPED_CARD_ROW}
+      model={{ id: item.modelId, name: downloadDisplayName(item), author: item.author,
         modelType: item.isVisionModel ? 'vision' : item.modelType === 'text' ? 'text' : undefined }}
       file={{ name: splitGgufModelName(item.fileName), size: item.fileSize, quantization: item.quantization, downloadUrl: '' }}
-      capabilities={textCapabilities(item)}
+      trailing={transferActions}
       facts={[
         item.modelType === 'tts'
           ? 'Voice'
           : item.modelType === 'stt'
-            ? 'Transcription'
+            ? 'Speech'
             : item.modelType === 'video'
               ? 'Video'
               : item.modelType === 'image'
@@ -151,87 +228,30 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
       footer={
         <>
           <View style={styles.progressContainer}>
+            {/* A failed download that never started has no progress to show: no bar row at all
+                (hand test 34: an empty bar read as stuck). It keeps the bar once some bytes arrived. */}
+            {nothingReceived ? null : (
             <View style={styles.transferRow}>
-              <View
-                style={[
-                  styles.progressBarBackground,
-                  styles.transferProgressBar,
-                ]}
-              >
                 <View
                   style={[
-                    styles.progressBarFill,
-                    {
-                      width: `${percentage}%` as const,
-                      backgroundColor: progressColor,
-                    },
+                    styles.progressBarBackground,
+                    styles.transferProgressBar,
                   ]}
-                />
-              </View>
-              <View style={styles.transferActions}>
-                {item.status === 'failed' ? (
-                  <>
-                    {isRetryable(item.reasonCode) &&
-                      !item.modelKey?.startsWith('model-download:') && (
-                        <TouchableOpacity
-                          style={styles.transferIconButton}
-                          hitSlop={SPACING.md}
-                          testID="failed-retry-button"
-                          accessibilityRole="button"
-                          accessibilityLabel={`Retry ${item.fileName}`}
-                          onPress={() => onRetry(item)}
-                        >
-                          <Icon
-                            name="refresh-cw"
-                            size={14}
-                            color={colors.primary}
-                          />
-                        </TouchableOpacity>
-                      )}
-                    <TouchableOpacity
-                      style={styles.transferIconButton}
-                      hitSlop={SPACING.md}
-                      testID="failed-remove-button"
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${item.fileName}`}
-                      onPress={() => onRemove(item)}
-                    >
-                      <Icon name="trash-2" size={14} color={colors.error} />
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    {(item.canPause || item.canResume) && (
-                      <TouchableOpacity
-                        style={styles.transferIconButton}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${item.canResume ? 'Resume' : 'Pause'} ${item.fileName}`}
-                        hitSlop={6}
-                        onPress={() =>
-                          item.canResume ? onResume(item) : onPause(item)
-                        }
-                      >
-                        <Icon
-                          name={item.canResume ? 'play' : 'pause'}
-                          size={14}
-                          color={colors.primary}
-                        />
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      style={styles.transferIconButton}
-                      testID="remove-download-button"
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${item.fileName}`}
-                      hitSlop={6}
-                      onPress={() => onRemove(item)}
-                    >
-                      <Icon name="x" size={16} color={colors.error} />
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
+                >
+                  <View
+                    style={[
+                      styles.progressBarFill,
+                      {
+                        width: `${percentage}%` as const,
+                        backgroundColor: progressColor,
+                      },
+                    ]}
+                  />
+                </View>
             </View>
+            )}
+            {/* Nothing received: no bytes line and no percent, so no empty line above the error. */}
+            {nothingReceived ? null : (
             <View style={styles.transferCaptionRow}>
               <Text
                 style={styles.progressText}
@@ -243,6 +263,7 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
                 {presented.percentageText}
               </Text>
             </View>
+            )}
           </View>
           <View style={styles.downloadMeta}>
             {(!!getStatusLabel(item) || !!getStatusIcon()) && (
@@ -304,24 +325,23 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({
   const repairActive = isRepairingVision || !!repairEntry && isMMProjFile(repairEntry.fileName);
   const showRepairProgress = repairActive && !!repairEntry;
   return (
-    <View style={{ marginHorizontal: SPACING.md }}>
+    <View>
       <ModelCard
         compact
+        style={GROUPED_CARD_ROW}
         model={{
           id: item.modelId,
-          name: splitGgufModelName(item.fileName),
+          name: downloadDisplayName(item),
           author: item.author,
           modelType: item.isVisionModel
             ? 'vision'
             : item.modelType === 'text'
               ? 'text'
               : undefined,
-          description: item.downloadedAt
-            ? new Date(item.downloadedAt).toLocaleDateString()
-            : undefined,
         }}
         file={{ name: splitGgufModelName(item.fileName), size: item.fileSize, quantization: item.quantization, downloadUrl: '' }}
-        capabilities={textCapabilities(item)}
+        // The date joins size and quant on the one Mono line, not a sentence line of its own.
+        facts={item.downloadedAt ? [formatShortDate(item.downloadedAt)] : undefined}
         isDownloaded
         isDownloading={showRepairProgress && repairEntry.status !== 'paused'}
         isPaused={showRepairProgress && repairEntry.status === 'paused'}

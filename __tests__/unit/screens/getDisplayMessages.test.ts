@@ -275,3 +275,44 @@ describe('getDisplayMessages', () => {
     expect(out.at(-1)).toBe(durableMessage);
   });
 });
+
+describe('getDisplayMessages tool pairing', () => {
+  const settled = (): StreamingArg => base();
+
+  it('pairs a result with its call when the parsed call has no id (one search, one row)', () => {
+    const out = getDisplayMessages([
+      { id: 'u', role: 'user', content: '[test] trail', timestamp: 1 } as Message,
+      { id: 'c', role: 'assistant', content: '', timestamp: 2, toolCalls: [{ name: 'web_search', arguments: '{"query":"trail"}' }] } as Message,
+      { id: 'r', role: 'tool', content: 'Sinhagad Fort', timestamp: 3, toolName: 'web_search' } as Message,
+      { id: 'a', role: 'assistant', content: 'Try Sinhagad.', timestamp: 4 } as Message,
+    ], settled());
+    const answer = out[1] as Message;
+    expect(answer.toolArtifacts).toHaveLength(1);
+    expect(answer.toolArtifacts![0]).toMatchObject({ name: 'web_search', result: 'Sinhagad Fort', status: 'completed' });
+    expect(answer.timeline!.filter(entry => entry.kind === 'tool')).toHaveLength(1);
+  });
+
+  it('pairs two id-less searches in order', () => {
+    const out = getDisplayMessages([
+      { id: 'u', role: 'user', content: '[test] two', timestamp: 1 } as Message,
+      { id: 'c1', role: 'assistant', content: '', timestamp: 2, toolCalls: [{ name: 'web_search', arguments: '{"query":"a"}' }] } as Message,
+      { id: 'r1', role: 'tool', content: 'first', timestamp: 3, toolName: 'web_search' } as Message,
+      { id: 'c2', role: 'assistant', content: '', timestamp: 4, toolCalls: [{ name: 'web_search', arguments: '{"query":"b"}' }] } as Message,
+      { id: 'r2', role: 'tool', content: 'second', timestamp: 5, toolName: 'web_search' } as Message,
+      { id: 'a', role: 'assistant', content: 'Done.', timestamp: 6 } as Message,
+    ], settled());
+    const artifacts = (out[1] as Message).toolArtifacts!;
+    expect(artifacts.map(artifact => artifact.result)).toEqual(['first', 'second']);
+  });
+
+  it('a result for a call id already answered starts its own row', () => {
+    const out = getDisplayMessages([
+      { id: 'u', role: 'user', content: '[test] dup', timestamp: 1 } as Message,
+      { id: 'c', role: 'assistant', content: '', timestamp: 2, toolCalls: [{ id: 'x', name: 'calculator', arguments: '{}' }] } as Message,
+      { id: 'r1', role: 'tool', content: '4', timestamp: 3, toolCallId: 'x', toolName: 'calculator' } as Message,
+      { id: 'r2', role: 'tool', content: '5', timestamp: 4, toolCallId: 'x', toolName: 'calculator' } as Message,
+      { id: 'a', role: 'assistant', content: 'Done.', timestamp: 5 } as Message,
+    ], settled());
+    expect((out[1] as Message).toolArtifacts!.map(artifact => artifact.result)).toEqual(['4', '5']);
+  });
+});

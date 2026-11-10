@@ -8,7 +8,8 @@
 
 export interface AlertButton {
   text: string;
-  style?: 'default' | 'cancel' | 'destructive';
+  /** `primary`: the recommended answer, drawn filled so the next step is obvious. */
+  style?: 'default' | 'cancel' | 'destructive' | 'primary';
   onPress?: () => void;
 }
 

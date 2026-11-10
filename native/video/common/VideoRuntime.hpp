@@ -6,6 +6,8 @@
 #include "ggml-backend.h"
 #endif
 #include "BlankImage.hpp"
+#include "EngineErrorLog.hpp"
+#include "GpuBudgets.hpp"
 #include <atomic>
 #include <cstdio>
 #include <sys/stat.h>
@@ -47,18 +49,15 @@ inline bool wanEncoderFitsGpu(const std::string &weight, const std::string &enco
   return fileGib(encoder) + fileGib(weight) + 2 + 1.5 <= availableGib;
 }
 inline std::string phoneGpuBudgets(const std::string &computeDevice) {
-  const long availableKb = availableRamKb();
-  std::string budgets = "HTP0=1.5";
+  // A positive budget is capped at what the driver reports; -1024 GiB leaves a device none.
+  std::vector<BudgetDevice> devices;
   for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
     auto device = ggml_backend_dev_get(i);
     const auto type = ggml_backend_dev_type(device);
-    if (type != GGML_BACKEND_DEVICE_TYPE_GPU && type != GGML_BACKEND_DEVICE_TYPE_IGPU) continue;
-    const std::string name = ggml_backend_dev_name(device);
-    // A positive budget is capped at what the driver reports; -1024 GiB leaves a device none.
-    const double gib = name == computeDevice && availableKb > 0 ? availableKb / (1024.0 * 1024.0) : -1024;
-    budgets += "," + name + "=" + std::to_string(gib);
+    devices.push_back({ggml_backend_dev_name(device),
+                       type == GGML_BACKEND_DEVICE_TYPE_GPU || type == GGML_BACKEND_DEVICE_TYPE_IGPU});
   }
-  return budgets;
+  return gpuBudgets(devices, computeDevice, availableRamKb());
 }
 #endif
 struct VideoRequest {
@@ -200,8 +199,9 @@ class VideoRuntime {
 #endif
       }
       sd_ctx_t *loaded = nullptr;
+      // Each attempt starts with an empty error log: a failed load names what its LAST attempt hit.
 #ifdef __ANDROID__
-      try { loaded = new_sd_ctx(&config); }
+      engineErrors.clear(); try { loaded = new_sd_ctx(&config); }
       catch (const std::exception &) {
         if (request.cpuOnly || cancelled.load()) throw;
       }
@@ -210,7 +210,7 @@ class VideoRuntime {
         config.params_backend = nullptr;
         config.auto_fit = true;
         config.backend = gpuBackend.c_str();
-        try { loaded = new_sd_ctx(&config); }
+        engineErrors.clear(); try { loaded = new_sd_ctx(&config); }
         catch (const std::exception &) {
           if (cancelled.load()) throw;
         }
@@ -218,10 +218,10 @@ class VideoRuntime {
       if (!loaded && !cancelled.load()) {
         config.backend = "cpu";
         lastLoadOnCpu = true;
-        loaded = new_sd_ctx(&config);
+        engineErrors.clear(); loaded = new_sd_ctx(&config);
       }
 #else
-      loaded = new_sd_ctx(&config);
+      engineErrors.clear(); loaded = new_sd_ctx(&config);
 #endif
       return loaded;
   }
@@ -231,6 +231,8 @@ public:
     if (imageContext) free_sd_ctx(imageContext);
   }
   std::atomic_bool cancelled{false};
+  /** Fed by the bindings' sd.cpp log callback; a failed video load names its last error. */
+  EngineErrorLog engineErrors;
   void cancel() {
     cancelled.store(true);
     std::lock_guard<std::mutex> guard(contextMutex);
@@ -375,7 +377,7 @@ public:
         std::lock_guard<std::mutex> guard(contextMutex);
         context = loaded;
       }
-      if (!loaded) throw std::runtime_error("Could not load the video model pack.");
+      if (!loaded) throw std::runtime_error(engineErrors.takeLoadFailure());
       if (cancelled.load()) throw std::runtime_error("Video generation stopped.");
       sd_set_progress_callback([](int step, int total, float, void *data) {
         (*static_cast<const std::function<void(int, int)> *>(data))(step, total);

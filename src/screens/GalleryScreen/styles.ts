@@ -1,13 +1,19 @@
+import { cardSurface } from '../../theme/surface';
 import { StyleSheet, Dimensions } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 
+/** Light ink for controls over the black image viewer, in either theme. */
+export const VIEWER_INK = 'rgba(255,255,255,0.88)';
+
 const { width: screenWidth } = Dimensions.get('window');
 export const COLUMN_COUNT = 3;
-const GRID_SPACING = 4;
-const CELL_SIZE = (screenWidth - GRID_SPACING * (COLUMN_COUNT + 1)) / COLUMN_COUNT;
+// The 24 pt screen gutter at the sides, a small gap between tiles.
+const GRID_GUTTER = SPACING.xl;
+const GRID_SPACING = SPACING.sm;
+const CELL_SIZE = (screenWidth - GRID_GUTTER * 2 - GRID_SPACING * (COLUMN_COUNT - 1)) / COLUMN_COUNT;
 
-const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createHeaderStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -15,17 +21,20 @@ const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-    ...shadows.small,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
     zIndex: 1,
   },
+  // 44 pt frames pulled back, so the header keeps its height (Back was 32, Select 36).
   closeButton: {
-    padding: SPACING.xs,
-    marginRight: SPACING.md,
+    width: 44,
+    height: 44,
+    margin: -8,
+    marginRight: SPACING.md - 8,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   title: {
     ...TYPOGRAPHY.h2,
@@ -38,8 +47,12 @@ const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     marginRight: SPACING.sm,
   },
   headerButton: {
-    padding: SPACING.sm,
+    minWidth: 44,
+    minHeight: 44,
+    marginVertical: -8,
     marginLeft: SPACING.xs,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   headerButtonDisabled: {
     opacity: 0.5,
@@ -82,16 +95,23 @@ const createGridStyles = (colors: ThemeColors) => ({
   genProgressFill: { height: '100%' as const, backgroundColor: colors.primary, borderRadius: 2 },
   genSteps: { ...TYPOGRAPHY.meta, color: colors.textMuted },
   genCancelButton: { padding: SPACING.sm - 2 },
-  gridContainer: { padding: GRID_SPACING },
+  gridContainer: { paddingHorizontal: GRID_GUTTER, paddingTop: SPACING.md, paddingBottom: GRID_GUTTER },
   gridRow: { gap: GRID_SPACING, marginBottom: GRID_SPACING },
   gridItem: {
     width: CELL_SIZE,
     height: CELL_SIZE,
     borderRadius: SPACING.sm,
     overflow: 'hidden' as const,
-    backgroundColor: colors.surfaceLight,
+    // A hairline edge, so a white image is a tile and not a hole in the page (hand test 35).
+    backgroundColor: colors.surface,
   },
   gridImage: { width: '100%' as const, height: '100%' as const },
+  gridEdge: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: SPACING.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   unavailableImage: {
     flex: 1,
     justifyContent: 'center' as const,
@@ -109,7 +129,8 @@ const createGridStyles = (colors: ThemeColors) => ({
     alignItems: 'flex-end' as const,
     padding: SPACING.sm - 2,
   },
-  selectionOverlaySelected: { backgroundColor: 'rgba(99, 102, 241, 0.25)' },
+  // Chosen is emerald, the one in-use colour, as an edge rather than a tint over the picture.
+  selectionOverlaySelected: { borderWidth: 2, borderColor: colors.primary, borderRadius: SPACING.sm },
   checkbox: {
     width: 22,
     height: 22,
@@ -137,67 +158,46 @@ const createGridStyles = (colors: ThemeColors) => ({
 });
 
 const createViewerStyles = (colors: ThemeColors) => ({
-  viewerContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.95)',
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-  },
-  viewerBackdrop: { ...StyleSheet.absoluteFillObject },
-  viewerContent: {
-    width: '100%' as const,
-    height: '100%' as const,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-  },
-  fullscreenImage: {
-    width: Dimensions.get('window').width,
-    height: Dimensions.get('window').height * 0.65,
-  },
-  // Five actions (Info, Animate, Save, Delete, Close) share the screen width, so none is cut off on a phone.
-  viewerActions: {
-    flexDirection: 'row' as const,
+  // The picture fills the screen on black, in either theme.
+  imageScreen: { flex: 1, backgroundColor: '#000', justifyContent: 'center' as const },
+  imageScreenPicture: { ...StyleSheet.absoluteFillObject },
+  // A video centred on the dark screen, as an image is (hand test 81).
+  videoScreenStage: { ...StyleSheet.absoluteFillObject, justifyContent: 'center' as const },
+  imageScreenGone: { ...TYPOGRAPHY.body, color: VIEWER_INK, textAlign: 'center' as const, padding: SPACING.xl },
+  imageScreenBar: {
     position: 'absolute' as const,
-    bottom: 60,
-    left: SPACING.lg,
-    right: SPACING.lg,
-    justifyContent: 'center' as const,
-    gap: SPACING.sm,
-  },
-  viewerButton: {
-    flex: 1,
-    maxWidth: 88,
-    alignItems: 'center' as const,
-    paddingVertical: SPACING.md + 2,
-    paddingHorizontal: SPACING.xs,
-    backgroundColor: colors.surface,
-    borderRadius: SPACING.md + 2,
-  },
-  viewerButtonActive: { borderWidth: 1, borderColor: colors.primary },
-  viewerButtonText: { ...TYPOGRAPHY.meta, color: colors.text, marginTop: SPACING.xs },
-  viewerButtonTextPrimary: { ...TYPOGRAPHY.meta, color: colors.primary, marginTop: SPACING.xs },
-  viewerButtonTextError: { ...TYPOGRAPHY.meta, color: colors.error, marginTop: SPACING.xs },
-  detailsSheet: {
-    flex: 1,
-    width: '100%' as const,
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    marginTop: 60,
-    overflow: 'hidden' as const,
-  },
-  detailsSheetHeader: {
+    top: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row' as const,
     justifyContent: 'space-between' as const,
+    paddingHorizontal: SPACING.md,
+  },
+  imageScreenBarButton: {
+    width: 44,
+    height: 44,
     alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  // The sheet's actions share its width, icon over label, so Animate, Save and Delete read as one row.
+  imageSheetActions: {
+    flexDirection: 'row' as const,
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
+    paddingBottom: SPACING.md,
+    gap: SPACING.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  detailsSheetTitle: { ...TYPOGRAPHY.h3, color: colors.text },
-  detailsSheetClose: { ...TYPOGRAPHY.body, color: colors.primary },
-  detailsPreview: { width: '100%' as const, height: 200, backgroundColor: colors.background },
+  imageSheetAction: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center' as const,
+    paddingVertical: SPACING.md,
+    borderRadius: SPACING.sm,
+    backgroundColor: colors.surfaceLight,
+  },
+  imageSheetActionText: { ...TYPOGRAPHY.meta, color: colors.text, marginTop: SPACING.xs },
+  imageSheetActionDestructive: { color: colors.error },
   detailsContent: { padding: SPACING.lg },
   detailRow: { marginBottom: SPACING.sm + 2 },
   detailLabel: { ...TYPOGRAPHY.meta, color: colors.textMuted, marginBottom: 2 },
@@ -219,36 +219,23 @@ const createViewerStyles = (colors: ThemeColors) => ({
 });
 
 const createVideoStyles = (colors: ThemeColors) => ({
-  mediaTabs: { flexDirection: 'row' as const, padding: SPACING.sm, gap: SPACING.sm },
-  mediaTab: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 6,
-    backgroundColor: colors.surface,
-  },
-  mediaTabActive: { backgroundColor: colors.primary },
-  mediaTabText: { color: colors.text },
-  mediaTabTextActive: { color: colors.background },
-  videoList: { padding: SPACING.md },
+  // The page gutter every screen uses (hand test 91: 16 pt here, 24 pt on Images).
+  videoList: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.md },
+  // Rows on one glass surface with hairlines, as every list (hand test 82: a card per video).
   videoRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    padding: SPACING.lg,
-    marginBottom: SPACING.sm,
-    backgroundColor: colors.surface,
-    borderRadius: 8,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
     gap: SPACING.md,
   },
+  videoGroup: { ...cardSurface(colors), overflow: 'hidden' as const },
+  videoDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.borderLight, marginLeft: SPACING.lg },
   videoRowBody: { flex: 1 },
   videoRowTitle: { color: colors.text },
   videoRowMeta: { color: colors.textMuted },
-  videoViewerHeader: {
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    padding: SPACING.lg,
-  },
-  videoViewerText: { color: colors.text },
   videoPlayer: { width: '100%' as const, backgroundColor: colors.background },
+  videoScreenPlayer: { width: '100%' as const, backgroundColor: 'transparent' },
   videoPrompt: { color: colors.text, padding: SPACING.lg },
   videoDelete: { padding: SPACING.lg },
   videoDeleteText: { color: colors.error },

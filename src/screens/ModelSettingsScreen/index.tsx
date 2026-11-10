@@ -1,7 +1,7 @@
+import { FastestSettingsButton } from '../../components/settings/FastestSettingsButton';
 import React, { useState } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '../../components';
@@ -26,7 +26,19 @@ import {
   NO_TRANSCRIPTION_MODEL_LABEL,
   useTranscriptionModelSetting,
 } from '../../hooks/useTranscriptionModelSetting';
+import { UnderlineTabs, type UnderlineTab } from '../../components/UnderlineTabs';
+import { TranscriptionLanguageSelect } from '../../components/TranscriptionLanguageSelect';
+import { useRemoteServerStore } from '../../stores';
+import { AliveScreen } from '../../components/AliveScreen';
+import { SectionLabel } from '../../components/SectionLabel';
+import { ScreenHeader } from '../../components/ScreenHeader';
 
+type SettingsTab = 'general' | 'text' | 'image' | 'voice';
+
+/**
+ * Every model setting, in one place (the chat's settings sheet links here rather than copying them).
+ * Tabs, not a stack of accordions (screen review): each tab shows its settings open.
+ */
 export const ModelSettingsScreen: React.FC = () => {
   const navigation = useNavigation();
   const { colors } = useTheme();
@@ -34,24 +46,26 @@ export const ModelSettingsScreen: React.FC = () => {
   const resetSettings = useAppStore(s => s.resetSettings);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
-  const [promptOpen, setPromptOpen] = useState(false);
-  const [generalOpen, setGeneralOpen] = useState(false);
-  const [imageOpen, setImageOpen] = useState(false);
-  const [textOpen, setTextOpen] = useState(false);
-  const [ttsOpen, setTtsOpen] = useState(false);
-  const [sttOpen, setSttOpen] = useState(false);
+  const [tab, setTab] = useState<SettingsTab>('general');
   const [whisperOpen, setWhisperOpen] = useState(false);
+  const textIsRemote = useRemoteServerStore(s => s.activeServerId != null);
   // TTS is a pro feature injected via a slot (same as the in-chat generation settings). Free builds have no
   // slot → the section is not shown at all.
   const TtsSection = getSlot(SLOTS.generationSettingsTts);
   const VideoSettings = getSlot(SLOTS.generationSettingsVideo);
   const { modelName: sttModelName, isRemote: isRemoteTranscription } =
     useTranscriptionModelSetting();
+  const tabs: UnderlineTab<SettingsTab>[] = [
+    { key: 'general', label: 'General', testID: 'model-settings-tab-general' },
+    { key: 'text', label: 'Text', testID: 'model-settings-tab-text' },
+    { key: 'image', label: VideoSettings ? 'Image & video' : 'Image', testID: 'model-settings-tab-image' },
+    { key: 'voice', label: 'Voice', testID: 'model-settings-tab-voice' },
+  ];
 
   const handleReset = () => {
     setAlertState(
       showAlert(
-        'Reset All Settings',
+        'Reset all settings',
         'This will restore all model settings to their defaults. You may need to reload the model for changes to take effect.',
         [
           { text: 'Cancel', style: 'cancel' },
@@ -69,151 +83,96 @@ export const ModelSettingsScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Model Settings</Text>
-      </View>
+    <AliveScreen style={styles.container}>
+      <ScreenHeader
+        title="Model settings"
+        onBack={() => navigation.goBack()}
+        right={
+          // In the header, away from the foot of the page where a tab bar sits on other screens.
+          <Button
+            title="Reset"
+            variant="ghost"
+            size="small"
+            onPress={handleReset}
+            testID="reset-settings-button"
+            accessibilityLabel="Reset to defaults"
+          />
+        }
+      />
+      <UnderlineTabs tabs={tabs} active={tab} onChange={setTab} />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
       >
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setGeneralOpen(!generalOpen)}
-          activeOpacity={0.7}
-          testID="general-generation-accordion"
-          accessibilityRole="button"
-          accessibilityState={{ expanded: generalOpen }}
-        >
-          <Text style={styles.accordionTitle}>General</Text>
-          <Icon name={generalOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
-        </TouchableOpacity>
-        {generalOpen && <View style={styles.settingSection}><GeneralGenerationControls /></View>}
-          <TouchableOpacity
-            style={styles.accordionHeader}
-            onPress={() => setPromptOpen(!promptOpen)}
-            activeOpacity={0.7}
-            testID="system-prompt-accordion"
-          >
-            <Text style={styles.accordionTitle}>Default System Prompt</Text>
-            <Icon
-              name={promptOpen ? 'chevron-up' : 'chevron-down'}
-              size={16}
-              color={colors.textMuted}
-            />
-          </TouchableOpacity>
-        {promptOpen && <SystemPromptSection />}
-
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setImageOpen(!imageOpen)}
-          activeOpacity={0.7}
-          testID="image-generation-accordion"
-        >
-          <Text style={styles.accordionTitle}>Image Generation</Text>
-          <Icon
-            name={imageOpen ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={colors.textMuted}
-          />
-        </TouchableOpacity>
-        {imageOpen && <ImageGenerationSection />}
-        {VideoSettings && <VideoSettings />}
-
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setTextOpen(!textOpen)}
-          activeOpacity={0.7}
-          testID="text-generation-accordion"
-        >
-          <Text style={styles.accordionTitle}>Text Generation</Text>
-          <Icon
-            name={textOpen ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={colors.textMuted}
-          />
-        </TouchableOpacity>
-        {textOpen && <TextGenerationSection />}
-
-        {/* Transcription (STT/whisper) — core. Reuses the same picker sheet Home/Chat open, and the same
-            whisper store as its single source, so the active model shown here is always consistent. */}
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setSttOpen(!sttOpen)}
-          activeOpacity={0.7}
-          testID="transcription-accordion"
-        >
-          <Text style={styles.accordionTitle}>
-            Transcription (Speech to Text)
-          </Text>
-          <Icon
-            name={sttOpen ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={colors.textMuted}
-          />
-        </TouchableOpacity>
-        {sttOpen && (
-          <View style={styles.settingSection}>
-            <Text style={styles.settingDesc}>
-              {isRemoteTranscription
-                ? 'Your active remote server transcribes dictation and voice chat.'
-                : 'The on-device model used to transcribe your voice for dictation and voice chat.'}
-            </Text>
-            <TouchableOpacity
-              style={styles.toggleRow}
-              onPress={() => setWhisperOpen(true)}
-              activeOpacity={0.7}
-              testID="stt-open-picker"
-            >
-              <View style={styles.toggleInfo}>
-                <Text style={styles.toggleLabel}>Transcription model</Text>
-                <Text style={styles.toggleDesc}>
-                  {sttModelName ?? NO_TRANSCRIPTION_MODEL_LABEL}
-                </Text>
-              </View>
-              <Icon name="chevron-right" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-            {/* Voice mode ends a turn on silence. Lives with STT because it is about listening. */}
-            <VoiceTurnSettings />
+        {tab === 'general' && (
+          <View style={styles.sectionsGroup}>
+            {/* It places every modality (text, image, video, speech, voice, search), so it leads the card. */}
+            <View style={styles.settingSection}>
+              <FastestSettingsButton />
+              <GeneralGenerationControls />
+            </View>
+            <SystemPromptSection />
           </View>
         )}
 
-        {/* Text to Speech — pro feature via slot; free builds render nothing (no accordion). */}
-        {TtsSection && (
+        {tab === 'text' && (
           <>
-            <TouchableOpacity
-              style={styles.accordionHeader}
-              onPress={() => setTtsOpen(!ttsOpen)}
-              activeOpacity={0.7}
-              testID="tts-accordion"
-            >
-              <Text style={styles.accordionTitle}>Text to Speech</Text>
-              <Icon
-                name={ttsOpen ? 'chevron-up' : 'chevron-down'}
-                size={16}
-                color={colors.textMuted}
-              />
-            </TouchableOpacity>
-            {ttsOpen && <TtsSection />}
+            {/* The section draws its own card: wrapping it made a card inside a card (hand test 71). */}
+            <TextGenerationSection />
+            {textIsRemote ? (
+              <Text style={styles.footnote} testID="model-settings-remote-note">
+                These apply to models on this phone. A remote server uses its own.
+              </Text>
+            ) : null}
           </>
         )}
 
-        <Button
-          title="Reset All to Defaults"
-          variant="ghost"
-          size="small"
-          onPress={handleReset}
-          testID="reset-settings-button"
-          style={styles.resetButton}
-        />
+        {tab === 'image' && (
+          <>
+            {/* Labelled like the Video card under it, so the tab reads as two named groups. */}
+            {VideoSettings ? <SectionLabel title="Image" /> : null}
+            <ImageGenerationSection />
+            {VideoSettings && <VideoSettings alwaysOpen />}
+          </>
+        )}
+
+        {tab === 'voice' && (
+          <>
+            {/* Transcription: the same picker sheet Home and Chat open, on the same whisper store. */}
+            <View style={styles.sectionsGroup}>
+              <View style={styles.settingSection}>
+                <Text style={styles.settingDesc}>
+                  {isRemoteTranscription
+                    ? 'Your active remote server transcribes dictation and voice chat.'
+                    : 'The on-device model used to transcribe your voice for dictation and voice chat.'}
+                </Text>
+                <TouchableOpacity
+                  style={styles.toggleRow}
+                  onPress={() => setWhisperOpen(true)}
+                  activeOpacity={0.7}
+                  testID="stt-open-picker"
+                >
+                  <View style={styles.toggleInfo}>
+                    <Text style={styles.toggleLabel}>Transcription model</Text>
+                    <Text style={styles.toggleDesc}>
+                      {sttModelName ?? NO_TRANSCRIPTION_MODEL_LABEL}
+                    </Text>
+                  </View>
+                  <Icon name="chevron-right" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+                <TranscriptionLanguageSelect testID="settings-transcription-language" />
+                {/* Voice mode ends a turn on silence. Lives with listening. */}
+                <VoiceTurnSettings />
+              </View>
+            </View>
+            {/* Text to speech is Pro, through a slot; free builds show none. */}
+            {TtsSection && (
+              <View style={styles.sectionGap}>
+                <TtsSection />
+              </View>
+            )}
+          </>
+        )}
       </ScrollView>
       {whisperOpen ? (
         <WhisperPickerSheet visible onClose={() => setWhisperOpen(false)} />
@@ -225,6 +184,6 @@ export const ModelSettingsScreen: React.FC = () => {
         buttons={alertState.buttons}
         onClose={() => setAlertState(hideAlert())}
       />
-    </SafeAreaView>
+    </AliveScreen>
   );
 };

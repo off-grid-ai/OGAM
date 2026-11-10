@@ -123,7 +123,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     flexGrow: 0,
   },
   listContent: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.xxl,
   },

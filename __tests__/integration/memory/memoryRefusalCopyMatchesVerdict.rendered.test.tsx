@@ -33,8 +33,8 @@ describe('memory refusal copy agrees with the verdict', () => {
     await h.rtl.waitFor(() => {
       expect(h.view!.queryByText('Load Anyway')).not.toBeNull();
     }, { timeout: 20000 });
-    const body = h.view!.getByText(/it needs ~\d+MB but only \d+MB is available/).props.children as string;
-    const [, needMB, availMB] = /it needs ~(\d+)MB but only (\d+)MB/.exec(String(body))!;
+    const body = h.view!.getByText(/needs about [\d.]+ GB of memory and [\d.]+ GB is free/).props.children as string;
+    const [, needMB, availMB] = /needs about ([\d.]+) GB of memory and ([\d.]+) GB is free/.exec(String(body))!;
     expect(Number(needMB)).toBeGreaterThan(Number(availMB));
   }, 45000);
 });

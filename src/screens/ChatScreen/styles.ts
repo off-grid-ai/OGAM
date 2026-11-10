@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { createImageStyles } from './stylesImage';
@@ -8,15 +9,16 @@ const createLayoutStyles = (colors: ThemeColors) => ({
   messageList: { paddingVertical: 16 },
 });
 
-const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createHeaderStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   header: {
-    paddingHorizontal: 16,
+    // The 24 pt gutter every other screen uses (hand test 34: chat sat at 16).
+    paddingHorizontal: SPACING.xl,
     paddingTop: 16,
     paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.background,
-    ...shadows.small,
+    // See-through over the living field, with a hairline under it (no slab, no shadow).
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
+    backgroundColor: 'transparent',
     zIndex: 10,
   },
   headerRow: {
@@ -25,7 +27,8 @@ const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     justifyContent: 'space-between' as const,
     gap: SPACING.md,
   },
-  backButton: { padding: SPACING.xs },
+  // 44 pt frames pulled back by negative margins: the header keeps its look, the targets their size.
+  backButton: { width: 44, height: 44, margin: -8, alignItems: 'center' as const, justifyContent: 'center' as const },
   headerLeft: { flex: 1, marginRight: 12 },
   headerTitle: { ...TYPOGRAPHY.h2, color: colors.text, marginBottom: 2 },
   headerSubtitleRow: {
@@ -46,7 +49,9 @@ const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   // is the thing that should truncate. `minWidth: 0` lets its Text actually ellipsize.
   headerProjectRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, flexShrink: 1, minWidth: 0 },
   headerSubtitle: { ...TYPOGRAPHY.h3, color: colors.textMuted, flexShrink: 1 },
-  modelSelector: { flexDirection: 'row' as const, alignItems: 'center' as const, flexShrink: 0, overflow: 'hidden' as const },
+  // A 44 pt tall frame around a 16 pt line, pulled back so the subtitle row keeps its height.
+  modelSelector: { flexDirection: 'row' as const, alignItems: 'center' as const, flexShrink: 0, overflow: 'hidden' as const, minHeight: 44, marginVertical: -14 },
+  headerProjectTarget: { minHeight: 44, marginVertical: -14, justifyContent: 'center' as const },
   remoteIcon: { marginRight: 4 },
   modelSelectorArrow: { ...TYPOGRAPHY.meta, color: colors.textMuted, marginLeft: SPACING.xs },
   headerImageBadge: {
@@ -58,17 +63,20 @@ const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     justifyContent: 'center' as const,
     marginLeft: 6,
   },
+  // The glyphs' 44 pt frames are pulled back 7 pt each side, so the gap must cover 14 pt or the
+  // frames overlap (hand test 39: Voice mode over Chat settings by 9 pt).
   headerActions: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    gap: SPACING.xs,
+    gap: 14,
   },
+  // Header actions are bare glyphs, as on desktop: no box behind them.
   iconButton: {
-    width: 30,
-    height: 30,
+    width: 44,
+    height: 44,
+    margin: -7,
     borderRadius: 8,
-    backgroundColor: colors.surface,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
@@ -95,57 +103,52 @@ const createScrollStyles = (colors: ThemeColors) => ({
 const createEmptyChatStyles = (colors: ThemeColors) => ({
   emptyChat: { flex: 1, justifyContent: 'center' as const, alignItems: 'center' as const, paddingHorizontal: 32 },
   emptyChatIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
   },
   emptyChatTitle: { ...TYPOGRAPHY.h2, color: colors.text, marginBottom: SPACING.sm },
   emptyChatText: { ...TYPOGRAPHY.body, color: colors.textSecondary, textAlign: 'center' as const, marginBottom: SPACING.xl },
+  // Starter prompts: one quiet grouped surface, a hairline between them (ListGroup look).
+  starterList: {
+    alignSelf: 'stretch' as const,
+    marginBottom: SPACING.lg,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    overflow: 'hidden' as const,
+  },
+  starterChip: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
+  },
+  starterChipLast: { borderBottomWidth: 0 },
+  starterText: { ...TYPOGRAPHY.body, color: colors.text },
   projectHint: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    backgroundColor: colors.surface,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
-    borderRadius: 8,
     marginBottom: SPACING.lg,
     gap: SPACING.sm,
   },
-  projectHintIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    backgroundColor: `${colors.primary}30`,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  projectHintIconText: { ...TYPOGRAPHY.bodySmall, fontWeight: '600' as const, color: colors.primary },
-  projectHintText: { ...TYPOGRAPHY.h3, color: colors.primary, fontWeight: '500' as const },
+  projectHintText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
   privacyText: { ...TYPOGRAPHY.h3, color: colors.textMuted, textAlign: 'center' as const, maxWidth: 300 },
 });
 
 const createStateScreenStyles = (colors: ThemeColors) => ({
   loadingContainer: { flex: 1, justifyContent: 'center' as const, alignItems: 'center' as const, gap: 16, paddingHorizontal: 24 },
-  loadingText: { ...TYPOGRAPHY.h1, fontSize: 18, fontWeight: '600' as const, textAlign: 'center' as const, color: colors.text },
+  loadingText: { ...TYPOGRAPHY.h1, fontSize: 18, fontWeight: '500' as const, textAlign: 'center' as const, color: colors.text },
   loadingSubtext: { ...TYPOGRAPHY.body, color: colors.textSecondary },
   loadingHint: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, marginTop: SPACING.lg, textAlign: 'center' as const, paddingHorizontal: 32 },
   noModelContainer: { flex: 1, justifyContent: 'center' as const, alignItems: 'center' as const, paddingHorizontal: SPACING.xxl },
   noModelIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
   },
   noModelTitle: { ...TYPOGRAPHY.h2, color: colors.text, marginBottom: SPACING.sm },
   noModelText: { ...TYPOGRAPHY.body, color: colors.textSecondary, textAlign: 'center' as const },
@@ -166,7 +169,7 @@ const createIndicatorStyles = (colors: ThemeColors) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: colors.border,
@@ -177,7 +180,7 @@ const createIndicatorStyles = (colors: ThemeColors) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.xl,
     paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: colors.border,
@@ -212,12 +215,12 @@ const createIndicatorStyles = (colors: ThemeColors) => ({
     marginRight: 20,
   },
   imageProgressInfo: { flex: 1 },
-  imageProgressTitle: { ...TYPOGRAPHY.body, fontWeight: '600' as const, color: colors.text },
+  imageProgressTitle: { ...TYPOGRAPHY.body, fontWeight: '500' as const, color: colors.text },
   imageProgressStatus: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, fontStyle: 'normal' as const },
   imageProgressBarContainer: { marginTop: 10 },
   imageProgressBar: { height: 4, backgroundColor: colors.surfaceLight, borderRadius: 2, overflow: 'hidden' as const },
   imageProgressFill: { height: '100%' as const, backgroundColor: colors.primary, borderRadius: 2 },
-  imageProgressSteps: { ...TYPOGRAPHY.bodySmall, fontWeight: '600' as const, color: colors.primary, marginRight: SPACING.sm },
+  imageProgressSteps: { ...TYPOGRAPHY.bodySmall, fontWeight: '500' as const, color: colors.primary, marginRight: SPACING.sm },
   imagePreview: { width: 100, height: 100, borderRadius: 8, marginRight: 12, backgroundColor: colors.surfaceLight },
   imageStopButton: {
     width: 28,

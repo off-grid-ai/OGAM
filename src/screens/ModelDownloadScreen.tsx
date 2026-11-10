@@ -6,7 +6,6 @@ import {
   Linking,
 } from 'react-native';
 import { LoadingDots } from '../components/LoadingDots';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button } from '../components';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
@@ -25,6 +24,7 @@ import { RootStackParamList } from '../navigation/types';
 import { NetworkSection } from './ModelDownloadHelpers';
 import logger from '../utils/logger';
 import { ModelsScreen } from './ModelsScreen';
+import { AliveScreen } from '../components/AliveScreen';
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, 'AdvancedSetup'> };
 
@@ -178,20 +178,20 @@ export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
   const liveServers = servers.filter((s) => reachableServerIds.has(s.id));
 
   if (isLoading) return (
-    <SafeAreaView style={styles.container}>
+    <AliveScreen style={styles.container} edges={['top', 'bottom']}>
       <View testID="model-download-loading" style={styles.loadingContainer}>
         <LoadingDots color={colors.primary} size={8} />
         <Text style={styles.loadingText}>Analyzing your device...</Text>
       </View>
-    </SafeAreaView>
+    </AliveScreen>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <AliveScreen style={styles.container} edges={['top', 'bottom']}>
       <View testID="model-download-screen" style={styles.container}>
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>Advanced Setup</Text>
+            <Text style={styles.title}>Advanced setup</Text>
             <Text style={styles.subtitle}>
               Run a model from your network or on this device.
             </Text>
@@ -210,11 +210,11 @@ export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
             colors={colors}
           />
 
-          <Text style={styles.sectionTitle}>On This Device</Text>
+          <Text style={styles.sectionTitle}>On this device</Text>
 
           <View style={styles.deviceCard}>
             <View style={styles.deviceInfo}>
-              <Text style={styles.deviceLabel}>Your Device</Text>
+              <Text style={styles.deviceLabel}>Your device</Text>
               <Text style={styles.deviceValue}>{deviceInfo?.deviceModel}</Text>
             </View>
             <View style={styles.deviceInfo}>
@@ -224,7 +224,7 @@ export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
                 * device reported a different number on every launch and the figure could not be
                 * compared with a model's size - which is the only reason it is on this screen. Total
                 * is a property of the device, so "12 GB" means the same thing tomorrow. */}
-              <Text style={styles.deviceLabel}>Total Memory</Text>
+              <Text style={styles.deviceLabel}>Total memory</Text>
               <Text style={styles.deviceValue}>{hardwareService.formatBytes(deviceInfo?.totalMemory || 0)}</Text>
             </View>
           </View>
@@ -237,7 +237,7 @@ export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
 
         <CustomAlert visible={alertState.visible} title={alertState.title} message={alertState.message} buttons={alertState.buttons} onClose={() => setAlertState(hideAlert())} />
       </View>
-    </SafeAreaView>
+    </AliveScreen>
   );
 };
 
@@ -247,7 +247,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   loadingContainer: { flex: 1, justifyContent: 'center' as const, alignItems: 'center' as const, gap: 16 },
   loadingText: { ...TYPOGRAPHY.body, color: colors.textSecondary, textAlign: 'center' as const },
   scrollView: { flex: 1 },
-  content: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md, paddingBottom: 72 },
+  content: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.md, paddingBottom: 72 },
   header: { marginBottom: SPACING.md },
   title: { ...TYPOGRAPHY.h2, color: colors.text, marginBottom: SPACING.xs },
   subtitle: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, lineHeight: 20 },

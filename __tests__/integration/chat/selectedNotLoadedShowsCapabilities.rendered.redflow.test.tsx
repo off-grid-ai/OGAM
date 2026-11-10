@@ -37,7 +37,8 @@ describe('selected-but-not-loaded GGUF shows its real capability settings (rende
     // Terminal artifacts (pre-load): the Thinking toggle renders (RED: hidden until first send
     // loads the model) and Tools shows its enabled count badge, not the unsupported "N/A".
     await rtl.waitFor(() => { expect(view.queryByTestId('quick-thinking-toggle')).not.toBeNull(); }, { timeout: 4000 });
-    expect(view.queryByText('N/A')).toBeNull();
+    expect(view.getByTestId('quick-tools')).not.toHaveTextContent(/N\/a/i);
+    expect(view.getByTestId('quick-tools')).toHaveTextContent(/Tools\s*\d+/);
   });
 
   it('falsifier — an unknown-named GGUF in the same unloaded state promises nothing (no Thinking toggle, Tools N/A)', async () => {
@@ -50,8 +51,9 @@ describe('selected-but-not-loaded GGUF shows its real capability settings (rende
 
     // The popover is open (Tools row renders)…
     await rtl.waitFor(() => { expect(view.queryByTestId('quick-tools')).not.toBeNull(); }, { timeout: 4000 });
-    // …but an unrecognized model gets no predicted promise: Thinking hidden, Tools reads N/A.
+    // …but an unrecognized model gets no predicted promise: Thinking hidden, Tools reads N/A
+    // (the quick-settings badge reads every value as a word).
     expect(view.queryByTestId('quick-thinking-toggle')).toBeNull();
-    expect(view.queryByText('N/A')).not.toBeNull();
+    expect(view.getByTestId('quick-tools')).toHaveTextContent(/N\/A/);
   });
 });

@@ -57,7 +57,8 @@ describe('QuickSettingsAudioRow', () => {
     );
 
     expect(getByText('Voice')).toBeTruthy();
-    expect(getByText('N/A')).toBeTruthy();
+    // On, Off and Auto read as words; anything else, like N/A, shows as given.
+    expect(getByText("N/A")).toBeTruthy();
     expect(getByTestId('tts-icon').props.children).toBe('volume-1');
   });
 

@@ -91,4 +91,38 @@ describe('startModelDownload flow (real stores)', () => {
 
     expect(useDownloadStore.getState().downloads[KEY].status).toBe('failed');
   });
+
+  it('keeps the native reason code on the failed row, so it is never a generic error', async () => {
+    // The watcher once rebuilt the native event as `new Error(reason)`: the code was lost, and every
+    // Android failure counted as a bare "error" (PostHog 0.0.122: 245 failures, 108 people).
+    await startModelDownload('author/model', FILE);
+    await device.settle();
+    const id = nativeDownloadId();
+    await device.reportProgress(id, 100, FILE.size);
+
+    await device.failDownload(id, 'The download was interrupted.', 'download_interrupted');
+
+    expect(useDownloadStore.getState().downloads[KEY]).toMatchObject({ status: 'failed', errorCode: 'download_interrupted' });
+  });
+
+  it('a download whose save failed is saved again on Retry, from the bytes already on disk', async () => {
+    // Play review (0.0.122): a download that failed while processing needed a whole new download. The
+    // native row is completed, so a native retry refused it and nothing could save the file again.
+    const { textProvider } = require('../../../src/services/modelDownloadService/providers/textProvider');
+    await startModelDownload('author/model', FILE);
+    await device.settle();
+    const id = nativeDownloadId();
+    device.failNextMove('No space left on device');
+
+    await device.finishDownload(id, FILE.size);
+    expect(useDownloadStore.getState().downloads[KEY]).toMatchObject({ status: 'failed', errorCode: 'finalize_failed' });
+
+    await textProvider.retry(`text:${KEY}`);
+    await device.settle();
+
+    // Saved: the model is registered, its row is gone, and no second transfer started.
+    expect(useAppStore.getState().downloadedModels.map(m => m.id)).toContain(KEY);
+    expect(useDownloadStore.getState().downloads[KEY]).toBeUndefined();
+    expect(device.nativeRows().filter(row => row.fileName === 'model.gguf' && row.status !== 'completed')).toHaveLength(0);
+  });
 });

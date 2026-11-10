@@ -1,5 +1,5 @@
 /**
- * TTSSection tests: the pro TTS settings section (Interface Mode picker, Enable-TTS toggle,
+ * TTSSection tests: the pro TTS settings section (How-replies-arrive picker, Read-replies-aloud toggle,
  * Voice picker, Speed slider).
  *
  * Everything that is ours runs for real: the component, the real useTTSStore, the real Kokoro
@@ -115,7 +115,7 @@ describe('when the voice model is downloaded but the engine is cold', () => {
 
     expect(app.store().isReady).toBe(false);
     expect(queryByText(/No voice models downloaded/)).toBeNull();
-    expect(getByText('Interface Mode')).toBeTruthy();
+    expect(getByText('How replies arrive')).toBeTruthy();
     expect(getByTestId('tts-speed-slider')).toBeTruthy();
   });
 });
@@ -137,7 +137,7 @@ describe('when a voice model is ready', () => {
   it('shows the interface-mode picker, the voice list and the speed slider (not the empty state)', async () => {
     const { getByText, getByTestId, queryByText } = await renderReady();
     expect(queryByText(/No voice models downloaded/)).toBeNull();
-    expect(getByText('Interface Mode')).toBeTruthy();
+    expect(getByText('How replies arrive')).toBeTruthy();
     expect(getByText('Chat')).toBeTruthy();
     expect(getByText('Audio')).toBeTruthy();
     // Voices of the active language only (US English), not the British ones.
@@ -147,17 +147,17 @@ describe('when a voice model is ready', () => {
     expect(getByTestId('tts-speed-slider')).toBeTruthy();
   });
 
-  it('shows the Chat-mode description and the Enable-TTS toggle while in chat mode', async () => {
+  it('shows the chat-mode description and the Read-replies-aloud toggle while in chat mode', async () => {
     const { getByText } = await renderReady();
-    expect(getByText(/Chat Mode/)).toBeTruthy();
-    expect(getByText('Enable TTS')).toBeTruthy();
+    expect(getByText('As text, with a play button.')).toBeTruthy();
+    expect(getByText('Read replies aloud')).toBeTruthy();
   });
 
-  it('hides the Enable-TTS toggle and shows the Audio-mode description while in audio mode', async () => {
+  it('hides the Read-replies-aloud toggle and shows the audio-mode description while in audio mode', async () => {
     await app.rtl.act(async () => { app.store().updateSettings({ interfaceMode: 'audio' }); });
     const { getByText, queryByText } = await renderReady();
-    expect(getByText(/Audio Mode/)).toBeTruthy();
-    expect(queryByText('Enable TTS')).toBeNull();
+    expect(getByText('As voice notes you can play.')).toBeTruthy();
+    expect(queryByText('Read replies aloud')).toBeNull();
   });
 
   // ── Voice picker interaction (real store action) ───────────────────────
@@ -182,9 +182,9 @@ describe('when a voice model is ready', () => {
     await app.rtl.waitFor(() => expect(app.store().pendingVoiceId).toBe('bf_emma'));
     expect(getByTestId('chat-tts-language-download-status')).toBeTruthy();
     expect(queryByTestId('icon-check-circle')).toBeNull();
-    // The fetcher reports a fraction only (no byte counts), so the rate reads unavailable.
+    // The fetcher reports a fraction only (no byte counts), so no rate shows.
     await app.rtl.waitFor(() =>
-      expect(getByText('Downloading English (UK) voice - 42% · Rate unavailable')).toBeTruthy(),
+      expect(getByText('Downloading English (UK) voice - 42%')).toBeTruthy(),
     );
 
     // A second selection cannot start while one voice is still being prepared.
@@ -252,11 +252,13 @@ describe('when a voice model is ready', () => {
     expect(app.store().settings.interfaceMode).toBe('chat');
   });
 
-  // ── Enable-TTS toggle interaction (real store action) ──────────────────
+  // ── Read-replies-aloud toggle interaction (real store action) ──────────────────
   it('toggling the Enable switch flips settings.enabled in the REAL store', async () => {
     const { UNSAFE_getByType } = await renderReady();
     const { Switch } = require('react-native');
     expect(app.store().settings.enabled).toBe(true);
+    // The app's one switch: a white knob when on, not an emerald knob on a half-emerald track.
+    expect(UNSAFE_getByType(Switch).props.thumbColor).toBe('#FFFFFF');
     await app.rtl.act(async () => { app.rtl.fireEvent(UNSAFE_getByType(Switch), 'valueChange', false); });
     expect(app.store().settings.enabled).toBe(false);
   });

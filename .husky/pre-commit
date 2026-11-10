@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# Analytics may only send action ids that are in the generated list. A new testID left the list
+# stale three times on 2026-11-06 (each one a red jest shard in CI), so every commit regenerates it.
+node scripts/collect-action-ids.js >/dev/null || exit 1
+git add src/services/analytics/actionIds.generated.ts

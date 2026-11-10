@@ -71,11 +71,11 @@ describe('same-named MCP tools stay on the server the user picked', () => {
     await waitFor(() => expect(ui.getByTestId(`mcp-server-status-${BETA.id}`)).toHaveTextContent('Active'));
 
     // Alpha connected first, so search runs there. Beta's copy is off; its new tool is on.
-    expect(ui.getByTestId(`mcp-server-tool-count-${ALPHA.id}`)).toHaveTextContent('1/1 tools');
-    expect(ui.getByTestId(`mcp-server-tool-count-${BETA.id}`)).toHaveTextContent('1/2 tools');
+    expect(ui.getByTestId(`mcp-server-tool-count-${ALPHA.id}`)).toHaveTextContent(/\b1 of 1 tools$/);
+    expect(ui.getByTestId(`mcp-server-tool-count-${BETA.id}`)).toHaveTextContent(/\b1 of 2 tools$/);
 
     // Open Beta's tools and turn search on there.
-    fireEvent.press(ui.getAllByText('Edit Tools')[1]);
+    fireEvent.press(ui.getByLabelText(new RegExp(`^${BETA.name}, Active, `)));
     expect(await ui.findByText('Beta Wiki')).toBeTruthy();
     const { Switch } = require('react-native');
     const betaSwitches = () => ui.UNSAFE_getAllByType(Switch).filter(sw => sw.props.testID === undefined);
@@ -85,8 +85,8 @@ describe('same-named MCP tools stay on the server the user picked', () => {
 
     // Back on the list, only Beta claims search now.
     fireEvent.press(ui.getByLabelText('Back'));
-    await waitFor(() => expect(ui.getByTestId(`mcp-server-tool-count-${ALPHA.id}`)).toHaveTextContent('0/1 tools'));
-    expect(ui.getByTestId(`mcp-server-tool-count-${BETA.id}`)).toHaveTextContent('2/2 tools');
+    await waitFor(() => expect(ui.getByTestId(`mcp-server-tool-count-${ALPHA.id}`)).toHaveTextContent(/\b0 of 1 tools$/));
+    expect(ui.getByTestId(`mcp-server-tool-count-${BETA.id}`)).toHaveTextContent(/\b2 of 2 tools$/);
 
     // The tool loop's call reaches Beta, the server the user picked.
     let result: Awaited<ReturnType<typeof McpToolExtension.execute>> | undefined;

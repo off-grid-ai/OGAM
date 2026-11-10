@@ -1,3 +1,4 @@
+import { isClassifierModel } from './classifierModel';
 import { modelManager } from './modelManager';
 import RNFS from 'react-native-fs';
 import { mtpHeadForPrimaryFile } from '@offgrid/models';
@@ -8,6 +9,7 @@ import { useAppStore } from '../stores';
 import { activeModelService } from './activeModelService';
 import { makeModelKey } from '../utils/modelKey';
 import { statFile } from '../utils/fileStat';
+import { failureDetails } from '../utils/downloadErrors';
 import type { ModelFile, DownloadedModel } from '../types';
 
 /** Placeholder downloadId for a row that exists only to represent the QUEUED state
@@ -142,7 +144,9 @@ export async function startModelDownload(
   let currentDownloadId: string | undefined = queuedPlaceholderId(modelKey);
   const fail = (err: Error) => {
     if (currentDownloadId) {
-      useDownloadStore.getState().setStatus(currentDownloadId, 'failed', { message: err.message });
+      // Keep the error's code (disk_full from the space check): without it every refusal read as
+      // a bare "error" in the numbers and in the row's message.
+      useDownloadStore.getState().setStatus(currentDownloadId, 'failed', failureDetails(err));
     }
     opts.onError?.(err);
   };
@@ -153,8 +157,9 @@ export async function startModelDownload(
     // Cancelled (the row is gone) stops quietly. A failed file clears the row and says so; the next
     // tap fetches only what is still missing.
     const cancelled = (e as Error & { cancelled?: boolean }).cancelled || !useDownloadStore.getState().downloads[modelKey];
+    // A failure is recorded first (with its code, disk_full from the space check), then the row clears.
+    if (!cancelled) fail(e as Error);
     useDownloadStore.getState().remove(modelKey);
-    if (!cancelled) opts.onError?.(e as Error);
     return;
   }
 
@@ -169,10 +174,14 @@ export async function startModelDownload(
       // "downloaded" from downloadedModels, not a lingering 100% store entry.
       useAppStore.getState().addDownloadedModel(model);
       const app = useAppStore.getState();
-      if (mayAutoSelect && app.activeModelId === null) {
+      // The intent classifier is never made the chat model, even when its download comes back
+      // through a path that asks for auto-select (a queued download restored after a restart).
+      if (mayAutoSelect && app.activeModelId === null && !isClassifierModel(model.id, app.settings.classifierModelId)) {
+        // Your last pick if it is still here, else the model you just downloaded. The first entry
+        // of the list could be any older file, the intent classifier included.
         const selected =
           app.downloadedModels.find(item => item.id === app.lastTextModelId) ??
-          app.downloadedModels[0];
+          app.downloadedModels.find(item => item.id === model.id);
         if (selected) activeModelService.selectTextModel(selected.id);
       }
       useDownloadStore.getState().remove(modelKey);

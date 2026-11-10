@@ -28,6 +28,7 @@ import { saveKvSession, loadKvSession } from './kvSessionStore';
 import { readModelFileType } from './modelHeader';
 import { installedMtpHeadPath } from './mtpHeads';
 import { resolveSpeculative } from './mtpDetection';
+import { copiedLoadEnded, copiedLoadStarted, startsInLowMemory } from './lowMemoryLoads';
 import type { StreamToken } from './llmStreamTypes';
 export type { StreamToken };
 type StreamCallback = (data: StreamToken) => void;
@@ -40,11 +41,18 @@ async function modelBytesOnDisk(modelPath: string): Promise<number> {
   return sizes.reduce((total, size) => total + size, 0);
 }
 
+/** What Android frees by closing background apps before it kills the app in front. 7 GB phones
+ *  loaded K2 Horizon 3.7B as a copy (about 4.4 GB with its KV cache) with a median 3.0 GB free,
+ *  and crashed with 1.9 GB free (0.0.122, in-app analytics). */
+const COPY_RECLAIM_BYTES = 1024 * 1024 * 1024;
+
 class LLMService {
   private context: LlamaContext | null = null;
   private currentModelPath: string | null = null;
   private nativeConversationId: string | null = null; // owns native KV/recurrent state
   private loadedWithMtp: boolean = false;
+  /** The model is loaded mapped because a copy would not fit in free RAM: slower, but loaded. */
+  private loadedInLowMemory: boolean = false;
   private isGenerating: boolean = false;
   private activeCompletionPromise: Promise<void> | null = null;
   /** A Stop asked for during the current turn. llama.rn drops a stop sent before its completion starts
@@ -149,44 +157,64 @@ class LLMService {
     const fileType = await readModelFileType(modelPath);
     const memory = await hardwareService.getAppMemoryUsage();
     const freeRamMb = memory.available / (1024 * 1024);
-    const params = buildModelParams(
+    const mtpHeadPath = speculativeDecoding ? await installedMtpHeadPath(modelPath) : undefined;
+    const paramsFor = (lowMemory: boolean) => buildModelParams(
       modelPath,
       { ...settings, nThreads: effectiveNThreads, speculativeDecoding },
-      {
-        fileType,
-        totalRamGb: memory.total / 1024 ** 3,
-        stateCacheBudgetMb: stateCacheBudgetMb(freeRamMb),
-        mtpHeadPath: speculativeDecoding ? await installedMtpHeadPath(modelPath) : undefined,
-      },
+      { fileType, totalRamGb: memory.total / 1024 ** 3, stateCacheBudgetMb: stateCacheBudgetMb(freeRamMb), mtpHeadPath, lowMemory },
     );
-    logger.log(`[LLM] Resolved params: threads=${params.nThreads}, batch=${params.nBatch}, ctx=${params.ctxLen}, gpuLayers=${params.nGpuLayers}, fileType=${fileType}`);
+    // A model that died loading as a copy before starts mapped (lowMemoryLoads).
+    let params = paramsFor(await startsInLowMemory(modelPath));
+    logger.log(`[LLM] Resolved params: threads=${params.nThreads}, batch=${params.nBatch}, ctx=${params.ctxLen}, gpuLayers=${params.nGpuLayers}, fileType=${fileType}, copies=${params.copiesWeights}`);
     const fileSize = await modelBytesOnDisk(modelPath);
     // The vision projector loads beside the model (initMultimodal), copied into memory, not mapped.
     const projectorFileSize = mmProjPath && await RNFS.exists(mmProjPath) ? (await statFile(mmProjPath))?.size ?? 0 : 0;
-    // Use the EFFECTIVE cache type, not the raw setting: OpenCL/HTP coerce the KV cache
-    // to f16 (see buildModelParams), so keying off settings.cacheType alone would let the
-    // guard use the cheaper quantized estimate and approve a context that then OOMs.
-    const quantizedCache = !params.usesF16Cache;
-    // This pre-load check can credit reclaimable pages for clean mmap-backed GGUF weights.
-    // The residency manager independently gates dirty/accelerator loads on live RAM.
-    // Policy comes from the residency manager (the authoritative owner).
-    const getMem = async (): Promise<{ available: number; total: number; used: number }> => {
+    // A model about to be released for this one gives its memory back.
+    const getReleasedMem = async (): Promise<{ available: number; total: number; used: number }> => {
       const raw = await hardwareService.getAppMemoryUsage();
-      // A model about to be released for this one gives its memory back.
-      const availableMB = effectiveAvailableMB((raw.available + reclaimBytes) / (1024 * 1024), raw.total / (1024 * 1024), {
+      return { ...raw, available: raw.available + reclaimBytes };
+    };
+    // A copy also gets what Android frees by closing background apps.
+    const getFreeMem = async (): Promise<{ available: number; total: number; used: number }> => {
+      const raw = await getReleasedMem();
+      return { ...raw, available: raw.available + COPY_RECLAIM_BYTES };
+    };
+    // Mapped weights may count pages the OS can reclaim (Android: up to the physical budget).
+    // Policy comes from the residency manager (the authoritative owner).
+    const getMappedMem = async (): Promise<{ available: number; total: number; used: number }> => {
+      const raw = await getReleasedMem();
+      const availableMB = effectiveAvailableMB(raw.available / (1024 * 1024), raw.total / (1024 * 1024), {
         platform: Platform.OS,
         policy: modelResidencyManager.getLoadPolicy(),
       });
       return { ...raw, available: availableMB * 1024 * 1024 };
     };
-    // Every iPhone load maps its weights (mobileUseMmap); Android keeps its copied-weights check.
-    const weightsMapped = Platform.OS === 'ios';
-    const systemAvailableBytes = weightsMapped ? await hardwareService.getSystemAvailableBytes() : null;
-    let memCheck = await checkMemoryForModel({ modelFileSize: fileSize, contextLength: params.ctxLen, getAvailableMemory: getMem, quantizedCache, weightsMapped, projectorFileSize, systemAvailableBytes });
+    const systemAvailableBytes = Platform.OS === 'ios' ? await hardwareService.getSystemAvailableBytes() : null;
+    // Copied weights are charged in full against what is free right now: no reclaim credit, since
+    // the OS kills the app before it reclaims enough (7 GB Android, 0.0.122). Mapped weights are
+    // bounded by the fit rule, and only the KV cache must fit in what is free.
+    const check = (p: typeof params) => checkMemoryForModel({
+      modelFileSize: fileSize, contextLength: p.ctxLen, getAvailableMemory: p.copiesWeights ? getFreeMem : getMappedMem,
+      quantizedCache: !p.usesF16Cache, weightsMapped: !p.copiesWeights, projectorFileSize, systemAvailableBytes,
+    });
+    let memCheck = await check(params);
+    if (!memCheck.safe && params.copiesWeights) {
+      // Too big to copy into what is free: load it mapped (slower) instead of refusing or crashing.
+      const mapped = paramsFor(true);
+      const mappedCheck = await check(mapped);
+      if (mappedCheck.safe || override) {
+        logger.log(`[LLM] Low-memory mode: a copy needs ${memCheck.requiredMB.toFixed(0)}MB, ${memCheck.availableMB.toFixed(0)}MB free`);
+        params = mapped;
+        memCheck = mappedCheck;
+      }
+    }
     if (!memCheck.safe) {
       // Keep the selected context. A failed estimate asks for Load Anyway; an explicit
       // override passes the selected value to native init even when memory is tight.
-      const decision = await resolveSafeContext({ fileSize, requestedCtx: params.ctxLen, quantizedCache, weightsMapped, projectorFileSize, override, getAvailableMemory: getMem, memCheck });
+      const decision = await resolveSafeContext({
+        fileSize, requestedCtx: params.ctxLen, quantizedCache: !params.usesF16Cache, weightsMapped: !params.copiesWeights,
+        projectorFileSize, override, getAvailableMemory: params.copiesWeights ? getFreeMem : getMappedMem, memCheck,
+      });
       memCheck = decision.memCheck;
     }
     logger.log(`[LLM] Memory check: estimatedMB=${memCheck.estimatedMB.toFixed(0)}, availableMB=${memCheck.availableMB.toFixed(0)}, safe=${memCheck.safe}, ctx=${params.ctxLen}`);
@@ -231,7 +259,8 @@ class LLMService {
       // back, since a switch that goes ahead releases it first. A context that stopped answering is
       // replaced the same way, even for the same file.
       const switching = !!this.context && (this.currentModelPath !== modelPath || this.contextUnusable);
-      const reclaimBytes = switching && this.currentModelPath ? await modelBytesOnDisk(this.currentModelPath) : 0;
+      // A model in low-memory mode holds its weights as file pages, which already count as free.
+      const reclaimBytes = switching && this.currentModelPath && !this.loadedInLowMemory ? await modelBytesOnDisk(this.currentModelPath) : 0;
       const { fileSize, memCheck, params } = await this.validateAndPrepareModel(modelPath, opts?.override, reclaimBytes, mmProjPath);
       if (switching) {
         logger.log('[LLM] Releasing previous context before loading new model');
@@ -243,7 +272,11 @@ class LLMService {
       this.loadedWithMtp = Boolean((baseParams as { speculative?: unknown }).speculative);
       logger.log(`[LLM] Loading model: ctx=${ctxLen}, threads=${nThreads}, batch=${nBatch}, fileSize=${(fileSize / (1024 * 1024)).toFixed(0)}MB, availRAM=${memCheck.availableMB.toFixed(0)}MB`);
       try {
-        const { context, gpuAttemptFailed, actualLength, attemptedGpuLayers } = await this.initConfiguredContext({ baseParams, ctxLen, nGpuLayers, fileSize });
+        // A copy that kills the app leaves this marker; that model then starts mapped (lowMemoryLoads).
+        if (params.copiesWeights) await copiedLoadStarted(modelPath);
+        const { context, gpuAttemptFailed, actualLength, attemptedGpuLayers } = await this.initConfiguredContext({ baseParams, ctxLen, nGpuLayers, fileSize })
+          .finally(() => params.copiesWeights ? copiedLoadEnded() : undefined);
+        this.loadedInLowMemory = params.lowMemory;
         // attemptedGpuLayers (post device-cap/backend resolution) is what the init actually offered the
         // GPU — the truthful layer count for the meta; nGpuLayers is the raw settings request.
         await this.applyLoadedContext({ context, actualLength, gpuAttemptFailed, nGpuLayers: attemptedGpuLayers, requestedGpuLayers: nGpuLayers, modelPath, mmProjPath });
@@ -379,6 +412,8 @@ class LLMService {
     try { await mutex.ready; await this.doUnloadModel(); } finally { mutex.release(); }
   }
   isModelLoaded(): boolean { return this.context !== null; }
+  /** The loaded model runs in low-memory mode (mapped, no repack): slower until memory frees up. */
+  isLowMemoryMode(): boolean { return this.context !== null && this.loadedInLowMemory; }
   /** A loaded context that still answers. False after a backend fault; the next load replaces it. */
   isContextUsable(): boolean { return this.context !== null && !this.contextUnusable; }
   /**

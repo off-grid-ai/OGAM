@@ -278,7 +278,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   primaryBtnText: {
     fontSize: 16,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
     color: '#FFFFFF',
     letterSpacing: 0.2,
   },

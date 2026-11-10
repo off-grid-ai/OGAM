@@ -25,6 +25,8 @@ const ragPackagePath = path.resolve(sharedRoot, 'packages/rag');
 // with desktop. Out-of-root like rag, prebuilt CJS in dist/.
 const modelsPackagePath = path.resolve(sharedRoot, 'packages/models');
 const uiPackagePath = path.resolve(sharedRoot, 'packages/ui');
+// @offgrid/design: the one token source for desktop and mobile (colours, type, spacing, motion).
+const designPackagePath = path.resolve(sharedRoot, 'packages/design');
 // @offgrid/speech: voice-turn decisions (when a spoken turn begins and ends) shared with desktop.
 // Out-of-root like sync, so Metro must watch it and be pointed at its built entry.
 const speechPackagePath = path.resolve(sharedRoot, 'packages/speech');
@@ -36,6 +38,15 @@ const notesPackagePath = path.resolve(sharedRoot, 'packages/notes');
 // @offgrid/notes-editor: the Notes Page editor, prebuilt as one HTML page for the WebView.
 const notesEditorPackagePath = path.resolve(sharedRoot, 'packages/notes-editor');
 const sharedNodeModulesPath = path.resolve(sharedRoot, 'node_modules');
+// A git worktree links each package to the main checkout (scripts/link-worktree-deps.sh). Metro
+// indexes files by their real path, so it must also watch the folder those links point into.
+const linkedNodeModulesPaths = (() => {
+  const own = path.resolve(__dirname, 'node_modules');
+  // No react-native yet (a fresh checkout before npm ci): nothing linked to watch.
+  if (!fs.existsSync(path.resolve(own, 'react-native'))) return [];
+  const real = path.dirname(fs.realpathSync(path.resolve(own, 'react-native')));
+  return real === own ? [] : [real];
+})();
 const syncRuntimeModules = {
   '@noble/hashes/hkdf': path.resolve(sharedNodeModulesPath, '@noble/hashes/hkdf.js'),
   '@noble/hashes/hmac': path.resolve(sharedNodeModulesPath, '@noble/hashes/hmac.js'),
@@ -55,7 +66,9 @@ const config = {
     notesPackagePath,
     notesEditorPackagePath,
     uiPackagePath,
+    designPackagePath,
     sharedNodeModulesPath,
+    ...linkedNodeModulesPaths,
   ],
   resolver: {
     // When resolving modules from outside the project root (i.e. @offgrid/pro),
@@ -84,6 +97,7 @@ const config = {
       '@offgrid/writing': path.resolve(writingPackagePath, 'dist/index.cjs'),
       '@offgrid/notes': path.resolve(notesPackagePath, 'dist/index.cjs'),
       '@offgrid/notes-editor/webview-html': path.resolve(notesEditorPackagePath, 'dist/webview-html.js'),
+      '@offgrid/design': path.resolve(designPackagePath, 'dist/index.js'),
       // @offgrid/sync owns this dependency in its package manifest. Metro still needs the
       // out-of-root file dependency mapped to a watched, built CommonJS entry.
       '@offgrid/automation': path.resolve(automationPackagePath, 'dist/index.js'),

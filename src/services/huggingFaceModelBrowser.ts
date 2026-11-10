@@ -6,6 +6,7 @@ import {
   resolveHuggingFaceModel,
   type MobileWhisperCatalogModel,
   extractQuantization,
+  cleanModelName,
   imageEngineSettings,
   isCompleteSDCheckpointHeader,
   isImageWeightAvailableOn,
@@ -156,17 +157,19 @@ export function getVariantLabel(variant?: string): string | undefined {
   return variant ? VARIANT_LABELS[variant] : undefined;
 }
 
+/** The look a model's name points to, or '' when the name says nothing. Unknown names used to be
+ *  called 'anime', so RealVisXL, a photo model, was labelled anime (hand test 91). */
 export function guessStyle(name: string): string {
   const lower = name.toLowerCase();
   if (
-    lower.includes('reality') ||
-    lower.includes('realistic') ||
+    lower.includes('real') ||
     lower.includes('chillout') ||
     lower.includes('photo')
   ) {
     return 'photorealistic';
   }
-  return 'anime';
+  if (['anime', 'anything', 'cartoon', 'meina', 'counterfeit'].some(word => lower.includes(word))) return 'anime';
+  return '';
 }
 
 const QWEN_IMAGE_WEIGHT = QWEN_IMAGE_21_WEIGHT;
@@ -375,10 +378,12 @@ export const RECOMMENDED_EMBEDDING_MODELS = [
     sha256: '161d07a32057e754e1fe82e30547c736032ab255a6719890b7e76414c565b748',
   },
   {
-    id: 'armand01/paraphrase-multilingual-MiniLM-L12-v2-Q6_K-GGUF@34b69e1683fccf80bbbe7255b8651cd7a76e8891/paraphrase-multilingual-minilm-l12-v2.Q6_K.gguf',
-    name: 'Multilingual MiniLM L12', description: 'Text search across multiple languages.', size: 130844160,
-    downloadUrl: 'https://huggingface.co/armand01/paraphrase-multilingual-MiniLM-L12-v2-Q6_K-GGUF/resolve/34b69e1683fccf80bbbe7255b8651cd7a76e8891/paraphrase-multilingual-minilm-l12-v2.Q6_K.gguf',
-    sha256: 'b5780f54a02b2e9a1cded186d349800aedfd6fb38635c41f532a9385fed34d32',
+    // The armand01 conversion this replaced carried a WordPiece vocabulary of 250,002 tokens over a
+    // 250,037-row embedding table, so llama.cpp refused it ("token_embd.weight has wrong shape").
+    id: 'mykor/paraphrase-multilingual-MiniLM-L12-v2.gguf@a964c09982b6e28b13646d5f9860b8a04f4182c4/paraphrase-multilingual-MiniLM-L12-118M-v2-Q6_K.gguf',
+    name: 'Multilingual MiniLM L12', description: 'Text search across multiple languages.', size: 130724128,
+    downloadUrl: 'https://huggingface.co/mykor/paraphrase-multilingual-MiniLM-L12-v2.gguf/resolve/a964c09982b6e28b13646d5f9860b8a04f4182c4/paraphrase-multilingual-MiniLM-L12-118M-v2-Q6_K.gguf',
+    sha256: '83199ec9f234f797cadce91b2f96a492610ab0a274c808dc3c67a87ef65a01be',
   },
 ] as const;
 
@@ -409,7 +414,9 @@ export async function searchEmbeddingModels(query: string, signal?: AbortSignal)
       (file.lfs?.size ?? file.size ?? 0) > 0,
     ).map(file => ({
       id: `${repo.id}@${data.sha}/${file.rfilename}`,
-      name: `${repo.id} / ${file.rfilename}`,
+      // The name a person reads ("Bge small en v1.5"), not "org/repo / file.gguf": the quant shows on
+      // its own beside it (Mac, 2026-11-08).
+      name: cleanModelName(file.rfilename),
       size: file.lfs?.size ?? file.size ?? 0,
       sha256: file.lfs?.sha256,
       downloadUrl: `https://huggingface.co/${repo.id}/resolve/${data.sha}/${file.rfilename.split('/').map(encodeURIComponent).join('/')}`,

@@ -169,6 +169,18 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
     if (visible) setActiveTab(initialTab);
   }, [visible, initialTab]);
 
+  // The sheet comes up first and its rows fill in a frame later. Mounting a long model list in the same
+  // frame left Home bare for seconds before the sheet appeared (hand tests 88-90).
+  const [bodyReady, setBodyReady] = useState(false);
+  useEffect(() => {
+    if (!visible) {
+      setBodyReady(false);
+      return undefined;
+    }
+    const frame = requestAnimationFrame(() => setBodyReady(true));
+    return () => cancelAnimationFrame(frame);
+  }, [visible]);
+
   // Group remote models by server for TextTab — exclude servers known to be offline
   const remoteTextModels = useMemo(() => {
     return servers
@@ -321,6 +333,8 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
       >
+        {bodyReady ? (
+          <>
         {activeTab === 'search' ? (
           <SearchTab
             onSelect={() => {
@@ -387,6 +401,8 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
             }
           />
         )}
+          </>
+        ) : null}
       </ScrollView>
 
       {onBrowseModels && (

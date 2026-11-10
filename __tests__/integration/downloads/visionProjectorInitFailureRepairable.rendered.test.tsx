@@ -9,7 +9,7 @@
  * Photo action says the vision file is missing and leads to Downloads, and the wrench repairs it.
  *
  * Entry point: the REAL App (boot, NavigationContainer, AppNavigator). Every step is a gesture: open
- * Models → Downloads, go back, New Chat, type and send, Photo, "Go to Download Manager", the wrench.
+ * Models → Downloads, go back, New Chat, type and send, Photo, "Open Downloads", the wrench.
  *
  * Fakes (device boundary only): the in-memory filesystem (the weights and, after launch, the projector
  * file), AsyncStorage (what an earlier run saved), the RAM sensor, and llama.rn. The llama.rn fake's
@@ -105,9 +105,10 @@ describe('vision projector that fails to start', () => {
     // BEFORE: no repair wrench. Unlinked, it is listed as a text model; linked at launch, it is
     // listed as a vision model that looks ready.
     let downloads = await openDownloads();
-    await waitFor(() => expect(within(downloads).getByText(MODEL_FILE)).toBeTruthy(), RENDER_WAIT);
+    await waitFor(() => expect(within(downloads).getByText('Gemma 4 E2B')).toBeTruthy(), RENDER_WAIT);
     if (arrival === 'folder scan') {
-      expect(within(downloads).getByText(/Q4_K_M$/)).toBeTruthy();
+      // The facts line ends with the download date now ("Q4_K_M · Nov 6").
+      expect(within(downloads).getByText(/Q4_K_M · [A-Z][a-z]{2} \d{1,2}$/)).toBeTruthy();
       expect(within(downloads).queryByLabelText('Vision')).toBeNull();
     } else {
       await waitFor(() => expect(within(downloads).getByLabelText('Vision')).toBeTruthy(), RENDER_WAIT);
@@ -131,7 +132,7 @@ describe('vision projector that fails to start', () => {
     fireEvent.press(await waitFor(() => ui.getByTestId('attach-photo'), RENDER_WAIT));
     await waitFor(() => expect(ui.getByText('Vision File Missing')).toBeTruthy(), RENDER_WAIT);
     expect(ui.queryByText('Vision Not Supported')).toBeNull();
-    fireEvent.press(ui.getByText('Go to Download Manager'));
+    fireEvent.press(ui.getByText('Open Downloads'));
 
     // AFTER: Downloads shows it as a vision model, with the repair wrench.
     downloads = await waitFor(() => ui.getByTestId('downloaded-models-screen'), RENDER_WAIT);

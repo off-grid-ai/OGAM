@@ -1,3 +1,4 @@
+require 'digest'
 # Fastlane Fastfile - Off Grid mobile release automation
 # Docs: https://docs.fastlane.tools
 #
@@ -16,6 +17,8 @@
 
 require "json"
 require "fileutils"
+require "plist"
+require "shellwords"
 
 # Off Grid sends analytics only when the person opts in. Disable fastlane's anonymous usage analytics.
 opt_out_usage
@@ -278,6 +281,40 @@ platform :ios do
     require "shellwords"
     require "tmpdir"
     require "base64"
+    profile_name = ENV["OFFGRID_PROFILE_NAME"]
+    if profile_name
+      # CI: the distribution certificate and App Store profile setup_signing installed. Nothing
+      # asks Apple for a certificate or a profile.
+      update_code_signing_settings(
+        path: "ios/OffgridMobile.xcodeproj",
+        targets: ["OffgridMobile"],
+        build_configurations: ["Release"],
+        use_automatic_signing: false,
+        team_id: APPLE_TEAM_ID,
+        bundle_identifier: "ai.offgridmobile",
+        # The team's distribution certificates are the Xcode 11+ "Apple Distribution" kind; Xcode reads
+        # "iPhone Distribution" as the legacy "iOS Distribution" kind and finds none to sign with.
+        code_sign_identity: "Apple Distribution",
+        profile_name: profile_name
+      )
+      build_app(
+        workspace: "ios/OffgridMobile.xcworkspace",
+        scheme: "OffgridMobile",
+        configuration: "Release",
+        export_method: "app-store",
+        export_team_id: APPLE_TEAM_ID,
+        export_options: {
+          method: "app-store-connect",
+          teamID: APPLE_TEAM_ID,
+          signingStyle: "manual",
+          signingCertificate: "Apple Distribution",
+          provisioningProfiles: { "ai.offgridmobile" => profile_name }
+        },
+        output_directory: "build",
+        output_name: "OffgridMobile.ipa"
+      )
+      next
+    end
     xcargs = "-allowProvisioningUpdates"
     if ENV["ASC_KEY_ID"] && ENV["ASC_ISSUER_ID"] && ENV["ASC_API_KEY_P8"] &&
        !ENV["ASC_KEY_ID"].empty? && !ENV["ASC_ISSUER_ID"].empty? && !ENV["ASC_API_KEY_P8"].empty?
@@ -488,8 +525,45 @@ platform :ios do
       keychain_password: ENV["KEYCHAIN_PASSWORD"]
     )
 
-    # Install the provisioning profile so xcodebuild can find it.
+    # Install the App Store profile and remember its name: the archive signs manually with it and
+    # this certificate. Automatic signing asked Apple for a new development certificate on every
+    # fresh runner, until the account hit its certificate limit and the build stopped.
+    # (`respond_to?(:install_provisioning_profile)` is false inside a lane, so the old guarded
+    # call never installed the profile.)
     profile_path = write_tmp_b64(ENV["IOS_PROVISION_PROFILE"], "profile.mobileprovision")
-    install_provisioning_profile(path: profile_path) if respond_to?(:install_provisioning_profile)
+    install_provisioning_profile(path: profile_path)
+    profile = Plist.parse_xml(`security cms -D -i #{profile_path.shellescape}`)
+    UI.user_error!("IOS_PROVISION_PROFILE is not a readable provisioning profile") unless profile && profile["Name"]
+    ENV["OFFGRID_PROFILE_NAME"] = profile["Name"]
+    UI.message("Signing manually with profile '#{profile['Name']}' (expires #{profile['ExpirationDate']})")
+
+    # Apple Distribution certificates chain to Apple's WWDR G3 intermediate. A runner without it
+    # holds the identity but treats it as untrusted, so codesign sees no valid identity.
+    %w[AppleWWDRCAG3 AppleWWDRCAG6].each do |ca|
+      cer = File.join(Dir.tmpdir, "#{ca}.cer")
+      sh("curl", "-fsSL", "-o", cer, "https://www.apple.com/certificateauthority/#{ca}.cer")
+      sh("security", "import", cer, "-k", File.expand_path("~/Library/Keychains/#{keychain}"), "-T", "/usr/bin/codesign") do |status, _out, _cmd|
+        UI.message("#{ca}: #{status.success? ? 'installed' : 'already present'}")
+      end
+    end
+    UI.message("All codesigning identities (valid or not):\n#{`security find-identity -p codesigning #{keychain.shellescape}`}")
+
+    # The archive signs with an identity in this keychain that the profile also lists. Say which
+    # side is wrong here, in one line, instead of xcodebuild's "no signing certificate found".
+    identities = `security find-identity -v -p codesigning #{keychain.shellescape}`
+    UI.message("Signing identities in #{keychain}:\n#{identities}")
+    in_keychain = identities.scan(/\b([0-9A-F]{40})\b/).flatten
+    in_profile = Array(profile["DeveloperCertificates"]).map do |cert|
+      der = cert.respond_to?(:string) ? cert.string : cert.read
+      Digest::SHA1.hexdigest(der).upcase
+    end
+    UI.message("Certificates the profile lists: #{in_profile.join(', ')}")
+    if (in_keychain & in_profile).empty?
+      UI.user_error!(
+        in_keychain.empty? ?
+          "IOS_CERTIFICATE_P12 holds no usable signing identity (no private key, or the wrong password)." :
+          "IOS_CERTIFICATE_P12 (#{in_keychain.join(', ')}) is not a certificate the profile '#{profile['Name']}' lists (#{in_profile.join(', ')})."
+      )
+    end
   end
 end

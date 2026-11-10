@@ -1,10 +1,12 @@
+import { ChatStyleSetting } from '../../components/MediaStyles/ChatStyleSetting';
 import React, { useState } from 'react';
+import { AppSwitch } from '../../components/AppSwitch';
 import { View, Text, Platform } from 'react-native';
-import { Switch, TouchableOpacity } from '../../components/Touchable';
+import { TouchableOpacity } from '../../components/Touchable';
 import { AdvancedToggle, Card } from '../../components';
 import { SliderSetting } from '../../components/SliderSetting';
 import { Button } from '../../components/Button';
-import { useTheme, useThemedStyles } from '../../theme';
+import { useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
 import { useClearGpuCache, useImageParameterSettings } from '../../hooks/useImageGenerationSettings';
 import {
@@ -16,10 +18,8 @@ import { createStyles } from './styles';
 // ─── Advanced Sub-Components ─────────────────────────────────────────────────
 
 const EnhanceImageToggle: React.FC = () => {
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings, downloadedModels } = useAppStore();
-  const trackColor = { false: colors.surfaceLight, true: `${colors.primary}80` };
   // Enhancement runs the prompt through a text model, so it needs one available.
   const hasTextModel = downloadedModels.length > 0;
   const enabled = (settings?.enhanceImagePrompts ?? false) && hasTextModel;
@@ -36,26 +36,22 @@ const EnhanceImageToggle: React.FC = () => {
   return (
     <View style={[styles.toggleRow, !hasTextModel && styles.dimmed]}>
       <View style={styles.toggleInfo}>
-        <Text style={styles.toggleLabel}>Enhance Image Prompts</Text>
+        <Text style={styles.toggleLabel}>Enhance image prompts</Text>
         <Text style={styles.toggleDesc}>{description}</Text>
       </View>
-      <Switch
+      <AppSwitch
         value={enabled}
         disabled={!hasTextModel}
         onValueChange={(value) => updateSettings({ enhanceImagePrompts: value })}
-        trackColor={trackColor}
-        thumbColor={enabled ? colors.primary : colors.textMuted}
       />
     </View>
   );
 };
 
 const ImageGpuSection: React.FC = () => {
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
   const { clearing, handleClearCache } = useClearGpuCache();
-  const trackColor = { false: colors.surfaceLight, true: `${colors.primary}80` };
   const isOpenCL = settings?.imageUseOpenCL ?? true;
 
   return (
@@ -67,11 +63,9 @@ const ImageGpuSection: React.FC = () => {
             Use GPU for faster image generation. First run may be slower while optimizing for your device.
           </Text>
         </View>
-        <Switch
+        <AppSwitch
           value={isOpenCL}
           onValueChange={(value) => updateSettings({ imageUseOpenCL: value })}
-          trackColor={trackColor}
-          thumbColor={isOpenCL ? colors.primary : colors.textMuted}
         />
       </View>
       {isOpenCL && (
@@ -145,7 +139,7 @@ const ImageAdvancedSection: React.FC = () => {
       <SliderSetting
         testID="image-threads"
         label="Image Threads"
-        description="CPU threads used for image generation (applies on next image model load)"
+        description="More is faster on phones with more cores."
         value={settings?.imageThreads ?? 4}
         min={1} max={8} step={1}
         onChange={(value) => updateSettings({ imageThreads: value })}
@@ -163,16 +157,17 @@ const ImageAdvancedSection: React.FC = () => {
 
 export const ImageGenerationSection: React.FC = () => {
   const { parameters, defaults, maxSize, applyDefaults, setParameter } = useImageParameterSettings();
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const isAutoMode = settings?.imageGenerationMode === 'auto';
-  const trackColor = { false: colors.surfaceLight, true: `${colors.primary}80` };
 
   return (
     <Card style={styles.section}>
+      {/* The picture style, the same choice as the composer and as the Video card's style row
+          (Mac, 2026-11-07: video had styles here, images did not). */}
+      <ChatStyleSetting kind="image" />
       <Text style={styles.settingHelp}>
         Control how image generation requests are handled in chat.
       </Text>
@@ -181,32 +176,30 @@ export const ImageGenerationSection: React.FC = () => {
 
       <View style={styles.toggleRow}>
         <View style={styles.toggleInfo}>
-          <Text style={styles.toggleLabel}>Automatic Detection</Text>
+          <Text style={styles.toggleLabel}>Notice when you want a picture</Text>
           <Text style={styles.toggleDesc}>
             {isAutoMode
-              ? 'LLM will classify if your message is asking for an image'
-              : 'Only generate images when you tap the image button'}
+              ? 'Ask for a picture in plain words and it makes one.'
+              : 'Pictures only when you turn on Image in the chat.'}
           </Text>
         </View>
-        <Switch
+        <AppSwitch
           value={isAutoMode}
           onValueChange={(value) =>
             updateSettings({ imageGenerationMode: value ? 'auto' : 'manual' })
           }
-          trackColor={trackColor}
-          thumbColor={isAutoMode ? colors.primary : colors.textMuted}
         />
       </View>
       <Text style={styles.toggleNote}>
         {isAutoMode
-          ? 'In Auto mode, messages like "Draw me a sunset" will automatically generate an image when an image model is loaded.'
-          : 'In Manual mode, you must tap the IMG button in chat to generate images.'}
+          ? '"Draw me a sunset" makes a picture when an image model is ready.'
+          : 'Turn on Image in the chat menu when you want one.'}
       </Text>
 
       <SliderSetting
         testID="image-steps"
-        label="Image Steps"
-        description="More steps = better quality but slower (4-8 fast, 20-50 high quality)"
+        label="Image steps"
+        description="More steps look better and take longer. 4 to 8 is quick, 20 or more is detailed."
         value={parameters.steps}
         min={4} max={MAX_IMAGE_STEPS} step={1}
         onChange={(value) => setParameter('steps', value)}
@@ -214,7 +207,7 @@ export const ImageGenerationSection: React.FC = () => {
 
       <SliderSetting
         testID="image-size"
-        label="Image Size"
+        label="Image size"
         description={`Output resolution. Recommended: ${defaults.size}x${defaults.size}.`}
         value={parameters.size}
         min={SWEET_SPOT_SIZE} max={maxSize} step={64}

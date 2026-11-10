@@ -1,4 +1,4 @@
-import { useSearchModelLabel } from '../hooks/useSearchModelLabel';
+import { AppSwitch } from '../components/AppSwitch';
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -6,7 +6,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import { TouchableOpacity, Switch } from '../components/Touchable';
+import { TouchableOpacity } from '../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -41,6 +41,8 @@ import { appBuildLabel, appVersion } from '../utils/appVersion';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { openSupportEmail } from '../utils/supportEmail';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
+import { useIsFocused } from '@react-navigation/native';
+import { LivingField } from '../components/LivingField';
 
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'SettingsTab'>,
@@ -65,10 +67,10 @@ async function loadDemoData(): Promise<void> {
 
 export const SettingsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
-  const searchLabel = useSearchModelLabel();
   const focusTrigger = useFocusTrigger();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const isFocused = useIsFocused();
   // Reactive: Pro sections registered at runtime (license-key activation re-runs
   // loadProFeatures) show up live without an app restart.
   const settingsSections = useSettingsSections();
@@ -166,6 +168,8 @@ export const SettingsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* The living field behind the tab, resting while the tab is hidden. */}
+      <LivingField active={isFocused} />
       <ScreenHeader title="Settings" variant="tab" />
       <ScrollView
         {...SCROLL_DEPTH_PROPS}
@@ -178,36 +182,37 @@ export const SettingsScreen: React.FC = () => {
           onGetPro={() => navigation.navigate('ProDetail')}
         />
 
-        <SettingsAppearanceRow
-          focusTrigger={focusTrigger}
-          styles={styles}
-          colors={colors}
-          themeMode={themeMode}
-          onSelect={setThemeMode}
-        />
-
-        {/* Navigation Items */}
+        {/* Navigation Items. Appearance is the first row of the same list, not a card of its own
+            (hand test 43: its own 68 pt card, label out of line with the rows). */}
           <View style={styles.navSection}>
+            <SettingsAppearanceRow
+              focusTrigger={focusTrigger}
+              styles={styles}
+              colors={colors}
+              themeMode={themeMode}
+              onSelect={setThemeMode}
+            />
             {[
               {
                 icon: 'sliders',
-                title: 'Model Settings',
-                desc: 'System prompt, generation, and performance',
+                title: 'Model settings',
+                desc: 'Instructions, replies, and speed',
                 screen: 'ModelSettings' as const,
                 testID: 'open-model-settings',
               },
               {
-                // The search model is chosen in one place, Models → Search; this row only goes there.
+                // Its own page (Back returns here), showing the same picker as Models → Search.
                 icon: 'search',
-                title: 'Search Model',
-                desc: searchLabel,
+                title: 'Document search',
+                // What it does for you; the model's name is one tap in, on its own screen.
+                desc: 'How chats find the right part of a file',
                 screen: 'SearchModel' as const,
                 testID: 'open-search-model',
               },
               {
                 icon: 'wifi',
-                title: 'Remote Servers',
-                desc: 'Connect to Off Grid AI Desktop, Ollama, LM Studio, and more',
+                title: 'Remote servers',
+                desc: 'Your computer, Ollama or LM Studio',
                 screen: 'RemoteServers' as const,
               },
               ...(hasSync
@@ -216,8 +221,8 @@ export const SettingsScreen: React.FC = () => {
                       icon: 'refresh-cw',
                       title: isSyncUnlocked ? 'Sync' : 'Sync with Pro',
                       desc: isSyncUnlocked
-                        ? 'Chats, projects, files, and copied text across your devices'
-                        : 'Get Pro to set up encrypted Sync across your devices',
+                        ? 'Chats and files on all your devices'
+                        : 'Chats and files on all your devices, with Pro',
                       screen: 'Sync' as const,
                       testID: 'open-sync-settings',
                     },
@@ -232,7 +237,7 @@ export const SettingsScreen: React.FC = () => {
               },
               {
                 icon: 'smartphone',
-                title: 'Device Information',
+                title: 'Device information',
                 desc: 'Hardware and compatibility',
                 screen: 'DeviceInfo' as const,
               },
@@ -245,31 +250,29 @@ export const SettingsScreen: React.FC = () => {
               {
                 icon: 'cpu',
                 title: 'Engine updates',
-                desc: 'The engine that runs your models, and how it stays current',
+                desc: 'What runs your models',
                 screen: 'EngineUpdates' as const,
                 testID: 'open-engine-updates',
               },
-            ].map((item, index, arr) => (
+            ].map((item, index) => (
               <AnimatedListItem
                 key={item.screen}
                 index={index + 1}
                 staggerMs={40}
                 trigger={focusTrigger}
-                style={[
-                  styles.navItem,
-                  index === arr.length - 1 && styles.navItemLast,
-                ]}
-                onPress={() =>
-                  item.screen === 'Sync'
-                    ? openSync()
-                    : item.screen === 'SearchModel'
-                      ? (navigation as unknown as { navigate: (name: string, params: object) => void }).navigate(
-                          'ModelsTab',
-                          { initialTab: 'embedding' },
-                        )
-                      : navigation.navigate(item.screen)
-                }
+                style={styles.navItem}
+                onPress={() => {
+                  if (item.screen === 'Sync') openSync();
+                  // Document search has one home, the Models tab's Documents; a second screen here
+                  // copied it (hand test 84).
+                  else if (item.screen === 'SearchModel') navigation.navigate('ModelsTab', { initialTab: 'embedding' });
+                  else navigation.navigate(item.screen);
+                }}
                 testID={'testID' in item ? item.testID : undefined}
+                // Said in words. A grouped row builds its label from its children, and on iOS an icon
+                // child gives its glyph ("\uf193, Security", hand test 40) whatever label it carries.
+                accessibilityRole="button"
+                accessibilityLabel={`${item.title}. ${item.desc}`}
               >
                 <View style={styles.navItemIcon}>
                   <Icon
@@ -280,35 +283,31 @@ export const SettingsScreen: React.FC = () => {
                 </View>
                 <View style={styles.navItemContent}>
                   <Text style={styles.navItemTitle}>{item.title}</Text>
-                  <Text style={styles.navItemDesc}>{item.desc}</Text>
+                  {/* One line, so every row in the list keeps one height (design philosophy: rhythm). */}
+                  <Text style={styles.navItemDesc} numberOfLines={1}>{item.desc}</Text>
                 </View>
                 <Icon name="chevron-right" size={16} color={colors.textMuted} />
               </AnimatedListItem>
             ))}
+            {/* Pro is the last row of this list, not a card on its own (hand tests 60-62). */}
+            <TouchableOpacity
+              style={[styles.navItem, styles.navItemLast]}
+              onPress={() => navigation.navigate('ProDetail')}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel={`Off Grid AI Pro. ${proStatusLabel}`}
+            >
+              <View style={styles.navItemIcon}>
+                <IconMC name="crown" size={16} color={colors.textSecondary} />
+              </View>
+              <View style={styles.navItemContent}>
+                <Text style={styles.navItemTitle}>Off Grid AI Pro</Text>
+                <Text style={styles.navItemDesc}>{proStatusLabel}</Text>
+              </View>
+              <Icon name="chevron-right" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
           </View>
 
-        {/* PRO Button */}
-        <AnimatedEntry index={6} staggerMs={40} trigger={focusTrigger}>
-          <TouchableOpacity
-            style={styles.proNavButton}
-            onPress={() => navigation.navigate('ProDetail')}
-            activeOpacity={0.75}
-          >
-            <View style={styles.proIconContainer}>
-              <IconMC name="crown" size={18} color={colors.primary} />
-            </View>
-            <View style={styles.proCardText}>
-              <View style={styles.proTitleRow}>
-                <Text style={styles.proNavTitle}>Off Grid AI PRO</Text>
-                <View style={styles.proBadge}>
-                  <Text style={styles.proBadgeText}>PRO</Text>
-                </View>
-              </View>
-              <Text style={styles.proDesc}>{proStatusLabel}</Text>
-            </View>
-            <Icon name="chevron-right" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
-        </AnimatedEntry>
 
         <SettingsCommunitySections
           focusTrigger={focusTrigger}
@@ -317,12 +316,23 @@ export const SettingsScreen: React.FC = () => {
           onSendFeedback={handleSendFeedback}
         />
 
+
+        {/* Analytics: opt-in consent, what is shared, Report a problem */}
+        <SettingsAnalyticsSection
+          focusTrigger={focusTrigger}
+          styles={styles}
+          colors={colors}
+          onWhatWeShare={() => navigation.navigate('AnalyticsInfo')}
+        />
+
         {/* About */}
         <AnimatedEntry index={9} staggerMs={40} trigger={focusTrigger}>
           <View style={styles.navSection}>
             <TouchableOpacity
               style={[styles.navItem, styles.navItemLast]}
               onPress={() => navigation.navigate('About')}
+              accessibilityRole="button"
+              accessibilityLabel="About"
             >
               <View style={styles.navItemIcon}>
                 <Icon name="info" size={16} color={colors.textSecondary} />
@@ -338,14 +348,6 @@ export const SettingsScreen: React.FC = () => {
           </View>
         </AnimatedEntry>
 
-        {/* Analytics: opt-in consent, what is shared, Report a problem */}
-        <SettingsAnalyticsSection
-          focusTrigger={focusTrigger}
-          styles={styles}
-          colors={colors}
-          onWhatWeShare={() => navigation.navigate('AnalyticsInfo')}
-        />
-
         {/* Pro feature sections registered at runtime by @offgrid/pro */}
         {settingsSections.map((Section, i) => (
           <Section key={Section.displayName ?? String(i)} />
@@ -357,12 +359,10 @@ export const SettingsScreen: React.FC = () => {
             <View style={styles.devButtonGroup}>
               <View style={styles.devButton}>
                 <Text style={styles.devButtonText}>Show sync status bar</Text>
-                <Switch
+                <AppSwitch
                   accessibilityLabel="Show sync status bar"
                   value={showSyncStatusBar}
                   onValueChange={setShowSyncStatusBar}
-                  trackColor={{ false: colors.surfaceLight, true: `${colors.primary}80` }}
-                  thumbColor={showSyncStatusBar ? colors.primary : colors.textMuted}
                 />
               </View>
               <TouchableOpacity
@@ -389,14 +389,14 @@ export const SettingsScreen: React.FC = () => {
                 onPress={handleResetOnboarding}
               >
                 <Icon name="rotate-ccw" size={14} color={colors.textMuted} />
-                <Text style={styles.devButtonText}>Reset Onboarding</Text>
+                <Text style={styles.devButtonText}>Reset onboarding</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.devButton}
                 onPress={() => setShowDebugLogs(true)}
               >
                 <Icon name="terminal" size={14} color={colors.textMuted} />
-                <Text style={styles.devButtonText}>Debug Logs</Text>
+                <Text style={styles.devButtonText}>Debug logs</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.devButton}

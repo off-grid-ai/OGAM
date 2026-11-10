@@ -122,7 +122,7 @@ describe('chat switch keeps each chat warm', () => {
     h.rtl.fireEvent.press(section.getByTestId('modal-text-advanced-toggle'));
     h.rtl.fireEvent.press(section.getByTestId('backend-opencl-button'));
     await h.rtl.waitFor(() => {
-      expect(section.queryByText('Text GPU Layers (OpenCL)')).not.toBeNull();
+      expect(section.queryByText('GPU layers')).not.toBeNull();
     });
     section.unmount();
 

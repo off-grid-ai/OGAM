@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
-import { ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button, ModelCard } from '../../components';
 import { CustomAlert, initialAlertState, showAlert, hideAlert } from '../../components/CustomAlert';
@@ -11,12 +11,28 @@ import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { SPACING, TYPOGRAPHY } from '../../constants';
 import { createStyles } from './styles';
+import { cardSurface } from '../../theme/surface';
+import { SearchField } from '../../components/SearchField';
+import { GROUPED_CARD_ROW, ListGroup } from '../../components/ListGroup';
 
 type Candidate = Awaited<ReturnType<typeof searchEmbeddingModels>>[number];
 
 const createEmbeddingStyles = (colors: ThemeColors) => ({
+  // On the glass, not on the dots: a paragraph outside a card read through the lattice (Mac, 2026-11-08).
+  introCard: {
+    ...cardSurface(colors),
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  intro: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
+  },
+  // The same section label as the Text tab ("FOR THIS PHONE"): Mono, upper case, grey.
   sectionLabel: {
     ...TYPOGRAPHY.label,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.3,
     color: colors.textMuted,
     marginTop: SPACING.sm,
     marginBottom: SPACING.sm,
@@ -50,6 +66,14 @@ const createEmbeddingStyles = (colors: ThemeColors) => ({
   },
 });
 
+/** Which language a search model is for, when its name or description says. */
+function languageFact(candidate: Candidate): string | undefined {
+  if (candidate.name.toLowerCase().includes('multilingual')) return 'Multilingual';
+  const description = 'description' in candidate && typeof candidate.description === 'string' ? candidate.description : '';
+  if (description.includes('English')) return 'English';
+  return undefined;
+}
+
 export const EmbeddingModelsTab: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const embeddingStyles = useThemedStyles(createEmbeddingStyles);
@@ -63,6 +87,14 @@ export const EmbeddingModelsTab: React.FC = () => {
   const [error, setError] = useState('');
   const [alert, setAlert] = useState(initialAlertState);
   const [downloaded, setDownloaded] = useState<Set<string>>(new Set());
+  // The failed row whose file is being removed: it shows that it is working, and offers neither Retry
+  // (an install could start while the file is deleted) nor a second Remove until it is done.
+  const [removingIds, setRemovingIds] = useState<ReadonlySet<string>>(new Set());
+  const removing = (id: string, on: boolean) => setRemovingIds(previous => {
+    const next = new Set(previous);
+    if (on) next.add(id); else next.delete(id);
+    return next;
+  });
 
   useEffect(() => {
     try {
@@ -98,7 +130,8 @@ export const EmbeddingModelsTab: React.FC = () => {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Switch', onPress: () => {
         setError('');
-        embeddingModelChanger.install(candidate).catch(e => setError(String(e.message)));
+        // A failed change reports on its row (status.error); nothing more to show here.
+        embeddingModelChanger.install(candidate).catch(() => undefined);
       } },
     ]));
   };
@@ -121,53 +154,112 @@ export const EmbeddingModelsTab: React.FC = () => {
       } },
     ]));
   };
+  const removeFailed = (candidate: Candidate) => {
+    const forget = () => setDownloaded(previous => { const next = new Set(previous); next.delete(candidate.id); return next; });
+    // Removes the final file and any partial one whatever their size: hasModelFile says no to a file
+    // of the wrong size, which is the one a failed check leaves.
+    const deleteIfThere = async () => {
+      if (active?.id === candidate.id) return;
+      await embeddingService.deleteModelFile(candidate);
+      forget();
+    };
+    // The failure clears only once the file is gone; a delete that fails keeps it, with the reason.
+    removing(candidate.id, true);
+    deleteIfThere()
+      // Only this model's failure: another change may have started and failed while the disk was slow.
+      .then(() => { if (embeddingModelChanger.getChange().candidateId === candidate.id) embeddingModelChanger.dismiss(); })
+      .catch(e => setError(String(e.message)))
+      .finally(() => removing(candidate.id, false));
+  };
   const activeInCandidates = active && candidates.some(candidate => candidate.id === active.id);
+  // A change in progress shows once: on the row of the model being fetched, with its own cancel, as in
+  // every model list. The line under the search field is only for a change with no row on screen
+  // (Mac, 2026-11-08: a second loader sat under the search bar, out of line with the list).
+  const changeRow = status.busy ? candidates.find(candidate => candidate.id === status.candidateId) : undefined;
+  const failedRow = !status.busy && status.error ? candidates.find(candidate => candidate.id === status.candidateId) : undefined;
+  // The row's right-hand mark: working while its file is removed; nothing where the row shows its own
+  // state (in use, downloading, failed); else what a tap does (a circle picks it, a mark downloads it).
+  const trailingFor = (candidate: Candidate) => {
+    if (removingIds.has(candidate.id)) {
+      return <View style={embeddingStyles.rowAction}><ActivityIndicator size="small" color={colors.textMuted} accessibilityLabel="Removing" /></View>;
+    }
+    if (active?.id === candidate.id || changeRow === candidate || failedRow === candidate) return undefined;
+    return <View style={embeddingStyles.rowAction}><Icon name={downloaded.has(candidate.id) ? 'circle' : 'download'} size={16} color={colors.textMuted} /></View>;
+  };
 
   return (
     <ScrollView contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled" testID="embedding-models-tab">
-      <TextInput
-        style={embeddingStyles.searchInput} value={query} onChangeText={setQuery}
-        placeholder="Search embedding models" placeholderTextColor={colors.textMuted}
-        accessibilityLabel="Search Hugging Face embedding models" autoCapitalize="none" autoCorrect={false}
+      {/* What this is for, before any model name: the reader gets the outcome first. */}
+      <View style={embeddingStyles.introCard}>
+        <Text style={embeddingStyles.intro}>
+          When you add documents to a project, chat finds the passages that answer you. This model does
+          the finding, on this phone. The built-in one needs no download.
+        </Text>
+      </View>
+      <SearchField
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search models"
+        clearLabel="Clear model search"
         testID="embedding-search-input"
       />
-      {!!status.message && <Text style={embeddingStyles.status} accessibilityLiveRegion="polite" testID="embedding-index-progress">{status.message}</Text>}
-      {!!(status.error || error) && <Text style={embeddingStyles.error} accessibilityRole="alert">{status.error || error}</Text>}
-      {status.busy && <Button title="Cancel model change" onPress={embeddingModelChanger.cancel} />}
+      {!!status.message && !changeRow && <Text style={embeddingStyles.status} accessibilityLiveRegion="polite" testID="embedding-index-progress">{status.message}</Text>}
+      {!!error && <Text style={embeddingStyles.error} accessibilityRole="alert">{error}</Text>}
+      {/* A failed change whose row a search has hidden shows here, with its own Dismiss. */}
+      {!failedRow && !status.busy && !!status.error && (
+        <>
+          <Text style={embeddingStyles.error} accessibilityRole="alert">{status.error}</Text>
+          <Button title="Dismiss" onPress={embeddingModelChanger.dismiss} testID="embedding-error-dismiss" />
+        </>
+      )}
+      {status.busy && !changeRow && <Button title="Cancel model change" onPress={embeddingModelChanger.cancel} />}
       {loading && <Text style={embeddingStyles.status} aria-busy>Searching...</Text>}
       {!loading && query.trim() !== '' && !error && results.length === 0 && <Text style={embeddingStyles.status}>No models found. Try another name.</Text>}
-      <Text style={embeddingStyles.sectionLabel}>{query.trim() ? 'MODELS' : 'RECOMMENDED MODELS'}</Text>
-      <ModelCard compact
+      <Text style={embeddingStyles.sectionLabel}>{query.trim() ? 'Models' : 'Recommended'}</Text>
+      {/* One surface with hairlines, as every model list. */}
+      <ListGroup>
+      <ModelCard compact style={GROUPED_CARD_ROW}
         model={{ id: 'bundled', name: 'MiniLM (built-in)', author: '' }}
         facts={['Offline']}
         isDownloaded isActive={!active}
         disabled={status.busy || !ready || !active}
         onPress={() => select(null)}
-        trailing={active ? <View style={embeddingStyles.rowAction}><Icon name="arrow-right" size={18} color={colors.primary} /></View> : undefined}
+        // An empty circle picks it, as on the Text tab; a bare arrow did not say what it would do.
+        trailing={active ? <View style={embeddingStyles.rowAction}><Icon name="circle" size={16} color={colors.textMuted} /></View> : undefined}
       />
-      {active && !activeInCandidates && <ModelCard compact
+      {active && !activeInCandidates && <ModelCard compact style={GROUPED_CARD_ROW}
         model={{ id: active.id, name: active.name, author: '' }}
         facts={[`${Math.round(active.size / 1024 / 1024)} MB`]}
         isDownloaded isActive
       />}
       {candidates.map(candidate => (
-        <ModelCard key={candidate.id} compact
+        <ModelCard key={candidate.id} compact style={GROUPED_CARD_ROW}
           model={{ id: candidate.id, name: candidate.name, author: '' }}
           facts={[
-            candidate.name.toLowerCase().includes('multilingual') ? 'Multilingual' :
-              'description' in candidate && candidate.description?.includes('English') ? 'English' : undefined,
-            `${Math.round(candidate.size / 1024 / 1024)} MB download`,
+            languageFact(candidate),
+            // A model already here has a size, not a download.
+            `${Math.round(candidate.size / 1024 / 1024)} MB${downloaded.has(candidate.id) ? '' : ' download'}`,
           ].filter((fact): fact is string => !!fact)}
           isActive={active?.id === candidate.id}
           isDownloaded={downloaded.has(candidate.id)}
-          isDownloading={status.busy && status.candidateId === candidate.id}
-          downloadProgress={status.busy && status.candidateId === candidate.id ? status.fraction : undefined}
+          isDownloading={changeRow === candidate}
+          downloadProgress={changeRow === candidate ? status.fraction : undefined}
+          onCancel={changeRow === candidate ? embeddingModelChanger.cancel : undefined}
+          failedState={failedRow === candidate && !removingIds.has(candidate.id) ? {
+            errorMessage: status.error, bytesDownloaded: 0, totalBytes: 0,
+            onRetry: () => { embeddingModelChanger.retry().catch(() => undefined); },
+            // "Remove download" also deletes a file that arrived but failed its check, asked of the disk
+            // when pressed (the downloaded list may not have caught up). The failure stays until it is done.
+            onRemove: () => { removeFailed(candidate); },
+          } : undefined}
           onDelete={downloaded.has(candidate.id) && active?.id !== candidate.id && !status.busy ? () => remove(candidate) : undefined}
-          disabled={status.busy || !ready || active?.id === candidate.id}
+          // Not while its file is removed: a switch then could start an install the delete would remove.
+          disabled={status.busy || !ready || active?.id === candidate.id || removingIds.has(candidate.id)}
           onPress={() => select(candidate)}
-          trailing={active?.id === candidate.id ? undefined : <View style={embeddingStyles.rowAction}><Icon name="arrow-right" size={18} color={colors.primary} /></View>}
+          trailing={trailingFor(candidate)}
         />
       ))}
+      </ListGroup>
       <CustomAlert {...alert} onClose={() => setAlert(hideAlert())} />
     </ScrollView>
   );

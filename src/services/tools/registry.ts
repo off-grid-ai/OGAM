@@ -5,8 +5,9 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
   {
     id: 'generate_video',
     name: 'generate_video',
-    displayName: 'Generate Video',
+    displayName: 'Make a video',
     icon: 'video',
+    summary: 'Turns a description into a short video clip.',
     description:
       'Request a short silent video from the selected video model. Generation starts after this text reply finishes. Describe the requested subject and motion.',
     parameters: {
@@ -21,8 +22,9 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
   {
     id: 'make_film',
     name: 'make_film',
-    displayName: 'Make Film',
+    displayName: 'Make a film',
     icon: 'film',
+    summary: 'Turns one sentence into a short narrated film. You see the shot list first.',
     description:
       'Turn one sentence into a short narrated film. The person sees a draft shot list first and chooses when it renders. Use when they ask for a story, a film, or anything longer than a few seconds.',
     parameters: {
@@ -32,7 +34,8 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
   {
     id: 'web_search',
     name: 'web_search',
-    displayName: 'Web Search',
+    displayName: 'Web search',
+    summary: 'Looks things up on the web when the answer needs today\'s facts.',
     description:
       'Search the live web and return real-time result titles, snippets, and URLs. Use this for any question about current events, prices, weather, news, or anything that requires up-to-date information. When the snippet is insufficient, call read_url on the most relevant result URL to get the full page content.',
     icon: 'globe',
@@ -49,6 +52,7 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
     id: 'calculator',
     name: 'calculator',
     displayName: 'Calculator',
+    summary: 'Works out sums exactly instead of guessing.',
     description: 'Evaluate math expressions',
     icon: 'hash',
     parameters: {
@@ -62,7 +66,8 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
   {
     id: 'get_current_datetime',
     name: 'get_current_datetime',
-    displayName: 'Date & Time',
+    displayName: 'Date and time',
+    summary: 'Knows today\'s date and the time where you are.',
     description: 'Get current date and time',
     icon: 'clock',
     parameters: {
@@ -75,7 +80,8 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
   {
     id: 'get_device_info',
     name: 'get_device_info',
-    displayName: 'Device Info',
+    displayName: 'Device info',
+    summary: 'Tells you about this phone\'s hardware when you ask.',
     description: 'Get device hardware info',
     icon: 'smartphone',
     parameters: {
@@ -89,7 +95,8 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
   {
     id: 'search_knowledge_base',
     name: 'search_knowledge_base',
-    displayName: 'Knowledge Base',
+    displayName: 'Knowledge base',
+    summary: 'Answers from your project documents. Counts only in a chat that has some.',
     description: 'Search uploaded project documents',
     icon: 'book-open',
     parameters: {
@@ -103,7 +110,8 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
   {
     id: 'read_url',
     name: 'read_url',
-    displayName: 'URL Reader',
+    displayName: 'Read a web page',
+    summary: 'Reads a web page you share and answers from it.',
     description:
       'Fetch the full live content of any URL. Use this after web_search to read the complete text of a result page, or directly when the user shares a link.',
     icon: 'link',

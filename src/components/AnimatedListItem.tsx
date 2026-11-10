@@ -72,7 +72,7 @@ export function AnimatedListItem({
         disabled={disabled}
         testID={testID}
         accessibilityLabel={accessibilityLabel}
-        accessibilityRole={accessibilityRole}
+        accessibilityRole={accessibilityRole ?? (onPress ? 'button' : undefined)}
         accessibilityHint={accessibilityHint}
       >
         {children}

@@ -33,13 +33,13 @@ async function sendWithSystemFree(systemAvailBytes: number) {
 describe('iPhone text load goes by the phone\'s free pages too', () => {
   it('1 GB of free pages: the memory refusal shows and no reply is made', async () => {
     const h = await sendWithSystemFree(1 * GB);
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/it needs ~/)).not.toBeNull(); }, { timeout: 8000 });
+    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/needs about [\d.]+ GB of memory/)).not.toBeNull(); }, { timeout: 8000 });
     expect(h.view!.queryByText(/Paris\./)).toBeNull();
   }, 30000);
 
   it('control: 9 GB of free pages loads the model and the reply renders', async () => {
     const h = await sendWithSystemFree(9 * GB);
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/Paris\./)).not.toBeNull(); }, { timeout: 8000 });
-    expect(h.view!.queryByText(/it needs ~/)).toBeNull();
+    expect(h.view!.queryByText(/needs about [\d.]+ GB of memory/)).toBeNull();
   }, 30000);
 });

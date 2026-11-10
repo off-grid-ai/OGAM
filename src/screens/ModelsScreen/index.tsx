@@ -1,7 +1,7 @@
 import { EmbeddingModelsTab } from './EmbeddingModelsTab';
 import type { HFSearchResult } from '@offgrid/models';
 import React, { useCallback, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
@@ -23,7 +23,9 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { checkForNewModels, useModelCatalogStore, withRemoteCatalog, type CatalogCheckResult } from '../../stores/modelCatalogStore';
 import { CatalogCheckSheet } from '../../components/models/CatalogCheckSheet';
 import { proGateShown } from '../../services/analytics/analytics';
-import { SCROLL_DEPTH_PROPS } from '../../constants/scrollDepth';
+import { UnderlineTabs } from '../../components/UnderlineTabs';
+import { useIsFocused } from '@react-navigation/native';
+import { LivingField } from '../../components/LivingField';
 
 const MODEL_TABS: ReadonlyArray<{
   key: ModelTab;
@@ -31,7 +33,7 @@ const MODEL_TABS: ReadonlyArray<{
   testID?: string;
 }> = [
   { key: 'text', label: 'Text' },
-  { key: 'embedding', label: 'Search', testID: 'embedding-tab' },
+  { key: 'embedding', label: 'Documents', testID: 'embedding-tab' },
   { key: 'image', label: 'Image' },
   { key: 'video', label: 'Video', testID: 'video-models-tab' },
   { key: 'voice', label: 'Voice', testID: 'voice-models-tab' },
@@ -46,12 +48,18 @@ const ScreenFrame: React.FC<{
   embedded: boolean;
   styles: ReturnType<typeof createStyles>;
   children: React.ReactNode;
-}> = ({ embedded, styles, children }) =>
-  embedded ? (
+}> = ({ embedded, styles, children }) => {
+  const isFocused = useIsFocused();
+  return embedded ? (
     <View style={[styles.container, embeddedStyles.container]} testID="embedded-models-screen">{children}</View>
   ) : (
-    <SafeAreaView style={styles.container} edges={['top']} testID="models-screen">{children}</SafeAreaView>
+    <SafeAreaView style={styles.container} edges={['top']} testID="models-screen">
+      {/* The living field behind the tab, resting while the tab is hidden. */}
+      <LivingField active={isFocused} />
+      {children}
+    </SafeAreaView>
   );
+};
 
 const HideWhenEmbedded: React.FC<{
   embedded: boolean;
@@ -145,6 +153,8 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({
                   hitSlop={SPACING.md}
                   onPress={() => vm.navigation.navigate('DownloadManager')}
                   testID="downloads-icon"
+                  accessibilityRole="button"
+                  accessibilityLabel={vm.downloadBadgeCount > 0 ? `Downloads, ${vm.downloadBadgeCount} not finished` : 'Downloads'}
                 >
                   <Icon name="download" size={20} color={colors.text} />
                   {vm.downloadBadgeCount > 0 && (
@@ -187,25 +197,7 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({
         </HideWhenEmbedded>
 
         {/* Tab Bar (horizontally scrollable — four tabs don't fit on a phone) */}
-        <ScrollView
-          {...SCROLL_DEPTH_PROPS}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.tabScroller}
-          contentContainerStyle={styles.tabBar}
-        >
-          {MODEL_TABS.map(tab => (
-            <TouchableOpacity
-              key={tab.key}
-              style={styles.tabItem}
-              testID={tab.testID}
-              onPress={() => vm.setActiveTab(tab.key)}
-            >
-              <Text style={[styles.tabText, vm.activeTab === tab.key && styles.tabTextActive]}>{tab.label}</Text>
-              {vm.activeTab === tab.key && <View style={styles.tabIndicator} />}
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <UnderlineTabs tabs={MODEL_TABS} active={vm.activeTab} onChange={vm.setActiveTab} />
       </View>
 
       {/* Text Models Tab */}
@@ -338,7 +330,8 @@ const collapsedStyle = StyleSheet.create({
 });
 
 const headerStyles = StyleSheet.create({
-  actions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  // Covers the two 44 pt frames' -8 margins, so they never overlap.
+  actions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.lg },
 });
 
 const embeddedStyles = StyleSheet.create({

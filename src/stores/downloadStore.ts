@@ -6,7 +6,7 @@ import logger from '../utils/logger';
 // existing `from '../stores/downloadStore'` importer of these keeps working unchanged.
 import { DownloadStatus, DownloadEntry, isActiveStatus } from '../utils/downloadStatus';
 import { sampleProgressRate } from '@offgrid/ui';
-import { downloadEnded, downloadStarted } from '../services/analytics/analytics';
+import { downloadDropped, downloadEnded, downloadStarted } from '../services/analytics/analytics';
 import { modelRef } from '../services/analytics/values';
 
 export type { DownloadStatus, DownloadEntry };
@@ -133,12 +133,16 @@ export const useDownloadStore = create<DownloadStoreState>((set, get) => ({
       const existing = state.downloads[next.modelKey];
       let merged: DownloadEntry;
       if (existing && existing.bytesDownloaded >= next.bytesDownloaded) {
-        // Local listeners are ahead — keep them, just refresh metadataJson + total
+        // Local listeners are ahead — keep them, just refresh metadataJson + total. Progress can be
+        // ahead locally; a failure cannot: a hydrate that finds the download failed (its native row,
+        // or its native task gone) says so, or the card would sit "downloading" or "paused" forever.
+        const failed = next.status === 'failed' && existing.status !== 'failed';
         merged = {
           ...existing,
           totalBytes: next.totalBytes || existing.totalBytes,
           combinedTotalBytes: next.combinedTotalBytes || existing.combinedTotalBytes,
           metadataJson: next.metadataJson ?? existing.metadataJson,
+          ...(failed ? { status: next.status, errorMessage: next.errorMessage, errorCode: next.errorCode } : {}),
         };
       } else {
         merged = next;
@@ -395,6 +399,9 @@ export const useDownloadStore = create<DownloadStoreState>((set, get) => ({
   remove: (modelKey) => set(state => {
     const entry = state.downloads[modelKey];
     if (!entry) return state;
+    // A row removed mid-attempt (a cancel) closes the attempt, so a later download starts fresh. A
+    // finished download registered its model first, which already reported it done.
+    downloadDropped(modelKey);
     const newIndex = { ...state.downloadIdIndex };
     delete newIndex[entry.downloadId];
     if (entry.mmProjDownloadId) delete newIndex[entry.mmProjDownloadId];

@@ -129,7 +129,7 @@ async function addOllamaPickModelAttachPhoto(app: App) {
   expect(await view.findByText(/Connected \(\d+ms\)\s+1 model available/)).toBeTruthy();
   rtl.fireEvent.press(view.getByTestId('save-server'));
   expect(await view.findByText(SERVER_NAME)).toBeTruthy();
-  expect(await view.findByText('Connected')).toBeTruthy();
+  expect(await view.findByText(/^Connected · /)).toBeTruthy();
   rtl.fireEvent.press(view.getByLabelText('Back'));
 
   rtl.fireEvent.press(await view.findByTestId('browse-models-button'));
@@ -142,8 +142,7 @@ async function addOllamaPickModelAttachPhoto(app: App) {
   // The photo the device picker hands back, attached through the real attach gesture.
   app.boundary.fs!.seedFile('/mock/image.jpg', 2048);
   rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('attach-button')));
-  rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('attach-photo')));
-  rtl.fireEvent.press(await rtl.waitFor(() => view.getByText('Photo Library')));
+  rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('attach-library')));
   await rtl.waitFor(() => expect(view.queryByTestId('attachments-container')).not.toBeNull(),
     { timeout: 3000 });
 }

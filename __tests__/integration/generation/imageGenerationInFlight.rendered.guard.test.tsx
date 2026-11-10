@@ -110,7 +110,7 @@ describe('while an image is generating', () => {
 
     h.rtl.fireEvent.press(h.view!.getByTestId('chat-settings-icon'));
     await h.rtl.waitFor(() => {
-      expect(h.view!.queryByText('Chat Settings')).not.toBeNull();
+      expect(h.view!.queryByText('Chat settings')).not.toBeNull();
     });
 
     h.boundary.diffusion.releaseGeneration();

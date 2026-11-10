@@ -32,6 +32,8 @@ export function withNavigator(element: React.ReactElement, params?: Record<strin
  *   screen's own Back really returns there (its `route-<openedFrom>` line shows again).
  * - `parentDestinations`: routes of a parent navigator around this stack (the app's root stack around
  *   its tabs), for a screen that acts on `navigation.getParent()`. Each renders `route-<name>` too.
+ * - `screens`: real screens the screen pushes, by route name (the Gallery's image and video routes), so
+ *   a test drives them as the app does.
  */
 export function withNavigatorRoutes(
   element: React.ReactElement,
@@ -40,6 +42,7 @@ export function withNavigatorRoutes(
     destinations?: string[];
     openedFrom?: string;
     parentDestinations?: string[];
+    screens?: Record<string, React.ComponentType<any>>;
   } = {},
 ): React.ReactElement {
   const { NavigationContainer } = require('@react-navigation/native');
@@ -57,6 +60,8 @@ export function withNavigatorRoutes(
       { screenOptions: { headerShown: false } },
       React.createElement(Stack.Screen, { name: 'Host', initialParams: options.params, children: () => element }),
       ...others.map(name => React.createElement(Stack.Screen, { key: name, name, component: routeLine(name) })),
+      ...Object.entries(options.screens ?? {}).map(([name, component]) =>
+        React.createElement(Stack.Screen, { key: name, name, component })),
     );
   if (!options.parentDestinations?.length) {
     return React.createElement(NavigationContainer, { initialState: stackState }, stack());

@@ -6,10 +6,11 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { TouchableOpacity, Switch } from '../components/Touchable';
+import { TouchableOpacity } from '../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { LoadingDots } from '../components/LoadingDots';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { AliveScreen } from '../components/AliveScreen';
+import { Button } from '../components/Button';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
@@ -22,10 +23,8 @@ import { useProjectStore } from '../stores';
 import { knowledgeBase } from '../services/rag';
 import type { KnowledgeDocument } from '../services/rag';
 import { RootStackParamList } from '../navigation/types';
-import {
-  KnowledgeDocumentInfo,
-  KnowledgeTransferInfo,
-} from '../components/knowledge/KnowledgeDocumentInfo';
+import { KnowledgeDocumentRow } from '../components/knowledge/KnowledgeDocumentRow';
+import { KnowledgeTransferInfo } from '../components/knowledge/KnowledgeDocumentInfo';
 import { useKnowledgeDocumentTransfers } from '../hooks/useKnowledgeDocumentTransfers';
 import {
   arrivingKnowledgeDocumentTransfers,
@@ -36,6 +35,8 @@ import {
 import { openDocumentPage } from '../components/ChatDocumentsSheet';
 import { isPickerStuck } from '../utils/pickerErrorUtils';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { PasteNoteSheet } from '../components/knowledge/PasteNoteSheet';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'KnowledgeBase'>;
@@ -52,6 +53,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isPicking, setIsPicking] = useState(false);
   const [indexError, setIndexError] = useState<{ fileName: string; message: string } | null>(null);
+  const [pasting, setPasting] = useState(false);
   const isPickingRef = useRef(false);
 
   const project = useProjectStore((s) => s.getProject(projectId));
@@ -147,6 +149,25 @@ export const KnowledgeBaseScreen: React.FC = () => {
     }
   };
 
+  // Pasted text is a file too. This screen is its one home now that the project page links here.
+  const handleSavePastedNote = async (title: string, text: string): Promise<void> => {
+    setAddingFile(title.trim() || 'pasted text');
+    try {
+      await knowledgeBase.addPastedText({ projectId, title, text });
+      await loadKbDocs();
+    } finally {
+      setAddingFile(null);
+    }
+  };
+
+  // One add, two ways in: a file from the phone, or text you paste.
+  const chooseAdd = () =>
+    Alert.alert('Add to Files', undefined, [
+      { text: 'A file', onPress: () => { handleAddDocument().catch(() => { /* it shows its own error */ }); } },
+      { text: 'Paste text', onPress: () => setPasting(true) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+
   const handleToggleDocument = async (docId: number, enabled: boolean) => {
     try {
       await knowledgeBase.toggleDocument(docId, enabled);
@@ -187,42 +208,13 @@ export const KnowledgeBaseScreen: React.FC = () => {
   // opens a preview. Opening, toggling and deleting are three different actions and each needs to
   // be reachable on its own.
   const renderDoc = ({ item }: { item: KnowledgeDocument }) => (
-    <View style={styles.docRow}>
-      <TouchableOpacity
-        style={styles.docInfo}
-        onPress={() => {
-          if (item.document_id) openDocumentPage(navigation, { documentId: item.document_id, name: item.name });
-        }}
-        disabled={!item.document_id}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel={`Knowledge document ${item.name}`}
-        testID={`knowledge-document-row-${item.sync_id}`}
-      >
-        <KnowledgeDocumentInfo
-          name={item.name}
-          size={item.size}
-          documentId={item.document_id}
-          transfer={rowKnowledgeDocumentTransfer(transfers, item.sync_id)}
-        />
-      </TouchableOpacity>
-      <Switch
-        value={item.enabled === 1}
-        onValueChange={(val) => handleToggleDocument(item.id, val)}
-        accessibilityLabel={`Use ${item.name}, ${item.enabled === 1 ? 'ON' : 'OFF'}`}
-        testID={`knowledge-document-toggle-${item.sync_id}`}
-        trackColor={{ false: colors.border, true: colors.primary }}
-      />
-      <TouchableOpacity
-        style={styles.docDelete}
-        onPress={() => handleDeleteDocument(item)}
-        accessibilityRole="button"
-        accessibilityLabel={`Remove ${item.name}`}
-        testID={`knowledge-document-remove-${item.sync_id}`}
-      >
-        <Icon name="trash-2" size={16} color={colors.error} />
-      </TouchableOpacity>
-    </View>
+    <KnowledgeDocumentRow
+      doc={item}
+      transfer={rowKnowledgeDocumentTransfer(transfers, item.sync_id)}
+      onOpen={doc => openDocumentPage(navigation, { documentId: doc.document_id, name: doc.name })}
+      onToggle={(doc, enabled) => handleToggleDocument(doc.id, enabled)}
+      onRemove={handleDeleteDocument}
+    />
   );
 
   const renderArriving = (transfer: KnowledgeDocumentTransfer) => (
@@ -254,36 +246,26 @@ export const KnowledgeBaseScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']} testID="knowledge-base-screen">
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          testID="knowledge-base-back"
-        >
-          <Icon name="arrow-left" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {project?.name || 'Knowledge Base'}
-          </Text>
-        </View>
-        <TouchableOpacity
-          onPress={handleAddDocument}
-          style={styles.addButton}
-          disabled={isPicking || !!addingFile}
-          accessibilityRole="button"
-          accessibilityLabel="Add documents"
-        >
-          {addingFile ? (
-            <LoadingDots color={colors.primary} />
-          ) : (
-            <Icon name="plus" size={20} color={colors.primary} />
-          )}
-        </TouchableOpacity>
-      </View>
+    <AliveScreen style={styles.container} testID="knowledge-base-screen">
+      <ScreenHeader
+        // Named for what it holds, with the project under it; the project page calls these files.
+        title="Files"
+        subtitle={project?.name}
+        onBack={() => navigation.goBack()}
+        backTestID="knowledge-base-back"
+        // One add: while the list is empty, its own Add a file button is the add (hand test 74).
+        right={kbDocs.length === 0 && !addingFile ? undefined : (
+          <TouchableOpacity
+            onPress={chooseAdd}
+            style={styles.addButton}
+            disabled={isPicking || !!addingFile}
+            accessibilityRole="button"
+            accessibilityLabel="Add files"
+          >
+            {addingFile ? <LoadingDots color={colors.textMuted} /> : <Icon name="plus" size={20} color={colors.text} />}
+          </TouchableOpacity>
+        )}
+      />
 
       {indexError && !addingFile && (
         <View style={styles.errorCard} testID="kb-index-error-card">
@@ -312,11 +294,24 @@ export const KnowledgeBaseScreen: React.FC = () => {
       ) : kbDocs.length === 0 && arriving.length === 0 ? (
         <View style={styles.centered}>
           <Icon name="file-text" size={40} color={colors.textMuted} />
-          <Text style={styles.emptyText}>No documents yet</Text>
-          <Text style={styles.emptySubtext}>Add files to build your knowledge base</Text>
-          <TouchableOpacity style={styles.addFirstButton} onPress={handleAddDocument} disabled={isPicking}>
-            <Text style={styles.addFirstButtonText}>Add Document</Text>
-          </TouchableOpacity>
+          <Text style={styles.emptyText}>No files yet</Text>
+          <Text style={styles.emptySubtext}>Add a PDF or notes, and every chat in this project answers from them.</Text>
+          <Button
+            title="Add a file"
+            variant="hero"
+            size="small"
+            icon={<Icon name="plus" size={16} color={colors.onHero} />}
+            onPress={handleAddDocument}
+            disabled={isPicking}
+            testID="kb-add-first"
+          />
+          <Button
+            title="Paste text"
+            variant="ghost"
+            size="small"
+            onPress={() => setPasting(true)}
+            testID="kb-paste-first"
+          />
         </View>
       ) : (
         <FlatList
@@ -331,6 +326,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
           showsVerticalScrollIndicator={false}
         />
       )}
-    </SafeAreaView>
+      <PasteNoteSheet visible={pasting} onClose={() => setPasting(false)} onSave={handleSavePastedNote} />
+    </AliveScreen>
   );
 };

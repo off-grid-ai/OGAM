@@ -4,6 +4,7 @@ import { TouchableOpacity } from '../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
 import { AnimatedEntry } from '../components/AnimatedEntry';
+import { SectionLabel } from '../components/SectionLabel';
 import {
   FOLLOW_X_URL,
   GITHUB_URL,
@@ -20,117 +21,55 @@ interface SettingsCommunitySectionsProps {
   onSendFeedback: () => void;
 }
 
+type CommunityRow = {
+  key: string;
+  icon: React.ReactNode;
+  title: string;
+  desc: string;
+  onPress: () => void;
+  testID?: string;
+};
+
 /**
- * The newsletter and community rows of the Settings screen.
+ * The community rows of the Settings screen: one labelled group (hand test 64 found two cards,
+ * one with its own header paragraph, saying the same kind of thing).
  *
- * Split out because the screen's render was 452 lines against a 350-line cap - these two sections are
- * outbound links and nothing else, so they were the part that carried no screen state and could leave
- * without threading anything back.
+ * Split out because the screen's render was over its line cap. These rows are outbound links and
+ * carry no screen state.
  */
 export const SettingsCommunitySections: React.FC<
   SettingsCommunitySectionsProps
-> = ({ focusTrigger, styles, colors, onSendFeedback }) => (
-  <>
-    {/* Stay in the loop */}
+> = ({ focusTrigger, styles, colors, onSendFeedback }) => {
+  const storeName = Platform.OS === 'ios' ? 'Rate on the App Store' : 'Rate on Google Play';
+  const rows: CommunityRow[] = [
+    { key: 'x', icon: <Icon name="at-sign" size={16} color={colors.textSecondary} />, title: 'Follow @alichherawalla on X', desc: 'New features first, promo discounts, the roadmap', onPress: () => Linking.openURL(FOLLOW_X_URL), testID: 'follow-on-x' },
+    { key: 'slack', icon: <IconMC name="slack" size={16} color={colors.textSecondary} />, title: 'Join the Slack community', desc: 'Get help fast and try things early', onPress: () => Linking.openURL(SLACK_INVITE_URL), testID: 'join-slack' },
+    { key: 'github', icon: <Icon name="star" size={16} color={colors.textSecondary} />, title: 'Star on GitHub', desc: 'Support the open-source project', onPress: () => Linking.openURL(GITHUB_URL) },
+    { key: 'feedback', icon: <Icon name="mail" size={16} color={colors.textSecondary} />, title: 'Send feedback', desc: 'Report a bug or share an idea', onPress: onSendFeedback },
+    { key: 'rate', icon: <Icon name="thumbs-up" size={16} color={colors.textSecondary} />, title: storeName, desc: 'A rating helps other people find Off Grid AI', onPress: () => rateOnStore() },
+  ];
+  return (
     <AnimatedEntry index={7} staggerMs={40} trigger={focusTrigger}>
-      <View style={styles.followSection}>
-        <View style={styles.followHeader}>
-          <Text style={styles.followHeaderTitle}>Stay in the loop</Text>
-          <Text style={styles.followHeaderDesc}>
-            New features land here first, subscribers get promo discounts,
-            and your feedback shapes what gets built next.
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={styles.navItem}
-          testID="follow-on-x"
-          onPress={() => Linking.openURL(FOLLOW_X_URL)}
-        >
-          <View style={styles.followItemIcon}>
-            <Icon name="twitter" size={16} color={colors.primary} />
-          </View>
-          <View style={styles.navItemContent}>
-            <Text style={styles.navItemTitle}>
-              Follow @alichherawalla on X
-            </Text>
-            <Text style={styles.navItemDesc}>
-              Feature drops, promo discounts, roadmap
-            </Text>
-          </View>
-          <Icon name="external-link" size={14} color={colors.textMuted} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.navItem, styles.navItemLast]}
-          testID="join-slack"
-          onPress={() => Linking.openURL(SLACK_INVITE_URL)}
-        >
-          <View style={styles.followItemIcon}>
-            <IconMC name="slack" size={16} color={colors.primary} />
-          </View>
-          <View style={styles.navItemContent}>
-            <Text style={styles.navItemTitle}>
-              Join the Slack community
-            </Text>
-            <Text style={styles.navItemDesc}>
-              Issues fixed fast, debug together, early access
-            </Text>
-          </View>
-          <Icon name="external-link" size={14} color={colors.textMuted} />
-        </TouchableOpacity>
-      </View>
-    </AnimatedEntry>
-
-    {/* Community */}
-    <AnimatedEntry index={8} staggerMs={40} trigger={focusTrigger}>
+      <SectionLabel title="Community" />
       <View style={styles.navSection}>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => Linking.openURL(GITHUB_URL)}
-        >
-          <View style={styles.navItemIcon}>
-            <Icon name="star" size={16} color={colors.textSecondary} />
-          </View>
-          <View style={styles.navItemContent}>
-            <Text style={styles.navItemTitle}>Star on GitHub</Text>
-            <Text style={styles.navItemDesc}>
-              Support the open-source project
-            </Text>
-          </View>
-          <Icon name="external-link" size={14} color={colors.textMuted} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={onSendFeedback}
-        >
-          <View style={styles.navItemIcon}>
-            <Icon name="mail" size={16} color={colors.textSecondary} />
-          </View>
-          <View style={styles.navItemContent}>
-            <Text style={styles.navItemTitle}>Send Feedback</Text>
-            <Text style={styles.navItemDesc}>
-              Report a bug or share a suggestion
-            </Text>
-          </View>
-          <Icon name="external-link" size={14} color={colors.textMuted} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.navItem, styles.navItemLast]}
-          onPress={() => rateOnStore()}
-        >
-          <View style={styles.navItemIcon}>
-            <Icon name="star" size={16} color={colors.textSecondary} />
-          </View>
-          <View style={styles.navItemContent}>
-            <Text style={styles.navItemTitle}>
-              {Platform.OS === 'ios' ? 'Rate on the App Store' : 'Rate on Google Play'}
-            </Text>
-            <Text style={styles.navItemDesc}>
-              A rating helps other people find Off Grid AI
-            </Text>
-          </View>
-          <Icon name="external-link" size={14} color={colors.textMuted} />
-        </TouchableOpacity>
+        {rows.map((row, i) => (
+          <TouchableOpacity
+            key={row.key}
+            style={[styles.navItem, i === rows.length - 1 && styles.navItemLast]}
+            testID={row.testID}
+            onPress={row.onPress}
+            accessibilityRole="button"
+            accessibilityLabel={row.title}
+          >
+            <View style={styles.navItemIcon}>{row.icon}</View>
+            <View style={styles.navItemContent}>
+              <Text style={styles.navItemTitle}>{row.title}</Text>
+              <Text style={styles.navItemDesc}>{row.desc}</Text>
+            </View>
+            <Icon name="external-link" size={14} color={colors.textMuted} />
+          </TouchableOpacity>
+        ))}
       </View>
     </AnimatedEntry>
-  </>
-);
+  );
+};

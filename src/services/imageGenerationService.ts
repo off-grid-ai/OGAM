@@ -206,11 +206,13 @@ class ImageGenerationService {
     job: ImageJob,
     params: GenerateImageParams,
   ): Promise<string> {
-    return enhanceImagePrompt(
+    const prompt = await enhanceImagePrompt(
       params,
       status => this._setEnhancementState(job, params, status),
       () => !this.isLive(job),
     );
+    // The style goes on last: the enhancer rewrites the person's words, never the style's.
+    return params.styleWords ? `${prompt.trim()}, ${params.styleWords}` : prompt;
   }
 
   private async _ensureImageModelLoaded(

@@ -1,8 +1,9 @@
 /**
- * knowledgeBaseApp — a project's Knowledge Base screen mounted on a REAL navigation stack (a project page
- * that opens it, the knowledge base, and the document preview its rows open), over the REAL document
- * engine (harness/documentEngine). Tests drive it by gestures: pick files, flip a switch, remove a row,
- * open a row, go back.
+ * knowledgeBaseApp — a project's Files screen (KnowledgeBaseScreen) mounted on a REAL navigation stack:
+ * the real project page (ProjectDetailScreen) whose files row opens it, the Files screen, and the
+ * document preview its rows open, over the REAL document engine (harness/documentEngine). The project
+ * page's other routes (its chats, its editor) are plain screens that name where a tap went. Tests drive
+ * it by gestures: tap the files row, pick files, flip a switch, remove a row, open a row, go back.
  *
  * The test file must `jest.unmock('@react-navigation/native')` (top level, hoisted) so the real
  * navigation runs.
@@ -21,9 +22,28 @@ export interface PickedFile {
   size?: number;
 }
 
-export async function openKnowledgeBase(
-  options: DocumentEngineOptions & { projectName?: string; beforeMount?: (engine: DocumentEngineBoundary) => void } = {},
-) {
+export interface ProjectPageOptions extends DocumentEngineOptions {
+  projectName?: string;
+  /** What the project is for (its description). Default: none. */
+  description?: string;
+  /** The project's instructions (its system prompt). Default: none. */
+  systemPrompt?: string;
+  /** After the device is in place, before the project is made (e.g. seed files, download a model). */
+  beforeMount?: (engine: DocumentEngineBoundary) => void;
+  /** After the project is made, before the screens mount: file chats or documents into it. */
+  seed?: (projectId: string) => void | Promise<void>;
+}
+
+/** Open the project's Files screen from its page's files row. */
+export async function openKnowledgeBase(options: ProjectPageOptions = {}) {
+  const app = await openProjectPage(options);
+  app.rtl.fireEvent.press(await app.view.findByTestId('project-files'));
+  await app.view.findByTestId('knowledge-base-screen');
+  return app;
+}
+
+/** The project's own page, the first screen of the stack. */
+export async function openProjectPage(options: ProjectPageOptions = {}) {
   const boundary: NativeBoundary = installNativeBoundary({
     fs: true,
     ram: { platform: 'ios', totalBytes: 8 * GB, availBytes: 6 * GB },
@@ -33,19 +53,21 @@ export async function openKnowledgeBase(
   const rtl = requireRTL();
   const RN = require('react-native');
   const picker = require('@react-native-documents/picker');
-  const { NavigationContainer } = require('@react-navigation/native');
+  const { NavigationContainer, createNavigationContainerRef } = require('@react-navigation/native');
   const { createNativeStackNavigator } = require('@react-navigation/native-stack');
   const { KnowledgeBaseScreen } = require('../../src/screens/KnowledgeBaseScreen');
   const { DocumentPreviewScreen } = require('../../src/screens/DocumentPreviewScreen');
+  const { ProjectDetailScreen } = require('../../src/screens/ProjectDetailScreen');
   const { useProjectStore } = require('../../src/stores/projectStore');
   options.beforeMount?.(engine);
 
   // A knowledge base belongs to a project; the project is made with the store's own action.
   const project = useProjectStore.getState().createProject({
     name: options.projectName ?? 'Research',
-    description: '',
-    systemPrompt: '',
+    description: options.description ?? '',
+    systemPrompt: options.systemPrompt ?? '',
   });
+  await options.seed?.(project.id);
 
   // The OS confirmation dialog: remember what it offered so the test can answer it like a person.
   let dialog: { title: string; message?: string; buttons: { text?: string; onPress?: () => void }[] } | null = null;
@@ -54,27 +76,30 @@ export async function openKnowledgeBase(
   };
 
   const Stack = createNativeStackNavigator();
-  const ProjectPage = ({ navigation }: { navigation: { navigate: (name: string, params: object) => void } }) =>
-    React.createElement(
-      RN.TouchableOpacity,
-      { onPress: () => navigation.navigate('KnowledgeBase', { projectId: project.id }) },
-      React.createElement(RN.Text, null, 'Open knowledge base'),
-    );
+  const navigationRef = createNavigationContainerRef();
+  /** Where the project page's other rows lead: a plain screen that names the route and its params. */
+  const Elsewhere = ({ route }: { route: { name: string; params?: object } }) =>
+    React.createElement(RN.Text, null, `${route.name} ${JSON.stringify(route.params ?? {})}`);
   const view = rtl.render(
     React.createElement(
       NavigationContainer,
-      null,
+      { ref: navigationRef },
       React.createElement(
         Stack.Navigator,
         { screenOptions: { headerShown: false } },
-        React.createElement(Stack.Screen, { name: 'ProjectDetail', component: ProjectPage }),
+        React.createElement(Stack.Screen, {
+          name: 'ProjectDetail',
+          component: ProjectDetailScreen,
+          initialParams: { projectId: project.id },
+        }),
         React.createElement(Stack.Screen, { name: 'KnowledgeBase', component: KnowledgeBaseScreen }),
         React.createElement(Stack.Screen, { name: 'DocumentPreview', component: DocumentPreviewScreen }),
+        React.createElement(Stack.Screen, { name: 'ProjectEdit', component: Elsewhere }),
+        React.createElement(Stack.Screen, { name: 'Chat', component: Elsewhere }),
       ),
     ),
   );
-  rtl.fireEvent.press(view.getByText('Open knowledge base'));
-  await view.findByTestId('knowledge-base-screen');
+  await view.findByTestId('project-detail-screen');
 
   return {
     boundary,
@@ -82,20 +107,31 @@ export async function openKnowledgeBase(
     rtl,
     view,
     project,
+    /** Where the stack is now: the route's name and params. */
+    route: (): { name: string; params?: Record<string, unknown> } | undefined => navigationRef.getCurrentRoute(),
+    /** Navigate the way another part of the app does (e.g. a link to a project). */
+    dispatch: (action: object) => navigationRef.dispatch(action),
     /** The picker hands back these files (seeded on disk first), then the add button is tapped. */
     async addFiles(files: PickedFile[]) {
       picker.pick.mockResolvedValue(
         files.map(file => ({ uri: `file://${file.path}`, name: file.name, size: file.size ?? 0 })),
       );
-      const empty = view.queryByText('Add Document');
-      rtl.fireEvent.press(empty ?? view.getByLabelText('Add documents'));
+      tapAdd(view, rtl);
+      // The header's + asks what to add (A file / Paste text / Cancel); a person picks A file.
+      const asked = dialog as { title: string; buttons: { text?: string; onPress?: () => void }[] } | null;
+      if (asked?.title === 'Add to Files') {
+        dialog = null;
+        const aFile = asked.buttons.find(button => button.text === 'A file');
+        if (!aFile) throw new Error('the add dialog has no "A file" button');
+        await rtl.act(async () => {
+          await aFile.onPress?.();
+        });
+      }
       // Each file is either listed or named on the error card, and the add button works again.
       await rtl.waitFor(() =>
         expect(files.every(file => view.queryByText(file.name)) || view.queryByTestId('kb-index-error-card')).toBeTruthy(),
       );
-      await rtl.waitFor(() =>
-        expect(view.getByLabelText('Add documents').props.accessibilityState?.disabled).toBeFalsy(),
-      );
+      await rtl.waitFor(() => expect(addButton(view).props.accessibilityState?.disabled).toBeFalsy());
     },
     /** The status line of a document's row ("12.0 KB · 3 pages"), found by the file it came from. */
     async statusOf(path: string) {
@@ -114,6 +150,20 @@ export async function openKnowledgeBase(
     },
     dialogTitle: () => (dialog as { title: string } | null)?.title ?? null,
   };
+}
+
+type KbView = { queryByTestId: (id: string) => any; getByLabelText: (label: string) => any };
+
+/**
+ * The Files screen's add: its empty state's Add a file while nothing is listed, else the header's
+ * Add files, which asks A file or Paste text (the header hides its + while the list is empty).
+ */
+function addButton(view: KbView) {
+  return view.queryByTestId('kb-add-first') ?? view.getByLabelText('Add files');
+}
+
+function tapAdd(view: KbView, rtl: ReturnType<typeof requireRTL>) {
+  rtl.fireEvent.press(addButton(view));
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -247,18 +297,22 @@ export async function launchProjectChatApp(options: ProjectChatAppOptions = {}) 
       await view.findByTestId('project-detail-screen', {}, RENDER_WAIT);
     },
 
+    /** From the project page: its files row opens the project's Files screen. */
+    async openFiles() {
+      fireEvent.press(await waitFor(() => view.getByTestId('project-files'), RENDER_WAIT));
+      await view.findByTestId('knowledge-base-screen', {}, RENDER_WAIT);
+    },
+
     /**
-     * From the project page: on its Knowledge base tab, + then File, pick these files (seeded on the
-     * disk first), and wait until each one has been read to the end ("<size> · <n> pages").
+     * From the project page: open its files, add these (seeded on the disk first) through the picker,
+     * wait until each one has been read to the end ("<size> · <n> pages"), then go back to the project.
      */
     async addKnowledge(files: Array<PickedFile & { pages: number }>) {
-      // The project opens on Chats; the knowledge base is behind its tab.
-      fireEvent.press(view.getByTestId('project-tab-knowledge'));
+      await this.openFiles();
       picker.pick.mockResolvedValue(
         files.map(file => ({ uri: `file://${file.path}`, name: file.name, size: file.size ?? 0 })),
       );
-      fireEvent.press(view.getByTestId('kb-add'));
-      fireEvent.press(await view.findByText('File', {}, RENDER_WAIT));
+      fireEvent.press(await waitFor(() => addButton(view), RENDER_WAIT));
       for (const file of files) {
         const status = await view.findByTestId(
           `knowledge-document-status-${await engine.documentIdOf(file.path)}`, {}, RENDER_WAIT,
@@ -266,15 +320,18 @@ export async function launchProjectChatApp(options: ProjectChatAppOptions = {}) 
         const pages = file.pages === 1 ? '1 page' : `${file.pages} pages`;
         await waitFor(() => expect(status.props.children).toMatch(new RegExp(`· ${pages}$`)), RENDER_WAIT);
       }
+      await this.closeFiles();
+    },
+
+    /** From the Files screen: back to the project page. */
+    async closeFiles() {
+      fireEvent.press(view.getByTestId('knowledge-base-back'));
+      await waitFor(() => expect(view.queryByTestId('knowledge-base-screen')).toBeNull(), RENDER_WAIT);
     },
 
     /** The project page's New chat button. */
     async newProjectChat() {
-      fireEvent.press(await waitFor(() => view.getByTestId('project-tab-chats'), RENDER_WAIT));
-      fireEvent.press(await waitFor(
-        () => view.queryByTestId('project-start-chat') ?? view.getByTestId('project-new-chat'),
-        RENDER_WAIT,
-      ));
+      fireEvent.press(await waitFor(() => view.getByTestId('project-new-chat'), RENDER_WAIT));
       await view.findByTestId('chat-input', {}, RENDER_WAIT);
     },
 

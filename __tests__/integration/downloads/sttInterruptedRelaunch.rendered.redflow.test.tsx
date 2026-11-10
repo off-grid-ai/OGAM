@@ -19,16 +19,16 @@ describe('V3 (rendered) — interrupted STT download lost on relaunch', () => {
     await hydrateDownloadStore();
 
     const before = render(React.createElement(DownloadManagerScreen, {}));
-    await waitFor(() => { expect(before.queryByText(/ggml-base\.en\.bin/)).not.toBeNull(); });
+    await waitFor(() => { expect(before.queryByText(/Whisper Base \(English\)/)).not.toBeNull(); });
     before.unmount();
 
     boundary.download!.simulateRelaunch();
     await hydrateDownloadStore();
 
     const after = render(React.createElement(DownloadManagerScreen, {}));
-    await waitFor(() => { expect(after.queryByText('Download Manager')).not.toBeNull(); });
+    await waitFor(() => { expect(after.queryByText('Downloads')).not.toBeNull(); });
 
     // Correct: the interrupted STT download survives as a retriable card. Today it vanishes → RED.
-    expect(after.queryByText(/ggml-base\.en\.bin/)).not.toBeNull();
+    expect(after.queryByText(/Whisper Base \(English\)/)).not.toBeNull();
   });
 });

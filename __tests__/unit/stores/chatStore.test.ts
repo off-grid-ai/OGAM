@@ -30,7 +30,7 @@ describe('chatStore', () => {
       expect(state.conversations).toHaveLength(1);
       expect(state.conversations[0]).toMatchObject({
         id: conversationId,
-        title: 'New Conversation',
+        title: 'New chat',
         modelId: 'test-model-id',
         messages: [],
       });
@@ -283,7 +283,7 @@ describe('chatStore', () => {
         content: 'Hello, how can I help?',
       });
 
-      expect(getChatState().conversations[0].title).toBe('New Conversation');
+      expect(getChatState().conversations[0].title).toBe('New chat');
     });
 
     it('does not update title if already customized', () => {
@@ -1229,7 +1229,7 @@ describe('chatStore', () => {
         content: 'System prompt text',
       });
 
-      expect(getChatState().conversations[0].title).toBe('New Conversation');
+      expect(getChatState().conversations[0].title).toBe('New chat');
     });
 
     it('stores system messages correctly', () => {
