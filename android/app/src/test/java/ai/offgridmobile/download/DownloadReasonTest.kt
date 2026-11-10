@@ -51,4 +51,11 @@ class DownloadReasonTest {
         assertFalse(DownloadReason.resumesInPlace(DownloadReason.fromThrowable(full), madeProgress = true))
         assertEquals(DownloadReason.UNKNOWN_ERROR, DownloadReason.fromThrowable(DiskWriteException(IOException("EIO"))))
     }
+
+    @Test
+    fun `a connection that keeps dropping stops resuming in place after the cap`() {
+        val code = DownloadReason.DOWNLOAD_INTERRUPTED
+        assertTrue(DownloadReason.resumesInPlace(code, madeProgress = true, resumesSoFar = DownloadReason.MAX_IN_PLACE_RESUMES - 1))
+        assertFalse(DownloadReason.resumesInPlace(code, madeProgress = true, resumesSoFar = DownloadReason.MAX_IN_PLACE_RESUMES))
+    }
 }

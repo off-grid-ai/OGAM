@@ -70,9 +70,15 @@ object DownloadReason {
     /**
      * Resume straight away, in the same worker, after a retryable failure that came after new bytes:
      * the download is still moving, so it costs none of WorkManager's retries (the file is finite, so
-     * this ends). Only a request that wrote nothing waits for a WorkManager retry.
+     * this ends). Only a request that wrote nothing, or a run past MAX_IN_PLACE_RESUMES, waits for a
+     * WorkManager retry.
      */
-    fun resumesInPlace(code: String, madeProgress: Boolean): Boolean = madeProgress && isRetryable(code)
+    fun resumesInPlace(code: String, madeProgress: Boolean, resumesSoFar: Int = 0): Boolean =
+        madeProgress && isRetryable(code) && resumesSoFar < MAX_IN_PLACE_RESUMES
+
+    /** A connection that writes a little and drops every time still ends the worker, so WorkManager's
+     *  bounded retries apply: a long download on a bad network resumes this often per run. */
+    const val MAX_IN_PLACE_RESUMES = 20
 
     fun fromHttpCode(code: Int): String {
         return when (code) {

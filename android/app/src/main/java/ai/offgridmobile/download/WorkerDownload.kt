@@ -75,6 +75,7 @@ class WorkerDownload(
         // Range request: the download is still moving. Only a request that wrote nothing ends the
         // worker, so WorkManager's bounded retries count stalls, not every hiccup of a long download.
         var requestStartBytes = existingBytes
+        var resumes = 0
         while (true) {
             val call = client.newCall(buildRequest(download.url, requestStartBytes))
             val cancelHandle = coroutineContext[Job]?.invokeOnCompletion { call.cancel() }
@@ -86,11 +87,12 @@ class WorkerDownload(
                 if (isStopped) return handleStoppedState(downloadId, download, download.downloadedBytes)
                 val reason = DownloadReason.fromThrowable(e)
                 val bytesNow = if (targetFile.exists()) targetFile.length() else 0L
-                if (!DownloadReason.resumesInPlace(reason, bytesNow > requestStartBytes)) {
+                if (!DownloadReason.resumesInPlace(reason, bytesNow > requestStartBytes, resumes)) {
                     return handleDownloadException(downloadId, download, e)
                 }
                 Log.w(TAG, "Transfer cut id=$downloadId at $bytesNow bytes reason=$reason (${e.javaClass.simpleName}); resuming")
                 requestStartBytes = bytesNow
+                resumes++
             } finally {
                 cancelHandle?.dispose()
             }
