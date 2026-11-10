@@ -82,6 +82,15 @@ export const LearningScreen: React.FC = () => {
 
   const settings = (
     <View>
+      <TouchableOpacity onPress={() => navigation.navigate('Knowledge')} style={styles.textbookCard} testID="open-textbook" accessibilityRole="button">
+        <Icon name="book-open" size={20} color={colors.primary} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.chipText}>Studying a textbook or a long PDF?</Text>
+          <Text style={styles.counts}>Add it under Knowledge. It is split into sections and studied piece by piece, with every finding tied to a quote and a page.</Text>
+        </View>
+        <Icon name="chevron-right" size={18} color={colors.textMuted} />
+      </TouchableOpacity>
+
       <Text style={styles.label}>Expert</Text>
       <Text style={styles.note}>Each subject learns on its own, so one expert never blurs into another. A chat uses the lessons of the expert whose subject it is about.</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.expertRow}>
@@ -361,6 +370,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   bigBtnText: { color: '#fff', fontWeight: '600' as const, fontSize: 15 },
   smallBtn: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
   smallBtnText: { color: colors.text, fontSize: 13 },
+  textbookCard: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, borderWidth: 1, borderColor: colors.primary, borderRadius: 10, padding: SPACING.md, marginTop: SPACING.sm },
   expertRow: { marginTop: 4 },
   advToggle: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
   resetBtn: { marginTop: SPACING.sm, paddingVertical: 8 },

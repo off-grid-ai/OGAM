@@ -21,6 +21,7 @@ const destinations: Destination[] = [
   { key: 'language', label: 'Learn a language', hint: 'Lessons, games and practice calls', icon: 'book', screen: 'Language', tint: '#E4F2F0', tintDark: '#10302C', color: ['#0F766E', '#2DD4BF'] },
   { key: 'topics', label: 'Learn a topic', hint: 'Any subject, on a board the AI designs', icon: 'compass', screen: 'Topics', tint: '#E6EEFB', tintDark: '#14243D', color: ['#1D4ED8', '#60A5FA'] },
   { key: 'teach', label: 'Teach the AI', hint: 'Let it study a subject and write reports you can read', icon: 'trending-up', screen: 'Learning', tint: '#E4F2F0', tintDark: '#10302C', color: ['#0F766E', '#2DD4BF'] },
+  { key: 'textbook', label: 'Study a textbook', hint: 'Add a PDF: it is split up and studied section by section', icon: 'book-open', screen: 'Knowledge', tint: '#E6EEFB', tintDark: '#14243D', color: ['#1D4ED8', '#60A5FA'] },
   { key: 'emergency', label: 'Emergency', hint: 'Offline emergency cards and first aid', icon: 'alert-triangle', screen: 'Emergency', optional: true, tint: '#FDE7E2', tintDark: '#3A1A15', color: ['#B91C1C', '#F87171'] },
   { key: 'survival', label: 'Survival manual', hint: 'The field manual, offline', icon: 'life-buoy', screen: 'SurvivalManual', optional: true, tint: '#E1F6E8', tintDark: '#12291C', color: ['#047857', '#34D399'] },
   { key: 'library', label: 'Offline library', hint: 'Medical and general reference, offline', icon: 'book-open', screen: 'OfflineLibrary', optional: true, tint: '#EDE5FF', tintDark: '#241A3D', color: ['#6D28D9', '#A78BFA'] },
