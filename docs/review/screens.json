@@ -104,8 +104,18 @@
         "file": "screens/v/chats-view-menu-ios-r4.jpg",
         "android": "screens/v/chats-view-menu-android-1.jpg",
         "androidClip": "screens/v/chats-view-menu-android-1.mp4"
+      },
+      {
+        "v": 2,
+        "label": "Answers at once: spinner, then tick",
+        "at": "2026-11-10T09:00:00Z",
+        "file": "screens/v/chats-view-menu-ios-r4.jpg",
+        "android": "screens/v/chats-view-menu-android-2.jpg",
+        "androidClip": "screens/v/chats-view-menu-android-2.mp4",
+        "what": "A choice shows a spinner on the row you touched at once, then its tick once the list has regrouped (design principle 10). Before, nothing moved for ~7 s and then the tick jumped. Android clip; the iPhone shot is v1's."
       }
-    ]
+    ],
+    "androidClip": "screens/v/chats-view-menu-android-2.mp4"
   },
   {
     "id": "chats-by-project",
