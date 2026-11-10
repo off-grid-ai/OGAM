@@ -29,10 +29,12 @@ collect_changed_files() {
     [ -z "$local_oid" ] && continue
     [ "$local_oid" = "$ZERO_OID" ] && continue
 
-    if [ "$remote_oid" = "$ZERO_OID" ]; then
+    if [ "$remote_oid" = "$ZERO_OID" ] || ! git cat-file -e "$remote_oid^{commit}" 2>/dev/null; then
       # A new branch has no remote tip. Diff its complete range from the release
       # base. Passing several commits to diff-tree can silently compare trees and
-      # omit earlier commits in the push.
+      # omit earlier commits in the push. A remote tip this clone does not have (a
+      # force-push over an old branch from a shallow CI checkout: the engine bot,
+      # 2026-11-04..10) is treated the same, instead of failing "Invalid revision range".
       base=$(new_branch_base "$local_oid")
       changed=$(git diff --name-only --diff-filter=ACMR "$base..$local_oid")
     else
