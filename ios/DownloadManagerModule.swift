@@ -429,6 +429,9 @@ class DownloadManagerModule: RCTEventEmitter {
           // Drop the old key first: its cancellation then reaches handleError as an unknown task.
           self.taskToDownloadId.removeValue(forKey: oldKey)
           self.retiredTaskKeys.insert(oldKey)
+          // And the old task itself: while it cancels its state reads .canceling/.completed, and a
+          // progress poll would mark the download failed or completed, so the hand-off never continued.
+          self.detachTask(downloadId: downloadId, oldKey: oldKey)
           group.enter()
           self.handOff(old, downloadId: downloadId, oldKey: oldKey, url: url, to: target) { group.leave() }
         }
@@ -468,6 +471,14 @@ class DownloadManagerModule: RCTEventEmitter {
       self.replaceTask(downloadId: downloadId, oldKey: oldKey, with: next, in: target)
       if !paused { next.resume() }
     }
+  }
+
+  /// Forgets the task a download is leaving (a hand-off), until replaceTask gives it the next one.
+  /// Call on `queue` with a barrier.
+  func detachTask(downloadId: String, oldKey: Int) {
+    guard var info = downloads[downloadId] else { return }
+    if info.isMultiFile { info.fileTasks[oldKey]?.task = nil } else { info.task = nil }
+    downloads[downloadId] = info
   }
 
   /// Points a download at a new task in place of an old one (a hand-off or an automatic retry).

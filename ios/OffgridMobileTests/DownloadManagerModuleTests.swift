@@ -389,6 +389,26 @@ final class DownloadManagerModuleTests: XCTestCase {
     XCTAssertEqual(DownloadManagerModule.saveFailureCode(for: full), "disk_full")
     XCTAssertEqual(DownloadManagerModule.saveFailureCode(for: other), "save_failed")
   }
+
+  // A hand-off retires the old task; the download must stop pointing at it, or a progress poll reads
+  // its .canceling state as "failed" and the hand-off never continues (CodeRabbit, OGAM#786).
+  func testDetachTaskForgetsTheTaskBeingHandedOff() {
+    let task = URLSession.shared.downloadTask(with: URL(string: "https://huggingface.co/x/resolve/main/m.gguf")!)
+    let info = DownloadManagerModule.DownloadInfo(
+      downloadId: "200", fileName: "m.gguf", modelId: "x/m", totalBytes: 10, bytesDownloaded: 5,
+      status: "running", startedAt: 0, modelKey: nil, modelType: "text", combinedTotalBytes: 10,
+      metadataJson: nil, task: task, taskIdentifier: task.taskIdentifier, localUri: nil,
+      fileTasks: [:], multiFileDestDir: nil, isMultiFile: false)
+    module.queue.sync(flags: .barrier) {
+      self.module.downloads["200"] = info
+      self.module.detachTask(downloadId: "200", oldKey: task.taskIdentifier)
+    }
+    task.cancel()
+    module.queue.sync {
+      XCTAssertNil(self.module.downloads["200"]?.task)
+      XCTAssertEqual(self.module.downloads["200"]?.status, "running")
+    }
+  }
 }
 
 // MARK: - AppDelegate Background URL Session Tests
