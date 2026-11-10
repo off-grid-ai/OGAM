@@ -1313,7 +1313,8 @@ extension DownloadManagerModule {
         var totalDown: Int64 = 0
         for (_, fileTask) in info.fileTasks { totalDown += fileTask.bytesDownloaded }
         info.bytesDownloaded = totalDown
-        info.status = "running"
+        // A late progress callback after a pause must not undo it (Resume would then refuse the download).
+        if info.status != "paused" { info.status = "running" }
         if totalBytesWritten % (5 * 1024 * 1024) < bytesWritten || totalBytesWritten == bytesWritten {
           NSLog("[DownloadManager] Multi-file progress: download#%@ task#%d: %lld/%lld (aggregate: %lld/%lld)",
                 downloadId, taskId, totalBytesWritten, totalBytesExpected, info.bytesDownloaded, info.totalBytes)
@@ -1569,7 +1570,8 @@ extension DownloadManagerModule {
         self.retiredTaskKeys.insert(taskId)
         // While it waits, the finished task must not be polled: its state would read "completed".
         if !info.isMultiFile { info.task = nil }
-        info.status = "pending"
+        // A pause the person made stays: the retry then waits suspended for Resume (continueDownload).
+        if info.status != "paused" { info.status = "pending" }
         self.downloads[downloadId] = info
         self.persistStateLocked()
         let resumeData = (error as NSError?)?.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
