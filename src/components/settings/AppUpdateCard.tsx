@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../theme';
 import { useAppStore } from '../../stores';
 import { offGridOn } from '../../atlasTools/offGrid';
-import { checkForUpdate, downloadAndInstall, installedBuild, type UpdateInfo } from '../../services/appUpdate';
+import { checkForUpdate, downloadAndInstall, installedBuild, UpdateCancelled, type UpdateInfo } from '../../services/appUpdate';
 
 const mb = (n: number) => `${Math.max(1, Math.round(n / 1e6))} MB`;
 
@@ -17,6 +17,7 @@ export function AppUpdateCard() {
   const [fraction, setFraction] = useState(0);
   const [message, setMessage] = useState('');
   const [showNotes, setShowNotes] = useState(false);
+  const cancelRef = useRef<() => void>(() => undefined);
   const build = installedBuild();
 
   const check = async () => {
@@ -34,10 +35,13 @@ export function AppUpdateCard() {
     if (!update) return;
     setState('downloading'); setFraction(0);
     try {
-      const r = await downloadAndInstall(update, setFraction);
+      const r = await downloadAndInstall(update, setFraction, (c) => { cancelRef.current = c; });
       setState('available');
       if (r === 'needs-permission') Alert.alert('One setting first', 'Android needs you to allow installs from Atlas. Turn it on in the screen that just opened, come back, and press Download and install again.');
-    } catch (e: any) { setState('error'); setMessage(String(e?.message || e)); }
+    } catch (e: any) {
+      if (e instanceof UpdateCancelled) { setState('available'); return; }
+      setState('error'); setMessage(String(e?.message || e));
+    }
   };
 
   const label = state === 'checking' ? 'Checking...' : state === 'latest' ? 'You have the latest build.' : state === 'available' && update ? `${update.name} is available (${mb(update.size)}).` : state === 'downloading' ? `Downloading ${Math.round(fraction * 100)}%` : state === 'error' ? message : 'Not checked yet.';
@@ -51,7 +55,14 @@ export function AppUpdateCard() {
           <TouchableOpacity onPress={install} testID="app-update-install" accessibilityRole="button" style={{ backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 }}>
             <Text style={{ color: colors.background, fontWeight: '600' }}>Download and install</Text>
           </TouchableOpacity>
-        ) : state === 'downloading' || state === 'checking' ? <ActivityIndicator color={colors.primary} /> : (
+        ) : state === 'downloading' ? (
+          <>
+            <ActivityIndicator color={colors.primary} />
+            <TouchableOpacity onPress={() => cancelRef.current()} testID="app-update-cancel" accessibilityRole="button" style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 }}>
+              <Text style={{ color: colors.text }}>Cancel</Text>
+            </TouchableOpacity>
+          </>
+        ) : state === 'checking' ? <ActivityIndicator color={colors.primary} /> : (
           <TouchableOpacity onPress={check} testID="app-update-check" accessibilityRole="button" style={{ borderWidth: 1, borderColor: colors.primary, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 }}>
             <Text style={{ color: colors.primary }}>Check for updates</Text>
           </TouchableOpacity>

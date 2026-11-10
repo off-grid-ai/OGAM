@@ -47,18 +47,25 @@ export async function checkForUpdate(): Promise<UpdateCheck> {
 }
 
 /** Downloads the APK into the cache and starts Android's installer. Resolves 'started', or 'needs-permission' when Android first needs the install setting turned on. */
-export async function downloadAndInstall(update: UpdateInfo, onProgress: (fraction: number) => void): Promise<'started' | 'needs-permission'> {
+export class UpdateCancelled extends Error { constructor() { super('Download cancelled.'); } }
+
+/** `onCancel` is given a function that stops the download (the promise then rejects with UpdateCancelled). */
+export async function downloadAndInstall(update: UpdateInfo, onProgress: (fraction: number) => void, onCancel?: (cancel: () => void) => void): Promise<'started' | 'needs-permission'> {
   if (Platform.OS !== 'android' || !NativeModules.AtlasDevice?.installApk) throw new Error('Updating from the app works on Android only.');
   const RNFS = require('react-native-fs');
   const dir = `${RNFS.CachesDirectoryPath}/updates`;
   await RNFS.mkdir(dir);
   const file = `${dir}/Atlas-${update.build}.apk`;
   await RNFS.unlink(file).catch(() => undefined);
-  const { promise } = RNFS.downloadFile({
+  let cancelled = false;
+  const { jobId, promise } = RNFS.downloadFile({
     fromUrl: update.apkUrl, toFile: file, progressInterval: 500,
     progress: (p: any) => onProgress(Math.min(1, p.bytesWritten / Math.max(1, p.contentLength || update.size))),
   });
-  const res = await promise;
+  onCancel?.(() => { cancelled = true; RNFS.stopDownload(jobId); });
+  let res: any;
+  try { res = await promise; } catch (e) { throw cancelled ? new UpdateCancelled() : e; }
+  if (cancelled) throw new UpdateCancelled();
   if (res.statusCode && res.statusCode >= 400) throw new Error(`Download failed (HTTP ${res.statusCode})`);
   const size = Number((await RNFS.stat(file)).size);
   if (update.size && size < update.size * 0.99) throw new Error('The download was cut short. Try again on a steadier connection.');
