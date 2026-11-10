@@ -37,7 +37,11 @@ import {
   getResourceUsage as _getResourceUsage,
   syncWithNativeState as _syncWithNativeState,
 } from './utils';
-;
+
+/** Our models in memory right now, for the load and crash records. */
+const residentKeys = (): string =>
+  modelResidencyManager.getResidents().map(resident => resident.key).join(',') || 'none';
+
 /** `utility`: a side-task load (the intent classifier) that borrows the engine without becoming the chat model. */
 type TextLoadOptions = { override?: boolean; utility?: boolean };
 
@@ -217,8 +221,10 @@ class ActiveModelService {
     if (!model) {
       throw new Error('Model not found');
     }
-    await trackModelLoad(downloadedModelFacts(model, store.settings), () =>
-      this.loadFoundTextModel(model, modelId, timeoutMs, opts),
+    await trackModelLoad(
+      { ...downloadedModelFacts(model, store.settings), residents: residentKeys() },
+      () => this.loadFoundTextModel(model, modelId, timeoutMs, opts),
+      () => (model.engine === 'llama' ? { low_memory: llmService.isLowMemoryMode() } : {}),
     );
   }
   private async loadFoundTextModel(
@@ -373,7 +379,7 @@ class ActiveModelService {
     if (!model) {
       throw new Error('Model not found');
     }
-    await trackModelLoad(imageModelFacts(model), () =>
+    await trackModelLoad({ ...imageModelFacts(model), residents: residentKeys() }, () =>
       this.loadFoundImageModel(model, modelId, imageThreads, needsThreadReload, timeoutMs, opts),
     );
   }

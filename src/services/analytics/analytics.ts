@@ -75,6 +75,8 @@ export interface ModelFacts {
   quant?: string;
   engine: string;
   backend: string;
+  /** Our other models still in memory when a load starts (residency keys), or `none`. */
+  residents?: string;
 }
 
 const CRASH_EVENTS = new Set(['$exception', 'unclean_exit']);
@@ -253,6 +255,7 @@ export function startAnalytics(
           engine: unclean.engine,
           backend: unclean.backend,
           free_ram_gb: unclean.free_ram_gb,
+          residents: unclean.residents,
           elapsed_ms: ms(Date.now() - unclean.startedAt),
         });
       }
@@ -637,7 +640,12 @@ async function socLabel(): Promise<string> {
 }
 
 /** Run a model load and report `model_loaded` / `model_load_failed`. The result is unchanged. */
-export async function trackModelLoad<T>(facts: ModelFacts, run: () => Promise<T>): Promise<T> {
+export async function trackModelLoad<T>(
+  facts: ModelFacts,
+  run: () => Promise<T>,
+  /** Facts known only once the model has loaded (a chat model's `low_memory`). */
+  loadedFacts: () => Properties = () => ({}),
+): Promise<T> {
   const startedAt = Date.now();
   const free = freeRamGb();
   markStageStarted({ stage: 'load', ...facts, free_ram_gb: free, startedAt, appVersion: appVersion() });
@@ -649,7 +657,7 @@ export async function trackModelLoad<T>(facts: ModelFacts, run: () => Promise<T>
   try {
     const result = await run();
     markStageEnded('load');
-    report('model_loaded', {});
+    report('model_loaded', loadedFacts());
     flowStep('onboarding', 'model_loaded');
     return result;
   } catch (error) {
