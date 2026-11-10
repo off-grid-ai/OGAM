@@ -35,15 +35,3 @@ export function packsForTier<T extends { name: string }>(id: TierId, packs: T[])
 
 export const tierBytes = (id: TierId, packs: { name: string; size: number }[]): number =>
   packsForTier(id, packs).reduce((n, p) => n + p.size, 0);
-
-const gb = (n: number) => `${(n / 1e9).toFixed(1)} GB`;
-
-/**
- * Building a package needs room on the phone for the downloaded packs and for the one zip made from them (about twice the
- * packs' size). Returns the sentence to show when there is not enough room, or null when there is (or the free space is unknown).
- */
-export function spaceProblem(packBytes: number, freeBytes: number | undefined): string | null {
-  if (freeBytes === undefined || !Number.isFinite(freeBytes)) return null;
-  const need = packBytes * 2;
-  return freeBytes >= need ? null : `This size needs about ${gb(need)} free on the phone while it is built, and ${gb(freeBytes)} is free. Free some space or pick a smaller size.`;
-}
