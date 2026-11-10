@@ -114,9 +114,9 @@ class EmbeddingService {
     const filePath = `${RNFS.DocumentDirectoryPath}/embedding-${sha256(candidate.id)}.gguf`;
     // Whatever its size (a file that failed its check is the wrong size), and the partial file too.
     // A file that is not there is fine; one that will not delete is reported, so it is not forgotten.
-    for (const path of [filePath, `${filePath}.part`]) {
+    await Promise.all([filePath, `${filePath}.part`].map(async path => {
       if (await RNFS.exists(path)) await RNFS.unlink(path);
-    }
+    }));
   }
 
   /** Download only. Activation and rebuilding require a separate confirmed RAG operation. */

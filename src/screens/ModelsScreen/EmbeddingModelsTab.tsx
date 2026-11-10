@@ -161,7 +161,8 @@ export const EmbeddingModelsTab: React.FC = () => {
     // The failure clears only once the file is gone; a delete that fails keeps it, with the reason.
     setRemovingId(candidate.id);
     deleteIfThere()
-      .then(() => embeddingModelChanger.dismiss())
+      // Only this model's failure: another change may have started and failed while the disk was slow.
+      .then(() => { if (embeddingModelChanger.getChange().candidateId === candidate.id) embeddingModelChanger.dismiss(); })
       .catch(e => setError(String(e.message)))
       .finally(() => setRemovingId(null));
   };

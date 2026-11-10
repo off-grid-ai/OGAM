@@ -194,3 +194,30 @@ it('Remove download deletes a wrong-sized file and its partial file, and says so
   expect(await fs.exists(path)).toBe(false);
   expect(await fs.exists(`${path}.part`)).toBe(false);
 });
+
+it("a slow Remove on one model never clears another model's failure", async () => {
+  const h = setup();
+  h.disk.serveRemoteFile(h.multilingual.downloadUrl, { statusCode: 500, body: 'error' });
+  h.disk.serveRemoteFile(h.english.downloadUrl, { statusCode: 500, body: 'error' });
+  const { rtl, view, row } = await renderTab();
+  rtl.fireEvent.press(view.getByLabelText(h.multilingual.name));
+  rtl.fireEvent.press(await view.findByText('Switch'));
+  await rtl.waitFor(() => expect(row(h.multilingual.name).getByLabelText('Retry download')).toBeTruthy());
+
+  const fs = h.disk.module;
+  const exists = fs.exists.getMockImplementation();
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  fs.exists.mockImplementation(async (path: string) => { await held; return exists!(path); });
+  rtl.fireEvent.press(row(h.multilingual.name).getByLabelText('Remove download'));
+
+  // Meanwhile the person picks the other model, and that one fails too.
+  fs.exists.mockImplementation(exists!);
+  rtl.fireEvent.press(view.getByLabelText(h.english.name));
+  rtl.fireEvent.press(await view.findByText('Switch'));
+  await rtl.waitFor(() => expect(row(h.english.name).getByLabelText('Retry download')).toBeTruthy());
+
+  release();
+  await new Promise(resolve => setTimeout(resolve, 50));
+  expect(row(h.english.name).getByLabelText('Retry download')).toBeTruthy();
+});
