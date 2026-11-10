@@ -1,0 +1,4 @@
+# A new worktree checks out from the null commit; link its heavy folders to the main checkout.
+if [ "$1" = "0000000000000000000000000000000000000000" ]; then
+  [ -f scripts/link-worktree-deps.sh ] && bash scripts/link-worktree-deps.sh || true
+fi
