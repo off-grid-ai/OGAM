@@ -91,7 +91,10 @@ function reportEnd(
 ): void {
   const entry = state.downloads[state.downloadIdIndex[downloadId] ?? ''];
   if (entry?.downloadId !== downloadId) return;
-  if (status === 'failed') downloadEnded(entry.modelKey, 'failed', { code });
+  // A cancel the person chose is not a failure: it closes the attempt quietly, as removing the row
+  // does. Counted as one, 0.0.122's numbers had 44 "failed" downloads a day that were cancels.
+  if (status === 'failed' && code === 'user_cancelled') downloadDropped(entry.modelKey);
+  else if (status === 'failed') downloadEnded(entry.modelKey, 'failed', { code });
   else if (status === 'completed') downloadEnded(entry.modelKey, 'done');
 }
 
