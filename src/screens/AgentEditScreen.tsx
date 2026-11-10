@@ -17,7 +17,7 @@ import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { useAgentStore } from '../stores/agentStore';
+import { isPal, useAgentStore } from '../stores/agentStore';
 import { useAppStore } from '../stores/appStore';
 import { SliderSetting } from '../components/SliderSetting';
 import { ModelChips } from '../components/ModelChips';
@@ -66,6 +66,7 @@ export const AgentEditScreen: React.FC = () => {
 
   const { getAgent, createAgent, updateAgent, deleteAgent, setActiveAgent } = useAgentStore();
   const existingProject = agentId ? getAgent(agentId) : null;
+  const [kind, setKind] = useState<'agent' | 'pal'>(existingProject ? (isPal(existingProject) ? 'pal' : 'agent') : (route.params?.kind ?? 'agent'));
 
   const [formData, setFormData] = useState({
     name: '',
@@ -143,6 +144,7 @@ export const AgentEditScreen: React.FC = () => {
         name: formData.name.trim(),
         description: formData.description.trim(),
         systemPrompt: formData.systemPrompt.trim(),
+        kind,
         ...advFields(),
       });
       if (useAgentStore.getState().activeAgentId === existingProject.id) setActiveAgent(existingProject.id);
@@ -151,6 +153,7 @@ export const AgentEditScreen: React.FC = () => {
         name: formData.name.trim(),
         description: formData.description.trim(),
         systemPrompt: formData.systemPrompt.trim(),
+        kind,
         ...advFields(),
       });
       setActiveAgent(created.id);
@@ -171,7 +174,7 @@ export const AgentEditScreen: React.FC = () => {
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>
-            {existingProject ? 'Edit Agent' : 'New Agent'}
+            {`${existingProject ? 'Edit' : 'New'} ${kind === 'pal' ? 'pal' : 'agent'}`}
           </Text>
           <TouchableOpacity onPress={handleSave} style={styles.headerButton}>
             <Text style={styles.saveText}>Save</Text>
@@ -183,6 +186,16 @@ export const AgentEditScreen: React.FC = () => {
           contentContainerStyle={[styles.contentContainer, wide.column]}
           keyboardShouldPersistTaps="handled"
         >
+          <Text style={styles.label}>Type</Text>
+          <View style={styles.kindRow}>
+            {([['agent', 'Agent', 'Gets work done: tools, study, writing'], ['pal', 'Pal', 'A character to talk or role-play with']] as const).map(([k, name, hint]) => (
+              <TouchableOpacity key={k} testID={`agent-kind-${k}`} accessibilityRole="button" accessibilityState={{ selected: kind === k }} onPress={() => setKind(k)} style={[styles.kindCard, kind === k && styles.kindCardOn]}>
+                <Text style={styles.kindName}>{name}</Text>
+                <Text style={styles.kindHint}>{hint}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           {/* Name */}
           <Text style={styles.label}>Name *</Text>
           <TextInput
@@ -314,6 +327,11 @@ export const AgentEditScreen: React.FC = () => {
 };
 
 const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+  kindRow: { flexDirection: 'row' as const, gap: SPACING.sm },
+  kindCard: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: SPACING.md },
+  kindCardOn: { borderColor: colors.primary, backgroundColor: colors.surface },
+  kindName: { ...TYPOGRAPHY.body, color: colors.text, fontWeight: '600' as const },
+  kindHint: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, marginTop: 2 },
   container: {
     flex: 1,
     backgroundColor: colors.background,

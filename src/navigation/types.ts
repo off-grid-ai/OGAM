@@ -9,7 +9,7 @@ export type RootStackParamList = {
   // Former ProjectsStack
   ProjectDetail: { projectId: string };
   ProjectEdit: { projectId?: string };
-  AgentEdit: { agentId?: string };
+  AgentEdit: { agentId?: string; kind?: 'agent' | 'pal' };
   Learning: { agentId?: string } | undefined;
   Knowledge: undefined;
   Emergency: undefined;

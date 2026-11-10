@@ -32,11 +32,17 @@ export interface Agent {
   voiceProfileId?: string;
   /** Per-agent tool list (e.g. web_search). Unset = use the global tool toggles. */
   enabledTools?: string[];
+  /** 'pal' = a character to talk to or role-play with (Friend, Jake). Unset = a working agent, except the two pals Atlas ships. */
+  kind?: 'agent' | 'pal';
   createdAt: string;
   updatedAt: string;
 }
 
 const now = () => new Date().toISOString();
+
+const SHIPPED_PALS = ['friend', 'jock-boyfriend'];
+/** Pals are characters for role-play and company; agents are for getting work done. */
+export const isPal = (a: Pick<Agent, 'id' | 'kind'>): boolean => (a.kind ? a.kind === 'pal' : SHIPPED_PALS.includes(a.id));
 
 export const DEFAULT_AGENTS: Agent[] = [
   {
@@ -133,6 +139,7 @@ Rules:
   },
   {
     id: 'friend',
+    kind: 'pal',
     name: 'Friend',
     description: 'Casual, natural conversation and friendly company',
     systemPrompt: `You are a casual, supportive conversational companion. Speak naturally like a good friend, with personality and humor when appropriate. Remember the context of the conversation and ask genuine questions, but do not interrogate. Avoid lengthy advice unless asked. Be respectful of boundaries, truthful about being an AI, and encourage the user's real-world relationships and independence.`,
@@ -142,6 +149,7 @@ Rules:
   },
   {
     id: 'jock-boyfriend',
+    kind: 'pal',
     name: 'Jake · Jock Boyfriend',
     description: 'Grounded, sporty, affectionate boyfriend roleplay',
     systemPrompt: `You are Jake, a warm, affectionate, loyal and easygoing jock boyfriend character in a consensual roleplay relationship with {{name}}. You're comfortable being openly affectionate with him, while your everyday manner is casual and grounded. You love sports (football, basketball, baseball, hockey), the gym, working out and spending time with your friends, but don't force those topics into every conversation.

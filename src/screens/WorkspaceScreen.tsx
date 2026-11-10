@@ -44,7 +44,7 @@ export const WorkspaceScreen: React.FC = () => {
               borderWidth: 1, borderColor: section === key ? colors.primary : colors.border,
             }}>
             <Text style={{ fontWeight: '600', color: section === key ? colors.background : colors.text }}>
-              {key === 'projects' ? 'Projects' : 'Agents'}
+              {key === 'projects' ? 'Projects' : 'Agents & pals'}
             </Text>
           </TouchableOpacity>
         ))}

@@ -1,15 +1,15 @@
 import React from 'react';
 import { useWideLayout } from '../hooks/useWideLayout';
-import { View, Text, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, SectionList, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { useAgentStore, Agent } from '../stores/agentStore';
+import { isPal, useAgentStore, Agent } from '../stores/agentStore';
 
-/** Agents tab: personas with their own system prompts. Tap the circle to make one active. */
+/** Agents and pals: personas with their own system prompts. Agents get work done; pals are characters to talk or role-play with. Tap the circle to make one active. */
 export const AgentsScreen: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const navigation = useNavigation<any>();
   const { colors } = useTheme();
@@ -18,6 +18,10 @@ export const AgentsScreen: React.FC<{ embedded?: boolean }> = ({ embedded = fals
   const agents = useAgentStore((s) => s.agents);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const setActiveAgent = useAgentStore((s) => s.setActiveAgent);
+  const sections = [
+    { title: 'Agents', hint: 'Get work done', data: agents.filter((a) => !isPal(a)) },
+    { title: 'Pals', hint: 'Characters to talk or role-play with', data: agents.filter(isPal) },
+  ];
 
   const renderItem = ({ item }: { item: Agent }) => {
     const active = item.id === activeAgentId;
@@ -39,21 +43,21 @@ export const AgentsScreen: React.FC<{ embedded?: boolean }> = ({ embedded = fals
   return (
     <SafeAreaView style={styles.container} edges={embedded ? [] : ['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Agents</Text>
+        <Text style={styles.title}>Agents & pals</Text>
         <View style={styles.headerButtons}>
-          <TouchableOpacity onPress={() => navigation.navigate('Learning', {})} style={styles.addButton} accessibilityLabel="Learning mode">
-            <Icon name="trending-up" size={18} color={colors.primary} />
-            <Text style={styles.addText}>Learn</Text>
-          </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('AgentEdit', {})} style={styles.addButton} accessibilityLabel="New agent">
             <Icon name="plus" size={18} color={colors.primary} />
-            <Text style={styles.addText}>New</Text>
+            <Text style={styles.addText}>Agent</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('AgentEdit', { kind: 'pal' })} style={styles.addButton} accessibilityLabel="New pal">
+            <Icon name="plus" size={18} color={colors.primary} />
+            <Text style={styles.addText}>Pal</Text>
           </TouchableOpacity>
         </View>
       </View>
       <Text style={styles.help}>
-        An agent decides who answers and how (its system prompt). Projects hold your chats and documents.
-        Tap the circle to choose the active agent - it is used in every chat. Tap again for no agent.
+        An agent gets work done (its system prompt says how). A pal is a character to talk or role-play with.
+        Projects hold your chats and documents. Tap the circle to choose who answers in every chat. Tap again for none.
       </Text>
       <TouchableOpacity style={styles.starter} onPress={() => navigation.navigate('AtlasHub')}>
         <Icon name="compass" size={20} color={colors.primary} />
@@ -63,7 +67,15 @@ export const AgentsScreen: React.FC<{ embedded?: boolean }> = ({ embedded = fals
         </View>
         <Icon name="chevron-right" size={18} color={colors.textMuted} />
       </TouchableOpacity>
-      <FlatList data={agents} keyExtractor={(a) => a.id} renderItem={renderItem} contentContainerStyle={[styles.list, wide.column]} />
+      <SectionList sections={sections} keyExtractor={(a) => a.id} renderItem={renderItem} stickySectionHeadersEnabled={false}
+        renderSectionHeader={({ section }) => (
+          <View style={styles.sectionHead}>
+            <Text style={styles.sectionTitle}>{section.title}</Text>
+            <Text style={styles.sectionHint}>{section.hint}</Text>
+          </View>
+        )}
+        renderSectionFooter={({ section }) => (section.data.length ? null : <Text style={styles.sectionHint}>None yet. Use the + button above.</Text>)}
+        contentContainerStyle={[styles.list, wide.column]} />
     </SafeAreaView>
   );
 };
@@ -77,6 +89,9 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   addButton: { flexDirection: 'row' as const, alignItems: 'center' as const, padding: SPACING.sm },
   addText: { ...TYPOGRAPHY.body, color: colors.primary, marginLeft: 4 },
   help: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, paddingHorizontal: SPACING.lg, marginTop: SPACING.sm, lineHeight: 18 },
+  sectionHead: { marginBottom: SPACING.sm, marginTop: SPACING.sm },
+  sectionTitle: { ...TYPOGRAPHY.h2, color: colors.text },
+  sectionHint: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, marginBottom: SPACING.sm },
   list: { padding: SPACING.lg, paddingBottom: 120 },
   card: { flexDirection: 'row' as const, alignItems: 'center' as const, backgroundColor: colors.surface, borderRadius: 10, padding: SPACING.md, marginBottom: SPACING.md, ...shadows.small },
   radioWrap: { marginRight: SPACING.md },
