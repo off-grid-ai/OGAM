@@ -12,6 +12,7 @@ import { reportsMarkdown, writeReportsFile } from '../learning/lessonsFile';
 import { markSources, superscript } from '../study/replySources';
 import { useProjectStore, useAppStore } from '../stores';
 import { useLearningStore, LearnEvent, defaultLearnConfig, newItem, BankStatus } from '../learning/store';
+import { projectForSubject, pickAndAddFiles, addWorkspaceFolder, summarize } from '../learning/documents';
 import { startLearning, stopLearning, isLearning, onLearningStatus, auditNow, keepSession, newRound } from '../learning/engine';
 import { keepScreenOn } from '../atlasVoice/tts';
 import { ModelChips } from '../components/ModelChips';
@@ -77,9 +78,29 @@ export const LearningScreen: React.FC = () => {
   const bank = st?.bank || [];
   const count = (k: BankStatus) => bank.filter((b) => b.status === k).length;
   const STATUS_COLOR: Record<string, string> = { pending: colors.textMuted, approved: colors.primary, answered: '#4D7C0F', rejected: colors.error, failed: '#B45309', dropped: colors.textMuted };
-  const cycle = (id: string, cur: BankStatus) => {
-    const next: BankStatus = cur === 'approved' || cur === 'pending' ? 'rejected' : cur === 'rejected' || cur === 'dropped' || cur === 'failed' ? 'approved' : cur;
-    updateItem(agentId, id, next === 'approved' ? { status: next, reason: undefined, tries: 0 } : { status: next, reason: 'Rejected by you' });
+  // A tap on a question only opens it; approving, rejecting and removing are separate, labelled buttons.
+  const [openQ, setOpenQ] = useState<string | null>(null);
+  const decide = (id: string, status: 'approved' | 'rejected' | 'dropped') => {
+    if (status === 'approved') updateItem(agentId, id, { status, reason: undefined, tries: 0 });
+    else updateItem(agentId, id, { status, reason: status === 'dropped' ? 'Removed by you' : 'Rejected by you' });
+    setOpenQ(null);
+  };
+  // Documents the learner reads from: picked files, or the Atlas folder. They go into a project named after the subject.
+  const [docStatus, setDocStatus] = useState('');
+  const addDocuments = async (from: 'files' | 'folder') => {
+    const projectId = cfg.projectId || projectForSubject(expertName(agentId));
+    if (!cfg.projectId) setConfig(agentId, { projectId });
+    setDocStatus('Starting...');
+    try {
+      if (from === 'files') {
+        const r = await pickAndAddFiles(projectId, setDocStatus);
+        if (r) Alert.alert('Documents', summarize(r));
+      } else {
+        const { dir, result } = await addWorkspaceFolder(projectId, setDocStatus);
+        Alert.alert('Documents', `${summarize(result)}\n\nFolder read: ${dir}`);
+      }
+    } catch (e: any) { Alert.alert('Could not add documents', String(e?.message || e)); }
+    setDocStatus('');
   };
 
   useEffect(() => {
@@ -147,6 +168,16 @@ export const LearningScreen: React.FC = () => {
           </TouchableOpacity>
         ))}
       </ScrollView>
+      <Text style={styles.note}>The learner reads these documents first and cites them. Add your own: pick files, or put them in the Atlas folder on the phone and add the whole folder. They are added to the chosen project (one named after this subject is made if you chose none).</Text>
+      <View style={styles.row}>
+        <TouchableOpacity disabled={running || !!docStatus} onPress={() => addDocuments('files')} style={styles.smallBtn} testID="learn-add-files" accessibilityRole="button">
+          <Text style={styles.smallBtnText}>Add files</Text>
+        </TouchableOpacity>
+        <TouchableOpacity disabled={running || !!docStatus} onPress={() => addDocuments('folder')} style={styles.smallBtn} testID="learn-add-folder" accessibilityRole="button">
+          <Text style={styles.smallBtnText}>Add the Atlas folder</Text>
+        </TouchableOpacity>
+      </View>
+      {!!docStatus && <Text style={styles.counts} testID="learn-doc-status">{docStatus}</Text>}
 
       <View style={styles.switchRow}>
         <Text style={styles.switchText}>Also research in the offline library (WikiMed, Wikipedia...)</Text>
@@ -296,16 +327,35 @@ export const LearningScreen: React.FC = () => {
           <Text style={styles.smallBtnText}>Manager audit now</Text>
         </TouchableOpacity>
       <Text style={styles.label}>Question bank</Text>
-      <Text style={styles.note}>The learner writes it, the judge approves or rejects (the learner can argue back once), the manager can drop or add questions. Tap a question to approve or reject it yourself.</Text>
-      {bank.filter((b) => b.status !== 'dropped').slice(-40).map((b) => (
-        <TouchableOpacity key={b.id} disabled={running && b.status !== 'pending'} onPress={() => cycle(b.id, b.status)} onLongPress={() => Alert.alert('Remove question?', b.q, [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => updateItem(agentId, b.id, { status: 'dropped', reason: 'Removed by you' }) }])} style={styles.bankRow}>
-          <View style={[styles.dot, { backgroundColor: STATUS_COLOR[b.status] || colors.textMuted }]} />
-          <View style={styles.grow}>
-            <Text style={styles.chipText}>{b.q}</Text>
-            <Text style={[styles.counts, { color: STATUS_COLOR[b.status] }]}>{b.status}{b.appealed ? ' (appealed)' : ''}{b.reason ? ` - ${b.reason}` : ''}</Text>
+      <Text style={styles.note}>The learner writes it, the judge approves or rejects (the learner can argue back once), the manager can drop or add questions. Tap a question to open it. You can then approve it, reject it or remove it yourself.</Text>
+      {bank.filter((b) => b.status !== 'dropped').slice(-40).map((b) => {
+        const isOpen = openQ === b.id;
+        return (
+          <View key={b.id}>
+            <TouchableOpacity onPress={() => setOpenQ(isOpen ? null : b.id)} style={styles.bankRow} testID={`bank-row-${b.id}`} accessibilityRole="button" accessibilityState={{ expanded: isOpen }}>
+              <View style={[styles.dot, { backgroundColor: STATUS_COLOR[b.status] || colors.textMuted }]} />
+              <View style={styles.grow}>
+                <Text style={styles.chipText}>{b.q}</Text>
+                <Text style={[styles.counts, { color: STATUS_COLOR[b.status] }]}>{b.status}{b.appealed ? ' (appealed)' : ''}{b.reason ? ` - ${b.reason}` : ''}</Text>
+              </View>
+              <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+            {isOpen && (
+              <View style={styles.row}>
+                <TouchableOpacity disabled={running && b.status !== 'pending'} onPress={() => decide(b.id, 'approved')} style={styles.smallBtn} testID={`bank-approve-${b.id}`} accessibilityRole="button">
+                  <Text style={styles.smallBtnText}>Approve</Text>
+                </TouchableOpacity>
+                <TouchableOpacity disabled={running && b.status !== 'pending'} onPress={() => decide(b.id, 'rejected')} style={styles.smallBtn} testID={`bank-reject-${b.id}`} accessibilityRole="button">
+                  <Text style={styles.smallBtnText}>Reject</Text>
+                </TouchableOpacity>
+                <TouchableOpacity disabled={running && b.status !== 'pending'} onPress={() => decide(b.id, 'dropped')} style={styles.smallBtn} testID={`bank-remove-${b.id}`} accessibilityRole="button">
+                  <Text style={styles.smallBtnText}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
-        </TouchableOpacity>
-      ))}
+        );
+      })}
       <View style={[styles.row, literalStyles.s3]}>
         <TextInput style={[styles.input, styles.grow]} value={newQ} onChangeText={setNewQ} placeholder="Add your own question" placeholderTextColor={colors.textMuted} />
         <TouchableOpacity onPress={() => { if (newQ.trim()) { addItems(agentId, [newItem(newQ, st?.round || 1, 'approved')]); setNewQ(''); } }} style={styles.smallBtn}><Text style={styles.smallBtnText}>Add</Text></TouchableOpacity>

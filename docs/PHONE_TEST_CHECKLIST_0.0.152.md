@@ -1,9 +1,9 @@
-# Phone test checklist, 0.0.151
+# Phone test checklist, 0.0.152
 
 Nothing below has been run on a phone yet. Tick each line on a real device, and note what you saw when it fails.
 
 ## Install and update
-- [ ] Install the APK over the old build. Settings shows version 0.0.151 (build N).
+- [ ] Install the APK over the old build. Settings shows version 0.0.152 (build N).
 - [ ] Settings > About > Updates: "Check for updates" says you are up to date, or offers a newer build.
 - [ ] When a newer build exists: "What is new" opens the notes, and Download and install opens the Android installer.
 - [ ] The first install from Atlas asks to allow installing from this source.
@@ -45,3 +45,10 @@ Nothing below has been run on a phone yet. Tick each line on a real device, and 
 - [ ] Daily briefing options: Playback speed changes how fast the saved lines play. Stop partway, leave and reopen: it carries on from that line.
 - [ ] Chat settings > Convert the Atlas workspace folder to Markdown: .md files appear in the workspace Converted folder.
 - [ ] A fresh Teach the AI screen shows the no-experts and no-reports hints.
+
+## Teach the AI documents and question bank (0.0.152)
+- [ ] Teach the AI > Knowledge base: "Add files" picks files and adds them; a project named after the subject is made if none was chosen.
+- [ ] Put a few files in the Atlas folder and press "Add the Atlas folder": they are added once, a second press adds nothing twice.
+- [ ] Start a cycle: reports cite those documents (numbered sources).
+- [ ] More options > Question bank: tapping a question only opens it. Approve, Reject and Remove are separate buttons.
+- [ ] Switching the active agent to one with its own model still loads that model; a very long message still posts the "cut" notice.

@@ -569,6 +569,15 @@ What changed:
   model. A second, short-prompt check decides whether to use the first-word workaround: prompts under about 192 tokens run
   once first so the first word comes from the engine's single-token step; it is switched on only if the same check passes with
   it, and never for long prompts. The remembered verdict records the batch size and CPU-kernel setting.
+- 0.0.152: Teach the AI: you can give a learning cycle your own documents. "Add files" picks files on the phone and "Add the Atlas
+  folder" adds every readable file in the Atlas folder (the Converted folder is skipped; files already added are skipped; one
+  that cannot be read is reported and the rest carry on). They go into the chosen knowledge project, or one named after the
+  subject ("Taxes documents") when none is chosen, and the learner reads them first and cites them. The question bank no longer
+  rejects a question when it is tapped: a tap opens it, and Approve, Reject and Remove are separate buttons. Dependency check:
+  80 import-cycle and layering violations down to 24 (below the repo's baseline of 33): the low-power and off-grid state moved
+  to small leaf modules, an agent's model switch, loading a model for study and the long-message notice go through named hooks
+  wired in one place (src/bootstrap/atlasHooks.ts), UI asks services/engines instead of the concrete engine, and
+  navigationRef, navBar, haptics and modelRuntimeStatus moved to the layers that match what they import.
 - 0.0.151: lint clean-up across the app (no change to what anything does). Literal style values moved into module-level
   StyleSheets and colour literals into named constants; long parameter lists became option objects (speech, pack import, vault
   sealing, study cards, drills, slides, the Vulkan engine, model file attach, image accelerator choice); template strings,
