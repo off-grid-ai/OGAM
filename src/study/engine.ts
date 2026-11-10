@@ -176,7 +176,7 @@ export function parseGroundedLearningTerms(raw: string, sources: Source[]): Lear
     if (answer.length < 3 || answer.length > 14 || used.has(answer) || clue.length < 8 || isFillerTerm(answer) ||
         clue.toUpperCase().replace(/[^A-Z]/g, '').includes(answer)) continue;
     // The word must really occur in a source passage: prefer the cited one, else any.
-    const word = new RegExp('\\b' + answer + '\\b', 'i');
+    const word = new RegExp(`\\b${answer}\\b`, 'i');
     const cited = sources.find(s => s.n === Number(match[3]));
     const source = cited && word.test(cited.text) ? cited : sources.find(s => word.test(s.text));
     if (!source) continue;

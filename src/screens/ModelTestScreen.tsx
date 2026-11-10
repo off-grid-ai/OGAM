@@ -269,7 +269,7 @@ const TextModelTestScreen: React.FC = () => {
         : `${requested} layers requested (model header unreadable, count unconfirmed)`;
       setVulkanResult(`${describeVulkanStatus(runtime)}. Backend: ${loaded.backend}. ${layers}. Load + reply: ${((Date.now() - started) / 1000).toFixed(1)}s. Reply: ${output.trim() || '(empty; check model template)'}`);
     } catch (e: any) {
-      setVulkanResult('Vulkan test failed: ' + (e?.message || String(e)));
+      setVulkanResult(`Vulkan test failed: ${e?.message || String(e)}`);
     } finally {
       try { await vulkanEngine.unload(); } catch { /* missing runtime is reported above */ }
       setVulkanBusy(false);

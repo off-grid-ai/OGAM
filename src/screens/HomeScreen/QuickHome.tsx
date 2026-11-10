@@ -51,7 +51,7 @@ export const QuickHomeScreen: React.FC<Props> = ({ navigation, mode }) => {
   const items = (focus ? shownKeys.filter((k) => FOCUS.includes(k)) : shownKeys).map(byKey);
   const hiddenSet = new Set(prefs?.hidden ?? []);
   const save = (next: { order?: string[]; hidden?: string[] }) => updateSettings({ homeTiles: next });
-  const fontSize = simple ? 21 : compact ? 16 : grid ? 18 : 18;
+  const fontSize = simple ? 21 : compact ? 16 : 18;
   const padding = compact ? 10 : simple ? 22 : grid ? 16 : 17;
   const go = (item: Destination) => {
     if (item.action === 'load') setLoadOpen(true);

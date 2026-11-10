@@ -64,7 +64,7 @@ const TITLES = [
 ] as const;
 const emptyItems = (): TestItem[] => TITLES.map(([key, title]) => ({ key, title, status: 'wait', detail: '' }));
 const SMILE = 'A single simple flat yellow smiley face icon: one bright yellow round circle with two small black dot eyes and one curved black smiling mouth, centered on a plain white background, clean vector art, no text.';
-const fmt = (s: number) => Math.floor(s / 60) + 'm ' + s % 60 + 's';
+const fmt = (s: number) => `${Math.floor(s / 60)}m ${s % 60}s`;
 function settingsFor(model: ONNXImageModel, mode: ImageTestMode) {
   return imageTestPreset(model, mode, useAppStore.getState().settings);
 }
@@ -183,26 +183,26 @@ export const ImageModelTestScreen: React.FC = () => {
       }
       update('files', 'run', 'Checking model family and attached components...');
       if (!isRunnableNativeModel(model)) {
-        throw new Error('Unsupported architecture: ' + imageFamilyDisplay(model.nativeImageFamily));
+        throw new Error(`Unsupported architecture: ${imageFamilyDisplay(model.nativeImageFamily)}`);
       }
       const missing = getMissingImageSupportGuides(model);
       if (missing.length) {
-        throw new Error(imageFamilyDisplay(model.nativeImageFamily) +
-          ' needs: ' + missing.map(item => item.label).join(', ') +
-          '. Open My models for direct links and attachment controls.');
+        throw new Error(`${imageFamilyDisplay(model.nativeImageFamily) 
+          } needs: ${missing.map(item => item.label).join(', ') 
+          }. Open My models for direct links and attachment controls.`);
       }
       update('files', model.nativeImageFamily === 'unknown' ? 'warn' : 'ok',
-        (model.nativeImageFamily || model.backend || 'image').toUpperCase() +
-        ' family. LoRAs ' + (includeLoRA ? 'on' : 'off') +
-        '; upscaler ' + (includeUpscaler ? 'on' : 'off') + '.');
+        `${(model.nativeImageFamily || model.backend || 'image').toUpperCase() 
+        } family. LoRAs ${includeLoRA ? 'on' : 'off' 
+        }; upscaler ${includeUpscaler ? 'on' : 'off'}.`);
       if (cancelRequested.current) return;
 
       update('ram', 'run', 'Checking available RAM...');
       const mem = await activeModelService.checkMemoryForModel(model.id, 'image');
       if (!mem.canLoad && !force) { setCanForce(true); throw new Error('The model exceeds the safe memory budget. Free RAM, choose a smaller model, or tap Load anyway.'); }
-      update('ram', !mem.canLoad || mem.severity === 'warning' ? 'warn' : 'ok', (!mem.canLoad ? 'Forced. ' : '') +
-        'Estimated ' + mem.requiredMemoryGB.toFixed(1) + ' GB required, ' +
-        mem.availableMemoryGB.toFixed(1) + ' GB usable.');
+      update('ram', !mem.canLoad || mem.severity === 'warning' ? 'warn' : 'ok', `${!mem.canLoad ? 'Forced. ' : '' 
+        }Estimated ${mem.requiredMemoryGB.toFixed(1)} GB required, ${ 
+        mem.availableMemoryGB.toFixed(1)} GB usable.`);
       if (cancelRequested.current) return;
 
       update('engine', 'run', 'Selecting and checking image accelerator...');
@@ -215,16 +215,16 @@ export const ImageModelTestScreen: React.FC = () => {
         },
       );
       if (cancelRequested.current) return;
-      update('engine', 'run', imageDecision.note + '. Loading model...');
+      update('engine', 'run', `${imageDecision.note}. Loading model...`);
       const t0 = Date.now();
       await activeModelService.loadImageModel(model.id, undefined, force ? { override: true } : undefined);
       if (cancelRequested.current) return;
       if (!await localDreamGeneratorService.isModelLoaded()) throw new Error('The image engine did not report a loaded model.');
       const backend = await localDreamGeneratorService.getLoadedBackend();
-      update('engine', 'ok', (backend || model.backend || 'unknown').toUpperCase() +
-        ' / ' + imageDecision.selected.toUpperCase() +
-        ' selected in ' + ((Date.now() - t0) / 1000).toFixed(1) +
-        's. Loading alone does not prove that the checkpoint will render.');
+      update('engine', 'ok', `${(backend || model.backend || 'unknown').toUpperCase() 
+        } / ${imageDecision.selected.toUpperCase() 
+        } selected in ${((Date.now() - t0) / 1000).toFixed(1) 
+        }s. Loading alone does not prove that the checkpoint will render.`);
 
       update('diffusion', 'run', 'Initializing diffusion. The first step may take several minutes...');
       generating.current = true;
@@ -239,13 +239,13 @@ export const ImageModelTestScreen: React.FC = () => {
       }, progress => {
         if (cancelRequested.current || gone.current) return;
         setDiffusionStep(progress.step);
-        update('diffusion', 'run', 'Step ' + progress.step + '/' +
-          (progress.totalSteps || cfg.steps) + '; ' + fmt(Math.floor((Date.now() - started.current) / 1000)));
+        update('diffusion', 'run', `Step ${progress.step}/${ 
+          progress.totalSteps || cfg.steps}; ${fmt(Math.floor((Date.now() - started.current) / 1000))}`);
       });
       generating.current = false;
       if (cancelRequested.current) return;
       if (!image?.imagePath) throw new Error('Diffusion finished without creating an image.');
-      update('diffusion', 'ok', cfg.steps + ' diffusion steps requested and PNG output returned.');
+      update('diffusion', 'ok', `${cfg.steps} diffusion steps requested and PNG output returned.`);
 
       update('output', 'run', 'Checking the generated image...');
       const filePath = image.imagePath.replace(/^file:\/\//, '');
@@ -257,10 +257,10 @@ export const ImageModelTestScreen: React.FC = () => {
       }
       if (!gone.current) { setResult(image); setDecision(testMode === 'smoke' ? 'engine' : 'review'); }
       update('output', testMode === 'smoke' ? 'ok' : 'warn',
-        image.width + 'x' + image.height + ' PNG (' +
-        Math.round(Number(info.size) / 1024) + ' KB). ' +
-        (testMode === 'smoke' ? 'Native 1-step engine test passed; artistic quality was not tested.' :
-          'Confirm the subject visually before marking success.'));
+        `${image.width}x${image.height} PNG (${ 
+        Math.round(Number(info.size) / 1024)} KB). ${ 
+        testMode === 'smoke' ? 'Native 1-step engine test passed; artistic quality was not tested.' :
+          'Confirm the subject visually before marking success.'}`);
     } catch (err: any) {
       if (!cancelRequested.current && !gone.current) {
         const message = err?.message || String(err || 'Image generation failed');
@@ -296,7 +296,7 @@ export const ImageModelTestScreen: React.FC = () => {
     status === 'fail' ? colors.error : status === 'warn' ? '#b78a26' :
     status === 'run' ? colors.primary : colors.textMuted;
   const imageUri = result?.imagePath ?
-    (result.imagePath.startsWith('file://') ? result.imagePath : 'file://' + result.imagePath) : '';
+    (result.imagePath.startsWith('file://') ? result.imagePath : `file://${result.imagePath}`) : '';
 
   return (
     <SafeAreaView style={[literalStyles.s1, { backgroundColor: colors.background }]} edges={['top']}>
@@ -356,8 +356,8 @@ export const ImageModelTestScreen: React.FC = () => {
                   </Text>
                   <TouchableOpacity onPress={() => {
                     void Share.share({ message:
-                      'Atlas Vulkan probe - ' + gpuDiagnostic.detail +
-                      '\nDevice list: ' + gpuDiagnostic.nativeOutput }).catch(() => {});
+                      `Atlas Vulkan probe - ${gpuDiagnostic.detail 
+                      }\nDevice list: ${gpuDiagnostic.nativeOutput}` }).catch(() => {});
                   }} style={literalStyles.s16}>
                     <Text style={[{ color: colors.primary }, literalStyles.s12]}>Share GPU diagnostics</Text>
                   </TouchableOpacity>
@@ -369,7 +369,7 @@ export const ImageModelTestScreen: React.FC = () => {
             </>}
             <TouchableOpacity onPress={running ? stop : () => doTest()} style={[literalStyles.s17, { backgroundColor: running ? colors.error : colors.primary }, literalStyles.s18]}>
               <Text style={literalStyles.s19}>
-                {running ? 'Cancel test · ' + fmt(elapsed) : decision || failure ? 'Test again' : 'Start test'}
+                {running ? `Cancel test · ${fmt(elapsed)}` : decision || failure ? 'Test again' : 'Start test'}
               </Text>
             </TouchableOpacity>
             {canForce && !running && (
@@ -390,10 +390,10 @@ export const ImageModelTestScreen: React.FC = () => {
                     cpuState === 'idle' ? 'no increase on last sample' : 'unavailable'}.
                   {' '}{runtime?.deviceLabel || ''}.
                   {runtime?.secondsSinceStep !== undefined && runtime.secondsSinceStep >= 0
-                    ? ' Last completed step ' + Math.round(runtime.secondsSinceStep) + ' seconds ago.'
+                    ? ` Last completed step ${Math.round(runtime.secondsSinceStep)} seconds ago.`
                     : ' No completed diffusion step reported yet.'}
                   {runtime?.secondsSinceLog !== undefined && runtime.secondsSinceLog >= 0
-                    ? ' Last engine output ' + Math.round(runtime.secondsSinceLog) + ' seconds ago.' : ''}
+                    ? ` Last engine output ${Math.round(runtime.secondsSinceLog)} seconds ago.` : ''}
                 </Text>
                 {elapsed >= 120 && (
                   <Text style={literalStyles.s24}>

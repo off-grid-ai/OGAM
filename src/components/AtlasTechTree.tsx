@@ -52,7 +52,7 @@ export function AtlasTechTree() {
       const enabled=!done&&prerequisites&&tech.cost<=science&&!won;
       return <TouchableOpacity key={tech.id} disabled={!enabled} onPress={()=>research(tech)} style={[literalStyles.s4, { borderColor:colors.border, backgroundColor:colors.surface, opacity: enabled||done ? OPACITY_1 : OPACITY_0_55 }]}>
         <Text style={[{ color:colors.text }, literalStyles.s5]}>{done?'✓ ':prerequisites?'◯ ':'🔒 '}{tech.name} · {tech.cost} science</Text>
-        <Text style={[{ color:colors.textSecondary }, literalStyles.s6]}>{done?'Researched':tech.requires.length?'Requires: '+tech.requires.map(id=>TECH_TREE.find(t=>t.id===id)?.name).join(', '):'Available from the start'}</Text>
+        <Text style={[{ color:colors.textSecondary }, literalStyles.s6]}>{done?'Researched':tech.requires.length?`Requires: ${tech.requires.map(id=>TECH_TREE.find(t=>t.id===id)?.name).join(', ')}`:'Available from the start'}</Text>
       </TouchableOpacity>;
     })}
     <TouchableOpacity onPress={restart} style={[literalStyles.s7, { backgroundColor:colors.surface }, literalStyles.s8]}><Text style={[{ color:colors.text }, literalStyles.s9]}>Restart civilization</Text></TouchableOpacity>

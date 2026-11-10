@@ -120,12 +120,12 @@ const numbered = (items: { q: string }[]) => items.map((b, i) => `${i + 1}. ${b.
 function rulings(text: string, n: number): Map<number, { ok: boolean; reason: string }> {
   const out = new Map<number, { ok: boolean; reason: string }>();
   for (const line of text.split('\n')) {
-    const clean = line.replace(/\*\*/g, '');
+    const plain = line.replace(/\*\*/g, '');
     const V = '(APPROVE[D]?|ACCEPT(?:ED)?|PASS(?:ED)?|OK|REJECT(?:ED)?|FAIL(?:ED)?)';
     const V2 = '(APPROVE[D]?|ACCEPT(?:ED)?|PASS(?:ED)?|REJECT(?:ED)?|FAIL(?:ED)?)'; // later on the line: no bare "ok" (questions use it)
     // Prefer a verdict right after the number; otherwise the first verdict word later on the line.
-    const m = clean.match(new RegExp(`^\\s*(?:[-*•]\\s*)?(?:Q(?:uestion)?|R(?:eport)?|#)?\\s*(\\d{1,2})\\s*[:.)\\-–—]?\\s*(?:[-–—:]\\s*)?${V}\\b\\s*[:\\-–—(]*\\s*(.*)$`, 'i'))
-      || clean.match(new RegExp(`^\\s*(?:[-*•]\\s*)?(?:Q(?:uestion)?|R(?:eport)?|#)?\\s*(\\d{1,2})\\b[^\\n]*?[\\s:–—-]${V2}\\b\\s*[:\\-–—(]*\\s*(.*)$`, 'i'));
+    const m = plain.match(new RegExp(`^\\s*(?:[-*•]\\s*)?(?:Q(?:uestion)?|R(?:eport)?|#)?\\s*(\\d{1,2})\\s*[:.)\\-–—]?\\s*(?:[-–—:]\\s*)?${V}\\b\\s*[:\\-–—(]*\\s*(.*)$`, 'i'))
+      || plain.match(new RegExp(`^\\s*(?:[-*•]\\s*)?(?:Q(?:uestion)?|R(?:eport)?|#)?\\s*(\\d{1,2})\\b[^\\n]*?[\\s:–—-]${V2}\\b\\s*[:\\-–—(]*\\s*(.*)$`, 'i'));
     if (!m) continue;
     const i = Number(m[1]);
     if (i < 1 || i > n) continue;

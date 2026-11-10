@@ -57,7 +57,7 @@ export async function listFiles(path?: string): Promise<string> {
   if (!(await RNFS.exists(dir))) return `Folder not found: ${dir}`;
   const items = (await RNFS.readDir(dir)).sort((a: any, b: any) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name));
   if (!items.length) return `${dir} is empty.`;
-  return `${dir}\n` + items.slice(0, 200).map((it: any) => (it.isDirectory() ? `[folder] ${it.name}/` : `${it.name} (${kb(Number(it.size))})`)).join('\n');
+  return `${dir}\n${items.slice(0, 200).map((it: any) => (it.isDirectory() ? `[folder] ${it.name}/` : `${it.name} (${kb(Number(it.size))})`)).join('\n')}`;
 }
 
 /** Last time the assistant read one of your files (used to double-check web requests after it). */

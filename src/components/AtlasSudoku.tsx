@@ -35,7 +35,7 @@ export function AtlasSudoku() {
     setBoard(next);
   };
   return <View style={literalStyles.s1}>
-    <Text style={[{ color: colors.text }, literalStyles.s2]}>Sudoku · {sudokuSolved(board) ? 'Solved!' : 'Mistakes: ' + mistakes}</Text>
+    <Text style={[{ color: colors.text }, literalStyles.s2]}>Sudoku · {sudokuSolved(board) ? 'Solved!' : `Mistakes: ${mistakes}`}</Text>
     <Text style={{ color: colors.textSecondary }}>Tap a blank square, then choose 1–9. Rows, columns and 3×3 boxes must contain no duplicates.</Text>
     <View style={literalStyles.s3}>
       {board.map((number,index) => <TouchableOpacity key={index} onPress={() => setSelected(index)} style={[literalStyles.s4, { borderColor: selected===index ? colors.primary : colors.border, borderWidth: selected===index ? BORDERWIDTH_2 : BORDERWIDTH_1, backgroundColor: colors.surface }, literalStyles.s5]}>

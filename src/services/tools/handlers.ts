@@ -169,12 +169,12 @@ async function handleWebSearch(query: string): Promise<string> {
     if (failed.length && failed.length === notes.length) throw new Error(`Search failed (offline or blocked): ${failed.join('; ')}`);
     return `No results found for "${query}".`;
   }
-  return `Results from ${provider}:\n\n` + results
+  return `Results from ${provider}:\n\n${results
     .map((r, i) => {
       const heading = r.url ? `[${r.title}](${r.url})` : r.title;
       return `${i + 1}. ${heading}\n   ${r.snippet}`;
     })
-    .join('\n\n');
+    .join('\n\n')}`;
 }
 
 type SearchResult = { title: string; snippet: string; url?: string };

@@ -53,7 +53,8 @@ module.exports = {
     'react-native/no-unused-styles': 'error',
     'react-native/no-inline-styles': 'error',
     'react-native/no-color-literals': 'error',
-    'react-native/no-raw-text': 'error',
+    // Banner and Title (components/games/kit) render their children inside a <Text>.
+    'react-native/no-raw-text': ['error', { skip: ['Banner', 'Title'] }],
     'react-native/no-single-element-style-arrays': 'error',
 
     // SonarJS — every rule stays at the recommended `error` (a real forward guard on new code)

@@ -254,10 +254,10 @@ export const useChatStore = create<ChatState>()(
         }
         if (into && conv?.isPrivate) throw new Error('Temporary private chats are not saved, so they cannot join a protected project.');
         set((state) => ({
-          conversations: state.conversations.map((conv) =>
-            conv.id !== conversationId
-              ? conv
-              : { ...conv, projectId: projectId || undefined, updatedAt: nextUpdatedAt(conv.updatedAt) }
+          conversations: state.conversations.map((c) =>
+            c.id !== conversationId
+              ? c
+              : { ...c, projectId: projectId || undefined, updatedAt: nextUpdatedAt(c.updatedAt) }
           ),
         }));
         // Joining a protected project: seal the chat with the project's PIN (a chat that already

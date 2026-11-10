@@ -134,7 +134,7 @@ export function AtlasGames({ visible, onClose }: { visible: boolean; onClose: ()
   return <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
     <ScrollView contentContainerStyle={[literalStyles.s4, { backgroundColor: colors.background }]}>
       <Text style={[literalStyles.s5, { color: colors.text }, literalStyles.s6]}>Atlas Offline Arcade</Text>
-      {press('← ' + (game === 'menu' ? 'Close' : 'All games'), () => game === 'menu' ? onClose() : setGame('menu'))}
+      {press(`← ${game === 'menu' ? 'Close' : 'All games'}`, () => game === 'menu' ? onClose() : setGame('menu'))}
       {game === 'menu' && <>
         <Text style={[{ color: colors.textSecondary }, literalStyles.s7]}>Playable locally, with no model, connection or account required.</Text>
         {press('Tic-Tac-Toe — play against Atlas', () => start('tic'))}

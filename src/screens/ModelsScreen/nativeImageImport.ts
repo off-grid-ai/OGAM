@@ -43,8 +43,8 @@ export async function importNativeImageFile(uri: string, fileName: string, deps:
   }
   const name = fileName.replace(/\.(safetensors?|gguf)$/i, '').replace(/[_-]+/g, ' ').trim();
   const safeName = name.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
-  const modelId = 'local_image_' + safeName + '_' + Date.now();
-  const modelDir = modelManager.getImageModelsDirectory() + '/' + modelId;
+  const modelId = `local_image_${safeName}_${Date.now()}`;
+  const modelDir = `${modelManager.getImageModelsDirectory()}/${modelId}`;
   const subscription = new NativeEventEmitter(module).addListener('LocalDreamConvert',
     (event: { stage?: string; fraction?: number }) => {
       if (event.stage === 'copy') {
@@ -65,7 +65,7 @@ export async function importNativeImageFile(uri: string, fileName: string, deps:
     const model: ONNXImageModel = {
       id: modelId,
       name: name || fileName,
-      description: 'Original ' + fileName.split('.').pop()?.toUpperCase() + ' image weights (no conversion)',
+      description: `Original ${fileName.split('.').pop()?.toUpperCase()} image weights (no conversion)`,
       modelPath: r.modelDir,
       backend: 'sdcpp',
       nativeImageFamily: family,
@@ -79,7 +79,7 @@ export async function importNativeImageFile(uri: string, fileName: string, deps:
     if (!useAppStore.getState().activeImageModelId) {
       useAppStore.getState().setActiveImageModelId(modelId);
     }
-    deps.setAlertState(showAlert('Image model imported', name + ' imported without changing its original weights. Add LoRAs or encoder files in My models.'));
+    deps.setAlertState(showAlert('Image model imported', `${name} imported without changing its original weights. Add LoRAs or encoder files in My models.`));
     return true;
   } finally {
     subscription.remove();

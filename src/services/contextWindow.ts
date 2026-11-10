@@ -86,7 +86,7 @@ export async function fitMessagesToContext<T extends ContextMessage>(options: {
     const messageWithLength = (n: number): T => ({
       ...newest,
       content: n >= newest.content.length ? newest.content :
-        '[Earlier message content omitted to fit active context]\n' + newest.content.slice(-n),
+        `[Earlier message content omitted to fit active context]\n${newest.content.slice(-n)}`,
     });
     let low = 0, high = newest.content.length;
     // Retain the latest user request and its ending instructions.

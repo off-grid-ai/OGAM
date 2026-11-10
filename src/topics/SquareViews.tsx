@@ -151,7 +151,7 @@ export function OrderView({ content, onDone }: ViewProps<'order'>) {
   const [chosen, setChosen] = useState<number[]>([]);
   const [mistakes, setMistakes] = useState(0);
   const [checked, setChecked] = useState<'right' | 'wrong' | null>(null);
-  const check = () => {
+  const checkAnswer = () => {
     const ok = chosen.every((n, i) => n === i);
     setChecked(ok ? 'right' : 'wrong');
     if (!ok) setMistakes(mistakes + 1);
@@ -174,7 +174,7 @@ export function OrderView({ content, onDone }: ViewProps<'order'>) {
       {checked === 'wrong' && <Text style={{ color: t.colors.error }} testID="order-wrong">Not the right order yet. Tap a step to take it back.</Text>}
       {checked === 'right'
         ? <Button title="Done" onPress={() => onDone(starsForShare(1 / (1 + mistakes)))} testID="order-done" />
-        : <Button title="Check" disabled={chosen.length < content.steps.length} onPress={check} testID="order-check" />}
+        : <Button title="Check" disabled={chosen.length < content.steps.length} onPress={checkAnswer} testID="order-check" />}
     </View>
   );
 }
@@ -187,7 +187,7 @@ export function PracticeView({ content, onDone }: ViewProps<'practice'>) {
   const [error, setError] = useState<string | null>(null);
   const [skipped, setSkipped] = useState(false);
   const [hint, setHint] = useState(false);
-  const check = async () => {
+  const checkAnswer = async () => {
     setBusy(true); setError(null);
     try { setResult(await gradeAnswer({ task: content.task, model: content.model, rubric: content.rubric, answer })); } catch (e: any) { setError(String(e?.message || e)); }
     setBusy(false);
@@ -203,7 +203,7 @@ export function PracticeView({ content, onDone }: ViewProps<'practice'>) {
       {!!error && <Text style={{ color: t.colors.error }} testID="practice-error">{error}</Text>}
       {!finished && (
         <>
-          <Button title="Check my answer" disabled={!answer.trim() || busy} onPress={check} testID="practice-check" />
+          <Button title="Check my answer" disabled={!answer.trim() || busy} onPress={checkAnswer} testID="practice-check" />
           <TouchableOpacity onPress={() => setSkipped(true)} testID="practice-skip"><Text style={t.meta}>Show a good answer instead</Text></TouchableOpacity>
         </>
       )}
@@ -225,7 +225,7 @@ export function NumericView({ content, onDone }: ViewProps<'numeric'>) {
   const [tries, setTries] = useState(0);
   const [result, setResult] = useState<'right' | 'wrong' | null>(null);
   const [shown, setShown] = useState(false);
-  const check = () => {
+  const checkAnswer = () => {
     const value = Number(typed.replace(/[,\s]/g, '').replace(/[^\d.+\-eE]/g, ''));
     const ok = Number.isFinite(value) && Math.abs(value - content.answer) <= Math.max(content.tolerance, 1e-9);
     setTries(tries + 1);
@@ -242,7 +242,7 @@ export function NumericView({ content, onDone }: ViewProps<'numeric'>) {
       </View>
       {result === 'wrong' && <Text style={{ color: t.colors.error }} testID="numeric-wrong">Not quite. Check the working and try again{tries >= 2 ? ', or look at the working below' : ''}.</Text>}
       {result === 'right' && <Text style={{ color: t.colors.primary }} testID="numeric-right">Correct: {content.answer} {content.unit}{content.checked ? ' (checked with the calculator)' : ''}</Text>}
-      {result !== 'right' && <Button title="Check" disabled={!typed.trim()} onPress={check} testID="numeric-check" />}
+      {result !== 'right' && <Button title="Check" disabled={!typed.trim()} onPress={checkAnswer} testID="numeric-check" />}
       {result !== 'right' && !shown && <TouchableOpacity onPress={() => setShown(true)} testID="numeric-show"><Text style={t.meta}>Show the working</Text></TouchableOpacity>}
       {shown && (
         <View style={[styles.box, t.card]} testID="numeric-working">
@@ -327,7 +327,7 @@ export function TypedView({ content, onDone }: ViewProps<'typed'>) {
   const [right, setRight] = useState(0);
   const item = content.items[i];
   const last = i === content.items.length - 1;
-  const check = () => {
+  const checkAnswer = () => {
     const ok = answersMatch(typed, item.answer, item.alternatives);
     setState(ok ? 'right' : 'wrong');
     if (ok) setRight(right + 1);
@@ -342,7 +342,7 @@ export function TypedView({ content, onDone }: ViewProps<'typed'>) {
       <MarkdownText>{item.prompt}</MarkdownText>
       <TextInput value={typed} onChangeText={setTyped} editable={state === 'asking'} multiline={content.mode === 'fix'} autoCapitalize="none" autoCorrect={false}
         placeholder="Your answer" placeholderTextColor={t.colors.textMuted} style={[styles.numberInput, { color: t.colors.text, borderColor: t.colors.border }]} testID="typed-input" />
-      {state === 'asking' && <Button title="Check" disabled={!typed.trim()} onPress={check} testID="typed-check" />}
+      {state === 'asking' && <Button title="Check" disabled={!typed.trim()} onPress={checkAnswer} testID="typed-check" />}
       {state === 'right' && <Text style={{ color: t.colors.primary }} testID="typed-right">Right.</Text>}
       {state === 'wrong' && <Text style={{ color: t.colors.error }} testID="typed-wrong">Not quite. The answer: {item.answer}</Text>}
       {state !== 'asking' && !!item.why && <Text style={t.meta}>{item.why}</Text>}
@@ -438,7 +438,7 @@ export function DictationView({ content, onDone }: ViewProps<'dictation'>) {
   const last = i === content.sentences.length - 1;
   const play = () => { try { require('../atlasVoice/tts').speakIn(sentence, content.lang, 'dictation'); } catch { /* no voice on this phone */ } };
   React.useEffect(play, [i]); // eslint-disable-line react-hooks/exhaustive-deps
-  const check = () => {
+  const checkAnswer = () => {
     const ok = answersMatch(typed, sentence);
     setTries(tries + 1);
     if (ok) { setState('right'); setRight(right + (tries === 0 ? 1 : 0.5)); } else if (tries >= 1) setState('wrong'); else setTyped('');
@@ -454,7 +454,7 @@ export function DictationView({ content, onDone }: ViewProps<'dictation'>) {
       <TextInput value={typed} onChangeText={setTyped} editable={state === 'asking'} multiline autoCapitalize="none" autoCorrect={false} placeholder="Type what you hear"
         placeholderTextColor={t.colors.textMuted} style={[styles.numberInput, { color: t.colors.text, borderColor: t.colors.border }]} testID="dictation-input" />
       {tries === 1 && state === 'asking' && <Text style={t.meta} testID="dictation-again">Not quite. Listen again and try once more.</Text>}
-      {state === 'asking' && <Button title="Check" disabled={!typed.trim()} onPress={check} testID="dictation-check" />}
+      {state === 'asking' && <Button title="Check" disabled={!typed.trim()} onPress={checkAnswer} testID="dictation-check" />}
       {state === 'right' && <Text style={{ color: t.colors.primary }} testID="dictation-right">Right: {sentence}</Text>}
       {state === 'wrong' && <Text style={{ color: t.colors.error }} testID="dictation-wrong">It was: {sentence}</Text>}
       {state !== 'asking' && <Button title={last ? 'Finish' : 'Next'} onPress={next} testID="dictation-next" />}

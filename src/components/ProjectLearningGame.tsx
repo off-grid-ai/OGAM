@@ -82,14 +82,14 @@ export function ProjectLearningGame({ activity, onOpenSource }: Props) {
           const highlighted = activeEntry && Array.from({ length: activeEntry.answer.length }, (_, k) =>
             (activeEntry.row + (activeEntry.direction === 'down' ? k : 0)) * crossword.size +
             activeEntry.col + (activeEntry.direction === 'across' ? k : 0)).includes(i);
-          return <View key={i} style={[{ width: cellSize, height: cellSize, borderWidth: char ? BORDERWIDTH_0_5 : BORDERWIDTH_0, borderColor: colors.textMuted, backgroundColor: !char ? colors.background : highlighted ? colors.primary + '44' : colors.surface }, literalStyles.s8]}>
+          return <View key={i} style={[{ width: cellSize, height: cellSize, borderWidth: char ? BORDERWIDTH_0_5 : BORDERWIDTH_0, borderColor: colors.textMuted, backgroundColor: !char ? colors.background : highlighted ? `${colors.primary}44` : colors.surface }, literalStyles.s8]}>
             {!!char && <Text style={[{ color: colors.text }, literalStyles.s9, { fontSize: Math.max(10, cellSize - 6) }]}>{shownLetters[i]}</Text>}
             {!!char && !shownLetters[i] && crossword.entries.some(e => e.row === row && e.col === col) && <Text style={[literalStyles.s10, { color: colors.textMuted }]}>{crossword.entries.find(e => e.row === row && e.col === col)?.number}</Text>}
           </View>;
         })}
       </View>
-      {banner(solved.length === crossword.entries.length ? 'All clues solved!' : 'Solved ' + solved.length + ' of ' + crossword.entries.length + ' clues')}
-      {crossword.entries.map(entry => <TouchableOpacity key={entry.id} onPress={() => { setSelected(entry.id); setEntryText(''); setNotice(''); }} style={[literalStyles.s11, { backgroundColor: selected === entry.id ? colors.primary + '22' : colors.surface }, literalStyles.s12]}>
+      {banner(solved.length === crossword.entries.length ? 'All clues solved!' : `Solved ${solved.length} of ${crossword.entries.length} clues`)}
+      {crossword.entries.map(entry => <TouchableOpacity key={entry.id} onPress={() => { setSelected(entry.id); setEntryText(''); setNotice(''); }} style={[literalStyles.s11, { backgroundColor: selected === entry.id ? `${colors.primary}22` : colors.surface }, literalStyles.s12]}>
         <Text style={[{ color: colors.text }, literalStyles.s13]}>{entry.number} {entry.direction === 'across' ? 'Across' : 'Down'} · {entry.clue} ({entry.answer.length}) {solved.includes(entry.id) ? '✓' : ''}</Text>
         {sourceLinks(entry.src)}
       </TouchableOpacity>)}
@@ -115,18 +115,18 @@ export function ProjectLearningGame({ activity, onOpenSource }: Props) {
     const tap = (index: number) => {
       if (firstCell === null) { setFirstCell(index); setNotice('Now tap the last letter of the word.'); return; }
       const matching = wordSearch.entries.find(e => !solved.includes(e.id) && matchWordSearch(e, firstCell, index, wordSearch.size));
-      if (matching) { setSolved(ids => [...ids, matching.id]); setNotice('Found ' + matching.answer + '!'); }
+      if (matching) { setSolved(ids => [...ids, matching.id]); setNotice(`Found ${matching.answer}!`); }
       else setNotice('No matching word along those cells. Try again.');
       setFirstCell(null);
     };
     return <View>
       {banner('Find words from the project passages. Tap a word’s first letter, then its last letter; either direction works.')}
       <View style={[literalStyles.s6, { width: cellSize * wordSearch.size }, literalStyles.s7]}>
-        {wordSearch.cells.map((char, index) => <TouchableOpacity key={index} onPress={() => tap(index)} style={[{ width: cellSize, height: cellSize }, literalStyles.s16, { backgroundColor: foundIndices.has(index) ? BACKGROUNDCOLOR_22C55E44 : firstCell === index ? colors.primary + '55' : colors.surface }]}>
+        {wordSearch.cells.map((char, index) => <TouchableOpacity key={index} onPress={() => tap(index)} style={[{ width: cellSize, height: cellSize }, literalStyles.s16, { backgroundColor: foundIndices.has(index) ? BACKGROUNDCOLOR_22C55E44 : firstCell === index ? `${colors.primary}55` : colors.surface }]}>
           <Text style={[{ color: colors.text, fontSize: Math.max(11, cellSize - 7) }, literalStyles.s13]}>{char}</Text>
         </TouchableOpacity>)}
       </View>
-      {banner(notice || ('Found ' + solved.length + ' of ' + wordSearch.entries.length + ' words'))}
+      {banner(notice || (`Found ${solved.length} of ${wordSearch.entries.length} words`))}
       {wordSearch.entries.map(entry => <View key={entry.id} style={literalStyles.s17}>
         <Text style={{ color: colors.text }}>{solved.includes(entry.id) ? '✓ ' : '○ '}{entry.clue} ({entry.answer.length} letters)</Text>
         {solved.includes(entry.id) && <Text style={[{ color: colors.primary }, literalStyles.s13]}>{entry.answer}</Text>}
@@ -146,11 +146,11 @@ export function ProjectLearningGame({ activity, onOpenSource }: Props) {
         {termsWithOptions.map((candidate, i) => <TouchableOpacity key={i} disabled={matchingPicked !== null} onPress={() => {
           setMatchingPicked(candidate.answer);
           if (candidate.answer === current.answer) setMatchingScore(score => score + 1);
-        }} style={[literalStyles.s20, { borderColor: colors.border }, literalStyles.s21, { backgroundColor: matchingPicked === candidate.answer ? colors.primary + '33' : colors.surface }]}>
+        }} style={[literalStyles.s20, { borderColor: colors.border }, literalStyles.s21, { backgroundColor: matchingPicked === candidate.answer ? `${colors.primary}33` : colors.surface }]}>
           <Text style={{ color: colors.text }}>{candidate.answer}</Text>
         </TouchableOpacity>)}
         {matchingPicked !== null && <View>
-          {banner(matchingPicked === current.answer ? 'Correct!' : 'Correct answer: ' + current.answer)}
+          {banner(matchingPicked === current.answer ? 'Correct!' : `Correct answer: ${current.answer}`)}
           {button('Next clue', () => { setMatchIndex(index => index + 1); setMatchingPicked(null); })}
         </View>}
       </View> : <Text style={[{ color: colors.text }, literalStyles.s22]}>Complete! Score: {matchingScore} / {termsWithOptions.length}</Text>}
