@@ -109,7 +109,7 @@ function docxRuns(paragraph: string): string {
     if (!text) continue;
     const bold = /<w:b\/>|<w:b w:val="(?:1|true)"\/>/.test(run);
     const italic = /<w:i\/>|<w:i w:val="(?:1|true)"\/>/.test(run);
-    out += text.trim() && (bold || italic) ? text.replace(/^(\s*)(.*?)(\s*)$/s, (...g: string[]) => emphasise(g[1], g[2], g[3], bold, italic)) : text;
+    out += text.trim() && (bold || italic) ? text.replace(/^(\s*)(.*?)(\s*)$/s, (...g: string[]) => emphasise(g.slice(1, 4), bold, italic)) : text;
   }
   return out;
 }
@@ -139,7 +139,7 @@ export function docxToMarkdown(xml: string): string {
 }
 
 /** A run's text wrapped in bold and/or italic marks, keeping the spaces outside the marks. */
-const emphasise = (before: string, text: string, after: string, bold: boolean, italic: boolean): string => {
+const emphasise = ([before, text, after]: string[], bold: boolean, italic: boolean): string => {
   const mark = bold && italic ? '***' : bold ? '**' : '*';
   return `${before}${mark}${text}${mark}${after}`;
 };

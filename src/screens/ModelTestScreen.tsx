@@ -18,6 +18,7 @@ import { ImageModelTestScreen } from './ImageModelTestScreen';
 import { isOverridableMemoryError } from '../utils/modelLoadErrors';
 import { cancelTuning, tuneDevice, type TuneOutcome, type TuneProgress } from '../services/deviceTuner';
 const WHITE = '#ffffff';
+const buttonText = { fontWeight: '700' as const, textAlign: 'center' as const };
 
 type Status = 'wait' | 'run' | 'ok' | 'warn' | 'fail' | 'skip';
 interface Step { key: string; title: string; status: Status; detail: string }
@@ -285,7 +286,7 @@ const TextModelTestScreen: React.FC = () => {
                 <Text style={{ color: colors.text, fontWeight: '700' }}>Find the best settings</Text>
                 <Text style={{ color: colors.textSecondary, marginTop: 4 }}>Loads this model a few ways (automatic GPU or NPU, and the CPU with different thread counts), times a short reply each way and keeps the fastest. Takes a few minutes. Your chat is not touched.</Text>
                 <TouchableOpacity onPress={findBest} disabled={running || vulkanBusy || tuneBusy} testID="model-tune-start" style={{ marginTop: 10, backgroundColor: tuneBusy ? colors.border : colors.primary, borderRadius: 10, padding: 11 }}>
-                  <Text style={{ color: WHITE, fontWeight: '700', textAlign: 'center' }}>{tuneBusy ? `Trying ${tune?.step ?? 1} of ${tune?.steps ?? '...'}: ${tune?.label ?? ''}` : tuned ? 'Find again' : 'Find the best settings'}</Text>
+                  <Text style={[buttonText, { color: WHITE }]}>{tuneBusy ? `Trying ${tune?.step ?? 1} of ${tune?.steps ?? '...'}: ${tune?.label ?? ''}` : tuned ? 'Find again' : 'Find the best settings'}</Text>
                 </TouchableOpacity>
                 {tuneBusy && (
                   <TouchableOpacity onPress={cancelTuning} style={{ marginTop: 8 }} testID="model-tune-cancel"><Text style={{ color: colors.error }}>Stop and keep my settings</Text></TouchableOpacity>
@@ -308,7 +309,7 @@ const TextModelTestScreen: React.FC = () => {
                 <Text style={{ color: colors.text, fontWeight: '700' }}>Vulkan GPU test</Text>
                 <Text style={{ color: colors.textSecondary, marginTop: 4 }}>Loads this model with your accelerator layer limit on the Vulkan engine and reports the layers actually placed on the GPU. This unloads the active text model to save memory.</Text>
                 <TouchableOpacity onPress={runVulkan} disabled={running || vulkanBusy} style={{ marginTop: 10, backgroundColor: colors.primary, borderRadius: 10, padding: 11 }}>
-                  <Text style={{ color: WHITE, fontWeight: '700', textAlign: 'center' }}>{vulkanBusy ? 'Testing Vulkan...' : 'Test Vulkan GPU'}</Text>
+                  <Text style={[buttonText, { color: WHITE }]}>{vulkanBusy ? 'Testing Vulkan...' : 'Test Vulkan GPU'}</Text>
                 </TouchableOpacity>
                 {!!vulkanResult && <Text style={{ color: colors.textSecondary, marginTop: 8 }}>{vulkanResult}</Text>}
               </View>

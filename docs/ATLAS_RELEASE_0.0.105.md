@@ -569,6 +569,10 @@ What changed:
   model. A second, short-prompt check decides whether to use the first-word workaround: prompts under about 192 tokens run
   once first so the first word comes from the engine's single-token step; it is switched on only if the same check passes with
   it, and never for long prompts. The remembered verdict records the batch size and CPU-kernel setting.
+- 0.0.150: the 0.0.149 features, with the lint errors in the code changed this week fixed. The update card, Chat settings and
+  the packs section use the themed style sheets; the briefing's tune-and-line player moved out of the Study screen into a small
+  tested module (it also now stops cleanly when the opening tune is cut off); long parameter lists became option objects
+  (document reading, book pages, slide text, the final tool-loop reply). No change to what the features do.
 - 0.0.149: documents, sources and update notes. Documents are converted to Markdown before the AI reads them (Word, PowerPoint,
   Excel, PDF, HTML, CSV: headings, lists and tables are kept; code, JSON and plain text are left as they are; switch it off in
   Chat settings > Convert documents to Markdown). Project-document excerpts are numbered: the model cites [1], and the reply

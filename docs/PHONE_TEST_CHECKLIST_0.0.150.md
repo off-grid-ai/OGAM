@@ -1,9 +1,9 @@
-# Phone test checklist, 0.0.149
+# Phone test checklist, 0.0.150
 
 Nothing below has been run on a phone yet. Tick each line on a real device, and note what you saw when it fails.
 
 ## Install and update
-- [ ] Install the APK over the old build. Settings shows version 0.0.149 (build N).
+- [ ] Install the APK over the old build. Settings shows version 0.0.150 (build N).
 - [ ] Settings > About > Updates: "Check for updates" says you are up to date, or offers a newer build.
 - [ ] When a newer build exists: "What is new" opens the notes, and Download and install opens the Android installer.
 - [ ] The first install from Atlas asks to allow installing from this source.
