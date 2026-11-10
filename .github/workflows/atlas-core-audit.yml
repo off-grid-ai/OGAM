@@ -3,10 +3,16 @@ name: Atlas Core Audit
 on:
   pull_request:
   workflow_dispatch:
+  # Every push to a working branch runs the type check and the whole test suite, so a break is seen at once
+  # (the APK build is started by hand and runs the same checks, but only when someone asks for it).
   push:
     branches:
       - atlas-voice
       - 'audit/**'
+      - 'claude/**'
+      - 'feat/**'
+      - 'fix/**'
+      - 'feature/**'
 
 permissions:
   contents: read
