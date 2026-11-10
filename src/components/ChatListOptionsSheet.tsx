@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from './AppSheet';
@@ -39,6 +39,8 @@ export const ChatListOptionsSheet: React.FC<{
   working?: boolean;
 }> = ({ visible, onClose, groupBy, sortBy, onChange, working = false }) => {
   const styles = useThemedStyles(createStyles);
+  // Only the choice you touched shows it is working; the other keeps its tick.
+  const [touched, setTouched] = useState<'group' | 'sort' | null>(null);
   const isDefault = groupBy === DEFAULT_CHAT_GROUP_BY && sortBy === DEFAULT_CHAT_SORT_BY;
   return (
     <AppSheet sheet="chat-list-options" visible={visible} onClose={onClose} enableDynamicSizing title="View">
@@ -46,15 +48,15 @@ export const ChatListOptionsSheet: React.FC<{
         <Text style={styles.label}>Group by</Text>
         <ListGroup testID="chats-group-by">
           {GROUPS.map(option => (
-            <Choice key={option.value} label={option.label} selected={groupBy === option.value} working={working}
-              onPress={() => onChange({ groupBy: option.value, sortBy })} testID={`chats-group-${option.value}`} />
+            <Choice key={option.value} label={option.label} selected={groupBy === option.value} working={working && touched !== 'sort'}
+              onPress={() => { setTouched('group'); onChange({ groupBy: option.value, sortBy }); }} testID={`chats-group-${option.value}`} />
           ))}
         </ListGroup>
         <Text style={styles.label}>Sort by</Text>
         <ListGroup testID="chats-sort-by">
           {SORTS.map(option => (
-            <Choice key={option.value} label={option.label} selected={sortBy === option.value} working={working}
-              onPress={() => onChange({ groupBy, sortBy: option.value })} testID={`chats-sort-${option.value}`} />
+            <Choice key={option.value} label={option.label} selected={sortBy === option.value} working={working && touched !== 'group'}
+              onPress={() => { setTouched('sort'); onChange({ groupBy, sortBy: option.value }); }} testID={`chats-sort-${option.value}`} />
           ))}
         </ListGroup>
         <TouchableOpacity
