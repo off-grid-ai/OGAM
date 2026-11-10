@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
+  Alert,
   View,
   Text,
   ScrollView,
@@ -15,6 +16,7 @@ import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { documentService } from '../services';
+import { markdownFileName } from '../services/markdownConvert';
 import { RootStackParamList } from '../navigation/types';
 import logger from '../utils/logger';
 
@@ -189,6 +191,19 @@ export const DocumentPreviewScreen: React.FC = () => {
     loadContent();
   }, [loadContent]);
 
+  /** Saves the document as a Markdown file in the Atlas workspace (Converted/<name>.md). */
+  const saveMarkdown = async () => {
+    if (!content) return;
+    try {
+      const { workspaceDir } = require('../atlasTools/deviceTools');
+      const dir = `${await workspaceDir()}/Converted`;
+      await RNFS.mkdir(dir);
+      const path = `${dir}/${markdownFileName(fileName)}`;
+      await RNFS.writeFile(path, content, 'utf8');
+      Alert.alert('Saved as Markdown', path);
+    } catch (e: any) { Alert.alert('Could not save the file', String(e?.message || e)); }
+  };
+
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
     return bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -208,6 +223,11 @@ export const DocumentPreviewScreen: React.FC = () => {
             <Text style={styles.headerSubtitle}>{formatFileSize(fileSize)}</Text>
           )}
         </View>
+        {!!content && (
+          <TouchableOpacity onPress={saveMarkdown} style={styles.backButton} testID="save-markdown" accessibilityRole="button" accessibilityLabel="Save as a Markdown file">
+            <Icon name="download" size={20} color={colors.text} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {isLoading ? (

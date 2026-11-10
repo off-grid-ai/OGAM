@@ -110,3 +110,11 @@ describe('search chunks of a Markdown document know their section', () => {
     expect(first.content.startsWith('[')).toBe(false);
   });
 });
+
+import { markdownFileName } from '../../src/services/markdownConvert';
+it('names the Markdown copy of a file', () => {
+  expect(markdownFileName('Report.docx')).toBe('Report.md');
+  expect(markdownFileName('notes.md')).toBe('notes.md');
+  expect(markdownFileName('a/b:c.pdf')).toBe('a_b_c.md');
+  expect(markdownFileName('')).toBe('document.md');
+});

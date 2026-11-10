@@ -144,6 +144,9 @@ export const slideMarkdown = (n: number, title: string, paragraphs: string[], no
 
 export const sheetMarkdown = (name: string, rows: string[][]): string => `## Sheet: ${name}\n\n${tableMarkdown(rows)}`;
 
+/** The name of the Markdown copy of a file: "Report.docx" becomes "Report.md" (a name that is already .md is kept). */
+export const markdownFileName = (name: string): string => `${(name || 'document').replace(/\.[a-z0-9]{1,8}$/i, '').replace(/[\\/:*?"<>|]/g, '_') || 'document'}.md`;
+
 /** Converts text read from a file to Markdown by its extension. JSON, plain text and Markdown are already readable and are returned as they are. */
 export function toMarkdown(text: string, ext: string): string {
   switch (ext.toLowerCase()) {
