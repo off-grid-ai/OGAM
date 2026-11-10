@@ -3,6 +3,10 @@ import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../theme';
 import { chartCaption, parseChart, shares, type ChartSpec } from '../study/chart';
+const literalStyles = StyleSheet.create({
+  s1: { height: 10, borderRadius: 5 },
+});
+
 
 const PALETTE = ['#2563EB', '#D97706', '#16A34A', '#DC2626', '#7C3AED', '#0891B2', '#DB2777', '#65A30D'];
 const st = StyleSheet.create({
@@ -34,7 +38,7 @@ export const ChartCard: React.FC<{ spec: ChartSpec }> = ({ spec }) => {
         <View key={i} style={st.row}>
           <View style={[st.dot, { backgroundColor: PALETTE[i % PALETTE.length] }]} />
           <Text style={{ color: colors.text }}>{l}</Text>
-          {spec.type !== 'pie' && <View style={[st.barTrack, { backgroundColor: colors.surfaceLight }]}><View style={{ width: `${Math.max(2, (Math.abs(spec.values[i]) / max) * 100)}%`, height: 10, borderRadius: 5, backgroundColor: PALETTE[i % PALETTE.length] }} /></View>}
+          {spec.type !== 'pie' && <View style={[st.barTrack, { backgroundColor: colors.surfaceLight }]}><View style={[{ width: `${Math.max(2, (Math.abs(spec.values[i]) / max) * 100)}%` }, literalStyles.s1, { backgroundColor: PALETTE[i % PALETTE.length] }]} /></View>}
           <Text style={{ color: colors.textSecondary }}>{spec.type === 'pie' ? `  ${pct[i]}% (${fmt(spec.values[i])})` : fmt(spec.values[i])}</Text>
         </View>
       ))}

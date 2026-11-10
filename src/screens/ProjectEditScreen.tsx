@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View,
+  StyleSheet, View,
   Text,
   ScrollView,
   TouchableOpacity,
@@ -26,6 +26,24 @@ import { RootStackParamList } from '../navigation/types';
 import { ProjectPinGate } from '../components/ProjectPinGate';
 import { protectProject, permanentlyUnprotectProject } from '../stores/protectedProjectStorage';
 import { PROJECT_TYPES, isStarterInstructions, projectType, type ProjectKind } from '../projects/projectTypes';
+const BACKGROUNDCOLOR_RGBA_0_0_0_0_5 = 'rgba(0,0,0,0.5)';
+const COLOR_FFF = '#fff';
+const literalStyles = StyleSheet.create({
+  s1: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
+  s2: { flex: 1, marginBottom: 0 },
+  s3: { marginTop: 20, gap: 8 },
+  s4: { padding: 13, borderRadius: 10 },
+  s5: { borderWidth: 1 },
+  s6: { fontWeight: '600' },
+  s7: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: BACKGROUNDCOLOR_RGBA_0_0_0_0_5 },
+  s8: { borderRadius: 14, padding: 20, gap: 14 },
+  s9: { fontSize: 18, fontWeight: '700' },
+  s10: { padding: 12, borderRadius: 8 },
+  s11: { padding: 13, borderRadius: 9 },
+  s12: { color: COLOR_FFF, textAlign: 'center' },
+  s13: { textAlign: 'center' },
+});
+
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'ProjectEdit'>;
 type RouteProps = RouteProp<RootStackParamList, 'ProjectEdit'>;
@@ -202,16 +220,16 @@ export const ProjectEditScreen: React.FC = () => {
 
           <Text style={styles.label}>Learning activities</Text>
           <Text style={styles.hint}>Allow Atlas to suggest learning games, quizzes or podcasts based on this project's material. On by default; turn it off for writing-only projects. Offline arcade games are in Emergency mode.</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 }}>
-            <Text style={[styles.label, { flex: 1, marginBottom: 0 }]}>Allow project-based learning activities</Text>
+          <View style={literalStyles.s1}>
+            <Text style={[styles.label, literalStyles.s2]}>Allow project-based learning activities</Text>
             <Switch value={formData.allowLearningActivities} onValueChange={value => setFormData(current => ({ ...current, allowLearningActivities: value }))} />
           </View>
 
-          {existingProject && <View style={{ marginTop: 20, gap: 8 }}>
+          {existingProject && <View style={literalStyles.s3}>
             <Text style={styles.label}>Project encryption</Text>
             <Text style={styles.hint}>Opt-in only. Encrypts this project's settings, notes and documents (text and search index) with its own Android Keystore key and your PIN. Chats and saved study results stay outside the lock, so a project with chats or saved study results cannot be protected, and Study, research and chats are off for protected projects.</Text>
-            <TouchableOpacity onPress={() => { setProtectAction(existingProject.pinVerifier ? 'unprotect' : 'protect'); setProtectPin(''); }} style={{ padding: 13, borderRadius: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
-              <Text style={{ color: colors.text, fontWeight: '600' }}>{existingProject.pinVerifier ? 'Permanently remove project protection' : 'Encrypt project settings with a PIN'}</Text>
+            <TouchableOpacity onPress={() => { setProtectAction(existingProject.pinVerifier ? 'unprotect' : 'protect'); setProtectPin(''); }} style={[literalStyles.s4, { backgroundColor: colors.surface }, literalStyles.s5, { borderColor: colors.border }]}>
+              <Text style={[{ color: colors.text }, literalStyles.s6]}>{existingProject.pinVerifier ? 'Permanently remove project protection' : 'Encrypt project settings with a PIN'}</Text>
             </TouchableOpacity>
           </View>}
 
@@ -220,14 +238,14 @@ export const ProjectEditScreen: React.FC = () => {
       </KeyboardAvoidingView>
       {!!projectId && <ProjectPinGate projectId={projectId} />}
       <Modal visible={protectAction !== null} animationType="fade" transparent onRequestClose={() => setProtectAction(null)}>
-        <View style={{ flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <View style={{ backgroundColor: colors.surface, borderRadius: 14, padding: 20, gap: 14 }}>
-            <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>{protectAction === 'protect' ? 'Protect project settings' : 'Permanently unprotect project'}</Text>
+        <View style={literalStyles.s7}>
+          <View style={[{ backgroundColor: colors.surface }, literalStyles.s8]}>
+            <Text style={[{ color: colors.text }, literalStyles.s9]}>{protectAction === 'protect' ? 'Protect project settings' : 'Permanently unprotect project'}</Text>
             <Text style={{ color: colors.textSecondary }}>{protectAction === 'protect' ? 'Choose a PIN; the same PIN may be used for other projects or chats.' : 'Enter the current PIN to decrypt and save these project settings normally.'}</Text>
-            <TextInput value={protectPin} onChangeText={v => setProtectPin(v.replace(/\D/g,'').slice(0,12))} secureTextEntry keyboardType="number-pad" placeholder="4–12 digits" placeholderTextColor={colors.textMuted} style={{ borderWidth: 1, borderColor: colors.border, padding: 12, borderRadius: 8, color: colors.text }} />
-            {protectAction === 'protect' && <TextInput value={protectPin2} onChangeText={v => setProtectPin2(v.replace(/\D/g,'').slice(0,12))} secureTextEntry keyboardType="number-pad" placeholder="Type the PIN again" placeholderTextColor={colors.textMuted} style={{ borderWidth: 1, borderColor: colors.border, padding: 12, borderRadius: 8, color: colors.text }} />}
-            <TouchableOpacity disabled={protectBusy} onPress={applyProjectProtection} style={{ padding: 13, borderRadius: 9, backgroundColor: colors.primary }}><Text style={{ color: '#fff', textAlign: 'center' }}>{protectBusy ? 'Working…' : 'Confirm'}</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => { setProtectAction(null); setProtectPin(''); setProtectPin2(''); }}><Text style={{ color: colors.text, textAlign: 'center' }}>Cancel</Text></TouchableOpacity>
+            <TextInput value={protectPin} onChangeText={v => setProtectPin(v.replace(/\D/g,'').slice(0,12))} secureTextEntry keyboardType="number-pad" placeholder="4–12 digits" placeholderTextColor={colors.textMuted} style={[literalStyles.s5, { borderColor: colors.border }, literalStyles.s10, { color: colors.text }]} />
+            {protectAction === 'protect' && <TextInput value={protectPin2} onChangeText={v => setProtectPin2(v.replace(/\D/g,'').slice(0,12))} secureTextEntry keyboardType="number-pad" placeholder="Type the PIN again" placeholderTextColor={colors.textMuted} style={[literalStyles.s5, { borderColor: colors.border }, literalStyles.s10, { color: colors.text }]} />}
+            <TouchableOpacity disabled={protectBusy} onPress={applyProjectProtection} style={[literalStyles.s11, { backgroundColor: colors.primary }]}><Text style={literalStyles.s12}>{protectBusy ? 'Working…' : 'Confirm'}</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => { setProtectAction(null); setProtectPin(''); setProtectPin2(''); }}><Text style={[{ color: colors.text }, literalStyles.s13]}>Cancel</Text></TouchableOpacity>
           </View>
         </View>
       </Modal>

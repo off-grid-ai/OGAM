@@ -4,7 +4,7 @@
  * and preparedness checklists.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Modal, NativeModules, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Image, Modal, NativeModules, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../theme';
@@ -17,6 +17,80 @@ import { morseTimeline, toMorse } from '../atlasTools/morse';
 import { formatDuration, sunTimes } from '../atlasTools/sun';
 import { expiringSoon, useChecklists } from '../atlasTools/checklists';
 import { shuffle } from '../study/games/logic';
+const BORDERWIDTH_0 = 0;
+const BORDERWIDTH_1 = 1;
+const OPACITY_0_5 = 0.5;
+const OPACITY_1 = 1;
+const COLOR_FFF = '#fff';
+const BACKGROUNDCOLOR_16A34A33 = '#16A34A33';
+const BACKGROUNDCOLOR_DC262633 = '#DC262633';
+const BACKGROUNDCOLOR_FFF = '#fff';
+const BORDERCOLOR_16A34A = '#16A34A';
+const BACKGROUNDCOLOR_FFFFFF = '#FFFFFF';
+const BACKGROUNDCOLOR_000000 = '#000000';
+const COLOR_000 = '#000';
+const COLOR_888 = '#888';
+const BACKGROUNDCOLOR_CA8A0433 = '#CA8A0433';
+const TEXTDECORATIONLINE_LINE_THROUGH = 'line-through';
+const TEXTDECORATIONLINE_NONE = 'none';
+const literalStyles = StyleSheet.create({
+  s1: { flex: 1 },
+  s2: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1 },
+  s3: { padding: 8 },
+  s4: { fontSize: 19, fontWeight: '700', marginLeft: 6 },
+  s5: { padding: 16, paddingBottom: 80, width: '100%', maxWidth: 820, alignSelf: 'center' },
+  s6: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12 },
+  s7: { marginBottom: 10 },
+  s8: { marginLeft: 12, flex: 1 },
+  s9: { fontSize: 17, fontWeight: '700' },
+  s10: { fontSize: 13 },
+  s11: { padding: 13, borderRadius: 10, marginVertical: 5, minHeight: 48, justifyContent: 'center' },
+  s12: { textAlign: 'center', fontWeight: '700' },
+  s13: { marginBottom: 8 },
+  s14: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 10 },
+  s15: { fontSize: 16, marginLeft: 10 },
+  s16: { fontSize: 22, fontWeight: '800' },
+  s17: { marginVertical: 6 },
+  s18: { fontSize: 18, lineHeight: 26, marginBottom: 10 },
+  s19: { padding: 14, borderRadius: 10, borderWidth: 1 },
+  s20: { fontSize: 16 },
+  s21: { padding: 14, borderRadius: 10 },
+  s22: { fontWeight: '800', fontSize: 17 },
+  s23: { marginTop: 4, lineHeight: 22 },
+  s24: { marginTop: 4, fontSize: 12 },
+  s25: { backgroundColor: BACKGROUNDCOLOR_FFF, borderRadius: 10, padding: 8, marginVertical: 8, alignItems: 'center' },
+  s26: { width: '100%', height: 240 },
+  s27: { fontWeight: '600', marginBottom: 4 },
+  s28: { padding: 12, borderRadius: 10, borderWidth: 1, marginVertical: 4 },
+  s29: { marginTop: 4 },
+  s30: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, marginRight: 6 },
+  s31: { flexDirection: 'row', gap: 8 },
+  s32: { padding: 8, borderRadius: 8 },
+  s33: { fontSize: 20, fontWeight: '700', marginVertical: 6 },
+  s34: { fontSize: 20, fontWeight: '700' },
+  s35: { marginBottom: 6 },
+  s36: { fontSize: 12, marginTop: 8 },
+  s37: { height: 520, borderRadius: 16 },
+  s38: { justifyContent: 'flex-end', alignItems: 'center', padding: 16 },
+  s39: { borderRadius: 10, padding: 12, fontSize: 18, letterSpacing: 2 },
+  s40: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+  s41: { marginLeft: 8 },
+  s42: { fontSize: 12 },
+  s43: { fontSize: 18 },
+  s44: { fontSize: 30, fontWeight: '800', marginVertical: 10 },
+  s45: { lineHeight: 21 },
+  s46: { fontSize: 12, marginTop: 10 },
+  s47: { padding: 12, borderRadius: 10, backgroundColor: BACKGROUNDCOLOR_CA8A0433, marginBottom: 8 },
+  s48: { fontWeight: '700' },
+  s49: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1 },
+  s50: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  s51: { marginLeft: 10, flex: 1 },
+  s52: { padding: 6 },
+  s53: { flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'center' },
+  s54: { borderRadius: 8, padding: 10 },
+  s55: { flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' },
+});
+
 
 type Tool = 'menu' | 'drills' | 'pictures' | 'phrases' | 'signal' | 'daylight' | 'checklists';
 const TOOLS: { id: Exclude<Tool, 'menu'>; title: string; desc: string; icon: string }[] = [
@@ -34,20 +108,20 @@ export function AtlasEmergencyTools({ visible, onClose }: { visible: boolean; on
   const close = () => { stop(); setTool('menu'); onClose(); };
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={() => (tool === 'menu' ? close() : setTool('menu'))}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-          <TouchableOpacity onPress={() => (tool === 'menu' ? close() : setTool('menu'))} accessibilityLabel="Back" style={{ padding: 8 }}>
+      <SafeAreaView style={[literalStyles.s1, { backgroundColor: colors.background }]}>
+        <View style={[literalStyles.s2, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => (tool === 'menu' ? close() : setTool('menu'))} accessibilityLabel="Back" style={literalStyles.s3}>
             <Icon name="arrow-left" size={22} color={colors.text} />
           </TouchableOpacity>
-          <Text style={{ color: colors.text, fontSize: 19, fontWeight: '700', marginLeft: 6 }}>{tool === 'menu' ? 'Emergency tools' : TOOLS.find((t) => t.id === tool)?.title}</Text>
+          <Text style={[{ color: colors.text }, literalStyles.s4]}>{tool === 'menu' ? 'Emergency tools' : TOOLS.find((t) => t.id === tool)?.title}</Text>
         </View>
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 80, width: '100%', maxWidth: 820, alignSelf: 'center' }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={literalStyles.s5} keyboardShouldPersistTaps="handled">
           {tool === 'menu' && TOOLS.map((t) => (
-            <TouchableOpacity key={t.id} onPress={() => setTool(t.id)} accessibilityRole="button" style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, backgroundColor: colors.surface, marginBottom: 10 }}>
+            <TouchableOpacity key={t.id} onPress={() => setTool(t.id)} accessibilityRole="button" style={[literalStyles.s6, { backgroundColor: colors.surface }, literalStyles.s7]}>
               <Icon name={t.icon} size={22} color={colors.primary} />
-              <View style={{ marginLeft: 12, flex: 1 }}>
-                <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>{t.title}</Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{t.desc}</Text>
+              <View style={literalStyles.s8}>
+                <Text style={[{ color: colors.text }, literalStyles.s9]}>{t.title}</Text>
+                <Text style={[{ color: colors.textSecondary }, literalStyles.s10]}>{t.desc}</Text>
               </View>
             </TouchableOpacity>
           ))}
@@ -67,8 +141,8 @@ function Btn({ label, onPress, primary = true, disabled }: { label: string; onPr
   const { colors } = useTheme();
   return (
     <TouchableOpacity onPress={onPress} disabled={disabled} accessibilityRole="button"
-      style={{ padding: 13, borderRadius: 10, marginVertical: 5, minHeight: 48, justifyContent: 'center', backgroundColor: primary ? colors.primary : colors.surface, borderWidth: primary ? 0 : 1, borderColor: colors.border, opacity: disabled ? 0.5 : 1 }}>
-      <Text style={{ color: primary ? '#fff' : colors.text, textAlign: 'center', fontWeight: '700' }}>{label}</Text>
+      style={[literalStyles.s11, { backgroundColor: primary ? colors.primary : colors.surface, borderWidth: primary ? BORDERWIDTH_0 : BORDERWIDTH_1, borderColor: colors.border, opacity: disabled ? OPACITY_0_5 : OPACITY_1 }]}>
+      <Text style={[{ color: primary ? COLOR_FFF : colors.text }, literalStyles.s12]}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -83,11 +157,11 @@ function Drills() {
   if (!drill) {
     return (
       <View>
-        <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>Practise the right first steps before you need them. Every answer names the emergency card it comes from.</Text>
+        <Text style={[{ color: colors.textSecondary }, literalStyles.s13]}>Practise the right first steps before you need them. Every answer names the emergency card it comes from.</Text>
         {DRILLS.map((d) => (
-          <TouchableOpacity key={d.id} onPress={() => { setDrill(d); setNode(d.start); setFeedback(null); setScore({ good: 0, total: 0 }); }} style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 10, backgroundColor: colors.surface, marginBottom: 8 }}>
+          <TouchableOpacity key={d.id} onPress={() => { setDrill(d); setNode(d.start); setFeedback(null); setScore({ good: 0, total: 0 }); }} style={[literalStyles.s14, { backgroundColor: colors.surface }, literalStyles.s13]}>
             <Icon name={d.icon} size={20} color={colors.primary} />
-            <Text style={{ color: colors.text, fontSize: 16, marginLeft: 10 }}>{d.title}</Text>
+            <Text style={[{ color: colors.text }, literalStyles.s15]}>{d.title}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -97,8 +171,8 @@ function Drills() {
   if (!current) {
     return (
       <View>
-        <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800' }}>{score.good === score.total ? 'Well done!' : 'Drill finished'}</Text>
-        <Text style={{ color: colors.textSecondary, marginVertical: 6 }}>{score.good} of {score.total} best choices. Read the matching emergency cards to lock it in.</Text>
+        <Text style={[{ color: colors.text }, literalStyles.s16]}>{score.good === score.total ? 'Well done!' : 'Drill finished'}</Text>
+        <Text style={[{ color: colors.textSecondary }, literalStyles.s17]}>{score.good} of {score.total} best choices. Read the matching emergency cards to lock it in.</Text>
         <Btn label="Try it again" onPress={() => { setNode(drill.start); setScore({ good: 0, total: 0 }); }} />
         <Btn label="Other drills" primary={false} onPress={() => setDrill(null)} />
       </View>
@@ -106,17 +180,17 @@ function Drills() {
   }
   return (
     <View>
-      <Text style={{ color: colors.text, fontSize: 18, lineHeight: 26, marginBottom: 10 }}>{current.text}</Text>
+      <Text style={[{ color: colors.text }, literalStyles.s18]}>{current.text}</Text>
       {!feedback ? current.choices.map((c, i) => (
         <TouchableOpacity key={i} onPress={() => { setFeedback({ good: c.good, why: c.why, card: c.card, next: c.next }); setScore((s) => ({ good: s.good + (c.good ? 1 : 0), total: s.total + 1 })); }}
-          style={{ padding: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, marginBottom: 8 }}>
-          <Text style={{ color: colors.text, fontSize: 16 }}>{c.text}</Text>
+          style={[literalStyles.s19, { borderColor: colors.border, backgroundColor: colors.surface }, literalStyles.s13]}>
+          <Text style={[{ color: colors.text }, literalStyles.s20]}>{c.text}</Text>
         </TouchableOpacity>
       )) : (
-        <View style={{ padding: 14, borderRadius: 10, backgroundColor: feedback.good ? '#16A34A33' : '#DC262633' }}>
-          <Text style={{ color: colors.text, fontWeight: '800', fontSize: 17 }}>{feedback.good ? 'Good call' : 'Not the best choice'}</Text>
-          <Text style={{ color: colors.text, marginTop: 4, lineHeight: 22 }}>{feedback.why}</Text>
-          <Text style={{ color: colors.textMuted, marginTop: 4, fontSize: 12 }}>From emergency card {feedback.card}</Text>
+        <View style={[literalStyles.s21, { backgroundColor: feedback.good ? BACKGROUNDCOLOR_16A34A33 : BACKGROUNDCOLOR_DC262633 }]}>
+          <Text style={[{ color: colors.text }, literalStyles.s22]}>{feedback.good ? 'Good call' : 'Not the best choice'}</Text>
+          <Text style={[{ color: colors.text }, literalStyles.s23]}>{feedback.why}</Text>
+          <Text style={[{ color: colors.textMuted }, literalStyles.s24]}>From emergency card {feedback.card}</Text>
           <Btn label="Continue" onPress={() => { setNode(feedback.next ?? '__end'); setFeedback(null); }} />
         </View>
       )}
@@ -152,7 +226,7 @@ function PictureQuiz() {
   if (!fig) {
     return (
       <View>
-        <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800' }}>{score} / {round.length}</Text>
+        <Text style={[{ color: colors.text }, literalStyles.s16]}>{score} / {round.length}</Text>
         <Btn label="New round" onPress={() => { setRound(shuffle(figures).slice(0, 10)); setI(0); setScore(0); setPicked(null); }} />
       </View>
     );
@@ -160,22 +234,22 @@ function PictureQuiz() {
   return (
     <View>
       <Text style={{ color: colors.textSecondary }}>Picture {i + 1} of {round.length} · score {score}</Text>
-      <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 8, marginVertical: 8, alignItems: 'center' }}>
-        <Image source={SURVIVAL_IMAGES[fig.file]} style={{ width: '100%', height: 240 }} resizeMode="contain" accessibilityLabel="Survival Manual figure" />
+      <View style={literalStyles.s25}>
+        <Image source={SURVIVAL_IMAGES[fig.file]} style={literalStyles.s26} resizeMode="contain" accessibilityLabel="Survival Manual figure" />
       </View>
-      <Text style={{ color: colors.text, fontWeight: '600', marginBottom: 4 }}>What does this figure show?</Text>
+      <Text style={[{ color: colors.text }, literalStyles.s27]}>What does this figure show?</Text>
       {options.map((o) => {
         const state = picked === null ? null : o === fig.title ? 'right' : o === picked ? 'wrong' : null;
         return (
           <TouchableOpacity key={o} disabled={picked !== null} onPress={() => { setPicked(o); if (o === fig.title) setScore((s) => s + 1); }}
-            style={{ padding: 12, borderRadius: 10, borderWidth: 1, marginVertical: 4, borderColor: state === 'right' ? '#16A34A' : state === 'wrong' ? '#DC2626' : colors.border, backgroundColor: state === 'right' ? '#16A34A33' : state === 'wrong' ? '#DC262633' : colors.surface }}>
+            style={[literalStyles.s28, { borderColor: state === 'right' ? BORDERCOLOR_16A34A : state === 'wrong' ? '#DC2626' : colors.border, backgroundColor: state === 'right' ? BACKGROUNDCOLOR_16A34A33 : state === 'wrong' ? '#DC262633' : colors.surface }]}>
             <Text style={{ color: colors.text }}>{o}</Text>
           </TouchableOpacity>
         );
       })}
       {picked !== null && (
         <View>
-          <Text style={{ color: colors.textSecondary, marginTop: 4 }}>From the chapter “{fig.chapter}”.</Text>
+          <Text style={[{ color: colors.textSecondary }, literalStyles.s29]}>From the chapter “{fig.chapter}”.</Text>
           <Btn label="Next picture" onPress={() => { setPicked(null); setI((x) => x + 1); }} />
         </View>
       )}
@@ -202,31 +276,31 @@ function PhrasePractice() {
   const next = () => { setPicked(null); setShown(false); setI((x) => x + 1); };
   return (
     <View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={literalStyles.s13}>
         {PHRASE_LANGUAGES.map((l) => (
           <TouchableOpacity key={l.code} onPress={() => { setLang(l); setOrder(shuffle(PHRASES_EN.map((_, k) => k))); setI(0); setScore(0); setPicked(null); setShown(false); }}
-            style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, marginRight: 6, backgroundColor: l.code === lang.code ? colors.primary : colors.surface }}>
-            <Text style={{ color: l.code === lang.code ? '#fff' : colors.text }}>{l.name}</Text>
+            style={[literalStyles.s30, { backgroundColor: l.code === lang.code ? colors.primary : colors.surface }]}>
+            <Text style={{ color: l.code === lang.code ? COLOR_FFF : colors.text }}>{l.name}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
+      <View style={literalStyles.s31}>
         {(['listen', 'recall'] as const).map((m) => (
-          <TouchableOpacity key={m} onPress={() => { setMode(m); setPicked(null); setShown(false); }} style={{ padding: 8, borderRadius: 8, backgroundColor: mode === m ? colors.primary : colors.surface }}>
-            <Text style={{ color: mode === m ? '#fff' : colors.text }}>{m === 'listen' ? 'Listen: pick the meaning' : 'Recall: say it yourself'}</Text>
+          <TouchableOpacity key={m} onPress={() => { setMode(m); setPicked(null); setShown(false); }} style={[literalStyles.s32, { backgroundColor: mode === m ? colors.primary : colors.surface }]}>
+            <Text style={{ color: mode === m ? COLOR_FFF : colors.text }}>{m === 'listen' ? 'Listen: pick the meaning' : 'Recall: say it yourself'}</Text>
           </TouchableOpacity>
         ))}
       </View>
-      <Text style={{ color: colors.textSecondary, marginVertical: 6 }}>Score {score} · phrase {i + 1}</Text>
+      <Text style={[{ color: colors.textSecondary }, literalStyles.s17]}>Score {score} · phrase {i + 1}</Text>
       {mode === 'listen' ? (
         <View>
           <Btn label="🔊 Play again" primary={false} onPress={say} />
-          {picked !== null && <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700', marginVertical: 6 }}>{phrase?.[0]}{phrase?.[1] ? `\n${phrase[1]}` : ''}</Text>}
+          {picked !== null && <Text style={[{ color: colors.text }, literalStyles.s33]}>{phrase?.[0]}{phrase?.[1] ? `\n${phrase[1]}` : ''}</Text>}
           {options.map((k) => {
             const state = picked === null ? null : k === idx ? 'right' : k === picked ? 'wrong' : null;
             return (
               <TouchableOpacity key={k} disabled={picked !== null} onPress={() => { setPicked(k); if (k === idx) setScore((s) => s + 1); }}
-                style={{ padding: 12, borderRadius: 10, borderWidth: 1, marginVertical: 4, borderColor: state === 'right' ? '#16A34A' : state === 'wrong' ? '#DC2626' : colors.border, backgroundColor: colors.surface }}>
+                style={[literalStyles.s28, { borderColor: state === 'right' ? BORDERCOLOR_16A34A : state === 'wrong' ? '#DC2626' : colors.border, backgroundColor: colors.surface }]}>
                 <Text style={{ color: colors.text }}>{PHRASES_EN[k]}</Text>
               </TouchableOpacity>
             );
@@ -235,21 +309,21 @@ function PhrasePractice() {
         </View>
       ) : (
         <View>
-          <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>{PHRASES_EN[idx]}</Text>
-          <Text style={{ color: colors.textSecondary, marginBottom: 6 }}>Say it in {lang.name} out loud, then check.</Text>
+          <Text style={[{ color: colors.text }, literalStyles.s34]}>{PHRASES_EN[idx]}</Text>
+          <Text style={[{ color: colors.textSecondary }, literalStyles.s35]}>Say it in {lang.name} out loud, then check.</Text>
           {!shown ? <Btn label="Show and play" onPress={() => { setShown(true); say(); }} /> : (
             <View>
-              <Text style={{ color: colors.primary, fontSize: 22, fontWeight: '800' }}>{phrase?.[0]}</Text>
+              <Text style={[{ color: colors.primary }, literalStyles.s16]}>{phrase?.[0]}</Text>
               {!!phrase?.[1] && <Text style={{ color: colors.textSecondary }}>{phrase[1]}</Text>}
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <View style={{ flex: 1 }}><Btn label="Missed it" primary={false} onPress={next} /></View>
-                <View style={{ flex: 1 }}><Btn label="Got it" onPress={() => { setScore((s) => s + 1); next(); }} /></View>
+              <View style={literalStyles.s31}>
+                <View style={literalStyles.s1}><Btn label="Missed it" primary={false} onPress={next} /></View>
+                <View style={literalStyles.s1}><Btn label="Got it" onPress={() => { setScore((s) => s + 1); next(); }} /></View>
               </View>
             </View>
           )}
         </View>
       )}
-      <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 8 }}>Phrases were written by AI and not yet checked by native speakers.</Text>
+      <Text style={[{ color: colors.textMuted }, literalStyles.s36]}>Phrases were written by AI and not yet checked by native speakers.</Text>
     </View>
   );
 }
@@ -292,23 +366,23 @@ function SignalTool() {
   if (running) {
     return (
       <TouchableOpacity activeOpacity={1} onPress={halt} accessibilityLabel="Stop signalling"
-        style={{ height: 520, borderRadius: 16, backgroundColor: lit ? '#FFFFFF' : '#000000', justifyContent: 'flex-end', alignItems: 'center', padding: 16 }}>
-        <Text style={{ color: lit ? '#000' : '#888' }}>{toMorse(text)} · tap to stop</Text>
+        style={[literalStyles.s37, { backgroundColor: lit ? BACKGROUNDCOLOR_FFFFFF : BACKGROUNDCOLOR_000000 }, literalStyles.s38]}>
+        <Text style={{ color: lit ? COLOR_000 : COLOR_888 }}>{toMorse(text)} · tap to stop</Text>
       </TouchableOpacity>
     );
   }
   return (
     <View>
-      <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>Flash a message in Morse code. At night a phone screen or flashlight can be seen from far away. Turn the screen brightness all the way up.</Text>
+      <Text style={[{ color: colors.textSecondary }, literalStyles.s13]}>Flash a message in Morse code. At night a phone screen or flashlight can be seen from far away. Turn the screen brightness all the way up.</Text>
       <TextInput value={text} onChangeText={(v) => setText(v.toUpperCase().replace(/[^A-Z0-9 ]/g, '').slice(0, 30))} placeholder="SOS" placeholderTextColor={colors.textMuted}
-        style={{ color: colors.text, backgroundColor: colors.surface, borderRadius: 10, padding: 12, fontSize: 18, letterSpacing: 2 }} />
-      <Text style={{ color: colors.textMuted, marginVertical: 6 }}>{toMorse(text || 'SOS')}</Text>
-      <TouchableOpacity onPress={() => setTorch((t) => !t)} accessibilityRole="switch" accessibilityState={{ checked: torch }} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }}>
+        style={[{ color: colors.text, backgroundColor: colors.surface }, literalStyles.s39]} />
+      <Text style={[{ color: colors.textMuted }, literalStyles.s17]}>{toMorse(text || 'SOS')}</Text>
+      <TouchableOpacity onPress={() => setTorch((t) => !t)} accessibilityRole="switch" accessibilityState={{ checked: torch }} style={literalStyles.s40}>
         <Icon name={torch ? 'check-square' : 'square'} size={20} color={colors.primary} />
-        <Text style={{ color: colors.text, marginLeft: 8 }}>Also flash the flashlight</Text>
+        <Text style={[{ color: colors.text }, literalStyles.s41]}>Also flash the flashlight</Text>
       </TouchableOpacity>
       <Btn label="Start signalling" onPress={start} />
-      <Text style={{ color: colors.textMuted, fontSize: 12 }}>SOS = ··· ––– ··· repeated. Also: 3 whistle blasts or 3 fires mean help (card S01).</Text>
+      <Text style={[{ color: colors.textMuted }, literalStyles.s42]}>SOS = ··· ––– ··· repeated. Also: 3 whistle blasts or 3 fires mean help (card S01).</Text>
     </View>
   );
 }
@@ -325,16 +399,16 @@ function Daylight() {
   const left = t.sunset ? t.sunset.getTime() - now : 0;
   return (
     <View>
-      {t.polar ? <Text style={{ color: colors.text, fontSize: 18 }}>{t.polar === 'day' ? 'The sun does not set today here.' : 'The sun does not rise today here.'}</Text> : (
+      {t.polar ? <Text style={[{ color: colors.text }, literalStyles.s43]}>{t.polar === 'day' ? 'The sun does not set today here.' : 'The sun does not rise today here.'}</Text> : (
         <View>
-          <Text style={{ color: colors.text, fontSize: 18 }}>Sunrise {fmt(t.sunrise)} · Sunset {fmt(t.sunset)}</Text>
-          <Text style={{ color: left > 0 ? colors.text : colors.error, fontSize: 30, fontWeight: '800', marginVertical: 10 }}>
+          <Text style={[{ color: colors.text }, literalStyles.s43]}>Sunrise {fmt(t.sunrise)} · Sunset {fmt(t.sunset)}</Text>
+          <Text style={[{ color: left > 0 ? colors.text : colors.error }, literalStyles.s44]}>
             {left > 0 ? `${formatDuration(left)} of daylight left` : 'The sun has set'}
           </Text>
-          {left > 0 && <Text style={{ color: colors.textSecondary, lineHeight: 21 }}>Turn back by {new Date(now + left / 2).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} if you need to return the way you came before dark (half the remaining daylight). Real dusk is darker under trees and in valleys.</Text>}
+          {left > 0 && <Text style={[{ color: colors.textSecondary }, literalStyles.s45]}>Turn back by {new Date(now + left / 2).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} if you need to return the way you came before dark (half the remaining daylight). Real dusk is darker under trees and in valleys.</Text>}
         </View>
       )}
-      <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 10 }}>From your last GPS fix ({fix.lat.toFixed(3)}, {fix.lon.toFixed(3)}), computed on the phone.</Text>
+      <Text style={[{ color: colors.textMuted }, literalStyles.s46]}>From your last GPS fix ({fix.lat.toFixed(3)}, {fix.lon.toFixed(3)}), computed on the phone.</Text>
     </View>
   );
 }
@@ -353,8 +427,8 @@ function Checklists() {
   return (
     <View>
       {soon.length > 0 && (
-        <View style={{ padding: 12, borderRadius: 10, backgroundColor: '#CA8A0433', marginBottom: 8 }}>
-          <Text style={{ color: colors.text, fontWeight: '700' }}>Expiring soon</Text>
+        <View style={literalStyles.s47}>
+          <Text style={[{ color: colors.text }, literalStyles.s48]}>Expiring soon</Text>
           {soon.map(({ list: l, item }) => <Text key={item.id} style={{ color: colors.text }}>• {item.text} ({l}): {item.expires}</Text>)}
         </View>
       )}
@@ -362,34 +436,34 @@ function Checklists() {
         {lists.map((l) => {
           const done = l.items.filter((i) => i.done).length;
           return (
-            <TouchableOpacity key={l.id} onPress={() => setOpen(l.id)} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, marginRight: 6, backgroundColor: l.id === list.id ? colors.primary : colors.surface }}>
-              <Text style={{ color: l.id === list.id ? '#fff' : colors.text }}>{l.title} {done}/{l.items.length}</Text>
+            <TouchableOpacity key={l.id} onPress={() => setOpen(l.id)} style={[literalStyles.s30, { backgroundColor: l.id === list.id ? colors.primary : colors.surface }]}>
+              <Text style={{ color: l.id === list.id ? COLOR_FFF : colors.text }}>{l.title} {done}/{l.items.length}</Text>
             </TouchableOpacity>
           );
         })}
       </ScrollView>
       {list.items.map((it) => (
-        <View key={it.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-          <TouchableOpacity onPress={() => toggle(list.id, it.id)} accessibilityRole="checkbox" accessibilityState={{ checked: it.done }} accessibilityLabel={it.text} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+        <View key={it.id} style={[literalStyles.s49, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => toggle(list.id, it.id)} accessibilityRole="checkbox" accessibilityState={{ checked: it.done }} accessibilityLabel={it.text} style={literalStyles.s50}>
             <Icon name={it.done ? 'check-square' : 'square'} size={20} color={colors.primary} />
-            <View style={{ marginLeft: 10, flex: 1 }}>
-              <Text style={{ color: colors.text, textDecorationLine: it.done ? 'line-through' : 'none' }}>{it.text}</Text>
-              {!!it.expires && <Text style={{ color: colors.textMuted, fontSize: 12 }}>Expires {it.expires}</Text>}
+            <View style={literalStyles.s51}>
+              <Text style={{ color: colors.text, textDecorationLine: it.done ? TEXTDECORATIONLINE_LINE_THROUGH : TEXTDECORATIONLINE_NONE }}>{it.text}</Text>
+              {!!it.expires && <Text style={[{ color: colors.textMuted }, literalStyles.s42]}>Expires {it.expires}</Text>}
             </View>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { setEditing(it.id); setExpiryText(it.expires ?? ''); }} accessibilityLabel={`Set expiry for ${it.text}`} style={{ padding: 6 }}><Icon name="calendar" size={16} color={colors.textMuted} /></TouchableOpacity>
-          <TouchableOpacity onPress={() => remove(list.id, it.id)} accessibilityLabel={`Remove ${it.text}`} style={{ padding: 6 }}><Icon name="x" size={16} color={colors.textMuted} /></TouchableOpacity>
+          <TouchableOpacity onPress={() => { setEditing(it.id); setExpiryText(it.expires ?? ''); }} accessibilityLabel={`Set expiry for ${it.text}`} style={literalStyles.s52}><Icon name="calendar" size={16} color={colors.textMuted} /></TouchableOpacity>
+          <TouchableOpacity onPress={() => remove(list.id, it.id)} accessibilityLabel={`Remove ${it.text}`} style={literalStyles.s52}><Icon name="x" size={16} color={colors.textMuted} /></TouchableOpacity>
         </View>
       ))}
       {editing && (
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'center' }}>
-          <TextInput value={expiryText} onChangeText={setExpiryText} placeholder="Expiry date YYYY-MM-DD" placeholderTextColor={colors.textMuted} style={{ flex: 1, color: colors.text, backgroundColor: colors.surface, borderRadius: 8, padding: 10 }} />
-          <TouchableOpacity onPress={() => { if (!expiryText || /^\d{4}-\d{2}-\d{2}$/.test(expiryText)) { setExpiry(list.id, editing, expiryText); setEditing(null); } }}><Text style={{ color: colors.primary, fontWeight: '700' }}>Save</Text></TouchableOpacity>
+        <View style={literalStyles.s53}>
+          <TextInput value={expiryText} onChangeText={setExpiryText} placeholder="Expiry date YYYY-MM-DD" placeholderTextColor={colors.textMuted} style={[literalStyles.s1, { color: colors.text, backgroundColor: colors.surface }, literalStyles.s54]} />
+          <TouchableOpacity onPress={() => { if (!expiryText || /^\d{4}-\d{2}-\d{2}$/.test(expiryText)) { setExpiry(list.id, editing, expiryText); setEditing(null); } }}><Text style={[{ color: colors.primary }, literalStyles.s48]}>Save</Text></TouchableOpacity>
         </View>
       )}
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' }}>
-        <TextInput value={newItem} onChangeText={setNewItem} placeholder="Add an item" placeholderTextColor={colors.textMuted} style={{ flex: 1, color: colors.text, backgroundColor: colors.surface, borderRadius: 8, padding: 10 }} />
-        <TouchableOpacity onPress={() => { if (newItem.trim()) { add(list.id, newItem.trim()); setNewItem(''); } }}><Text style={{ color: colors.primary, fontWeight: '700' }}>Add</Text></TouchableOpacity>
+      <View style={literalStyles.s55}>
+        <TextInput value={newItem} onChangeText={setNewItem} placeholder="Add an item" placeholderTextColor={colors.textMuted} style={[literalStyles.s1, { color: colors.text, backgroundColor: colors.surface }, literalStyles.s54]} />
+        <TouchableOpacity onPress={() => { if (newItem.trim()) { add(list.id, newItem.trim()); setNewItem(''); } }}><Text style={[{ color: colors.primary }, literalStyles.s48]}>Add</Text></TouchableOpacity>
       </View>
       <Btn label="Untick all (repack)" primary={false} onPress={() => reset(list.id)} />
     </View>

@@ -1,10 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../theme';
 import { useChatStore } from '../stores/chatStore';
 import { useAppStore } from '../stores/appStore';
 import { estimateReply, fmtSec, roughTokens, useSpeedStats, ReplyEstimate } from '../atlasTools/speed';
+const literalStyles = StyleSheet.create({
+  s1: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 3 },
+  s2: { fontSize: 11, marginLeft: 5 },
+});
+
 
 /** New text the model has to read this turn (earlier turns are already in its memory). */
 function newPromptTokens(convId: string | null): number {
@@ -64,9 +69,9 @@ export const ReplyEta: React.FC<{ remote?: boolean }> = ({ remote }) => {
   }
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 3 }}>
+    <View style={literalStyles.s1}>
       <Icon name="clock" size={11} color={colors.textMuted} />
-      <Text style={{ color: colors.textMuted, fontSize: 11, marginLeft: 5 }}>{text} · {Math.round(elapsed)} s so far</Text>
+      <Text style={[{ color: colors.textMuted }, literalStyles.s2]}>{text} · {Math.round(elapsed)} s so far</Text>
     </View>
   );
 };

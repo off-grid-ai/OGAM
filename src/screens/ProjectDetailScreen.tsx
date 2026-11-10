@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View,
+  StyleSheet, View,
   Text,
   TouchableOpacity,
   ScrollView,
@@ -27,6 +27,18 @@ import { LanguageCourseCard } from '../language/LanguageCourseCard';
 import { ProjectPinGate } from '../components/ProjectPinGate';
 import { useActiveTextModel } from '../hooks/useActiveTextModel';
 import { useTopics } from '../topics/store';
+const COLOR_FFF = '#fff';
+const COLOR_RGBA_255_255_255_0_85 = 'rgba(255,255,255,0.85)';
+const literalStyles = StyleSheet.create({
+  s1: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 12, padding: 14, borderRadius: 12 },
+  s2: { marginLeft: 12, flex: 1 },
+  s3: { color: COLOR_FFF, fontWeight: '700', fontSize: 15 },
+  s4: { color: COLOR_RGBA_255_255_255_0_85, fontSize: 12 },
+  s5: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 8, padding: 14, borderRadius: 12, borderWidth: 1 },
+  s6: { fontSize: 15 },
+  s7: { fontSize: 12 },
+});
+
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProjectDetail'>;
@@ -194,12 +206,12 @@ export const ProjectDetailScreen: React.FC = () => {
       {/* Atlas: NotebookLM-style study tools for this project's documents */}
       <TouchableOpacity
         onPress={() => navigation.navigate('Study', { projectId })}
-        style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 12, padding: 14, borderRadius: 12, backgroundColor: colors.primary }}
+        style={[literalStyles.s1, { backgroundColor: colors.primary }]}
       >
         <Icon name="book-open" size={20} color="#fff" />
-        <View style={{ marginLeft: 12, flex: 1 }}>
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Study</Text>
-          <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>Ask with sources, study guide, flashcards, quiz, mind map, podcast, video</Text>
+        <View style={literalStyles.s2}>
+          <Text style={literalStyles.s3}>Study</Text>
+          <Text style={literalStyles.s4}>Ask with sources, study guide, flashcards, quiz, mind map, podcast, video</Text>
         </View>
         <Icon name="chevron-right" size={18} color="#fff" />
       </TouchableOpacity>
@@ -207,13 +219,13 @@ export const ProjectDetailScreen: React.FC = () => {
       {/* Courses: a subject learned on a board, built from this project's documents */}
       <TouchableOpacity
         onPress={() => navigation.navigate('Topics', { projectId, topic: project?.name })}
-        style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 8, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.primary }}
+        style={[literalStyles.s5, { borderColor: colors.primary }]}
         testID="project-courses"
       >
         <Icon name="compass" size={20} color={colors.primary} />
-        <View style={{ marginLeft: 12, flex: 1 }}>
-          <Text style={{ color: colors.text, fontSize: 15 }}>Courses{projectCourses ? ` (${projectCourses})` : ''}</Text>
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Learn this subject on a board, built from the documents in this project</Text>
+        <View style={literalStyles.s2}>
+          <Text style={[{ color: colors.text }, literalStyles.s6]}>Courses{projectCourses ? ` (${projectCourses})` : ''}</Text>
+          <Text style={[{ color: colors.textSecondary }, literalStyles.s7]}>Learn this subject on a board, built from the documents in this project</Text>
         </View>
         <Icon name="chevron-right" size={18} color={colors.textMuted} />
       </TouchableOpacity>

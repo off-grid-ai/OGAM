@@ -15,6 +15,11 @@ import { TextModelsTab } from './TextModelsTab';
 import { ImageModelsTab } from './ImageModelsTab';
 import { TranscriptionModelsTab } from './TranscriptionModelsTab';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
+const literalStyles = StyleSheet.create({
+  s1: { flexDirection: 'row', alignItems: 'center', marginLeft: 'auto', marginRight: 8 },
+  s2: { marginLeft: 6, fontWeight: '600' },
+});
+
 
 export const ModelsScreen: React.FC = () => {
   const { colors } = useTheme();
@@ -74,13 +79,13 @@ export const ModelsScreen: React.FC = () => {
         <View style={styles.header}>
           <Text style={styles.title}>Models</Text>
           <TouchableOpacity
-            style={[styles.downloadManagerButton, { flexDirection: 'row', alignItems: 'center', marginLeft: 'auto', marginRight: 8 }]}
+            style={[styles.downloadManagerButton, literalStyles.s1]}
             onPress={() => vm.navigation.navigate('MyModels')}
             testID="my-models"
             accessibilityLabel="My models: delete, move to SD card, add vision file"
           >
             <Icon name="hard-drive" size={18} color={colors.text} />
-            <Text style={{ color: colors.text, marginLeft: 6, fontWeight: '600' }}>My models</Text>
+            <Text style={[{ color: colors.text }, literalStyles.s2]}>My models</Text>
           </TouchableOpacity>
           <AttachStep index={10}>
             <TouchableOpacity

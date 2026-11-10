@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { BackHandler, Image, Linking, Modal, ScrollView, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, BackHandler, Image, Linking, Modal, ScrollView, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -12,6 +12,40 @@ import { useSurvivalStore } from '../survival/store';
 import { speak, stop } from '../atlasVoice/tts';
 import { useAtlasVoiceStore } from '../atlasVoice/store';
 import { prepareMessageForSpeech } from '../utils/messageContent';
+const BACKGROUNDCOLOR_FFF = '#fff';
+const COLOR_888 = '#888';
+const COLOR_FFF = '#fff';
+const COLOR_333 = '#333';
+const literalStyles = StyleSheet.create({
+  s1: { alignItems: 'center', marginVertical: 10 },
+  s2: { backgroundColor: BACKGROUNDCOLOR_FFF, borderRadius: 6 },
+  s3: { fontSize: 12, color: COLOR_888, marginTop: 4, textAlign: 'center' },
+  s4: { borderRadius: 8, padding: 12, minHeight: 90, marginTop: 8, fontSize: 15 },
+  s5: { flex: 1 },
+  s6: { flexDirection: 'row', alignItems: 'center', padding: 12 },
+  s7: { padding: 6 },
+  s8: { color: COLOR_FFF, fontSize: 19, fontWeight: '700', flex: 1, marginLeft: 8 },
+  s9: { padding: 8 },
+  s10: { color: COLOR_FFF },
+  s11: { color: COLOR_FFF, fontSize: 18 },
+  s12: { padding: 18, paddingBottom: 120, width: '100%', maxWidth: 920, alignSelf: 'center' },
+  s13: { fontSize: 16, fontWeight: '700', marginTop: 24 },
+  s14: { fontSize: 12, marginTop: 24 },
+  s15: { flex: 1, backgroundColor: BACKGROUNDCOLOR_FFF, justifyContent: 'center' },
+  s16: { width: '100%', height: '85%' },
+  s17: { textAlign: 'center', color: COLOR_333, padding: 12 },
+  s18: { color: COLOR_FFF, fontSize: 21, fontWeight: '800', marginLeft: 8, flex: 1 },
+  s19: { padding: 14, paddingBottom: 120, width: '100%', maxWidth: 1200, alignSelf: 'center' },
+  s20: { borderRadius: 10, padding: 12, fontSize: 16, marginBottom: 12 },
+  s21: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5 },
+  s22: { padding: 5 },
+  s23: { borderRadius: 12, padding: 16, flexDirection: 'row', alignItems: 'center', minHeight: 64 },
+  s24: { fontSize: 17, fontWeight: '600', marginLeft: 12, flex: 1 },
+  s25: { fontSize: 12 },
+  s26: { fontSize: 12, paddingHorizontal: 8, paddingTop: 4 },
+  s27: { marginTop: 10 },
+});
+
 
 const ICONS: Record<string, string> = {
   Introduction: 'info', Psychology: 'smile', Power: 'battery-charging', Planning: 'clipboard', Kits: 'briefcase', Apps: 'smartphone',
@@ -28,9 +62,9 @@ function ManualImage({ src, alt, width, onZoom }: { src: string; alt: string; wi
   const w = Math.min(width, meta?.width ? meta.width * 1.6 : width);
   const h = meta?.width ? (w * meta.height) / meta.width : w * 0.6;
   return (
-    <TouchableOpacity activeOpacity={0.85} onPress={() => onZoom(src, alt)} style={{ alignItems: 'center', marginVertical: 10 }}>
-      <Image source={mod} style={{ width: w, height: h, backgroundColor: '#fff', borderRadius: 6 }} resizeMode="contain" accessibilityLabel={alt} />
-      {!!alt && <Text style={{ fontSize: 12, color: '#888', marginTop: 4, textAlign: 'center' }}>{alt} (tap to enlarge)</Text>}
+    <TouchableOpacity activeOpacity={0.85} onPress={() => onZoom(src, alt)} style={literalStyles.s1}>
+      <Image source={mod} style={[{ width: w, height: h }, literalStyles.s2]} resizeMode="contain" accessibilityLabel={alt} />
+      {!!alt && <Text style={literalStyles.s3}>{alt} (tap to enlarge)</Text>}
     </TouchableOpacity>
   );
 }
@@ -51,7 +85,7 @@ function NotesBox({ id, colors }: { id: string; colors: any }) {
       placeholderTextColor={colors.textMuted}
       multiline
       textAlignVertical="top"
-      style={{ backgroundColor: colors.surface, color: colors.text, borderRadius: 8, padding: 12, minHeight: 90, marginTop: 8, fontSize: 15 }}
+      style={[{ backgroundColor: colors.surface, color: colors.text }, literalStyles.s4]}
     />
   );
 }
@@ -147,15 +181,15 @@ export const SurvivalManualScreen: React.FC = () => {
 
   if (chapter) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: bar('#3F6212') }}>
-          <TouchableOpacity onPress={() => { stop(); setChapter(null); }} style={{ padding: 6 }}><Icon name="arrow-left" size={22} color="#fff" /></TouchableOpacity>
-          <Text style={{ color: '#fff', fontSize: 19, fontWeight: '700', flex: 1, marginLeft: 8 }} numberOfLines={1}>{chapter.title}</Text>
-          <TouchableOpacity onPress={() => (speaking ? stop() : speak(prepareMessageForSpeech(chapter.md.replace(/!\[[^\]]*\]\([^)]*\)/g, '')), 'survival-chapter'))} style={{ padding: 8 }}>
+      <SafeAreaView style={[literalStyles.s5, { backgroundColor: colors.background }]} edges={['top']}>
+        <View style={[literalStyles.s6, { backgroundColor: bar('#3F6212') }]}>
+          <TouchableOpacity onPress={() => { stop(); setChapter(null); }} style={literalStyles.s7}><Icon name="arrow-left" size={22} color="#fff" /></TouchableOpacity>
+          <Text style={literalStyles.s8} numberOfLines={1}>{chapter.title}</Text>
+          <TouchableOpacity onPress={() => (speaking ? stop() : speak(prepareMessageForSpeech(chapter.md.replace(/!\[[^\]]*\]\([^)]*\)/g, '')), 'survival-chapter'))} style={literalStyles.s9}>
             <Icon name={speaking ? 'volume-x' : 'volume-2'} size={20} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setSize((s) => Math.max(13, s - 2))} style={{ padding: 8 }}><Text style={{ color: '#fff' }}>A-</Text></TouchableOpacity>
-          <TouchableOpacity onPress={() => setSize((s) => Math.min(28, s + 2))} style={{ padding: 8 }}><Text style={{ color: '#fff', fontSize: 18 }}>A+</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => setSize((s) => Math.max(13, s - 2))} style={literalStyles.s9}><Text style={literalStyles.s10}>A-</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => setSize((s) => Math.min(28, s + 2))} style={literalStyles.s9}><Text style={literalStyles.s11}>A+</Text></TouchableOpacity>
         </View>
         <ScrollView
           ref={scrollRef}
@@ -164,22 +198,22 @@ export const SurvivalManualScreen: React.FC = () => {
             const now = Date.now();
             if (now - lastSave.current > 1500) { lastSave.current = now; setPos(chapter.id, e.nativeEvent.contentOffset.y); }
           }}
-          contentContainerStyle={{ padding: 18, paddingBottom: 120, width: '100%', maxWidth: 920, alignSelf: 'center' }}
+          contentContainerStyle={literalStyles.s12}
           keyboardShouldPersistTaps="handled"
         >
           <Markdown style={mdStyles} rules={rules} onLinkPress={onLink}>{chapter.md}</Markdown>
-          <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700', marginTop: 24 }}>My notes</Text>
+          <Text style={[{ color: colors.text }, literalStyles.s13]}>My notes</Text>
           <NotesBox key={chapter.id} id={chapter.id} colors={colors} />
-          <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 24 }}>
+          <Text style={[{ color: colors.textMuted }, literalStyles.s14]}>
             From the Survival Manual (github.com/ligi/SurvivalManual), based on US Army FM 21-76. Community edited; not medical advice.
           </Text>
         </ScrollView>
         <Modal visible={!!zoom} transparent={false} animationType="fade" onRequestClose={() => setZoom(null)}>
-          <TouchableOpacity activeOpacity={1} onPress={() => setZoom(null)} style={{ flex: 1, backgroundColor: '#fff', justifyContent: 'center' }}>
+          <TouchableOpacity activeOpacity={1} onPress={() => setZoom(null)} style={literalStyles.s15}>
             {!!zoom && !!SURVIVAL_IMAGES[zoom.src] && (
-              <Image source={SURVIVAL_IMAGES[zoom.src]} style={{ width: '100%', height: '85%' }} resizeMode="contain" />
+              <Image source={SURVIVAL_IMAGES[zoom.src]} style={literalStyles.s16} resizeMode="contain" />
             )}
-            <Text style={{ textAlign: 'center', color: '#333', padding: 12 }}>{zoom?.alt} · tap to close (turn the phone sideways for more detail)</Text>
+            <Text style={literalStyles.s17}>{zoom?.alt} · tap to close (turn the phone sideways for more detail)</Text>
           </TouchableOpacity>
         </Modal>
       </SafeAreaView>
@@ -187,34 +221,34 @@ export const SurvivalManualScreen: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: bar('#3F6212') }}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 6 }}><Icon name="arrow-left" size={22} color="#fff" /></TouchableOpacity>
-        <Text style={{ color: '#fff', fontSize: 21, fontWeight: '800', marginLeft: 8, flex: 1 }}>Survival Manual</Text>
-        <TouchableOpacity onPress={() => setNight(!night)} style={{ padding: 8 }} accessibilityLabel="Red night mode"><Icon name="moon" size={20} color="#fff" /></TouchableOpacity>
+    <SafeAreaView style={[literalStyles.s5, { backgroundColor: colors.background }]} edges={['top']}>
+      <View style={[literalStyles.s6, { backgroundColor: bar('#3F6212') }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={literalStyles.s7}><Icon name="arrow-left" size={22} color="#fff" /></TouchableOpacity>
+        <Text style={literalStyles.s18}>Survival Manual</Text>
+        <TouchableOpacity onPress={() => setNight(!night)} style={literalStyles.s9} accessibilityLabel="Red night mode"><Icon name="moon" size={20} color="#fff" /></TouchableOpacity>
       </View>
-      <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 120, width: '100%', maxWidth: 1200, alignSelf: 'center' }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={literalStyles.s19} keyboardShouldPersistTaps="handled">
         <TextInput
           value={q} onChangeText={setQ}
           placeholder="Search the manual: snare, purify, splint, shelter..."
           placeholderTextColor={colors.textMuted}
-          style={{ backgroundColor: colors.surface, color: colors.text, borderRadius: 10, padding: 12, fontSize: 16, marginBottom: 12 }}
+          style={[{ backgroundColor: colors.surface, color: colors.text }, literalStyles.s20]}
         />
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5 }}>
+        <View style={literalStyles.s21}>
           {results.map(({ c, count, titleHit }) => (
-            <View key={c.id} style={{ width: `${100 / cols}%`, padding: 5 }}>
-              <TouchableOpacity onPress={() => openChapter(c.id)} style={{ backgroundColor: colors.surface, borderRadius: 12, padding: 16, flexDirection: 'row', alignItems: 'center', minHeight: 64 }}>
+            <View key={c.id} style={[{ width: `${100 / cols}%` }, literalStyles.s22]}>
+              <TouchableOpacity onPress={() => openChapter(c.id)} style={[{ backgroundColor: colors.surface }, literalStyles.s23]}>
                 <Icon name={ICONS[c.id] || 'book-open'} size={22} color="#3F6212" />
-                <Text style={{ color: colors.text, fontSize: 17, fontWeight: '600', marginLeft: 12, flex: 1 }}>{c.title}</Text>
-                {(count > 0 || titleHit) && <Text style={{ color: colors.textMuted, fontSize: 12 }}>{titleHit ? 'title' : `${count}×`}</Text>}
+                <Text style={[{ color: colors.text }, literalStyles.s24]}>{c.title}</Text>
+                {(count > 0 || titleHit) && <Text style={[{ color: colors.textMuted }, literalStyles.s25]}>{titleHit ? 'title' : `${count}×`}</Text>}
               </TouchableOpacity>
               {!!q.trim() && count > 0 && !titleHit && (
-                <Text style={{ color: colors.textSecondary, fontSize: 12, paddingHorizontal: 8, paddingTop: 4 }} numberOfLines={2}>{snippetFor(c, q)}</Text>
+                <Text style={[{ color: colors.textSecondary }, literalStyles.s26]} numberOfLines={2}>{snippetFor(c, q)}</Text>
               )}
             </View>
           ))}
         </View>
-        {results.length === 0 && <Text style={{ color: colors.textSecondary, marginTop: 10 }}>Nothing found. Try one simple word.</Text>}
+        {results.length === 0 && <Text style={[{ color: colors.textSecondary }, literalStyles.s27]}>Nothing found. Try one simple word.</Text>}
       </ScrollView>
     </SafeAreaView>
   );

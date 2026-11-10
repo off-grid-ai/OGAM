@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useWideLayout } from '../hooks/useWideLayout';
 import {
-  View,
+  StyleSheet, View,
   Text,
   ScrollView,
   TouchableOpacity,
@@ -51,6 +51,12 @@ const TOOL_CHOICES: { id: string; label: string }[] = [
 ];
 const fmtK = (v: number) => (v >= 1024 ? `${(v / 1024).toFixed(v % 1024 ? 1 : 0)}K` : String(v));
 import { RootStackParamList } from '../navigation/types';
+const literalStyles = StyleSheet.create({
+  s1: { flex: 1 },
+  s2: { padding: 6 },
+  s3: { fontSize: 16 },
+});
+
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'AgentEdit'>;
 type RouteProps = RouteProp<RootStackParamList, 'AgentEdit'>;
@@ -297,9 +303,9 @@ export const AgentEditScreen: React.FC = () => {
               <Text style={styles.hint}>Stored only on this phone. Tap ✕ to forget one.</Text>
               {((existingProject as any).memories as string[]).map((m: string, i: number) => (
                 <View key={`${i}-${m}`} style={styles.toolRow}>
-                  <Text style={[styles.toolLabel, { flex: 1 }]}>{m}</Text>
-                  <TouchableOpacity onPress={() => updateAgent(existingProject.id, { memories: ((existingProject as any).memories as string[]).filter((_: string, j: number) => j !== i) })} style={{ padding: 6 }}>
-                    <Text style={{ color: colors.error, fontSize: 16 }}>✕</Text>
+                  <Text style={[styles.toolLabel, literalStyles.s1]}>{m}</Text>
+                  <TouchableOpacity onPress={() => updateAgent(existingProject.id, { memories: ((existingProject as any).memories as string[]).filter((_: string, j: number) => j !== i) })} style={literalStyles.s2}>
+                    <Text style={[{ color: colors.error }, literalStyles.s3]}>✕</Text>
                   </TouchableOpacity>
                 </View>
               ))}

@@ -1,6 +1,6 @@
 /** Settings > Appearance & AI style: theme, background, accent, font, text size, bottom bar, and how the AI answers. */
 import React from 'react';
-import { Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Button } from '../components/Button';
 import { pick as pickDocument, keepLocalCopy, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +14,10 @@ import { parseCustomTheme, ACCENTS, SKINS, CHAT_LAYOUTS, FONT_CHOICES, PALETTES,
 import { NavBarSettings } from '../components/NavBarSettings';
 import { AI_LENGTHS, AI_LEVELS, AI_TONES, type AiStyle } from '../services/aiStyle';
 import { ABOUT_FIELDS, useAboutMe } from '../stores/aboutMeStore';
+const literalStyles = StyleSheet.create({
+  s1: { borderWidth: 1, borderRadius: 8, padding: 10, minHeight: 90 },
+});
+
 
 type Option<T> = { id: T; name: string; hint?: string };
 
@@ -133,7 +137,7 @@ export const AppearanceScreen: React.FC = () => {
 
         <Text style={styles.label}>Import a theme</Text>
         <Text style={styles.note}>Paste a theme file: {'{"name":"Mine","light":{"background":"#fff8f0","primary":"#c2410c"},"dark":{"background":"#1a1008"},"cornerRadius":1.5}'}. Colour names: background, surface, surfaceLight, surfaceHover, border, borderLight, divider, text, textSecondary, textMuted, primary, primaryDark, error, borderFocus.</Text>
-        <TextInput testID="theme-json" value={themeText} onChangeText={setThemeText} multiline autoCapitalize="none" autoCorrect={false} placeholder="Paste theme JSON" placeholderTextColor={colors.textMuted} style={[styles.note, { color: colors.text, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 10, minHeight: 90 }]} />
+        <TextInput testID="theme-json" value={themeText} onChangeText={setThemeText} multiline autoCapitalize="none" autoCorrect={false} placeholder="Paste theme JSON" placeholderTextColor={colors.textMuted} style={[styles.note, [{ color: colors.text, borderColor: colors.border }, literalStyles.s1]]} />
         <Button title="Apply theme" onPress={importTheme} testID="theme-apply" />
         {!!themeMsg && <Text testID="theme-msg" style={styles.note}>{themeMsg}</Text>}
         {!!appearance.custom && <Button title={`Remove "${appearance.custom.name}"`} variant="outline" onPress={() => { setLook({ custom: undefined }); setThemeMsg('Removed.'); }} testID="theme-remove" />}

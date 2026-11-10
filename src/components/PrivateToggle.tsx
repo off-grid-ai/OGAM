@@ -1,7 +1,11 @@
 import React from 'react';
-import { Alert, TouchableOpacity } from 'react-native';
+import { StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useChatStore } from '../stores/chatStore';
+const literalStyles = StyleSheet.create({
+  s1: { paddingHorizontal: 6 },
+});
+
 
 /** Chat header lock: make this conversation private (never saved; gone when the app closes). */
 export function PrivateToggle({ colors }: { colors: any }) {
@@ -22,7 +26,7 @@ export function PrivateToggle({ colors }: { colors: any }) {
     }
   };
   return (
-    <TouchableOpacity onPress={toggle} style={{ paddingHorizontal: 6 }} accessibilityLabel={isPrivate ? 'Private chat (not saved)' : 'Make chat private'}>
+    <TouchableOpacity onPress={toggle} style={literalStyles.s1} accessibilityLabel={isPrivate ? 'Private chat (not saved)' : 'Make chat private'}>
       <Icon name={isPrivate ? 'lock' : 'unlock'} size={13} color={isPrivate ? colors.primary : colors.textMuted} />
     </TouchableOpacity>
   );

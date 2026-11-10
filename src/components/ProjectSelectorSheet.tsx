@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View,
+  StyleSheet, View,
   Text,
   ScrollView,
   TouchableOpacity,
@@ -11,6 +11,10 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { Project } from '../types';
 import { isProtectedProjectUnlocked } from '../stores/protectedProjectStorage';
+const literalStyles = StyleSheet.create({
+  s1: { opacity: 0.45 },
+});
+
 
 /** A protected project accepts chats only while it is unlocked. */
 const isLockedProject = (p: { id: string; pinVerifier?: string }) => !!p.pinVerifier && !isProtectedProjectUnlocked(p.id);
@@ -74,7 +78,7 @@ export const ProjectSelectorSheet: React.FC<ProjectSelectorSheetProps> = ({
             style={[
               styles.projectOption,
               activeProject?.id === project.id && styles.projectOptionSelected,
-              isLockedProject(project) && { opacity: 0.45 },
+              isLockedProject(project) && literalStyles.s1,
             ]}
             onPress={() => handleSelect(project)}
           >

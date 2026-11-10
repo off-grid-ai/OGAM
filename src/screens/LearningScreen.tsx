@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Share, Switch, View, Text, TextInput, TouchableOpacity, ScrollView, useWindowDimensions } from 'react-native';
+import { StyleSheet, Alert, Share, Switch, View, Text, TextInput, TouchableOpacity, ScrollView, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -15,6 +15,13 @@ import { useLearningStore, LearnEvent, defaultLearnConfig, newItem, BankStatus }
 import { startLearning, stopLearning, isLearning, onLearningStatus, auditNow, keepSession, newRound } from '../learning/engine';
 import { keepScreenOn } from '../atlasVoice/tts';
 import { ModelChips } from '../components/ModelChips';
+const literalStyles = StyleSheet.create({
+  s1: { marginTop: 0 },
+  s2: { fontWeight: '700' },
+  s3: { marginTop: 6 },
+  s4: { marginTop: 8, alignSelf: 'flex-start' },
+});
+
 
 const KIND_ICON: Record<string, string> = {
   bank: 'list', appeal: 'message-square', question: 'help-circle', report: 'edit-3', judge: 'check-square', manager: 'briefcase', info: 'info', error: 'alert-triangle',
@@ -247,10 +254,10 @@ export const LearningScreen: React.FC = () => {
             <Switch value={showLessons} onValueChange={(v) => updateSettings({ showLessonsUsed: v })} testID="show-lessons-used" />
           </View>
       <Text style={styles.label}>Mode</Text>
-      <View style={[styles.row, { marginTop: 0 }]}>
+      <View style={[styles.row, literalStyles.s1]}>
         {([['keep', 'Keep learning', 'Lessons go into the agent; checked answers are saved to the project'], ['session', 'Practice session', 'Temporary: nothing changes unless you tap Keep at the end']] as const).map(([m, t, d]) => (
           <TouchableOpacity key={m} disabled={running} onPress={() => setConfig(agentId, { mode: m })} style={[styles.modeCard, cfg.mode === m && { borderColor: colors.primary }]}>
-            <Text style={[styles.chipText, { fontWeight: '700' }]}>{t}</Text>
+            <Text style={[styles.chipText, literalStyles.s2]}>{t}</Text>
             <Text style={styles.counts}>{d}</Text>
           </TouchableOpacity>
         ))}
@@ -299,7 +306,7 @@ export const LearningScreen: React.FC = () => {
           </View>
         </TouchableOpacity>
       ))}
-      <View style={[styles.row, { marginTop: 6 }]}>
+      <View style={[styles.row, literalStyles.s3]}>
         <TextInput style={[styles.input, styles.grow]} value={newQ} onChangeText={setNewQ} placeholder="Add your own question" placeholderTextColor={colors.textMuted} />
         <TouchableOpacity onPress={() => { if (newQ.trim()) { addItems(agentId, [newItem(newQ, st?.round || 1, 'approved')]); setNewQ(''); } }} style={styles.smallBtn}><Text style={styles.smallBtnText}>Add</Text></TouchableOpacity>
         <TouchableOpacity disabled={running} onPress={() => newRound(agentId)} style={styles.smallBtn}><Text style={styles.smallBtnText}>New round</Text></TouchableOpacity>
@@ -309,7 +316,7 @@ export const LearningScreen: React.FC = () => {
         <View style={styles.statusBox}>
           <Text style={styles.statusText}>This practice session</Text>
           <Text style={styles.counts}>{st?.notes?.length ?? 0} checked answers{st?.sessionLessons ? `\nLessons so far:\n${st.sessionLessons}` : ''}</Text>
-          <TouchableOpacity disabled={running} onPress={async () => { try { Alert.alert('Done', await keepSession(agentId)); } catch (e: any) { Alert.alert('Could not keep it', String(e?.message || e)); } }} style={[styles.smallBtn, { marginTop: 8, alignSelf: 'flex-start' }]}>
+          <TouchableOpacity disabled={running} onPress={async () => { try { Alert.alert('Done', await keepSession(agentId)); } catch (e: any) { Alert.alert('Could not keep it', String(e?.message || e)); } }} style={[styles.smallBtn, literalStyles.s4]}>
             <Text style={styles.smallBtnText}>Keep what it learned</Text>
           </TouchableOpacity>
         </View>

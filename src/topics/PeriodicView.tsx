@@ -6,6 +6,12 @@ import { GOOD } from '../components/games/kit';
 import { ELEMENTS } from '../study/science';
 import { tablePosition, type PeriodicQuestion } from '../study/periodicQuiz';
 import { starsForShare } from './formats';
+const literalStyles = StyleSheet.create({
+  s1: { fontSize: 17 },
+  s2: { height: 6 },
+  s3: { fontSize: 12 },
+});
+
 const WHITE = '#ffffff';
 
 const GROUP_COLORS: Record<string, string> = {
@@ -42,10 +48,10 @@ export function PeriodicView({ content, onDone }: { content: { questions: Period
   return (
     <ScrollView contentContainerStyle={st.gap} testID="square-periodic">
       <Text style={{ color: colors.textSecondary }}>{i + 1} of {content.questions.length}</Text>
-      <Text style={{ color: colors.text, fontSize: 17 }} testID="periodic-prompt">{q.prompt}</Text>
+      <Text style={[{ color: colors.text }, literalStyles.s1]} testID="periodic-prompt">{q.prompt}</Text>
       <View style={st.grid}>
         {grid.map((row, r) => (
-          <View key={r} style={[st.row, r === 7 ? { height: 6 } : null]}>
+          <View key={r} style={[st.row, r === 7 ? literalStyles.s2 : null]}>
             {r === 7 ? null : row.map((e, c) => {
               if (!e) return <View key={c} style={{ width: cell, height: cell }} />;
               const isTapped = tapped === e.symbol;
@@ -68,7 +74,7 @@ export function PeriodicView({ content, onDone }: { content: { questions: Period
       {tapped && !done && <Text style={{ color: colors.error }} testID="periodic-wrong">Not that one. Try again.</Text>}
       {done && <Text style={{ color: GOOD }} testID="periodic-right">Correct. {q.explain}</Text>}
       {done && <Button title={last ? 'Finish' : 'Next'} onPress={next} testID={last ? 'periodic-done' : 'periodic-next'} />}
-      {wrong > 0 && !done && <Text style={{ color: colors.textMuted, fontSize: 12 }}>{wrong} wrong tap{wrong === 1 ? '' : 's'} so far</Text>}
+      {wrong > 0 && !done && <Text style={[{ color: colors.textMuted }, literalStyles.s3]}>{wrong} wrong tap{wrong === 1 ? '' : 's'} so far</Text>}
     </ScrollView>
   );
 }

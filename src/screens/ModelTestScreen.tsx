@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -17,6 +17,36 @@ import { localUniqueId } from '../utils/uniqueId';
 import { ImageModelTestScreen } from './ImageModelTestScreen';
 import { isOverridableMemoryError } from '../utils/modelLoadErrors';
 import { cancelTuning, tuneDevice, type TuneOutcome, type TuneProgress } from '../services/deviceTuner';
+const COLOR_FFF = '#fff';
+const BORDERCOLOR_D4A017 = '#d4a017';
+const literalStyles = StyleSheet.create({
+  s1: { flex: 1 },
+  s2: { flexDirection: 'row', alignItems: 'center', padding: 12 },
+  s3: { padding: 6 },
+  s4: { fontSize: 22, fontWeight: '700', fontFamily: 'serif', marginLeft: 8, flex: 1 },
+  s5: { padding: 12, paddingBottom: 60, width: '100%', maxWidth: 900, alignSelf: 'center' },
+  s6: { fontWeight: '700', fontSize: 16 },
+  s7: { fontSize: 12, marginTop: 2 },
+  s8: { marginTop: 8 },
+  s9: { marginTop: 12 },
+  s10: { borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  s11: { color: COLOR_FFF, fontWeight: '700' },
+  s12: { marginTop: 10, borderWidth: 1 },
+  s13: { borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
+  s14: { fontWeight: '700' },
+  s15: { marginTop: 4 },
+  s16: { marginTop: 10 },
+  s17: { borderRadius: 10, padding: 11 },
+  s18: { marginTop: 6 },
+  s19: { fontWeight: '600', marginTop: 8 },
+  s20: { flexDirection: 'row' },
+  s21: { width: 20 },
+  s22: { flex: 1, marginLeft: 12 },
+  s23: { fontWeight: '600' },
+  s24: { marginTop: 3 },
+  s25: { borderWidth: 1 },
+});
+
 const WHITE = '#ffffff';
 const buttonText = { fontWeight: '700' as const, textAlign: 'center' as const };
 
@@ -259,46 +289,46 @@ const TextModelTestScreen: React.FC = () => {
   const prevName = useAppStore((s) => s.downloadedModels.find((m) => m.id === prevId)?.name);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12 }}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 6 }}><Icon name="arrow-left" size={22} color={colors.text} /></TouchableOpacity>
-        <Text style={{ color: colors.text, fontSize: 22, fontWeight: '700', fontFamily: 'serif', marginLeft: 8, flex: 1 }}>Test model</Text>
+    <SafeAreaView style={[literalStyles.s1, { backgroundColor: colors.background }]} edges={['top']}>
+      <View style={literalStyles.s2}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={literalStyles.s3}><Icon name="arrow-left" size={22} color={colors.text} /></TouchableOpacity>
+        <Text style={[{ color: colors.text }, literalStyles.s4]}>Test model</Text>
       </View>
-      <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 60, width: '100%', maxWidth: 900, alignSelf: 'center' }}>
+      <ScrollView contentContainerStyle={literalStyles.s5}>
         {!model ? <Text style={{ color: colors.textMuted }}>Model not found.</Text> : (
           <>
             <View style={card}>
-              <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>{model.name}</Text>
-              <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>{model.fileName} · {hardwareService.formatModelSize(model)}</Text>
-              <Text style={{ color: colors.textSecondary, marginTop: 8 }}>Checks whether this model fits, loads, how fast it writes and reads, and what it can do. Takes about a minute. The model stays loaded afterwards.</Text>
-              <TouchableOpacity onPress={() => run()} disabled={running} style={{ marginTop: 12, backgroundColor: running ? colors.border : colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}>
-                {running ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>{verdict ? 'Test again' : 'Start test'}</Text>}
+              <Text style={[{ color: colors.text }, literalStyles.s6]}>{model.name}</Text>
+              <Text style={[{ color: colors.textMuted }, literalStyles.s7]}>{model.fileName} · {hardwareService.formatModelSize(model)}</Text>
+              <Text style={[{ color: colors.textSecondary }, literalStyles.s8]}>Checks whether this model fits, loads, how fast it writes and reads, and what it can do. Takes about a minute. The model stays loaded afterwards.</Text>
+              <TouchableOpacity onPress={() => run()} disabled={running} style={[literalStyles.s9, { backgroundColor: running ? colors.border : colors.primary }, literalStyles.s10]}>
+                {running ? <ActivityIndicator color="#fff" /> : <Text style={literalStyles.s11}>{verdict ? 'Test again' : 'Start test'}</Text>}
               </TouchableOpacity>
               {canForce && !running && (
-                <TouchableOpacity testID="model-test-load-anyway" onPress={() => run(true)} style={{ marginTop: 10, borderWidth: 1, borderColor: colors.error, borderRadius: 10, paddingVertical: 11, alignItems: 'center' }}>
+                <TouchableOpacity testID="model-test-load-anyway" onPress={() => run(true)} style={[literalStyles.s12, { borderColor: colors.error }, literalStyles.s13]}>
                   <Text style={{ color: colors.error }}>Load anyway</Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>May close other apps or crash if memory runs out</Text>
+                  <Text style={[{ color: colors.textMuted }, literalStyles.s7]}>May close other apps or crash if memory runs out</Text>
                 </TouchableOpacity>
               )}
             </View>
             {model.engine === 'llama' && (
               <View style={card} testID="model-tune">
-                <Text style={{ color: colors.text, fontWeight: '700' }}>Find the best settings</Text>
-                <Text style={{ color: colors.textSecondary, marginTop: 4 }}>Loads this model a few ways (automatic GPU or NPU, and the CPU with different thread counts), times a short reply each way and keeps the fastest. Takes a few minutes. Your chat is not touched.</Text>
-                <TouchableOpacity onPress={findBest} disabled={running || vulkanBusy || tuneBusy} testID="model-tune-start" style={{ marginTop: 10, backgroundColor: tuneBusy ? colors.border : colors.primary, borderRadius: 10, padding: 11 }}>
+                <Text style={[{ color: colors.text }, literalStyles.s14]}>Find the best settings</Text>
+                <Text style={[{ color: colors.textSecondary }, literalStyles.s15]}>Loads this model a few ways (automatic GPU or NPU, and the CPU with different thread counts), times a short reply each way and keeps the fastest. Takes a few minutes. Your chat is not touched.</Text>
+                <TouchableOpacity onPress={findBest} disabled={running || vulkanBusy || tuneBusy} testID="model-tune-start" style={[literalStyles.s16, { backgroundColor: tuneBusy ? colors.border : colors.primary }, literalStyles.s17]}>
                   <Text style={[buttonText, { color: WHITE }]}>{tuneBusy ? `Trying ${tune?.step ?? 1} of ${tune?.steps ?? '...'}: ${tune?.label ?? ''}` : tuned ? 'Find again' : 'Find the best settings'}</Text>
                 </TouchableOpacity>
                 {tuneBusy && (
-                  <TouchableOpacity onPress={cancelTuning} style={{ marginTop: 8 }} testID="model-tune-cancel"><Text style={{ color: colors.error }}>Stop and keep my settings</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={cancelTuning} style={literalStyles.s8} testID="model-tune-cancel"><Text style={{ color: colors.error }}>Stop and keep my settings</Text></TouchableOpacity>
                 )}
-                {!!tuneError && <Text style={{ color: colors.error, marginTop: 8 }}>{tuneError}</Text>}
+                {!!tuneError && <Text style={[{ color: colors.error }, literalStyles.s8]}>{tuneError}</Text>}
                 {tuned?.results.map((r) => (
-                  <Text key={r.option.id} style={{ color: colors.textSecondary, marginTop: 6 }}>
+                  <Text key={r.option.id} style={[{ color: colors.textSecondary }, literalStyles.s18]}>
                     {r.option.label}: {r.error ? `failed (${r.error})` : `${r.tps.toFixed(1)} tok/s, first words after ${r.firstWordSec.toFixed(1)} s`}
                   </Text>
                 ))}
                 {!!tuned && (
-                  <Text style={{ color: colors.text, fontWeight: '600', marginTop: 8 }} testID="model-tune-result">
+                  <Text style={[{ color: colors.text }, literalStyles.s19]} testID="model-tune-result">
                     {tuned.best ? `Using ${tuned.best.option.label} (${tuned.best.tps.toFixed(1)} tok/s). Change it any time in Settings, Text generation.` : tuned.cancelled ? 'Stopped. Your settings are unchanged.' : 'None of the options worked, so your settings are unchanged.'}
                   </Text>
                 )}
@@ -306,41 +336,41 @@ const TextModelTestScreen: React.FC = () => {
             )}
             {model.engine === 'llama' && (
               <View style={card}>
-                <Text style={{ color: colors.text, fontWeight: '700' }}>Vulkan GPU test</Text>
-                <Text style={{ color: colors.textSecondary, marginTop: 4 }}>Loads this model with your accelerator layer limit on the Vulkan engine and reports the layers actually placed on the GPU. This unloads the active text model to save memory.</Text>
-                <TouchableOpacity onPress={runVulkan} disabled={running || vulkanBusy} style={{ marginTop: 10, backgroundColor: colors.primary, borderRadius: 10, padding: 11 }}>
+                <Text style={[{ color: colors.text }, literalStyles.s14]}>Vulkan GPU test</Text>
+                <Text style={[{ color: colors.textSecondary }, literalStyles.s15]}>Loads this model with your accelerator layer limit on the Vulkan engine and reports the layers actually placed on the GPU. This unloads the active text model to save memory.</Text>
+                <TouchableOpacity onPress={runVulkan} disabled={running || vulkanBusy} style={[literalStyles.s16, { backgroundColor: colors.primary }, literalStyles.s17]}>
                   <Text style={[buttonText, { color: WHITE }]}>{vulkanBusy ? 'Testing Vulkan...' : 'Test Vulkan GPU'}</Text>
                 </TouchableOpacity>
-                {!!vulkanResult && <Text style={{ color: colors.textSecondary, marginTop: 8 }}>{vulkanResult}</Text>}
+                {!!vulkanResult && <Text style={[{ color: colors.textSecondary }, literalStyles.s8]}>{vulkanResult}</Text>}
               </View>
             )}
             {steps.map((s) => {
               const [name, color] = icon(s.status);
               return (
-                <View key={s.key} style={[card, { flexDirection: 'row' }]}>
-                  {s.status === 'run' ? <ActivityIndicator size="small" color={colors.primary} style={{ width: 20 }} /> : <Icon name={name} size={20} color={color} />}
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={{ color: colors.text, fontWeight: '600' }}>{s.title}</Text>
-                    {!!s.detail && <Text style={{ color: colors.textSecondary, marginTop: 3 }}>{s.detail}</Text>}
+                <View key={s.key} style={[card, literalStyles.s20]}>
+                  {s.status === 'run' ? <ActivityIndicator size="small" color={colors.primary} style={literalStyles.s21} /> : <Icon name={name} size={20} color={color} />}
+                  <View style={literalStyles.s22}>
+                    <Text style={[{ color: colors.text }, literalStyles.s23]}>{s.title}</Text>
+                    {!!s.detail && <Text style={[{ color: colors.textSecondary }, literalStyles.s24]}>{s.detail}</Text>}
                   </View>
                 </View>
               );
             })}
             {!!verdict && (
-              <View style={[card, { borderWidth: 1, borderColor: verdict.good ? (colors.success ?? '#3a9d5d') : ('#d4a017') }]}>
-                <Text style={{ color: colors.text, fontWeight: '700' }}>{verdict.text}</Text>
+              <View style={[card, [literalStyles.s25, { borderColor: verdict.good ? colors.success ?? '#3a9d5d' : BORDERCOLOR_D4A017 }]]}>
+                <Text style={[{ color: colors.text }, literalStyles.s14]}>{verdict.text}</Text>
                 {!!faster && !running && (
-                  <TouchableOpacity onPress={() => navigation.navigate('Main', { screen: 'ModelsTab', params: { initialTab: 'text', initialSearchQuery: `${model.name.replace(/[-_. ]?(i?q\d[\w]*|f16|bf16|gguf)$/gi, '').trim()}` } })} style={{ marginTop: 10 }} testID="model-test-find-faster">
+                  <TouchableOpacity onPress={() => navigation.navigate('Main', { screen: 'ModelsTab', params: { initialTab: 'text', initialSearchQuery: `${model.name.replace(/[-_. ]?(i?q\d[\w]*|f16|bf16|gguf)$/gi, '').trim()}` } })} style={literalStyles.s16} testID="model-test-find-faster">
                     <Text style={{ color: colors.primary }}>{faster} {/NPU/.test(faster) ? 'Get the NPU version' : 'Find it'}</Text>
                   </TouchableOpacity>
                 )}
                 {!!verdict && !verdict.good && tps0(verdict) && !running && (
-                  <TouchableOpacity onPress={() => navigation.navigate('Main', { screen: 'ModelsTab', params: { initialTab: 'text' } })} style={{ marginTop: 10 }}>
+                  <TouchableOpacity onPress={() => navigation.navigate('Main', { screen: 'ModelsTab', params: { initialTab: 'text' } })} style={literalStyles.s16}>
                     <Text style={{ color: colors.primary }}>Browse smaller models</Text>
                   </TouchableOpacity>
                 )}
                 {!!prevId && !running && (
-                  <TouchableOpacity onPress={goBackToPrev} style={{ marginTop: 10 }}>
+                  <TouchableOpacity onPress={goBackToPrev} style={literalStyles.s16}>
                     <Text style={{ color: colors.primary }}>Switch back to {prevName || 'the previous model'}</Text>
                   </TouchableOpacity>
                 )}

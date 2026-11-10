@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Alert, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -16,6 +16,13 @@ import {
   addPdfs, allReportsMarkdown, autoBackup, listBackups, restoreBackup, decide, deleteDocument, evaluateAgent, exportKnowledge, importPackage, listDocuments, listProfiles, pauseStudy,
   previewPackage, snapshotFor, startStudy, transferHistory, useKnowledgeStatus,
 } from './controller';
+const literalStyles = StyleSheet.create({
+  s1: { flex: 1 },
+  s2: { flexDirection: 'row', alignItems: 'center' },
+  s3: { flexDirection: 'row' },
+  s4: { borderWidth: 1 },
+});
+
 const NO_COLOR = 'transparent';
 const rowGap = { flexDirection: 'row' as const, gap: SPACING.sm };
 const tabStyle = { paddingVertical: SPACING.xs, paddingHorizontal: SPACING.sm, borderBottomWidth: 2 };
@@ -99,12 +106,12 @@ export const KnowledgeScreen: React.FC = () => {
   const p = status.progress;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', padding: SPACING.md, gap: SPACING.sm }}>
+    <SafeAreaView style={[literalStyles.s1, { backgroundColor: colors.background }]} edges={['top']}>
+      <View style={[literalStyles.s2, { padding: SPACING.md, gap: SPACING.sm }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} accessibilityLabel="Back"><Icon name="arrow-left" size={20} color={colors.text} /></TouchableOpacity>
-        <Text style={[s.text, { flex: 1 }]}>Knowledge</Text>
+        <Text style={[s.text, literalStyles.s1]}>Knowledge</Text>
       </View>
-      <View style={{ flexDirection: 'row', paddingHorizontal: SPACING.md, gap: SPACING.xs }}>
+      <View style={[literalStyles.s3, { paddingHorizontal: SPACING.md, gap: SPACING.xs }]}>
         {TABS.map(([id, label]) => (
           <TouchableOpacity key={id} onPress={() => setTab(id)} testID={`knowledge-tab-${id}`} style={[tabStyle, { borderBottomColor: tab === id ? colors.primary : NO_COLOR }]}>
             <Text style={{ color: tab === id ? colors.primary : colors.textSecondary, ...TYPOGRAPHY.meta }}>{label}</Text>
@@ -168,8 +175,8 @@ export const KnowledgeScreen: React.FC = () => {
         {tab === 'library' && (
           <View>
             <TextInput value={query} onChangeText={setQuery} placeholder="Search what has been learned" placeholderTextColor={colors.textMuted} testID="knowledge-search"
-              style={{ borderWidth: 1, borderColor: colors.border, color: colors.text, padding: SPACING.sm, marginBottom: SPACING.sm }} />
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm }}>
+              style={[literalStyles.s4, { borderColor: colors.border, color: colors.text, padding: SPACING.sm, marginBottom: SPACING.sm }]} />
+            <View style={[literalStyles.s2, { gap: SPACING.sm, marginBottom: SPACING.sm }]}>
               <Switch value={conflictsOnly} onValueChange={setConflictsOnly} /><Text style={s.meta}>Only findings that conflict</Text>
             </View>
             {findings.map((f) => (
@@ -192,7 +199,7 @@ export const KnowledgeScreen: React.FC = () => {
 
         {tab === 'transfer' && (
           <View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm }}>
+            <View style={[literalStyles.s2, { gap: SPACING.sm, marginBottom: SPACING.sm }]}>
               <Switch value={includePdfs} onValueChange={setIncludePdfs} /><Text style={s.meta}>Include the original PDFs (larger, and may contain private material)</Text>
             </View>
             <Text style={s.meta}>Nothing leaves this phone until you pick where to save the file.</Text>
@@ -208,8 +215,8 @@ export const KnowledgeScreen: React.FC = () => {
               <Button title="Back up now" variant="outline" onPress={backUpNow} testID="knowledge-backup-now" />
             </View>
             {backups.map((b) => (
-              <View key={b.name} style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.xs }} testID={`backup-${b.day}`}>
-                <Text style={[s.meta, { flex: 1 }]}>{b.day} · {Math.round(b.bytes / 1024)} KB</Text>
+              <View key={b.name} style={[literalStyles.s2, { gap: SPACING.sm, marginBottom: SPACING.xs }]} testID={`backup-${b.day}`}>
+                <Text style={[s.meta, literalStyles.s1]}>{b.day} · {Math.round(b.bytes / 1024)} KB</Text>
                 <Button title="Restore" size="small" variant="outline" onPress={() => restore(b)} testID={`backup-restore-${b.day}`} />
                 <Button title="Save to Files" size="small" variant="ghost" onPress={() => copyOut(b)} />
               </View>

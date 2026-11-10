@@ -1,6 +1,17 @@
 import React, { useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../theme';
+const literalStyles = StyleSheet.create({
+  s1: { gap:12 },
+  s2: { fontSize:19 },
+  s3: { fontSize:20 },
+  s4: { padding:13 },
+  s5: { borderWidth:1, borderRadius:9 },
+  s6: { fontSize:12 },
+  s7: { borderRadius:9 },
+  s8: { textAlign:'center' },
+});
+
 
 type Choice = { label: string; food: number; water: number; warmth: number; result: string };
 type Scenario = { story: string; options: Choice[] };
@@ -45,19 +56,19 @@ export function AtlasSurvival() {
     setFood(v=>v+choice.food);setWater(v=>v+choice.water);setWarmth(v=>v+choice.warmth);
     setHistory(choice.result);setDay(d=>d+1);
   };
-  return <View style={{ gap:12 }}>
-    <Text style={{ color:colors.text, fontSize:19 }}>Wilderness Survival · Stage {Math.min(day+1,scenarios.length)}/{scenarios.length}</Text>
+  return <View style={literalStyles.s1}>
+    <Text style={[{ color:colors.text }, literalStyles.s2]}>Wilderness Survival · Stage {Math.min(day+1,scenarios.length)}/{scenarios.length}</Text>
     <Text style={{ color:colors.textSecondary }}>Food: {food} · Water: {water} · Warmth: {warmth}</Text>
     {!!history && <Text style={{ color:colors.textSecondary }}>{history}</Text>}
-    {lost ? <Text style={{ color:colors.error, fontSize:20 }}>Your supplies ran out. Try a different strategy!</Text>
-      : finished ? <Text style={{ color:colors.text,fontSize:20 }}>You made it to rescue. You survived!</Text>
+    {lost ? <Text style={[{ color:colors.error }, literalStyles.s3]}>Your supplies ran out. Try a different strategy!</Text>
+      : finished ? <Text style={[{ color:colors.text }, literalStyles.s3]}>You made it to rescue. You survived!</Text>
       : <>
-        <Text style={{ color:colors.text,fontSize:19 }}>{scenarios[day].story}</Text>
-        {scenarios[day].options.map((choice,i)=><TouchableOpacity key={i} onPress={()=>choose(choice)} style={{ padding:13,borderColor:colors.border,borderWidth:1,borderRadius:9,backgroundColor:colors.surface }}>
+        <Text style={[{ color:colors.text }, literalStyles.s2]}>{scenarios[day].story}</Text>
+        {scenarios[day].options.map((choice,i)=><TouchableOpacity key={i} onPress={()=>choose(choice)} style={[literalStyles.s4, { borderColor:colors.border }, literalStyles.s5, { backgroundColor:colors.surface }]}>
           <Text style={{ color:colors.text }}>{choice.label}</Text>
-          <Text style={{ color:colors.textSecondary, fontSize:12 }}>Food {choice.food>=0?'+':''}{choice.food} · Water {choice.water>=0?'+':''}{choice.water} · Warmth {choice.warmth>=0?'+':''}{choice.warmth}</Text>
+          <Text style={[{ color:colors.textSecondary }, literalStyles.s6]}>Food {choice.food>=0?'+':''}{choice.food} · Water {choice.water>=0?'+':''}{choice.water} · Warmth {choice.warmth>=0?'+':''}{choice.warmth}</Text>
         </TouchableOpacity>)}
       </>}
-    <TouchableOpacity onPress={restart} style={{ padding:13,backgroundColor:colors.surface,borderRadius:9 }}><Text style={{ color:colors.text,textAlign:'center' }}>Restart survival challenge</Text></TouchableOpacity>
+    <TouchableOpacity onPress={restart} style={[literalStyles.s4, { backgroundColor:colors.surface }, literalStyles.s7]}><Text style={[{ color:colors.text }, literalStyles.s8]}>Restart survival challenge</Text></TouchableOpacity>
   </View>;
 }

@@ -2,6 +2,12 @@ import React, { useState } from 'react';
 import { Modal, Text, TouchableOpacity, View, ScrollView, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useAgentStore } from '../stores/agentStore';
+const BACKGROUNDCOLOR_RGBA_0_0_0_0_45 = 'rgba(0,0,0,0.45)';
+const literalStyles = StyleSheet.create({
+  s1: { fontSize: 15 },
+  s2: { fontSize: 12 },
+});
+
 
 /** Chat header: shows the active agent; tap to switch agents (or none). */
 export function AgentChip({ styles, colors, onSelect }: { styles: any; colors: any; onSelect?: (agentId: string | null) => void }) {
@@ -30,8 +36,8 @@ export function AgentChip({ styles, colors, onSelect }: { styles: any; colors: a
                   <TouchableOpacity key={a.id ?? 'none'} style={local.row} onPress={() => pick(a.id)}>
                     <Icon name={on ? 'check-circle' : 'circle'} size={18} color={on ? colors.primary : colors.textMuted} />
                     <View style={local.rowText}>
-                      <Text style={{ color: colors.text, fontSize: 15 }}>{a.name}</Text>
-                      {!!a.description && <Text style={{ color: colors.textSecondary, fontSize: 12 }} numberOfLines={1}>{a.description}</Text>}
+                      <Text style={[{ color: colors.text }, literalStyles.s1]}>{a.name}</Text>
+                      {!!a.description && <Text style={[{ color: colors.textSecondary }, literalStyles.s2]} numberOfLines={1}>{a.description}</Text>}
                     </View>
                   </TouchableOpacity>
                 );
@@ -46,7 +52,7 @@ export function AgentChip({ styles, colors, onSelect }: { styles: any; colors: a
 }
 
 const local = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 24 },
+  backdrop: { flex: 1, backgroundColor: BACKGROUNDCOLOR_RGBA_0_0_0_0_45, justifyContent: 'center', padding: 24 },
   sheet: { borderRadius: 12, padding: 16, maxHeight: '70%', width: '100%', maxWidth: 520, alignSelf: 'center' },
   title: { fontSize: 17, fontWeight: '600', marginBottom: 8 },
   list: { flexGrow: 0 },

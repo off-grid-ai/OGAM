@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Button } from '../components/Button';
 import { CitationChips } from '../components/CitationChips';
 import { ACCOUNTING_DRILLS, DRILL_LABELS, STATS_DRILLS, type DrillKind } from '../study/drills';
@@ -7,6 +7,10 @@ import { answerText, type Exercise, type Verdict } from '../study/exercises';
 import { secondsLeft, type Exam, type ExamResult } from '../study/exam';
 import { Answer } from '../components/ExerciseAnswer';
 import { good, st, type Colors } from '../components/practiceStyles';
+const literalStyles = StyleSheet.create({
+  s1: { minHeight: 50 },
+});
+
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
@@ -81,7 +85,7 @@ export const Flashcards: React.FC<{ cards: Exercise[]; onGotIt: (id: string) => 
 
 /** A note on why a question was missed; kept with the question and shown when it comes back. */
 export const WhyWrong: React.FC<{ value?: string; onChange: (t: string) => void; colors: Colors }> = ({ value, onChange, colors }) => (
-  <TextInput testID="why-wrong" value={value ?? ''} onChangeText={onChange} placeholder="Why did I get this wrong? (a note for next time)" placeholderTextColor={colors.textMuted} multiline style={[st.input, st.top10, { borderColor: colors.border, color: colors.text, minHeight: 50 }]} />
+  <TextInput testID="why-wrong" value={value ?? ''} onChangeText={onChange} placeholder="Why did I get this wrong? (a note for next time)" placeholderTextColor={colors.textMuted} multiline style={[st.input, st.top10, [{ borderColor: colors.border, color: colors.text }, literalStyles.s1]]} />
 );
 
 export interface HomeProps {

@@ -7,7 +7,7 @@ import { NearbySyncSettings } from '../components/settings/NearbySyncSettings';
 import { AssistantAccessCard } from '../components/AssistantAccessCard';
 import { useWideLayout } from '../hooks/useWideLayout';
 import {
-  View,
+  StyleSheet, View,
   Text,
   ScrollView,
   TouchableOpacity,
@@ -31,6 +31,10 @@ import { AppUpdateCard } from '../components/settings/AppUpdateCard';
 import { useAppStore } from '../stores';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { appVersionLabel } from '../utils/appVersion';
+const literalStyles = StyleSheet.create({
+  s1: { minWidth: 150, textAlign: 'right', paddingVertical: 4 },
+});
+
 
 
 type NavigationProp = CompositeNavigationProp<
@@ -135,7 +139,7 @@ export const SettingsScreen: React.FC = () => {
             placeholder="What agents call you"
             placeholderTextColor={colors.textMuted}
             accessibilityLabel="Your name, used by agents"
-            style={{ color: colors.text, minWidth: 150, textAlign: 'right', paddingVertical: 4 }}
+            style={[{ color: colors.text }, literalStyles.s1]}
           />
         </View>
 

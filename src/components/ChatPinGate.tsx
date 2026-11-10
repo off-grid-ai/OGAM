@@ -1,10 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useChatStore } from '../stores/chatStore';
 import { onProtectedChatsRelocked, unlockChat } from '../stores/encryptedChatStorage';
 import { useTheme } from '../theme';
 import { useNavigation } from '@react-navigation/native';
 import { formatWait, pinWaitRemaining, recordPinFailure, recordPinSuccess } from '../services/pinThrottle';
+const OPACITY_0_5 = 0.5;
+const OPACITY_1 = 1;
+const literalStyles = StyleSheet.create({
+  s1: { flex: 1, justifyContent: 'center', padding: 32, gap: 18 },
+  s2: { fontSize: 24, fontWeight: '700' },
+  s3: { padding: 12, borderRadius: 9, borderWidth: 1 },
+  s4: { padding: 10 },
+  s5: { textAlign: 'center' },
+  s6: { padding: 14, borderRadius: 10 },
+  s7: { textAlign: 'center', fontWeight: '700' },
+  s8: { padding: 12, borderRadius: 10, borderWidth: 1 },
+});
+
 
 const unlocked = new Map<string, string>();
 onProtectedChatsRelocked(() => unlocked.clear());
@@ -49,17 +62,17 @@ export function ChatPinGate({ conversationId }: { conversationId?: string | null
     } finally { setBusy(false); }
   };
   return <Modal visible={locked} animationType="fade" onRequestClose={() => navigation.goBack()} transparent={false}>
-    <View style={{ flex: 1, justifyContent: 'center', padding: 32, gap: 18, backgroundColor: colors.background }}>
-      <Text style={{ color: colors.text, fontSize: 24, fontWeight: '700' }}>Locked conversation</Text>
+    <View style={[literalStyles.s1, { backgroundColor: colors.background }]}>
+      <Text style={[{ color: colors.text }, literalStyles.s2]}>Locked conversation</Text>
       <Text style={{ color: colors.textSecondary }}>Enter this chat's PIN to open it.</Text>
-      <TextInput value={pin} onChangeText={v => setPin(v.replace(/\D/g, '').slice(0, 12))} secureTextEntry keyboardType="number-pad" placeholder="4–12 digit PIN" placeholderTextColor={colors.textMuted} style={{ color: colors.text, padding: 12, borderRadius: 9, borderWidth: 1, borderColor: colors.border }} />
+      <TextInput value={pin} onChangeText={v => setPin(v.replace(/\D/g, '').slice(0, 12))} secureTextEntry keyboardType="number-pad" placeholder="4–12 digit PIN" placeholderTextColor={colors.textMuted} style={[{ color: colors.text }, literalStyles.s3, { borderColor: colors.border }]} />
       {!!error && <Text style={{ color: colors.error }}>{error}</Text>}
-      <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 10 }}><Text style={{ color: colors.text, textAlign: 'center' }}>Back to chats</Text></TouchableOpacity>
-      <TouchableOpacity disabled={busy || pin.length < 4} onPress={() => submit(false)} style={{ backgroundColor: colors.primary, padding: 14, borderRadius: 10, opacity: busy ? 0.5 : 1 }}>
-        <Text style={{ color: colors.background, textAlign: 'center', fontWeight: '700' }}>Unlock this chat</Text>
+      <TouchableOpacity onPress={() => navigation.goBack()} style={literalStyles.s4}><Text style={[{ color: colors.text }, literalStyles.s5]}>Back to chats</Text></TouchableOpacity>
+      <TouchableOpacity disabled={busy || pin.length < 4} onPress={() => submit(false)} style={[{ backgroundColor: colors.primary }, literalStyles.s6, { opacity: busy ? OPACITY_0_5 : OPACITY_1 }]}>
+        <Text style={[{ color: colors.background }, literalStyles.s7]}>Unlock this chat</Text>
       </TouchableOpacity>
-      <TouchableOpacity disabled={busy || pin.length < 4} onPress={() => submit(true)} style={{ padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}>
-        <Text style={{ color: colors.text, textAlign: 'center' }}>Unlock other chats using the same PIN</Text>
+      <TouchableOpacity disabled={busy || pin.length < 4} onPress={() => submit(true)} style={[literalStyles.s8, { borderColor: colors.border }]}>
+        <Text style={[{ color: colors.text }, literalStyles.s5]}>Unlock other chats using the same PIN</Text>
       </TouchableOpacity>
     </View>
   </Modal>;
