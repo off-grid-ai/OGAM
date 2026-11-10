@@ -581,6 +581,15 @@ What changed:
   grounded-answers skill reduce made-up answers. A message longer than the model can read now tells you the start was left out.
   Atlas emergency packages in Small, Medium, Large and Full sizes: add to the phone, save as one file to an SD card or flash drive,
   and import from it. Not verified on a phone.
+  Also in 0.0.148: updates from inside the app (Settings > App updates: checks the latest GitHub release against this build, downloads
+  the APK and starts Android's installer; also checked once a day when the app opens, switch in Settings, skipped in off-grid
+  mode). The made-by-Wednesday footer was removed. Source numbers: a reply that cites a search result as [1] shows a small raised
+  number and lists the sources under it; Teach the AI reports list their sources 1 to n. Undo for merged chats. Jump-to-story chips
+  in the briefing. A note under a reply saying which learned lessons it used. Share the AI's reports as Markdown. Packages saved to
+  a drive carry a manifest so an incomplete copy is caught. "Check this answer" in a reply's menu. A message longer than the model can
+  read is read in parts (switch in Chat settings). Knowledge studies EPUB and text books as well as PDFs. Messaging-app looks set the
+  chat background and show the time. Fixed: pinning a message or making slides from it crashed (ChatMessage used the chat store
+  without importing it). Not verified on a phone.
 - 0.0.147: fixes and additions from phone use. Daily briefing: lines are queued in order so the one you play renders first (the
   gaps of several seconds before each card); the briefing opens and closes with a short tune (switch in Show options); timing lines
   tagged [POD] in Debug Logs. Chat: tool calls time out (3 minutes, 10 for research and media), an unanswered file prompt counts as
