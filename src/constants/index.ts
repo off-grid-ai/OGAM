@@ -8,7 +8,6 @@ export {
 } from './models';
 
 // External URLs
-export const WEDNESDAY_URL = 'https://wednesday.is';
 
 // Off Grid AI Desktop: the free, open-source desktop app. Linked from remote-server discovery.
 export const OFF_GRID_DESKTOP_URL = 'https://getoffgridai.co/desktop';

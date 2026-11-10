@@ -366,18 +366,4 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   nextButton: {
     width: '100%' as const,
   },
-  madeWithLove: { alignItems: 'center' as const, paddingTop: SPACING.md },
-  madeWithLoveText: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
-  heart: { color: '#FF0000', fontSize: 14 },
-  wednesdayLink: { textDecorationLine: 'underline' as const },
-  wednesdayLogo: {
-    width: 20,
-    height: 20,
-    resizeMode: 'contain' as const,
-    marginHorizontal: 4,
-  },
-  madeWithLoveRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-  },
 });

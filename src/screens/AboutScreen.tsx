@@ -180,5 +180,4 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   navItemContent: { flex: 1 },
   navItemTitle: { ...TYPOGRAPHY.body, color: colors.text },
   navItemDesc: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, marginTop: 2 },
-  wednesdayLogo: { width: 24, height: 24, resizeMode: 'contain' as const },
 });

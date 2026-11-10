@@ -1,8 +1,7 @@
 /**
  * UTM tagging for outbound links to our own web properties (getoffgridai.co,
- * offgridmobileai.co, wednesday.is), so we can attribute which in-app surface
- * drove a click. This is the single source of the param format — matching the
- * pre-existing convention already baked into WEDNESDAY_URL / the onboarding link:
+ * offgridmobileai.co), so we can attribute which in-app surface drove a click.
+ * This is the single source of the param format:
  *
  *   utm_source = off-grid-mobile-app   (always — the traffic came from this app)
  *   utm_medium = <surface>             (which screen/card: home-promo, …)

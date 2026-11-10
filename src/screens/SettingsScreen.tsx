@@ -21,7 +21,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { AnimatedEntry } from '../components/AnimatedEntry';
 import { AnimatedListItem } from '../components/AnimatedListItem';
-import { MadeWithLove } from '../components/MadeWithLove';
 import { DebugLogsScreen } from '../components/DebugLogsScreen';
 import { useSettingsSections } from '../components/settings/sectionRegistry';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
@@ -292,7 +291,6 @@ export const SettingsScreen: React.FC = () => {
           </AnimatedEntry>
         )}
 
-        <MadeWithLove />
         {__DEV__ && <DebugLogsScreen visible={showDebugLogs} onClose={() => setShowDebugLogs(false)} />}
       </ScrollView>
 
