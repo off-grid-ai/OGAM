@@ -8,6 +8,7 @@ import { useChatStore, useRemoteServerStore, useAppStore } from '../stores';
 import { Message } from '../types';
 import { getToolsAsOpenAISchema, executeToolCall } from './tools';
 import { withTimeout } from '../utils/withTimeout';
+import { fileClaimNote } from './fileClaim';
 import type { ToolCall, ToolResult } from './tools/types';
 import { normalizeToolResult, toolErrorResult, toolResultModelContent } from './tools/toolResult';
 import { modelInputImageUris, modelInputAudioUris } from './modelMedia';
@@ -781,13 +782,17 @@ function buildStreamHandler(ctx: ToolLoopContext, state: ToolLoopState): ((data:
   };
 }
 
-function emitFinalResponse(ctx: ToolLoopContext, state: ToolLoopState, displayResponse: string): void {
+function emitFinalResponse(ctx: ToolLoopContext, state: ToolLoopState, displayResponse: string, loopMessages: Message[] = []): void {
+  // The model may claim it saved a file it never wrote; say so in the reply itself.
+  const note = fileClaimNote(displayResponse, loopMessages);
   if (!state.streamedContent) {
     if (!state.thinkingDoneFired) {
       ctx.onThinkingDone();
       ctx.callbacks?.onFirstToken?.();
     }
-    ctx.onFinalResponse(displayResponse || '_(No response)_');
+    ctx.onFinalResponse((displayResponse || '_(No response)_') + note);
+  } else if (note) {
+    useChatStore.getState().appendToStreamingMessage(note);
   }
 }
 
@@ -798,7 +803,7 @@ async function forceFinalTextResponse(ctx: ToolLoopContext, state: ToolLoopState
   state.firstTokenFired = false;
   const forcedOnStream = buildStreamHandler(ctx, state);
   const { fullResponse: forcedResponse } = await callLLMWithRetry(loopMessages, [], { onStream: forcedOnStream, forceRemote: ctx.forceRemote, disableThinking: true, conversationId: ctx.conversationId, ctx });
-  emitFinalResponse(ctx, state, forcedResponse);
+  emitFinalResponse(ctx, state, forcedResponse, loopMessages);
 }
 
 /**
@@ -921,10 +926,10 @@ export async function runToolLoop(ctx: ToolLoopContext): Promise<ToolLoopOutcome
         const { fullResponse: fallbackResp } = await callLLMWithRetry(
           loopMessages, [], { onStream: fallbackOnStream, forceRemote: ctx.forceRemote, disableThinking: true, conversationId: ctx.conversationId, ctx },
         );
-        emitFinalResponse(ctx, state, fallbackResp);
+        emitFinalResponse(ctx, state, fallbackResp, loopMessages);
         return { interrupted: false };
       }
-      emitFinalResponse(ctx, state, displayResponse);
+      emitFinalResponse(ctx, state, displayResponse, loopMessages);
       return { interrupted: false };
     }
 
