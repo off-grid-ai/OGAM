@@ -52,7 +52,7 @@ export const KnowledgeScreen: React.FC = () => {
 
   const addDocuments = async () => {
     try {
-      const picked = await pick({ mode: 'open', type: [types.pdf], allowMultiSelection: true });
+      const picked = await pick({ mode: 'open', type: [types.pdf, types.plainText, 'application/epub+zip', 'text/markdown'], allowMultiSelection: true });
       const resolved = await Promise.all(picked.map(async (f) => ({ uri: await resolvePickedFileUri(f.uri, f.name || 'document.pdf'), name: f.name || 'document.pdf' })));
       const r = await addPdfs(resolved);
       setNotice(`${r.added} added${r.duplicates ? `, ${r.duplicates} already here` : ''}${r.failed.length ? `. Could not read: ${r.failed.join('; ')}` : ''}.`);
@@ -119,7 +119,7 @@ export const KnowledgeScreen: React.FC = () => {
                 <Text style={s.meta}>{p.phase === 'studying' ? `${p.chunksStudied} of ${p.chunksTotal} sections` : p.phase}{p.pages ? ` · ${p.pages} pages` : ''} · {p.findings} findings so far</Text>
                 <Button title="Pause" variant="outline" onPress={pauseStudy} testID="knowledge-pause" />
               </View>
-            ) : <Text style={s.meta}>Nothing is being studied. Add a PDF under Documents.</Text>}
+            ) : <Text style={s.meta}>Nothing is being studied. Add a PDF, EPUB or text file under Documents.</Text>}
             {!!status.lastError && <View style={s.card}><Text style={s.text}>Stopped: {status.lastError}</Text><Text style={s.meta}>Nothing was marked as read. Fix it and press Study to continue where it stopped.</Text></View>}
             {status.lastReport && (
               <View style={s.card} testID="knowledge-last-report">
@@ -146,7 +146,7 @@ export const KnowledgeScreen: React.FC = () => {
 
         {tab === 'documents' && (
           <View>
-            <Button title="Add PDFs" onPress={addDocuments} testID="knowledge-add-pdf" />
+            <Button title="Add books (PDF, EPUB, text)" onPress={addDocuments} testID="knowledge-add-pdf" />
             {docs.map((d) => (
               <View key={d.sourceId} style={[s.card, { marginTop: SPACING.sm }]} testID={`doc-${d.sourceId}`}>
                 <Text style={s.text}>{d.title ?? d.name}</Text>
@@ -155,7 +155,7 @@ export const KnowledgeScreen: React.FC = () => {
                 {!!d.error && <Text style={s.meta}>{d.error}</Text>}
                 <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
                   {d.status !== 'done' && <Button title={status.running === d.sourceId ? 'Studying...' : d.progress.chunksStudied ? 'Resume' : 'Study'} disabled={!!status.running} onPress={() => study(d.sourceId)} testID={`doc-study-${d.sourceId}`} />}
-                  <Button title="Remove" variant="outline" onPress={() => Alert.alert('Remove this source?', 'The PDF, its text and the knowledge that rests only on it are deleted.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => deleteDocument(d.sourceId).then((n) => setNotice(`Removed. ${n} findings erased.`)) }])} />
+                  <Button title="Remove" variant="outline" onPress={() => Alert.alert('Remove this source?', 'The file, its text and the knowledge that rests only on it are deleted.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => deleteDocument(d.sourceId).then((n) => setNotice(`Removed. ${n} findings erased.`)) }])} />
                 </View>
               </View>
             ))}

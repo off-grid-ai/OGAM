@@ -308,3 +308,33 @@ describe('PDF learning', () => {
     expect(doc.ocrPages).toEqual([18]);
   });
 });
+
+describe('text books', () => {
+  it('imports a plain-text book, reads it as pages, and chunks it like a PDF', async () => {
+    await setup(bookPages(2), { model: false });
+    const RNFS = require('react-native-fs').default ?? require('react-native-fs');
+    const text = Array.from({ length: 60 }, (_, i) => `${i % 15 === 0 ? `Chapter ${i / 15 + 1} The ledger\n\n` : ''}${para('ledger', i * 6)}`).join('\n\n');
+    await RNFS.mkdir('/picked');
+    await RNFS.writeFile('/picked/notes.txt', text, 'utf8');
+    const { docs } = mods();
+    const { doc, duplicate } = await docs.importPdf({ uri: 'file:///picked/notes.txt', name: 'Textbook notes.txt' });
+    expect(duplicate).toBe(false);
+    expect(doc.title).toBe('Textbook notes');
+    expect(doc.pages).toBeGreaterThan(3); // cut into pages of about 3,000 characters
+
+    const extracted = await docs.extractDocument(doc.sourceId);
+    expect(extracted.progress.pagesExtracted).toBe(doc.pages);
+    expect(extracted.unreadablePages).toEqual([]);
+    const ready = await docs.chunkDocument(doc.sourceId);
+    expect(ready.status).toBe('ready');
+    const chunks = await docs.readChunks(ready.hash, 0, ready.progress.chunksTotal);
+    expect(chunks.length).toBeGreaterThan(3);
+    expect(chunks[0].page).toBe(1);
+    expect(chunks[chunks.length - 1].pageEnd).toBe(doc.pages);
+  });
+  it('refuses a file type it cannot study, with a clear message', async () => {
+    await setup(bookPages(2), { model: false });
+    const { docs } = mods();
+    await expect(docs.importPdf({ uri: 'file:///picked/pic.jpg', name: 'pic.jpg' })).rejects.toThrow(/PDF, EPUB and plain text/);
+  });
+});

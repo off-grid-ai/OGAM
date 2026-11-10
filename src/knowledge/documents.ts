@@ -18,7 +18,8 @@ import {
 } from './storage';
 import { Chunker } from './chunker';
 import { eraseFindings, findingsCiting } from './cycles';
-import { pdfExtractPages, pdfPageCount } from '../services/pdfExtractor';
+import { bookExtractPages, bookPageCount, removeBookSidecar } from './bookPages';
+import { bookKind, type BookKind } from './textPages';
 import { resolvePickedFileUri } from '../utils/resolvePickedFileUri';
 
 export const PAGES_PER_FILE = 20;
@@ -53,8 +54,13 @@ async function patchDocument(sourceId: string, change: (d: SourceDocument) => vo
 // ------------------------------------------------------------------ import
 export interface ImportResult { doc: SourceDocument; duplicate: boolean }
 
-/** Brings a PDF into Atlas's private storage. The same bytes imported twice are one document. */
+/** What kind of book a stored document is, from its name (the stored original has no extension). */
+export const kindOf = (doc: { name: string }): BookKind => bookKind(doc.name) ?? 'pdf';
+
+/** Brings a PDF, EPUB or text file into Atlas's private storage. The same bytes imported twice are one document. */
 export async function importPdf(input: { uri: string; name: string; agentId?: string; topicId?: string }): Promise<ImportResult> {
+  const kind = bookKind(input.name);
+  if (!kind) throw new Error('Atlas can study PDF, EPUB and plain text (.txt, .md) files.');
   const local = (await resolvePickedFileUri(input.uri, input.name)).replace(/^file:\/\//, '');
   const bytes = Number((await RNFS.stat(local)).size);
   const hash = await RNFS.hash(local, 'sha256');
@@ -63,12 +69,13 @@ export async function importPdf(input: { uri: string; name: string; agentId?: st
   await ensureDir(`${P.original(hash).slice(0, P.original(hash).lastIndexOf('/'))}`);
   if (!(await RNFS.exists(P.original(hash)))) await RNFS.copyFile(local, P.original(hash));
   let pages: number | undefined;
-  try { pages = await pdfPageCount(P.original(hash)); } catch (e: any) {
+  try { pages = await bookPageCount(P.original(hash), kind); } catch (e: any) {
     await removeTree(P.original(hash));
-    throw new Error(`That file could not be read as a PDF (${String(e?.message || e)}).`);
+    await removeBookSidecar(P.original(hash));
+    throw new Error(`That file could not be read as ${kind === 'pdf' ? 'a PDF' : kind === 'epub' ? 'an EPUB' : 'text'} (${String(e?.message || e)}).`);
   }
   const doc: SourceDocument = {
-    schemaVersion: SCHEMA_VERSION, sourceId: uuid(), hash, name: input.name, title: input.name.replace(/\.pdf$/i, ''), bytes, pages,
+    schemaVersion: SCHEMA_VERSION, sourceId: uuid(), hash, name: input.name, title: input.name.replace(/\.(pdf|epub|txt|md|markdown|text)$/i, ''), bytes, pages,
     importedAt: nowIso(), ...(input.agentId ? { agentId: input.agentId } : {}), ...(input.topicId ? { topicId: input.topicId } : {}),
     status: 'imported', progress: { pagesExtracted: 0, chunksTotal: 0, chunksStudied: 0 }, unreadablePages: [],
   };
@@ -99,16 +106,18 @@ export async function extractDocument(sourceId: string, opts: RunOptions = {}): 
   let doc = (await getDocument(sourceId))!;
   if (!doc) throw new Error('No such document.');
   if (doc.status === 'ready' || doc.status === 'studying' || doc.status === 'done') return doc;
-  const total = doc.pages ?? (await pdfPageCount(P.original(doc.hash)));
+  const kind = kindOf(doc);
+  const total = doc.pages ?? (await bookPageCount(P.original(doc.hash), kind));
   doc = await patchDocument(sourceId, (d) => { d.pages = total; d.status = 'extracting'; d.error = undefined; });
   while (doc.progress.pagesExtracted < total) {
     if (opts.shouldStop?.()) return patchDocument(sourceId, (d) => { d.status = 'paused'; });
     const start = doc.progress.pagesExtracted;
-    const texts = await pdfExtractPages(P.original(doc.hash), start, PAGES_PER_FILE);
+    const texts = await bookExtractPages(P.original(doc.hash), kind, start, PAGES_PER_FILE);
     if (!texts.length) throw new Error(`The PDF returned no pages at page ${start + 1}.`);
     const rows: PageRow[] = texts.map((text, i) => ({ page: start + i + 1, text }));
     await atomicWriteText(pagesFile(doc.hash, Math.floor(start / PAGES_PER_FILE) + 1), `${rows.map((r) => JSON.stringify(r)).join('\n')  }\n`);
-    const ocrDone = await readPagesByOcr(P.original(doc.hash), rows, opts.shouldStop);
+    // Only a PDF has page pictures to read; a text or EPUB page that is empty is simply empty.
+    const ocrDone = kind === 'pdf' ? await readPagesByOcr(P.original(doc.hash), rows, opts.shouldStop) : [];
     const unreadable = rows.filter((r) => r.text.replace(/\s/g, '').length < MIN_PAGE_CHARS).map((r) => r.page);
     doc = await patchDocument(sourceId, (d) => {
       d.progress.pagesExtracted = start + texts.length;
@@ -190,7 +199,7 @@ export async function removeDocument(sourceId: string): Promise<{ erasedFindings
   const citing = await findingsCiting(doc.hash);
   const onlyThis = citing.filter((f) => f.evidence.every((e) => e.sourceHash === doc.hash)).map((f) => f.recordId);
   const erasedFindings = await eraseFindings(onlyThis, `source ${doc.name} was removed`);
-  await removeTree(P.original(doc.hash)); await removeTree(P.extractedDir(doc.hash)); await removeTree(P.chunksDir(doc.hash));
+  await removeTree(P.original(doc.hash)); await removeBookSidecar(P.original(doc.hash)); await removeTree(P.extractedDir(doc.hash)); await removeTree(P.chunksDir(doc.hash));
   await appendJsonl(P.tombstones(), [{ schemaVersion: SCHEMA_VERSION, tombstoneId: uuid(), kind: 'document', targetId: doc.sourceId, targetHash: doc.hash, reason: 'removed by the person', createdAt: nowIso() }]);
   // Keep a minimal record (no name) so the removal is visible and the same bytes are not mistaken for something never seen.
   await saveDocument({ ...doc, name: '(removed)', title: undefined, removed: true, status: 'failed', progress: { pagesExtracted: 0, chunksTotal: 0, chunksStudied: 0 }, unreadablePages: [] });
