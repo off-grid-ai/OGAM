@@ -279,10 +279,15 @@ export const ChatsListScreen: React.FC = () => {
     const names = new Map(projects.map(project => [project.id, project.name]));
     return groupChats(visibleConversations, { groupBy: shownGroupBy, sortBy: shownSortBy, projectName: id => names.get(id) });
   }, [visibleConversations, shownGroupBy, shownSortBy, projects]);
-  // A folded section keeps its header and hides its chats.
+  // A folded section keeps its header and hides its chats; a search shows every match, folded or not.
+  const searching = deferredQuery.trim() !== '';
   const sections = useMemo(
-    () => grouped.map(section => ({ ...section, count: section.data.length, data: folded.has(section.key) ? [] : section.data })),
-    [grouped, folded],
+    () => grouped.map(section => ({
+      ...section,
+      count: section.data.length,
+      data: folded.has(section.key) && !searching ? [] : section.data,
+    })),
+    [grouped, folded, searching],
   );
   const toggleSection = (key: string) =>
     setFolded(current => {

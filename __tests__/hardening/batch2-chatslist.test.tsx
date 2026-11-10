@@ -158,6 +158,11 @@ describe('batch2 ChatsListScreen — sort, timestamp format, delete, empty', () 
     app.rtl.fireEvent.press(view.getByTestId(`chats-section-project:${garden.id}`));
     expect(view.queryByText('Tomatoes')).toBeNull();
     expect(view.getByText('Loose chat')).toBeTruthy();
+    // A search shows a match inside a folded section; clearing it folds the section again.
+    app.rtl.fireEvent.changeText(view.getByTestId('chat-search-input'), 'Tomat');
+    await app.rtl.waitFor(() => expect(view.getByText('Tomatoes')).toBeTruthy());
+    app.rtl.fireEvent.changeText(view.getByTestId('chat-search-input'), '');
+    await app.rtl.waitFor(() => expect(view.queryByText('Tomatoes')).toBeNull());
     app.rtl.fireEvent.press(view.getByTestId(`chats-section-project:${garden.id}`));
     expect(view.getByText('Tomatoes')).toBeTruthy();
 

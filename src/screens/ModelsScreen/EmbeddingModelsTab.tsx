@@ -162,9 +162,14 @@ export const EmbeddingModelsTab: React.FC = () => {
         testID="embedding-search-input"
       />
       {!!status.message && !changeRow && <Text style={embeddingStyles.status} accessibilityLiveRegion="polite" testID="embedding-index-progress">{status.message}</Text>}
-      {!!((!failedRow && status.error) || error) && <Text style={embeddingStyles.error} accessibilityRole="alert">{error || status.error}</Text>}
-      {/* A failed change whose row a search has hidden can still be cleared here. */}
-      {!failedRow && !status.busy && !!status.error && <Button title="Dismiss" onPress={embeddingModelChanger.dismiss} testID="embedding-error-dismiss" />}
+      {!!error && <Text style={embeddingStyles.error} accessibilityRole="alert">{error}</Text>}
+      {/* A failed change whose row a search has hidden shows here, with its own Dismiss. */}
+      {!failedRow && !status.busy && !!status.error && (
+        <>
+          <Text style={embeddingStyles.error} accessibilityRole="alert">{status.error}</Text>
+          <Button title="Dismiss" onPress={embeddingModelChanger.dismiss} testID="embedding-error-dismiss" />
+        </>
+      )}
       {status.busy && !changeRow && <Button title="Cancel model change" onPress={embeddingModelChanger.cancel} />}
       {loading && <Text style={embeddingStyles.status} aria-busy>Searching...</Text>}
       {!loading && query.trim() !== '' && !error && results.length === 0 && <Text style={embeddingStyles.status}>No models found. Try another name.</Text>}
