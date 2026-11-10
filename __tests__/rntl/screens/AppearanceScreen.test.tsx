@@ -19,8 +19,21 @@ describe('AppearanceScreen', () => {
     useAppStore.setState({ themeMode: 'light', settings: { ...useAppStore.getState().settings, appearance: undefined, aiStyle: undefined } });
   });
 
+  it('starts short: only the quick look is open, and every other group opens with one tap', () => {
+    const view = render(<AppearanceScreen />);
+    expect(view.getByTestId('skin-ios')).toBeTruthy();
+    expect(view.queryByTestId('accent-blue')).toBeNull();
+    expect(view.queryByTestId('ai-length-brief')).toBeNull();
+    fireEvent.press(view.getByTestId('fold-colors'));
+    expect(view.getByTestId('accent-blue')).toBeTruthy();
+    fireEvent.press(view.getByTestId('fold-colors'));
+    expect(view.queryByTestId('accent-blue')).toBeNull();
+  });
+
   it('recolors with the picked accent', () => {
     const view = render(<AppearanceScreen />);
+    fireEvent.press(view.getByTestId('fold-colors'));
+    fireEvent.press(view.getByTestId('fold-chat'));
     const before = StyleSheet.flatten(view.getByText('Preview').props.style).color;
     fireEvent.press(view.getByTestId('accent-blue'));
     const after = StyleSheet.flatten(view.getByText('Preview').props.style).color;
@@ -30,6 +43,7 @@ describe('AppearanceScreen', () => {
 
   it('"Surprise me" picks a new look and "Reset the look" brings the default back', () => {
     const view = render(<AppearanceScreen />);
+    fireEvent.press(view.getByTestId('fold-colors'));
     fireEvent.press(view.getByTestId('accent-blue'));
     fireEvent.press(view.getByTestId('look-surprise'));
     const { appearance } = useAppStore.getState().settings;
@@ -52,6 +66,8 @@ describe('AppearanceScreen', () => {
 
   it('puts the chosen AI style into the system prompt', () => {
     const view = render(<AppearanceScreen />);
+    fireEvent.press(view.getByTestId('fold-ai'));
+    fireEvent.press(view.getByTestId('fold-about'));
     fireEvent.press(view.getByText('Brief'));
     fireEvent.press(view.getByText('Playful'));
     fireEvent.changeText(view.getByTestId('ai-custom'), 'Use metric units.');

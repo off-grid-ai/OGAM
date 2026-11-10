@@ -40,6 +40,21 @@ function Chips<T extends string | boolean | undefined>({ options, value, onPick,
 
 const pick = <T,>(list: T[]): T => list[Math.floor(Math.random() * list.length)];
 
+/** One group of options that opens and closes, so the screen starts short and every option is still one tap away. */
+function Fold({ id, title, open, onToggle, children }: { id: string; title: string; open: boolean; onToggle: (id: string) => void; children: React.ReactNode }) {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
+  return (
+    <View style={styles.fold}>
+      <TouchableOpacity testID={`fold-${id}`} accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => onToggle(id)} style={styles.foldHead}>
+        <Text style={styles.foldTitle}>{title}</Text>
+        <Icon name={open ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textMuted} />
+      </TouchableOpacity>
+      {open && <View>{children}</View>}
+    </View>
+  );
+}
+
 export const AppearanceScreen: React.FC = () => {
   const navigation = useNavigation();
   const { colors, isDark } = useTheme();
@@ -73,6 +88,10 @@ export const AppearanceScreen: React.FC = () => {
     } catch (e: any) { if (!isErrorWithCode(e) || e.code !== errorCodes.OPERATION_CANCELED) Alert.alert('Could not use that picture', String(e?.message || e)); }
   };
   const setAi = (patch: Partial<AiStyle>) => updateSettings({ aiStyle: { ...ai, ...patch } });
+  // Which groups are open. Only the quick look at the top is open to begin with.
+  const [openFolds, setOpenFolds] = React.useState<Record<string, boolean>>({});
+  const toggleFold = (id: string) => setOpenFolds((o) => ({ ...o, [id]: !o[id] }));
+  const fold = (id: string, title: string, children: React.ReactNode) => <Fold id={id} title={title} open={!!openFolds[id]} onToggle={toggleFold}>{children}</Fold>;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -97,6 +116,7 @@ export const AppearanceScreen: React.FC = () => {
           options={[{ id: 'none', name: 'Atlas', hint: 'The standard look' }, ...SKINS.map(k => ({ id: k.id, name: k.name, hint: k.hint }))]} />
         <Text style={styles.note}>A style sets the colors, font, chat style and the shape of boxes in one go. You can still change any part below.</Text>
 
+        {fold('shape', 'Shape, background picture and themes', <>
         <Text style={styles.label}>Corner roundness</Text>
         <Chips testID="corner-radius" value={String(appearance.cornerRadius ?? appearance.custom?.cornerRadius ?? 'skin')}
           onPick={id => setLook({ cornerRadius: id === 'skin' ? undefined : Number(id) })}
@@ -118,6 +138,9 @@ export const AppearanceScreen: React.FC = () => {
         {!!themeMsg && <Text testID="theme-msg" style={styles.note}>{themeMsg}</Text>}
         {!!appearance.custom && <Button title={`Remove "${appearance.custom.name}"`} variant="outline" onPress={() => { setLook({ custom: undefined }); setThemeMsg('Removed.'); }} testID="theme-remove" />}
 
+        </>)}
+
+        {fold('colors', 'Colors, font and layout', <>
         <Text style={styles.label}>Light or dark</Text>
         <Chips testID="theme-mode" value={themeMode} onPick={setThemeMode}
           options={[{ id: 'system', name: 'Match phone' }, { id: 'light', name: 'Light' }, { id: 'dark', name: 'Dark' }]} />
@@ -166,6 +189,9 @@ export const AppearanceScreen: React.FC = () => {
         <Chips testID="text-size" value={appearance.textSize ?? 'normal'} onPick={textSize => setLook({ textSize })}
           options={TEXT_SIZES.map(t => ({ id: t.id, name: t.name }))} />
 
+        </>)}
+
+        {fold('chat', 'Chat style', <>
         <Text style={styles.label}>Chat layout</Text>
         <Chips testID="chat-layout" value={appearance.chatLayout ?? 'clean'} onPick={chatLayout => setLook({ chatLayout })}
           options={CHAT_LAYOUTS.map(l => ({ id: l.id, name: l.name, hint: l.hint }))} />
@@ -175,6 +201,8 @@ export const AppearanceScreen: React.FC = () => {
           <Text style={[styles.previewBody, { fontFamily: FONT_CHOICES.find(f => f.id === appearance.font)?.body ?? 'sans-serif' }]}>This is how chats and notes will look.</Text>
           <Text style={styles.previewMeta}>Font and size apply to every screen right away.</Text>
         </View>
+
+        </>)}
 
         <View style={styles.chips}>
           <TouchableOpacity testID="look-surprise" accessibilityRole="button" style={styles.chip}
@@ -189,14 +217,19 @@ export const AppearanceScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
+        {fold('bar', 'Bottom bar', <>
         <NavBarSettings />
 
-        <Text style={styles.section}>Feel</Text>
+        </>)}
+
+        {fold('feel', 'Feel', <>
         <Text style={styles.label}>Vibration on taps</Text>
         <Chips testID="haptics" value={!settings.hapticsOff} onPick={on => updateSettings({ hapticsOff: !on })}
           options={[{ id: true, name: 'On' }, { id: false, name: 'Off' }]} />
 
-        <Text style={styles.section}>AI style</Text>
+        </>)}
+
+        {fold('ai', 'AI style', <>
         <Text style={styles.note}>Applies to every chat, agent and project. A project or agent can still add its own instructions.</Text>
         <Text style={styles.label}>How much it says</Text>
         <Chips testID="ai-length" value={ai.length ?? 'balanced'} onPick={length => setAi({ length })} options={AI_LENGTHS} />
@@ -214,7 +247,9 @@ export const AppearanceScreen: React.FC = () => {
         <Chips testID="share-location" value={settings.shareLocation !== false} onPick={on => updateSettings({ shareLocation: on })}
           options={[{ id: true, name: 'Tell the AI the city' }, { id: false, name: 'Never' }]} />
         <Text style={styles.note}>The AI can say what city you are in or near, from the phone's last GPS reading and a built-in list of large cities. It never leaves the phone, and the AI only gets the city and country, not coordinates. Needs location allowed once (open Maps).</Text>
-        <Text style={styles.section}>About you</Text>
+        </>)}
+
+        {fold('about', 'About you', <>
         <Text style={styles.note}>Every chat knows this, so you do not have to repeat it. Fill in only what you want; each box is optional.</Text>
         {ABOUT_FIELDS.map(f => (
           <View key={f.key}>
@@ -237,7 +272,9 @@ export const AppearanceScreen: React.FC = () => {
         <TextInput testID="ai-custom" value={ai.custom ?? ''} onChangeText={custom => setAi({ custom: custom.slice(0, 1200) })}
           placeholder="e.g. Use metric units. I am studying nursing. Call me Sam."
           placeholderTextColor={colors.textMuted} multiline style={styles.input} />
-      </ScrollView>
+        </>)}
+
+        </ScrollView>
     </SafeAreaView>
   );
 };
@@ -248,6 +285,9 @@ const createStyles = (colors: ThemeColors) => ({
   back: { padding: SPACING.xs, marginRight: SPACING.sm },
   title: { ...TYPOGRAPHY.h2, color: colors.text },
   content: { padding: SPACING.lg, paddingBottom: SPACING.xxl * 2 },
+  fold: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: SPACING.sm },
+  foldHead: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingVertical: SPACING.md },
+  foldTitle: { ...TYPOGRAPHY.h2, color: colors.text },
   section: { ...TYPOGRAPHY.h2, color: colors.text, marginTop: SPACING.lg, marginBottom: SPACING.xs },
   label: { ...TYPOGRAPHY.label, color: colors.textSecondary, marginTop: SPACING.md, marginBottom: SPACING.sm, textTransform: 'uppercase' as const },
   note: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
