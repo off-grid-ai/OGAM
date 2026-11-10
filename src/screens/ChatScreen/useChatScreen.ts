@@ -24,6 +24,7 @@ import { getDisplayMessages } from './types';
 import { saveReportToProject } from '../../services/researchReportStorage';
 import { saveImageToGallery } from './useSaveImage';
 import { needsVisionRepair } from '../../utils/visionRepair';
+import { checkAnswerPrompt } from '../../services/checkAnswer';
 import { toggleChatTool, toolsForConversation } from '../../services/tools/chatTools';
 import {
   isSuspiciousRecoveredImageModel,
@@ -389,6 +390,14 @@ export const useChatScreen = () => {
   const handleSend = (text: string, attachments?: MediaAttachment[], imageMode?: 'auto' | 'force' | 'disabled') =>
     handleSendFn(genDeps, { text, attachments, imageMode: researchMode ? 'disabled' : imageMode, startGeneration, setDebugInfo });
 
+  /** "Check this answer": sends a follow-up asking the model to check that reply, with the figures nothing earlier supports. */
+  const handleCheckAnswer = (message: Message) => {
+    const msgs = activeConversation?.messages ?? [];
+    const upTo = msgs.findIndex((m) => m.id === message.id);
+    const earlier = (upTo < 0 ? msgs : msgs.slice(0, upTo)).map((m) => m.content);
+    handleSend(checkAnswerPrompt(message.content, earlier));
+  };
+
   // After picking a text model, replay the stashed message (no retype needed).
   const handleModelSelect = async (model: DownloadedModel) => {
     await handleModelSelectFn(modelDeps, model);
@@ -424,6 +433,7 @@ export const useChatScreen = () => {
     visionNeedsRepair: !activeModelInfo.isRemote && needsVisionRepair(activeModel),
     navigation, hardwareService,
     handleSend,
+    handleCheckAnswer,
     handleStop: () => handleStopFn(genDeps),
     handleModelSelect,
     handleUnloadModel: () => handleUnloadModelFn(modelDeps),

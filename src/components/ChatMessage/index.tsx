@@ -333,6 +333,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   onCopy,
   onRetry,
   onEdit,
+  onCheckAnswer,
   onDelete,
   onSaveToProject,
   onGenerateImage,
@@ -393,6 +394,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     usePins.getState().add({ id: message.id, text: displayContent, role: message.role, conversationId: conversation?.id ?? null, conversationTitle: conversation?.title ?? 'Chat' });
     triggerHaptic('notificationSuccess');
   };
+  const handleCheck = () => {
+    setShowActionMenu(false);
+    setTimeout(() => onCheckAnswer?.(message), 350); // let the menu finish closing
+  };
+
   const handleSlides = () => {
     setShowActionMenu(false);
     const chat = useChatStore.getState();
@@ -516,7 +522,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         onRetry={handleRetry}
         onDelete={handleDelete}
         onSaveToProject={handleSaveToProject}
-        extras={{ pinned, onPin: handlePin, onSlides: isStreaming ? undefined : handleSlides }}
+        extras={{ pinned, onPin: handlePin, onSlides: isStreaming ? undefined : handleSlides, onCheck: isStreaming || !onCheckAnswer ? undefined : handleCheck }}
         onGenerateImage={handleGenerateImage}
         onSpeak={handleSpeak}
         onSelectText={handleSelectText}

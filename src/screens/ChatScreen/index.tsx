@@ -285,6 +285,7 @@ export const ChatScreen: React.FC = () => {
       onRetry={chat.handleRetryMessage}
       onEdit={chat.handleEditMessage}
       onDelete={chat.handleDeleteMessage}
+      onCheckAnswer={chat.handleCheckAnswer}
       onSaveToProject={chat.activeProject && !chat.activeConversation?.isPrivate &&
         (chat.activeProject.pinVerifier ? isProtectedProjectUnlocked(chat.activeProject.id) : !chat.activeConversation?.pinVerifier)
         ? chat.handleSaveReportToProject : undefined}

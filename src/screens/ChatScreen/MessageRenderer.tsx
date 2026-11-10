@@ -19,6 +19,7 @@ type MessageRendererProps = {
   onRetry: (message: Message) => void;
   onEdit: (message: Message, newContent: string, opts?: { resend?: boolean }) => void;
   onDelete?: (message: Message) => void;
+  onCheckAnswer?: (message: Message) => void;
   onSaveToProject?: (message: Message) => void;
   onGenerateImage: (prompt: string) => void;
   onImagePress: (uri: string) => void;
@@ -38,6 +39,7 @@ const MessageRendererInner: React.FC<MessageRendererProps> = (props) => {
     onRetry,
     onEdit,
     onDelete,
+    onCheckAnswer,
     onSaveToProject,
     onGenerateImage,
     onImagePress,
@@ -87,6 +89,7 @@ const MessageRendererInner: React.FC<MessageRendererProps> = (props) => {
       onRetry={onRetry}
       onEdit={onEdit}
       onDelete={onDelete}
+      onCheckAnswer={onCheckAnswer}
       onSaveToProject={onSaveToProject}
       onGenerateImage={onGenerateImage}
       onImagePress={onImagePress}

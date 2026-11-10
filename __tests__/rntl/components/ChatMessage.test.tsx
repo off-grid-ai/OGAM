@@ -1641,3 +1641,22 @@ describe('ChatMessage: which lessons a reply used', () => {
     useAppStore.getState().updateSettings({ showLessonsUsed: undefined });
   });
 });
+
+describe('ChatMessage: check this answer', () => {
+  it('offers the action on a reply and calls back with that message', () => {
+    jest.useFakeTimers();
+    const onCheckAnswer = jest.fn();
+    const message = createAssistantMessage('The penalty is 5%.');
+    const { getByTestId } = render(<ChatMessage message={message} onCheckAnswer={onCheckAnswer} showActions={true} />);
+    fireEvent(getByTestId('assistant-message'), 'longPress');
+    fireEvent.press(getByTestId('action-check-answer'));
+    act(() => { jest.advanceTimersByTime(400); });
+    expect(onCheckAnswer).toHaveBeenCalledWith(expect.objectContaining({ content: 'The penalty is 5%.' }));
+    jest.useRealTimers();
+  });
+  it('does not offer it on your own message', () => {
+    const { getByTestId, queryByTestId } = render(<ChatMessage message={createUserMessage('hi')} onCheckAnswer={jest.fn()} showActions={true} />);
+    fireEvent(getByTestId('user-message'), 'longPress');
+    expect(queryByTestId('action-check-answer')).toBeNull();
+  });
+});

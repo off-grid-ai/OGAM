@@ -26,7 +26,7 @@ interface ActionMenuSheetProps {
   /** When provided, shows a "Select text" item (chat mode) for partial copy. */
   onSelectText?: () => void;
   /** Pin this message to the Pinned page, and make slides from it. */
-  extras?: { pinned: boolean; onPin: () => void; onSlides?: () => void };
+  extras?: { pinned: boolean; onPin: () => void; onSlides?: () => void; onCheck?: () => void };
 }
 
 export function ActionMenuSheet({
@@ -124,6 +124,12 @@ export function ActionMenuSheet({
           <AnimatedPressable testID="action-pin" hapticType="selection" style={styles.actionSheetItem} onPress={extras.onPin}>
             <Icon name="bookmark" size={18} color={colors.textSecondary} />
             <Text style={styles.actionSheetText}>{extras.pinned ? 'Unpin' : 'Pin'}</Text>
+          </AnimatedPressable>
+        )}
+        {extras?.onCheck && !isUser && (
+          <AnimatedPressable testID="action-check-answer" hapticType="selection" style={styles.actionSheetItem} onPress={extras.onCheck}>
+            <Icon name="check-circle" size={18} color={colors.textSecondary} />
+            <Text style={styles.actionSheetText}>Check this answer</Text>
           </AnimatedPressable>
         )}
         {extras?.onSlides && !isUser && (
