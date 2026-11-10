@@ -159,7 +159,7 @@
     "name": "A chat in low-memory mode",
     "group": "Chat",
     "what": "A model too big to copy into free RAM loads mapped instead of crashing or being refused, and says so in one line.",
-    "file": "screens/v/chat-low-memory-ios-1.jpg",
+    "file": "screens/v/chat-low-memory-ios-2.jpg",
     "versions": [
       {
         "v": 1,
@@ -169,8 +169,19 @@
         "android": "screens/v/chat-low-memory-android-1.jpg",
         "what": "LFM2.5 8B (4.8 GB) on an 11 GB Android with 5.1 GB free: a copy needed 6.8 GB, so it loaded mapped in 10 s and answered at 4.4 tok/s. Gemma 4 E2B on the same phone still loads as a full-speed copy (5.0 tok/s). iPhone: K2 Horizon 3.7B on a 12 GB iPhone loads as before (weights were already mapped), no notice, answered in 5.5 s.",
         "androidClip": "screens/v/chat-low-memory-android-1.mp4"
+      },
+      {
+        "v": 2,
+        "label": "K2 thinking tags hidden",
+        "at": "2026-11-10T06:47:00Z",
+        "file": "screens/v/chat-low-memory-ios-2.jpg",
+        "clip": "screens/v/chat-k2-ios-1.mp4",
+        "android": "screens/v/chat-low-memory-android-1.jpg",
+        "androidClip": "screens/v/chat-low-memory-android-1.mp4",
+        "what": "K2 Horizon's empty <ifm|think> block no longer shows as text: the same reply now reads \"Mars, Venus, and Jupiter.\" The clip is a fresh K2 reply on the iPhone (Loading, Model loaded, Banana.), with no tags and no low-memory line."
       }
-    ]
+    ],
+    "clip": "screens/v/chat-k2-ios-1.mp4"
   },
   {
     "id": "attach-menu",
