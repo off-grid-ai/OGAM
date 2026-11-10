@@ -13,6 +13,7 @@ it('rejects a bad theme with a clear reason, applies a good one, and sets corner
   const { useAppStore } = require('../../src/stores');
   const { getTheme } = require('../../src/theme/useTheme');
   const r = rtl.render(React.createElement(AppearanceScreen));
+  rtl.fireEvent.press(r.getByTestId('fold-shape')); // the theme, roundness and picture options sit in this group
 
   rtl.fireEvent.changeText(r.getByTestId('theme-json'), '{"light":{"background":"red"}}');
   rtl.fireEvent.press(r.getByTestId('theme-apply'));
@@ -46,6 +47,7 @@ it('keeps a chosen background picture in app storage, makes screens see-through,
   const { useAppStore } = require('../../src/stores');
   const { getTheme } = require('../../src/theme/useTheme');
   const r = rtl.render(React.createElement(AppearanceScreen));
+  rtl.fireEvent.press(r.getByTestId('fold-shape'));
   await rtl.act(async () => { await Promise.resolve(); });
   const picker = require('@react-native-documents/picker');
   (picker.pick as jest.Mock).mockResolvedValue([{ uri: 'file:///pics/wall.jpg', name: 'wall.jpg' }]);
