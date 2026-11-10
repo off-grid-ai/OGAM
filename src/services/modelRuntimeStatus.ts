@@ -1,4 +1,4 @@
-import type { TextRuntimeInfo } from '../services/activeModelService/types';
+import type { TextRuntimeInfo } from './activeModelService/types';
 
 export type ModelRuntimeDisplay = {
   compact: string;

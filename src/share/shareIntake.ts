@@ -1,6 +1,6 @@
 import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
 import { create } from 'zustand';
-import { navigationRef } from '../navigation/navigationRef';
+import { navigationRef } from '../utils/navigationRef';
 import { useAuthStore } from '../stores';
 import logger from '../utils/logger';
 

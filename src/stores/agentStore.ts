@@ -3,6 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generateId } from '../utils/generateId';
 import { COUNSELOR_PROMPT } from './counselorPrompt';
+import { callHook, HOOKS } from '../bootstrap/hookRegistry';
+import { lowPowerActive, useLowPower, LOW_POWER_NOTE } from '../atlasTools/lowPowerState';
 
 /**
  * Agents (Atlas): reusable personas, each with its own system prompt.
@@ -220,7 +222,7 @@ export const useAgentStore = create<AgentState>()(
         }
         if (agent?.contextLength) applyContextLength(agent.contextLength);
         if (agent?.modelId) {
-          try { require('../atlasTools/models').switchToModelInBackground(agent.modelId); } catch { /* ignore */ }
+          callHook(HOOKS.agentModelChosen, agent.modelId);
         }
       },
       getAgent: (id) => (id ? get().agents.find((x) => x.id === id) : undefined),
@@ -332,14 +334,11 @@ export function activeAgentOverrides(): { temperature?: number; topP?: number; m
   const a = agents.find((x) => x.id === activeAgentId);
   const o: any = {};
   // Low-battery mode caps answer length for every agent.
-  try {
-    const lp = require('../atlasTools/lowPower');
-    if (lp.lowPowerActive()) {
-      const cap = lp.useLowPower.getState().maxTokens;
-      const base = (a && typeof a.maxTokens === 'number') ? a.maxTokens : cap;
-      o.maxTokens = Math.min(base, cap);
-    }
-  } catch { /* ignore */ }
+  if (lowPowerActive()) {
+    const cap = useLowPower.getState().maxTokens;
+    const base = (a && typeof a.maxTokens === 'number') ? a.maxTokens : cap;
+    o.maxTokens = Math.min(base, cap);
+  }
   if (!a) {
     if (require('./uiModeStore').useUiModeStore.getState().interfaceMode === 'audio') o.maxTokens = Math.min(o.maxTokens ?? 96, 96);
     return o;
@@ -395,8 +394,5 @@ function applyContextLength(ctx: number): void {
 }
 
 function lowPowerNote(): string {
-  try {
-    const lp = require('../atlasTools/lowPower');
-    return lp.lowPowerActive() ? `\n\n${lp.LOW_POWER_NOTE}` : '';
-  } catch { return ''; }
+  return lowPowerActive() ? `\n\n${LOW_POWER_NOTE}` : '';
 }

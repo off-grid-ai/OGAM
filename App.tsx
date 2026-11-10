@@ -39,11 +39,13 @@ import { startShareIntake, flushShare } from './src/share/shareIntake';
 import { UndoBar } from './src/chats/UndoBar';
 import { startScheduler } from './src/schedule/runner';
 import { refreshLastFix } from './src/atlasMaps/locationNote';
-import { navigationRef } from './src/navigation/navigationRef';
+import { navigationRef } from './src/utils/navigationRef';
 import { startAppLinks, flushAppLink } from './src/navigation/appLinks';
+import { registerAtlasHooks } from './src/bootstrap/atlasHooks';
 
 // Atlas: free read-aloud + voice mode + hands-free mode using the phone's own voice.
 registerAtlasVoice();
+registerAtlasHooks();
 startLowPowerMonitor();
 autoPickAcceleration();
 startCtxRecovery();

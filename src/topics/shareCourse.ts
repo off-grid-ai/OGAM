@@ -4,19 +4,12 @@
  * text of web pages (only their titles and addresses). Pure, so it is tested without a device.
  */
 import { FORMAT_IDS, type PlannedSquare, type SquareContent } from './formats';
-import type { Course } from './store';
+import type { Course, SharedCourse } from './store';
 
 export const COURSE_FILE_EXTENSION = 'atlascourse.json';
 export const MAX_COURSE_FILE_CHARS = 3_000_000;
 
-export interface SharedCourse {
-  atlasCourse: 1;
-  title: string; topic: string; summary: string; style: string; theme: string;
-  request: Course['request'];
-  squares: PlannedSquare[];
-  content: Record<string, SquareContent>;
-  sources: { title: string; kind: 'web' | 'note' | 'file'; url?: string; text: string }[];
-}
+export type { SharedCourse };
 
 export function courseToFile(course: Course): string {
   const shared: SharedCourse = {

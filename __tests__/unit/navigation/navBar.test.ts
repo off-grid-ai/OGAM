@@ -1,4 +1,4 @@
-import { DEFAULT_HIDDEN, MAX_VISIBLE, moveNavItem, resolveNavBar, setNavItemVisible } from '../../../src/navigation/navBar';
+import { DEFAULT_HIDDEN, MAX_VISIBLE, moveNavItem, resolveNavBar, setNavItemVisible } from '../../../src/utils/navBar';
 
 describe('bottom bar rules', () => {
   it('defaults to Home, Chats, Workspace, Learn and Settings', () => {
@@ -53,7 +53,7 @@ describe('vibration setting', () => {
   it('stops haptics when switched off', () => {
     const haptic = require('react-native-haptic-feedback');
     const { useAppStore } = require('../../../src/stores/appStore');
-    const { triggerHaptic } = require('../../../src/utils/haptics');
+    const { triggerHaptic } = require('../../../src/services/haptics');
     const trigger = (haptic.default ?? haptic).trigger as jest.Mock;
     trigger.mockClear();
     useAppStore.setState({ settings: { ...useAppStore.getState().settings, hapticsOff: false } });
@@ -67,7 +67,7 @@ describe('vibration setting', () => {
 
 describe('items added in an update', () => {
   it('start hidden for someone who already arranged their bar', () => {
-    const { resolveNavBar } = require('../../../src/navigation/navBar');
+    const { resolveNavBar } = require('../../../src/utils/navBar');
     // Saved before the Record shortcut existed: no "recorder" in the order or the hidden list.
     const saved = { order: ['home', 'chats', 'workspace', 'models', 'settings', 'emergency', 'library', 'brief', 'compass', 'phrases', 'survival'], hidden: ['models', 'library', 'compass', 'phrases', 'survival'] };
     const r = resolveNavBar(saved);

@@ -30,6 +30,12 @@ export function _clearHooksForTesting(): void {
 
 /** Known hook names, centralised so core and features stay in sync. */
 export const HOOKS = {
+  /** (latestTokens: number, budgetTokens: number) => void — the person's latest message was too long for the model and its start was cut; tell them in the chat. */
+  messageCut: 'chat.messageCut',
+  /** (modelId: string | null) => Promise<void> — make sure a text model is loaded (null: the one in use, else the first downloaded). */
+  ensureTextModel: 'models.ensureText',
+  /** (modelId: string) => void — an agent that has its own model was made active; the app loads that model in the background. */
+  agentModelChosen: 'agent.modelChosen',
   /** () => boolean — whether a message can be spoken (TTS enabled + ready). */
   audioCanSpeak: 'audio.canSpeak',
   /** (text: string, messageId: string) => void — speak a message aloud. */

@@ -25,6 +25,9 @@ try {
   // RNTL not present in a given suite's module graph — nothing to configure.
 }
 
+// The app wires its cross-layer hooks (load a model, tell the chat a message was cut) at start-up; tests need the same wiring.
+require('./src/bootstrap/atlasHooks').registerAtlasHooks();
+
 const shouldPrintJestConsole = process.env.DEBUG_JEST_CONSOLE === '1';
 
 // react-native-keyboard-controller ships a jest mock; without it, any test that

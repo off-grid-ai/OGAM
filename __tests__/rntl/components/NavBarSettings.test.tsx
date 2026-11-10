@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 import { NavBarSettings } from '../../../src/components/NavBarSettings';
 import { useAppStore } from '../../../src/stores/appStore';
-import { resolveNavBar } from '../../../src/navigation/navBar';
+import { resolveNavBar } from '../../../src/utils/navBar';
 
 describe('bottom bar settings', () => {
   beforeEach(() => useAppStore.setState({ settings: { ...useAppStore.getState().settings, navBar: undefined } }));

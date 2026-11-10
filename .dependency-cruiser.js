@@ -42,7 +42,8 @@ module.exports = {
       name: 'engine-dip-no-concrete-in-ui',
       severity: 'error',
       comment: 'UI (screens/components) must depend on the engine ABSTRACTION (services/engines), never a concrete engine service (services/litert, services/llm). Branching on a concrete engine in a caller is the DIP violation we keep fixing (SO2/SO4). Route through services/engines.',
-      from: { path: '^src/(screens|components)/' },
+      // The on-device model test is a diagnostic: it measures the concrete engines, so it has to call them.
+      from: { path: '^src/(screens|components)/', pathNot: '^src/screens/ModelTestScreen\\.tsx$' },
       to: { path: '^src/services/(litert|llm)(/|\\.|$)' },
     },
     {
@@ -92,7 +93,9 @@ module.exports = {
         dependencyTypes: ['unknown', 'undetermined', 'npm-no-pkg', 'npm-unknown'],
         // Known non-resolvable-by-cruiser but LEGITIMATE: whisper.rn IS declared (^0.5.5) but the
         // `.rn` name defeats cruiser's resolver, so exclude rather than baseline.
-        pathNot: '^whisper\\.rn(/|$)',
+        // react-native has no public export for TextAncestorContext; theme/globalText needs it to tell nested Text
+        // from top-level Text, and react-native is a declared dependency.
+        pathNot: '^(whisper\\.rn|react-native/Libraries/Text/TextAncestorContext)(/|$)',
       },
     },
     {

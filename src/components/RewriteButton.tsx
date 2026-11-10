@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, ActivityIndicator, Alert, Modal, Text, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { ensureTextModel } from '../atlasTools/models';
+import { completeSmallTask } from '../services/engines';
 const BACKGROUNDCOLOR_RGBA_0_0_0_0_4 = 'rgba(0,0,0,0.4)';
 const literalStyles = StyleSheet.create({
   s1: { paddingHorizontal: 8, justifyContent: 'center' },
@@ -33,12 +34,10 @@ export function RewriteButton({ text, onResult, colors }: { text: string; onResu
     setBusy(true);
     try {
       await ensureTextModel(null);
-      const { llmService } = require('../services/llm');
-      if (llmService.isCurrentlyGenerating()) throw new Error('The model is busy. Try again in a moment.');
-      const out: string = await llmService.generateResponse([
+      const out: string = await completeSmallTask([
         { id: 's', role: 'system', content: `You rewrite the user's text. ${instruction} Reply with ONLY the rewritten text - no quotes, no explanations.`, timestamp: 0 },
         { id: 'u', role: 'user', content: text, timestamp: 0 },
-      ], { disableThinking: true });
+      ], 'The model is busy. Try again in a moment.');
       const cleaned = out.replace(/<think>[\s\S]*?<\/think>/gi, '').trim().replace(/^["“](.*)["”]$/s, '$1');
       if (cleaned) onResult(cleaned);
     } catch (e: any) {

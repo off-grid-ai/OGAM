@@ -4,7 +4,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { localUniqueId } from '../utils/uniqueId';
 import type { CoursePlan, CourseRequest, PlannedSquare, SquareContent } from './formats';
 import { MAX_SOURCES, type CourseSource } from './sources';
-import type { SharedCourse } from './shareCourse';
 
 export interface Course {
   id: string;
@@ -23,6 +22,15 @@ export interface Course {
   sources: CourseSource[];
   /** The project this course belongs to: its shared documents are material for the squares, and its chats are where the tutor talks. */
   projectId?: string;
+}
+
+export interface SharedCourse {
+  atlasCourse: 1;
+  title: string; topic: string; summary: string; style: string; theme: string;
+  request: Course['request'];
+  squares: PlannedSquare[];
+  content: Record<string, SquareContent>;
+  sources: { title: string; kind: 'web' | 'note' | 'file'; url?: string; text: string }[];
 }
 
 interface TopicsState {

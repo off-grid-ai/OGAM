@@ -9,7 +9,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
 import { sha256 } from 'js-sha256';
-import { EXCLUDED_BACKUP_KEYS, RESTORABLE_STORE_KEYS, sanitizeBackupValue } from '../../atlasTools/backup';
+import { EXCLUDED_BACKUP_KEYS, RESTORABLE_STORE_KEYS, sanitizeBackupValue } from '../../atlasTools/backupKeys';
 import { rehydrateStores } from '../../atlasTools/storeRegistry';
 import { DEVICE_SETTING, keepThisDevice } from '../../atlasTools/deviceSettings';
 import { LIST_STORES, listIds, mergeListStore, type Baseline } from './listMerge';

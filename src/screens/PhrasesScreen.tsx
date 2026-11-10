@@ -9,6 +9,7 @@ import { useEmergencyColors, useOffGrid } from '../atlasTools/offGrid';
 import { PHRASES_EN, PHRASE_LANGUAGES, Phrase } from '../phrases/data';
 import { speakIn, stop, onMissingLanguage } from '../atlasVoice/tts';
 import { ensureTextModel } from '../atlasTools/models';
+import { completeSmallTask } from '../services/engines';
 const BACKGROUNDCOLOR_111 = '#111';
 const COLOR_FFF = '#fff';
 const COLOR_CCC = '#ccc';
@@ -83,12 +84,10 @@ export const PhrasesScreen: React.FC = () => {
     setBusy(true);
     try {
       await ensureTextModel(null);
-      const { llmService } = require('../services/llm');
-      if (llmService.isCurrentlyGenerating()) throw new Error('The model is busy with a chat. Try again in a moment.');
-      const out: string = await llmService.generateResponse([
+      const out: string = await completeSmallTask([
         { id: 's', role: 'system', content: `You translate short phrases into ${lang.name}. Reply with ONLY the translation${/^(ja|zh|ar|hi|ru)/.test(code) ? ', then on a new line the pronunciation in Latin letters' : ''}. No explanations.`, timestamp: 0 },
         { id: 'u', role: 'user', content: custom.trim(), timestamp: 0 },
-      ], { disableThinking: true });
+      ], 'The model is busy with a chat. Try again in a moment.');
       const lines = out.replace(/<think>[\s\S]*?<\/think>/g, '').trim().split('\n').map((l) => l.trim()).filter(Boolean);
       setShown({ text: lines[0] || '', roman: /^(ja|zh|ar|hi|ru)/.test(code) ? lines[1] : undefined, en: `${custom.trim()} (translated by the AI - may contain mistakes)` });
     } catch (e: any) {

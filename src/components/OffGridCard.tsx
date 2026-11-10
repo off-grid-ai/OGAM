@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import { useTheme } from '../theme';
-import { useOffGrid } from '../atlasTools/offGrid';
+import { useOffGrid, setOffGrid } from '../atlasTools/offGrid';
 const BACKGROUNDCOLOR_3A0A0A = '#3A0A0A';
 const COLOR_FFB4B4 = '#FFB4B4';
 const COLOR_E89A9A = '#E89A9A';
@@ -21,7 +21,6 @@ const literalStyles = StyleSheet.create({
 export function OffGridCard() {
   const { colors } = useTheme();
   const on = useOffGrid((s) => s.on);
-  const setOn = useOffGrid((s) => s.setOn);
   const night = useOffGrid((s) => s.nightRed);
   const setNight = useOffGrid((s) => s.setNightRed);
   return (
@@ -33,7 +32,7 @@ export function OffGridCard() {
             Atlas agent on, no internet tools, low-battery mode on. Everything still works offline.
           </Text>
         </View>
-        <Switch value={on} onValueChange={setOn} />
+        <Switch value={on} onValueChange={setOffGrid} />
       </View>
       <View style={literalStyles.s6}>
         <Text style={[literalStyles.s7, { color: on ? COLOR_E89A9A : colors.textSecondary }, literalStyles.s8]}>Red night screens (protects night vision, saves battery)</Text>

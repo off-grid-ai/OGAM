@@ -97,7 +97,7 @@ jest.mock('../../../src/services/hardware', () => ({
   },
 }));
 
-jest.mock('../../../src/utils/haptics', () => ({
+jest.mock('../../../src/services/haptics', () => ({
   triggerHaptic: jest.fn(),
 }));
 

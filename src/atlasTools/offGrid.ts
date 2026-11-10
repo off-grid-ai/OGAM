@@ -1,6 +1,7 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useOffGrid, offGridOn, NETWORK_TOOLS } from './offGridState';
+import { useLowPower } from './lowPowerState';
+
+export { useOffGrid, offGridOn };
 
 /**
  * Off-grid mode: one switch for "no internet, save battery, emergency first".
@@ -9,33 +10,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  *  - low-battery mode is switched on
  *  - the emergency screens use a red-on-black night palette (protects night vision, saves OLED battery)
  */
-interface OffGridState {
-  on: boolean;
-  nightRed: boolean;
-  setOn: (v: boolean) => void;
-  setNightRed: (v: boolean) => void;
+/** Switches off-grid mode on or off. Switching it on also makes the Atlas agent active and turns low-battery mode on. */
+export function setOffGrid(on: boolean): void {
+  useOffGrid.getState().setOn(on);
+  if (!on) return;
+  try { require('../stores/agentStore').useAgentStore.getState().setActiveAgent('atlas'); } catch { /* ignore */ }
+  useLowPower.getState().set({ enabled: true });
 }
 
-export const useOffGrid = create<OffGridState>()(
-  persist(
-    (set) => ({
-      on: false,
-      nightRed: false,
-      setOn: (on) => {
-        set({ on });
-        if (on) {
-          try { require('../stores/agentStore').useAgentStore.getState().setActiveAgent('atlas'); } catch { /* ignore */ }
-          try { require('./lowPower').useLowPower.getState().set({ enabled: true }); } catch { /* ignore */ }
-        }
-      },
-      setNightRed: (nightRed) => set({ nightRed }),
-    }),
-    { name: 'atlas-off-grid', storage: createJSONStorage(() => AsyncStorage) },
-  ),
-);
-
-export const NETWORK_TOOLS = ['web_search', 'read_url', 'find_image'];
-export const offGridOn = (): boolean => useOffGrid.getState().on;
+export { NETWORK_TOOLS };
 
 export const NIGHT_COLORS: any = {
   background: '#000000', surface: '#160303', surfaceLight: '#220505', text: '#FF5A5A', textSecondary: '#D24848',

@@ -9,7 +9,7 @@ import { shouldSuggestTuning, useSlowHint, useSpeedStats, useTuned } from '../at
 import { slowCause, type SlowCause } from '../atlasTools/slowCause';
 import { hardwareService } from '../services/hardware';
 import { vulkanEngine } from '../services/vulkanEngine';
-import { llmService } from '../services/llm';
+import { localGpuInfo } from '../services/engines';
 
 /**
  * One line above the message box when this model has been slow on a few replies. It says WHY when the settings show it
@@ -33,7 +33,7 @@ export const SlowReplyHint: React.FC = () => {
     if (!show) return;
     let live = true;
     Promise.all([vulkanEngine.isSlowTextGpu(), hardwareService.getRecommendedThreadCount()]).then(([slowGpu, recommendedThreads]) => {
-      const gpu = llmService.getGpuInfo();
+      const gpu = localGpuInfo();
       if (live) setCause(slowCause({ gpuOn: gpu.gpu, gpuBackend: gpu.gpuBackend, slowGpu, threads, recommendedThreads }));
     }).catch(() => undefined);
     return () => { live = false; };

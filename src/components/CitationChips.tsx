@@ -35,7 +35,7 @@ export const CitationChips: React.FC<{ cites: CheckedCitation[]; testID?: string
             {c.verified ? 'Quote found in the source.' : 'Not checked against the source: this is the text the source gave.'}
           </Text>
           {!!c.file && (
-            <Text accessibilityRole="link" testID="chip-open-document" onPress={() => { try { require('../navigation/navigationRef').navigationRef.navigate('DocumentPreview', { filePath: c.file!.path, fileName: c.file!.name, fileSize: c.file!.size }); } catch { /* navigation not ready */ } }} style={[st.top4, st.link, { color: colors.primary }]}>Open the document</Text>
+            <Text accessibilityRole="link" testID="chip-open-document" onPress={() => { try { require('../utils/navigationRef').navigationRef.navigate('DocumentPreview', { filePath: c.file!.path, fileName: c.file!.name, fileSize: c.file!.size }); } catch { /* navigation not ready */ } }} style={[st.top4, st.link, { color: colors.primary }]}>Open the document</Text>
           )}
           {!!c.url && <Text accessibilityRole="link" onPress={() => { void Linking.openURL(c.url!); }} style={[st.top4, st.link, { color: colors.primary }]}>{c.url}</Text>}
         </View>

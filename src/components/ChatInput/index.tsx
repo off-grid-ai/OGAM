@@ -9,7 +9,7 @@ import { VoiceRecordButton } from '../VoiceRecordButton';
 import { RecordingHint } from './RecordingHint';
 import { ComposerIconsRow } from './ComposerIconsRow';
 import { AttachStep } from 'react-native-spotlight-tour';
-import { triggerHaptic } from '../../utils/haptics';
+import { triggerHaptic } from '../../services/haptics';
 import logger from '../../utils/logger';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../CustomAlert';
 import { createStyles, PILL_ICON_SIZE } from './styles';

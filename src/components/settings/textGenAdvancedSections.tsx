@@ -22,7 +22,7 @@ import {
   CACHE_TYPE_OPTIONS,
 } from '../../hooks/useTextGenerationAdvanced';
 import { hardwareService } from '../../services/hardware';
-import { llmService } from '../../services/llm';
+import { isLocalModelLoaded, localGpuInfo } from '../../services/engines';
 import { describeOffload } from '../../services/gpuOffload';
 import { createTextGenAdvancedStyles } from './textGenAdvancedStyles';
 
@@ -102,8 +102,8 @@ const ANDROID_BASE_BACKENDS: BackendOption[] = [
 
 /** What the currently loaded model actually got, never the requested number. */
 function describeLoadedOffload(): string {
-  if (!llmService.isModelLoaded()) return 'Load a model to see how many layers run on the accelerator.';
-  const info = llmService.getGpuInfo();
+  if (!isLocalModelLoaded()) return 'Load a model to see how many layers run on the accelerator.';
+  const info = localGpuInfo();
   if (!info.gpu) return 'Loaded model is running on the CPU (no accelerator layers).';
   return `Loaded model: ${describeOffload(info.gpuLayers, info.totalLayers ?? -1)} on ${info.gpuBackend || 'the accelerator'}.`;
 }

@@ -96,7 +96,7 @@ export async function announceUpdateOnce(): Promise<void> {
     Alert.alert('A newer Atlas is ready', `${update.name} is published. Install it from Settings > App updates.`, [
       { text: 'Later', style: 'cancel' },
       { text: 'Skip this version', onPress: () => { void AsyncStorage.setItem(SKIP_KEY, String(update.build)); } },
-      { text: 'Open', onPress: () => { try { require('../navigation/navigationRef').navigationRef.navigate('Main', { screen: 'SettingsTab' }); } catch { /* not ready */ } } },
+      { text: 'Open', onPress: () => { try { require('../utils/navigationRef').navigationRef.navigate('Main', { screen: 'SettingsTab' }); } catch { /* not ready */ } } },
     ]);
   } catch { /* offline or GitHub unreachable: say nothing */ }
 }

@@ -4,7 +4,6 @@
  * decides which ones are shown and in what order. Pure rules live here; the navigator and the
  * settings screen both use them.
  */
-import type { RootStackParamList } from './types';
 
 export type NavItemId =
   | 'home' | 'chats' | 'workspace' | 'models' | 'settings'
@@ -16,8 +15,8 @@ export interface NavItem {
   icon: string;
   /** Tab route name. */
   route: string;
-  /** Shortcut items open this full-screen destination instead of a tab page. */
-  target?: keyof RootStackParamList;
+  /** Shortcut items open this full-screen destination (a route name in the root stack) instead of a tab page. */
+  target?: string;
   description: string;
 }
 
@@ -41,7 +40,7 @@ export const NAV_ITEMS: NavItem[] = [
  * What holding a bottom tab does: the one thing you most often want from that area, without opening it first.
  * `link` is an atlas://app/... link (see appLinks.ts); `screen` opens a full-screen page.
  */
-export const TAB_LONG_PRESS: Partial<Record<NavItemId, { label: string; link?: string; screen?: keyof RootStackParamList }>> = {
+export const TAB_LONG_PRESS: Partial<Record<NavItemId, { label: string; link?: string; screen?: string }>> = {
   home: { label: 'Search', screen: 'Search' },
   chats: { label: 'New chat', link: 'atlas://app/chat' },
   workspace: { label: 'New project', screen: 'ProjectEdit' },

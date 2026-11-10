@@ -1,5 +1,5 @@
 import { Linking } from 'react-native';
-import { navigationRef } from './navigationRef';
+import { navigationRef } from '../utils/navigationRef';
 import { useAppStore, useAuthStore, useChatStore } from '../stores';
 
 /** Where an atlas://app/<where> link goes (the launcher shortcuts use these). */

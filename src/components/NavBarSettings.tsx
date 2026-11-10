@@ -8,7 +8,7 @@ import { TYPOGRAPHY, SPACING } from '../constants';
 import { useAppStore } from '../stores';
 import {
   LOCKED, MAX_VISIBLE, MIN_VISIBLE, moveNavItem, navItem, resolveNavBar, setNavItemVisible,
-} from '../navigation/navBar';
+} from '../utils/navBar';
 
 export const NavBarSettings: React.FC = () => {
   const { colors } = useTheme();

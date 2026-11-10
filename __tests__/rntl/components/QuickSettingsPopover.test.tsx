@@ -19,7 +19,7 @@ jest.mock('react-native-vector-icons/Feather', () => {
 jest.mock('../../../src/theme', () => ({
   useTheme: () => ({ colors: COLORS }),
 }));
-jest.mock('../../../src/utils/haptics', () => ({ triggerHaptic: jest.fn() }));
+jest.mock('../../../src/services/haptics', () => ({ triggerHaptic: jest.fn() }));
 jest.mock('../../../src/bootstrap/slotRegistry', () => ({
   getSlot: () => null,
   SLOTS: { quickSettingsAudioRow: 'quickSettingsAudioRow' },

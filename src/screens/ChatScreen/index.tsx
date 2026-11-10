@@ -35,7 +35,7 @@ import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { WHISPER_MODELS } from '../../services';
 import { getTextRuntimeInfo } from '../../services/activeModelService/runtimeInfo';
-import { formatRemoteRuntimeStatus, formatTextRuntimeStatus } from '../../utils/modelRuntimeStatus';
+import { formatRemoteRuntimeStatus, formatTextRuntimeStatus } from '../../services/modelRuntimeStatus';
 import { speedHealthLabel, useSpeedStats } from '../../atlasTools/speed';
 
 function countConversationImages(conv: Conversation | undefined): number {

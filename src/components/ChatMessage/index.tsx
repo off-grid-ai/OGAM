@@ -12,7 +12,7 @@ import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import Icon from 'react-native-vector-icons/Feather';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../CustomAlert';
 import { AnimatedEntry } from '../AnimatedEntry';
-import { triggerHaptic } from '../../utils/haptics';
+import { triggerHaptic } from '../../services/haptics';
 import { createStyles } from './styles';
 import { useWideLayout } from '../../hooks/useWideLayout';
 import { MessageAttachments } from './components/MessageAttachments';
@@ -437,7 +437,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     const title = chat.conversations.find((c: { id: string }) => c.id === chat.activeConversationId)?.title;
     const made = slidesFromReply(displayContent, title);
     // Loaded when used: screens that mock the navigation library do not need it.
-    require('../../navigation/navigationRef').navigationRef.navigate('Presentations', { slides: made.slides, name: made.name });
+    require('../../utils/navigationRef').navigationRef.navigate('Presentations', { slides: made.slides, name: made.name });
   };
 
   const handleSaveToProject = () => {

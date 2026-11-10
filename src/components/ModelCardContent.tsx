@@ -7,7 +7,7 @@ import type { ThemeColors } from '../theme';
 import { createStyles } from './ModelCard.styles';
 import { huggingFaceService } from '../services/huggingface';
 import { ModelCredibility } from '../types';
-import { triggerHaptic } from '../utils/haptics';
+import { triggerHaptic } from '../services/haptics';
 
 interface CredibilityInfo {
   color: string;

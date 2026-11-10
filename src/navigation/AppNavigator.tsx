@@ -13,7 +13,7 @@ import { SpotlightTourProvider } from 'react-native-spotlight-tour';
 import { useTheme, useThemedStyles } from '../theme';
 import { sectionColor } from '../theme/appearance';
 import type { ThemeColors, ThemeShadows } from '../theme';
-import { triggerHaptic } from '../utils/haptics';
+import { triggerHaptic } from '../services/haptics';
 import { useAppStore } from '../stores';
 import { createSpotlightSteps } from '../components/onboarding/spotlightConfig';
 import {
@@ -67,7 +67,7 @@ import { WorkspaceScreen } from '../screens/WorkspaceScreen';
 import { QuickHomeScreen } from '../screens/HomeScreen/QuickHome';
 import { PresentationScreen } from '../screens/PresentationScreen';
 import { useRegisteredScreens } from './screenRegistry';
-import { NAV_ITEMS, TAB_LONG_PRESS, resolveNavBar, type NavItemId } from './navBar';
+import { NAV_ITEMS, TAB_LONG_PRESS, resolveNavBar, type NavItemId } from '../utils/navBar';
 import { openAppLink } from './appLinks';
 import { RecorderScreen } from '../atlasRecorder/RecorderScreen';
 import { RecordingDetailScreen } from '../atlasRecorder/RecordingDetailScreen';

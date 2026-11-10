@@ -115,7 +115,7 @@ type AppSettings = {
   /** Theme, accent color, font and text size (see theme/appearance). */
   appearance?: import('../theme/appearance').Appearance;
   /** Which destinations the bottom bar shows, their order and whether it has labels. */
-  navBar?: import('../navigation/navBar').NavBarSetting;
+  navBar?: import('../utils/navBar').NavBarSetting;
   /** Turns off the small vibrations on taps. */
   hapticsOff?: boolean;
   /** How every AI answers, whichever agent or project is active (see services/aiStyle). */

@@ -16,13 +16,13 @@ import { Text } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 import { AnimatedPressable } from '../../../src/components/AnimatedPressable';
 
-jest.mock('../../../src/utils/haptics', () => ({
+jest.mock('../../../src/services/haptics', () => ({
   __esModule: true,
   triggerHaptic: jest.fn(),
 }));
 
  
-const { triggerHaptic: mockTriggerHaptic } = require('../../../src/utils/haptics');
+const { triggerHaptic: mockTriggerHaptic } = require('../../../src/services/haptics');
  
 const Reanimated = require('react-native-reanimated');
 

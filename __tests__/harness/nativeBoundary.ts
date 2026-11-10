@@ -813,6 +813,8 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   const ram: RamProfile = opts.ram ?? { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB };
 
   jest.resetModules();
+  // The app wires its cross-layer hooks at start-up (App.tsx); a reset registry needs the same wiring.
+  require('../../src/bootstrap/atlasHooks').registerAtlasHooks();
 
   // A single emitter registry shared by every NativeEventEmitter built over our fake modules.
   const { add, handle } = makeEmitterRegistry();

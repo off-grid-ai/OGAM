@@ -36,7 +36,7 @@ it('offers to open the project document a source came from', () => {
   const rtl = requireRTL();
   const React = require('react');
   const { CitationChips } = require('../../src/components/CitationChips');
-  const { navigationRef } = require('../../src/navigation/navigationRef');
+  const { navigationRef } = require('../../src/utils/navigationRef');
   const navigate = jest.spyOn(navigationRef, 'navigate').mockImplementation(() => undefined);
   const cites = [{ title: 'tax-guide.pdf (part 3)', quote: 'Returns are due April 15.', verified: true, file: { path: '/docs/tax-guide.pdf', name: 'tax-guide.pdf', size: 900 } }, { title: 'No file', quote: 'q', verified: true }];
   const r = rtl.render(React.createElement(CitationChips, { cites }));

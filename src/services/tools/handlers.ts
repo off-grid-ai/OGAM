@@ -7,7 +7,7 @@ import logger from '../../utils/logger';
 import { searchWeb } from './webSearchProviders';
 import { libraryToolAnswer } from '../../atlasTools/offlineLibrary';
 import * as DT from '../../atlasTools/deviceTools';
-import { NETWORK_TOOLS, offGridOn } from '../../atlasTools/offGrid';
+import { NETWORK_TOOLS, offGridOn } from '../../atlasTools/offGridState';
 import { arg, requireString, EMPTY_WRITE } from './toolArgs';
 
 function makeResult(call: ToolCall, start: number, opts: { content: string; error?: string }): ToolResult {

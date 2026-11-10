@@ -6,7 +6,7 @@
 import { ragService } from '../services/rag';
 import { runBackgroundJob } from '../services/llmJobQueue';
 import { knowledgeSource } from '../services/rag/knowledgeSource';
-import { ensureTextModel } from '../atlasTools/models';
+import { callHook, HOOKS } from '../bootstrap/hookRegistry';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -132,7 +132,7 @@ const refs = (t: string) => [...new Set([...t.matchAll(/\[(\d{1,2})\]/g)].map((m
 export async function askModel(system: string, user: string): Promise<string> { return ask(system, user); }
 
 async function ask(system: string, user: string): Promise<string> {
-  await ensureTextModel(null);
+  await callHook(HOOKS.ensureTextModel, null);
   const { llmService } = require('../services/llm');
   return runBackgroundJob(async () => {
   const out: string = await llmService.generateResponse(
@@ -410,7 +410,7 @@ async function researchSources(query: string, startN: number, onStep: (m: string
     }
   } catch { /* no library */ }
   try {
-    const { offGridOn } = require('../atlasTools/offGrid');
+    const { offGridOn } = require('../atlasTools/offGridState');
     if (!offGridOn()) {
       onStep('Researching the web...');
       const { searchWeb } = require('../services/tools/webSearchProviders');
