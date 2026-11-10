@@ -65,6 +65,8 @@ if [ -n "$PUSHED_JS" ]; then
   # The four static gates run side by side, in the background, while Jest runs: one after another
   # they held a push for minutes. Each writes its own log; a failure prints it and stops the push.
   GATE_DIR=$(mktemp -d)
+  # A failing Jest run exits before the wait below: stop the gates and remove their logs then too.
+  trap 'kill $(jobs -p) 2>/dev/null || true; rm -rf "$GATE_DIR"' EXIT
   run_gate() {
     name=$1; shift
     ( "$@" > "$GATE_DIR/$name.log" 2>&1; echo $? > "$GATE_DIR/$name.status" ) &

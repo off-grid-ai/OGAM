@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
-# A linked git worktree holds only the codebase. Its heavy, rebuildable folders point at the main
-# checkout, so a new worktree costs megabytes, not 20+ GB. Runs from .husky/post-checkout when a
+# A linked git worktree holds only the codebase. Its node_modules points at the main checkout's
+# packages, so a new worktree costs megabytes, not gigabytes. Runs from .husky/post-checkout when a
 # worktree is created; safe to run again by hand in any worktree.
 ROOT="$(git rev-parse --show-toplevel)"
 MAIN="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
@@ -32,17 +32,7 @@ link_node_modules() {
   done
 }
 
-# Build output is a cache: a worktree build reuses and refreshes the main checkout's output.
-# ios/Pods and android/app/.cxx stay private: Pods records the native/ source path of the checkout
-# that ran pod install, and CMake refuses a cache made for another source folder.
-link_build_dir() {
-  local relative="$1"
-  [ -e "$ROOT/$relative" ] || [ -L "$ROOT/$relative" ] && return 0
-  mkdir -p "$MAIN/$relative" "$(dirname "$ROOT/$relative")"
-  ln -s "$MAIN/$relative" "$ROOT/$relative"
-}
+# Native build output (ios/build, android/app/build, .video-build) stays private to each checkout:
+# two worktrees building at once would overwrite each other's outputs and intermediates.
 
 link_node_modules
-link_build_dir ios/build
-link_build_dir android/app/build
-link_build_dir .video-build

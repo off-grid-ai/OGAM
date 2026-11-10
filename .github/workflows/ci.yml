@@ -316,7 +316,7 @@ jobs:
             gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/files.txt"
             if grep -Eq '^(scripts/video/|scripts/prepare-video-runtime\.sh$|scripts/build-video-ios\.sh$)' "$RUNNER_TEMP/files.txt"; then video=true; fi
             native=false
-            if grep -Eq '^(ios/|android/|patches/|pro$|\.github/|package(-lock)?\.json$|Gemfile|react-native\.config\.js$|app\.json$|scripts/(test-ios|test-android|ios-simulator-id|download-prebuilt-binaries)[^/]*$)' "$RUNNER_TEMP/files.txt"; then native=true; fi
+            if grep -Eq '^(ios/|android/|patches/|pro$|\.github/|package(-lock)?\.json$|Gemfile|react-native\.config\.js$|app\.json$|scripts/video/|scripts/(test-ios|test-android|ios-simulator-id|download-prebuilt-binaries|xcode-ccache)[^/]*$)' "$RUNNER_TEMP/files.txt"; then native=true; fi
             # CI builds pro's matching branch, whose native changes this pull request's files do not list.
             if [ -n "$PRO_TOKEN" ] && git -c http.https://github.com/.extraheader= ls-remote --exit-code --heads \
               "https://x-access-token:${PRO_TOKEN}@github.com/off-grid-ai/mobile-pro.git" "$HEAD_REF" >/dev/null 2>&1; then native=true; fi

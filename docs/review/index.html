@@ -423,7 +423,9 @@ function renderStage() {
   const vs = versions(s), a = afterIdx(s);
   // On Android, a version with no Android shot says the shot is the iPhone's (judged per version:
   // an older version's Android shot does not cover the latest one).
-  const noAndroid = platform === "android" && !vs[a].android ? " (iPhone shot: no Android one for this version)" : "";
+  // Judged on the panes shown: Before shows the version before the chosen one, Side by side both.
+  const shownVersions = view === "before" && a > 0 ? [vs[a - 1]] : view === "both" && a > 0 ? [vs[a - 1], vs[a]] : [vs[a]];
+  const noAndroid = platform === "android" && shownVersions.some((v) => !v.android) ? " (iPhone shot: no Android one for this version)" : "";
   $("what").textContent = (vs[a].what || s.what || "") + noAndroid;
   $("views").hidden = a === 0;
   // The version picker: every version of this screen, newest first.
@@ -840,7 +842,9 @@ $("next").onclick = () => go(current + 1);
 // Once a note has text, arrows edit it; Cmd/Ctrl+Enter pins it, Esc lets go of the box.
 const step = { ArrowLeft: -1, ArrowUp: -1, k: -1, ArrowRight: 1, ArrowDown: 1, j: 1 };
 document.addEventListener("keydown", (e) => {
-  if (e.metaKey || e.ctrlKey || e.altKey) {
+  // Ctrl+Alt is AltGr on Windows: some layouts type [ and ] with it, so it reaches the fold keys below.
+  const altGrBracket = e.ctrlKey && e.altKey && !e.metaKey && (e.key === "[" || e.key === "]");
+  if ((e.metaKey || e.ctrlKey || e.altKey) && !altGrBracket) {
     if (e.key === "Enter" && e.target.id === "text") { e.preventDefault(); $("compose").requestSubmit(); }
     return;
   }
