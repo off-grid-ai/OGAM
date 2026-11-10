@@ -29,6 +29,7 @@ export const ChatContextSection: React.FC = () => {
   const ctxValue = useAppStore((s) => (s.settings as any)[ctxKey] as number) || 4096;
   const contextMode = useAppStore((s) => s.settings.contextMode ?? 'manual');
   const modelMax = useAppStore((s) => s.modelMaxContext);
+  const readLong = useAppStore((s) => s.settings.readLongInParts !== false);
   const replyMode = useAppStore((s) => s.settings.maxTokensMode ?? 'auto');
   const replyTokens = useAppStore((s) => s.settings.maxTokens);
   // Same ceiling the loader uses for this phone's RAM (bigger choices would be cut down anyway).
@@ -109,6 +110,13 @@ export const ChatContextSection: React.FC = () => {
           style={{ color: colors.text, backgroundColor: colors.background, borderRadius: 8, padding: 10, marginTop: 8, minHeight: 60, textAlignVertical: 'top' }} />
       </View>
       <View style={box}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={{ color: colors.text, fontWeight: '600' }}>Read very long messages in parts</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>A message longer than the model's memory is read piece by piece and answered from notes, instead of its start being cut off. Slower.</Text>
+          </View>
+          <Switch value={readLong} onValueChange={(v) => updateSettings({ readLongInParts: v })} testID="read-long-in-parts" />
+        </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ flex: 1, paddingRight: 8 }}>
             <Text style={{ color: colors.text, fontWeight: '600' }}>Compress long chats automatically</Text>

@@ -108,6 +108,8 @@ type AppSettings = {
   checkUpdates?: boolean;
   /** Show "Used: Taxes lessons" under a reply that was written with learned lessons. Unset counts as on. */
   showLessonsUsed?: boolean;
+  /** Read a message that is longer than the model's memory in parts, and answer from notes. Unset counts as on. */
+  readLongInParts?: boolean;
   /** Theme, accent color, font and text size (see theme/appearance). */
   appearance?: import('../theme/appearance').Appearance;
   /** Which destinations the bottom bar shows, their order and whether it has labels. */

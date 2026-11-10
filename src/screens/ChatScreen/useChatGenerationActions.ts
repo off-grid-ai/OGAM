@@ -7,6 +7,7 @@ import { expertKnowledgeNote } from '../../knowledge/chatHook';
 import { chartNote } from '../../study/chart';
 import { skillsNote } from '../../skills/selectSkills';
 import { learnedNote } from '../../learning/learnedNote';
+import { needsReadingInParts, readInParts } from '../../services/readInParts';
 import { Dispatch, SetStateAction } from 'react';
 import { resolveAgentPrompt } from '../../stores/agentStore';
 import { toolsForConversation } from '../../services/tools/chatTools';
@@ -420,6 +421,28 @@ function resolveToolsAndPrompt(deps: GenerationDeps, conversation: any, messageT
 let researchInFlight = false;
 export function isResearchInFlight(): boolean { return researchInFlight; }
 
+/** Reads a very long message in parts with the loaded model; returns the shorter text for the model, or the message itself. */
+async function condenseLongMessage(text: string, deps: GenerationDeps, conversationId: string): Promise<string> {
+  const contextTokens = llmService.getPerformanceSettings?.()?.contextLength || useAppStore.getState().settings.contextLength || 4096;
+  if (!needsReadingInParts(text, contextTokens)) return text;
+  try {
+    const out = await readInParts({
+      text, contextTokens,
+      ask: (system, user) => llmService.generateWithMaxTokens([
+        { id: 'rip-s', role: 'system', content: system, timestamp: Date.now() },
+        { id: 'rip-u', role: 'user', content: user, timestamp: Date.now() },
+      ] as any, 220),
+      onProgress: (done, total) => deps.setResearchStatus?.(done < total ? `Reading your long message in parts: ${done + 1} of ${total}...` : null),
+    });
+    deps.setResearchStatus?.(null);
+    return out ?? text;
+  } catch (e) {
+    deps.setResearchStatus?.(null);
+    logger.warn(`[ChatGen] could not read the long message in parts: ${String((e as any)?.message ?? e)}`);
+    return text; // fall back to the usual cut, which tells the person
+  }
+}
+
 export async function startGenerationFn(deps: GenerationDeps, call: StartGenerationCall): Promise<void> {
   // PER-TURN stop truth (from the tool loop's outcome) — never the service's shared abort flag,
   // which the NEXT turn's prepare resets (the race that mislabeled a stopped turn 'No response').
@@ -463,6 +486,10 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
       return;
     }
     researchInFlight = false;
+  }
+  // A message longer than the model can hold is read in parts and shown to the model as notes (the saved message is unchanged).
+  if (!deps.activeModelInfo?.isRemote && useAppStore.getState().settings.readLongInParts !== false && llmService.isModelLoaded()) {
+    researchMessage = await condenseLongMessage(researchMessage, deps, conversation?.id ?? targetConversationId);
   }
   // Offline research already contains the selected document excerpts; do not inject them twice.
   let basePrompt = usedOfflineProjectEvidence
