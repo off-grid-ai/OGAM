@@ -770,6 +770,7 @@ export const TEMPLATE_ACTION_IDS: ReadonlyArray<readonly [string, string]> = [
   ["^.+-loading$", "loading"],
   ["^.+-option-.+$", "option"],
   ["^.+-restyle$", "restyle"],
+  ["^.+-working$", "working"],
   ["^setting-.+$", "setting"],
   ["^version-.+$", "version"],
   ["^.+-delete$", "delete"],

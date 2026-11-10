@@ -193,7 +193,7 @@ export const ChatsListScreen: React.FC = () => {
 
   const renderChat = ({ item }: { item: Conversation }) => {
     // Grouped by project, the header already names it: no tag on each row.
-    const project = item.projectId && groupBy !== 'project' ? getProject(item.projectId) : null;
+    const project = item.projectId && shownGroupBy !== 'project' ? getProject(item.projectId) : null;
     const selected = selectedIds.has(item.id);
     const index = listIndex.get(item.id) ?? 0;
     const kind = chatKind(item.messages);
@@ -270,10 +270,15 @@ export const ChatsListScreen: React.FC = () => {
       conversation.messages.some(message => message.content.toLowerCase().includes(query)),
     );
   }, [deferredQuery, sortedConversations]);
+  // The view menu ticks the choice at once; regrouping every chat (1280 on the test phone) follows
+  // when React has time, so the tick never waits on the list (it took ~7 s, Android 2026-11-10).
+  const shownGroupBy = useDeferredValue(groupBy);
+  const shownSortBy = useDeferredValue(sortBy);
+  const regrouping = shownGroupBy !== groupBy || shownSortBy !== sortBy;
   const grouped = useMemo(() => {
     const names = new Map(projects.map(project => [project.id, project.name]));
-    return groupChats(visibleConversations, { groupBy, sortBy, projectName: id => names.get(id) });
-  }, [visibleConversations, groupBy, sortBy, projects]);
+    return groupChats(visibleConversations, { groupBy: shownGroupBy, sortBy: shownSortBy, projectName: id => names.get(id) });
+  }, [visibleConversations, shownGroupBy, shownSortBy, projects]);
   // A folded section keeps its header and hides its chats.
   const sections = useMemo(
     () => grouped.map(section => ({ ...section, count: section.data.length, data: folded.has(section.key) ? [] : section.data })),
@@ -460,6 +465,7 @@ export const ChatsListScreen: React.FC = () => {
         onClose={() => setViewMenuOpen(false)}
         groupBy={groupBy}
         sortBy={sortBy}
+        working={regrouping}
         onChange={next => {
           setFolded(new Set());
           updateSettings({ chatsGroupBy: next.groupBy, chatsSortBy: next.sortBy });

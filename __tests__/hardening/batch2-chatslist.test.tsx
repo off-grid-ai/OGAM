@@ -140,10 +140,16 @@ describe('batch2 ChatsListScreen — sort, timestamp format, delete, empty', () 
     const view = app.render();
     app.rtl.fireEvent.press(view.getByLabelText('View options'));
     app.rtl.fireEvent.press(await view.findByTestId('chats-group-project'));
+    // The choice is chosen at once, before the list has regrouped (design principle 10: pressed,
+    // working, done; it used to show nothing for ~7 s on Android, then jump).
+    expect(view.getByTestId('chats-group-project').props.accessibilityState.selected).toBe(true);
 
     const headers = () => app.rtl.within(view.getByTestId('conversation-list')).getAllByRole('header')
       .map(node => String(node.props.accessibilityLabel));
     await app.rtl.waitFor(() => expect(headers()).toEqual(['Garden', 'No project']));
+    // Done: the row settles on its tick, not a spinner.
+    expect(view.getByTestId('chats-group-project').props.accessibilityState.busy).toBe(false);
+    expect(view.queryByTestId('chats-group-project-working')).toBeNull();
     expect(useAppStore.getState().settings.chatsGroupBy).toBe('project');
     // The header names the project, so the row carries no project tag of its own.
     expect(view.getAllByText('Garden')).toHaveLength(1);

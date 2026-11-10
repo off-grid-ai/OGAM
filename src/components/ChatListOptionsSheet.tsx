@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from './AppSheet';
 import { ListGroup, listRowStyle } from './ListGroup';
@@ -26,7 +26,8 @@ const SORTS: { value: ChatSortBy; label: string }[] = [
 
 /**
  * The Chats list's view menu, like Claude's: group by date, project or nothing, order by last update
- * or by when a chat was started, and go back to the defaults. A choice applies at once.
+ * or by when a chat was started, and go back to the defaults. A choice ticks at once; while the list
+ * regroups (`working`) the chosen row shows a spinner, then its tick (design doc principle 10).
  */
 export const ChatListOptionsSheet: React.FC<{
   visible: boolean;
@@ -34,7 +35,9 @@ export const ChatListOptionsSheet: React.FC<{
   groupBy: ChatGroupBy;
   sortBy: ChatSortBy;
   onChange: (next: { groupBy: ChatGroupBy; sortBy: ChatSortBy }) => void;
-}> = ({ visible, onClose, groupBy, sortBy, onChange }) => {
+  /** The list is still regrouping for the current choice. */
+  working?: boolean;
+}> = ({ visible, onClose, groupBy, sortBy, onChange, working = false }) => {
   const styles = useThemedStyles(createStyles);
   const isDefault = groupBy === DEFAULT_CHAT_GROUP_BY && sortBy === DEFAULT_CHAT_SORT_BY;
   return (
@@ -43,14 +46,14 @@ export const ChatListOptionsSheet: React.FC<{
         <Text style={styles.label}>Group by</Text>
         <ListGroup testID="chats-group-by">
           {GROUPS.map(option => (
-            <Choice key={option.value} label={option.label} selected={groupBy === option.value}
+            <Choice key={option.value} label={option.label} selected={groupBy === option.value} working={working}
               onPress={() => onChange({ groupBy: option.value, sortBy })} testID={`chats-group-${option.value}`} />
           ))}
         </ListGroup>
         <Text style={styles.label}>Sort by</Text>
         <ListGroup testID="chats-sort-by">
           {SORTS.map(option => (
-            <Choice key={option.value} label={option.label} selected={sortBy === option.value}
+            <Choice key={option.value} label={option.label} selected={sortBy === option.value} working={working}
               onPress={() => onChange({ groupBy, sortBy: option.value })} testID={`chats-sort-${option.value}`} />
           ))}
         </ListGroup>
@@ -69,8 +72,8 @@ export const ChatListOptionsSheet: React.FC<{
   );
 };
 
-const Choice: React.FC<{ label: string; selected: boolean; onPress: () => void; testID: string }> = ({
-  label, selected, onPress, testID,
+const Choice: React.FC<{ label: string; selected: boolean; working: boolean; onPress: () => void; testID: string }> = ({
+  label, selected, working, onPress, testID,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -79,12 +82,13 @@ const Choice: React.FC<{ label: string; selected: boolean; onPress: () => void; 
       style={styles.row}
       onPress={onPress}
       accessibilityRole="radio"
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected, busy: selected && working }}
       accessibilityLabel={label}
       testID={testID}
     >
       <Text style={styles.rowText}>{label}</Text>
-      {selected ? <Icon name="check" size={16} color={colors.primary} /> : null}
+      {selected && working ? <ActivityIndicator size="small" color={colors.textMuted} testID={`${testID}-working`} /> : null}
+      {selected && !working ? <Icon name="check" size={16} color={colors.primary} /> : null}
     </TouchableOpacity>
   );
 };
