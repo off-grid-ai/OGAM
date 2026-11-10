@@ -112,8 +112,11 @@ class EmbeddingService {
     if (activeEmbeddingModel()?.id === candidate.id)
       throw new Error('This search model is in use. Choose another one first.');
     const filePath = `${RNFS.DocumentDirectoryPath}/embedding-${sha256(candidate.id)}.gguf`;
-    await RNFS.unlink(filePath).catch(() => undefined);
-    await RNFS.unlink(`${filePath}.part`).catch(() => undefined);
+    // Whatever its size (a file that failed its check is the wrong size), and the partial file too.
+    // A file that is not there is fine; one that will not delete is reported, so it is not forgotten.
+    for (const path of [filePath, `${filePath}.part`]) {
+      if (await RNFS.exists(path)) await RNFS.unlink(path);
+    }
   }
 
   /** Download only. Activation and rebuilding require a separate confirmed RAG operation. */

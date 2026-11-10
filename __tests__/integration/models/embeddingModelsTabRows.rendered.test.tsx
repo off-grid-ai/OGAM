@@ -165,3 +165,32 @@ it('while Remove download works, the row says so and offers no Retry or second R
   expect(view.queryByText(/The previous model is still active\./)).toBeNull();
   fs.exists.mockImplementation(exists);
 });
+
+it('Remove download deletes a wrong-sized file and its partial file, and says so if the disk refuses', async () => {
+  const h = setup();
+  h.disk.serveRemoteFile(h.multilingual.downloadUrl, { statusCode: 500, body: 'error' });
+  const { rtl, view, row } = await renderTab();
+  rtl.fireEvent.press(view.getByLabelText(h.multilingual.name));
+  rtl.fireEvent.press(await view.findByText('Switch'));
+  await rtl.waitFor(() => expect(row(h.multilingual.name).getByLabelText('Retry download')).toBeTruthy());
+
+  // What a failed check can leave: a final file of the wrong size, and a partial file.
+  const fs = h.disk.module;
+  const { sha256 } = require('js-sha256');
+  const path = `${fs.DocumentDirectoryPath}/embedding-${sha256(h.multilingual.id)}.gguf`;
+  h.disk.seedFile(path, 10);
+  h.disk.seedFile(`${path}.part`, 10);
+
+  // The disk refuses once: the failure stays, with the reason, and the file is still there.
+  fs.unlink.mockImplementationOnce(async () => { throw new Error('Operation not permitted'); });
+  rtl.fireEvent.press(row(h.multilingual.name).getByLabelText('Remove download'));
+  await rtl.waitFor(() => expect(view.getByText('Operation not permitted')).toBeTruthy());
+  expect(row(h.multilingual.name).getByLabelText('Retry download')).toBeTruthy();
+  expect(await fs.exists(path)).toBe(true);
+
+  // Again: both files go, and so does the failure.
+  rtl.fireEvent.press(row(h.multilingual.name).getByLabelText('Remove download'));
+  await rtl.waitFor(() => expect(view.queryByText(/The previous model is still active\./)).toBeNull());
+  expect(await fs.exists(path)).toBe(false);
+  expect(await fs.exists(`${path}.part`)).toBe(false);
+});

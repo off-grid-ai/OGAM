@@ -151,8 +151,10 @@ export const EmbeddingModelsTab: React.FC = () => {
   };
   const removeFailed = (candidate: Candidate) => {
     const forget = () => setDownloaded(previous => { const next = new Set(previous); next.delete(candidate.id); return next; });
+    // Removes the final file and any partial one whatever their size: hasModelFile says no to a file
+    // of the wrong size, which is the one a failed check leaves.
     const deleteIfThere = async () => {
-      if (active?.id === candidate.id || !(await embeddingService.hasModelFile(candidate))) return;
+      if (active?.id === candidate.id) return;
       await embeddingService.deleteModelFile(candidate);
       forget();
     };
