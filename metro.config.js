@@ -51,6 +51,10 @@ const syncRuntimeModules = {
   '@noble/hashes/hkdf': path.resolve(sharedNodeModulesPath, '@noble/hashes/hkdf.js'),
   '@noble/hashes/hmac': path.resolve(sharedNodeModulesPath, '@noble/hashes/hmac.js'),
   '@noble/hashes/sha256': path.resolve(sharedNodeModulesPath, '@noble/hashes/sha256.js'),
+  // Writing's ESM build (what package exports pick through node_modules/@offgrid/writing) loads its
+  // dictionary with import(), a lazy bundle in dev that the phone requests at a `../shared/…` URL
+  // Metro cannot serve: spelling went silent. The CJS build requires the chunk, so it is bundled.
+  '@offgrid/writing': path.resolve(writingPackagePath, 'dist/index.cjs'),
 };
 
 const config = {
