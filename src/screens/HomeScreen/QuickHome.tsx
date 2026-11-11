@@ -26,6 +26,7 @@ const destinations: Destination[] = [
   { key: 'survival', label: 'Survival manual', hint: 'The field manual, offline', icon: 'life-buoy', screen: 'SurvivalManual', optional: true, tint: '#E1F6E8', tintDark: '#12291C', color: ['#047857', '#34D399'] },
   { key: 'library', label: 'Offline library', hint: 'Medical and general reference, offline', icon: 'book-open', screen: 'OfflineLibrary', optional: true, tint: '#EDE5FF', tintDark: '#241A3D', color: ['#6D28D9', '#A78BFA'] },
   { key: 'atlashub', label: 'Atlas tools', hint: 'Maps, phrases, compass, off-grid mode', icon: 'compass', screen: 'AtlasHub', optional: true, tint: '#E6EEFB', tintDark: '#14243D', color: ['#1D4ED8', '#60A5FA'] },
+  { key: 'compass', label: 'Compass', hint: 'Works with no signal, uses phone sensors', icon: 'compass', screen: 'Compass', optional: true, tint: '#EDE5FF', tintDark: '#241A3D', color: ['#6D28D9', '#A78BFA'] },
   { key: 'settings', label: 'Settings', hint: 'Personalize Atlas', icon: 'settings', tab: 'SettingsTab', tint: '#FBE8F0', tintDark: '#381827', color: ['#BE185D', '#F472B6'] },
 ];
 const FOCUS = ['chat', 'language', 'brief'];
