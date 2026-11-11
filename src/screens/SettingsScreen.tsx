@@ -157,6 +157,7 @@ export const SettingsScreen: React.FC = () => {
                 { icon: 'smartphone', title: 'Device Information', desc: 'Hardware and compatibility', screen: 'DeviceInfo' as const },
                 { icon: 'save', title: 'Backup & sync', desc: 'Back up and restore; sync with nearby devices', screen: 'Backup' as const },
                 { icon: 'users', title: 'Assistant access', desc: 'Control which apps and keyboards can reach the AI', screen: 'AssistantAccess' as const },
+                { icon: 'image', title: 'Background images', desc: 'Set a background photo for any screen', screen: 'BackgroundSettings' as const },
               ],
             },
           ] as Array<{ label: string; items: { icon: string; title: string; desc: string; screen: any }[] }>).map((group) => (

@@ -125,6 +125,8 @@ type AppSettings = {
   liteRTTemperature: number;
   liteRTTopP: number;
   liteRTMaxTokens: number;
+  /** Per-screen background images, keyed by screen name (e.g. 'Home', 'Settings', 'Compass'). */
+  screenBackgrounds?: Record<string, { uri: string; blur: number; dim: number; opacity: number }>;
 };
 
 type ThemeMode = 'system' | 'light' | 'dark';

@@ -57,6 +57,7 @@ export type RootStackParamList = {
   Pins: undefined;
   Backup: undefined;
   AssistantAccess: undefined;
+  BackgroundSettings: undefined;
   // Already in RootStack
   DownloadManager: undefined;
   Gallery: { conversationId?: string } | undefined;

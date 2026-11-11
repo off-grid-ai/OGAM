@@ -7,6 +7,7 @@ import { useTheme } from '../theme';
 import { useEmergencyColors, useOffGrid } from '../atlasTools/offGrid';
 import { useMaps, bearingDeg, distanceM, fmtDistance } from '../atlasMaps/maps';
 import { trueHeading } from '../atlasTools/compassMath';
+import { ScreenBackground } from '../components/ScreenBackground';;
 const BORDERLEFTCOLOR_TRANSPARENT = 'transparent';
 const BORDERRIGHTCOLOR_TRANSPARENT = 'transparent';
 const BORDERBOTTOMCOLOR_16A34A = '#16A34A';
@@ -125,6 +126,7 @@ export const CompassScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[literalStyles.s1, { backgroundColor: colors.background }]}>
+      <ScreenBackground screenKey="Compass" />
       <View style={literalStyles.s2}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={literalStyles.s3}><Icon name="arrow-left" size={22} color={colors.text} /></TouchableOpacity>
         <Text style={[{ color: colors.text }, literalStyles.s4]}>Compass</Text>

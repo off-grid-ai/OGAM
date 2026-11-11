@@ -8,6 +8,7 @@ import type { LayoutMode } from '../../theme/appearance';
 import { useAppStore } from '../../stores/appStore';
 import { LoadModelSheet } from '../../components/LoadModelSheet';
 import { arrangeTiles, moveTile, toggleTile } from './homeTiles';
+import { ScreenBackground } from '../../components/ScreenBackground';
 
 type Props = { navigation: any; mode: LayoutMode };
 type Destination = { key: string; label: string; hint: string; icon: string; tab?: string; screen?: string; action?: 'load'; optional?: boolean; tint: string; tintDark: string; color: [string, string] };
@@ -67,6 +68,7 @@ export const QuickHomeScreen: React.FC<Props> = ({ navigation, mode }) => {
   };
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
+      <ScreenBackground screenKey="Home" />
       <ScrollView testID={'home-' + mode} contentContainerStyle={{ padding: compact ? 12 : 22, paddingBottom: 44 }}>
         <Text style={{ color: colors.text, fontSize: simple ? 31 : compact ? 24 : 29, fontWeight: '700' }}>Atlas</Text>
         <Text style={{ color: colors.textSecondary, fontSize: simple ? 18 : 14, marginTop: 6, marginBottom: compact ? 10 : 20 }}>
