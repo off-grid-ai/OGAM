@@ -86,13 +86,17 @@ describePro('Improve rewrites from the phone\'s model', () => {
     expect(sent).toContain('Second way.');
   });
 
-  it('a leading think block is never shown or returned', async () => {
+  // K2 Horizon writes <ifm|think>, even empty with thinking off; the iPhone streamed its tags raw.
+  it.each([
+    ['<think>', '</think>'],
+    ['<ifm|think>', '</ifm|think>'],
+  ])('a leading %s block is never shown or returned', async (open, close) => {
     const boundary = installPhone();
     await loadTextModel(boundary);
     const service = rewrites();
 
     boundary.llama!.scriptCompletion({
-      text: '<think>The person wants it clearer. Maybe shorter.</think>\nOne clearer line.',
+      text: `${open}The person wants it clearer. Maybe shorter.${close}\nOne clearer line.`,
     });
     const progress: string[] = [];
     const version = await service.rewriteVersion('a draft', IMPROVE, [], p => progress.push(p));
