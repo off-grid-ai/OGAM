@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useStopTapGuard } from './useStopTapGuard';
 import { View, Text, TextInput, Animated, Platform, ActionSheetIOS } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
@@ -199,6 +199,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const styles = useThemedStyles(createStyles);
   const [message, setMessage] = useState('');
   const [selection, setSelection] = useState({ start: 0, end: 0 });
+  // A Scribe fix or Improve pick rewrites the text in code, where the field reports no new
+  // selection: move ours to the caret it hands back, or a later Improve acts on a stale range.
+  const applyScribeChange = useCallback((next: string, caret: number) => {
+    setMessage(next);
+    setSelection({ start: caret, end: caret });
+  }, []);
   // Focus draws light to the field (brand: its edge glows while you are inside it).
   const [isFocused, setIsFocused] = useState(false);
   const [localAssistantEnabled, setLocalAssistantEnabled] = useState(false);
@@ -683,7 +689,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       ) : null}
       {/* Scribe's fix for the word at the caret, or Improve for a selection: inside the box it acts on. */}
       {ScribeBar && !showVoiceStatus ? (
-        <ScribeBar text={message} selection={selection} onChangeText={setMessage} />
+        <ScribeBar text={message} selection={selection} onChangeText={applyScribeChange} />
       ) : null}
       <View style={styles.mainRow}>
         <View style={[styles.pill, styles.pillInComposer]} testID="composer-pill" accessibilityState={{ selected: isFocused }}>
