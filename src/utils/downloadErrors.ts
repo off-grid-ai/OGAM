@@ -106,6 +106,11 @@ export function toUserMessage(reason?: string, code?: string): string {
 const RETRYABLE_CODES = new Set([
   'network_lost', 'network_timeout', 'server_unavailable', 'download_interrupted',
   'http_416', 'http_429', 'empty_response', 'unknown_error', 'save_failed', 'finalize_failed',
+  // The app's own fallback codes, for a failure that came with no native code. Before they existed
+  // these rows had no code at all, and a row with no code offers Retry; a retry can recover each one
+  // (a kept zip is processed again, a missing or partial download starts over). No source URL and
+  // no download metadata stay out: a retry has nothing to start from, the row says remove it.
+  'extract_failed', 'multifile_failed', 'download_failed', 'resume_failed', 'files_missing', 'retry_failed',
 ]);
 
 export function isRetryable(reasonCode?: string): boolean {
