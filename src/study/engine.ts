@@ -328,7 +328,7 @@ const STYLE_TEXT: Record<PodcastStyle, string> = {
   debate: 'a friendly debate: the hosts take different sides and weigh the evidence',
   interview: 'an interview: A is the interviewer, B is the expert guest',
   beginner: 'for complete beginners: simple words, everyday examples, no jargon',
-  news: 'a friendly daily news show: story by story, each explained simply with why it matters, upbeat but accurate',
+  news: 'a friendly daily news show: story by story, each explained simply, upbeat but accurate',
 };
 
 /** Extra research: offline library (Kiwix) first, then the web when online and not in off-grid mode. */
@@ -456,7 +456,7 @@ async function writeOutlinedEpisode(
     const howMany = howManyLines(opts, n);
     const cast = opts.castFor?.(i) ?? cfg.cast;
     const t = await ask(
-      'You write natural spoken scripts from sources. Say ONLY what the sources say: never add names, numbers, dates, places or quotes that are not in them. If the source gives few details, the hosts may say why it matters, using only what the source says. Never mention source numbers.',
+      'You write natural spoken scripts from sources. Say ONLY what the sources say: never add names, numbers, dates, places or quotes that are not in them. Never tell the listener what to feel or think about the subject. Never mention source numbers.',
       `SOURCES:\n${sourceBlock(part.sources)}\n\nEpisode: "${title}". Style: ${cfg.style}. Cast: ${cast}.\nThis item: ${part.topic}\n${where}\n${recap ? `Last lines so far:\n${recap}\n` : ''}${covered ? `Already covered (do not repeat or retell these):\n${covered}\n` : ''}${opts.rules ? `${opts.rules}\n` : ''}${howMany}, exactly in this format:\n${cfg.fmt}`,
     );
     const written = withoutRepeats(parseLines(t, cfg.hosts).slice(0, n + 2), lines);

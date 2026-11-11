@@ -18,9 +18,10 @@ export const AgentsScreen: React.FC<{ embedded?: boolean }> = ({ embedded = fals
   const agents = useAgentStore((s) => s.agents);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const setActiveAgent = useAgentStore((s) => s.setActiveAgent);
+  const byName = (a: Agent, b: Agent) => a.name.localeCompare(b.name);
   const sections = [
-    { title: 'Agents', hint: 'Get work done', data: agents.filter((a) => !isPal(a)) },
-    { title: 'Pals', hint: 'Characters to talk or role-play with', data: agents.filter(isPal) },
+    { title: 'Agents', hint: 'Get work done', data: agents.filter((a) => !isPal(a)).sort(byName) },
+    { title: 'Pals', hint: 'Characters to talk or role-play with', data: agents.filter(isPal).sort(byName) },
   ];
 
   const renderItem = ({ item }: { item: Agent }) => {

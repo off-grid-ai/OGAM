@@ -155,6 +155,16 @@ async function libraryFacts(topic: string, startN: number): Promise<Source[]> {
   } catch { return []; }
 }
 
+async function webFacts(topic: string, startN: number): Promise<Source[]> {
+  try {
+    const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topic)}`;
+    const json = JSON.parse(await fetchText(url, 8000));
+    const text = (json.extract || '').trim().slice(0, 1200);
+    if (!text || text.length < 50) return [];
+    return [{ n: startN, doc: `Wikipedia: ${json.title || topic}`, part: 1, text, origin: 'web' }];
+  } catch { return []; }
+}
+
 type OutlineItem = { topic: string; sources: Source[]; always?: boolean };
 
 function storyHeader(h: Headline): string {
@@ -177,10 +187,15 @@ async function libraryItems(interests: string[], withNews: boolean, firstN: numb
   const out: OutlineItem[] = [];
   let n = firstN;
   for (const topic of interests.slice(0, withNews ? 2 : 6)) {
-    const facts = await libraryFacts(topic, n);
+    let facts = await libraryFacts(topic, n);
+    let factSource = 'offline library';
+    if (!facts.length && withNews && !offGridNow()) {
+      facts = await webFacts(topic, n);
+      factSource = 'Wikipedia';
+    }
     if (!facts.length) continue;
     n += facts.length;
-    out.push({ topic: withNews ? `A fun fact about ${topic} from the offline library` : `From the offline library: ${topic}`, sources: facts, always: true });
+    out.push({ topic: withNews ? `A fun fact about ${topic} from ${factSource}` : `From the offline library: ${topic}`, sources: facts, always: true });
     if (withNews) break;
   }
   return out;
@@ -257,7 +272,7 @@ async function wantedInterests(all: string[], avoid: string[]): Promise<string[]
   return wanted.length ? wanted : ['world news'];
 }
 
-const NO_WELCOME = 'Do not greet listeners, welcome them, name the show or say the date: the opening greeting is added for you. Start straight into the first story, never repeat a line, and move between stories with a few words.';
+const NO_WELCOME = 'Do not greet listeners, welcome them, name the show or say the date: the opening greeting is added for you. Start straight into the first story, never repeat a line, and move between stories with a few words. Never tell the listener what to think or feel about a story. Skip graphic violent details or explicit descriptions.';
 
 /** The opening line, made here so the date is always said first (the model was leaving it out or putting it mid-show). */
 export function greetingLine(now = new Date()): string {
@@ -280,10 +295,10 @@ export async function makeBriefing(onStep: (m: string) => void, voicesAvailable:
   const { outline, stories } = offline ? { outline: [] as OutlineItem[], stories: [] as Picked[] }
     : await gatherStories({ interests, minutes: p.minutes, deep: p.deep, avoid }, onStep);
 
-  // 3. Fun facts come only from the offline library, never from the model's memory.
+  // 3. Fun facts come from the offline library when available, falling back to Wikipedia when online.
   const gotNews = outline.length > 0;
   if (p.funFacts || !gotNews) {
-    onStep(gotNews ? 'Finding a fun fact in the offline library...' : 'No news - making an offline edition from your library...');
+    onStep(gotNews ? 'Finding a fun fact...' : 'No news - making an offline edition from your library...');
     outline.push(...await libraryItems(interests, gotNews, outline.length + 1));
   }
   if (!outline.length) {
@@ -299,7 +314,7 @@ export async function makeBriefing(onStep: (m: string) => void, voicesAvailable:
   const r = await writeEpisode([], {
     title: `${gotNews ? 'Daily briefing' : 'Offline edition'} - ${date}`,
     prompt: gotNews
-      ? `A daily news briefing for ${date} on: ${interests.join(', ')}. Each item is one real story: summarize it in your own words in two to four sentences (what happened, who is involved, why it matters) and name the outlet. Never read an article aloud or quote it, and report only what its source says.`
+      ? `A daily news briefing for ${date} on: ${interests.join(', ')}. Each item is one real story: summarize it in your own words in two to four sentences (what happened, who is involved) and name the outlet. Never read an article aloud or quote it, and report only what its source says.`
       : `An "offline edition" for ${date}: there is no live news today, so share interesting things from the library about: ${interests.join(', ')}.`,
     minutes: p.minutes,
     hosts: withExperts ? 3 : voicesAvailable >= 2 ? p.hosts : 1,

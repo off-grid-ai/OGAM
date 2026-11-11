@@ -179,12 +179,15 @@ function playFile(path: string): Promise<PlayResult> {
     (async () => {
       // Playback-session setup happens once per listening session, not every 20 seconds.
       if (!sessionReady) { await audioSessionManager.ensurePlayback(); sessionReady = true; }
+      // On Android the AudioContext can be suspended (e.g. after a stop or background). Resume it.
+      const actx = audioContext();
+      if (actx.state === 'suspended') { try { await actx.resume(); } catch { /* carry on */ } }
       const buffer = await decode(path);
       decoded.delete(path);
       if (token !== stopToken) { finish('stopped'); return; }
-      const node = audioContext().createBufferSource();
+      const node = actx.createBufferSource();
       node.buffer = buffer;
-      node.connect(audioContext().destination);
+      node.connect(actx.destination);
       if (speed !== 1 && node.playbackRate) node.playbackRate.value = speed;
       node.onEnded = () => { if (source === node) source = null; finish(token === stopToken ? 'ended' : 'stopped'); };
       source = node;
