@@ -75,12 +75,16 @@ class AtlasAudioService : Service() {
     }
 
     private fun startQueue(newFiles: List<String>, startAt: Int) {
-        stopPlayback()
+        // Release any existing player WITHOUT calling stopSelf() — the service was just
+        // started via startForegroundService() and must call startForeground() before
+        // stopSelf(), or Android 8+ throws RemoteServiceException.
+        releasePlayer()
+        abandonAudioFocus()
         files = newFiles
         currentIndex = startAt.coerceIn(0, maxOf(0, newFiles.size - 1))
-        if (files.isEmpty()) { broadcastFinished(); stopSelf(); return }
+        if (files.isEmpty()) { broadcastFinished(); stopForegroundAndSelf(); return }
         requestAudioFocus()
-        showNotification("Playing…")
+        showNotification("Playing…")  // calls startForeground() — must come before playNext()
         playNext()
     }
 
@@ -124,21 +128,30 @@ class AtlasAudioService : Service() {
     private fun onQueueFinished() {
         broadcastFinished()
         abandonAudioFocus()
+        stopForegroundAndSelf()
+    }
+
+    private fun releasePlayer() {
+        player?.let {
+            try { if (it.isPlaying) it.stop() } catch (_: Exception) {}
+            try { it.release() } catch (_: Exception) {}
+        }
+        player = null
+    }
+
+    private fun stopForegroundAndSelf() {
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     private fun stopPlayback() {
-        player?.let { if (it.isPlaying) it.stop(); it.release() }
-        player = null
+        releasePlayer()
         abandonAudioFocus()
-        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        stopForegroundAndSelf()
     }
 
     override fun onDestroy() {
-        player?.let { try { if (it.isPlaying) it.stop() } catch (_: Exception) {}; it.release() }
-        player = null
+        releasePlayer()
         abandonAudioFocus()
         super.onDestroy()
     }
