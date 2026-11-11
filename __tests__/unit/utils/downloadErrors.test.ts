@@ -83,5 +83,16 @@ describe('downloadErrors', () => {
       expect(isRetryable('http_404')).toBe(false);
       expect(isRetryable('user_cancelled')).toBe(false);
     });
+
+    it('keeps Retry for the app fallback codes a retry can recover', () => {
+      for (const code of ['extract_failed', 'multifile_failed', 'download_failed', 'resume_failed', 'files_missing', 'retry_failed']) {
+        expect(isRetryable(code)).toBe(true);
+      }
+    });
+
+    it('offers no Retry when a retry has nothing to start from', () => {
+      expect(isRetryable('no_source_url')).toBe(false);
+      expect(isRetryable('metadata_missing')).toBe(false);
+    });
   });
 });

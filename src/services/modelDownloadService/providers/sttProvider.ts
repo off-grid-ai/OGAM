@@ -150,7 +150,7 @@ export const sttProvider: DownloadProvider = {
     for (const e of Object.values(store.downloads)) {
       if (e.modelType === 'stt' && isActiveStatus(e.status)) {
         logger.log(`[DL-SM] stt:${bareId(e.modelId)} reconcile: interrupted by app close → failed`);
-        store.setStatus(e.downloadId, 'failed', { message: 'Interrupted — app closed. Tap retry.' });
+        store.setStatus(e.downloadId, 'failed', { message: 'Interrupted — app closed. Tap retry.', code: 'download_interrupted' });
       }
     }
   },

@@ -60,6 +60,19 @@ it('keeps a failed transcription download with Retry, and Retry completes it', a
   expect((await row())?.status).not.toBe('error');
 });
 
+it('a failed transcription download keeps its reason code on the row', async () => {
+  // 0.0.122: a Whisper download failed again and again with no code ("error"), so the numbers could
+  // not say why. The row now carries the native reason.
+  const { whisperService } = require('../../../src/services/whisperService');
+  const { useDownloadStore } = require('../../../src/stores/downloadStore');
+  const first = whisperService.downloadModel(MODEL).catch(() => undefined);
+  await device.failDownload((await transfer()).downloadId, 'The connection was lost.', 'network_lost');
+  await first;
+
+  const entry = Object.values(useDownloadStore.getState().downloads).find((e: any) => e.modelId === `whisper-${MODEL}`);
+  expect(entry).toMatchObject({ status: 'failed', errorCode: 'network_lost' });
+});
+
 it('a cancelled transcription download leaves no row', async () => {
   const { whisperService } = require('../../../src/services/whisperService');
   const first = whisperService.downloadModel(MODEL).catch(() => undefined);
