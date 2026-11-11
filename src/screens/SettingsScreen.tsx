@@ -143,44 +143,71 @@ export const SettingsScreen: React.FC = () => {
           />
         </View>
 
-        {/* Navigation Items */}
+        {/* Navigation Items — grouped */}
         <AttachStep index={5} fill>
-          <View style={styles.navSection}>
-            {[
-              { icon: 'monitor', title: 'Presentation Studio', desc: 'Create PowerPoint decks with templates and export PDF, offline', screen: 'Presentations' as const },
-              { icon: 'bookmark', title: 'Pinned', desc: 'Answers you pinned from any chat, in one place', screen: 'Pins' as const },
-              { icon: 'clock', title: 'Scheduled tasks', desc: 'Have the AI do something at a set time: a daily briefing, a plan, anything you can ask', screen: 'Schedule' as const },
-              { icon: 'zap', title: 'Skills', desc: 'Reusable instructions in the SKILL.md format (Claude, OpenClaw): import, switch on or off, call with /name', screen: 'Skills' as const },
-              { icon: 'droplet', title: 'Appearance & AI style', desc: 'Theme, colors, font, text size, bottom bar, and how talkative the AI is', screen: 'Appearance' as const },
-              { icon: 'cpu', title: 'Models', desc: 'Browse, download and load text, image and voice models', screen: 'ModelsTab' as any },
-              { icon: 'sliders', title: 'Model Settings', desc: 'System prompt, generation, and performance', screen: 'ModelSettings' as const },
-              { icon: 'wifi', title: 'Remote Servers', desc: 'Use models running on a computer on your Wi-Fi (Ollama, LM Studio...)', screen: 'RemoteServers' as const },
-              { icon: 'compass', title: 'Atlas', desc: 'Emergency cards, Survival Manual, offline maps, phrases, off-grid mode', screen: 'AtlasHub' as const },
-              { icon: 'book', title: 'Offline Library', desc: 'Download the Atlas library and offline encyclopedias (WikiMed, Wikipedia, iFixit, Wikivoyage)', screen: 'OfflineLibrary' as const },
-              { icon: 'search', title: 'Tools & Web Search', desc: 'Search provider (SearXNG, DuckDuckGo, Exa, Parallel, Tavily) and tools', screen: 'Tools' as const },
-              { icon: 'lock', title: 'Security', desc: 'Passphrase and app lock', screen: 'SecuritySettings' as const },
-              { icon: 'smartphone', title: 'Device Information', desc: 'Hardware and compatibility', screen: 'DeviceInfo' as const },
-              { icon: 'package', title: 'My models', desc: 'Delete models, move them to an SD card, add vision files', screen: 'MyModels' as const },
-              { icon: 'hard-drive', title: 'Storage', desc: 'Models and data usage', screen: 'StorageSettings' as const },
-            ].map((item, index, arr) => (
-              <AnimatedListItem
-                key={item.screen}
-                index={index + 1}
-                staggerMs={40}
-                trigger={focusTrigger}
-                style={[styles.navItem, index === arr.length - 1 && styles.navItemLast]}
-                onPress={() => navigation.navigate(item.screen)}
-              >
-                <View style={styles.navItemIcon}>
-                  <Icon name={item.icon} size={16} color={colors.textSecondary} />
-                </View>
-                <View style={styles.navItemContent}>
-                  <Text style={styles.navItemTitle}>{item.title}</Text>
-                  <Text style={styles.navItemDesc}>{item.desc}</Text>
-                </View>
-                <Icon name="chevron-right" size={16} color={colors.textMuted} />
-              </AnimatedListItem>
-            ))}
+          <View>
+          {([
+            {
+              label: 'Models & AI',
+              items: [
+                { icon: 'cpu', title: 'Models', desc: 'Browse, download and load text, image and voice models', screen: 'ModelsTab' as any },
+                { icon: 'sliders', title: 'Model Settings', desc: 'System prompt, generation, and performance', screen: 'ModelSettings' as const },
+                { icon: 'wifi', title: 'Remote Servers', desc: 'Use models running on a computer on your Wi-Fi (Ollama, LM Studio...)', screen: 'RemoteServers' as const },
+                { icon: 'zap', title: 'Skills', desc: 'Reusable instructions in the SKILL.md format (Claude, OpenClaw): import, switch on or off, call with /name', screen: 'Skills' as const },
+                { icon: 'search', title: 'Tools & Web Search', desc: 'Search provider (SearXNG, DuckDuckGo, Exa, Parallel, Tavily) and tools', screen: 'Tools' as const },
+              ],
+            },
+            {
+              label: 'Features',
+              items: [
+                { icon: 'droplet', title: 'Appearance & AI style', desc: 'Theme, colors, font, text size, bottom bar, and how talkative the AI is', screen: 'Appearance' as const },
+                { icon: 'monitor', title: 'Presentation Studio', desc: 'Create PowerPoint decks with templates and export PDF, offline', screen: 'Presentations' as const },
+                { icon: 'bookmark', title: 'Pinned', desc: 'Answers you pinned from any chat, in one place', screen: 'Pins' as const },
+                { icon: 'clock', title: 'Scheduled tasks', desc: 'Have the AI do something at a set time: a daily briefing, a plan, anything you can ask', screen: 'Schedule' as const },
+              ],
+            },
+            {
+              label: 'Off-grid',
+              items: [
+                { icon: 'compass', title: 'Atlas', desc: 'Emergency cards, Survival Manual, offline maps, phrases, off-grid mode', screen: 'AtlasHub' as const },
+                { icon: 'book', title: 'Offline Library', desc: 'Download the Atlas library and offline encyclopedias (WikiMed, Wikipedia, iFixit, Wikivoyage)', screen: 'OfflineLibrary' as const },
+              ],
+            },
+            {
+              label: 'System',
+              items: [
+                { icon: 'lock', title: 'Security', desc: 'Passphrase and app lock', screen: 'SecuritySettings' as const },
+                { icon: 'package', title: 'My models', desc: 'Delete models, move them to an SD card, add vision files', screen: 'MyModels' as const },
+                { icon: 'hard-drive', title: 'Storage', desc: 'Models and data usage', screen: 'StorageSettings' as const },
+                { icon: 'smartphone', title: 'Device Information', desc: 'Hardware and compatibility', screen: 'DeviceInfo' as const },
+              ],
+            },
+          ] as Array<{ label: string; items: { icon: string; title: string; desc: string; screen: any }[] }>).map((group) => (
+            <View key={group.label} style={styles.section}>
+              <Text style={styles.groupLabel}>{group.label}</Text>
+              <View style={styles.navSection}>
+                {group.items.map((item, index, arr) => (
+                  <AnimatedListItem
+                    key={item.screen}
+                    index={index + 1}
+                    staggerMs={40}
+                    trigger={focusTrigger}
+                    style={[styles.navItem, index === arr.length - 1 && styles.navItemLast]}
+                    onPress={() => navigation.navigate(item.screen)}
+                  >
+                    <View style={styles.navItemIcon}>
+                      <Icon name={item.icon} size={16} color={colors.textSecondary} />
+                    </View>
+                    <View style={styles.navItemContent}>
+                      <Text style={styles.navItemTitle}>{item.title}</Text>
+                      <Text style={styles.navItemDesc}>{item.desc}</Text>
+                    </View>
+                    <Icon name="chevron-right" size={16} color={colors.textMuted} />
+                  </AnimatedListItem>
+                ))}
+              </View>
+            </View>
+          ))}
           </View>
         </AttachStep>
 
@@ -342,6 +369,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   themeSelector: { flexDirection: 'row' as const, backgroundColor: colors.surfaceLight, borderRadius: 8, padding: 3, gap: 2 },
   themeSelectorOption: { width: 34, height: 30, borderRadius: 6, alignItems: 'center' as const, justifyContent: 'center' as const },
   themeSelectorOptionActive: { backgroundColor: colors.primary },
+  groupLabel: { ...TYPOGRAPHY.meta, color: colors.textSecondary, marginBottom: SPACING.xs, marginLeft: 2 },
   navSection: {
     backgroundColor: colors.surface,
     borderRadius: 8,

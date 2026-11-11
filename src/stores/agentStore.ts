@@ -138,7 +138,7 @@ BUILT-IN IDENTIFICATION BASICS (always available):
     // The prompt is long (~2,700 tokens): give the conversation room.
     contextLength: 8192,
     temperature: 0.7,
-    enabledTools: ['remember', 'search_knowledge_base', 'search_offline_library'],
+    enabledTools: ['remember', 'search_knowledge_base', 'search_offline_library', 'update_project_document'],
     createdAt: now(),
     updatedAt: now(),
   },
@@ -291,6 +291,7 @@ export const useAgentStore = create<AgentState>()(
             a.systemPrompt = DEFAULT_AGENTS.find(d => d.id === 'jock-boyfriend')!.systemPrompt;
           }
           if (a.id === 'counselor' && a.systemPrompt.startsWith('You are a warm, skilled counselor having a private conversation')) { a.systemPrompt = COUNSELOR_PROMPT; if (!a.contextLength) a.contextLength = 8192; }
+          if (a.id === 'counselor' && Array.isArray(a.enabledTools) && !a.enabledTools.includes('update_project_document')) { a.enabledTools = [...a.enabledTools, 'update_project_document']; }
           // Upgrade only the shipped placeholder persona, never a user-customized Jake prompt.
           if (a.id === 'jock-boyfriend' && a.systemPrompt.startsWith('Roleplay a warm, confident, sporty, playful boyfriend character')) {
             const jake = DEFAULT_AGENTS.find(d => d.id === 'jock-boyfriend')!;

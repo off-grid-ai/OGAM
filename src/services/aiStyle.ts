@@ -7,11 +7,14 @@ export type AiLength = 'brief' | 'balanced' | 'detailed';
 export type AiTone = 'friendly' | 'neutral' | 'formal' | 'playful' | 'direct';
 export type AiLevel = 'simple' | 'normal' | 'expert';
 
+export type AiEmoji = 'never' | 'sometimes' | 'often';
+
 export interface AiStyle {
   length?: AiLength;
   tone?: AiTone;
   level?: AiLevel;
-  emoji?: boolean;
+  /** 'never' | 'sometimes' | 'often'; legacy boolean values (false/true) are still accepted. */
+  emoji?: AiEmoji | boolean;
   /** Ask a follow-up question at the end of answers. Unset means only when the answer truly needs one. */
   followUps?: boolean;
   /** Free-text standing instructions ("Always use metric units"). */
@@ -67,7 +70,9 @@ export function aiStyleNote(style?: AiStyle): string {
     style?.length && style.length !== 'balanced' ? LENGTH_NOTE[style.length] : '',
     style?.tone && style.tone !== 'neutral' ? TONE_NOTE[style.tone] : '',
     style?.level ? LEVEL_NOTE[style.level] : '',
-    style?.emoji === true ? 'An occasional emoji is fine.' : style?.emoji === false ? 'Do not use emoji.' : '',
+    style?.emoji === 'often' ? 'Feel free to use emoji to express yourself.' :
+    (style?.emoji === 'sometimes' || style?.emoji === true) ? 'An occasional emoji is fine.' :
+    (style?.emoji === 'never' || style?.emoji === false) ? 'Do not use emoji.' : '',
     followUpNote(style?.followUps),
     BE_HONEST,
   ].filter(Boolean);

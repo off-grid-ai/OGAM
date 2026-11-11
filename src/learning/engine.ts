@@ -166,7 +166,7 @@ function learnerSystem(agent: Agent, st: PerAgent, cfg: LearnConfig): string {
 async function buildBank(agent: Agent, cfg: LearnConfig): Promise<void> {
   const st = L().get(agent.id);
   const round = st.round + 1;
-  const done = st.bank.filter((b) => b.status === 'answered').map((b) => b.q).slice(-25);
+  const done = st.bank.filter((b) => b.status === 'answered').map((b) => b.q).slice(-60);
   const gaps = st.bank.filter((b) => b.status === 'failed').map((b) => b.q).slice(-8);
   status(`Learner is writing question bank (round ${round})...`);
   const raw = await ask(
@@ -187,7 +187,7 @@ async function buildBank(agent: Agent, cfg: LearnConfig): Promise<void> {
   status('Judge is reviewing the question bank...');
   const verdict = await ask(
     `You are the judge. You check that study questions stay on the task, are specific, safe and not duplicates.${st.judgeNote ? `\nManager's note to you: ${st.judgeNote}` : ''}`,
-    `TASK: ${cfg.topic}\n\nQUESTIONS:\n${numbered(items)}\n\nFor EVERY question write one line: "<number>: APPROVE" or "<number>: REJECT - <short reason>". Reject only questions that are off the task, too vague, unsafe, or duplicates.`,
+    `TASK: ${cfg.topic}\n${done.length ? `\nAlready answered (do not repeat any of these):\n${done.join('\n')}\n` : ''}\nQUESTIONS:\n${numbered(items)}\n\nFor EVERY question write one line: "<number>: APPROVE" or "<number>: REJECT - <short reason>". Reject only questions that are off the task, too vague, unsafe, duplicates, or already answered.`,
     'judge',
   );
   const r = rulings(verdict, items.length);
@@ -242,7 +242,7 @@ async function writeReport(agent: Agent, cfg: LearnConfig, item: BankItem): Prom
   status('Learner is writing a report...');
   const report = await ask(
     learnerSystem(agent, st, cfg),
-    `${src ? `SOURCES:\n${src}\n\n` : 'No sources found: use what you know, and say so.\n\n'}TASK: ${cfg.topic}\nQUESTION: ${item.q}\n${item.feedback ? `Judge feedback on your last try: ${item.feedback}\n` : ''}\nWrite a simple report:\nANSWER: 2-5 plain sentences.\nKEY POINTS: 2-4 short bullets.\nREASONING: why this is right, step by step, and which source supports it. Cite each source you use by its number in square brackets, like [1].\nUNSURE: anything you could not confirm (or "nothing").`,
+    `${src ? `SOURCES:\n${src}\n\n` : 'No sources found: use what you know, and say so.\n\n'}TASK: ${cfg.topic}\nQUESTION: ${item.q}\n${item.feedback ? `Judge feedback on your last try: ${item.feedback}\n` : ''}\nWrite a simple report:\nANSWER: 2-5 plain sentences.\nKEY POINTS: 2-4 short bullets.\nREASONING: why this is right, step by step, and which source supports it. Cite each source you use by its number in square brackets, like [1]. Draw on as many of the available sources as fit — do not rely on only one.\nUNSURE: anything you could not confirm (or "nothing").`,
     'learner',
   );
   L().log({ agentId: agent.id, kind: 'report', title: `Report: ${item.q.slice(0, 70)}`, body: report.slice(0, 2500) });

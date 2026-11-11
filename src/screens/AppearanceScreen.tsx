@@ -242,8 +242,8 @@ export const AppearanceScreen: React.FC = () => {
         <Text style={styles.label}>Explanations</Text>
         <Chips testID="ai-level" value={ai.level ?? 'normal'} onPick={level => setAi({ level })} options={AI_LEVELS} />
         <Text style={styles.label}>Emoji</Text>
-        <Chips testID="ai-emoji" value={ai.emoji} onPick={emoji => setAi({ emoji })}
-          options={[{ id: undefined, name: 'Model decides' }, { id: false, name: 'Never' }, { id: true, name: 'Sometimes' }]} />
+        <Chips testID="ai-emoji" value={ai.emoji === true ? 'sometimes' : ai.emoji === false ? 'never' : (ai.emoji as any)} onPick={emoji => setAi({ emoji })}
+          options={[{ id: undefined, name: 'Model decides' }, { id: 'never', name: 'Never' }, { id: 'sometimes', name: 'Sometimes' }, { id: 'often', name: 'Often' }]} />
         <Text style={styles.label}>Follow-up questions</Text>
         <Chips testID="ai-followups" value={ai.followUps} onPick={followUps => setAi({ followUps })}
           options={[{ id: undefined, name: 'Only when needed' }, { id: false, name: 'Never' }, { id: true, name: 'When useful' }]} />
