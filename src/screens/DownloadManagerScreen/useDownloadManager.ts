@@ -31,6 +31,7 @@ import { downloadItemId, outstandingDownloadItems } from './outstandingDownloads
 import { uniformDownloadId } from '../../services/modelDownloadService/uniformId';
 import { setImageDownloadOps } from '../../services/modelDownloadService/providers/imageProvider';
 import { useEffect } from 'react';
+import { failureDetails } from '../../utils/downloadErrors';
 
 export interface UseDownloadManagerResult {
   activeItems: DownloadItem[];
@@ -218,6 +219,7 @@ export function useDownloadManager(): UseDownloadManagerResult {
         error?.message || 'Retry failed. Please remove and re-download.';
       if (item.downloadId)
         useDownloadStore.getState().setStatus(item.downloadId, 'failed', {
+          ...failureDetails(error, 'retry_failed'),
           message: errorMessage,
         });
     }

@@ -7,6 +7,7 @@ import * as whisperModelFiles from './whisperModelFiles';
 import { WHISPER_MODELS, findTranscriptionModel } from './whisperModels';
 import { withRemoteCatalog } from '../stores/modelCatalogStore';
 import type { MobileWhisperCatalogModel } from '@offgrid/models';
+import { failureDetails } from '../utils/downloadErrors';
 
 /** One file of a transcription model download: Whisper has one, Qwen3-ASR two. */
 interface ModelDownloadFile {
@@ -287,8 +288,9 @@ export class WhisperModelDownloads {
       store.remove(owner.modelKey);
       return;
     }
-    const message = owner.failure instanceof Error ? owner.failure.message : String(owner.failure);
-    store.setStatus(entry.downloadId, 'failed', { message });
+    // Its code too (disk_full from the space check, a native reason): without it every failure here
+    // counted as a bare "error" (0.0.122: a Whisper retry failed in 10 ms, again and again, uncoded).
+    store.setStatus(entry.downloadId, 'failed', failureDetails(owner.failure, 'download_failed'));
   }
 
   listDownloadedModels(): Promise<DownloadedWhisperModel[]> {

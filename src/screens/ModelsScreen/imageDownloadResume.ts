@@ -12,6 +12,7 @@ import { imageDescriptorFromMetadata } from './imageDescriptor';
 import { validateImageModelDir, ensureImageExtractionComplete } from '../../services/imageModelIntegrity';
 import { makeImageModelKey } from '../../utils/modelKey';
 import logger from '../../utils/logger';
+import { failureDetails } from '../../utils/downloadErrors';
 
 type ResumeCtx = { entry: DownloadEntry; modelId: string; metadata: Record<string, any>; deps: ImageDownloadDeps };
 
@@ -87,6 +88,7 @@ async function reDownloadFromMetadata(ctx: ResumeCtx): Promise<void> {
     // No URL to re-fetch from. Surface a clear, honest failure rather than a stale native error.
     useDownloadStore.getState().setStatus(ctx.entry.downloadId, 'failed', {
       message: 'Download could not be re-downloaded. Remove it and download again.',
+      code: 'no_source_url',
     });
     return;
   }
@@ -195,7 +197,7 @@ async function resumeMultifileDownload(ctx: ResumeCtx): Promise<void> {
   const modelDirExists = await RNFS.exists(modelDir);
   if (!modelDirExists) {
     logger.warn(`[ImageDownload] resumeImageDownload multifile - model dir missing, marking failed ${modelId}`);
-    useDownloadStore.getState().setStatus(entry.downloadId, 'failed', { message: 'Download files missing. Please retry.' });
+    useDownloadStore.getState().setStatus(entry.downloadId, 'failed', { message: 'Download files missing. Please retry.', code: 'files_missing' });
     return;
   }
   const hfFiles = metadata.imageModelHuggingFaceFiles as ImageModelDescriptor['huggingFaceFiles'];
@@ -225,7 +227,7 @@ export async function resumeImageDownload(entry: DownloadEntry, deps: ImageDownl
 
   if (!metadata?.imageDownloadType) {
     logger.warn(`[ImageDownload] resumeImageDownload no metadata for ${modelId} - marking failed`);
-    useDownloadStore.getState().setStatus(entry.downloadId, 'failed', { message: 'Could not resume: missing download metadata' });
+    useDownloadStore.getState().setStatus(entry.downloadId, 'failed', { message: 'Could not resume: missing download metadata', code: 'metadata_missing' });
     return;
   }
 
@@ -237,6 +239,6 @@ export async function resumeImageDownload(entry: DownloadEntry, deps: ImageDownl
     }
   } catch (error: any) {
     logger.error(`[ImageDownload] resumeImageDownload failed for ${modelId}`, error?.message);
-    useDownloadStore.getState().setStatus(entry.downloadId, 'failed', { message: error?.message || 'Could not resume download after restart' });
+    useDownloadStore.getState().setStatus(entry.downloadId, 'failed', { ...failureDetails(error, 'resume_failed'), message: error?.message || 'Could not resume download after restart' });
   }
 }

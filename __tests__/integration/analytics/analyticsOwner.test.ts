@@ -252,6 +252,24 @@ it('a cancelled download closes its attempt: downloading it again is a new start
   expect(endpoint.named('model_download_failed')).toHaveLength(0);
 });
 
+it('a download the person cancels is not a failure: no model_download_failed, and a retry is a new start', async () => {
+  // 0.0.122, 2026-11-10: 44 of 171 "failed" downloads in a day were user_cancelled.
+  const { endpoint, flush } = await setup({ usage: true });
+  const { useDownloadStore } = require('../../../src/stores/downloadStore');
+  useDownloadStore.getState().add({
+    modelKey: 'org/m-GGUF/m.gguf', downloadId: 'dl-1', modelId: 'org/m-GGUF', fileName: 'm.gguf', quantization: '',
+    modelType: 'text', status: 'running', bytesDownloaded: 0, totalBytes: GB, combinedTotalBytes: 0, progress: 0, createdAt: 0,
+  });
+  // The cancel reaches the store as the native layer reports it: a failed status with user_cancelled.
+  useDownloadStore.getState().setStatus('dl-1', 'failed', { message: 'Download cancelled.', code: 'user_cancelled' });
+  useDownloadStore.getState().retryEntry('org/m-GGUF/m.gguf', 'dl-2');
+
+  await new Promise(resolve => setTimeout(resolve, 20));
+  await flush();
+  await waitFor(() => expect(endpoint.named('model_download_started')).toHaveLength(2));
+  expect(endpoint.named('model_download_failed')).toHaveLength(0);
+});
+
 it('reports the spec properties when the device cannot say its chip, memory or battery', async () => {
   const { analytics, endpoint, flush } = await setup(null);
   // Before opting in a download is not tracked at all, so its end later sends nothing.

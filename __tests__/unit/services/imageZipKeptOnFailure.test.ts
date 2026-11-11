@@ -58,6 +58,10 @@ describe('a failed unzip keeps the download', () => {
 
     await download();
     expect(row()?.status).toBe('failed');
+    // The failed row still offers Retry: the unzip error has no code, so the row records the
+    // extract_failed fallback, and the Download Manager shows Retry for it.
+    expect(row()?.errorCode).toBe('extract_failed');
+    expect(require('../../../src/utils/downloadErrors').isRetryable(row()?.errorCode)).toBe(true);
     expect(await boundary.fs!.exists(zipPath)).toBe(true);
     expect(await boundary.fs!.exists(modelDir)).toBe(false); // a half-made model never reads as installed
 
