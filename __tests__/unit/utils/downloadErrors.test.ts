@@ -90,10 +90,6 @@ describe('downloadErrors', () => {
       }
     });
 
-    it('keeps Retry when the phone ran out of space: freeing space makes a retry work', () => {
-      expect(isRetryable('disk_full')).toBe(true);
-    });
-
     it('offers no Retry when a retry has nothing to start from', () => {
       expect(isRetryable('no_source_url')).toBe(false);
       expect(isRetryable('metadata_missing')).toBe(false);

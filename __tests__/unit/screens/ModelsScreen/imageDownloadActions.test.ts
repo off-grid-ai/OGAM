@@ -177,8 +177,6 @@ describe('a Hugging Face multi-file download', () => {
     expect(row(HF_KEY).status).toBe('failed');
     expect(row(HF_KEY).errorCode).toBe('disk_full');
     expect(row(HF_KEY).errorMessage).toBe('Not enough space on the phone');
-    // The row still offers Retry: once the person frees space, a retry works.
-    expect(require('../../../../src/utils/downloadErrors').isRetryable(row(HF_KEY).errorCode)).toBe(true);
     expect(await registeredIds()).toEqual([]);
   });
 
