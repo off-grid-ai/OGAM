@@ -36,6 +36,7 @@
          the app is backgrounded / the screen is off (WorkManager foreground worker). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Android 13+ needs this to SHOW the ongoing download notification (requested at runtime). -->
@@ -175,6 +176,13 @@
               android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
               android:value="User-started on-device AI model loading and inference that must continue when the app is backgrounded or the display turns off." />
       </service>
+      <!-- Background audio: plays pre-rendered WAV files (daily briefing, episodes) when
+           the app is backgrounded. mediaPlayback is the standard Android FGS type for this. -->
+      <service
+          android:name=".atlasaudio.AtlasAudioService"
+          android:exported="false"
+          android:foregroundServiceType="mediaPlayback" />
+
         <!-- Atlas: lets other apps (browser, document viewers) open files the assistant made -->
         <provider
             android:name=".atlasdevice.AtlasFileProvider"

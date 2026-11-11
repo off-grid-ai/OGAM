@@ -237,6 +237,51 @@ let speed = 1;
 /** How fast saved lines play from now on (1 is as recorded). Spoken-live lines are not affected. */
 export function setPodcastSpeed(x: number): void { speed = x > 0 ? x : 1; }
 
+export interface NativeEpisodeQueueOpts {
+  from: number;
+  tunes?: { storyStarts: number[] };
+  jingleVolume?: JingleVolume;
+}
+
+/**
+ * Builds an ordered list of WAV file paths for playing an episode with the
+ * native background player (Android only). Jingle files are created on demand.
+ * Returns null when any episode line has not been pre-rendered yet — caller
+ * should fall back to the JS AudioContext player in that case.
+ */
+export async function nativeEpisodeQueue(
+  key: string,
+  items: CastLine[],
+  opts: NativeEpisodeQueueOpts,
+): Promise<{ paths: string[]; lineAtIndex: Map<number, number> } | null> {
+  if (!renderable(items)) return null;
+  const { from, tunes, jingleVolume = 'normal' } = opts;
+  const paths: string[] = [];
+  const lineAtIndex = new Map<number, number>();
+  const first = Math.max(0, from);
+
+  const addJingle = async (kind: JingleKind): Promise<void> => {
+    const p = `${root()}/_jingles/${kind}-${jingleVolume}-v2.wav`;
+    if (!(await RNFS.exists(p))) {
+      await RNFS.mkdir(`${root()}/_jingles`);
+      await RNFS.writeFile(p, toBase64(wavBytes(makeJingle(kind, undefined, JINGLE_PEAK[jingleVolume]))), 'base64');
+    }
+    paths.push(p);
+  };
+
+  if (tunes && first === 0) await addJingle('intro');
+  for (let i = first; i < items.length; i++) {
+    if (tunes && i > first && tunes.storyStarts.includes(i)) await addJingle('chime');
+    const p = pathFor(key, i, items[i]);
+    if (!(await RNFS.exists(p))) return null;
+    lineAtIndex.set(paths.length, i);
+    paths.push(p);
+  }
+  if (tunes) await addJingle('outro');
+
+  return { paths, lineAtIndex };
+}
+
 /** Stops whatever podcast line is playing from a file. */
 export function stopPodcastAudio(): void {
   stopToken++;

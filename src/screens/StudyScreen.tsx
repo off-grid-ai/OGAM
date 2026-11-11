@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { StyleSheet, ActivityIndicator, Alert, BackHandler, Linking, ScrollView, Share, Text, TextInput, TouchableOpacity, View, Modal, useWindowDimensions } from 'react-native';
+import { StyleSheet, ActivityIndicator, Alert, BackHandler, Linking, Platform, ScrollView, Share, Text, TextInput, TouchableOpacity, View, Modal, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -7,7 +7,8 @@ import { useTheme } from '../theme';
 import { useProjectStore } from '../stores';
 import { MarkdownText } from '../components/MarkdownText';
 import { PodcastVoicePicker } from '../components/PodcastVoicePicker';
-import { castLine, playLine, playJingle, setPodcastSpeed, stopPodcastAudio } from '../atlasVoice/podcastAudio';
+import { castLine, nativeEpisodeQueue, playLine, playJingle, setPodcastSpeed, stopPodcastAudio } from '../atlasVoice/podcastAudio';
+import * as nativePlayer from '../atlasVoice/nativeAudioPlayer';
 import { storyJumps, currentStory } from '../study/storyJumps';
 import { resumeLine } from '../study/listenPosition';
 import { playEpisode } from '../study/playEpisode';
@@ -289,16 +290,49 @@ export const StudyScreen: React.FC = () => {
     const audioKey = source?.audioKey;
     const isBrief = !!audioKey && audioKey.startsWith(`${BRIEF_PROJECT}-`);
     setPodcastSpeed(isBrief ? prefs.speed ?? 1 : 1);
+    const tunes = isBrief && prefs.jingles !== false ? { storyStarts: source!.storyStarts } : undefined;
+    const isStopped = () => stopRef.current || playToken.current !== my;
+    const onLine = (i: number) => {
+      setPlaying(i); setResumeAt(i); setItemStart(Date.now());
+      if (isBrief) useBriefPrefs.getState().set({ listened: { key: audioKey!, line: i } });
+    };
     try {
-      finished = await playEpisode({ count: items.length, from, tunes: isBrief && prefs.jingles !== false ? { storyStarts: source!.storyStarts } : undefined }, {
-        stopped: () => stopRef.current || playToken.current !== my,
-        jingle: (kind) => playJingle(kind, prefs.jingleVolume ?? 'normal'),
-        onLine: (i) => {
-          setPlaying(i); setResumeAt(i); setItemStart(Date.now());
-          if (isBrief) useBriefPrefs.getState().set({ listened: { key: audioKey!, line: i } });
-        },
-        line: (i) => (audioKey ? playLine(audioKey, items, i) : speakAndWait(items[i].text, { pitch: items[i].pitch, voice: items[i].voice || '' })),
-      });
+      // On Android, hand the full queue to the native foreground service so playback
+      // continues even when the app is backgrounded (the JS AudioContext pauses then).
+      let usedNative = false;
+      if (Platform.OS === 'android' && audioKey && nativePlayer.isAvailable()) {
+        const queue = await nativeEpisodeQueue(audioKey, items, { from, tunes, jingleVolume: prefs.jingleVolume ?? 'normal' });
+        if (queue && !isStopped()) {
+          usedNative = true;
+          finished = await new Promise<boolean>((resolve) => {
+            let settled = false;
+            const settle = (result: boolean) => {
+              if (settled) return;
+              settled = true;
+              clearInterval(poll);
+              unP(); unF(); unE();
+              resolve(result);
+            };
+            const unP = nativePlayer.onProgress((fileIdx) => {
+              const lineIdx = queue.lineAtIndex.get(fileIdx);
+              if (lineIdx !== undefined) onLine(lineIdx);
+            });
+            const unF = nativePlayer.onFinished(() => settle(true));
+            const unE = nativePlayer.onError(() => settle(false));
+            // Poll isStopped() so the native service halts when the user taps stop.
+            const poll = setInterval(() => { if (isStopped()) { nativePlayer.stop(); settle(false); } }, 500);
+            nativePlayer.play(queue.paths, { startIndex: 0, speed: isBrief ? prefs.speed ?? 1 : 1 });
+          });
+        }
+      }
+      if (!usedNative) {
+        finished = await playEpisode({ count: items.length, from, tunes }, {
+          stopped: isStopped,
+          jingle: (kind) => playJingle(kind, prefs.jingleVolume ?? 'normal'),
+          onLine,
+          line: (i) => (audioKey ? playLine(audioKey, items, i) : speakAndWait(items[i].text, { pitch: items[i].pitch, voice: items[i].voice || '' })),
+        });
+      }
     } catch (e: any) {
       Alert.alert('Playback stopped', String(e?.message || e));
     }
@@ -307,7 +341,11 @@ export const StudyScreen: React.FC = () => {
     setPlaying(null);
     if (finished) { setResumeAt(0); if (isBrief) useBriefPrefs.getState().set({ listened: null }); }
   };
-  const halt = () => { playToken.current++; stopRef.current = true; stop(); stopPodcastAudio(); keepScreenOn(false); setPlaying(null); };
+  const halt = () => {
+    playToken.current++; stopRef.current = true; stop(); stopPodcastAudio();
+    if (nativePlayer.isAvailable()) nativePlayer.stop();
+    keepScreenOn(false); setPlaying(null);
+  };
 
   const [exporting, setExporting] = useState<VideoProgress | null>(null);
   const [savedVideo, setSavedVideo] = useState<SavedVideo | null>(null);
