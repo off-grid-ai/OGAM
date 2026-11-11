@@ -12,7 +12,6 @@ export interface AboutMe {
   notes: string;
 }
 export const ABOUT_FIELDS: Array<{ key: keyof AboutMe; label: string; placeholder: string; multiline?: boolean }> = [
-  { key: 'name', label: 'Name', placeholder: 'What should I call you?' },
   { key: 'age', label: 'Age', placeholder: 'e.g. 34 (optional)' },
   { key: 'work', label: 'What you do', placeholder: 'Job, studies, or what fills your days', multiline: true },
   { key: 'helpWith', label: 'How I can help you', placeholder: 'e.g. plan my week, explain things simply, keep me on track', multiline: true },

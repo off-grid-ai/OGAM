@@ -272,7 +272,7 @@ async function wantedInterests(all: string[], avoid: string[]): Promise<string[]
   return wanted.length ? wanted : ['world news'];
 }
 
-const NO_WELCOME = 'Do not greet listeners, welcome them, name the show or say the date: the opening greeting is added for you. Start straight into the first story, never repeat a line, and move between stories with a few words. Never tell the listener what to think or feel about a story. Skip graphic violent details or explicit descriptions.';
+const NO_WELCOME = 'Do not greet listeners, welcome them, name the show or say the date: the opening greeting is added for you. Start straight into the first story, never repeat a line. Move between stories with brief transitions like "Next..." or "Also..." or "In other news...". Never tell the listener what to think or feel about a story. Skip items that are not genuine news: personal obituaries of private individuals, promotional announcements, and minor local notices with no wider significance.';
 
 /** The opening line, made here so the date is always said first (the model was leaving it out or putting it mid-show). */
 export function greetingLine(now = new Date()): string {

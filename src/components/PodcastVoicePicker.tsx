@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Text, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
@@ -57,12 +57,12 @@ export function PodcastVoicePicker({ hosts = 3 }: { hosts?: number }) {
       {ROLES.slice(0, Math.max(1, Math.min(3, hosts))).map((role, i) => (
         <View key={role} style={styles.row}>
           <Text style={styles.label}>{role}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          <View style={styles.chips}>
             {voices.map((v, k) => {
               const on = current[i] === v.name;
               return <VoiceChip key={v.name} role={role} roleIndex={i} name={v.name} label={voiceLabel(v.name, k)} on={on} onPick={pick} styles={styles} color={colors.background} />;
             })}
-          </ScrollView>
+          </View>
         </View>
       ))}
       {chosen.length > 0 && (
@@ -77,7 +77,7 @@ export function PodcastVoicePicker({ hosts = 3 }: { hosts?: number }) {
 const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   row: { marginTop: SPACING.sm, gap: SPACING.xs },
   label: { ...TYPOGRAPHY.meta, color: colors.textSecondary },
-  chips: { gap: SPACING.xs, paddingRight: SPACING.md },
+  chips: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: SPACING.xs, marginTop: SPACING.xs },
   chip: {
     flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: SPACING.md, paddingVertical: SPACING.xs,
     borderRadius: 16, borderWidth: 1, borderColor: colors.border,

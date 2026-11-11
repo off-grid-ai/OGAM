@@ -24,6 +24,58 @@ import { ModelChips } from '../components/ModelChips';
 import { VoiceProfileChips } from '../components/VoiceProfileChips';
 import { Switch } from 'react-native';
 
+const PAL_PROFILE_FIELDS: Array<{ key: 'age' | 'occupation' | 'origin' | 'appearance'; label: string; placeholder: string }> = [
+  { key: 'age', label: 'Age or generation', placeholder: 'e.g. 26, mid-30s' },
+  { key: 'occupation', label: 'Occupation', placeholder: 'e.g. sports coach, chef' },
+  { key: 'origin', label: 'Where they are from', placeholder: 'e.g. Texas, London, online friend' },
+  { key: 'appearance', label: 'Appearance / other notes', placeholder: 'e.g. tall, dark hair, athletic' },
+];
+
+function buildAdvFields(adv: { custom: boolean; temperature: number; topP: number; maxTokens: number; repeatPenalty: number; contextLength: number; toolsCustom: boolean; tools: string[]; modelId: string; voiceProfileId: string }) {
+  return {
+    temperature: adv.custom ? adv.temperature : undefined,
+    topP: adv.custom ? adv.topP : undefined,
+    maxTokens: adv.custom ? adv.maxTokens : undefined,
+    repeatPenalty: adv.custom ? adv.repeatPenalty : undefined,
+    contextLength: adv.custom ? adv.contextLength : undefined,
+    enabledTools: adv.toolsCustom ? adv.tools : undefined,
+    modelId: adv.modelId || undefined,
+    voiceProfileId: adv.voiceProfileId || undefined,
+  };
+}
+
+function loadPalProfile(src?: { age?: string; occupation?: string; origin?: string; appearance?: string }) {
+  return { age: src?.age ?? '', occupation: src?.occupation ?? '', origin: src?.origin ?? '', appearance: src?.appearance ?? '' };
+}
+
+function buildPalProfile(kind: string, p: Record<string, string>) {
+  if (kind !== 'pal') return undefined;
+  const r: Record<string, string | undefined> = {};
+  for (const k of ['age', 'occupation', 'origin', 'appearance']) r[k] = p[k]?.trim() || undefined;
+  return r as { age?: string; occupation?: string; origin?: string; appearance?: string };
+}
+
+function PalSection({ kind, profile, onChange, styles, colors }: { kind: string; profile: Record<string, string>; onChange: (p: any) => void; styles: any; colors: any }) {
+  if (kind !== 'pal') return null;
+  return <PalProfileFields profile={profile} onChange={onChange} styles={styles} colors={colors} />;
+}
+
+function PalProfileFields({ profile, onChange, styles, colors }: { profile: Record<string, string>; onChange: (p: any) => void; styles: any; colors: any }) {
+  return (
+    <>
+      <Text style={styles.label}>Character profile</Text>
+      <Text style={styles.hint}>Optional facts about this pal. Leave blank anything that is not relevant.</Text>
+      {PAL_PROFILE_FIELDS.map(({ key, label, placeholder }) => (
+        <View key={key}>
+          <Text style={styles.hint}>{label}</Text>
+          <TextInput style={styles.input} value={profile[key] ?? ''} onChangeText={(v) => onChange((p: any) => ({ ...p, [key]: v }))}
+            placeholder={placeholder} placeholderTextColor={colors.textMuted} />
+        </View>
+      ))}
+    </>
+  );
+}
+
 const TOOL_CHOICES: { id: string; label: string }[] = [
   { id: 'search_knowledge_base', label: 'Search knowledge base' },
   { id: 'update_project_document', label: 'Update shared project documents' },
@@ -79,6 +131,7 @@ export const AgentEditScreen: React.FC = () => {
     description: '',
     systemPrompt: '',
   });
+  const [palProfile, setPalProfile] = useState({ age: '', occupation: '', origin: '', appearance: '' });
 
   const g = useAppStore.getState().settings as any;
   const [adv, setAdv] = useState({
@@ -114,16 +167,7 @@ export const AgentEditScreen: React.FC = () => {
     }
   }, [agentId]); // eslint-disable-line react-hooks/exhaustive-deps -- load once per agent, keep unsaved edits
 
-  const advFields = () => ({
-    temperature: adv.custom ? adv.temperature : undefined,
-    topP: adv.custom ? adv.topP : undefined,
-    maxTokens: adv.custom ? adv.maxTokens : undefined,
-    repeatPenalty: adv.custom ? adv.repeatPenalty : undefined,
-    contextLength: adv.custom ? adv.contextLength : undefined,
-    enabledTools: adv.toolsCustom ? adv.tools : undefined,
-    modelId: adv.modelId || undefined,
-    voiceProfileId: adv.voiceProfileId || undefined,
-  });
+  const advFields = () => buildAdvFields(adv);
 
   useEffect(() => {
     if (existingProject) {
@@ -132,6 +176,7 @@ export const AgentEditScreen: React.FC = () => {
         description: existingProject.description,
         systemPrompt: existingProject.systemPrompt,
       });
+      setPalProfile(loadPalProfile(existingProject.palProfile));
     }
   }, [agentId]); // eslint-disable-line react-hooks/exhaustive-deps -- load once per agent, keep unsaved edits
 
@@ -145,12 +190,14 @@ export const AgentEditScreen: React.FC = () => {
       setAlertState(showAlert('Error', 'Please enter a system prompt'));
       return;
     }
+    const palProfileData = buildPalProfile(kind, palProfile);
     if (existingProject) {
       updateAgent(existingProject.id, {
         name: formData.name.trim(),
         description: formData.description.trim(),
         systemPrompt: formData.systemPrompt.trim(),
         kind,
+        palProfile: palProfileData,
         ...advFields(),
       });
       if (useAgentStore.getState().activeAgentId === existingProject.id) setActiveAgent(existingProject.id);
@@ -160,6 +207,7 @@ export const AgentEditScreen: React.FC = () => {
         description: formData.description.trim(),
         systemPrompt: formData.systemPrompt.trim(),
         kind,
+        palProfile: palProfileData,
         ...advFields(),
       });
       setActiveAgent(created.id);
@@ -221,6 +269,9 @@ export const AgentEditScreen: React.FC = () => {
             placeholder="What this agent is for"
             placeholderTextColor={colors.textMuted}
           />
+
+          {/* Pal profile fields */}
+          <PalSection kind={kind} profile={palProfile} onChange={setPalProfile} styles={styles} colors={colors} />
 
           {/* System Prompt */}
           <Text style={styles.label}>System Prompt *</Text>

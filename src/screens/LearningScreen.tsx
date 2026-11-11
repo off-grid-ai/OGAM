@@ -234,18 +234,18 @@ export const LearningScreen: React.FC = () => {
         const isOpen = openReport === r.id;
         const color = r.status === 'pass' ? '#4D7C0F' : r.status === 'fail' ? colors.error : colors.textMuted;
         return (
-          <TouchableOpacity key={r.id} onPress={() => setOpenReport(isOpen ? null : r.id)} style={styles.bankRow} testID={`learn-report-${r.id}`} accessibilityRole="button">
+          <TouchableOpacity key={r.id} onPress={() => setOpenReport(isOpen ? null : r.id)} style={styles.bankRow} testID={`learn-report-${r.id}`} accessibilityRole="button" accessibilityState={{ expanded: isOpen }}>
             <View style={[styles.dot, { backgroundColor: color }]} />
             <View style={styles.grow}>
               <Text style={styles.chipText}>{r.q}</Text>
               <Text style={[styles.counts, { color }]}>
-                {r.status === 'pass' ? 'Judge passed it' : r.status === 'fail' ? 'Judge failed it' : 'Waiting for the judge'}{r.score !== undefined ? ` · ${r.score}/10` : ''} · {new Date(r.at).toLocaleString()}
+                {r.status === 'pass' ? 'Judge passed' : r.status === 'fail' ? 'Judge failed' : 'Pending'}{r.score !== undefined ? ` · ${r.score}/10` : ''} · {new Date(r.at).toLocaleString()}
               </Text>
-              <Text style={styles.eventBody} numberOfLines={isOpen ? undefined : 3} selectable={isOpen}>{markSources(r.text, r.sourceList?.length ?? 0)}</Text>
-              {!!r.sourceList?.length && (
+              {isOpen && <Text style={styles.eventBody} selectable>{markSources(r.text, r.sourceList?.length ?? 0)}</Text>}
+              {isOpen && !!r.sourceList?.length && (
                 <View testID={`report-sources-${r.id}`}>
-                  <Text style={styles.counts}>{isOpen ? 'Sources' : `${r.sourceList.length} ${r.sourceList.length === 1 ? 'source' : 'sources'}`}</Text>
-                  {isOpen && r.sourceList.map((s) => (
+                  <Text style={styles.counts}>Sources</Text>
+                  {r.sourceList.map((s) => (
                     <Text key={s.n} style={styles.counts} selectable>{superscript(s.n)} {s.title} ({s.kind}){s.url ? ` ${s.url}` : ''}</Text>
                   ))}
                 </View>
@@ -253,6 +253,7 @@ export const LearningScreen: React.FC = () => {
               {isOpen && !!r.why && <Text style={styles.direction}>Judge: {r.why}</Text>}
               {isOpen && !!r.sources && <Text style={styles.counts} selectable>Sources it had:{'\n'}{r.sources}</Text>}
             </View>
+            <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
           </TouchableOpacity>
         );
       })}

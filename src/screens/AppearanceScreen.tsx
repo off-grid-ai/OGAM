@@ -308,5 +308,5 @@ const createStyles = (colors: ThemeColors) => ({
   previewTitle: { ...TYPOGRAPHY.h2, color: colors.primary },
   previewBody: { ...TYPOGRAPHY.body, color: colors.text },
   previewMeta: { ...TYPOGRAPHY.meta, color: colors.textMuted },
-  input: { ...TYPOGRAPHY.body, color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: SPACING.md, minHeight: 90, textAlignVertical: 'top' as const },
+  input: { ...TYPOGRAPHY.body, color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: SPACING.md, minHeight: 44, textAlignVertical: 'top' as const },
 });
