@@ -39,16 +39,16 @@ export interface PresentationTemplate {
 }
 export const PRESENTATION_TEMPLATES: PresentationTemplate[] = [
   { id: 'minimal', name: 'Minimal', description: 'Clean and understated', background: 'FFFFFF', foreground: '111827', secondary: '475569', accent: '2563EB', panel: 'F1F5F9', font: 'Calibri', headingFont: 'Calibri Light' },
-  { id: 'modern', name: 'Modern', description: 'Teal with structured sections', background: 'F3F9FA', foreground: '10333C', secondary: '42636B', accent: '008E89', panel: 'DCEFED', font: 'Aptos', headingFont: 'Aptos Display' },
+  { id: 'modern', name: 'Modern', description: 'Teal with structured sections', background: 'F3F9FA', foreground: '10333C', secondary: '42636B', accent: '008E89', panel: 'DCEFED', font: 'Calibri', headingFont: 'Calibri Light' },
   { id: 'colorful', name: 'Colorful', description: 'Playful violet and pastel', background: 'F7F3FF', foreground: '281548', secondary: '65578C', accent: '8351E2', panel: 'EEE0FF', font: 'Trebuchet MS' },
   { id: 'dark', name: 'Dark', description: 'High-contrast midnight', background: '101827', foreground: 'F8FAFC', secondary: 'CBD5E1', accent: '38BDF8', panel: '253247', font: 'Calibri', headingFont: 'Calibri Light' },
   { id: 'academic', name: 'Academic', description: 'Traditional research presentation', background: 'FFFCF5', foreground: '292524', secondary: '57534E', accent: '995D23', panel: 'F4EBDA', font: 'Georgia' },
-  { id: 'minimal-green', name: 'Minimal green', description: 'Airy off-white with calm green lines', background: 'F8FAF6', foreground: '16301F', secondary: '566B5C', accent: '2F7D50', panel: 'E7F0E4', font: 'Aptos' },
+  { id: 'minimal-green', name: 'Minimal green', description: 'Airy off-white with calm green lines', background: 'F8FAF6', foreground: '16301F', secondary: '566B5C', accent: '2F7D50', panel: 'E7F0E4', font: 'Calibri' },
   { id: 'sage', name: 'Sage', description: 'Soft grey-green, quiet and warm', background: 'F2F4EC', foreground: '2B3A2E', secondary: '67756A', accent: '7A9A6B', panel: 'E1E8D6', font: 'Georgia' },
-  { id: 'forest', name: 'Forest', description: 'Deep green with light text', background: '12261B', foreground: 'F1F7EE', secondary: 'B9CDBF', accent: '6FD196', panel: '1F3B2B', font: 'Aptos', headingFont: 'Aptos Display' },
+  { id: 'forest', name: 'Forest', description: 'Deep green with light text', background: '12261B', foreground: 'F1F7EE', secondary: 'B9CDBF', accent: '6FD196', panel: '1F3B2B', font: 'Calibri', headingFont: 'Calibri Light' },
   { id: 'sunrise', name: 'Sunrise', description: 'Warm cream with coral and amber', background: 'FFF8F0', foreground: '3A2216', secondary: '7C5B49', accent: 'E2573B', panel: 'FCE6D4', font: 'Trebuchet MS' },
-  { id: 'ocean', name: 'Ocean', description: 'Cool navy and bright blue', background: 'F2F7FB', foreground: '0E2A47', secondary: '4A6580', accent: '1672C4', panel: 'DDEAF6', font: 'Aptos', headingFont: 'Aptos Display' },
-  { id: 'berry', name: 'Berry', description: 'Rich plum with a pink accent', background: 'FBF4F8', foreground: '3B1230', secondary: '7A5671', accent: 'B4246B', panel: 'F3DDEA', font: 'Garamond', headingFont: 'Garamond' },
+  { id: 'ocean', name: 'Ocean', description: 'Cool navy and bright blue', background: 'F2F7FB', foreground: '0E2A47', secondary: '4A6580', accent: '1672C4', panel: 'DDEAF6', font: 'Calibri', headingFont: 'Calibri Light' },
+  { id: 'berry', name: 'Berry', description: 'Rich plum with a pink accent', background: 'FBF4F8', foreground: '3B1230', secondary: '7A5671', accent: 'B4246B', panel: 'F3DDEA', font: 'Georgia', headingFont: 'Georgia' },
   { id: 'mono', name: 'Mono', description: 'Black and white, no color at all', background: 'FFFFFF', foreground: '000000', secondary: '555555', accent: '000000', panel: 'EFEFEF', font: 'Courier New', headingFont: 'Courier New' },
 ];
 
