@@ -38,7 +38,7 @@ export function resolveAgentPrompt(projectPrompt: string | undefined, fallback: 
   } catch { /* nothing saved yet */ }
   // Models update shared project files far too rarely unless told when to: say it plainly in project chats.
   const projectFiles = currentProject
-    ? '\n\nPROJECT FILES: this chat belongs to a project whose documents every chat in it shares. When you finish a piece of work, make a decision, or learn something the next chat will need, call update_project_document yourself (use "Current Progress" with mode "append" for progress, "replace" to rewrite a document). Do this without being asked, then tell the user in one short line what you saved. Read search_knowledge_base before answering questions about the project.'
+    ? '\n\nPROJECT FILES: this chat belongs to a project whose documents every chat in it shares. Update the project documents without being asked:\n- After completing a task or subtask: append a brief note to "Current Progress" (mode "append").\n- After making a decision: record it in "Decisions" (mode "append").\n- After learning something the next chat will need: add it to the relevant document (mode "append" or "replace").\nDo this at the end of each substantive response. Tell the user in one short line what you saved. Read search_knowledge_base before answering questions about the project.'
     : '';
   if (!agent || !agent.systemPrompt.trim()) return (projectPrompt?.trim() || fallback) + lp + about + style + phoneNote + projectGuard + projectFiles;
   return agentPromptWithLessons(agent) + (projectPrompt?.trim() ? `\n\nProject notes:\n${projectPrompt.trim()}` : '') + lp + about + style + phoneNote + projectGuard + projectFiles;

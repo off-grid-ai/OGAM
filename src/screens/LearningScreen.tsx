@@ -187,6 +187,19 @@ export const LearningScreen: React.FC = () => {
         <Text style={styles.switchText}>Also research on the web (when online, not in off-grid mode)</Text>
         <Switch value={cfg.useWeb} onValueChange={(v) => setConfig(agentId, { useWeb: v })} disabled={running} />
       </View>
+      {cfg.useWeb && (
+        <TextInput
+          style={styles.input}
+          placeholder="Limit to domains (e.g. scholar.google.com, arxiv.org) — leave blank for all"
+          placeholderTextColor={colors.textSecondary}
+          value={cfg.webDomains || ''}
+          onChangeText={(t) => setConfig(agentId, { webDomains: t })}
+          editable={!running}
+          autoCapitalize="none"
+          autoCorrect={false}
+          testID="web-domains-input"
+        />
+      )}
 
       <View style={styles.statusBox}>
         <Text style={styles.statusText}>{running || !/^(Idle|Stopped|Running|Starting...)$/.test(statusText) ? statusText : 'Idle'}</Text>

@@ -104,8 +104,13 @@ async function research(cfg: LearnConfig, query: string): Promise<Research> {
       const { offGridOn } = require('../atlasTools/offGrid');
       if (!offGridOn()) {
         const { searchWeb } = require('../services/tools/webSearchProviders');
-        const r = await searchWeb(query, (q: string) => require('../services/tools/handlers').braveSearch(q));
-        r.results.slice(0, 2).forEach((w: any) => { if (w.snippet) found.push({ title: String(w.title), kind: 'web', content: w.snippet.slice(0, 500), url: w.url }); });
+        const domains = (cfg.webDomains || '').split(',').map((d: string) => d.trim().toLowerCase()).filter(Boolean);
+        const webQuery = domains.length ? `${query} site:${domains.join(' OR site:')}` : query;
+        const r = await searchWeb(webQuery, (q: string) => require('../services/tools/handlers').braveSearch(q));
+        const results: any[] = domains.length
+          ? r.results.filter((w: any) => domains.some((d: string) => (w.url || '').toLowerCase().includes(d)))
+          : r.results;
+        results.slice(0, 2).forEach((w: any) => { if (w.snippet) found.push({ title: String(w.title), kind: 'web', content: w.snippet.slice(0, 500), url: w.url }); });
       }
     } catch { /* offline */ }
   }

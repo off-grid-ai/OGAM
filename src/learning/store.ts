@@ -23,6 +23,8 @@ export interface LearnConfig {
   useLibrary: boolean;
   /** Research on the web too (never in off-grid mode). */
   useWeb: boolean;
+  /** When useWeb is on: comma-separated domains to restrict results to (e.g. "scholar.google.com, arxiv.org"). Empty = no restriction. */
+  webDomains?: string;
   /** Keep making new question rounds after the bank is done (keep mode). */
   continuous: boolean;
   learnerModelId?: string;
