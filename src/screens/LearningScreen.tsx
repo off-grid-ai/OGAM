@@ -12,7 +12,7 @@ import { reportsMarkdown, writeReportsFile } from '../learning/lessonsFile';
 import { markSources, superscript } from '../study/replySources';
 import { useProjectStore, useAppStore } from '../stores';
 import { useLearningStore, LearnEvent, defaultLearnConfig, newItem, BankStatus } from '../learning/store';
-import { projectForSubject, pickAndAddFiles, addWorkspaceFolder, summarize } from '../learning/documents';
+import { projectForSubject, pickAndAddFiles, addWorkspaceFolder, pickAndAddFolder, summarize } from '../learning/documents';
 import { startLearning, stopLearning, isLearning, onLearningStatus, auditNow, keepSession, newRound } from '../learning/engine';
 import { keepScreenOn } from '../atlasVoice/tts';
 import { ModelChips } from '../components/ModelChips';
@@ -87,7 +87,7 @@ export const LearningScreen: React.FC = () => {
   };
   // Documents the learner reads from: picked files, or the Atlas folder. They go into a project named after the subject.
   const [docStatus, setDocStatus] = useState('');
-  const addDocuments = async (from: 'files' | 'folder') => {
+  const addDocuments = async (from: 'files' | 'folder' | 'pick-folder') => {
     const projectId = cfg.projectId || projectForSubject(expertName(agentId));
     if (!cfg.projectId) setConfig(agentId, { projectId });
     setDocStatus('Starting...');
@@ -95,6 +95,9 @@ export const LearningScreen: React.FC = () => {
       if (from === 'files') {
         const r = await pickAndAddFiles(projectId, setDocStatus);
         if (r) Alert.alert('Documents', summarize(r));
+      } else if (from === 'pick-folder') {
+        const r = await pickAndAddFolder(projectId, setDocStatus);
+        if (r) Alert.alert('Documents', `${summarize(r.result)}\n\nFolder read: ${r.dir}`);
       } else {
         const { dir, result } = await addWorkspaceFolder(projectId, setDocStatus);
         Alert.alert('Documents', `${summarize(result)}\n\nFolder read: ${dir}`);
@@ -168,10 +171,13 @@ export const LearningScreen: React.FC = () => {
           </TouchableOpacity>
         ))}
       </ScrollView>
-      <Text style={styles.note}>The learner reads these documents first and cites them. Add your own: pick files, or put them in the Atlas folder on the phone and add the whole folder. They are added to the chosen project (one named after this subject is made if you chose none).</Text>
+      <Text style={styles.note}>The learner reads these documents first and cites them. Add your own: pick individual files, pick an entire folder (e.g. your tax documents), or put files in the Atlas folder and add the whole Atlas folder. They are added to the chosen project (one named after this subject is made if you chose none).</Text>
       <View style={styles.row}>
         <TouchableOpacity disabled={running || !!docStatus} onPress={() => addDocuments('files')} style={styles.smallBtn} testID="learn-add-files" accessibilityRole="button">
           <Text style={styles.smallBtnText}>Add files</Text>
+        </TouchableOpacity>
+        <TouchableOpacity disabled={running || !!docStatus} onPress={() => addDocuments('pick-folder')} style={styles.smallBtn} testID="learn-add-pick-folder" accessibilityRole="button">
+          <Text style={styles.smallBtnText}>Add a folder</Text>
         </TouchableOpacity>
         <TouchableOpacity disabled={running || !!docStatus} onPress={() => addDocuments('folder')} style={styles.smallBtn} testID="learn-add-folder" accessibilityRole="button">
           <Text style={styles.smallBtnText}>Add the Atlas folder</Text>

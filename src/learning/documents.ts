@@ -72,6 +72,35 @@ export async function addWorkspaceFolder(projectId: string, onProgress?: (m: str
   return { dir, result: await addFilesToProject({ projectId, files: await listReadableFiles(dir), onProgress }) };
 }
 
+/** Converts a SAF tree URI (Android) or file:// URI (iOS) to a real filesystem path RNFS can use. */
+function uriToPath(uri: string): string | null {
+  try {
+    const decoded = decodeURIComponent(uri);
+    // Android SAF primary internal storage: .../tree/primary:Path/Subdir
+    const treeMatch = decoded.match(/\/tree\/primary:(.+)$/);
+    if (treeMatch) return '/storage/emulated/0/' + treeMatch[1];
+    // iOS and some Android paths use file://
+    if (uri.startsWith('file://')) return decodeURIComponent(uri.slice(7));
+  } catch {}
+  return null;
+}
+
+/** Lets the person pick any folder and adds all readable files in it to the project. Resolves null when the picker was closed. */
+export async function pickAndAddFolder(projectId: string, onProgress?: (m: string) => void): Promise<{ dir: string; result: AddResult } | null> {
+  const { pickDirectory, isErrorWithCode, errorCodes } = require('@react-native-documents/picker');
+  let picked: { uri: string };
+  try {
+    picked = await pickDirectory();
+  } catch (e: any) {
+    if (isErrorWithCode(e) && e.code === errorCodes.OPERATION_CANCELED) return null;
+    throw e;
+  }
+  if (!picked?.uri) return null;
+  const dir = uriToPath(picked.uri);
+  if (!dir) throw new Error('Cannot read this folder directly. Move the files into the Atlas folder instead, then use "Add the Atlas folder".');
+  return { dir, result: await addFilesToProject({ projectId, files: await listReadableFiles(dir), onProgress }) };
+}
+
 export const summarize = (r: AddResult): string => [
   r.added.length ? `${r.added.length} added.` : 'Nothing new to add.',
   r.skipped.length ? `${r.skipped.length} already there.` : '',
