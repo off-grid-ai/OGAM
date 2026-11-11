@@ -31,6 +31,8 @@ export function useTextGenerationAdvanced() {
   const cacheDisabled = gpuForcesF16;
   const displayCacheType = cacheDisabled ? 'f16' : currentCacheType;
   const [resolvedThreadCount, setResolvedThreadCount] = useState<number | null>(null);
+  const [cpuCores, setCpuCores] = useState(8);
+  useEffect(() => { hardwareService.getCpuCoreCount().then(setCpuCores).catch(() => undefined); }, []);
 
   useEffect(() => {
     if (settings?.nThreads !== 0) return;
@@ -68,6 +70,7 @@ export function useTextGenerationAdvanced() {
     currentCacheType,
     displayCacheType,
     gpuLayersEffective,
+    cpuCores,
     isGpuEnabled,
     isAndroid,
     gpuForcesF16,

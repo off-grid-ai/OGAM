@@ -41,9 +41,6 @@ export interface ChatHarnessOptions {
   /** Install the stateful background-download native fake (drive DownloadProgress/Complete/Error
    *  events through the real backgroundDownloadService — e.g. an in-flight STT model download). */
   download?: boolean;
-  /** Activate the PRO feature set (audio/voice mode header toggle, audio layout, TTS, MCP) via the real
-   *  bootstrap, so pro user-flows are reachable in the mounted screen. */
-  pro?: boolean;
   /** Skip the deterministic pre-load after model select, so the model is selected-but-not-loaded exactly
    *  as the real lazy flow leaves it (load defers to the first send). Use to assert the lazy-on-select
    *  invariant (no eager warm) via the In Memory section. Default false (pre-load for send determinism). */
@@ -108,9 +105,6 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
   require('../../src/components/onboarding/spotlightState').setPendingSpotlight(null);
   useAppStore.setState({ checklistDismissed: true, shownSpotlights: { input: true, voiceHint: true, imageSettings: true } });
 
-  // Activate PRO (audio/voice mode header toggle, audio layout, TTS, MCP) via the real bootstrap BEFORE any
-  // screen mounts, so pro slots render in Home + ChatScreen. Reusable seam (proHarness.installPro).
-  if (opts.pro) { const { installPro } = require('./proHarness'); await installPro(); }
 
   // GESTURE: mount the real Home screen — its REAL hydration loads the record — then open the picker and TAP
   // the model row. The real handleSelectTextModel sets it active (no setState activeModelId shortcut).
@@ -321,64 +315,11 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       rtl.fireEvent(btn, 'responderRelease', evt);
     },
 
-    /**
-     * Reusable VOICE-MODE (audio interface) entry. Enter voice mode the way a user does: tap the header
-     * Text/Voice dropdown and choose Voice. Pre-places ONLY the boundary leaf a completed voice-model
-     * download leaves (the persisted modelDownloaded flag) — downloading is native and can't be gestured;
-     * the mode-switch gesture runs for real. Requires pro:true + whisper:true. Waits for the audio-mode
-     * record button to render. Reused by every voice/TTS flow test.
-     */
-    async enterVoiceMode() {
-      const view = this.view!;
-       
-      const { useTTSStore } = require('@offgrid/pro/audio/ttsStore');
-      const engineId = useTTSStore.getState().settings.engineId;
-      // BOUNDARY: the persisted artifact a completed voice-model download leaves — drives shouldLoad in the
-      // REAL KokoroTTSBridge. Set via the real store action (like the LLM's @local_llm/downloaded_models
-      // record). NOT a phase/isReady poke: readiness below is EMERGENT from the real engine + executorch fake.
-      await useTTSStore.getState().updateSettings({ modelDownloaded: { ...(useTTSStore.getState().settings.modelDownloaded ?? {}), [engineId]: true } });
-      // The real EngineBridge (mounted in render()) now mounts KokoroTTSBridge → the executorch fake reports
-      // isReady → KokoroEngine._setBridge → phase 'ready'. Wait for that emergent readiness (the same signal
-      // the real Voice toggle gates on) — never set by the test.
-      await rtl.waitFor(() => { expect(useTTSStore.getState().isReady).toBe(true); }, { timeout: 4000 });
-      // GESTURE: open the chat-input quick-settings popover and tap the Voice row (the alternate real entry
-      // to voice mode, per the header dropdown). initializeEngine + interfaceMode='audio' run for real.
-      rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('quick-settings-button')));
-      rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('quick-tts-mode')));
-      await rtl.waitFor(() => { expect(view.getByTestId('voice-record-button-audio')).toBeTruthy(); }, { timeout: 4000 });
-    },
-
-    /**
-     * Voice-send a message in audio mode: the (faked) whisper model transcribes the recorded audio file to
-     * `transcript`, then the REAL audio record button is tapped to START and tapped again to STOP & SEND —
-     * driving the real transcribeFile → onTranscript → send path (the working voice-mode STT pipeline). Pass
-     * `scripted` for a text reply; omit it for an image request (the diffusion boundary renders the image).
-     */
-    async voiceSend(transcript: string, scripted?: { text?: string; content?: string; toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }> }) {
-      const view = this.view!;
-      if (scripted) {
-        if (opts.engine === 'llama') boundary.llama!.scriptCompletion(scripted as { text?: string });
-        else boundary.litert.scriptTurn(scripted as { content?: string; toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }> });
-      }
-      // BOUNDARY: the whisper model transcribes the recorded audio file to this text.
-      boundary.whisper!.setFileTranscript(transcript);
-      const btn = () => view.getByTestId('voice-record-button-audio');
-      rtl.fireEvent.press(await rtl.waitFor(btn)); // tap: start recording
-      await this.settle(50);
-      rtl.fireEvent.press(await rtl.waitFor(btn)); // tap: stop & send → transcribeFile → onTranscript → send
-    },
-
-    /** Mount the real ChatScreen (plus the real app.root slot when pro is active, so the TTS EngineBridge
-     *  mounts and the voice engine can load over the executorch fake — the same slot App.tsx renders). */
+    /** Mount the real ChatScreen. */
     render() {
        
       const { ChatScreen } = require('../../src/screens/ChatScreen');
-      const { getSlot, SLOTS } = require('../../src/bootstrap/slotRegistry');
-       
-      const AppRoot = opts.pro ? getSlot(SLOTS.appRoot) : undefined;
-      const tree = AppRoot
-        ? React.createElement(React.Fragment, null, React.createElement(AppRoot, {}), React.createElement(ChatScreen, {}))
-        : React.createElement(ChatScreen, {});
+      const tree = React.createElement(ChatScreen, {});
       this.view = rtl.render(tree);
       return this.view;
     },

@@ -393,9 +393,11 @@ describe('handleImageGenerationFn', () => {
 
   it('shows alert when image generation returns null and there is a non-cancel error', async () => {
     mockGenerateImage.mockResolvedValueOnce(null);
+    // The alert reads the service's current error (deps is a render snapshot from before the run).
+    mockGetImageGenState.mockReturnValue({ isGenerating: false, error: 'out of memory' });
     const deps = makeGenerationDeps({
       activeImageModel: baseImageModel,
-      imageGenState: { isGenerating: false, error: 'out of memory' },
+      imageGenState: { isGenerating: false, error: null },
     });
     await handleImageGenerationFn(deps, { prompt: 'cat', conversationId: 'conv-1' });
     expect(deps.setAlertState).toHaveBeenCalledWith(expect.objectContaining({ title: 'Error' }));
@@ -403,9 +405,10 @@ describe('handleImageGenerationFn', () => {
 
   it('does not show alert when error is "cancelled"', async () => {
     mockGenerateImage.mockResolvedValueOnce(null);
+    mockGetImageGenState.mockReturnValue({ isGenerating: false, error: 'cancelled by user' });
     const deps = makeGenerationDeps({
       activeImageModel: baseImageModel,
-      imageGenState: { isGenerating: false, error: 'cancelled by user' },
+      imageGenState: { isGenerating: false, error: null },
     });
     await handleImageGenerationFn(deps, { prompt: 'cat', conversationId: 'conv-1' });
     expect(deps.setAlertState).not.toHaveBeenCalled();
@@ -866,8 +869,8 @@ describe('startGenerationFn', () => {
     expect(generationSession.getConversationId()).toBeNull();
   });
 
-  it('clears cache when context usage is high', async () => {
-    mockGetContextDebugInfo.mockResolvedValueOnce({ truncatedCount: 0, contextUsagePercent: 75 });
+  it('clears cache when the context is nearly full', async () => {
+    mockGetContextDebugInfo.mockResolvedValueOnce({ truncatedCount: 0, contextUsagePercent: 97 });
     mockGetLoadedModelPath.mockReturnValue('/path/model.gguf');
     const deps = makeGenerationDeps();
     await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'test' });
@@ -891,7 +894,7 @@ describe('startGenerationFn', () => {
     });
 
     // classifyToolsNeeded mock returns get_current_datetime, so it survives the filter
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'Hi' });
+    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'What is the latest news today?' });
 
     expect(mockGenerateWithTools).toHaveBeenCalled();
     expect(mockGenerateResponse).not.toHaveBeenCalled();
@@ -963,7 +966,7 @@ describe('UI tool gate (supportsToolCalling) gates generation', () => {
     const deps = makeGenerationDeps({
       settings: { ...makeGenerationDeps().settings, enabledTools: ['web_search'] },
     });
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'hi' });
+    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'What is the latest news today?' });
 
     expect(mockGenerateWithTools).toHaveBeenCalled();
   });
@@ -1025,7 +1028,9 @@ describe('SO4 engine tool-routing (LiteRT native path via engine registry)', () 
     // Terminal artifact: the system message that reaches generation. For LiteRT it is exactly the
     // base prompt — no appended tool-hint text (which is what llama-without-Jinja would get).
     const [, messages] = mockGenerateWithTools.mock.calls[0];
-    expect(messages[0].content).toBe('Be helpful');
+    // The always-on style note (no idle follow-up questions, no invented facts) is allowed; a tool hint is not.
+    const { NO_IDLE_QUESTIONS, BE_HONEST } = require('../../../src/services/aiStyle');
+    expect(messages[0].content).toBe(`Be helpful\n\nHOW THE USER WANTS YOU TO ANSWER (always follow, unless a safety rule says otherwise):\n${NO_IDLE_QUESTIONS} ${BE_HONEST}`);
   });
 
   // The two Gemma-4 <|think|> tests that lived here drove the token via deps.settings.thinkingEnabled
@@ -1280,7 +1285,7 @@ describe('startGenerationFn — remote model path', () => {
     });
     const conv = { id: 'conv-1', messages: [{ id: 'm1', role: 'user', content: 'Hi', timestamp: 0 }] };
     mockChatStoreGetState.mockReturnValue({ conversations: [conv], updateCompactionState: jest.fn() });
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'Hi' });
+    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'What is the latest news today?' });
     // Remote: isRemote=true → all tools used regardless of heuristic
     expect(mockGenerateWithTools).toHaveBeenCalledWith('conv-1', expect.any(Array), expect.objectContaining({ enabledToolIds: ['get_current_datetime'] }));
   });

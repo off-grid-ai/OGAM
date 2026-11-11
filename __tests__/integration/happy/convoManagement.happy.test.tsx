@@ -40,10 +40,16 @@ describe('happy — delete a conversation from the long-press menu', () => {
     expect(home.getByText('Set chat PIN')).toBeTruthy();
     expect(home.getByText('Archive')).toBeTruthy();
     h.rtl.fireEvent.press(home.getByText('Delete'));
-    await h.rtl.waitFor(() => { expect(home.queryByText('Delete Chat')).not.toBeNull(); });
-    h.rtl.fireEvent.press(home.getByText('Delete'));
+    const { UndoBar } = require('../../../src/chats/UndoBar');
+    const bar = h.rtl.render(React.createElement(UndoBar));
 
-    // The conversation is gone from the Recent list.
-    await h.rtl.waitFor(() => { expect(home.queryByText('trip planning ideas')).toBeNull(); });
+    // The conversation is gone from the Recent list at once, with a short chance to undo it.
+    await h.rtl.waitFor(() => { expect(bar.queryByText('Chat deleted')).not.toBeNull(); });
+    expect(require('../../../src/stores').useChatStore.getState().conversations).toHaveLength(0);
+
+    // Undo puts it back.
+    h.rtl.fireEvent.press(bar.getByTestId('undo-delete'));
+    expect(require('../../../src/stores').useChatStore.getState().conversations).toHaveLength(1);
+    await h.rtl.waitFor(() => { expect(bar.queryByTestId('undo-bar')).toBeNull(); });
   });
 });

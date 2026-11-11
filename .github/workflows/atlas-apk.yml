@@ -6,6 +6,11 @@ on:
   push:
     branches: [atlas-voice]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish the signed APK on the Releases page (only after every check passes)'
+        type: boolean
+        default: false
 
 jobs:
   apk:
@@ -48,7 +53,7 @@ jobs:
         run: ./node_modules/.bin/tsc --noEmit -p .
       - name: Core regression gate
         run: ./node_modules/.bin/jest --runInBand --forceExit --coverage=false --silent
-      - name: Checkout pinned public llama.kt sources (exclude private Pro)
+      - name: Checkout pinned public llama.kt sources
         run: |
           set -euo pipefail
           git submodule sync -- vendor/llama-kt
@@ -84,6 +89,89 @@ jobs:
           # phones only need 64-bit ARM: drop the other CPU types to keep the APK small
           zip -q -d android/app/libs/sherpa-onnx.aar 'jni/armeabi-v7a/*' 'jni/x86/*' 'jni/x86_64/*' || true
           ls -la android/app/libs
+      - name: Find the Android NDK for the image engines
+        run: |
+          set -euo pipefail
+          NDK=$(find "$ANDROID_SDK_ROOT/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          test -n "$NDK"
+          test -f "$NDK/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/28/libvulkan.so"
+          echo "ATLAS_NDK=$NDK" >> "$GITHUB_ENV"
+      - name: Build native ARM64 diffusion CLI from pinned upstream source
+        run: |
+          git clone --depth 1 https://github.com/leejet/stable-diffusion.cpp.git /tmp/atlas-sdcpp
+          git -C /tmp/atlas-sdcpp fetch --depth 1 origin e16d26a96a1bf59824d12cc26352aa36c25c2252
+          git -C /tmp/atlas-sdcpp checkout e16d26a96a1bf59824d12cc26352aa36c25c2252
+          git -C /tmp/atlas-sdcpp submodule update --init --recursive --depth 1
+          # The pinned Vulkan backend unconditionally creates three BF16 matvec
+          # pipelines. On Adreno without native BF16 this aborts VkPipeline
+          # creation even for an otherwise compatible checkpoint.
+          # Vendor patches are generated and verified against exact pinned
+          # source revisions and applied before CMake or native compilation.
+          git -C /tmp/atlas-sdcpp/ggml apply --check "$GITHUB_WORKSPACE/android/patches/ggml-vulkan-guard-unsupported-bf16.patch"
+          git -C /tmp/atlas-sdcpp/ggml apply "$GITHUB_WORKSPACE/android/patches/ggml-vulkan-guard-unsupported-bf16.patch"
+          git -C /tmp/atlas-sdcpp apply --check "$GITHUB_WORKSPACE/android/patches/sdcpp-convert-all-bf16-to-f16.patch"
+          git -C /tmp/atlas-sdcpp apply "$GITHUB_WORKSPACE/android/patches/sdcpp-convert-all-bf16-to-f16.patch"
+          grep -q 'device->vendor_id != VK_VENDOR_ID_QUALCOMM' /tmp/atlas-sdcpp/ggml/src/ggml-vulkan/ggml-vulkan.cpp
+          grep -q 'tensor_storage.type == GGML_TYPE_BF16' /tmp/atlas-sdcpp/src/model_loader.cpp
+          # Android NDK has libvulkan.so and C API headers, but not vulkan.hpp.
+          # GGML needs Khronos' Vulkan C++ headers to compile.
+          # Pin to the same Vulkan SDK release used for SPIRV-Headers.
+          git clone --depth 1 --branch vulkan-sdk-1.4.335.0 https://github.com/KhronosGroup/Vulkan-Headers.git /tmp/atlas-vulkan-headers
+          test -s /tmp/atlas-vulkan-headers/include/vulkan/vulkan.hpp
+          test -s /tmp/atlas-vulkan-headers/include/vulkan/vulkan.h
+          # GGML Vulkan requires an official SPIRV-Headers CMake package.
+          # Ubuntu apt spirv-headers supplies headers, but no CMake config.
+          # Pin to the Vulkan SDK headers version reported by the build runner.
+          git clone --depth 1 --branch vulkan-sdk-1.4.335.0 https://github.com/KhronosGroup/SPIRV-Headers.git /tmp/atlas-spirv-headers
+          cmake -S /tmp/atlas-spirv-headers -B /tmp/atlas-spirv-headers-build -G Ninja \
+            -DCMAKE_INSTALL_PREFIX=/tmp/atlas-spirv-install \
+            -DSPIRV_HEADERS_ENABLE_TESTS=OFF -DSPIRV_HEADERS_ENABLE_INSTALL=ON
+          cmake --build /tmp/atlas-spirv-headers-build
+          cmake --install /tmp/atlas-spirv-headers-build
+          test -s /tmp/atlas-spirv-install/share/cmake/SPIRV-Headers/SPIRV-HeadersConfig.cmake
+          # CMake's SPIRV-Headers package is found, but this pinned GGML build
+          # does not propagate its include directory to ggml-vulkan C++ sources.
+          test -s /tmp/atlas-spirv-install/include/spirv/unified1/spirv.hpp
+          cmake -S /tmp/atlas-sdcpp -B /tmp/atlas-sdcpp/build-android -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ATLAS_NDK/build/cmake/android.toolchain.cmake" \
+            -DCMAKE_BUILD_TYPE=Release -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 \
+            -DSD_WEBP=OFF -DSD_WEBM=OFF -DGGML_OPENMP=OFF -DGGML_NATIVE=OFF \
+            -DSD_VULKAN=ON \
+            -DCMAKE_CXX_FLAGS=-I/tmp/atlas-spirv-install/include \
+            -DSPIRV-Headers_DIR=/tmp/atlas-spirv-install/share/cmake/SPIRV-Headers \
+            -DVulkan_GLSLC_EXECUTABLE="$(command -v glslc)" \
+            -DVulkan_INCLUDE_DIR=/tmp/atlas-vulkan-headers/include \
+            -DVulkan_LIBRARY="$ATLAS_NDK/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/28/libvulkan.so" \
+            -DSD_BUILD_EXAMPLES=ON -DSD_BUILD_SHARED_LIBS=OFF -DSD_BUILD_SHARED_GGML_LIB=OFF
+          cmake --build /tmp/atlas-sdcpp/build-android --target sd-cli --parallel 3
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          cp /tmp/atlas-sdcpp/build-android/bin/sd-cli android/app/src/main/jniLibs/arm64-v8a/libatlas_sdcli.so
+          file android/app/src/main/jniLibs/arm64-v8a/libatlas_sdcli.so
+          # Fail closed if CI unexpectedly produced a CPU-only image runtime.
+          test -s android/app/src/main/jniLibs/arm64-v8a/libatlas_sdcli.so
+          strings android/app/src/main/jniLibs/arm64-v8a/libatlas_sdcli.so | grep -q 'ggml_vulkan'
+          readelf -d android/app/src/main/jniLibs/arm64-v8a/libatlas_sdcli.so | grep -q 'libvulkan.so'
+      - name: Build OpenCL ARM64 diffusion CLI from the same pinned source
+        run: |
+          # A second image engine for Adreno phones whose Vulkan driver rejects the
+          # diffusion shaders: same sd-cli, ggml OpenCL backend with Adreno kernels.
+          # It links llama.rn's libOpenCL.so stub (soname libOpenCL.so); the phone's
+          # vendor libOpenCL.so is used at run time.
+          git clone --depth 1 --branch v2024.10.24 https://github.com/KhronosGroup/OpenCL-Headers.git /tmp/atlas-opencl-headers
+          test -s /tmp/atlas-opencl-headers/CL/cl.h
+          OPENCL_STUB="$GITHUB_WORKSPACE/node_modules/llama.rn/bin/arm64-v8a/libOpenCL.so"
+          readelf -d "$OPENCL_STUB" | grep -q 'Library soname: \[libOpenCL.so\]'
+          cmake -S /tmp/atlas-sdcpp -B /tmp/atlas-sdcpp/build-android-opencl -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ATLAS_NDK/build/cmake/android.toolchain.cmake" \
+            -DCMAKE_BUILD_TYPE=Release -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 \
+            -DSD_WEBP=OFF -DSD_WEBM=OFF -DGGML_OPENMP=OFF -DGGML_NATIVE=OFF \
+            -DSD_OPENCL=ON -DGGML_OPENCL_EMBED_KERNELS=ON -DGGML_OPENCL_USE_ADRENO_KERNELS=ON \
+            -DOpenCL_INCLUDE_DIR=/tmp/atlas-opencl-headers -DOpenCL_LIBRARY="$OPENCL_STUB" \
+            -DSD_BUILD_EXAMPLES=ON -DSD_BUILD_SHARED_LIBS=OFF -DSD_BUILD_SHARED_GGML_LIB=OFF
+          cmake --build /tmp/atlas-sdcpp/build-android-opencl --target sd-cli --parallel 3
+          cp /tmp/atlas-sdcpp/build-android-opencl/bin/sd-cli android/app/src/main/jniLibs/arm64-v8a/libatlas_sdcli_opencl.so
+          strings android/app/src/main/jniLibs/arm64-v8a/libatlas_sdcli_opencl.so | grep -q 'GPUOpenCL'
+          readelf -d android/app/src/main/jniLibs/arm64-v8a/libatlas_sdcli_opencl.so | grep -q 'Shared library: \[libOpenCL.so\]'
       - name: Require permanent release-signing keystore
         env:
           ATLAS_UPLOAD_KEYSTORE_B64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -116,7 +204,7 @@ jobs:
           OFFGRID_UPLOAD_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           set -o pipefail
-          ./gradlew assembleRelease -PatlasRequireReleaseSigning=true -PreactNativeArchitectures=arm64-v8a --no-daemon 2>&1 | tee ../gradle.log || {
+          ./gradlew assembleRelease -PatlasBuild=${{ github.run_number }} -PatlasRequireReleaseSigning=true -PatlasVulkanEnabled=true -PreactNativeArchitectures=arm64-v8a --no-daemon 2>&1 | tee ../gradle.log || {
             grep -E "^e: |error:|What went wrong|Could not|Execution failed|Unresolved|Duplicate|Manifest merger|Attribute |Suggestion|> Task .*FAILED|Caused by" ../gradle.log | grep -v "^w: " | head -40 | while IFS= read -r l; do echo "::error::$l"; done
             exit 1
           }
@@ -128,8 +216,15 @@ jobs:
           grep -q 'lib/arm64-v8a/librnllama.so' apk-contents.txt
           grep -q 'lib/arm64-v8a/librnllama_v8.so' apk-contents.txt
           grep -q 'lib/arm64-v8a/librnllama_v8_2.so' apk-contents.txt
-          node -e "const p=require('./node_modules/llama.rn/package.json'); if(p.version!=='0.13.0-rc.4') { console.error('Unexpected llama.rn version:',p.version); process.exit(1) } console.log('Verified llama.rn',p.version)"
-          echo "Verified Atlas release contains the ARM64 llama.rn native runtime."
+          # The llama.kt Vulkan text engine must ship in the release APK (Vulkan + CPU only;
+          # OpenCL stays in llama.rn).
+          grep -q 'lib/arm64-v8a/libllamakt.so' apk-contents.txt
+          # Image generation: the Vulkan and OpenCL diffusion engines must ship too.
+          grep -q 'lib/arm64-v8a/libatlas_sdcli.so' apk-contents.txt
+          grep -q 'lib/arm64-v8a/libatlas_sdcli_opencl.so' apk-contents.txt
+          node scripts/verify-vulkan-apk.cjs
+          node -e "const p=require('./node_modules/llama.rn/package.json'); if(p.version!=='0.13.0-rc.9') { console.error('Unexpected llama.rn version:',p.version); process.exit(1) } console.log('Verified llama.rn',p.version)"
+          echo "Verified Atlas release contains the ARM64 llama.rn and llama.kt Vulkan native runtimes."
           APKSIGNER="$ANDROID_SDK_ROOT/build-tools/$(ls "$ANDROID_SDK_ROOT/build-tools" | sort -V | tail -1)/apksigner"
           "$APKSIGNER" verify --verbose --print-certs "$APK"
           # Confirm exact GitHub keystore identity, rejecting other valid certificates.
@@ -150,11 +245,15 @@ jobs:
         with:
           name: Atlas-apk
           path: out/*.apk
-      - name: Publish release (stable branch only)
-        if: github.ref == 'refs/heads/atlas-voice'
+          # A published build keeps its APK on the release page; this copy is only for the official-publish
+          # workflow. Each APK is about 250 MB and GitHub's free plan includes 500 MB of saved build files.
+          retention-days: 1
+      - name: Publish release (stable branch, or a manual run with publish ticked)
+        if: github.ref == 'refs/heads/atlas-voice' || inputs.publish == true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          node scripts/release/latest-notes.cjs > release-notes.md
           gh release create atlas-${{ github.run_number }} out/*.apk --latest \
             --target ${{ github.sha }} --title "Atlas build ${{ github.run_number }}" \
-            --notes "Install this APK on your Android phone or tablet (download it, open it, allow installing from this source)."
+            --notes-file release-notes.md

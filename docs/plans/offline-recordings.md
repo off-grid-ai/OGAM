@@ -2,7 +2,6 @@
 
 Status: Planning
 Epic: Offline Recordings & Transcriptions (single epic, all stories inside)
-Tier: Pro-gated
 
 ## What this is
 
@@ -29,7 +28,7 @@ The core primitives already exist in the codebase:
 
 The genuinely new work: the Recordings product surface, the record -> transcribe ->
 summarize orchestration and persistence, background capture (the heavy native piece),
-Pro-gating, and storage management.
+and storage management.
 
 ## Decisions locked
 
@@ -73,10 +72,6 @@ Pro-gating, and storage management.
    Interruption handling (incoming call, Siri, app kill/restart).
    Heaviest, highest-risk story. Native work on both platforms.
 
-8. Pro-gating
-   Gate the whole surface behind the Pro license via `proLicenseService`; upsell entry
-   point for non-Pro users. Land before story 7 so native work isn't redone.
-
 9. Storage management
    Size display, bulk delete, quota warning. Mirrors desktop retention behavior.
 
@@ -92,8 +87,6 @@ Pro-gating, and storage management.
 
 - Story 1 (data layer) blocks everything.
 - Stories 2 -> 3 -> 4 -> 5 -> 6 form the core foreground happy path.
-- Story 8 (Pro-gating) should land before story 7 (background recording) so the
-  expensive native work is not restructured for gating later.
 - Story 7 is ~the largest effort and carries App Store / Android-policy review risk.
   Even inside one epic, treat it as separable: stories 1-6 + 8-11 deliver a complete,
   shippable foreground feature without it.
@@ -113,4 +106,3 @@ Pro-gating, and storage management.
 | Summarize | `generationService.ts` |
 | Audio metadata shape | `chatStore` audio fields |
 | Whisper model mgmt | existing model manager + whisper store |
-| Pro license check | `proLicenseService.ts` |

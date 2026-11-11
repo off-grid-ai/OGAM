@@ -316,11 +316,22 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
             // a SQLite failure here must not take the whole app down.
             try {
                 val active = withContext(Dispatchers.IO) {
-                    downloadDao.getAllDownloads().first().filter {
-                        it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.RUNNING
+                    downloadDao.getAllDownloads().first().filter { it.status in ACTIVE_STATUSES }
+                }
+                for (download in active) {
+                    if (workObservers.containsKey(download.id)) continue
+                    // After an app update WorkManager can drop or cancel work that was running
+                    // before. Those rows would otherwise stay "running" forever with no progress.
+                    val states: List<WorkInfo.State> = withContext(Dispatchers.IO) {
+                        workManager.getWorkInfosForUniqueWorkFlow(WorkerDownload.workName(download.id)).first()
+                            .map { info: WorkInfo -> info.state }
+                    }
+                    if (isStrandedWork(states)) {
+                        markInterrupted(download.id, download.fileName, download.modelId)
+                    } else {
+                        registerObserver(download.id, download.fileName, download.modelId)
                     }
                 }
-                active.forEach { if (!workObservers.containsKey(it.id)) registerObserver(it.id, it.fileName, it.modelId) }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -483,7 +494,15 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
                     }
                 }
                 WorkInfo.State.CANCELLED -> {
-                    scope.launch { removeWorkObserver(downloadId) }
+                    scope.launch {
+                        // A user cancel marks the row CANCELLED first. Any other cancel (system,
+                        // app update) would strand the row, so surface it as retryable.
+                        val d = withContext(Dispatchers.IO) { downloadDao.getDownload(downloadId) }
+                        if (d != null && d.status in ACTIVE_STATUSES) {
+                            markInterrupted(downloadId, d.fileName, d.modelId)
+                        }
+                        removeWorkObserver(downloadId)
+                    }
                 }
                 else -> Unit
             }
@@ -492,6 +511,17 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
         workObservers[downloadId] = observer
         workManager.getWorkInfosForUniqueWorkLiveData(WorkerDownload.workName(downloadId))
             .observeForever(observer)
+    }
+
+    private suspend fun markInterrupted(downloadId: String, fileName: String, modelId: String) {
+        withContext(Dispatchers.IO) {
+            downloadDao.updateStatus(downloadId, DownloadStatus.FAILED, DownloadReason.DOWNLOAD_INTERRUPTED)
+        }
+        DownloadEventBridge.error(
+            downloadId, fileName, modelId,
+            DownloadReason.messageFor(DownloadReason.DOWNLOAD_INTERRUPTED) ?: "The download was interrupted.",
+            DownloadReason.DOWNLOAD_INTERRUPTED,
+        )
     }
 
     private fun removeWorkObserver(downloadId: String) {
@@ -518,5 +548,14 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
         const val NAME = "DownloadManagerModule"
         const val PREFS_NAME = "OffgridWorkerDownloads"
         const val DOWNLOADS_KEY = "downloads"
+
+        val ACTIVE_STATUSES = setOf(
+            DownloadStatus.QUEUED, DownloadStatus.RUNNING,
+            DownloadStatus.RETRYING, DownloadStatus.WAITING_FOR_NETWORK,
+        )
+
+        /** True when WorkManager no longer has live work for an active DB row. */
+        fun isStrandedWork(states: List<WorkInfo.State>): Boolean =
+            states.isEmpty() || states.all { it == WorkInfo.State.CANCELLED || it == WorkInfo.State.FAILED }
     }
 }

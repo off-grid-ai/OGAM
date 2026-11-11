@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View,
+  StyleSheet, View,
   Text,
   TouchableOpacity,
   ScrollView,
@@ -11,15 +11,34 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useChatOptions } from '../components/ChatOptions';
 import { useChatPrefs, useVaultSession, visibleConversations } from '../atlasTools/chatPrefs';
 import Icon from 'react-native-vector-icons/Feather';
+import { projectType } from '../projects/projectTypes';
 import { Button } from '../components/Button';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../theme';
 import { createStyles } from './ProjectDetailScreen.styles';
 import { useChatStore, useProjectStore, useAppStore } from '../stores';
+import { isChatUnlocked } from '../stores/encryptedChatStorage';
+import { isProtectedProjectUnlocked } from '../stores/protectedProjectStorage';
 import { Conversation } from '../types';
 import { RootStackParamList } from '../navigation/types';
 import { KnowledgeBaseSection } from './ProjectDetailKnowledgeBaseSection';
+import { isTextDocument } from '../services/rag/textDocument';
+import { LanguageCourseCard } from '../language/LanguageCourseCard';
 import { ProjectPinGate } from '../components/ProjectPinGate';
+import { useActiveTextModel } from '../hooks/useActiveTextModel';
+import { useTopics } from '../topics/store';
+const COLOR_FFF = '#fff';
+const COLOR_RGBA_255_255_255_0_85 = 'rgba(255,255,255,0.85)';
+const literalStyles = StyleSheet.create({
+  s1: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 12, padding: 14, borderRadius: 12 },
+  s2: { marginLeft: 12, flex: 1 },
+  s3: { color: COLOR_FFF, fontWeight: '700', fontSize: 15 },
+  s4: { color: COLOR_RGBA_255_255_255_0_85, fontSize: 12 },
+  s5: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 8, padding: 14, borderRadius: 12, borderWidth: 1 },
+  s6: { fontSize: 15 },
+  s7: { fontSize: 12 },
+});
+
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProjectDetail'>;
@@ -40,7 +59,10 @@ export const ProjectDetailScreen: React.FC = () => {
   const { downloadedModels, activeModelId } = useAppStore();
 
   const project = getProject(projectId);
-  const hasModels = downloadedModels.length > 0;
+  const projectCourses = useTopics((st) => st.courses.filter((c) => c.projectId === projectId).length);
+  // A connected remote model (Ollama, LM Studio...) counts, as it does on Home and in the chat list.
+  const { modelId: activeTextModelId } = useActiveTextModel();
+  const hasModels = downloadedModels.length > 0 || !!activeTextModelId;
 
   // Get chats for this project
   const projectChats = visibleConversations(conversations, hideLocked, vaultOpen)
@@ -52,19 +74,19 @@ export const ProjectDetailScreen: React.FC = () => {
     navigation.navigate('Chat', { conversationId: conversation.id });
   };
 
-  const handleNewChat = () => {
-    if (project?.pinVerifier) {
-      setAlertState(showAlert('Protected project', 'Chats cannot be attached to a protected project until its content vault is supported. Permanently unprotect this project to create chats.'));
+  const handleNewChat = (starter?: string) => {
+    if (project?.pinVerifier && !isProtectedProjectUnlocked(project.id)) {
+      setAlertState(showAlert('Protected project', 'Unlock this project to start a chat in it. New chats are encrypted with the project PIN.'));
       return;
     }
     if (!hasModels) {
       setAlertState(showAlert('No Model', 'Please download a model first from the Models tab.'));
       return;
     }
-    const modelId = activeModelId || downloadedModels[0]?.id;
+    const modelId = activeTextModelId || activeModelId || downloadedModels[0]?.id;
     if (modelId) {
       const newConversationId = createConversation(modelId, undefined, projectId);
-      navigation.navigate('Chat', { conversationId: newConversationId, projectId });
+      navigation.navigate('Chat', { conversationId: newConversationId, projectId, ...(starter ? { starter } : {}) });
     }
   };
 
@@ -116,11 +138,11 @@ export const ProjectDetailScreen: React.FC = () => {
           <View style={styles.chatContent}>
             <View style={styles.chatHeader}>
               <Text style={styles.chatTitle} numberOfLines={1}>
-                {item.pinVerifier ? 'Locked conversation' : item.title}
+                {item.pinVerifier && !isChatUnlocked(item.id) ? 'Locked conversation' : item.title}
               </Text>
               <Text style={styles.chatDate}>{formatDate(item.updatedAt)}</Text>
             </View>
-            {item.pinVerifier ? <Text style={styles.chatPreview}>PIN required</Text> : lastMessage && (
+            {item.pinVerifier && !isChatUnlocked(item.id) ? <Text style={styles.chatPreview}>PIN required</Text> : lastMessage && (
               <Text style={styles.chatPreview} numberOfLines={1}>
                 {lastMessage.role === 'user' ? 'You: ' : ''}{lastMessage.content}
               </Text>
@@ -165,17 +187,47 @@ export const ProjectDetailScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      {project.course === 'language' && <LanguageCourseCard />}
+
+      {projectType(project.kind).starts.length > 0 && (
+        <View style={styles.startsWrap} testID="project-quick-starts">
+          <Text style={styles.startsLabel}>{projectType(project.kind).name} quick starts</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.startsRow}>
+            {projectType(project.kind).starts.map((q) => (
+              <TouchableOpacity key={q.label} style={styles.start} onPress={() => handleNewChat(q.prompt)} testID={`project-start-${q.label.toLowerCase().replace(/\s+/g, '-')}`} accessibilityLabel={`${q.label}: start a chat`}>
+                <Icon name={q.icon} size={14} color={colors.primary} />
+                <Text style={styles.startText}>{q.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
       {/* Atlas: NotebookLM-style study tools for this project's documents */}
       <TouchableOpacity
         onPress={() => navigation.navigate('Study', { projectId })}
-        style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 12, padding: 14, borderRadius: 12, backgroundColor: colors.primary }}
+        style={[literalStyles.s1, { backgroundColor: colors.primary }]}
       >
         <Icon name="book-open" size={20} color="#fff" />
-        <View style={{ marginLeft: 12, flex: 1 }}>
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Study</Text>
-          <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>Ask with sources, study guide, flashcards, quiz, mind map, podcast, video</Text>
+        <View style={literalStyles.s2}>
+          <Text style={literalStyles.s3}>Study</Text>
+          <Text style={literalStyles.s4}>Ask with sources, study guide, flashcards, quiz, mind map, podcast, video</Text>
         </View>
         <Icon name="chevron-right" size={18} color="#fff" />
+      </TouchableOpacity>
+
+      {/* Courses: a subject learned on a board, built from this project's documents */}
+      <TouchableOpacity
+        onPress={() => navigation.navigate('Topics', { projectId, topic: project?.name })}
+        style={[literalStyles.s5, { borderColor: colors.primary }]}
+        testID="project-courses"
+      >
+        <Icon name="compass" size={20} color={colors.primary} />
+        <View style={literalStyles.s2}>
+          <Text style={[{ color: colors.text }, literalStyles.s6]}>Courses{projectCourses ? ` (${projectCourses})` : ''}</Text>
+          <Text style={[{ color: colors.textSecondary }, literalStyles.s7]}>Learn this subject on a board, built from the documents in this project</Text>
+        </View>
+        <Icon name="chevron-right" size={18} color={colors.textMuted} />
       </TouchableOpacity>
 
       <View style={styles.sectionsContainer}>
@@ -187,7 +239,9 @@ export const ProjectDetailScreen: React.FC = () => {
             styles={styles}
             setAlertState={setAlertState}
             onNavigateToKb={() => navigation.navigate('KnowledgeBase', { projectId })}
-            onDocumentPress={(doc) => navigation.navigate('DocumentPreview', { filePath: doc.path, fileName: doc.name, fileSize: doc.size })}
+            onDocumentPress={(doc) => (isTextDocument(doc)
+              ? navigation.navigate('ProjectDocument', { projectId, docId: doc.id, name: doc.name })
+              : navigation.navigate('DocumentPreview', { filePath: doc.path, fileName: doc.name, fileSize: doc.size }))}
           />
         </View>
 
@@ -209,7 +263,7 @@ export const ProjectDetailScreen: React.FC = () => {
                 title="New"
                 variant="primary"
                 size="small"
-                onPress={handleNewChat}
+                onPress={() => handleNewChat()}
                 disabled={!hasModels}
                 icon={<Icon name="plus" size={16} color={hasModels ? colors.primary : colors.textDisabled} />}
               />
@@ -232,7 +286,7 @@ export const ProjectDetailScreen: React.FC = () => {
                     title="Start a Chat"
                     variant="primary"
                     size="small"
-                    onPress={handleNewChat}
+                    onPress={() => handleNewChat()}
                     style={styles.emptyStateButton}
                   />
                 )}

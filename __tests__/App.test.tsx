@@ -123,12 +123,6 @@ jest.mock('../src/services/downloadHydration', () => ({
 jest.mock('../src/services/modelDownloadService/registerProviders', () => ({
   registerCoreDownloadProviders: jest.fn(),
 }));
-jest.mock('../src/services/proLicenseService', () => ({
-  checkProStatus: jest.fn(() => Promise.resolve(false)),
-}));
-jest.mock('../src/bootstrap/loadProFeatures', () => ({
-  loadProFeatures: jest.fn(() => Promise.resolve()),
-}));
 jest.mock('../src/hooks/useDownloads', () => ({
   useDownloadListeners: jest.fn(),
 }));

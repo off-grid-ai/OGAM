@@ -1,6 +1,7 @@
 /* eslint-disable react-native/no-inline-styles, max-lines-per-function, complexity -- Existing chat orchestrator coordinates many native model and UI lifecycles. */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useWideLayout } from '../../hooks/useWideLayout';
+import { isProtectedProjectUnlocked } from '../../stores/protectedProjectStorage';
 import { FlatList, Keyboard, InteractionManager, Platform, View } from 'react-native';
 // Edge-to-edge-aware KeyboardAvoidingView. RN's own version leaves a residual
 // padding band on Android under edge-to-edge (adjustResize is a no-op there);
@@ -12,15 +13,15 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useSpotlightTour } from 'react-native-spotlight-tour';
-import { CustomAlert, hideAlert, showAlert, SharePromptSheet, ProAhaSheet } from '../../components';
+import { CustomAlert, hideAlert, showAlert, SharePromptSheet } from '../../components';
 import { useEjectAllModels } from '../../hooks/useEjectAllModels';
 import { consumePendingSpotlight } from '../../components/onboarding/spotlightState';
-import { subscribeProPrompt } from '../../services/proPrompt';
 import { VOICE_HINT_STEP_INDEX, IMAGE_SETTINGS_STEP_INDEX } from '../../components/onboarding/spotlightConfig';
 import { useAppStore } from '../../stores/appStore';
 import { useChatOptions } from '../../components/ChatOptions';
 import type { Conversation, Message } from '../../types';
 import { useTheme, useThemedStyles } from '../../theme';
+import { isMessageLook, lookBackground } from '../../theme/messageLooks';
 import { createStyles } from './styles';
 import { useChatScreen } from './useChatScreen';
 import { MessageRenderer } from './MessageRenderer';
@@ -34,7 +35,7 @@ import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { WHISPER_MODELS } from '../../services';
 import { getTextRuntimeInfo } from '../../services/activeModelService/runtimeInfo';
-import { formatRemoteRuntimeStatus, formatTextRuntimeStatus } from '../../utils/modelRuntimeStatus';
+import { formatRemoteRuntimeStatus, formatTextRuntimeStatus } from '../../services/modelRuntimeStatus';
 import { speedHealthLabel, useSpeedStats } from '../../atlasTools/speed';
 
 function countConversationImages(conv: Conversation | undefined): number {
@@ -45,7 +46,7 @@ export const ChatScreen: React.FC = () => {
   const flatListRef = React.useRef<FlatList>(null);
   const isNearBottomRef = React.useRef(true);
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
   const chat = useChatScreen();
   // Deleting the open chat from its header menu leaves the screen instead of showing a deleted chat.
@@ -134,22 +135,14 @@ export const ChatScreen: React.FC = () => {
   // (same as main, on both platforms). The custom androidKbPad mechanism that
   // previously lived here floated the input mid-screen, so it was removed.
 
-  const wide = useWideLayout();
+  // Clean layout (the default) uses more of a tablet's width; Bubbles keeps the narrower reading column.
+  const chatLayout = useAppStore((s) => s.settings.appearance?.chatLayout ?? 'clean');
+  const wide = useWideLayout(chatLayout === 'clean' ? 1180 : undefined);
+  // A messaging-app chat look also sets the screen's background (WhatsApp's beige, Telegram's blue-grey...).
+  const lookBackgroundStyle = useMemo(() => (isMessageLook(chatLayout) ? { backgroundColor: lookBackground(chatLayout, isDark) } : undefined), [chatLayout, isDark]);
   const [sharePromptVisible, setSharePromptVisible] = useState(false);
   // Atlas: no share prompts.
 
-  const [proAhaVisible, setProAhaVisible] = useState(false);
-  const proAhaShownThisSession = useRef(false);
-  useEffect(() => {
-    // Reset cycle on each new chat session so PRO sheet can fire again
-    useAppStore.getState().setProAhaTriggeredBy(null);
-    proAhaShownThisSession.current = false;
-  }, []);
-  useEffect(() => subscribeProPrompt(() => {
-    if (proAhaShownThisSession.current) return;
-    proAhaShownThisSession.current = true;
-    // Atlas: no Pro prompts.
-  }), []);
   // Only ONE AttachStep mounted at a time to avoid waypoint dots/lines.
   // chatSpotlight controls which index is active (3, 12, 15, or 16).
   const [chatSpotlight, setChatSpotlight] = useState<number | null>(null);
@@ -295,7 +288,10 @@ export const ChatScreen: React.FC = () => {
       onRetry={chat.handleRetryMessage}
       onEdit={chat.handleEditMessage}
       onDelete={chat.handleDeleteMessage}
-      onSaveToProject={chat.activeProject && !chat.activeProject.pinVerifier && !chat.activeConversation?.pinVerifier && !chat.activeConversation?.isPrivate ? chat.handleSaveReportToProject : undefined}
+      onCheckAnswer={chat.handleCheckAnswer}
+      onSaveToProject={chat.activeProject && !chat.activeConversation?.isPrivate &&
+        (chat.activeProject.pinVerifier ? isProtectedProjectUnlocked(chat.activeProject.id) : !chat.activeConversation?.pinVerifier)
+        ? chat.handleSaveReportToProject : undefined}
       onGenerateImage={chat.handleGenerateImageFromMessage}
       onImagePress={chat.handleImagePress}
     />
@@ -307,8 +303,9 @@ export const ChatScreen: React.FC = () => {
   // — otherwise the inset stacks on top of the input's own padding and leaves a
   // gap below the bar.
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, lookBackgroundStyle]} edges={['top']}>
       <KeyboardAvoidingView testID="chat-screen" style={styles.keyboardView} behavior="padding" keyboardVerticalOffset={0}>
+        <View style={wide.column}>
         <ChatHeader
           styles={styles} colors={colors}
           activeConversation={chat.activeConversation}
@@ -323,6 +320,7 @@ export const ChatScreen: React.FC = () => {
           modelRuntimeLabel={textRuntime.compact}
           modelRuntimeState={textRuntime.state}
         />
+        </View>
         <ModelsManagerSheet
           visible={modelsManagerOpen}
           onClose={() => setModelsManagerOpen(false)}
@@ -396,11 +394,6 @@ export const ChatScreen: React.FC = () => {
       <SharePromptSheet visible={sharePromptVisible} onClose={() => setSharePromptVisible(false)} />
       {chatOptions.element}
       <ChatPinGate conversationId={chat.activeConversationId} />
-      <ProAhaSheet
-        visible={proAhaVisible}
-        onClose={() => setProAhaVisible(false)}
-        onRegister={() => rootNavigation.navigate('ProDetail')}
-      />
     </SafeAreaView>
   );
 };

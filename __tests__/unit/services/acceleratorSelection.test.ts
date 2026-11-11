@@ -10,9 +10,12 @@ describe('text accelerator candidate selection', () => {
       .toEqual(['opencl', 'vulkan']);
     expect(acceleratorCandidates({ npu: false, vulkan: false, opencl: false }, 'x.gguf', false)).toEqual([]);
   });
-  it('does not use experimental Vulkan for a vision projector', () => {
+  it('keeps pictures on OpenCL first, then uses Vulkan text-only before falling back to CPU', () => {
     expect(acceleratorCandidates({ npu: true, vulkan: true, opencl: true }, 'model-Q4_0.gguf', true))
-      .toEqual(['opencl']);
+      .toEqual(['opencl', 'vulkan']);
+    // A Mali tablet (no OpenCL): the GPU still runs the model's text.
+    expect(acceleratorCandidates({ npu: false, vulkan: true, opencl: false }, 'qwen3.5-4b-Q4_K_M.gguf', true))
+      .toEqual(['vulkan']);
   });
   it('distinguishes manual accelerators from CPU and future Auto mode', () => {
     expect(isExplicitAndroidAccelerator('vulkan')).toBe(true);

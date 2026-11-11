@@ -7,6 +7,7 @@ import {
   estimateTokens,
   fitMessagesInBudget,
   getStreamingDelta,
+  nextStreamedContent,
   buildModelParams,
   effectiveCacheType,
   backendForcesF16Cache,
@@ -330,8 +331,50 @@ describe('getStreamingDelta', () => {
     expect(getStreamingDelta('same', 'same')).toBeUndefined();
   });
 
-  it('returns nextValue when it does not start with previousValue', () => {
-    expect(getStreamingDelta('different', 'prev')).toBe('different');
+  it('never re-sends already displayed text when the parser revises it', () => {
+    // Re-sending the whole value duplicated the reply (Qwen repeated-text glitch).
+    expect(getStreamingDelta('abc d', 'abc <')).toBeUndefined();
+    expect(getStreamingDelta('abc de', 'abc <')).toBe('e');
+    expect(getStreamingDelta('Hello', 'Hello ')).toBeUndefined();
+  });
+
+  it('does not duplicate the answer when raw tokens switch to parsed content', () => {
+    const displayed = 'Hi there';
+    expect(getStreamingDelta('Hi there', displayed)).toBeUndefined();
+    expect(getStreamingDelta('Hi there!', displayed)).toBe('!');
+  });
+});
+
+describe('nextStreamedContent', () => {
+  it('prefers parsed accumulated content', () => {
+    expect(nextStreamedContent({ content: 'Hello', token: 'lo' }, 'Hel')).toBe('Hello');
+    expect(nextStreamedContent({ content: '', token: 'x' }, 'abc')).toBe('');
+  });
+
+  it('accumulates raw token pieces when the partial parse reported no content', () => {
+    expect(nextStreamedContent({ token: ' world' }, 'Hello')).toBe('Hello world');
+  });
+
+  it('ignores reasoning-only events', () => {
+    expect(nextStreamedContent({ token: 'x', reasoning_content: 'thinking' }, 'abc')).toBeUndefined();
+  });
+
+  it('replays a revised llama.rn stream without repeating text', () => {
+    const events = [
+      { token: 'Hel', content: 'Hel' },
+      { token: 'lo', content: 'Hello' },
+      { token: ' <', content: 'Hello <' },
+      { token: 'b', content: 'Hello b' },          // parser released the held-back "<"
+      { token: 'ye' },                              // partial parse threw: raw token only
+      { token: '!', content: 'Hello bye!' },
+    ];
+    let displayed = '';
+    for (const event of events) {
+      const delta = getStreamingDelta(nextStreamedContent(event, displayed), displayed);
+      if (delta) displayed += delta;
+    }
+    expect(displayed.length).toBe('Hello bye!'.length);
+    expect(displayed.match(/Hello/g)).toHaveLength(1);
   });
 });
 
@@ -533,10 +576,11 @@ describe('initContextWithFallback — HTP device stripping and timeout', () => {
     const mockCtx = { gpu: true, release: jest.fn() };
     mockedInitLlama.mockResolvedValueOnce(mockCtx as any);
 
-    await initContextWithFallback(baseParams, 2048, 99);
+    await initContextWithFallback(baseParams, 2048, { nGpuLayers: 99 });
 
+    // A GPU/HTP load also gets a progress callback, so a slow load can be told apart from a hung one.
     expect(mockedInitLlama).toHaveBeenCalledWith(
-      expect.objectContaining({ devices: ['HTP0'], n_gpu_layers: 99 }),
+      expect.objectContaining({ devices: ['HTP0'], n_gpu_layers: 99 }), expect.any(Function),
     );
   });
 
@@ -544,7 +588,7 @@ describe('initContextWithFallback — HTP device stripping and timeout', () => {
     const callsBefore = mockedInitLlama.mock.calls.length;
     mockedInitLlama.mockRejectedValueOnce(new Error('JSI bindings not installed'));
 
-    await expect(initContextWithFallback(baseParams, 8192, 99)).rejects.toThrow(
+    await expect(initContextWithFallback(baseParams, 8192, { nGpuLayers: 99 })).rejects.toThrow(
       'app installation/build problem',
     );
 
@@ -556,7 +600,7 @@ describe('initContextWithFallback — HTP device stripping and timeout', () => {
     const mockCtx = { gpu: true, release: jest.fn() };
     mockedInitLlama.mockResolvedValueOnce(mockCtx as any);
 
-    await initContextWithFallback(baseParams, 2048, 99);
+    await initContextWithFallback(baseParams, 2048, { nGpuLayers: 99 });
 
     const gpuCall = mockedInitLlama.mock.calls[1][0] as Record<string, unknown>;
     expect(gpuCall.devices).toBeUndefined();
@@ -570,7 +614,7 @@ describe('initContextWithFallback — HTP device stripping and timeout', () => {
     const mockCtx = { gpu: false, release: jest.fn() };
     mockedInitLlama.mockResolvedValueOnce(mockCtx as any);
 
-    await initContextWithFallback(baseParams, 8192, 99);
+    await initContextWithFallback(baseParams, 8192, { nGpuLayers: 99 });
 
     const minCtxCall = mockedInitLlama.mock.calls[3][0] as Record<string, unknown>;
     expect(minCtxCall.devices).toBeUndefined();
@@ -584,7 +628,7 @@ describe('initContextWithFallback — HTP device stripping and timeout', () => {
     mockedInitLlama.mockResolvedValueOnce(mockCtx as any);
     const logger = require('../../../src/utils/logger').default;
 
-    await initContextWithFallback(baseParams, 2048, 99);
+    await initContextWithFallback(baseParams, 2048, { nGpuLayers: 99 });
 
     expect(logger.log).toHaveBeenCalledWith(
       expect.stringContaining('backend=HTP'),
@@ -611,7 +655,7 @@ describe('initContextWithFallback — GPU timeout on Android', () => {
     jest.useRealTimers();
   });
 
-  it('falls back to CPU when GPU init times out (withTimeout + tryGpuInit catch)', async () => {
+  it('falls back to CPU when GPU init times out, but only after the timed-out GPU load has finished and been released', async () => {
     let resolveGpu!: (ctx: any) => void;
     const slowGpu = new Promise<any>(resolve => { resolveGpu = resolve; });
     const cpuCtx = { gpu: false, release: jest.fn() };
@@ -620,22 +664,21 @@ describe('initContextWithFallback — GPU timeout on Android', () => {
       .mockReturnValueOnce(slowGpu)
       .mockResolvedValueOnce(cpuCtx);
 
-    const resultPromise = initContextWithFallback({ model: '/m.gguf' }, 2048, 4);
-    jest.advanceTimersByTime(45001);
-    const result = await resultPromise;
+    const resultPromise = initContextWithFallback({ model: '/m.gguf' }, 2048, { nGpuLayers: 4 });
+    await jest.advanceTimersByTimeAsync(45001);
+    // The GPU load is still running natively: the CPU load must not have started beside it.
+    expect(mockedInitLlama).toHaveBeenCalledTimes(1);
 
-    expect(result.gpuAttemptFailed).toBe(true);
-    expect(result.context).toBe(cpuCtx);
-
-    // Resolve the late GPU promise after timeout — exercises safeRelease(nonNullCtx)
+    // The late GPU load finishes: its context is released, then the CPU load runs.
     const lateCtx = { release: jest.fn() };
     resolveGpu(lateCtx);
-    await Promise.resolve();
-    await Promise.resolve();
+    const result = await resultPromise;
     expect(lateCtx.release).toHaveBeenCalled();
+    expect(result.gpuAttemptFailed).toBe(true);
+    expect(result.context).toBe(cpuCtx);
   });
 
-  it('safeRelease swallows error when late GPU ctx release throws', async () => {
+  it('a late GPU context whose release throws does not stop the CPU fallback', async () => {
     let resolveGpu!: (ctx: any) => void;
     const slowGpu = new Promise<any>(resolve => { resolveGpu = resolve; });
     const cpuCtx = { gpu: false, release: jest.fn() };
@@ -644,17 +687,14 @@ describe('initContextWithFallback — GPU timeout on Android', () => {
       .mockReturnValueOnce(slowGpu)
       .mockResolvedValueOnce(cpuCtx);
 
-    const resultPromise = initContextWithFallback({ model: '/m.gguf' }, 2048, 4);
-    jest.advanceTimersByTime(45001);
-    await resultPromise;
+    const resultPromise = initContextWithFallback({ model: '/m.gguf' }, 2048, { nGpuLayers: 4 });
+    await jest.advanceTimersByTimeAsync(45001);
 
-    // Late ctx whose release() throws — safeRelease must swallow the error
     const lateCtx = { release: jest.fn().mockRejectedValue(new Error('release fail')) };
     resolveGpu(lateCtx);
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    const result = await resultPromise;
     expect(lateCtx.release).toHaveBeenCalled();
+    expect(result.context).toBe(cpuCtx);
   });
 });
 
@@ -682,5 +722,14 @@ describe('backendForcesF16Cache / effectiveCacheType (single source)', () => {
     // Guards against the loader and the reporter drifting apart again.
     const params = buildModelParams('/m.gguf', { inferenceBackend: INFERENCE_BACKENDS.HTP, cacheType: 'q8_0' });
     expect((params.baseParams as any).cache_type_k).toBe(effectiveCacheType(INFERENCE_BACKENDS.HTP, 'q8_0'));
+  });
+});
+
+describe('Vulkan cache type', () => {
+  it('reports an f16 cache, because the Vulkan engine is never given the cache type setting', () => {
+    const { effectiveCacheType, backendForcesF16Cache } = require('../../../src/services/llmHelpers');
+    expect(backendForcesF16Cache('vulkan')).toBe(true);
+    expect(effectiveCacheType('vulkan', 'q8_0')).toBe('f16');
+    expect(effectiveCacheType('cpu', 'q8_0')).toBe('q8_0');
   });
 });

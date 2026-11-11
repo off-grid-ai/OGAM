@@ -79,3 +79,54 @@ index 8fce879..5475585 100644
 -    implementation "com.android.support:appcompat-v7:${supportVersion}"
      implementation 'com.facebook.react:react-native:+'
  }
+diff --git a/node_modules/@react-native-voice/voice/android/src/main/java/com/wenkesj/voice/VoiceModule.java b/node_modules/@react-native-voice/voice/android/src/main/java/com/wenkesj/voice/VoiceModule.java
+index f22833e..3213d3b 100644
+--- a/node_modules/@react-native-voice/voice/android/src/main/java/com/wenkesj/voice/VoiceModule.java
++++ b/node_modules/@react-native-voice/voice/android/src/main/java/com/wenkesj/voice/VoiceModule.java
+@@ -62,6 +62,16 @@ public class VoiceModule extends ReactContextBaseJavaModule implements Recogniti
+     
+     if(opts.hasKey("RECOGNIZER_ENGINE")) {
+       switch (opts.getString("RECOGNIZER_ENGINE")) {
++        case "ON_DEVICE": {
++          // Atlas: Android 12+ on-device recognizer (offline speech packs, e.g. the ones Gboard voice
++          // typing uses). Falls back to the default recognizer when unavailable.
++          if (android.os.Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(this.reactContext)) {
++            speech = SpeechRecognizer.createOnDeviceSpeechRecognizer(this.reactContext);
++          } else {
++            speech = SpeechRecognizer.createSpeechRecognizer(this.reactContext);
++          }
++          break;
++        }
+         case "GOOGLE": {
+           speech = SpeechRecognizer.createSpeechRecognizer(this.reactContext, ComponentName.unflattenFromString("com.google.android.googlequicksearchbox/com.google.android.voicesearch.serviceapi.GoogleRecognitionService"));
+           break;
+@@ -100,6 +110,11 @@ public class VoiceModule extends ReactContextBaseJavaModule implements Recogniti
+           intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, extras.intValue());
+           break;
+         }
++        case "EXTRA_PREFER_OFFLINE": {
++          // Atlas: ask the recognizer to stay on the phone (no audio sent to a server).
++          intent.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, opts.getBoolean(key));
++          break;
++        }
+         case "EXTRA_PARTIAL_RESULTS": {
+           intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, opts.getBoolean(key));
+           break;
+@@ -248,6 +263,17 @@ public class VoiceModule extends ReactContextBaseJavaModule implements Recogniti
+     });
+   }
+ 
++  /** Atlas: true when Android 12+ offers an on-device (offline) speech recognizer. */
++  @ReactMethod
++  public void isOnDeviceRecognitionAvailable(Promise promise) {
++    try {
++      promise.resolve(android.os.Build.VERSION.SDK_INT >= 31
++        && SpeechRecognizer.isOnDeviceRecognitionAvailable(this.reactContext));
++    } catch (Exception e) {
++      promise.resolve(false);
++    }
++  }
++
+   @ReactMethod
+   public void getSpeechRecognitionServices(Promise promise) {
+     final List<ResolveInfo> services = this.reactContext.getPackageManager()

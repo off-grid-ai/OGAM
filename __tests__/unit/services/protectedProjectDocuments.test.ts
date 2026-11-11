@@ -41,6 +41,7 @@ function boot() {
     const vec = (t: string) => new Array(8).fill(0).map((_, i) => Math.sin(i + t.length * 0.1));
     return { embeddingService: { load: async () => undefined, embed: async (t: string) => vec(t), embedBatch: async (ts: string[]) => ts.map(vec), isLoaded: () => true } };
   });
+  require('../../utils/registerStores').registerStoreRefs();
   const rag = require('../../../src/services/rag');
   const db = require('../../../src/services/rag/database').ragDatabase;
   const storage = require('../../../src/stores/protectedProjectStorage');
@@ -111,7 +112,7 @@ describe('PIN-protected projects keep their documents encrypted', () => {
     expect(sqliteHolds(env, 'purple-heron-4471')).toBe(true);
     expect((await ragService.getDocumentsByProject(project.id)).map((d: any) => d.name)).toEqual(['diary.txt']);
     expect([...env.files.keys()].some(k => k.includes('atlas-protected-docs'))).toBe(false);
-    expect(env.NativeModules.AtlasDevice.removeProtectedItemKey).toHaveBeenCalledTimes(2); // project key and documents key
+    expect(env.NativeModules.AtlasDevice.removeProtectedItemKey).toHaveBeenCalledTimes(3); // project, documents and study-outputs keys
   });
 
   it('does not unlock documents with a wrong PIN', async () => {

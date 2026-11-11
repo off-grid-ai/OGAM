@@ -8,6 +8,8 @@ import { whisperService } from '../../services/whisperService';
 import { recordingController } from '../../services/recordingController';
 import { resolveTranscription } from './transcriptionOutcome';
 import { ensureWhisperForTranscription } from './ensureWhisperForTranscription';
+import { listenWithSystemSpeech, systemSpeechStatus, SpeechCancelled, type SystemSpeechSession } from '../../services/systemSpeech';
+import { CALL_END_OF_SPEECH } from '../../atlasVoice/endOfSpeech';
 import logger from '../../utils/logger';
 
 interface UseVoiceInputParams {
@@ -15,7 +17,8 @@ interface UseVoiceInputParams {
   onTranscript: (text: string) => void;
   onAudioAttachment?: (audio: { uri: string; format: 'wav' | 'mp3'; durationSeconds?: number; transcription?: string }) => void;
   /** Called in Audio Mode to auto-send. Includes audio info so caller can build attachment atomically. */
-  onAutoSend?: (text: string, audio: { uri: string; format: 'wav' | 'mp3'; durationSeconds: number }) => void;
+  /** `audio` is absent when the phone's own recognizer produced the text (no recording file). */
+  onAutoSend?: (text: string, audio?: { uri: string; format: 'wav' | 'mp3'; durationSeconds: number }) => void;
 }
 
 export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment, onAutoSend }: UseVoiceInputParams) {
@@ -31,6 +34,20 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
   const [isAudioModeRecording, setIsAudioModeRecording] = useState(false);
   const [isTranscribingFile, setIsTranscribingFile] = useState(false);
   const [directError, setDirectError] = useState<string | null>(null);
+  // The phone's own recognizer (Google / Gboard speech): used when no Whisper model is downloaded.
+  const [systemSpeech, setSystemSpeech] = useState({ available: false, onDevice: false });
+  const [isSystemRecording, setIsSystemRecording] = useState(false);
+  const [systemPartial, setSystemPartial] = useState('');
+  const systemSessionRef = useRef<SystemSpeechSession | null>(null);
+  useEffect(() => {
+    let live = true;
+    systemSpeechStatus().then((st) => { if (live) setSystemSpeech(st); }).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
+  // Call mode only (text chat keeps the keyboard mic / Whisper). The phone's ON-DEVICE recognizer
+  // is preferred even with Whisper: it ends the turn when you stop talking, like a real call.
+  const usesSystemSpeech = (): boolean =>
+    useUiModeStore.getState().interfaceMode === 'audio' && systemSpeech.available && (systemSpeech.onDevice || !downloadedModelId);
 
   const supportsDirectAudio = (): boolean =>
     activeModelService.supportsAudioInput() && audioRecorderService.supportsDirectAudioInput();
@@ -69,18 +86,60 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
   } = useWhisperTranscription({ ensureModelReady: ensureWhisper });
 
   const isTranscribing = isWhisperTranscribing || isTranscribingFile;
-  const isRecording = isDirectRecording || isAudioModeRecording || isWhisperRecording;
+  const isRecording = isDirectRecording || isAudioModeRecording || isWhisperRecording || isSystemRecording;
   const error = directError ?? whisperError;
 
-  // voiceAvailable: direct audio OR whisper downloaded
-  const voiceAvailable = supportsDirectAudio() || !!downloadedModelId;
+  // Voice mode sends a transcript every turn, so it needs a transcriber: a downloaded
+  // Whisper model or the phone's recognizer. A direct-audio model alone used to count,
+  // which left voice mode recording turns that nothing could transcribe.
+  const voiceAvailable = isInAudioInterfaceMode()
+    ? !!downloadedModelId || systemSpeech.available
+    : supportsDirectAudio() || !!downloadedModelId;
+
+  const showVoiceError = (message: string) => {
+    setDirectError(message);
+    setTimeout(() => setDirectError(null), 3000);
+  };
+
+  const deliverSystemTranscript = (text: string) => {
+    if (recordingConversationIdRef.current && recordingConversationIdRef.current !== conversationId) return;
+    const outcome = resolveTranscription(true, text);
+    if (!outcome.dispatch) { showVoiceError(outcome.message); return; }
+    if (onAutoSendRef.current && isInAudioInterfaceMode()) onAutoSendRef.current(outcome.text);
+    else onTranscriptRef.current(outcome.text);
+  };
+
+  const startSystemRecording = async () => {
+    setIsSystemRecording(true);
+    setSystemPartial('');
+    try {
+      const session = await listenWithSystemSpeech({ onPartial: setSystemPartial, endSilenceMs: CALL_END_OF_SPEECH.silenceMs }); // a call ends a turn on a short pause
+      systemSessionRef.current = session;
+      deliverSystemTranscript(await session.result);
+    } catch (err) {
+      if (!(err instanceof SpeechCancelled)) {
+        logger.error('[Voice] Phone speech recognizer error:', err);
+        showVoiceError(err instanceof Error ? err.message : 'Speech recognition failed');
+      }
+    } finally {
+      systemSessionRef.current = null;
+      setIsSystemRecording(false);
+      setSystemPartial('');
+      recordingConversationIdRef.current = null;
+    }
+  };
 
   const startRecording = async () => {
     recordingConversationIdRef.current = conversationId || null;
     setDirectError(null);
     // Stop any TTS playback before recording — mic and speaker shouldn't overlap.
-    // No-op without the pro audio feature.
+    // No-op without the voice feature.
     callHook(HOOKS.audioStop);
+
+    if (usesSystemSpeech()) {
+      await startSystemRecording();
+      return;
+    }
 
     if (supportsDirectAudio()) {
       try {
@@ -217,6 +276,11 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
   };
 
   const stopRecording = async () => {
+    if (systemSessionRef.current) {
+      systemSessionRef.current.stop();
+      return;
+    }
+
     if (isDirectRecording) {
       await stopDirectRecording();
       return;
@@ -231,6 +295,10 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
   };
 
   const cancelRecording = () => {
+    if (systemSessionRef.current) {
+      systemSessionRef.current.cancel();
+      return;
+    }
     if (isDirectRecording) {
       audioRecorderService.cancelRecording();
       setIsDirectRecording(false);
@@ -290,7 +358,7 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
     isRecording,
     isModelLoading,
     isTranscribing,
-    partialResult,
+    partialResult: partialResult || systemPartial,
     error,
     voiceAvailable,
     startRecording,

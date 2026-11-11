@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { lockedChatsNotOpen, exportBackup, importBackup } from '../atlasTools/backup';
+import { lastBackupText, useBackupReminder } from '../atlasTools/backupReminder';
 import { LowPowerCard } from '../components/LowPowerCard';
 import { NearbySyncSettings } from '../components/settings/NearbySyncSettings';
 
 import { AssistantAccessCard } from '../components/AssistantAccessCard';
 import { useWideLayout } from '../hooks/useWideLayout';
 import {
-  View,
+  StyleSheet, View,
   Text,
   ScrollView,
   TouchableOpacity,
@@ -20,17 +21,20 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { AnimatedEntry } from '../components/AnimatedEntry';
 import { AnimatedListItem } from '../components/AnimatedListItem';
-import { MadeWithLove } from '../components/MadeWithLove';
 import { DebugLogsScreen } from '../components/DebugLogsScreen';
 import { useSettingsSections } from '../components/settings/sectionRegistry';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
+import { AppUpdateCard } from '../components/settings/AppUpdateCard';
 import { useAppStore } from '../stores';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
-import { clearProForTesting } from '../services/proLicenseService';
-import packageJson from '../../package.json';
+import { appVersionLabel } from '../utils/appVersion';
+const literalStyles = StyleSheet.create({
+  s1: { minWidth: 150, textAlign: 'right', paddingVertical: 4 },
+});
+
 
 
 type NavigationProp = CompositeNavigationProp<
@@ -44,8 +48,7 @@ export const SettingsScreen: React.FC = () => {
   const { colors } = useTheme();
   const wide = useWideLayout();
   const styles = useThemedStyles(createStyles);
-  // Reactive: Pro sections registered at runtime (license-key activation re-runs
-  // loadProFeatures) show up live without an app restart.
+  // Reactive: Sections registered at runtime show up live without an app restart.
   const settingsSections = useSettingsSections();
   const setOnboardingComplete = useAppStore((s) => s.setOnboardingComplete);
   const themeMode = useAppStore((s) => s.themeMode);
@@ -56,6 +59,7 @@ export const SettingsScreen: React.FC = () => {
   const resetChecklist = useAppStore((s) => s.resetChecklist);
   const [showDebugLogs, setShowDebugLogs] = useState(false);
 
+  const lastBackupAt = useBackupReminder((s) => s.lastBackupAt);
   const [backupPasswordAction, setBackupPasswordAction] = useState<'export' | 'import' | null>(null);
   const [backupPassword, setBackupPassword] = useState('');
   const [backupBusy, setBackupBusy] = useState(false);
@@ -73,37 +77,10 @@ export const SettingsScreen: React.FC = () => {
     } catch (e: any) { Alert.alert('Encrypted backup failed', String(e?.message ?? e)); }
     finally { setBackupBusy(false); }
   };
-  // Hidden once the user dismisses it, or once Pro is active (the upsell makes no
-  // sense to a paid user). hasRegisteredPro only flips true after RC verification
-  // (activateProByEmail / revalidatePro), so this also covers "paid and verified".
-  const devProDisabled = useAppStore((s) => s.devProDisabled);
-  const setDevProDisabled = useAppStore((s) => s.setDevProDisabled);
-  const setHasRegisteredPro = useAppStore((s) => s.setHasRegisteredPro);
 
   useEffect(() => {
     completeChecklistStep('exploredSettings');
   }, [completeChecklistStep]);
-
-  // DEV-only: flip the Pro auto-unlock. Disabling also clears the cached license
-  // so the build behaves like a fresh free install. We flip the store flags
-  // synchronously (so the UI drops Pro immediately) and do NOT auto-reload —
-  // an immediate reload races the async persist write and rehydrates the old
-  // Pro-active state. A manual restart applies feature load/unload (slots
-  // registered at boot can't be cleanly torn down at runtime).
-  const handleToggleDevPro = async () => {
-    const disabling = !devProDisabled;
-    if (disabling) {
-      setDevProDisabled(true);
-      await clearProForTesting();
-      setHasRegisteredPro(false);
-    } else {
-      setDevProDisabled(false);
-    }
-    Alert.alert(
-      disabling ? 'Pro disabled (DEV)' : 'Pro enabled (DEV)',
-      `Restart the app to fully ${disabling ? 'unload' : 'load'} Pro features.`,
-    );
-  };
 
   const handleResetOnboarding = () => {
     setOnboardingComplete(false);
@@ -162,45 +139,75 @@ export const SettingsScreen: React.FC = () => {
             placeholder="What agents call you"
             placeholderTextColor={colors.textMuted}
             accessibilityLabel="Your name, used by agents"
-            style={{ color: colors.text, minWidth: 150, textAlign: 'right', paddingVertical: 4 }}
+            style={[{ color: colors.text }, literalStyles.s1]}
           />
         </View>
 
-        {/* Navigation Items */}
+        {/* Navigation Items — grouped */}
         <AttachStep index={5} fill>
-          <View style={styles.navSection}>
-            {[
-              { icon: 'monitor', title: 'Presentation Studio', desc: 'Create PowerPoint decks with templates and export PDF, offline', screen: 'Presentations' as const },
-              { icon: 'droplet', title: 'Appearance & AI style', desc: 'Theme, colors, font, text size, bottom bar, and how talkative the AI is', screen: 'Appearance' as const },
-              { icon: 'cpu', title: 'Models', desc: 'Browse, download and load text, image and voice models', screen: 'ModelsTab' as any },
-              { icon: 'sliders', title: 'Model Settings', desc: 'System prompt, generation, and performance', screen: 'ModelSettings' as const },
-              { icon: 'wifi', title: 'Remote Servers', desc: 'Use models running on a computer on your Wi-Fi (Ollama, LM Studio...)', screen: 'RemoteServers' as const },
-              { icon: 'compass', title: 'Atlas', desc: 'Emergency cards, Survival Manual, offline maps, phrases, off-grid mode', screen: 'AtlasHub' as const },
-              { icon: 'book', title: 'Offline Library', desc: 'Download the Atlas library and offline encyclopedias (WikiMed, Wikipedia, iFixit, Wikivoyage)', screen: 'OfflineLibrary' as const },
-              { icon: 'search', title: 'Tools & Web Search', desc: 'Search provider (SearXNG, DuckDuckGo, Exa, Parallel, Tavily) and tools', screen: 'Tools' as const },
-              { icon: 'lock', title: 'Security', desc: 'Passphrase and app lock', screen: 'SecuritySettings' as const },
-              { icon: 'smartphone', title: 'Device Information', desc: 'Hardware and compatibility', screen: 'DeviceInfo' as const },
-              { icon: 'package', title: 'My models', desc: 'Delete models, move them to an SD card, add vision files', screen: 'MyModels' as const },
-              { icon: 'hard-drive', title: 'Storage', desc: 'Models and data usage', screen: 'StorageSettings' as const },
-            ].map((item, index, arr) => (
-              <AnimatedListItem
-                key={item.screen}
-                index={index + 1}
-                staggerMs={40}
-                trigger={focusTrigger}
-                style={[styles.navItem, index === arr.length - 1 && styles.navItemLast]}
-                onPress={() => navigation.navigate(item.screen)}
-              >
-                <View style={styles.navItemIcon}>
-                  <Icon name={item.icon} size={16} color={colors.textSecondary} />
-                </View>
-                <View style={styles.navItemContent}>
-                  <Text style={styles.navItemTitle}>{item.title}</Text>
-                  <Text style={styles.navItemDesc}>{item.desc}</Text>
-                </View>
-                <Icon name="chevron-right" size={16} color={colors.textMuted} />
-              </AnimatedListItem>
-            ))}
+          <View>
+          {([
+            {
+              label: 'Models & AI',
+              items: [
+                { icon: 'cpu', title: 'Models', desc: 'Browse, download and load text, image and voice models', screen: 'ModelsTab' as any },
+                { icon: 'sliders', title: 'Model Settings', desc: 'System prompt, generation, and performance', screen: 'ModelSettings' as const },
+                { icon: 'wifi', title: 'Remote Servers', desc: 'Use models running on a computer on your Wi-Fi (Ollama, LM Studio...)', screen: 'RemoteServers' as const },
+                { icon: 'zap', title: 'Skills', desc: 'Reusable instructions in the SKILL.md format (Claude, OpenClaw): import, switch on or off, call with /name', screen: 'Skills' as const },
+                { icon: 'search', title: 'Tools & Web Search', desc: 'Search provider (SearXNG, DuckDuckGo, Exa, Parallel, Tavily) and tools', screen: 'Tools' as const },
+              ],
+            },
+            {
+              label: 'Features',
+              items: [
+                { icon: 'droplet', title: 'Appearance & AI style', desc: 'Theme, colors, font, text size, bottom bar, and how talkative the AI is', screen: 'Appearance' as const },
+                { icon: 'monitor', title: 'Presentation Studio', desc: 'Create PowerPoint decks with templates and export PDF, offline', screen: 'Presentations' as const },
+                { icon: 'bookmark', title: 'Pinned', desc: 'Answers you pinned from any chat, in one place', screen: 'Pins' as const },
+                { icon: 'clock', title: 'Scheduled tasks', desc: 'Have the AI do something at a set time: a daily briefing, a plan, anything you can ask', screen: 'Schedule' as const },
+              ],
+            },
+            {
+              label: 'Off-grid',
+              items: [
+                { icon: 'compass', title: 'Atlas', desc: 'Emergency cards, Survival Manual, offline maps, phrases, off-grid mode', screen: 'AtlasHub' as const },
+                { icon: 'book', title: 'Offline Library', desc: 'Download the Atlas library and offline encyclopedias (WikiMed, Wikipedia, iFixit, Wikivoyage)', screen: 'OfflineLibrary' as const },
+              ],
+            },
+            {
+              label: 'System',
+              items: [
+                { icon: 'lock', title: 'Security', desc: 'Passphrase and app lock', screen: 'SecuritySettings' as const },
+                { icon: 'package', title: 'My models', desc: 'Delete models, move them to an SD card, add vision files', screen: 'MyModels' as const },
+                { icon: 'hard-drive', title: 'Storage', desc: 'Models and data usage', screen: 'StorageSettings' as const },
+                { icon: 'smartphone', title: 'Device Information', desc: 'Hardware and compatibility', screen: 'DeviceInfo' as const },
+              ],
+            },
+          ] as Array<{ label: string; items: { icon: string; title: string; desc: string; screen: any }[] }>).map((group) => (
+            <View key={group.label} style={styles.section}>
+              <Text style={styles.groupLabel}>{group.label}</Text>
+              <View style={styles.navSection}>
+                {group.items.map((item, index, arr) => (
+                  <AnimatedListItem
+                    key={item.screen}
+                    index={index + 1}
+                    staggerMs={40}
+                    trigger={focusTrigger}
+                    style={[styles.navItem, index === arr.length - 1 && styles.navItemLast]}
+                    onPress={() => navigation.navigate(item.screen)}
+                  >
+                    <View style={styles.navItemIcon}>
+                      <Icon name={item.icon} size={16} color={colors.textSecondary} />
+                    </View>
+                    <View style={styles.navItemContent}>
+                      <Text style={styles.navItemTitle}>{item.title}</Text>
+                      <Text style={styles.navItemDesc}>{item.desc}</Text>
+                    </View>
+                    <Icon name="chevron-right" size={16} color={colors.textMuted} />
+                  </AnimatedListItem>
+                ))}
+              </View>
+            </View>
+          ))}
           </View>
         </AttachStep>
 
@@ -232,7 +239,7 @@ export const SettingsScreen: React.FC = () => {
               </View>
               <View style={styles.navItemContent}>
                 <Text style={styles.navItemTitle}>Back up</Text>
-                <Text style={styles.navItemDesc}>Agents, lessons, projects and settings (encrypted chats excluded)</Text>
+                <Text style={styles.navItemDesc}>{lastBackupText(lastBackupAt)}. Agents, lessons, projects and settings (encrypted chats excluded)</Text>
               </View>
               <Icon name="chevron-right" size={16} color={colors.textMuted} />
             </TouchableOpacity>
@@ -286,14 +293,16 @@ export const SettingsScreen: React.FC = () => {
               </View>
               <View style={styles.navItemContent}>
                 <Text style={styles.navItemTitle}>About</Text>
-                <Text style={styles.navItemDesc}>Version {packageJson.version}</Text>
+                <Text style={styles.navItemDesc}>Version {appVersionLabel()}</Text>
               </View>
               <Icon name="chevron-right" size={16} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
         </AnimatedEntry>
 
-        {/* Pro feature sections registered at runtime by @offgrid/pro */}
+        <AppUpdateCard />
+
+        {/* Sections registered at runtime through the settings section registry */}
         {settingsSections.map((Section, i) => <Section key={Section.displayName ?? String(i)} />)}
 
         {/* Dev-only tooling — stripped from release builds */}
@@ -312,15 +321,10 @@ export const SettingsScreen: React.FC = () => {
                 <Icon name="terminal" size={14} color={colors.textMuted} />
                 <Text style={styles.devButtonText}>Debug Logs</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.devButton} onPress={handleToggleDevPro}>
-                <Icon name={devProDisabled ? 'unlock' : 'lock'} size={14} color={colors.textMuted} />
-                <Text style={styles.devButtonText}>{devProDisabled ? 'Turn on Pro (DEV)' : 'Turn off Pro (DEV)'}</Text>
-              </TouchableOpacity>
             </View>
           </AnimatedEntry>
         )}
 
-        <MadeWithLove />
         {__DEV__ && <DebugLogsScreen visible={showDebugLogs} onClose={() => setShowDebugLogs(false)} />}
       </ScrollView>
 
@@ -328,7 +332,7 @@ export const SettingsScreen: React.FC = () => {
         <View style={styles.backupBackdrop}>
           <View style={styles.backupSheet}>
             <Text style={styles.backupTitle}>{backupPasswordAction === 'export' ? 'Protect your backup' : 'Unlock encrypted backup'}</Text>
-            <Text style={{ color: colors.textSecondary }}>Use a password of at least 12 characters and keep it safe. Encrypted backups include chats (PIN-locked chats stay locked), project knowledge-base files and searchable text (up to 25 MB of project files), agents and settings. Protected project vaults and downloaded models are excluded.</Text>
+            <Text style={{ color: colors.textSecondary }}>Use a password of at least 12 characters and keep it safe. Encrypted backups include chats (PIN-locked chats stay locked), project knowledge-base files and searchable text (up to 25 MB of project files), agents and settings. Protected projects are included only if they are unlocked when you back up: they stay sealed with their own PIN and open on a new phone with that PIN. Locked protected projects and downloaded models are not included. Restoring never deletes a protected project or locked chat that is only on this phone.</Text>
             <TextInput placeholder="Backup password" placeholderTextColor={colors.textMuted} secureTextEntry value={backupPassword} onChangeText={setBackupPassword} autoCapitalize="none" autoCorrect={false} style={styles.backupInput} />
             <View style={styles.backupActions}>
               <TouchableOpacity disabled={backupBusy} onPress={() => { setBackupPassword(''); setBackupPasswordAction(null); }}><Text style={{ color: colors.text }}>Cancel</Text></TouchableOpacity>
@@ -365,6 +369,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   themeSelector: { flexDirection: 'row' as const, backgroundColor: colors.surfaceLight, borderRadius: 8, padding: 3, gap: 2 },
   themeSelectorOption: { width: 34, height: 30, borderRadius: 6, alignItems: 'center' as const, justifyContent: 'center' as const },
   themeSelectorOptionActive: { backgroundColor: colors.primary },
+  groupLabel: { ...TYPOGRAPHY.meta, color: colors.textSecondary, marginBottom: SPACING.xs, marginLeft: 2 },
   navSection: {
     backgroundColor: colors.surface,
     borderRadius: 8,

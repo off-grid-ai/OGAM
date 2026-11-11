@@ -10,6 +10,8 @@ import { consumePendingSpotlight } from '../../components/onboarding/spotlightSt
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
 import { createStyles } from './styles';
+import { useLayoutClass } from '../../hooks/useLayoutClass';
+import { useWideLayout } from '../../hooks/useWideLayout';
 import { SystemPromptSection } from './SystemPromptSection';
 import { ImageGenerationSection } from './ImageGenerationSection';
 import { TextGenerationSection } from './TextGenerationSection';
@@ -26,14 +28,17 @@ export const ModelSettingsScreen: React.FC = () => {
   const resetSettings = useAppStore((s) => s.resetSettings);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
-  const [promptOpen, setPromptOpen] = useState(false);
-  const [imageOpen, setImageOpen] = useState(false);
-  const [textOpen, setTextOpen] = useState(false);
+  const { twoPane } = useLayoutClass();
+  const wide = useWideLayout();
+  // On a large tablet there is room to show the main sections open from the start.
+  const [promptOpen, setPromptOpen] = useState(twoPane);
+  const [imageOpen, setImageOpen] = useState(twoPane);
+  const [textOpen, setTextOpen] = useState(twoPane);
   const [ttsOpen, setTtsOpen] = useState(false);
   const [sttOpen, setSttOpen] = useState(false);
   const [whisperOpen, setWhisperOpen] = useState(false);
-  // TTS is a pro feature injected via a slot (same as the in-chat generation settings). Free builds have no
-  // slot → the section is not shown at all.
+  // TTS is a feature injected via a slot (same as the in-chat generation settings). With no
+  // slot the section is not shown at all.
   const TtsSection = getSlot(SLOTS.generationSettingsTts);
   // Active transcription (STT/whisper) model — the single source is the whisper store (same as the picker).
   const sttModelId = useWhisperStore((s) => s.downloadedModelId);
@@ -64,6 +69,116 @@ export const ModelSettingsScreen: React.FC = () => {
     ));
   };
 
+  const promptBlock = (
+    <>
+          <AttachStep index={6} fill>
+            <TouchableOpacity
+              style={styles.accordionHeader}
+              onPress={() => setPromptOpen(!promptOpen)}
+              activeOpacity={0.7}
+              testID="system-prompt-accordion"
+            >
+              <Text style={styles.accordionTitle}>Default System Prompt</Text>
+              <Icon
+                name={promptOpen ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={colors.textMuted}
+              />
+            </TouchableOpacity>
+          </AttachStep>
+          {promptOpen && <SystemPromptSection />}
+    </>
+  );
+  const imageBlock = (
+    <>
+          <TouchableOpacity
+            style={styles.accordionHeader}
+            onPress={() => setImageOpen(!imageOpen)}
+            activeOpacity={0.7}
+            testID="image-generation-accordion"
+          >
+            <Text style={styles.accordionTitle}>Image Generation</Text>
+            <Icon
+              name={imageOpen ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color={colors.textMuted}
+            />
+          </TouchableOpacity>
+          {imageOpen && <ImageGenerationSection />}
+    </>
+  );
+  const textBlock = (
+    <>
+          <TouchableOpacity
+            style={styles.accordionHeader}
+            onPress={() => setTextOpen(!textOpen)}
+            activeOpacity={0.7}
+            testID="text-generation-accordion"
+          >
+            <Text style={styles.accordionTitle}>Text Generation</Text>
+            <Icon
+              name={textOpen ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color={colors.textMuted}
+            />
+          </TouchableOpacity>
+          {textOpen && <TextGenerationSection />}
+    </>
+  );
+  const sttBlock = (
+    <>
+          {/* Transcription (STT/whisper) — core. Reuses the same picker sheet Home/Chat open, and the same
+              whisper store as its single source, so the active model shown here is always consistent. */}
+          <TouchableOpacity
+            style={styles.accordionHeader}
+            onPress={() => setSttOpen(!sttOpen)}
+            activeOpacity={0.7}
+            testID="transcription-accordion"
+          >
+            <Text style={styles.accordionTitle}>Transcription (Speech to Text)</Text>
+            <Icon name={sttOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+          {sttOpen && (
+            <View style={styles.settingSection}>
+              <Text style={styles.settingDesc}>
+                The on-device model used to transcribe your voice for dictation and voice chat.
+              </Text>
+              <TouchableOpacity
+                style={styles.toggleRow}
+                onPress={() => setWhisperOpen(true)}
+                activeOpacity={0.7}
+                testID="stt-open-picker"
+              >
+                <View style={styles.toggleInfo}>
+                  <Text style={styles.toggleLabel}>Transcription model</Text>
+                  <Text style={styles.toggleDesc}>{sttModelName ?? 'None selected — tap to choose'}</Text>
+                </View>
+                <Icon name="chevron-right" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          )}
+    </>
+  );
+  const ttsBlock = (
+    <>
+          {/* Text to Speech — feature via slot; nothing renders when it is absent (no accordion). */}
+          {TtsSection && (
+            <>
+              <TouchableOpacity
+                style={styles.accordionHeader}
+                onPress={() => setTtsOpen(!ttsOpen)}
+                activeOpacity={0.7}
+                testID="tts-accordion"
+              >
+                <Text style={styles.accordionTitle}>Text to Speech</Text>
+                <Icon name={ttsOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+              {ttsOpen && <TtsSection />}
+            </>
+          )}
+    </>
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -72,99 +187,15 @@ export const ModelSettingsScreen: React.FC = () => {
         </TouchableOpacity>
         <Text style={styles.title}>Model Settings</Text>
       </View>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        <AttachStep index={6} fill>
-          <TouchableOpacity
-            style={styles.accordionHeader}
-            onPress={() => setPromptOpen(!promptOpen)}
-            activeOpacity={0.7}
-            testID="system-prompt-accordion"
-          >
-            <Text style={styles.accordionTitle}>Default System Prompt</Text>
-            <Icon
-              name={promptOpen ? 'chevron-up' : 'chevron-down'}
-              size={16}
-              color={colors.textMuted}
-            />
-          </TouchableOpacity>
-        </AttachStep>
-        {promptOpen && <SystemPromptSection />}
-
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setImageOpen(!imageOpen)}
-          activeOpacity={0.7}
-          testID="image-generation-accordion"
-        >
-          <Text style={styles.accordionTitle}>Image Generation</Text>
-          <Icon
-            name={imageOpen ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={colors.textMuted}
-          />
-        </TouchableOpacity>
-        {imageOpen && <ImageGenerationSection />}
-
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setTextOpen(!textOpen)}
-          activeOpacity={0.7}
-          testID="text-generation-accordion"
-        >
-          <Text style={styles.accordionTitle}>Text Generation</Text>
-          <Icon
-            name={textOpen ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={colors.textMuted}
-          />
-        </TouchableOpacity>
-        {textOpen && <TextGenerationSection />}
-
-        {/* Transcription (STT/whisper) — core. Reuses the same picker sheet Home/Chat open, and the same
-            whisper store as its single source, so the active model shown here is always consistent. */}
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setSttOpen(!sttOpen)}
-          activeOpacity={0.7}
-          testID="transcription-accordion"
-        >
-          <Text style={styles.accordionTitle}>Transcription (Speech to Text)</Text>
-          <Icon name={sttOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
-        </TouchableOpacity>
-        {sttOpen && (
-          <View style={styles.settingSection}>
-            <Text style={styles.settingDesc}>
-              The on-device model used to transcribe your voice for dictation and voice chat.
-            </Text>
-            <TouchableOpacity
-              style={styles.toggleRow}
-              onPress={() => setWhisperOpen(true)}
-              activeOpacity={0.7}
-              testID="stt-open-picker"
-            >
-              <View style={styles.toggleInfo}>
-                <Text style={styles.toggleLabel}>Transcription model</Text>
-                <Text style={styles.toggleDesc}>{sttModelName ?? 'None selected — tap to choose'}</Text>
-              </View>
-              <Icon name="chevron-right" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
+      <ScrollView style={styles.scrollView} contentContainerStyle={[styles.content, wide.column, twoPane && styles.contentWide]}>
+        {twoPane ? (
+          // Large tablet: two open columns instead of one long list of collapsed sections.
+          <View style={styles.columns} testID="model-settings-two-column">
+            <View style={styles.column}>{promptBlock}{textBlock}</View>
+            <View style={styles.column}>{imageBlock}{sttBlock}{ttsBlock}</View>
           </View>
-        )}
-
-        {/* Text to Speech — pro feature via slot; free builds render nothing (no accordion). */}
-        {TtsSection && (
-          <>
-            <TouchableOpacity
-              style={styles.accordionHeader}
-              onPress={() => setTtsOpen(!ttsOpen)}
-              activeOpacity={0.7}
-              testID="tts-accordion"
-            >
-              <Text style={styles.accordionTitle}>Text to Speech</Text>
-              <Icon name={ttsOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
-            </TouchableOpacity>
-            {ttsOpen && <TtsSection />}
-          </>
+        ) : (
+          <>{promptBlock}{imageBlock}{textBlock}{sttBlock}{ttsBlock}</>
         )}
 
         <Button

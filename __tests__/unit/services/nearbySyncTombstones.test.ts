@@ -10,13 +10,20 @@ describe('offline synchronization deletion safety', () => {
     expect(result.conversations['chat-one']).toBe(1_760_000_000_000);
     expect(result.conversations['chat-two']).toBeUndefined();
   });
-  it('never publishes the deletion of a PIN-locked or temporary conversation', () => {
+  it('publishes the deletion of a locked conversation (so it does not come back) but never of a temporary one', () => {
     const secret = { ...entry('secret'), pinVerifier: 'locked' };
     const temp = { ...entry('temp'), isPrivate: true };
     const result = captureRemovals([secret, temp], [], {
       current: emptyTombstones(), kind: 'conversations', now: 1_760_000_000_000,
     });
-    expect(result.conversations).toEqual({});
+    expect(result.conversations).toEqual({ secret: 1_760_000_000_000 });
+  });
+  it('deletes a locked record deleted on the other phone, unless it was edited after the deletion', () => {
+    const old = { ...entry('locked-old', earlier), pinVerifier: 'pin', protectedBlob: 'atlasbackup:v1:x' };
+    const edited = { ...entry('locked-new', later), pinVerifier: 'pin', protectedBlob: 'atlasbackup:v1:y' };
+    const deletedAt = Date.parse('2026-10-15T12:00:00.000Z');
+    const kept = applyTombstones([old, edited], { 'locked-old': deletedAt, 'locked-new': deletedAt });
+    expect(kept.map((r) => r.id)).toEqual(['locked-new']);
   });
   it('merges deletion ledgers idempotently and keeps the latest known deletion', () => {
     const a = emptyTombstones();

@@ -64,7 +64,7 @@ export async function handleRetryMessageFn(
   // no-op. Mirrors the send path's "No Model Selected" alert (handleSendFn).
   if (!p.hasActiveModel) { logger.log('[RESEND-SM] retry BAIL: no active model'); genDeps.setAlertState(showAlert('No Model Selected', 'Please select a model first.')); return; }
   if (!p.activeConversationId) { logger.log('[RESEND-SM] retry BAIL: no conv'); return; }
-  // Stop any in-flight TTS before deleting messages (no-op without pro audio)
+  // Stop any in-flight TTS before deleting messages (no-op without the voice feature)
   callHook(HOOKS.audioStop);
   const ctx: RetryCtx = { message, genDeps, p, convId: p.activeConversationId, msgs };
   if (message.role === 'user') await retryFromUserMessage(ctx);

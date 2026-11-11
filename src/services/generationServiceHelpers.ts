@@ -12,6 +12,9 @@ import { clearModelFailure } from './modelFailureHandler';
 import type { ToolResult } from './tools/types';
 import type { GenerationOptions, CompletionResult } from './providers/types';
 import logger from '../utils/logger';
+import { reconcileStreamedAnswer } from './streamReconcile';
+import { lessonsUsedThisTurn } from '../learning/learnedNote';
+import { turnSources } from './rag/turnSources';
 
 // ~12 streamed UI updates/sec stays smooth while reducing redraw competition with inference.
 const FLUSH_INTERVAL_MS = 80;
@@ -86,6 +89,10 @@ export function buildGenerationMetaImpl(svc: any): GenerationMeta {
   const meta = buildBaseGenerationMeta(svc);
   const routed = svc.state?.routedToolNames;
   if (Array.isArray(routed) && routed.length > 0) meta.routedToolNames = routed;
+  const lessons = lessonsUsedThisTurn();
+  if (lessons.length > 0) meta.lessonsUsed = lessons;
+  const excerpts = turnSources();
+  if (excerpts.length > 0) meta.sources = excerpts;
   return meta;
 }
 function buildBaseGenerationMeta(svc: any): GenerationMeta {
@@ -122,7 +129,7 @@ function buildBaseGenerationMeta(svc: any): GenerationMeta {
     decodeTokensPerSecond: perf.lastDecodeTokensPerSecond,
     timeToFirstToken: perf.lastTimeToFirstToken,
     tokenCount: perf.lastTokenCount,
-    cacheType: effectiveCacheType(settings.inferenceBackend, settings.cacheType),
+    cacheType: effectiveCacheType(settings.inferenceBackend, settings.cacheType, llmService.getLoadedModelPath?.() ?? undefined),
     truncated: perf.lastTruncated,
   };
 }
@@ -353,14 +360,13 @@ export async function generateResponseImpl(
         if (chunk.reasoningContent) {
           svc.reasoningBuffer += chunk.reasoningContent;
         }
-        if (!svc.flushTimer) {
-          svc.flushTimer = setTimeout(() => svc.flushTokenBuffer(), FLUSH_INTERVAL_MS);
-        }
+        if (!svc.flushTimer) svc.flushTimer = setTimeout(() => svc.flushTokenBuffer(), FLUSH_INTERVAL_MS);
       },
-      onComplete: () => {
+      onComplete: (result) => {
         // If aborted, stopGeneration() already handled cleanup — don't clobber new generation state.
         if (svc.abortRequested) return;
         svc.forceFlushTokens();
+        reconcileStreamedAnswer(result?.parsedContent);
         const generationTime = svc.state.startTime ? Date.now() - svc.state.startTime : undefined;
         chatStore.finalizeStreamingMessage(conversationId, generationTime, buildGenerationMetaImpl(svc));
         svc.checkSharePrompt();

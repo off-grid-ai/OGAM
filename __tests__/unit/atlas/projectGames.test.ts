@@ -30,7 +30,7 @@ describe('game logic', () => {
     expect(shuffle([1, 2, 3, 4, 5], 42).sort()).toEqual([1, 2, 3, 4, 5]);
   });
   it('builds fill-the-blanks from real sentences', () => {
-    const items = buildCloze(terms, sources as any, 10, 1);
+    const items = buildCloze(terms, sources as any, { max: 10, seed: 1 });
     expect(items.length).toBeGreaterThanOrEqual(3);
     for (const it of items) {
       expect(it.sentence).toContain('_____');
@@ -110,14 +110,14 @@ describe('generateGame (project-based)', () => {
     expect(PROJECT_GAMES.map((g) => g.type)).toEqual(expect.arrayContaining(['scramble', 'ladder', 'mistake']));
   });
   it('builds a scramble from terms of four letters or more without a model call', async () => {
-    const r = await generateGame('p1', 'scramble', '');
+    const r = await generateGame('p1', 'scramble', { topic: '' });
     expect(r.game?.type).toBe('scramble');
     expect(r.game?.data.terms.every((t: any) => t.answer.length >= 4)).toBe(true);
     expect(ask).not.toHaveBeenCalled();
   });
   it('builds a ladder of ten rungs plus spares, easy to hard', async () => {
     ask.mockResolvedValue(JSON.stringify({ questions: Array.from({ length: 12 }, (_, i) => ({ q: `Q${i}`, options: ['right', 'w1', 'w2', 'w3'], answer: 0, why: '', src: [1], difficulty: (i % 3) + 1 })) }));
-    const r = await generateGame('p1', 'ladder', '');
+    const r = await generateGame('p1', 'ladder', { topic: '' });
     expect(r.game?.data.questions).toHaveLength(10);
     expect(r.game?.data.spares).toHaveLength(2);
     const d = r.game?.data.questions.map((q: any) => q.difficulty);
@@ -130,7 +130,7 @@ describe('generateGame (project-based)', () => {
       { text: 'Never filter water.', true: false, fix: 'Filter cloudy water.', src: [1] },
       { text: 'Boiling kills bacteria.', true: true, fix: '', src: [1] },
     ] }));
-    const r = await generateGame('p1', 'mistake', '');
+    const r = await generateGame('p1', 'mistake', { topic: '' });
     expect(r.game?.data.items).toHaveLength(3);
     for (const it of r.game?.data.items) expect(it.options[it.answer]).toBe(it.fix);
   });
@@ -141,7 +141,7 @@ describe('generateGame (project-based)', () => {
       { text: 'Sediment settles if water stands.', true: true, fix: '', src: [1] },
       { text: 'You never need to filter cloudy water.', true: false, fix: 'Filter cloudy water.', src: [9] },
     ] }));
-    const r = await generateGame('p1', 'truefalse', '');
+    const r = await generateGame('p1', 'truefalse', { topic: '' });
     expect(r.kind).toBe('game');
     expect(r.game?.data.statements).toHaveLength(4);
     expect(r.game?.data.statements[3].src).toEqual([]); // invalid source number dropped
@@ -151,24 +151,24 @@ describe('generateGame (project-based)', () => {
       { text: 'Gather tinder', order: 1, label: 'Step 1', src: [2] }, { text: 'Add kindling', order: 2, label: 'Step 2', src: [2] },
       { text: 'Add fuel', order: 3, label: 'Step 3', src: [2] }, { text: 'Keep watch', order: 4, label: 'Step 4', src: [2] },
     ] }));
-    const r = await generateGame('p1', 'timeline', 'fire');
+    const r = await generateGame('p1', 'timeline', { topic: 'fire' });
     expect(ask).toHaveBeenCalledTimes(2);
     expect(r.game?.data.items.map((x: any) => x.order)).toEqual([1, 2, 3, 4]);
   });
   it('shuffles multiple-choice answers and keeps the right one', async () => {
     ask.mockResolvedValue(JSON.stringify({ questions: Array.from({ length: 6 }, (_, i) => ({ q: `Q${i}`, options: ['right', 'w1', 'w2', 'w3'], answer: 0, why: '', src: [1], difficulty: (i % 3) + 1 })) }));
-    const r = await generateGame('p1', 'boss', '');
+    const r = await generateGame('p1', 'boss', { topic: '' });
     for (const q of r.game?.data.questions) expect(q.options[q.answer]).toBe('right');
   });
   it('builds pairs, cloze and hangman from grounded terms without extra calls', async () => {
     for (const type of ['pairs', 'cloze', 'hangman'] as const) {
-      const r = await generateGame('p1', type, '');
+      const r = await generateGame('p1', type, { topic: '' });
       expect(r.game?.type).toBe(type);
     }
     expect(ask).not.toHaveBeenCalled();
   });
   it('refuses a podcast quiz when the project has no podcast', async () => {
-    await expect(generateGame('empty-project', 'podcastquiz', '')).rejects.toThrow(/podcast/i);
+    await expect(generateGame('empty-project', 'podcastquiz', { topic: '' })).rejects.toThrow(/podcast/i);
   });
 });
 

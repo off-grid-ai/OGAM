@@ -1,4 +1,4 @@
-import { formatRemoteRuntimeStatus, formatTextRuntimeStatus } from '../../../src/utils/modelRuntimeStatus';
+import { formatRemoteRuntimeStatus, formatTextRuntimeStatus } from '../../../src/services/modelRuntimeStatus';
 
 describe('formatTextRuntimeStatus', () => {
   it('distinguishes selected from actually loaded', () => {

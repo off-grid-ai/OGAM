@@ -2,6 +2,7 @@ import { useAppStore } from '../../stores';
 import { llmService } from '../llm';
 import { liteRTService } from '../litert';
 import type { TextRuntimeInfo } from './types';
+import { describeOffload } from '../gpuOffload';
 
 let lastLoadModelId: string | null = null;
 let lastLoadDurationMs: number | null = null;
@@ -45,12 +46,13 @@ function loadedLlamaInfo(modelId: string, model: any): TextRuntimeInfo {
     ...baseInfo(modelId, model),
     state: 'loaded',
     backend: gpu.gpu ? (npu ? 'NPU' : 'GPU') : 'CPU',
-    backendDetail: gpu.gpu ?
-      (selected === 'vulkan' ? 'Vulkan (native selected; offload unverified)' :
+    backendDetail: (llmService.isMtpActive?.() ? 'MTP drafting on. ' : '') + (gpu.gpu ?
+      (selected === 'vulkan' ? `Vulkan (llama.kt): ${describeOffload(gpu.gpuLayers, gpu.totalLayers ?? -1)}` :
         selected === 'htp' ? 'HTP / Hexagon (native context GPU flag confirmed)' :
-          'OpenCL (native context GPU flag confirmed): ' + gpu.gpuBackend) : 'CPU',
+          `OpenCL (native context GPU flag confirmed): ${gpu.gpuBackend}`) : 'CPU'),
     contextLength: llmService.getPerformanceSettings().contextLength,
     gpuLayers: gpu.gpu ? gpu.gpuLayers : 0,
+    totalLayers: (gpu.totalLayers ?? -1) > 0 ? gpu.totalLayers : undefined,
     fallbackNotice: llmService.getBackendFallbackNotice()
       ?? (llmService.isCpuForFileType()
         ? 'CPU chosen for this quantization; Q4_0/Q8_0 builds can use GPU/NPU acceleration.'

@@ -1,6 +1,6 @@
 /**
  * The parsed shape of a model message: reasoning split from the visible response.
- * Owned HERE (the util that produces it via parseThinkingContent) so store/service/pro layers
+ * Owned HERE (the util that produces it via parseThinkingContent) so store/service layers
  * import it without a backwards dependency on the ChatMessage component; ChatMessage/types
  * re-exports it for the UI. (Was imported FROM the component — the wrong direction.)
  */
@@ -255,7 +255,7 @@ export function prepareMessageForSpeech(content: string): string {
   return stripMarkdownForSpeech(stripControlTokens(content));
 }
 
-// ── Model-output parsing (moved from ChatMessage/utils so store/service/pro layers
+// ── Model-output parsing (moved from ChatMessage/utils so store/service layers
 //    can import the ONE parser without a backwards component dependency) ──────────
 /**
  * Parse content that may contain thinking/reasoning sections.

@@ -393,18 +393,21 @@ describe('importLocalModel', () => {
       .rejects.toThrow('Only .gguf and .litertlm files can be imported');
   });
 
-  it('rejects when destination already exists', async () => {
-    mockedRNFS.exists.mockResolvedValueOnce(true); // destExists
-    await expect(importLocalModel(baseOpts() as any))
-      .rejects.toThrow(/already exists/);
+  it('replaces a partial leftover file that is in the folder but not in the model list', async () => {
+    mockedRNFS.exists.mockResolvedValueOnce(true); // a file with this name is there
+    (mockedRNFS.stat as jest.Mock).mockResolvedValue({ size: 10 });
+    mockedRNFS.unlink.mockClear();
+    await importLocalModel(baseOpts() as any).catch(() => undefined);
+    expect(mockedRNFS.unlink).toHaveBeenCalledWith('/models/a b.gguf');
   });
 
-  it('rejects when mmproj destination already exists', async () => {
+  it('replaces a picture file that is already in the folder under that name instead of refusing', async () => {
     mockedRNFS.exists
       .mockResolvedValueOnce(false) // dest does not exist
       .mockResolvedValueOnce(true); // mmproj exists
-    await expect(importLocalModel({ ...baseOpts(), mmProjFileName: 'mmproj.gguf' } as any))
-      .rejects.toThrow('A file named "mmproj.gguf" already exists');
+    mockedRNFS.unlink.mockClear();
+    await importLocalModel({ ...baseOpts(), mmProjFileName: 'mmproj.gguf', mmProjSourceUri: 'file:///tmp/mm.gguf' } as any).catch(() => undefined);
+    expect(mockedRNFS.unlink).toHaveBeenCalledWith('/models/mmproj.gguf');
   });
 
   it('imports a llama gguf with mmproj, decoding file:// uri and scaling progress', async () => {

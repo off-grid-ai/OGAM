@@ -3,8 +3,8 @@ import { textAppearanceFor, adjustTextStyle } from '../../../src/theme/globalTex
 import { getTheme } from '../../../src/theme/useTheme';
 
 describe('Atlas visual modes and typography', () => {
-  test('offers four genuinely separate modes and eight font choices', () => {
-    expect(LAYOUT_MODES.map(x => x.id)).toEqual(['standard', 'simple', 'compact', 'colorful']);
+  test('offers six genuinely separate modes and eight font choices', () => {
+    expect(LAYOUT_MODES.map(x => x.id)).toEqual(['standard', 'simple', 'compact', 'colorful', 'grid', 'focus']);
     expect(new Set(FONT_CHOICES.map(f => f.body)).size).toBeGreaterThanOrEqual(5);
   });
   test('every font option is reactive for plain Text styles', () => {

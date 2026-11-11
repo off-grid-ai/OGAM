@@ -11,8 +11,11 @@ function portableCrypto() {
 import RNFS from 'react-native-fs';
 import { pick, saveDocuments, types } from '@react-native-documents/picker';
 import { resolvePickedFileUri } from '../utils/resolvePickedFileUri';
-import { collectProjectFiles, restoreProjectFiles } from './projectBackupFiles';
+import { collectProjectFiles, restoreProjectFiles, validateProjectFiles } from './projectBackupFiles';
 import type { ProjectBackupFile } from './projectBackupFiles';
+import { rehydrateStores } from './storeRegistry';
+import { keepThisDevice } from './deviceSettings';
+import { useBackupReminder } from './backupReminder';
 
 /**
  * Backup = every saved app setting in one JSON file: agents and their lessons, projects,
@@ -21,33 +24,9 @@ import type { ProjectBackupFile } from './projectBackupFiles';
  * Plain JSON exports omit private content, project documents and downloaded models.
  */
 const MAGIC = 'OffGridAtlasBackup';
-// Explicit persistent-store allowlist also permits restore on a fresh install.
-// Add other reviewed store keys here as their schemas are audited.
-const RESTORABLE_STORE_KEYS = new Set([
-  'local-llm-chat-storage', 'local-llm-app-storage', 'local-llm-project-storage',
-  'atlas-agent-storage', 'atlas-learning', 'atlas-study', 'atlas-voice-settings',
-  // Saved map places, Survival Manual notes, library list and app preferences.
-  // (Secret fields are stripped by stripSensitiveFields; API keys live in the Keychain.)
-  'atlas-maps', 'atlas-survival-manual', 'atlas-offline-library', 'atlas-off-grid',
-  'atlas-chat-prefs', 'atlas-daily-brief', 'atlas-low-power', 'remote-servers',
-  'atlas-study-progress', 'atlas-checklists',
-]);
-// Never export or restore credentials, vault contents, or authentication state.
-const EXCLUDED_BACKUP_KEYS = /auth|passphrase|lock|vault|keychain|credential|secret|token|api.?key|atlas-search-settings/i;
-const SENSITIVE_FIELDS = /api.?key|secret|token|password|passphrase|credential/i;
-function stripSensitiveFields(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stripSensitiveFields);
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value)
-      .filter(([key]) => !SENSITIVE_FIELDS.test(key))
-      .map(([key, item]) => [key, stripSensitiveFields(item)]));
-  }
-  return value;
-}
-function sanitizeBackupValue(raw: string): string | null {
-  try { return JSON.stringify(stripSensitiveFields(JSON.parse(raw))); }
-  catch { return null; }
-}
+import { RESTORABLE_STORE_KEYS, EXCLUDED_BACKUP_KEYS, sanitizeBackupValue } from './backupKeys';
+
+export { RESTORABLE_STORE_KEYS, EXCLUDED_BACKUP_KEYS, sanitizeBackupValue };
 function portableStoreValue(key: string, raw: string): string | null {
   const safe = sanitizeBackupValue(raw);
   if (!safe) return null;
@@ -60,9 +39,17 @@ function portableStoreValue(key: string, raw: string): string | null {
     const { isLockedChatBlob } = require('../stores/encryptedChatStorage');
     // Protected projects are device-bound and never exported. A locked chat travels only as
     // its title-less placeholder plus ciphertext: never with readable messages or a title.
+    const { isPortableProjectBlob } = require('../stores/protectedProjectStorage');
     parsed.state[collection] = parsed.state[collection].flatMap((item: any) => {
       if (!item.pinVerifier && !item.protectedBlob) return [item];
-      if (!isChats || !item.pinVerifier || !isLockedChatBlob(item.protectedBlob)) return [];
+      // A protected project travels only as a PIN-sealed portable blob with no readable fields.
+      if (!isChats) {
+        return item.pinVerifier && isPortableProjectBlob(item.protectedBlob) ? [{
+          id: item.id, name: 'Locked project', description: '', systemPrompt: '', createdAt: item.createdAt,
+          updatedAt: item.updatedAt, pinVerifier: item.pinVerifier, protectedBlob: item.protectedBlob,
+        }] : [];
+      }
+      if (!item.pinVerifier || !isLockedChatBlob(item.protectedBlob)) return [];
       return [{ ...item, title: 'Locked conversation', messages: [] }];
     });
     return JSON.stringify(parsed);
@@ -108,6 +95,18 @@ export async function exportBackup(password?: string): Promise<string | null> {
       }
     }
   }
+  if (password) {
+    // Unlocked protected projects go in sealed with their own PIN (record, documents and study
+    // outputs), so they can be restored on a new phone. Locked ones cannot be sealed portably.
+    const { openProtectedProjectsForBackup } = require('../stores/protectedProjectStorage');
+    const portable: any[] = await openProtectedProjectsForBackup();
+    const index = safe.findIndex(([key]) => key === 'local-llm-project-storage');
+    if (portable.length && index >= 0) {
+      const parsed = JSON.parse(safe[index][1]);
+      parsed.state.projects = [...parsed.state.projects, ...portable];
+      safe[index] = ['local-llm-project-storage', JSON.stringify(parsed)];
+    }
+  }
   // Only encrypted backups may carry original project files. Include the original
   // file bytes, searchable chunks, enabled flag and stable project ID together.
   const projectRecord = safe.find(([key]) => key === 'local-llm-project-storage')?.[1];
@@ -130,6 +129,8 @@ export async function exportBackup(password?: string): Promise<string | null> {
   await RNFS.writeFile(path, output, 'utf8');
   try {
     const [res] = await saveDocuments({ sourceUris: [`file://${path}`], mimeType: password ? 'application/octet-stream' : 'application/json', fileName: name, copy: true });
+    // Only when the person actually saved it (cancelling throws above). A failure to note it must never fail the backup.
+    try { useBackupReminder.getState().markBackedUp(); } catch { /* the reminder just stays on */ }
     return res?.name ?? name;
   } finally {
     RNFS.unlink(path).catch(() => undefined);
@@ -157,6 +158,28 @@ async function readPortableBackup(password?: string): Promise<{ data: any; encry
   return { data, encrypted };
 }
 
+/** Adds this phone's protected projects / locked chats that the restored list does not have. */
+export async function keepDeviceProtected(key: string, restored: string): Promise<string> {
+  // Hardware settings (backend, threads, GPU layers, cache, context) and the model list stay
+  // this device's own: a phone's NPU setting restored on a tablet stopped every model loading.
+  if (key === 'local-llm-app-storage') return keepThisDevice(await AsyncStorage.getItem(key), restored);
+  if (key !== 'local-llm-project-storage' && key !== 'local-llm-chat-storage') return restored;
+  const collection = key === 'local-llm-chat-storage' ? 'conversations' : 'projects';
+  try {
+    const current = key === 'local-llm-chat-storage'
+      ? await require('../stores/encryptedChatStorage').encryptedChatStorage.getItem(key)
+      : await AsyncStorage.getItem(key);
+    const mine = current ? JSON.parse(current)?.state?.[collection] : null;
+    if (!Array.isArray(mine)) return restored;
+    const parsed = JSON.parse(restored);
+    const have = new Set(parsed.state[collection].map((x: any) => x.id));
+    const keep = mine.filter((x: any) => x.pinVerifier && x.protectedBlob && !have.has(x.id));
+    if (!keep.length) return restored;
+    parsed.state[collection] = [...parsed.state[collection], ...keep];
+    return JSON.stringify(parsed);
+  } catch { return restored; }
+}
+
 /** Returns the number of restored entries. The app must be closed and reopened afterwards. */
 export async function importBackup(password?: string): Promise<number | null> {
   const source = await readPortableBackup(password);
@@ -174,39 +197,59 @@ export async function importBackup(password?: string): Promise<number | null> {
   if (data.version === 2 && !projectPair && data.projectFiles?.length) throw new Error('Project file backup is missing the project records.');
   const projectIds: string[] = projectPair
     ? JSON.parse(projectPair[1]).state.projects.map((p: { id: string }) => p.id) : [];
-  // Do not claim restoration succeeded if a document is missing or damaged.
-  // Older v1 backups are supported without replacing existing knowledge-base data.
-  const restoredDocs = data.version === 2
-    ? await restoreProjectFiles(data.projectFiles as ProjectBackupFile[], projectIds) : 0;
-  const chatPair = pairs.find(([key]) => key === 'local-llm-chat-storage');
-  const settingsPairs = pairs.filter(([key]) => key !== 'local-llm-chat-storage');
+  // Validate all documents, IDs, sizes and duplicate names before changing anything.
+  // Version 1 backups intentionally leave the current knowledge base alone.
+  const projectFiles: ProjectBackupFile[] = data.version === 2 ? data.projectFiles : [];
+  if (data.version === 2) validateProjectFiles(projectFiles, projectIds);
+
+  // Keep local protected items, which an older portable archive may not contain.
+  const merged = await Promise.all(pairs.map(async ([key, value]) => [key, await keepDeviceProtected(key, value)] as [string, string]));
+  const chatPair = merged.find(([key]) => key === 'local-llm-chat-storage');
+  const settingsPairs = merged.filter(([key]) => key !== 'local-llm-chat-storage');
   if (chatPair && !encrypted) throw new Error('Chat restoration requires an encrypted backup.');
-  // Restore via the selected-chat storage adapter. Ordinary chats are readable
-  // on disk by design; protected chats must never enter a portable backup.
-  if (chatPair) {
-    const { encryptedChatStorage } = require('../stores/encryptedChatStorage');
-    await encryptedChatStorage.setItem('local-llm-chat-storage', chatPair[1]);
-  }
-  if (settingsPairs.length) await AsyncStorage.multiSet(settingsPairs);
-  // Load the restored data into the running app right away, so nothing writes old data back over it.
-  const stores: [string, string][] = [
-    ['../stores/chatStore', 'useChatStore'], ['../stores/remoteServerStore', 'useRemoteServerStore'], ['../stores/whisperStore', 'useWhisperStore'],
-    ['../stores/appStore', 'useAppStore'], ['../stores/projectStore', 'useProjectStore'], ['../stores/agentStore', 'useAgentStore'],
-    ['../atlasVoice/store', 'useAtlasVoiceStore'], ['../services/tools/webSearchProviders', 'useSearchSettings'], ['../atlasMaps/maps', 'useMaps'],
-    ['../survival/store', 'useSurvivalStore'], ['./chatPrefs', 'useChatPrefs'], ['./offGrid', 'useOffGrid'], ['./offlineLibrary', 'useOfflineLibrary'],
-    ['./lowPower', 'useLowPower'], ['../learning/store', 'useLearningStore'], ['../study/engine', 'useStudyStore'],
-  ];
-  const mods: Record<string, () => any> = {
-    '../stores/chatStore': () => require('../stores/chatStore'), '../stores/remoteServerStore': () => require('../stores/remoteServerStore'),
-    '../stores/whisperStore': () => require('../stores/whisperStore'), '../stores/appStore': () => require('../stores/appStore'),
-    '../stores/projectStore': () => require('../stores/projectStore'), '../stores/agentStore': () => require('../stores/agentStore'),
-    '../atlasVoice/store': () => require('../atlasVoice/store'), '../services/tools/webSearchProviders': () => require('../services/tools/webSearchProviders'),
-    '../atlasMaps/maps': () => require('../atlasMaps/maps'), '../survival/store': () => require('../survival/store'),
-    './chatPrefs': () => require('./chatPrefs'), './offGrid': () => require('./offGrid'), './offlineLibrary': () => require('./offlineLibrary'),
-    './lowPower': () => require('./lowPower'), '../learning/store': () => require('../learning/store'), '../study/engine': () => require('../study/engine'),
-  };
-  for (const [m, name] of stores) {
-    try { await mods[m]()[name]?.persist?.rehydrate?.(); } catch { /* store not present */ }
-  }
-  return pairs.length + restoredDocs;
+
+  // Snapshot precisely the keys that might change. Android's AsyncStorage multiSet
+  // is not a transaction; recover partial writes rather than leaving half a backup.
+  const oldSettings = await AsyncStorage.multiGet(settingsPairs.map(([key]) => key));
+  const { encryptedChatStorage } = require('../stores/encryptedChatStorage');
+  const oldChat: string | null = chatPair ? await encryptedChatStorage.getItem('local-llm-chat-storage') : null;
+  const reload = () => rehydrateStores(merged.map(([key]) => key));
+  const { nearbySync } = require('../services/nearbySync');
+
+  // Commit the SQLite document index LAST: its own restore is transactional and
+  // rolls back staged file writes on failure. No fallible operations follow it.
+  return nearbySync.suppressRemovals(async () => {
+    let chatTouched = false;
+    let settingsTouched = false;
+    try {
+      if (chatPair) {
+        chatTouched = true;
+        await encryptedChatStorage.setItem('local-llm-chat-storage', chatPair[1]);
+      }
+      if (settingsPairs.length) {
+        settingsTouched = true;
+        await AsyncStorage.multiSet(settingsPairs);
+      }
+      await reload();
+      const docs = data.version === 2 ? await restoreProjectFiles(projectFiles, projectIds) : 0;
+      return pairs.length + docs;
+    } catch (error) {
+      try {
+        if (settingsTouched) {
+          const previouslySet = oldSettings.filter((entry): entry is [string, string] => entry[1] !== null);
+          const previouslyAbsent = oldSettings.filter(([, value]) => value === null).map(([key]) => key);
+          if (previouslySet.length) await AsyncStorage.multiSet(previouslySet);
+          if (previouslyAbsent.length) await AsyncStorage.multiRemove(previouslyAbsent);
+        }
+        if (chatTouched) {
+          if (oldChat === null) await encryptedChatStorage.removeItem('local-llm-chat-storage');
+          else await encryptedChatStorage.setItem('local-llm-chat-storage', oldChat);
+        }
+        await reload();
+      } catch (rollback) {
+        throw new Error(`Backup restore failed and rollback also failed: ${String(error)}; ${String(rollback)}`);
+      }
+      throw error;
+    }
+  });
 }

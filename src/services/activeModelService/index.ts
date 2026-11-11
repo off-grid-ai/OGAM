@@ -27,6 +27,7 @@ import {
   getCurrentlyLoadedMemoryGB as _getCurrentlyLoadedMemoryGB,
 } from './memory';
 import { doLoadTextModel, doLoadImageModel, checkImageModelCanLoad } from './loaders';
+import { warmUpTextModel } from '../modelWarmUp';
 import {
   getResourceUsage as _getResourceUsage,
   syncWithNativeState as _syncWithNativeState,
@@ -193,6 +194,7 @@ class ActiveModelService {
         recordTextLoadDuration(id, Date.now() - loadStartedAt);
         this.setLoadedText(id);
         useAppStore.getState().setTextModelEvicted(false); // loaded → clear any prior eviction
+        void warmUpTextModel(); // optional, silent, GPU only
         modelResidencyManager.register(
           { key: 'text', type: 'text', modelId, sizeMB: textSizeMB, dirtyMemory: textIsDirty },
           () => this.doUnloadTextModelLocked(true), // eviction keeps the selection

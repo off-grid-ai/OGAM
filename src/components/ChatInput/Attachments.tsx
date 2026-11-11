@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 
 let _attachmentIdSeq = 0;
 const nextAttachmentId = () => `${Date.now()}-${(++_attachmentIdSeq).toString(36)}`;
-import { View, Text, Image, ScrollView, TouchableOpacity, Platform, ActionSheetIOS } from 'react-native';
+import { StyleSheet, View, Text, Image, ScrollView, TouchableOpacity, Platform, ActionSheetIOS } from 'react-native';
 import { launchImageLibrary, launchCamera, Asset } from 'react-native-image-picker';
 import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
 import Icon from 'react-native-vector-icons/Feather';
@@ -15,6 +15,10 @@ import { createStyles } from './styles';
 import { isPickerStuck } from '../../utils/pickerErrorUtils';
 import { estimateReply, fmtSec, roughTokens } from '../../atlasTools/speed';
 import { useAppStore } from '../../stores/appStore';
+const literalStyles = StyleSheet.create({
+  s1: { opacity: 0.7 },
+});
+
 
 /** Seconds the model in use needs to read this text (null = speed not learned yet). */
 const readSeconds = (chars: number): number | null => {
@@ -220,7 +224,7 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({ attachment
               <Text style={styles.documentName} numberOfLines={2}>
                 {attachment.fileName || 'Document'}
               </Text>
-              {(() => { const s = readSeconds((attachment.textContent || '').length); return s !== null && s > 5 ? <Text style={[styles.documentName, { opacity: 0.7 }]}>~{fmtSec(s)} to read</Text> : null; })()}
+              {(() => { const s = readSeconds((attachment.textContent || '').length); return s !== null && s > 5 ? <Text style={[styles.documentName, literalStyles.s1]}>~{fmtSec(s)} to read</Text> : null; })()}
             </View>
           )}
           <TouchableOpacity

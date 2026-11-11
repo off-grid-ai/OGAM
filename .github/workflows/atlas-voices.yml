@@ -1,6 +1,6 @@
 name: Build Atlas voices
 
-# Repackages free natural-voice models (Kokoro, Piper; from the sherpa-onnx project) as plain
+# Repackages free natural-voice models (Kokoro, KittenTTS, Piper; from the sherpa-onnx project) as plain
 # .zip files on the "atlas-voices" release, so the app can download and unpack them easily.
 on:
   workflow_dispatch:
@@ -22,17 +22,39 @@ jobs:
         run: |
           set -e
           gh release view atlas-voices >/dev/null 2>&1 || gh release create atlas-voices --prerelease --target "$GITHUB_SHA" \
-            --title "Atlas voices" --notes "Natural offline voices for the Atlas app (Settings > Models > Voice). Kokoro (Apache-2.0) and Piper voices, packaged from the sherpa-onnx project."
+            --title "Atlas voices" --notes "Natural offline voices for the Atlas app (Settings > Models > Voice). Kokoro (Apache-2.0), KittenTTS (Apache-2.0) and Piper voices, packaged from the sherpa-onnx project with their LICENSE files."
           gh release edit atlas-voices --prerelease || true
           mkdir -p work && cd work
-          for pair in kokoro-en:kokoro-int8-en-v0_19 piper-amy:vits-piper-en_US-amy-medium piper-ryan:vits-piper-en_US-ryan-medium \
-                      piper-lessac:vits-piper-en_US-lessac-medium piper-joe:vits-piper-en_US-joe-medium piper-hfc:vits-piper-en_US-hfc_female-medium; do
+          for pair in kokoro-v1-en:kokoro-int8-multi-lang-v1_0 kokoro-en:kokoro-int8-en-v0_19 piper-amy:vits-piper-en_US-amy-medium piper-ryan:vits-piper-en_US-ryan-medium \
+                      piper-lessac:vits-piper-en_US-lessac-medium piper-joe:vits-piper-en_US-joe-medium piper-hfc:vits-piper-en_US-hfc_female-medium \
+                      kitten-nano-en:kitten-nano-en-v0_2-fp16 kitten-mini-en:kitten-mini-en-v0_1-fp16; do
             id=${pair%%:*}; src=${pair#*:}
             curl --fail --silent --show-error --location --retry 3 --proto '=https' --proto-redir '=https' -o "$src.tar.bz2" "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$src.tar.bz2"
             tar -xjf "$src.tar.bz2" && rm "$src.tar.bz2"
+            # KittenTTS and Kokoro v1.0 weights are Apache-2.0: only redistribute when the license ships with them.
+            case "$id" in kitten-*|kokoro-v1-*) grep -q "Apache License" "$src/LICENSE" || { echo "::error::$src has no Apache-2.0 LICENSE"; exit 1; } ;; esac
             (cd "$src" && zip -q -r -1 "../$id.zip" .)
             rm -rf "$src"
             echo "::notice title=Voice $id::$(du -h $id.zip | cut -f1)"
             gh release upload atlas-voices "$id.zip" --clobber
             rm "$id.zip"
           done
+      - name: Package speaker-label models (recorder)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p speakers/atlas-speakers && cd speakers
+          base=https://github.com/k2-fsa/sherpa-onnx/releases/download
+          curl --fail --silent --show-error --location --retry 3 --proto '=https' --proto-redir '=https' -o seg.tar.bz2 "$base/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
+          tar -xjf seg.tar.bz2
+          # pyannote segmentation-3.0 is MIT: only redistribute with its license.
+          grep -q "MIT License" sherpa-onnx-pyannote-segmentation-3-0/LICENSE || { echo "::error::segmentation model has no MIT LICENSE"; exit 1; }
+          cp sherpa-onnx-pyannote-segmentation-3-0/model.int8.onnx atlas-speakers/segmentation.onnx
+          cp sherpa-onnx-pyannote-segmentation-3-0/LICENSE atlas-speakers/LICENSE-segmentation
+          curl --fail --silent --show-error --location --retry 3 --proto '=https' --proto-redir '=https' -o atlas-speakers/embedding.onnx "$base/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+          printf '%s\n' "segmentation.onnx: pyannote/segmentation-3.0 (MIT, see LICENSE-segmentation), int8 export by sherpa-onnx." \
+            "embedding.onnx: 3D-Speaker ERes2Net-base (modelscope/3D-Speaker, Apache-2.0), ONNX export by sherpa-onnx." > atlas-speakers/NOTICE
+          (cd atlas-speakers && zip -q -r -1 ../atlas-speakers.zip .)
+          echo "::notice title=Speaker labels::$(du -h atlas-speakers.zip | cut -f1)"
+          gh release upload atlas-voices atlas-speakers.zip --clobber --repo "$GITHUB_REPOSITORY"

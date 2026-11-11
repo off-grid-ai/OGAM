@@ -1242,4 +1242,17 @@ describe('HardwareService', () => {
       expect(await hardwareService.getAccelerationCapability()).toEqual({ hasNpu: false, hasGpu: false });
     });
   });
+
+  describe('fast core count', () => {
+    const cores = (parts: string[]) => parts.map((part, i) => `processor\t: ${i}\nCPU implementer\t: 0x41\nCPU part\t: ${part}\n`).join('\n');
+    it('counts only the fast cores of a 4 + 4 chip (the onn tablet), so inference does not use the slow ones', () => {
+      const { countFastCores } = require('../../../src/services/hardware');
+      expect(countFastCores(cores(['0xd05', '0xd05', '0xd05', '0xd05', '0xd41', '0xd41', '0xd41', '0xd41']))).toBe(4);
+    });
+    it('counts every core when none is the small kind (Snapdragon 8 Elite), and nothing when there are no ids', () => {
+      const { countFastCores } = require('../../../src/services/hardware');
+      expect(countFastCores(cores(Array(8).fill('0x001')))).toBe(8);
+      expect(countFastCores('processor\t: 0\n')).toBeNull();
+    });
+  });
 });

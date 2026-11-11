@@ -1,3 +1,4 @@
+import { Dimensions } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING, FONTS } from '../../constants';
 
@@ -75,6 +76,31 @@ const createBubbleStyles = (colors: ThemeColors) => ({
   userBubble: {
     backgroundColor: colors.primary,
     borderBottomRightRadius: 4,
+  },
+  // Clean layout (like ChatGPT and Claude): the reply is plain text across the page, your own message keeps a
+  // rounded bubble, and the gaps between messages are smaller.
+  lookLabel: {
+    fontWeight: '700' as const,
+    marginBottom: 2,
+    color: colors.primary,
+  },
+  cleanContainer: {
+    marginVertical: 4,
+    paddingHorizontal: 12,
+  },
+  cleanAssistantBubble: {
+    backgroundColor: 'transparent' as const,
+    paddingHorizontal: 0,
+    paddingVertical: 2,
+    maxWidth: '100%' as const,
+    minWidth: undefined,
+    width: '100%' as const,
+  },
+  cleanUserBubble: {
+    maxWidth: '85%' as const,
+    borderRadius: 18,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
   },
   assistantBubble: {
     backgroundColor: colors.surface,
@@ -356,8 +382,9 @@ const createActionStyles = (colors: ThemeColors) => ({
     borderColor: colors.border,
     padding: SPACING.md,
     color: colors.text,
-    minHeight: 100,
-    maxHeight: 300,
+    // Long messages need room: about half the screen, scrolling inside.
+    minHeight: 160,
+    maxHeight: Math.max(300, Math.round(Dimensions.get('window').height * 0.5)),
     textAlignVertical: 'top' as const,
   },
   editActions: {

@@ -9,7 +9,8 @@ import { MediaAttachment } from '../types';
 import { pdfExtractor } from './pdfExtractor';
 import { useAppStore } from '../stores/appStore';
 import { APP_CONFIG } from '../constants';
-import { OFFICE_EXTENSIONS, extractOffice } from './officeExtract';
+import { OFFICE_EXTENSIONS, extractOffice, extractOfficeMarkdown } from './officeExtract';
+import { toMarkdown } from './markdownConvert';
 
 // File extensions we can read as text
 const TEXT_EXTENSIONS = ['.txt', '.md', '.csv', '.json', '.xml', '.html', '.log', '.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.c', '.cpp', '.h', '.swift', '.kt', '.go', '.rs', '.rb', '.php', '.sql', '.sh', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf'];
@@ -51,7 +52,7 @@ class DocumentService {
    * - Note: Files from keepLocalCopy are already in app's Documents directory
    */
   private async resolveContentUri(uri: string, fileName: string): Promise<string> {
-    console.log(`[DocumentService] resolveContentUri input: ${uri}`);
+    console.log('[DocumentService] resolveContentUri');
 
     // Check if this is a file from keepLocalCopy - it would be in our app's Documents directory
     // keepLocalCopy returns paths like: file:///Users/.../App/Documents/filename
@@ -63,8 +64,6 @@ class DocumentService {
     let decodedUri = uri;
     try { decodedUri = decodeURIComponent(uri); } catch { /* Malformed picker URI: preserve literal path. */ }
     const cleanUri = decodedUri.replace(/^file:\/\//, '');
-    console.log(`[DocumentService] Decoded and cleaned path: ${cleanUri}`);
-    console.log(`[DocumentService] Documents path: ${documentsPath}`);
 
     // Only skip copying if the file is exactly in our app's Documents directory
     // This must be a precise match to avoid security-scoped URLs from document picker
@@ -77,7 +76,7 @@ class DocumentService {
     if (Platform.OS === 'android' && uri.startsWith('content://')) {
       const tempPath = `${RNFS.CachesDirectoryPath}/${Date.now()}_${fileName}`;
       await RNFS.copyFile(uri, tempPath);
-      console.log(`[DocumentService] Copied Android content:// URI to: ${tempPath}`);
+      console.log('[DocumentService] Copied Android content:// URI to app storage');
       return tempPath;
     }
 
@@ -88,14 +87,14 @@ class DocumentService {
       try {
         // RNFS.copyFile can handle file:// URIs by copying the underlying file
         await RNFS.copyFile(uri, tempPath);
-        console.log(`[DocumentService] Copied iOS file:// URI to: ${tempPath}`);
+        console.log('[DocumentService] Copied iOS file:// URI to app storage');
         return tempPath;
       } catch (_copyError) {
         // If direct copy fails, try stripping the file:// prefix
         const pathWithoutScheme = decodedUri.replace(/^file:\/\//, '');
         try {
           await RNFS.copyFile(pathWithoutScheme, tempPath);
-          console.log(`[DocumentService] Copied (fallback) to: ${tempPath}`);
+          console.log('[DocumentService] Copied (fallback) to app storage');
           return tempPath;
         } catch {
           console.error(`[DocumentService] Both copy attempts failed`);
@@ -104,7 +103,7 @@ class DocumentService {
       }
     }
 
-    console.log(`[DocumentService] Returning URI as-is: ${uri}`);
+    console.log('[DocumentService] Returning URI as-is');
     return uri;
   }
 
@@ -117,23 +116,35 @@ class DocumentService {
     }
   }
 
-  private async readContent(resolvedPath: string, isPdf: boolean, maxChars: number): Promise<string> {
-    console.log(`[DocumentService] readContent called - path: ${resolvedPath}, isPdf: ${isPdf}, maxChars: ${maxChars}`);
+  private async readContent(resolvedPath: string, isPdf: boolean, opts: { maxChars: number; forceMarkdown?: boolean }): Promise<string> {
+    const { maxChars, forceMarkdown = false } = opts;
+    console.log(`[DocumentService] readContent called - isPdf: ${isPdf}, maxChars: ${maxChars}`);
     const ext = `.${resolvedPath.split('.').pop()?.toLowerCase()}`;
-    if (OFFICE_EXTENSIONS.includes(ext)) return extractOffice(resolvedPath, ext, maxChars);
+    // The AI reads Markdown (headings, lists, tables) better than flat text, so documents are converted to it (Chat settings).
+    const markdown = forceMarkdown || useAppStore.getState().settings.convertToMarkdown !== false;
+    if (OFFICE_EXTENSIONS.includes(ext)) return markdown ? extractOfficeMarkdown(resolvedPath, ext, maxChars) : extractOffice(resolvedPath, ext, maxChars);
     try {
       const raw = isPdf
         ? await pdfExtractor.extractText(resolvedPath, maxChars)
         : await RNFS.readFile(resolvedPath, 'utf8');
       console.log(`[DocumentService] Successfully read ${raw.length} characters`);
-      if (raw.length > maxChars) {
-        return `${raw.substring(0, maxChars)}\n\n... [Content truncated due to length]`;
+      const text = markdown ? toMarkdown(raw, ext) : raw;
+      if (text.length > maxChars) {
+        return `${text.substring(0, maxChars)}\n\n... [Content truncated due to length]`;
       }
-      return raw;
+      return text;
     } catch (error: any) {
       console.error(`[DocumentService] Error reading content:`, error?.message || error);
       throw error;
     }
+  }
+
+  /** A file's text as Markdown whatever the Chat setting says (for converting files to .md). Nothing is copied or kept. */
+  async markdownFromPath(path: string, maxChars = 2_000_000): Promise<string> {
+    const extension = `.${path.split('.').pop()?.toLowerCase()}`;
+    const isPdf = extension === PDF_EXTENSION;
+    this.validateFileType(extension, isPdf);
+    return this.readContent(path, isPdf, { maxChars, forceMarkdown: true });
   }
 
   private async savePersistentCopy(resolvedPath: string, originalPath: string, name: string): Promise<{ id: string; uri: string }> {
@@ -156,7 +167,7 @@ class DocumentService {
    */
   async processDocumentFromPath(filePath: string, fileName?: string, maxCharsOverride?: number): Promise<MediaAttachment | null> {
     try {
-      console.log(`[DocumentService] Processing document - filePath: ${filePath}, fileName: ${fileName}`);
+      // Never log document paths or names: they can reveal protected-project content.
       const rawName = fileName || filePath.split('/').pop() || 'document';
       let name = rawName;
       try { name = decodeURIComponent(rawName); } catch { /* Keep malformed percent sequences displayable. */ }
@@ -167,7 +178,6 @@ class DocumentService {
       this.validateFileType(extension, isPdf);
 
       const resolvedPath = await this.resolveContentUri(filePath, name);
-      console.log(`[DocumentService] Resolved path: ${resolvedPath}`);
 
       // Verify the file exists and is accessible
       let fileExists = false;
@@ -193,7 +203,7 @@ class DocumentService {
       }
 
       const maxChars = maxCharsOverride ?? Math.floor((useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength) * 4 * 0.5);
-      const textContent = await this.readContent(resolvedPath, isPdf, maxChars);
+      const textContent = await this.readContent(resolvedPath, isPdf, { maxChars });
       const { id, uri } = await this.savePersistentCopy(resolvedPath, filePath, name);
 
       return { id, type: 'document', uri, fileName: name, textContent, fileSize: stat.size };

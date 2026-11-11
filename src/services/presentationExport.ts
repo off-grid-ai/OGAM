@@ -2,7 +2,7 @@
 import { NativeModules, Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 import { zip } from 'react-native-zip-archive';
-import { cleanPresentationSlides, type PresentationSlide, type PresentationTemplate } from './presentationTemplates';
+import { basicLayouts, cleanPresentationSlides, type PresentationSlide, type PresentationTemplate } from './presentationTemplates';
 
 export type PresentationFormat = 'pptx' | 'pdf';
 export interface ExportedPresentation { uri: string; mime: string; name: string }
@@ -37,30 +37,81 @@ function shape(id: number, name: string, x: number, y: number, w: number, h: num
     (lines.length ? '<p:txBody><a:bodyPr wrap="square" lIns="0" rIns="0" tIns="0" bIns="0"/><a:lstStyle/>' +
       lines.join('') + '</p:txBody>' : '') + '</p:sp>';
 }
+/** Shapes for the layouts beyond title / content / closing; null for those three. */
+function extraLayoutShapes(slide: PresentationSlide, t: PresentationTemplate): string | null {
+  const bullets = slide.bullets.length ? slide.bullets : ['Add your points'];
+  const hf = t.headingFont ?? t.font;
+  let out = '';
+  if (slide.layout === 'section') {
+    out += shape(2, 'Section block', 0, 0, 3300000, H, t.accent, []);
+    out += shape(3, 'Section title', 4000000, 2300000, 7600000, 1700000, null, [paragraph(slide.title, t.foreground, hf, 4800, true)]);
+    if (slide.subtitle) out += shape(4, 'Section subtitle', 4020000, 4150000, 7400000, 900000, null, [paragraph(slide.subtitle, t.secondary, t.font, 2200, false)]);
+    return out;
+  }
+  if (slide.layout === 'quote') {
+    out += shape(2, 'Quote mark', 900000, 700000, 1600000, 1500000, null, [paragraph('\u201C', t.accent, hf, 12000, true)]);
+    out += shape(3, 'Quote', 1300000, 2200000, 9600000, 2700000, null, [paragraph(slide.title, t.foreground, t.font, 3400, false)]);
+    out += shape(4, 'Quote rule', 1300000, 5150000, 1200000, 60000, t.accent, []);
+    if (slide.subtitle) out += shape(5, 'Said by', 1300000, 5350000, 9000000, 600000, null, [paragraph(slide.subtitle, t.secondary, t.font, 2000, false)]);
+    return out;
+  }
+  if (slide.layout === 'stat') {
+    out += shape(2, 'Stat rule', 900000, 1100000, 1200000, 60000, t.accent, []);
+    out += shape(3, 'Big number', 900000, 1500000, 10400000, 2300000, null, [paragraph(slide.title, t.accent, hf, 11000, true)]);
+    if (slide.subtitle) out += shape(4, 'Caption', 960000, 3900000, 10200000, 700000, null, [paragraph(slide.subtitle, t.foreground, t.font, 2800, false)]);
+    out += shape(5, 'Notes', 960000, 4800000, 10200000, 1700000, null, bullets.slice(0, 4).map(b => paragraph(b, t.secondary, t.font, 1900, false)));
+    return out;
+  }
+  if (slide.layout === 'agenda') {
+    out += shape(2, 'Section accent', 680000, 520000, 150000, 820000, t.accent, []);
+    out += shape(3, 'Slide title', 960000, 560000, 10500000, 900000, null, [paragraph(slide.title, t.foreground, hf, 3600, true)]);
+    bullets.slice(0, 6).forEach((b, i) => {
+      const y = 1750000 + i * 780000;
+      out += shape(10 + i * 2, 'Number ' + (i + 1), 960000, y, 800000, 640000, null, [paragraph(String(i + 1).padStart(2, '0'), t.accent, hf, 3000, true)]);
+      out += shape(11 + i * 2, 'Item ' + (i + 1), 1900000, y + 40000, 9400000, 640000, null, [paragraph(b, t.foreground, t.font, 2400, false)]);
+    });
+    return out;
+  }
+  if (slide.layout === 'twoColumn') {
+    out += shape(2, 'Section accent', 680000, 520000, 150000, 820000, t.accent, []);
+    out += shape(3, 'Slide title', 960000, 560000, 10500000, 900000, null, [paragraph(slide.title, t.foreground, hf, 3600, true)]);
+    if (slide.subtitle) out += shape(4, 'Subtitle', 960000, 1530000, 9800000, 500000, null, [paragraph(slide.subtitle, t.secondary, t.font, 1900, false)]);
+    const items = bullets.slice(0, 10);
+    const half = Math.ceil(items.length / 2);
+    const column = (list: string[]) => list.map(b => paragraph('\u2022  ' + b, t.foreground, t.font, 2000, false));
+    out += shape(5, 'Left panel', 750000, 2220000, 5150000, 3980000, t.panel, []);
+    out += shape(6, 'Left column', 1000000, 2500000, 4700000, 3500000, null, column(items.slice(0, half)));
+    out += shape(7, 'Right panel', 6150000, 2220000, 5150000, 3980000, t.panel, []);
+    out += shape(8, 'Right column', 6400000, 2500000, 4700000, 3500000, null, column(items.slice(half)));
+    return out;
+  }
+  return null;
+}
 function slideXml(slide: PresentationSlide, t: PresentationTemplate): string {
-  let shapes = '';
-  if (slide.layout === 'title') {
+  const hf = t.headingFont ?? t.font;
+  let shapes = extraLayoutShapes(slide, t) ?? '';
+  if (shapes) { /* drawn by extraLayoutShapes */ } else if (slide.layout === 'title') {
     shapes += shape(2, 'Accent bar', 720000, 1240000, 10600000, 130000, t.accent, []);
     shapes += shape(3, 'Presentation title', 780000, 1840000, 10600000, 1700000, null,
-      [paragraph(slide.title, t.foreground, t.font, 4900, true)]);
+      [paragraph(slide.title, t.foreground, hf, 4900, true)]);
     shapes += shape(4, 'Subtitle', 800000, 3800000, 10200000, 1000000, null,
       [paragraph(slide.subtitle, t.secondary, t.font, 2400, false)]);
   } else if (slide.layout === 'closing') {
     shapes += shape(2, 'Accent panel', 760000, 1920000, 9500000, 220000, t.accent, []);
     shapes += shape(3, 'Closing message', 820000, 2650000, 10000000, 1500000, null,
-      [paragraph(slide.title, t.foreground, t.font, 4900, true)]);
+      [paragraph(slide.title, t.foreground, hf, 4900, true)]);
     shapes += shape(4, 'Follow up', 840000, 4480000, 10000000, 650000, null,
       [paragraph(slide.subtitle, t.secondary, t.font, 2300, false)]);
   } else {
     shapes += shape(2, 'Section accent', 680000, 520000, 150000, 820000, t.accent, []);
     shapes += shape(3, 'Slide title', 960000, 560000, 10500000, 900000, null,
-      [paragraph(slide.title, t.foreground, t.font, 3600, true)]);
+      [paragraph(slide.title, t.foreground, hf, 3600, true)]);
     if (slide.subtitle) shapes += shape(4, 'Subtitle', 960000, 1530000, 9800000, 500000, null,
       [paragraph(slide.subtitle, t.secondary, t.font, 1900, false)]);
     shapes += shape(5, 'Content panel', 750000, 2220000, 10600000, 3980000, t.panel, []);
     shapes += shape(6, 'Bullet points', 1050000, 2560000, 9800000, 3450000, null,
       (slide.bullets.length ? slide.bullets : ['Add your main points']).slice(0, 9)
-        .map(b => paragraph('?  ' + b, t.foreground, t.font, 2200, false)));
+        .map(b => paragraph('\u2022  ' + b, t.foreground, t.font, 2200, false)));
   }
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<p:sld ' + ns + '><p:cSld><p:bg><p:bgPr>' + rgb(t.background) +
@@ -80,7 +131,7 @@ function themeXml(t: PresentationTemplate): string {
     color('dk2', t.secondary) + color('lt2', t.panel) +
     ['accent1','accent2','accent3','accent4','accent5','accent6'].map((n,i) => color(n, i%2 ? t.secondary : t.accent)).join('') +
     color('hlink', t.accent) + color('folHlink', t.secondary) + '</a:clrScheme>' +
-    '<a:fontScheme name="Atlas"><a:majorFont><a:latin typeface="' + esc(t.font) +
+    '<a:fontScheme name="Atlas"><a:majorFont><a:latin typeface="' + esc(t.headingFont ?? t.font) +
     '"/></a:majorFont><a:minorFont><a:latin typeface="' + esc(t.font) +
     '"/></a:minorFont></a:fontScheme>' +
     '<a:fmtScheme name="Atlas"><a:fillStyleLst>' + rgb(t.accent) + rgb(t.panel) + rgb(t.background) +
@@ -149,7 +200,7 @@ export async function exportPresentation(slides: PresentationSlide[], t: Present
   if (!safe.length) throw new Error('Add a slide first.');
   const name = sanitizedName(filename) + '.' + format;
   if (format === 'pdf') {
-    const uri = await nativeExporter().exportPdf(safe, t, name);
+    const uri = await nativeExporter().exportPdf(basicLayouts(safe), t, name);
     return { uri, mime: PDF_MIME, name };
   }
   const temp = RNFS.CachesDirectoryPath + '/atlas-presentation-' + Date.now();

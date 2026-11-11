@@ -2,6 +2,9 @@
  * The complete chat stays in storage. Only the inference prompt is windowed.
  * Never assume native KV-cache shifting is safe on Android OpenCL.
  */
+
+/** Messages dropped at a time when the history no longer fits (keeps the prompt start stable between drops). */
+const DROP_CHUNK = 8;
 export type ContextMessage = { role: string; content: string };
 export type ContextWindowResult<T> = {
   messages: T[];
@@ -9,7 +12,32 @@ export type ContextWindowResult<T> = {
   latestTruncated: boolean;
   promptTokens: number;
   budgetTokens: number;
+  /** How long the newest message was in tokens, when it had to be cut to fit. */
+  latestTokens?: number;
 };
+
+/** Smallest and largest reply the automatic length will choose. */
+export const AUTO_MIN_REPLY_TOKENS = 1024;
+export const AUTO_MAX_REPLY_TOKENS = 8192;
+
+/**
+ * How long a reply may be when the length is automatic: as much of the memory window as the prompt guard will keep
+ * free for the answer (40% of it), within sensible limits. A fixed 1K cap made long writing (files, code, reports)
+ * stop mid-way and need "continue" again and again, which was far slower than writing it in one go.
+ */
+export function autoReplyTokens(contextTokens: number): number {
+  const context = Math.max(256, Math.floor(contextTokens));
+  return Math.min(AUTO_MAX_REPLY_TOKENS, Math.max(AUTO_MIN_REPLY_TOKENS, Math.floor(context * 0.4)));
+}
+
+/** The reply limit in use: the chosen number when manual, else the automatic one for this context size. */
+export function resolveReplyTokens(
+  settings: { maxTokens?: number; maxTokensMode?: 'auto' | 'manual' },
+  contextTokens?: number,
+): number {
+  if (settings.maxTokensMode === 'manual' || !contextTokens) return settings.maxTokens || 512;
+  return autoReplyTokens(contextTokens);
+}
 
 export function contextOutputReserve(contextTokens: number, requestedOutput: number): number {
   const context = Math.max(256, Math.floor(contextTokens));
@@ -50,14 +78,15 @@ export async function fitMessagesToContext<T extends ContextMessage>(options: {
   }
   const newest = history[history.length - 1];
   const minimum = [...systems, newest];
-  if (await count(minimum) > budget) {
+  const minimumTokens = await count(minimum);
+  if (minimumTokens > budget) {
     if (await count(systems) >= budget - 32) {
       throw new Error('The system instructions leave no space for a message. Shorten the system prompt or increase context.');
     }
     const messageWithLength = (n: number): T => ({
       ...newest,
       content: n >= newest.content.length ? newest.content :
-        '[Earlier message content omitted to fit active context]\n' + newest.content.slice(-n),
+        `[Earlier message content omitted to fit active context]\n${newest.content.slice(-n)}`,
     });
     let low = 0, high = newest.content.length;
     // Retain the latest user request and its ending instructions.
@@ -74,7 +103,7 @@ export async function fitMessagesToContext<T extends ContextMessage>(options: {
     return {
       messages: trimmed, droppedMessages: Math.max(0, history.length - 1),
       latestTruncated: low < newest.content.length,
-      promptTokens: tokens, budgetTokens: budget,
+      promptTokens: tokens, budgetTokens: budget, latestTokens: minimumTokens,
     };
   }
 
@@ -89,7 +118,8 @@ export async function fitMessagesToContext<T extends ContextMessage>(options: {
   // by one. The prompt start then stays identical for several turns, so the
   // native KV cache can be reused instead of re-reading the whole prompt each send.
   const needed = history.length - low;
-  const chunk = Math.max(2, Math.ceil(history.length * 0.25));
+  // A fixed chunk (DROP_CHUNK): one that grows with the history moved the start of the prompt on most turns.
+  const chunk = DROP_CHUNK;
   const dropped = Math.min(history.length - 1, Math.ceil(needed / chunk) * chunk);
   const kept = [...systems, ...history.slice(dropped)];
   return {

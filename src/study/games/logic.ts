@@ -28,7 +28,8 @@ export function shuffle<T>(items: T[], seed = Date.now()): T[] {
 export interface ClozeItem { sentence: string; answer: string; options: string[]; src: number[] }
 
 /** Sentences from the sources that contain a known term, with that term blanked. No model needed. */
-export function buildCloze(terms: LearningTerm[], sources: Source[], max = 10, seed = 1): ClozeItem[] {
+export function buildCloze(terms: LearningTerm[], sources: Source[], opts: { max?: number; seed?: number } = {}): ClozeItem[] {
+  const { max = 10, seed = 1 } = opts;
   const out: ClozeItem[] = [];
   const used = new Set<string>();
   const words = terms.map((t) => t.answer);
@@ -146,7 +147,8 @@ export function acronymMatches(acronym: string, items: string[]): boolean {
 export interface MapNode { id: string; label: string; x?: number; y?: number }
 export interface MapEdge { from: string; to: string; label: string }
 /** Small force-directed layout in a 0..1 box (fixed iterations, deterministic). */
-export function layoutConceptMap(nodes: MapNode[], edges: MapEdge[], iterations = 300, seed = 3): Required<MapNode>[] {
+export function layoutConceptMap(nodes: MapNode[], edges: MapEdge[], opts: { iterations?: number; seed?: number } = {}): Required<MapNode>[] {
+  const { iterations = 300, seed = 3 } = opts;
   const r = rng(seed);
   const pos = nodes.map((n, i) => ({
     ...n,

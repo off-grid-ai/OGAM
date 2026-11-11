@@ -8,7 +8,7 @@ import { TYPOGRAPHY, SPACING } from '../constants';
 import { useAppStore } from '../stores';
 import {
   LOCKED, MAX_VISIBLE, MIN_VISIBLE, moveNavItem, navItem, resolveNavBar, setNavItemVisible,
-} from '../navigation/navBar';
+} from '../utils/navBar';
 
 export const NavBarSettings: React.FC = () => {
   const { colors } = useTheme();
@@ -21,7 +21,7 @@ export const NavBarSettings: React.FC = () => {
     <View testID="navbar-settings">
       <Text style={styles.section}>Bottom bar</Text>
       <Text style={styles.note}>
-        Pick up to {MAX_VISIBLE} destinations, at least {MIN_VISIBLE}. Settings always stays. Anything you turn off is still one tap away: Models from Home or Settings, the Atlas tools from Settings.
+        Pick up to {MAX_VISIBLE} destinations, at least {MIN_VISIBLE}. Settings always stays. Anything you turn off is still one tap away: Models from Home or Settings, the Atlas tools from Settings. Hold a tab for a shortcut: Home Search, Chats New chat, Workspace New project, Learn Practice call, Models Downloads, Settings Appearance.
       </Text>
       <View style={styles.list}>
         {order.map((id, index) => {

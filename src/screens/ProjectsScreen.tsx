@@ -38,7 +38,9 @@ export const ProjectsScreen: React.FC<{ embedded?: boolean }> = ({ embedded = fa
   const { colors } = useTheme();
   const wide = useWideLayout();
   const styles = useThemedStyles(createStyles);
-  const { projects, deleteProject, updateProject } = useProjectStore();
+  const { projects: everyProject, deleteProject, updateProject } = useProjectStore();
+  // Learn a language has its own tab and screen: its chats are reached from there.
+  const projects = everyProject.filter((p) => p.course !== 'language');
   const { conversations } = useChatStore();
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 

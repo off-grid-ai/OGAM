@@ -55,6 +55,11 @@ let mockDownloadedModels: any[] = [{ id: 'model1', name: 'Test Model' }];
 let mockActiveModelId: string | null = 'model1';
 
 jest.mock('../../../src/stores', () => ({
+  // No remote server connected in these tests (useActiveTextModel reads this store).
+  useRemoteServerStore: jest.fn((selector?: any) => {
+    const state = { activeServerId: null, activeRemoteTextModelId: null, discoveredModels: {} };
+    return selector ? selector(state) : state;
+  }),
   useProjectStore: jest.fn(() => ({
     getProject: jest.fn(() => mockProject),
     deleteProject: mockDeleteProject,

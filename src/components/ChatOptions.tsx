@@ -10,18 +10,13 @@ import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from './AppSheet';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from './CustomAlert';
 import { useTheme } from '../theme';
-import { useChatStore, useAppStore } from '../stores';
+import { useChatStore } from '../stores';
 import { protectChat, permanentlyUnprotectChat } from '../stores/encryptedChatStorage';
-import { onnxImageGeneratorService } from '../services';
+import { deleteChatWithUndo } from '../chats/undoDelete';
 import type { Conversation } from '../types';
-import { conversationToText, hasShareableTurns } from '../utils/chatExport';
+import { conversationToPlainText, conversationToText, hasShareableTurns } from '../utils/chatExport';
+import { safeFileName, saveMarkdown, saveText } from '../study/exportFiles';
 
-/** Deletes a chat and the images generated in it. */
-export function deleteChatAndImages(conversationId: string): void {
-  const imageIds = useAppStore.getState().removeImagesByConversationId(conversationId);
-  for (const imageId of imageIds) onnxImageGeneratorService.deleteGeneratedImage(imageId).catch(() => {});
-  useChatStore.getState().deleteConversation(conversationId);
-}
 
 /** `onDeleted` runs after a chat is deleted (an open chat uses it to leave the screen). */
 export function useChatOptions(opts?: { onDeleted?: (conversationId: string) => void }): { open: (c: Conversation) => void; confirmDelete: (c: Conversation) => void; element: React.ReactElement } {
@@ -61,10 +56,15 @@ export function useChatOptions(opts?: { onDeleted?: (conversationId: string) => 
       `Delete "${conversation.pinVerifier ? 'Locked conversation' : conversation.title}"? This will also delete all images generated in this chat.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => { deleteChatAndImages(conversation.id); opts?.onDeleted?.(conversation.id); } },
+        { text: 'Delete', style: 'destructive', onPress: () => { deleteChatWithUndo(conversation.id); opts?.onDeleted?.(conversation.id); } },
       ],
     ));
-  const confirmDelete = (conversation: Conversation) => setAlertState(deleteAlert(conversation));
+  // An ordinary chat is deleted at once and can be undone for a few seconds; a locked or private chat asks first.
+  const confirmDelete = (conversation: Conversation) => {
+    if (conversation.pinVerifier || conversation.isPrivate) { setAlertState(deleteAlert(conversation)); return; }
+    deleteChatWithUndo(conversation.id);
+    opts?.onDeleted?.(conversation.id);
+  };
 
   const open = (conversation: Conversation) => setMenuTarget(conversation);
   const menuAction = (icon: string, label: string, action: () => void, destructive = false) => (
@@ -96,7 +96,15 @@ export function useChatOptions(opts?: { onDeleted?: (conversationId: string) => 
               useChatStore.getState().setConversationPinned(menuTarget.id, !menuTarget.isPinned);
               finishMenu();
             })}
-            {hasShareableTurns(menuTarget) && menuAction('share-2', 'Share as text', () => finishMenu(() => {
+            {hasShareableTurns(menuTarget) && menuAction('download', 'Save as Markdown', () => finishMenu(() => {
+              saveMarkdown(safeFileName(menuTarget.title || 'Chat', 'md'), conversationToText(menuTarget))
+                .catch((e) => Alert.alert('Could not save', String(e?.message || e)));
+            }))}
+            {hasShareableTurns(menuTarget) && menuAction('file-text', 'Save as text file', () => finishMenu(() => {
+              saveText(safeFileName(menuTarget.title || 'Chat', 'txt'), conversationToPlainText(menuTarget))
+                .catch((e) => Alert.alert('Could not save', String(e?.message || e)));
+            }))}
+            {hasShareableTurns(menuTarget) && menuAction('share-2', 'Share to an app', () => finishMenu(() => {
               Share.share({ title: menuTarget.title, message: conversationToText(menuTarget) }).catch(() => undefined);
             }))}
             {menuAction(menuTarget.pinVerifier ? 'unlock' : 'lock',

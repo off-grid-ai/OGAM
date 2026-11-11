@@ -178,6 +178,12 @@ async function doLoadLiteRTModel(ctx: TextLoadContext): Promise<void> {
 }
 
 /** Atlas: if a bigger memory size (context) broke the load, go back to the last size that worked and try once more. */
+/** The MTP options of a model, only the ones it has (so a model without MTP loads exactly as before). */
+function mtpOptions(model: { engine: string; draftPath?: string; embeddedMtp?: boolean }): { draftPath?: string; embeddedMtp?: boolean } {
+  if (model.engine !== 'llama') return {};
+  return { ...(model.draftPath ? { draftPath: model.draftPath } : {}), ...(model.embeddedMtp ? { embeddedMtp: true } : {}) };
+}
+
 export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
   const engine = ctx.model.engine === 'litert' ? 'litert' : 'llama';
   try {
@@ -217,7 +223,7 @@ async function doLoadTextModelOnce(ctx: TextLoadContext): Promise<void> {
     await beginLoad('llama', ctx.modelId);
     try {
       await Promise.race([
-        llmService.loadModel(ctx.model.filePath, mmProjPath, { override: ctx.override }),
+        llmService.loadModel(ctx.model.filePath, mmProjPath, { override: ctx.override, ...mtpOptions(ctx.model) }),
         timeoutPromise,
       ]);
     } finally {
@@ -229,7 +235,10 @@ async function doLoadTextModelOnce(ctx: TextLoadContext): Promise<void> {
     // (incompatible file), clear it so the eye icon reappears for repair.
     // Only applies when the link was already persisted before this load attempt — not
     // when resolveMmProjPath just discovered the file via directory scan.
-    if (ctx.model.mmProjPath && !multimodalSupport?.vision) {
+    // The Vulkan engine is text only by design, so it reports no picture support for a model whose
+    // picture file is fine: leave the link in place for the engines that can use it.
+    const onVulkan = /vulkan/i.test(llmService.getGpuInfo?.()?.gpuBackend ?? '');
+    if (ctx.model.mmProjPath && !multimodalSupport?.vision && !onVulkan) {
       await modelManager.clearMmProjLink(ctx.modelId);
     }
 

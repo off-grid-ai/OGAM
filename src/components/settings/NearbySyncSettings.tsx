@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import qrcode from 'qrcode-generator';
-import { nearbyAvailable, nearbySync } from '../../services/nearbySync';
+import { nearbyAvailable, nearbySync, qrScanAvailable, scanPairingCode } from '../../services/nearbySync';
 import type { NearbyStatus } from '../../services/nearbySync';
 import { useTheme } from '../../theme';
 
@@ -60,6 +60,12 @@ export function NearbySyncSettings() {
     } catch (e) { Alert.alert('Pairing failed', String(e)); }
     finally { setWorking(false); }
   };
+  const onScan = async () => {
+    try {
+      const link = await scanPairingCode();
+      if (link) await onPair(link);
+    } catch (e) { Alert.alert('Could not scan', String(e instanceof Error ? e.message : e)); }
+  };
   const manualSync = async (peer: string) => {
     setWorking(true);
     try { await nearbySync.syncPeer(peer); Alert.alert('Synced', 'Changes were exchanged securely.'); }
@@ -78,23 +84,36 @@ export function NearbySyncSettings() {
         <View style={styles.titleGroup}>
           <Text style={[styles.title, { color: colors.text }]}>Offline device sync</Text>
           <Text style={[styles.description, { color: colors.textSecondary }]}>
-            Encrypted, optional, no Internet. Sync chats, agents, projects and knowledge files.
+            Encrypted, optional, no Internet, no password. Syncs chats, agents, projects, files, settings, learning, maps, notes and recordings. Credential sharing is separate and off by default.
           </Text>
         </View>
         <Switch testID="nearby-sync-toggle" disabled={working} value={status.enabled} onValueChange={onEnable} />
       </View>
       {status.enabled && <>
         <Text style={[styles.note, { color: colors.textSecondary }]}>
-          Both devices must have Atlas open and share Wi-Fi or a hotspot. Wi-Fi Direct works if Android has already connected them. Locked and private items are not transferred.
+          Both devices must have Atlas open and share Wi-Fi or a hotspot. Locked chats and projects transfer only when available as PIN-sealed data. Temporary private chats and lock PINs never transfer. Credential sharing is optional; downloaded models and voices stay device-specific.
         </Text>
+        <View style={styles.header}>
+          <View style={styles.titleGroup}>
+            <Text style={[styles.subtitle, { color: colors.text }]}>Share API credentials</Text>
+            <Text style={[styles.description, { color: colors.textSecondary }]}>Off by default. Enable on both trusted devices to synchronize API keys securely.</Text>
+          </View>
+          <Switch testID="nearby-secrets-toggle" disabled={working} value={status.shareSecrets}
+            onValueChange={(enabled) => { void nearbySync.setShareSecrets(enabled).catch(e => Alert.alert('Could not change credential sharing', String(e))); }} />
+        </View>
         <Pressable testID="nearby-pair-button" style={[styles.button, { backgroundColor: colors.primary }]} disabled={working} onPress={onInvite}>
           <Text style={styles.buttonText}>Show pairing QR code</Text>
         </Pressable>
         {invitation ? <View style={styles.qrWrapper}>
           <AtlasPairingQr value={invitation} />
-          <Text style={[styles.note, { color: colors.textSecondary }]}>Scan using the other device's camera. Valid for 10 minutes.</Text>
+          <Text style={[styles.note, { color: colors.textSecondary }]}>On the other device, tap Scan the other device's code. Valid for 10 minutes.</Text>
           <Pressable onPress={() => setInvitation('')}><Text style={{ color: colors.primary }}>Hide QR code</Text></Pressable>
         </View> : null}
+        {qrScanAvailable && (
+          <Pressable testID="nearby-scan-button" style={[styles.button, { backgroundColor: colors.primary }]} disabled={working} onPress={onScan}>
+            <Text style={styles.buttonText}>Scan the other device's code</Text>
+          </Pressable>
+        )}
         <TextInput testID="nearby-pair-link" value={paste} onChangeText={setPaste}
           secureTextEntry autoCapitalize="none" autoCorrect={false}
           placeholder="Or paste an Atlas pairing link" placeholderTextColor={colors.textMuted}

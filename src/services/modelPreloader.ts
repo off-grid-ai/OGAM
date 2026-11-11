@@ -54,8 +54,8 @@ async function preloadText(): Promise<void> {
 }
 
 async function preloadTts(): Promise<void> {
-  // Pro implements the audio.preload hook (fits-gated + registers the engine);
-  // no-op in free builds.
+  // A voice feature can implement the audio.preload hook (fits-gated + registers the engine);
+  // no-op when none is registered.
   const pending = callHook<Promise<void>>(HOOKS.audioPreload);
   if (pending) await pending;
 }

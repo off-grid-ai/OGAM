@@ -33,6 +33,11 @@ const mockSetActiveConversation = jest.fn();
 const mockCreateConversation = jest.fn(() => 'new-conv-id');
 
 jest.mock('../../../src/stores', () => ({
+  // No remote server connected in these tests (useActiveTextModel reads this store).
+  useRemoteServerStore: jest.fn((selector?: any) => {
+    const state = { activeServerId: null, activeRemoteTextModelId: null, discoveredModels: {} };
+    return selector ? selector(state) : state;
+  }),
   useProjectStore: jest.fn(() => ({
     getProject: () => mockProject,
   })),
@@ -42,10 +47,10 @@ jest.mock('../../../src/stores', () => ({
     setActiveConversation: mockSetActiveConversation,
     createConversation: mockCreateConversation,
   })),
-  useAppStore: jest.fn(() => ({
-    downloadedModels: mockDownloadedModels,
-    activeModelId: mockActiveModelId,
-  })),
+  useAppStore: jest.fn((selector?: any) => {
+    const state = { downloadedModels: mockDownloadedModels, activeModelId: mockActiveModelId };
+    return selector ? selector(state) : state;
+  }),
 }));
 
 jest.mock('../../../src/components/Button', () => ({

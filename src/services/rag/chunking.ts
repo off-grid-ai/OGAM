@@ -41,7 +41,35 @@ function flushChunk(
   return position;
 }
 
+/**
+ * In a Markdown document a chunk is told where it sits ("[Chapter 2 > Cash flow]"), so a search result and the answer built from
+ * it keep their place in the document. A chunk that already starts with a heading is left as it is; text without headings is
+ * unchanged.
+ */
+export function withSectionContext(text: string, chunks: Chunk[]): Chunk[] {
+  if (!text || !chunks.length) return chunks;
+  const heads = [...text.matchAll(/^(#{1,6})[ \t]+(.+?)[ \t]*$/gm)].map((m) => ({ at: m.index ?? 0, level: m[1].length, title: m[2] }));
+  if (!heads.length) return chunks;
+  let from = 0;
+  return chunks.map((c) => {
+    const found = text.indexOf(c.content.slice(0, 80), from);
+    if (found >= 0) from = found;
+    const stack: typeof heads = [];
+    for (const h of heads) {
+      if (h.at > from) break;
+      while (stack.length && stack[stack.length - 1].level >= h.level) stack.pop();
+      stack.push(h);
+    }
+    const path = stack.map((h) => h.title).join(' > ');
+    return path && !/^#{1,6}\s/.test(c.content) ? { ...c, content: `[${path}]\n${c.content}` } : c;
+  });
+}
+
 export function chunkDocument(text: string, options?: ChunkOptions): Chunk[] {
+  return withSectionContext(text, plainChunks(text, options));
+}
+
+function plainChunks(text: string, options?: ChunkOptions): Chunk[] {
   const chunkSize = options?.chunkSize ?? DEFAULT_CHUNK_SIZE;
   const overlap = options?.overlap ?? DEFAULT_OVERLAP;
   const minLength = options?.minChunkLength ?? DEFAULT_MIN_CHUNK_LENGTH;

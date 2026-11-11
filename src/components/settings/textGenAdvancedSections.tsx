@@ -22,6 +22,8 @@ import {
   CACHE_TYPE_OPTIONS,
 } from '../../hooks/useTextGenerationAdvanced';
 import { hardwareService } from '../../services/hardware';
+import { isLocalModelLoaded, localGpuInfo } from '../../services/engines';
+import { describeOffload } from '../../services/gpuOffload';
 import { createTextGenAdvancedStyles } from './textGenAdvancedStyles';
 
 const isAndroid = Platform.OS === 'android';
@@ -91,12 +93,20 @@ const IOS_BACKENDS: BackendOption[] = [
 // Automatic is the recommended choice; the others force one engine (each falls back to CPU
 // with a visible reason if it cannot load the model).
 const ANDROID_BASE_BACKENDS: BackendOption[] = [
-  { id: INFERENCE_BACKENDS.AUTO, label: 'Automatic', desc: 'Recommended. Atlas tries the NPU, then the OpenCL GPU, then the Vulkan GPU, then the CPU for each model.' },
+  { id: INFERENCE_BACKENDS.AUTO, label: 'Automatic', desc: 'Recommended. Atlas tries the NPU, then the OpenCL GPU, then the Vulkan GPU, then the CPU for each model. Vulkan is skipped on the Mali-G57, where the CPU is faster.' },
   { id: INFERENCE_BACKENDS.HTP, label: 'NPU', desc: 'Force the Snapdragon NPU. Needs a Q4_0 or Q8_0 text model; other formats are refused.' },
   { id: INFERENCE_BACKENDS.OPENCL, label: 'OpenCL', desc: 'Force the OpenCL GPU (Adreno). Keeps tools and pictures.' },
   { id: INFERENCE_BACKENDS.VULKAN, label: 'Vulkan', desc: 'Force the Vulkan GPU (also Mali and other GPUs). Text chat only: no tools and no picture input, because llama.kt has neither. Use OpenCL (Adreno) or Automatic for those.' },
   { id: INFERENCE_BACKENDS.CPU, label: 'CPU only', desc: 'Run without hardware acceleration. Always works, can be considerably slower.' },
 ];
+
+/** What the currently loaded model actually got, never the requested number. */
+function describeLoadedOffload(): string {
+  if (!isLocalModelLoaded()) return 'Load a model to see how many layers run on the accelerator.';
+  const info = localGpuInfo();
+  if (!info.gpu) return 'Loaded model is running on the CPU (no accelerator layers).';
+  return `Loaded model: ${describeOffload(info.gpuLayers, info.totalLayers ?? -1)} on ${info.gpuBackend || 'the accelerator'}.`;
+}
 
 export const BackendSelector: React.FC = () => {
   const styles = useThemedStyles(createTextGenAdvancedStyles);
@@ -130,11 +140,23 @@ export const BackendSelector: React.FC = () => {
           <SliderSetting
             testID="gpu-layers-stepper"
             label={layersLabel}
-            description="Layers offloaded to GPU. Higher = faster but may crash on low-VRAM devices. Requires model reload."
+            description="Layers offloaded to the GPU/NPU. Higher is faster but uses more memory. Maximum safe offloads every layer this device's RAM allows. Requires model reload."
             value={gpuLayersEffective}
             min={1} max={GPU_LAYERS_MAX} step={1}
             onChange={(value) => updateSettings({ gpuLayers: value })}
           />
+          <View style={styles.buttons}>
+            <TouchableOpacity
+              testID="gpu-layers-max-button"
+              style={[styles.button, gpuLayersEffective >= GPU_LAYERS_MAX && styles.buttonActive]}
+              onPress={() => updateSettings({ gpuLayers: GPU_LAYERS_MAX })}
+            >
+              <Text style={[styles.buttonText, gpuLayersEffective >= GPU_LAYERS_MAX && styles.buttonTextActive]}>
+                Maximum safe
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.desc} testID="gpu-layers-actual">{describeLoadedOffload()}</Text>
         </View>
       )}
     </SegmentedRow>
@@ -258,22 +280,80 @@ export const ShowGenerationDetailsToggle: React.FC = () => {
   );
 };
 
+// ─── Warm-up after load ───────────────────────────────────────────────────────
+
+export const WarmUpToggle: React.FC = () => {
+  const { settings, updateSettings } = useAppStore();
+  return (
+    <SegmentedRow<'off' | 'on'>
+      label="Warm up after loading"
+      description="After a model loads, run one tiny silent reply so a GPU does its one-time setup now instead of during your first question. Only used when the GPU is on. If you send a message while it runs (it can take a while the first time), wait a moment and send again."
+      options={BOOL_OPTIONS}
+      current={settings.warmUpAfterLoad ? 'on' : 'off'}
+      onSelect={(id) => updateSettings({ warmUpAfterLoad: id === 'on' })}
+      testIdFor={(id) => `warm-up-${id}-button`}
+    />
+  );
+};
+
+// ─── Trim tools ───────────────────────────────────────────────────────────────
+
+export const TrimToolsToggle: React.FC = () => {
+  const { settings, updateSettings } = useAppStore();
+  return (
+    <SegmentedRow<'off' | 'on'>
+      label="Send only the tools a message needs"
+      description="The model reads every tool's description before it answers, which slows the first reply. With this on, only the tools your message could use (and ones already used in the chat) are sent. Turn it off to send every tool you have switched on, every time."
+      options={BOOL_OPTIONS}
+      current={settings.trimTools === false ? 'off' : 'on'}
+      onSelect={(id) => updateSettings({ trimTools: id === 'on' })}
+      testIdFor={(id) => `trim-tools-${id}-button`}
+    />
+  );
+};
+
+// ─── MTP (multi-token prediction) ─────────────────────────────────────────────
+
+export const MtpToggle: React.FC = () => {
+  const { settings, updateSettings } = useAppStore();
+  return (
+    <SegmentedRow<'off' | 'on'>
+      label="Use MTP files"
+      description="A model with an MTP file attached (My models, Add MTP file) drafts a few words ahead with it and the main model checks them, so replies can come faster. If the engine cannot start with the file, the model loads without it. Requires model reload."
+      options={BOOL_OPTIONS}
+      current={settings.useMtp === false ? 'off' : 'on'}
+      onSelect={(id) => updateSettings({ useMtp: id === 'on' })}
+      testIdFor={(id) => `use-mtp-${id}-button`}
+    />
+  );
+};
+
 // ─── CPU Threads & Batch Size ────────────────────────────────────────────────
 
 export const CpuThreadsSlider: React.FC = () => {
   const styles = useThemedStyles(createTextGenAdvancedStyles);
-  const { updateSettings } = useAppStore();
-  const { cpuThreadsSliderValue } = useTextGenerationAdvanced();
+  const { settings, updateSettings } = useAppStore();
+  const { cpuThreadsSliderValue, cpuThreadsDisplayValue, cpuCores } = useTextGenerationAdvanced();
+  const auto = settings?.nThreads === 0;
   return (
     <View style={styles.container}>
       <SliderSetting
         testID="cpu-threads-stepper"
         label="CPU Threads"
-        description="Parallel threads for inference"
+        description={`Parallel threads for inference: ${cpuThreadsDisplayValue}. More than the ${cpuCores} cores this device has only slows it down.`}
         value={cpuThreadsSliderValue}
-        min={1} max={12} step={1}
+        min={1} max={Math.max(1, cpuCores)} step={1}
         onChange={(v) => updateSettings({ nThreads: v })}
       />
+      <View style={styles.buttons}>
+        <TouchableOpacity
+          testID="cpu-threads-auto-button"
+          style={[styles.button, auto && styles.buttonActive]}
+          onPress={() => updateSettings({ nThreads: 0 })}
+        >
+          <Text style={[styles.buttonText, auto && styles.buttonTextActive]}>Auto</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };

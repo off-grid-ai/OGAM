@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Alert, NativeEventEmitter, NativeModules, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import RNFS from 'react-native-fs';
 import { extractImageModelZip } from '../../utils/imageZipExtractor';
@@ -9,7 +9,6 @@ import { useFocusTrigger } from '../../hooks/useFocusTrigger';
 import { useAppStore } from '../../stores';
 import { useDownloadStore, isActiveStatus, isFailedStatus } from '../../stores/downloadStore';
 import { modelManager } from '../../services';
-import { activeModelService } from '../../services/activeModelService';
 import { isLiteRTAvailable } from '../../services/engines';
 import { resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
 import { ensureImageExtractionComplete, resolveImageModelDir, validateImageModelDir } from '../../utils/imageModelIntegrity';
@@ -51,116 +50,71 @@ async function findAndroidImageModel(root: string): Promise<{ dir?: string; back
   return { problem: 'No image model found in this zip. It needs a complete MNN package (unet.mnn) or QNN package (unet.bin). If you downloaded it, the download may not have finished.' };
 }
 
-/** Atlas: Stable Diffusion 1.5 .safetensors checkpoint -> CPU/GPU image model, converted on the phone. */
-async function importSafetensors(sourceUri: string, fileName: string, deps: ZipImportDeps): Promise<void> {
-  const { addDownloadedImageModel, activeImageModelId, setActiveImageModelId, setImportProgress, setAlertState } = deps;
-  const Native: any = NativeModules.LocalDreamModule;
-  if (Platform.OS !== 'android' || !Native?.convertCheckpoint) {
-    setAlertState(showAlert('Not supported', 'Converting .safetensors models needs the Android app.'));
-    return;
-  }
-  const clipSkip2 = await new Promise<boolean | null>((resolve) => Alert.alert(
-    'Convert this model?',
-    `"${fileName}" will be turned into an image model on this phone. It must be a Stable Diffusion 1.5 model (like DreamShaper 8). This takes a few minutes and needs about twice the file's size free. Keep Atlas open.\n\nStyle setting ("clip skip"): use Normal unless the model's page says clip skip 2 (common for anime models).`,
-    [
-      { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
-      { text: 'Clip skip 2', onPress: () => resolve(true) },
-      { text: 'Normal', onPress: () => resolve(false) },
-    ],
-    { cancelable: true, onDismiss: () => resolve(null) },
-  ));
-  if (clipSkip2 === null) return;
-  try { await activeModelService.unloadImageModel(true); } catch { /* not loaded */ }
-  const name = fileName.replace(/\.safetensors$/i, '').replace(/[_-]+/g, ' ').trim();
-  const modelId = `local_${fileName.replace(/\.safetensors$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}`;
-  const modelDir = `${modelManager.getImageModelsDirectory()}/${modelId}`;
-  const sub = new NativeEventEmitter(Native).addListener('LocalDreamConvert', (e: { stage: string; fraction: number }) => {
-    if (e.stage === 'copy') setImportProgress({ fraction: Math.max(0, e.fraction) * 0.3, fileName: `${name}: copying` });
-    else if (e.stage === 'convert') setImportProgress({ fraction: 0.5, fileName: `${name}: converting (a few minutes)` });
-  });
-  try {
-    setImportProgress({ fraction: 0, fileName: `${name}: copying` });
-    const r = await Native.convertCheckpoint({ uri: sourceUri, modelDir, clipSkip2 });
-    const integrity = await validateImageModelDir(r.modelDir, 'mnn');
-    if (!integrity.complete) {
-      await RNFS.unlink(r.modelDir).catch(() => {});
-      throw new Error(`Converted image model is incomplete: ${integrity.missing.join(', ')}`);
-    }
-    // Conversion is transactional: only a validated package receives _ready.
-    // If the app dies after this point but before AsyncStorage registration,
-    // startup reconciliation can recover it safely.
-    await RNFS.writeFile(`${r.modelDir}/_ready`, '', 'utf8');
-    const imageModel: ONNXImageModel = {
-      id: modelId, name, description: 'Converted on this phone (CPU/GPU)',
-      modelPath: r.modelDir, downloadedAt: new Date().toISOString(), size: r.size, backend: 'mnn',
-    };
-    await modelManager.addDownloadedImageModel(imageModel);
-    addDownloadedImageModel(imageModel);
-    if (!activeImageModelId) setActiveImageModelId(imageModel.id);
-    setImportProgress({ fraction: 1, fileName: name });
-    setAlertState(showAlert('Ready', `${name} is ready. It runs on the CPU/GPU (converted models can't use the NPU).`));
-  } finally {
-    sub.remove();
-  }
-}
-
 async function importImageModelZip(sourceUri: string, fileName: string, deps: ZipImportDeps): Promise<void> {
   const { addDownloadedImageModel, activeImageModelId, setActiveImageModelId, setImportProgress, setAlertState } = deps;
   const imageModelsDir = modelManager.getImageModelsDirectory();
   const modelId = `local_${fileName.replaceAll(/\.zip$/gi, '').replaceAll(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}`;
   const modelDir = `${imageModelsDir}/${modelId}`;
   const zipPath = `${imageModelsDir}/${modelId}.zip`;
-  if (!(await RNFS.exists(imageModelsDir))) await RNFS.mkdir(imageModelsDir);
-  setImportProgress({ fraction: 0.1, fileName });
-  if (Platform.OS === 'ios') await RNFS.moveFile(sourceUri, zipPath);
-  else await RNFS.copyFile(sourceUri, zipPath);
-  setImportProgress({ fraction: 0.5, fileName });
-  if (!(await RNFS.exists(modelDir))) await RNFS.mkdir(modelDir);
-  setImportProgress({ fraction: 0.6, fileName });
-  await extractImageModelZip(zipPath, modelDir);
-  setImportProgress({ fraction: 0.85, fileName });
-  const dirContents = await RNFS.readDir(modelDir);
-  const hasMLModelC = dirContents.some(f => f.name.endsWith('.mlmodelc'));
-  const hasNestedMLModelC = Platform.OS === 'ios' && !hasMLModelC && dirContents.some(f => f.isDirectory());
-  let resolvedModelDir = modelDir;
-  let backend: 'mnn' | 'qnn' | 'coreml' | undefined;
-  if (Platform.OS === 'android') {
-    // Atlas: find the model files even when the zip holds them inside a folder, and say what's missing.
-    const found = await findAndroidImageModel(modelDir);
-    if (!found.dir) {
-      await RNFS.unlink(zipPath).catch(() => { });
-      await RNFS.unlink(modelDir).catch(() => { });
-      setImportProgress(null);
-      setAlertState(showAlert('Not an image model', found.problem));
-      return;
+  try {
+    if (!(await RNFS.exists(imageModelsDir))) await RNFS.mkdir(imageModelsDir);
+    setImportProgress({ fraction: 0.1, fileName });
+    if (Platform.OS === 'ios') await RNFS.moveFile(sourceUri, zipPath);
+    else await RNFS.copyFile(sourceUri, zipPath);
+    setImportProgress({ fraction: 0.5, fileName });
+    if (!(await RNFS.exists(modelDir))) await RNFS.mkdir(modelDir);
+    setImportProgress({ fraction: 0.6, fileName });
+    await extractImageModelZip(zipPath, modelDir);
+    setImportProgress({ fraction: 0.85, fileName });
+    const dirContents = await RNFS.readDir(modelDir);
+    const hasMLModelC = dirContents.some(f => f.name.endsWith('.mlmodelc'));
+    const hasNestedMLModelC = Platform.OS === 'ios' && !hasMLModelC && dirContents.some(f => f.isDirectory());
+    let resolvedModelDir = modelDir;
+    let backend: 'mnn' | 'qnn' | 'coreml' | undefined;
+    if (Platform.OS === 'android') {
+      // Atlas: find the model files even when the zip holds them inside a folder, and say what's missing.
+      const found = await findAndroidImageModel(modelDir);
+      if (!found.dir) {
+        await RNFS.unlink(zipPath).catch(() => { });
+        await RNFS.unlink(modelDir).catch(() => { });
+        setImportProgress(null);
+        setAlertState(showAlert('Not an image model', found.problem));
+        return;
+      }
+      resolvedModelDir = found.dir;
+      backend = found.backend;
+    } else if (hasMLModelC || hasNestedMLModelC) {
+      backend = 'coreml';
+      resolvedModelDir = await resolveCoreMLModelDir(modelDir);
+    } else {
+      const hasMNN = dirContents.some(f => f.name.endsWith('.mnn'));
+      const hasQNN = dirContents.some(f => f.name.endsWith('.bin') || f.name.includes('qnn'));
+      if (hasMNN) backend = 'mnn';
+      else if (hasQNN) backend = 'qnn';
     }
-    resolvedModelDir = found.dir;
-    backend = found.backend;
-  } else if (hasMLModelC || hasNestedMLModelC) {
-    backend = 'coreml';
-    resolvedModelDir = await resolveCoreMLModelDir(modelDir);
-  } else {
-    const hasMNN = dirContents.some(f => f.name.endsWith('.mnn'));
-    const hasQNN = dirContents.some(f => f.name.endsWith('.bin') || f.name.includes('qnn'));
-    if (hasMNN) backend = 'mnn';
-    else if (hasQNN) backend = 'qnn';
+    if (backend === 'mnn' || backend === 'qnn') {
+      await ensureImageExtractionComplete({ backend, modelDir, zipPath, modelId });
+    }
+    await RNFS.unlink(zipPath).catch(() => { });
+    const totalSize = await getDirectorySize(resolvedModelDir);
+    setImportProgress({ fraction: 0.95, fileName });
+    const modelName = fileName.replaceAll(/\.zip$/gi, '').replaceAll(/[_-]/g, ' ');
+    const imageModel: ONNXImageModel = {
+      id: modelId, name: modelName, description: 'Locally imported image model',
+      modelPath: resolvedModelDir, downloadedAt: new Date().toISOString(), size: totalSize, backend,
+    };
+    await modelManager.addDownloadedImageModel(imageModel);
+    addDownloadedImageModel(imageModel);
+    if (!activeImageModelId) setActiveImageModelId(imageModel.id);
+    setImportProgress({ fraction: 1, fileName });
+    setAlertState(showAlert('Success', `${modelName} imported successfully!`));
+  } catch (error) {
+    // A failed copy, unzip or integrity check must not leave the zip and a half-extracted folder behind:
+    // they are not registered, so the person could never delete them from the app.
+    await RNFS.unlink(zipPath).catch(() => { });
+    await RNFS.unlink(modelDir).catch(() => { });
+    throw error;
   }
-  if (backend === 'mnn' || backend === 'qnn') {
-    await ensureImageExtractionComplete({ backend, modelDir, zipPath, modelId });
-  }
-  await RNFS.unlink(zipPath).catch(() => { });
-  const totalSize = await getDirectorySize(resolvedModelDir);
-  setImportProgress({ fraction: 0.95, fileName });
-  const modelName = fileName.replaceAll(/\.zip$/gi, '').replaceAll(/[_-]/g, ' ');
-  const imageModel: ONNXImageModel = {
-    id: modelId, name: modelName, description: 'Locally imported image model',
-    modelPath: resolvedModelDir, downloadedAt: new Date().toISOString(), size: totalSize, backend,
-  };
-  await modelManager.addDownloadedImageModel(imageModel);
-  addDownloadedImageModel(imageModel);
-  if (!activeImageModelId) setActiveImageModelId(imageModel.id);
-  setImportProgress({ fraction: 1, fileName });
-  setAlertState(showAlert('Success', `${modelName} imported successfully!`));
 }
 
 

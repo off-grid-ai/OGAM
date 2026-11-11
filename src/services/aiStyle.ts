@@ -7,12 +7,15 @@ export type AiLength = 'brief' | 'balanced' | 'detailed';
 export type AiTone = 'friendly' | 'neutral' | 'formal' | 'playful' | 'direct';
 export type AiLevel = 'simple' | 'normal' | 'expert';
 
+export type AiEmoji = 'never' | 'sometimes' | 'often';
+
 export interface AiStyle {
   length?: AiLength;
   tone?: AiTone;
   level?: AiLevel;
-  emoji?: boolean;
-  /** Ask a follow-up question at the end of answers. */
+  /** 'never' | 'sometimes' | 'often'; legacy boolean values (false/true) are still accepted. */
+  emoji?: AiEmoji | boolean;
+  /** Ask a follow-up question at the end of answers. Unset means only when the answer truly needs one. */
   followUps?: boolean;
   /** Free-text standing instructions ("Always use metric units"). */
   custom?: string;
@@ -49,17 +52,31 @@ const LEVEL_NOTE: Record<AiLevel, string> = {
   expert: 'The user is knowledgeable: use precise technical language and skip the basics.',
 };
 
-/** The prompt note for the user's AI style, or '' when nothing is set. */
+/**
+ * Models end nearly every answer with "Would you like me to...?" unless told not to, so the default (nothing chosen)
+ * is to ask only when the answer cannot be given without more information.
+ */
+/** Always on: models fill gaps with confident inventions unless told that "I am not sure" is an acceptable answer. */
+export const BE_HONEST = 'If you are not sure of a fact, say so. Never invent names, numbers, dates, quotes, links or sources.';
+export const NO_IDLE_QUESTIONS = 'Do not end your answer with a question or an offer ("Would you like me to...", "Let me know if..."). Ask a question only when you cannot do what was asked without one more piece of information.';
+function followUpNote(followUps: boolean | undefined): string {
+  if (followUps === true) return 'End with one short follow-up question when it would help.';
+  return followUps === false ? 'Never end with a follow-up question or an offer to do more.' : NO_IDLE_QUESTIONS;
+}
+
+/** The prompt note for the user's AI style (it always says not to end with idle questions unless the user turned them on). */
 export function aiStyleNote(style?: AiStyle): string {
-  if (!style) return '';
   const parts = [
-    style.length && style.length !== 'balanced' ? LENGTH_NOTE[style.length] : '',
-    style.tone && style.tone !== 'neutral' ? TONE_NOTE[style.tone] : '',
-    style.level ? LEVEL_NOTE[style.level] : '',
-    style.emoji === true ? 'An occasional emoji is fine.' : style.emoji === false ? 'Do not use emoji.' : '',
-    style.followUps === true ? 'End with one short follow-up question when it would help.' : style.followUps === false ? 'Do not end with follow-up questions.' : '',
+    style?.length && style.length !== 'balanced' ? LENGTH_NOTE[style.length] : '',
+    style?.tone && style.tone !== 'neutral' ? TONE_NOTE[style.tone] : '',
+    style?.level ? LEVEL_NOTE[style.level] : '',
+    style?.emoji === 'often' ? 'Feel free to use emoji to express yourself.' :
+    (style?.emoji === 'sometimes' || style?.emoji === true) ? 'An occasional emoji is fine.' :
+    (style?.emoji === 'never' || style?.emoji === false) ? 'Do not use emoji.' : '',
+    followUpNote(style?.followUps),
+    BE_HONEST,
   ].filter(Boolean);
-  const custom = style.custom?.trim();
+  const custom = style?.custom?.trim();
   if (!parts.length && !custom) return '';
   const rules = parts.length ? `\n${parts.join(' ')}` : '';
   const own = custom ? `\nThe user's standing instructions: ${custom.slice(0, 1200)}` : '';

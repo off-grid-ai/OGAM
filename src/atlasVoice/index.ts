@@ -4,12 +4,39 @@ import { useUiModeStore } from '../stores/uiModeStore';
 import { useChatStore } from '../stores/chatStore';
 import { prepareMessageForSpeech } from '../utils/messageContent';
 import { speak, stop, ttsAvailable, warmUp } from './tts';
-import { restoreVoice } from './neural';
+import { finishStreamSpeech, onStreamToken } from './streamSpeech';
+import { restoreVoice, restoreSavedVoice, loadVoiceForSpeech } from './neural';
+import { profileForConversation, profileForMessage, type VoiceProfile } from './profiles';
 import { useAtlasVoiceStore } from './store';
 import { AtlasAudioInput } from './AudioInput';
 import { AtlasModeToggle, AtlasSpeakButton } from './Buttons';
 import { AtlasVoicePanel } from './VoicePanel';
 import logger from '../utils/logger';
+
+/** Voice mode is a phone call: talk like a person on the phone, not like a document. */
+export const VOICE_CALL_STYLE = [
+  'PHONE CALL MODE. You are talking to the user on a phone call, and every word you write is read aloud.',
+  'Keep it super simple: short sentences, everyday words a ten-year-old knows, no jargon.',
+  'Answer in one or two sentences. Only say more if the user asks for details, and even then stay under five sentences.',
+  'Answer the question first, then stop. If there is more worth saying, ask "Want me to go on?" and wait.',
+  'Talk like a friendly person: contractions (it\'s, you\'re, don\'t), a short reaction now and then ("Got it."), and a short follow-up question when it helps.',
+  'Never use lists, markdown, headings, tables, code, links, symbols or emojis. Say numbers the way you would speak them.',
+  'If the user interrupts you, do not repeat what you already said; respond to what they just said.',
+].join(' ');
+
+/**
+ * Read a reply in the answering agent's own voice profile (if any), then put the saved
+ * voice back so emergency cards, study and other screens keep the user's choice.
+ */
+function speakAsAgent(text: string, messageId: string, profile: VoiceProfile | null): void {
+  if (!profile) {
+    restoreSavedVoice().catch(() => undefined).finally(() => speak(text, messageId));
+    return;
+  }
+  loadVoiceForSpeech(profile.voiceId, profile.sid).catch(() => undefined).finally(() => {
+    speak(text, messageId, profile.rate);
+  });
+}
 
 /**
  * Atlas voice: read-aloud, voice mode and hands-free "phone call" mode for the free
@@ -33,10 +60,22 @@ export function registerAtlasVoice(): void {
   const ps: any = (useAtlasVoiceStore as any).persist;
   if (ps?.hasHydrated?.()) restore(); else ps?.onFinishHydration?.(restore);
   registerHook(HOOKS.audioCanSpeak, () => true);
-  registerHook(HOOKS.audioSpeak, (text: string, messageId: string) => speak(prepareMessageForSpeech(text), messageId));
+  registerHook(HOOKS.audioSpeak, (text: string, messageId: string) => {
+    speakAsAgent(prepareMessageForSpeech(text), messageId, profileForMessage(messageId));
+  });
   registerHook(HOOKS.audioStop, () => stop());
+  // Call mode: speak the reply sentence by sentence while it is still being written.
+  registerHook(HOOKS.audioOnStreamingToken, (answerSoFar: string) => onStreamToken(answerSoFar));
   registerHook(HOOKS.audioOnStreamingEnd, (conversationId: string) => {
     const voiceMode = useUiModeStore.getState().interfaceMode === 'audio';
+    if (voiceMode) {
+      const whole = () => {
+        const conv = (useChatStore.getState() as any).conversations?.find((c: any) => c.id === conversationId);
+        const last = conv?.messages?.[conv.messages.length - 1];
+        if (last?.role === 'assistant' && last.content?.trim()) speakAsAgent(prepareMessageForSpeech(last.content), last.id, profileForConversation(conversationId));
+      };
+      if (finishStreamSpeech(conversationId, whole)) return;
+    }
     if (!voiceMode && !useAtlasVoiceStore.getState().autoSpeakInChat) return;
     const conv = (useChatStore.getState() as any).conversations?.find((c: any) => c.id === conversationId);
     const last = conv?.messages?.[conv.messages.length - 1];
@@ -45,11 +84,11 @@ export function registerAtlasVoice(): void {
       if (voiceMode && useAtlasVoiceStore.getState().handsFree) setTimeout(() => useAtlasVoiceStore.getState().markDone(), 300);
       return;
     }
-    speak(prepareMessageForSpeech(last.content), last.id);
+    speakAsAgent(prepareMessageForSpeech(last.content), last.id, profileForConversation(conversationId));
   });
   registerHook(HOOKS.audioAugmentPrompt, (base: string) =>
     useUiModeStore.getState().interfaceMode === 'audio'
-      ? `${base}\n\nThe user is talking to you by voice and your reply will be read aloud. Answer in short, plain spoken sentences. No markdown, tables, lists of symbols or emojis. Put the most important thing first.`
+      ? `${base}\n\n${VOICE_CALL_STYLE}`
       : base,
   );
   registerSlot(SLOTS.chatInputAudioMode, AtlasAudioInput);

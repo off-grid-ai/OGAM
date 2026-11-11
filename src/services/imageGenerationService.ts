@@ -9,7 +9,6 @@ import { GeneratedImage } from '../types';
 import logger from '../utils/logger';
 import { holdScreenAwake, releaseScreenAwake } from '../atlasTools/runtimePower';
 import { maybeScheduleSharePrompt } from '../utils/sharePrompt';
-import { checkProPromptForImage } from './proPrompt';
 
 import { getImageTuning, getImageGuidance } from '../utils/nativeImageTuning';
 import { hardwareService } from './hardware';
@@ -19,6 +18,7 @@ import { buildEnhancementMessages, getConversationContext, cleanEnhancedPrompt, 
 import { reportModelFailure } from './modelFailureHandler';
 import { reasonFromLoadError } from './modelFailureReasons';
 import { isOverridableMemoryError } from './modelLoadErrors';
+import { applyImageStyle } from './imageStyles';
 import {
   isInFlight,
   ImageGenerationState,
@@ -37,6 +37,12 @@ export { isInFlight } from './imageGenerationTypes';
 export type { ImageGenPhase, ImageGenerationState } from './imageGenerationTypes';
 
 const SHARE_PROMPT_DELAY_MS = 2000;
+
+/** The prompt and negative prompt with the chosen image style added. */
+const styled = (prompt: string, negative?: string) => {
+  const s = applyImageStyle(prompt, negative || '', useAppStore.getState().settings.imageStyle);
+  return { prompt: s.prompt, negativePrompt: s.negative };
+};
 
 // ---------------------------------------------------------------------------
 // Service class
@@ -159,7 +165,6 @@ class ImageGenerationService {
     const s = useAppStore.getState();
     const count = s.incrementImageGenerationCount();
     maybeScheduleSharePrompt({ variant: 'image', count, hasEngaged: s.hasEngagedSharePrompt, delayMs: SHARE_PROMPT_DELAY_MS });
-    checkProPromptForImage(SHARE_PROMPT_DELAY_MS);
   }
 
   private async _resetLlmAfterEnhancement(): Promise<void> {
@@ -200,8 +205,12 @@ class ImageGenerationService {
     logger.log('[ImageGen] 🎨 Starting prompt enhancement - Model loaded:', loaded);
     if (loaded) return true;
 
-    const { activeModelId, lastTextModelId } = useAppStore.getState();
-    const textModelId = activeModelId ?? lastTextModelId;
+    // The chosen text model, or the last one used; failing that, the smallest downloaded one
+    // (a prompt rewrite does not need a big model), so enhancement does not quietly stop.
+    const { activeModelId, lastTextModelId, downloadedModels, settings: appSettings } = useAppStore.getState();
+    // Never the small intent-classifier model: loading it for this would make it the chat model.
+    const smallest = downloadedModels.filter(m => m.id !== appSettings.classifierModelId).sort((x, y) => (x.fileSize || 0) - (y.fileSize || 0))[0]?.id;
+    const textModelId = activeModelId ?? lastTextModelId ?? smallest;
     if (!textModelId) {
       logger.warn('[ImageGen] No text model available, skipping enhancement');
       this._noticeEnhancementSkipped('no text model is selected');
@@ -299,7 +308,7 @@ class ImageGenerationService {
     return this._streamEnhancedPrompt(params, requestEpoch);
   }
 
-  private async _ensureImageModelLoaded(activeImageModelId: string | null, activeImageModel: ActiveImageModel, opts: { desiredThreads: number; override?: boolean }): Promise<boolean> {
+  private async _ensureImageModelLoaded(activeImageModelId: string | null, activeImageModel: ActiveImageModel, opts: { desiredThreads: number; override?: boolean; requestEpoch?: number }): Promise<boolean> {
     const isImageModelLoaded = await onnxImageGeneratorService.isModelLoaded();
     const loadedPath = await onnxImageGeneratorService.getLoadedModelPath();
     const loadedThreads = onnxImageGeneratorService.getLoadedThreads();
@@ -316,6 +325,8 @@ class ImageGenerationService {
     } catch (error: any) {
       // Pass the TYPED error as `cause` — an OverridableMemoryError here is what lets
       // the failure card offer "Load Anyway". Stringifying it (as before) hid it.
+      // A request cancelled while its model was loading must not fail a newer request.
+      if (opts.requestEpoch !== undefined && !this._isRequestCurrent(opts.requestEpoch)) return false;
       this._fail(`Failed to load image model: ${error?.message || 'Unknown error'}`, { cause: error });
       return false;
     }
@@ -421,7 +432,7 @@ class ImageGenerationService {
     const handlers = this._imageProgressHandlers({ steps, isFirstRun, warmupStatus, requestEpoch });
     try {
       const result = await onnxImageGeneratorService.generateImage(
-        { prompt: enhancedPrompt, negativePrompt: params.negativePrompt || '', steps, guidanceScale, seed: params.seed, width: imageWidth, height: imageHeight, previewInterval: params.previewInterval ?? 2, useOpenCL,
+        { ...styled(enhancedPrompt, params.negativePrompt), steps, guidanceScale, seed: params.seed, width: imageWidth, height: imageHeight, previewInterval: params.previewInterval ?? 2, useOpenCL,
           ...(computeBackend ? { computeBackend } : {}),
           threads: useAppStore.getState().settings.imageThreads ?? 4 },
         handlers.onProgress,
@@ -440,7 +451,8 @@ class ImageGenerationService {
         const label = (b?: string) => b === 'opencl' ? 'OpenCL' : b === 'cpu' ? 'CPU' : 'Vulkan';
         const why = `${label(computeBackend)} failed (${message.slice(0, 160)})`;
         logger.warn(`[ImageGen] ${why}; trying ${label(next.computeBackend)}`);
-        this.updateState({ status: `${why}. Trying ${label(next.computeBackend)}...` });
+        // The failed attempt's picture is gone (the next run clears it), so do not keep showing it.
+        this.updateState({ status: `${why}. Trying ${label(next.computeBackend)}...`, previewPath: null, progress: { step: 0, totalSteps: steps } });
         return this._runGenerationAndSave({
           ...opts, useOpenCL: next.useOpenCL, computeBackend: next.computeBackend,
           fallbacks: later, fallbackNotes: [...(opts.fallbackNotes ?? []), why],
@@ -509,15 +521,15 @@ class ImageGenerationService {
     let imageBackend;
     try {
       imageBackend = await selectImageAccelerator(
-        activeImageModel.backend || 'mnn', imageComputeMode(settings), {
+        activeImageModel.backend || 'mnn', { mode: imageComputeMode(settings), allowCpuFallback: settings.imageAllowCpuFallback === true }, {
           vulkan: () => onnxImageGeneratorService.getNativeImageGpuDiagnostics(),
           sdOpencl: () => onnxImageGeneratorService.getNativeImageGpuDiagnostics('opencl'),
           opencl: () => hardwareService.getOpenCLCapability(),
           npu: async () => (await hardwareService.getSoCInfo()).hasNPU,
         },
-        settings.imageAllowCpuFallback === true,
       );
     } catch (error: any) {
+      if (!this._isRequestCurrent(requestEpoch)) return null;
       return this._fail('Image accelerator unavailable: ' + (error?.message || String(error)));
     }
     if (!this._isRequestCurrent(requestEpoch)) return null;
@@ -531,7 +543,7 @@ class ImageGenerationService {
     // Never silently start a potentially hours-long CPU image job without opting in.
     const allowedFallbacks = allowSlowCpu ? imageBackend.fallbacks : imageBackend.fallbacks?.filter(option => option.selected !== 'cpu');
     this.updateState({ status: 'Selected ' + imageBackend.selected.toUpperCase() + ': ' + imageBackend.note });
-    const loaded = await this._ensureImageModelLoaded(activeImageModelId, activeImageModel, { desiredThreads: settings.imageThreads ?? 4, override: opts?.override });
+    const loaded = await this._ensureImageModelLoaded(activeImageModelId, activeImageModel, { desiredThreads: settings.imageThreads ?? 4, override: opts?.override, requestEpoch });
     if (!loaded) return null;
     if (requestEpoch !== this.requestEpoch) return null;
     if (this.cancelRequested) { this.resetState(); return null; }
@@ -554,6 +566,11 @@ class ImageGenerationService {
       try { await stopStandaloneGeneration(); } catch { /* best-effort */ }
     }
     try { await onnxImageGeneratorService.cancelGeneration(); } catch { /* Ignore */ }
+    // The engine takes a moment to wind down. A request sent straight after a cancel would otherwise hit
+    // "Image generation already in progress" and show a failure for a request that was fine.
+    for (let waited = 0; waited < 4000 && await onnxImageGeneratorService.isGenerating(); waited += 100) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
     this.resetState();
   }
 

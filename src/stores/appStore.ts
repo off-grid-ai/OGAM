@@ -48,6 +48,8 @@ type OnboardingChecklist = {
 
 type AppSettings = {
   systemPrompt: string; temperature: number; maxTokens: number;
+  /** Auto sizes the reply to the memory window; manual uses maxTokens. Unset counts as auto. */
+  maxTokensMode?: 'auto' | 'manual';
   topP: number; repeatPenalty: number; contextLength: number;
   /** Auto chooses a RAM-safe window; manual uses contextLength subject to memory checks. */
   contextMode?: 'auto' | 'manual';
@@ -61,6 +63,8 @@ type AppSettings = {
   /** CPU fallback is much slower; require explicit user opt-in. */
   imageAllowCpuFallback?: boolean;
   enhanceImagePrompts: boolean;
+  /** The look every picture gets (services/imageStyles.ts); 'none' adds nothing. */
+  imageStyle?: string;
   enableGpu: boolean; gpuLayers: number; flashAttn: boolean;
   /** Aggressive model loading: commit more RAM + a smaller reserve so large models
    *  load (with a "Load Anyway" override when the budget still blocks). Off by
@@ -72,7 +76,7 @@ type AppSettings = {
    *  'conservative' = one model at a time; 'balanced' = co-reside within budget;
    *  'aggressive' = co-reside with a larger RAM commitment. */
   modelLoadingMode?: 'conservative' | 'balanced' | 'aggressive';
-  cacheType: CacheType; showGenerationDetails: boolean; enabledTools: string[];
+  cacheType: CacheType; showGenerationDetails: boolean; enabledTools: string[]; studyToolsAdded?: boolean;
   thinkingEnabled: boolean;
   /** Atlas: how much to think when thinking is on. */
   thinkingLevel?: 'low' | 'medium' | 'high';
@@ -84,14 +88,34 @@ type AppSettings = {
    *  auto-selected). */
   /** Atlas: the user picked the backend themselves (auto GPU never overrides it). */
   backendUserChosen?: boolean;
+  /** Run one tiny silent reply after a model loads so a GPU backend does its one-time setup early (off by default). */
+  warmUpAfterLoad?: boolean;
+  /** Use a model's attached MTP file to draft tokens (on unless set to false). */
+  useMtp?: boolean;
+  /** CPU only: false turns off llama.cpp's ARM-optimized repacked weight kernels (a diagnostic for a model that writes noise on the CPU). Default on. */
+  cpuRepack?: boolean;
+  /** Send only the tools a message could need (on unless set to false): a faster first reply. */
+  trimTools?: boolean;
+  /** Tell the AI roughly where the user is (city and country, from the last GPS reading). On unless set to false. */
+  shareLocation?: boolean;
   /** Set once the one-time move of automatic installs to the Auto backend has run. */
   autoBackendMigrated?: boolean;
   /** What agents call the user (fills {{name}} in agent prompts). */
   userName?: string;
+  /** Home screen tiles the person hid or reordered. */
+  homeTiles?: { order?: string[]; hidden?: string[] };
+  /** Look for a newer Atlas release when the app opens. Unset counts as on. */
+  checkUpdates?: boolean;
+  /** Show "Used: Taxes lessons" under a reply that was written with learned lessons. Unset counts as on. */
+  showLessonsUsed?: boolean;
+  /** Read a message that is longer than the model's memory in parts, and answer from notes. Unset counts as on. */
+  readLongInParts?: boolean;
+  /** Turn documents (HTML, Word, PowerPoint, Excel, EPUB, CSV, PDF text) into Markdown for the AI. Unset counts as on. */
+  convertToMarkdown?: boolean;
   /** Theme, accent color, font and text size (see theme/appearance). */
   appearance?: import('../theme/appearance').Appearance;
   /** Which destinations the bottom bar shows, their order and whether it has labels. */
-  navBar?: import('../navigation/navBar').NavBarSetting;
+  navBar?: import('../utils/navBar').NavBarSetting;
   /** Turns off the small vibrations on taps. */
   hapticsOff?: boolean;
   /** How every AI answers, whichever agent or project is active (see services/aiStyle). */
@@ -193,44 +217,27 @@ interface AppState {
   incrementImageGenerationCount: () => number;
   hasEngagedSharePrompt: boolean;
   setHasEngagedSharePrompt: (v: boolean) => void;
-  // PRO pre-order state
-  hasRegisteredPro: boolean;
-  setHasRegisteredPro: (v: boolean) => void;
-  /**
-   * Authoritative "Pro is unlocked right now" — the same signal loadProFeatures uses
-   * to activate paid features (keychain entitlement OR a __DEV__ unlock), set at boot.
-   * This is the ONE flag every upsell gate must read: hasRegisteredPro alone misses a
-   * keychain/dev-unlocked Pro user, so the upsell wrongly fired for them. Not persisted
-   * — recomputed authoritatively each launch.
-   */
-  isProActive: boolean;
-  setProActive: (v: boolean) => void;
-  /** DEV-only: when true, suppresses the __DEV__ Pro auto-unlock so the
-   *  free → Pro activation flow can be exercised in a debug build. No effect in
-   *  release (__DEV__ is false there). */
-  devProDisabled: boolean;
-  setDevProDisabled: (v: boolean) => void;
-  proBannerDismissed: boolean;
-  setProBannerDismissed: (v: boolean) => void;
   desktopPromoDismissed: boolean;
   setDesktopPromoDismissed: (v: boolean) => void;
-  proAhaTriggeredBy: 'image' | 'text' | null;
-  setProAhaTriggeredBy: (by: 'image' | 'text' | null) => void;
   toolCountHintDismissed: boolean;
   setToolCountHintDismissed: () => void;
   loadedSettings: Partial<AppSettings> | null;
   setLoadedSettings: (settings: Partial<AppSettings> | null) => void;
 }
 
+/** Tools that help teach: exact maths, science look-ups, planner/rubric/references, and pictures. They are only sent to the model when the message needs them. */
+export const STUDY_TOOL_IDS = ['study_math', 'science_data', 'study_helpers', 'find_image'];
+
 const DEFAULT_CHECKLIST: OnboardingChecklist = {
   downloadedModel: false, loadedModel: false, sentMessage: false,
   triedImageGen: false, exploredSettings: false, createdProject: false,
 };
 
-const DEFAULT_SETTINGS: AppSettings = {
+export const DEFAULT_SETTINGS: AppSettings = {
   systemPrompt: 'You are a helpful AI assistant running locally on the user\'s device. Be concise and helpful.',
   temperature: 0.7,
   maxTokens: 1024,
+  maxTokensMode: 'auto',
   topP: 0.9,
   repeatPenalty: 1.1,
   contextLength: 4096,
@@ -259,7 +266,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   modelLoadingMode: 'balanced',
   cacheType: 'q8_0' as CacheType,
   showGenerationDetails: false,
-  enabledTools: ['web_search', 'read_url', 'search_knowledge_base'],
+  enabledTools: ['web_search', 'read_url', 'search_knowledge_base', ...STUDY_TOOL_IDS],
   thinkingEnabled: false,
   liteRTBackend: 'gpu',
   liteRTTemperature: 0.7,
@@ -268,6 +275,11 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 function migrateEnabledTools(merged: any): void {
+  // Once: older installs get the study tools too, so no subject needs choosing for the tutor to calculate and look things up exactly.
+  if (merged.settings?.enabledTools && !merged.settings.studyToolsAdded) {
+    const have: string[] = merged.settings.enabledTools;
+    merged.settings = { ...merged.settings, enabledTools: [...have, ...STUDY_TOOL_IDS.filter((t) => !have.includes(t))], studyToolsAdded: true };
+  }
   if (merged.settings?.enabledTools && !merged.settings.enabledTools.includes('search_knowledge_base')) {
     merged.settings = { ...merged.settings, enabledTools: [...merged.settings.enabledTools, 'search_knowledge_base'] };
   }
@@ -407,9 +419,17 @@ export const useAppStore = create<AppState>()(
       settings: { ...DEFAULT_SETTINGS },
       updateSettings: (newSettings) =>
         set((state) => ({
-          settings: { ...state.settings, ...newSettings },
+          // Choosing a reply length by hand turns the automatic length off.
+          settings: { ...state.settings, ...(newSettings.maxTokens !== undefined && newSettings.maxTokensMode === undefined ? { maxTokensMode: 'manual' as const } : {}), ...newSettings },
         })),
-      resetSettings: () => set({ settings: { ...DEFAULT_SETTINGS } }),
+      // Back to the defaults for every model setting. Personal choices that have no default (accent and
+      // font, bottom bar, name, tone, haptics) are not model settings and stay.
+      resetSettings: () => set((state) => ({
+        settings: {
+          ...Object.fromEntries(Object.entries(state.settings).filter(([key]) => !(key in DEFAULT_SETTINGS))),
+          ...DEFAULT_SETTINGS,
+        },
+      })),
       // Image models (ONNX-based)
       downloadedImageModels: [],
       activeImageModelId: null,
@@ -483,18 +503,8 @@ export const useAppStore = create<AppState>()(
       incrementImageGenerationCount: () => { const c = get().imageGenerationCount + 1; set({ imageGenerationCount: c }); return c; },
       hasEngagedSharePrompt: false,
       setHasEngagedSharePrompt: (v) => set({ hasEngagedSharePrompt: v }),
-      hasRegisteredPro: false,
-      setHasRegisteredPro: (v) => set({ hasRegisteredPro: v }),
-      isProActive: false,
-      setProActive: (v) => set({ isProActive: v }),
-      devProDisabled: false,
-      setDevProDisabled: (v) => set({ devProDisabled: v }),
-      proBannerDismissed: false,
-      setProBannerDismissed: (v) => set({ proBannerDismissed: v }),
       desktopPromoDismissed: false,
       setDesktopPromoDismissed: (v) => set({ desktopPromoDismissed: v }),
-      proAhaTriggeredBy: null,
-      setProAhaTriggeredBy: (by) => set({ proAhaTriggeredBy: by }),
       toolCountHintDismissed: false,
       setToolCountHintDismissed: () => set({ toolCountHintDismissed: true }),
       loadedSettings: null,
@@ -521,11 +531,7 @@ export const useAppStore = create<AppState>()(
         warmedImageModels: state.warmedImageModels,
         textGenerationCount: state.textGenerationCount, imageGenerationCount: state.imageGenerationCount,
         hasEngagedSharePrompt: state.hasEngagedSharePrompt,
-        hasRegisteredPro: state.hasRegisteredPro,
-        devProDisabled: state.devProDisabled,
-        proBannerDismissed: state.proBannerDismissed,
         desktopPromoDismissed: state.desktopPromoDismissed,
-        proAhaTriggeredBy: state.proAhaTriggeredBy,
         loadedSettings: state.loadedSettings,
       }),
     }

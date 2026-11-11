@@ -1889,4 +1889,15 @@ describe('ChatInput', () => {
       expect(getByTestId('stop-button')).toBeTruthy();
     });
   });
+
+  describe('ask about this', () => {
+    it('puts a quoted reply in front of what is typed', () => {
+      const { useQuoteDraft } = require('../../../src/utils/quoteDraft');
+      const { getByTestId } = render(<ChatInput {...defaultProps} />);
+      fireEvent.changeText(getByTestId('chat-input'), 'Why?');
+      act(() => { useQuoteDraft.getState().set('> The rate is 5%.\n\n'); });
+      expect(getByTestId('chat-input').props.value).toBe('Why?\n\n> The rate is 5%.\n\n');
+      expect(useQuoteDraft.getState().text).toBe('');
+    });
+  });
 });

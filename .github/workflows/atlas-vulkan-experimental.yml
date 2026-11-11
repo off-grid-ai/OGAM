@@ -96,10 +96,10 @@ jobs:
           name: atlas-vulkan-experimental-apk
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 2
       - uses: actions/upload-artifact@v7
         if: success()
         with:
           name: atlas-llamakt-vulkan-native-aar
           path: android/atlasLlamaKt/build/outputs/aar/atlasLlamaKt-release.aar
-          retention-days: 14
+          retention-days: 2

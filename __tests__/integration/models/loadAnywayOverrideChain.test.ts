@@ -37,6 +37,7 @@ import { modelResidencyManager } from '../../../src/services/modelResidency';
 import { llmService } from '../../../src/services/llm';
 import { hardwareService } from '../../../src/services/hardware';
 import { loadModelWithOverride } from '../../../src/services/loadModelWithOverride';
+import { useForceLoad } from '../../../src/services/forceLoad';
 import type { AlertState } from '../../../src/components/CustomAlert';
 import {
   resetStores,
@@ -179,6 +180,7 @@ describe('Load Anyway override chain (UI helper → service → residency)', () 
     expect(prompt?.title).toBe('Insufficient Memory');
     expect(prompt?.buttons?.map(b => b.text)).toEqual([
       'Cancel',
+      'Free memory and load',
       'Load Anyway',
     ]);
     // A refusal is NOT a load and NOT an eviction — the victim must survive so the
@@ -186,6 +188,21 @@ describe('Load Anyway override chain (UI helper → service → residency)', () 
     expect(mockLlmService.loadModel).not.toHaveBeenCalled();
     expect(modelResidencyManager.isResident('whisper')).toBe(true);
     expect(getAppState().activeModelId).not.toBe('big-gguf');
+  });
+
+  it('with Force load switched on, the same blocked load goes straight through (no prompt), frees the other model, and the switch turns itself off', async () => {
+    const victimUnload = registerCleanVictim();
+    useAppStore.setState({ downloadedModels: [bigGguf()] });
+    useForceLoad.getState().set(true);
+
+    const ui = driveLoad('big-gguf');
+    mockLlmService.isModelLoaded.mockReturnValue(true);
+    await ui.start();
+
+    expect(ui.alerts.map(a => a.title)).not.toContain('Insufficient Memory');
+    expect(victimUnload).toHaveBeenCalledTimes(1);
+    expect(getAppState().activeModelId).toBe('big-gguf');
+    expect(useForceLoad.getState().armed).toBe(false);
   });
 
   it('tapping Load Anyway evicts the clean resident and unconditionally loads the model, even with pre-eviction free RAM very low', async () => {

@@ -32,6 +32,7 @@ import { loadModelWithOverride } from '../services/loadModelWithOverride';
 import { Conversation } from '../types';
 import { buildChatListRows, type ChatListRow } from './chatListGrouping';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
+import { DuplicateChatsBanner } from '../chats/DuplicateChatsBanner';
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'ChatsTab'>,
   NativeStackNavigationProp<RootStackParamList>
@@ -336,6 +337,7 @@ export const ChatsListScreen: React.FC = () => {
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={Platform.OS !== 'android'}
           testID="conversation-list"
+          ListHeaderComponent={<DuplicateChatsBanner />}
         />
       )}
       <Modal visible={vaultPrompt} transparent animationType="fade" onRequestClose={() => setVaultPrompt(false)}>

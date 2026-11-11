@@ -26,7 +26,6 @@
 - Existing failing suites include image generation flow and metadata, model picker/UI snapshots/text, image downloads, model RAM residency, GPU backend indicators, hardware probes, tool error handling, and some stale UI expectations. **Do not infer all were resolved by the targeted fixes.**
 - Native image source-contract script: **13/13 static checks passed**. This is not equivalent to a compiled or installed APK.
 - Dependency-cruiser: **51 architecture violations** across 692 modules and 3,063 dependencies, including circular imports and UI-to-concrete-engine dependencies. Existing push-hook threshold is 33; this branch currently exceeds it.
-- Knip dead-code scan reports **35 unresolved imports** (primarily references to absent private Pro modules), one unused file, and unused/unlisted dependency findings. These require baseline review rather than indiscriminate deletion.
 - Native APK CI build dispatched for this fix commit: https://github.com/coolchan03/Atlas/actions/runs/38656151364 (still unverified at time of audit).
 - Native Android compile, APK smoke testing, app migration on devices, live Vulkan/OpenCL/NPU/QNN and long-running image generation: **NOT TESTED** in this audit. No Android SDK installed.
 

@@ -10,3 +10,10 @@
 # Add any project specific keep options here:
 # Vulkan llama.kt engine is loaded reflectively by the Android bridge.
 -keep class com.tensai.llamakt.** { *; }
+
+# commons-compress (voice import): optional codecs (xz, zstd, brotli, asm) are not bundled.
+-dontwarn org.apache.commons.compress.**
+-dontwarn org.tukaani.xz.**
+-dontwarn com.github.luben.zstd.**
+-dontwarn org.brotli.dec.**
+-dontwarn org.objectweb.asm.**

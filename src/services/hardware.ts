@@ -25,6 +25,16 @@ import { HTP_ENABLED } from '../config/featureFlags';
  */
 const FLAGSHIP_8GEN2 = new Set([8550, 8650, 8735, 8750, 8845, 8850]);
 const FLAGSHIP_8GEN1 = new Set([8450, 8475]);
+/** ARM part ids of the small power-saving cores: Cortex-A53, A35, A55, A510 and A520. */
+const LITTLE_CORE_PARTS = new Set(['0xd03', '0xd04', '0xd05', '0xd46', '0xd80']);
+
+/** Number of fast cores in /proc/cpuinfo text, or null when it carries no part ids. */
+export function countFastCores(cpuinfo: string): number | null {
+  const parts = [...cpuinfo.matchAll(/^CPU part\s*:\s*(0x[0-9a-f]+)/gim)].map((m) => m[1].toLowerCase());
+  if (!parts.length) return null;
+  return parts.filter((part) => !LITTLE_CORE_PARTS.has(part)).length;
+}
+
 class HardwareService {
   private cachedDeviceInfo: DeviceInfoType | null = null;
   private cachedSoCInfo: SoCInfo | null = null;
@@ -452,8 +462,22 @@ class HardwareService {
       return matches ? matches.length : 4;
     } catch { return 4; }
   }
+  /**
+   * Threads for inference. On a big.LITTLE chip (the onn tablet: 4 fast Cortex-A78 + 4 slow A55) the
+   * slow cores drag the whole pool, so only the fast ones are used. Chips whose cores are all fast
+   * (Snapdragon 8 Elite) keep four fifths of the cores.
+   */
   async getRecommendedThreadCount(): Promise<number> {
-    const cores = await this.getCpuCoreCount();
+    let cores = 4;
+    let fast: number | null = null;
+    if (Platform.OS === 'android') {
+      try {
+        const cpuinfo = await RNFS.readFile('/proc/cpuinfo', 'utf8');
+        cores = cpuinfo.match(/^processor\s*:/gm)?.length ?? 4;
+        fast = countFastCores(cpuinfo);
+      } catch { /* keep the defaults */ }
+    }
+    if (fast !== null && fast >= 2 && fast < cores) return fast;
     return cores <= 4 ? cores : Math.floor(cores * 0.8);
   }
   /**

@@ -1,17 +1,18 @@
 import React from 'react';
 import { useWideLayout } from '../../hooks/useWideLayout';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Card, CustomAlert, hideAlert } from '../../components';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
+import { BackupReminderCard } from '../../components/BackupReminderCard';
+import { ContinueCard } from './components/ContinueCard';
 import { OnboardingSheet } from '../../components/onboarding/OnboardingSheet';
 import { PulsatingIcon } from '../../components/onboarding/PulsatingIcon';
 import { useOnboardingSheet } from '../../components/onboarding/useOnboardingSheet';
 import { useFocusTrigger } from '../../hooks/useFocusTrigger';
 import { AttachStep } from 'react-native-spotlight-tour';
 import Icon from 'react-native-vector-icons/Feather';
-import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useThemedStyles, useTheme } from '../../theme';
 import { createStyles } from './styles';
 import { useHomeScreen, HomeScreenNavigationProp } from './hooks/useHomeScreen';
@@ -19,7 +20,6 @@ import { useHomeScreenSpotlight } from './hooks/useHomeScreenSpotlight';
 import { RecentConversations } from './components/RecentConversations';
 import { ModelPickerSheet } from './components/ModelPickerSheet';
 import { LoadingOverlay } from './components/LoadingOverlay';
-import { DesktopPromoCard } from './components/DesktopPromoCard';
 import { ModelsSummaryRow } from '../../components/models/ModelsSummaryRow';
 import { ModelsManagerSheet, ModelRowType } from '../../components/models/ModelsManagerSheet';
 import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
@@ -162,6 +162,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </AttachStep>
           </AnimatedEntry>
 
+          <AnimatedPressable style={styles.galleryCard} onPress={() => navigation.navigate('Search')} hapticType="selection" testID="home-search">
+            <Icon name="search" size={18} color={colors.primary} />
+            <View style={styles.galleryCardInfo}>
+              <Text style={styles.galleryCardTitle}>Search</Text>
+              <Text style={styles.galleryCardMeta}>Chats, settings, models and projects</Text>
+            </View>
+            <Icon name="chevron-right" size={16} color={colors.textMuted} />
+          </AnimatedPressable>
+
           {/* New Chat Button */}
           {
             (activeTextModel || activeImageModelId) ? (
@@ -212,6 +221,55 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               </AnimatedEntry>
             )
           }
+
+          <ContinueCard navigation={navigation} />
+
+          <BackupReminderCard onOpenSettings={() => navigation.navigate('SettingsTab')} />
+
+          {/* Recorder: record a conversation, get a transcript with speakers */}
+          <AnimatedPressable
+            style={styles.galleryCard}
+            onPress={() => navigation.navigate('Recorder')}
+            hapticType="selection"
+            testID="home-recorder"
+          >
+            <Icon name="mic" size={18} color={colors.primary} />
+            <View style={styles.galleryCardInfo}>
+              <Text style={styles.galleryCardTitle}>Recorder</Text>
+              <Text style={styles.galleryCardMeta}>Record a conversation, get a transcript with speakers</Text>
+            </View>
+            <Icon name="chevron-right" size={16} color={colors.textMuted} />
+          </AnimatedPressable>
+
+          {/* Learn a language: lessons, games and practice calls */}
+          <AnimatedPressable
+            style={styles.galleryCard}
+            onPress={() => navigation.navigate('Language')}
+            hapticType="selection"
+            testID="home-language"
+          >
+            <Icon name="book" size={18} color={colors.primary} />
+            <View style={styles.galleryCardInfo}>
+              <Text style={styles.galleryCardTitle}>Learn a language</Text>
+              <Text style={styles.galleryCardMeta}>Lessons, games, stories and practice calls</Text>
+            </View>
+            <Icon name="chevron-right" size={16} color={colors.textMuted} />
+          </AnimatedPressable>
+
+          {/* Learn any topic on a board the AI designs */}
+          <AnimatedPressable
+            style={styles.galleryCard}
+            onPress={() => navigation.navigate('Topics')}
+            hapticType="selection"
+            testID="home-topics"
+          >
+            <Icon name="compass" size={18} color={colors.primary} />
+            <View style={styles.galleryCardInfo}>
+              <Text style={styles.galleryCardTitle}>Learn a topic</Text>
+              <Text style={styles.galleryCardMeta}>Accounting, coding, history: a board designed for it</Text>
+            </View>
+            <Icon name="chevron-right" size={16} color={colors.textMuted} />
+          </AnimatedPressable>
 
           {/* Image Gallery */}
           <AnimatedPressable

@@ -12,5 +12,6 @@ export {
   CpuThreadsSlider,
   BatchSizeSlider,
   ModelLoadingModeSelector,
+  WarmUpToggle,
   ShowGenerationDetailsToggle,
 } from '../settings/textGenAdvancedSections';

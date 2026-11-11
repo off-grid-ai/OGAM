@@ -1,0 +1,50 @@
+import type { ThemeColors, ThemeShadows } from '../theme';
+import { TYPOGRAPHY, SPACING } from '../constants';
+
+export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+  container: { flex: 1, backgroundColor: colors.background },
+  header: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  backButton: { padding: SPACING.xs, marginRight: SPACING.sm },
+  title: { ...TYPOGRAPHY.h2, flex: 1, color: colors.text },
+  content: { padding: SPACING.lg, paddingBottom: SPACING.xxl, gap: SPACING.md },
+  date: { ...TYPOGRAPHY.meta, color: colors.textSecondary },
+  body: { ...TYPOGRAPHY.body, color: colors.text },
+  desc: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, marginTop: SPACING.xs },
+  meta: { ...TYPOGRAPHY.meta, color: colors.textMuted },
+  sectionLabel: { ...TYPOGRAPHY.label, color: colors.textSecondary, marginTop: SPACING.sm },
+  actions: { marginTop: SPACING.md, gap: SPACING.sm },
+  progressRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.md },
+  progressText: { ...TYPOGRAPHY.body, color: colors.text, flex: 1 },
+  doneStep: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.sm, marginTop: SPACING.xs },
+  headline: {
+    flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: SPACING.sm,
+    paddingVertical: SPACING.sm, borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  headlineText: { flex: 1 },
+  chips: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: SPACING.sm, marginTop: SPACING.sm },
+  chip: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.xs,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.xs + 2,
+    borderRadius: 16, borderWidth: 1, borderColor: colors.border,
+  },
+  chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { ...TYPOGRAPHY.bodySmall, color: colors.text },
+  chipTextOn: { ...TYPOGRAPHY.bodySmall, color: colors.background },
+  input: {
+    ...TYPOGRAPHY.body, color: colors.text, backgroundColor: colors.background,
+    borderRadius: 10, borderWidth: 1, borderColor: colors.border,
+    padding: SPACING.md, marginTop: SPACING.md, minHeight: 48,
+  },
+  switchRow: { flexDirection: 'row' as const, alignItems: 'center' as const, marginTop: SPACING.md, gap: SPACING.md },
+  switchLabel: { ...TYPOGRAPHY.body, color: colors.text, flex: 1 },
+  deleteButton: { padding: SPACING.sm },
+  earlier: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.md },
+  error: { ...TYPOGRAPHY.bodySmall, color: colors.error, marginTop: SPACING.sm },
+});

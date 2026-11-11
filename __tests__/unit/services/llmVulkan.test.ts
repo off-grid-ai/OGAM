@@ -10,6 +10,14 @@ import { vulkanEngine } from '../../../src/services/vulkanEngine';
 import { useAppStore } from '../../../src/stores/appStore';
 import { createMockLlamaContext, resetStores } from '../../utils/testHelpers';
 
+const VK_LOADED = { backend: 'Vulkan: Adreno (TM) 830', requestedGpuLayers: 8, offloadedGpuLayers: 8, totalLayers: 29 };
+function mockVulkanStatus(status: 'ok' | 'no_vulkan_device' | 'not_packaged') {
+  jest.spyOn(vulkanEngine, 'runtimeStatus').mockResolvedValue({
+    status, packaged: status !== 'not_packaged', message: status, devices: [],
+  });
+  jest.spyOn(vulkanEngine, 'isAvailable').mockResolvedValue(status === 'ok');
+}
+const mockVulkanReady = () => mockVulkanStatus('ok');
 const native = initLlama as jest.MockedFunction<typeof initLlama>;
 const fs = RNFS as jest.Mocked<typeof RNFS>;
 const initialPlatform = Platform.OS;
@@ -33,8 +41,8 @@ beforeEach(() => {
 });
 
 it('uses the isolated Vulkan engine when supported and retains model identity', async () => {
-  jest.spyOn(vulkanEngine,'isAvailable').mockResolvedValue(true);
-  jest.spyOn(vulkanEngine,'loadModel').mockResolvedValue('Vulkan');
+  mockVulkanReady();
+  jest.spyOn(vulkanEngine,'loadModel').mockResolvedValue(VK_LOADED);
   const stop = jest.spyOn(vulkanEngine,'unload').mockResolvedValue();
   await llmService.loadModel('/models/small.gguf');
   expect(llmService.isModelLoaded()).toBe(true);
@@ -46,10 +54,10 @@ it('uses the isolated Vulkan engine when supported and retains model identity', 
 });
 
 it('streams actual text through Vulkan while keeping the ordinary completion callbacks', async () => {
-  jest.spyOn(vulkanEngine,'isAvailable').mockResolvedValue(true);
-  jest.spyOn(vulkanEngine,'loadModel').mockResolvedValue('Vulkan');
+  mockVulkanReady();
+  jest.spyOn(vulkanEngine,'loadModel').mockResolvedValue(VK_LOADED);
   jest.spyOn(vulkanEngine,'formatChat').mockResolvedValue('formatted prompt');
-  jest.spyOn(vulkanEngine,'generate').mockImplementation(async (_prompt,_limit,cb)=>{cb('Hello');cb(' world');});
+  jest.spyOn(vulkanEngine,'generate').mockImplementation(async (_prompt,{ onToken })=>{onToken('Hello');onToken(' world');});
   await llmService.loadModel('/models/small.gguf');
   const streamed: string[]=[];
   const onComplete=jest.fn();
@@ -60,8 +68,8 @@ it('streams actual text through Vulkan while keeping the ordinary completion cal
 });
 
 it('rejects tool calls on explicit Vulkan without unloading or switching to CPU', async () => {
-  jest.spyOn(vulkanEngine, 'isAvailable').mockResolvedValue(true);
-  jest.spyOn(vulkanEngine, 'loadModel').mockResolvedValue('Vulkan');
+  mockVulkanReady();
+  jest.spyOn(vulkanEngine, 'loadModel').mockResolvedValue(VK_LOADED);
   const unload = jest.spyOn(vulkanEngine, 'unload').mockResolvedValue();
   await llmService.loadModel('/models/small.gguf');
   await expect(llmService.generateResponseWithTools([{id:'m',role:'user',content:'hi',timestamp:0}], {tools:[]}))
@@ -72,7 +80,7 @@ it('rejects tool calls on explicit Vulkan without unloading or switching to CPU'
 });
 
 it('does not silently run on CPU when explicitly selected Vulkan is unavailable', async () => {
-  jest.spyOn(vulkanEngine,'isAvailable').mockResolvedValue(false);
+  mockVulkanStatus('no_vulkan_device');
   const unload = jest.spyOn(vulkanEngine,'unload').mockResolvedValue();
   native.mockResolvedValue(createMockLlamaContext() as any);
   await expect(llmService.loadModel('/models/small.gguf')).rejects.toThrow(/Vulkan GPU unavailable/i);
@@ -95,8 +103,8 @@ it('Auto picks OpenCL first on an Adreno device (keeps tools), without touching 
   const availability = jest.spyOn(hardwareService, 'getAccelerationCapability')
     .mockResolvedValue({ hasNpu: false, hasGpu: true });
   jest.spyOn(hardwareService, 'getOpenCLCapability').mockResolvedValue({ supported: true });
-  jest.spyOn(vulkanEngine, 'isAvailable').mockResolvedValue(true);
-  const vulkanLoad = jest.spyOn(vulkanEngine, 'loadModel').mockResolvedValue('Vulkan');
+  mockVulkanReady();
+  const vulkanLoad = jest.spyOn(vulkanEngine, 'loadModel').mockResolvedValue(VK_LOADED);
   native.mockResolvedValue(createMockLlamaContext({ gpu: true, devices: ['Adreno GPU'] }) as any);
   useAppStore.setState({ settings: {
     ...useAppStore.getState().settings, inferenceBackend: 'auto', gpuLayers: 8,
@@ -113,8 +121,8 @@ it('Auto uses Vulkan when OpenCL cannot load (Mali-style device)', async () => {
   const { hardwareService } = require('../../../src/services/hardware');
   jest.spyOn(hardwareService, 'getAccelerationCapability').mockResolvedValue({ hasNpu: false, hasGpu: true });
   jest.spyOn(hardwareService, 'getOpenCLCapability').mockResolvedValue({ supported: true });
-  jest.spyOn(vulkanEngine, 'isAvailable').mockResolvedValue(true);
-  jest.spyOn(vulkanEngine, 'loadModel').mockResolvedValue('Vulkan');
+  mockVulkanReady();
+  jest.spyOn(vulkanEngine, 'loadModel').mockResolvedValue(VK_LOADED);
   native.mockRejectedValue(new Error('OpenCL init failed'));
   useAppStore.setState({ settings: {
     ...useAppStore.getState().settings, inferenceBackend: 'auto', gpuLayers: 8,
@@ -128,7 +136,7 @@ it('Auto falls back to CPU when all accelerators are unavailable', async () => {
   const { hardwareService } = require('../../../src/services/hardware');
   jest.spyOn(hardwareService, 'getAccelerationCapability')
     .mockResolvedValue({ hasNpu: false, hasGpu: false });
-  jest.spyOn(vulkanEngine, 'isAvailable').mockResolvedValue(false);
+  mockVulkanStatus('no_vulkan_device');
   useAppStore.setState({ settings: {
     ...useAppStore.getState().settings, inferenceBackend: 'auto',
   }});
@@ -158,16 +166,16 @@ it('uses a user-selected Vulkan context above the former 4K limit and honors sam
     ...useAppStore.getState().settings, inferenceBackend: 'vulkan', contextMode: 'manual',
     contextLength: 8192, maxTokens: 800, temperature: 0.35, topP: 0.75, repeatPenalty: 1.2,
   }});
-  jest.spyOn(vulkanEngine, 'isAvailable').mockResolvedValue(true);
-  const load = jest.spyOn(vulkanEngine, 'loadModel').mockResolvedValue('Vulkan');
+  mockVulkanReady();
+  const load = jest.spyOn(vulkanEngine, 'loadModel').mockResolvedValue(VK_LOADED);
   jest.spyOn(vulkanEngine, 'formatChat').mockResolvedValue('small prompt');
   jest.spyOn(vulkanEngine, 'tokenize').mockResolvedValue([1, 2, 3, 4]);
   const generate = jest.spyOn(vulkanEngine, 'generate').mockResolvedValue();
   await llmService.loadModel('/models/small.gguf');
-  expect(load.mock.calls[0][2]).toBeGreaterThan(4096);
+  expect(load.mock.calls[0][1].context).toBeGreaterThan(4096);
   await llmService.generateResponse([{id:'q',role:'user',content:'Hello',timestamp:0}]);
-  expect(generate).toHaveBeenCalledWith('small prompt', 800, expect.any(Function), {
-    temperature: 0.35, topP: 0.75, repeatPenalty: 1.2,
+  expect(generate).toHaveBeenCalledWith('small prompt', {
+    maxTokens: 800, onToken: expect.any(Function), sampling: { temperature: 0.35, topP: 0.75, repeatPenalty: 1.2 },
   });
 });
 
@@ -176,8 +184,8 @@ it('trims old turns before formatting a long Vulkan chat', async () => {
     ...useAppStore.getState().settings, inferenceBackend: 'vulkan', contextMode: 'manual',
     contextLength: 1024, maxTokens: 256,
   }});
-  jest.spyOn(vulkanEngine, 'isAvailable').mockResolvedValue(true);
-  jest.spyOn(vulkanEngine, 'loadModel').mockResolvedValue('Vulkan');
+  mockVulkanReady();
+  jest.spyOn(vulkanEngine, 'loadModel').mockResolvedValue(VK_LOADED);
   const fmt = jest.spyOn(vulkanEngine, 'formatChat')
     .mockImplementation(async items => JSON.stringify(items));
   jest.spyOn(vulkanEngine, 'tokenize')
@@ -193,4 +201,35 @@ it('trims old turns before formatting a long Vulkan chat', async () => {
   expect(finalCall.some(item => item.content === 'Final question')).toBe(true);
   expect(finalCall.length).toBeLessThan(history.length);
   expect(history).toHaveLength(20);
+});
+
+it('reports the layers llama.kt actually placed on the Vulkan GPU', async () => {
+  mockVulkanReady();
+  jest.spyOn(vulkanEngine, 'loadModel').mockResolvedValue(
+    { backend: 'Vulkan: Mali-G615', requestedGpuLayers: 99, offloadedGpuLayers: 29, totalLayers: 29 });
+  useAppStore.setState({ settings: { ...useAppStore.getState().settings, inferenceBackend: 'vulkan', gpuLayers: 99 } });
+  await llmService.loadModel('/models/small.gguf');
+  const info = llmService.getGpuInfo();
+  expect(info.gpuLayers).toBe(29);
+  expect(info.totalLayers).toBe(29);
+});
+
+it('tells a missing Vulkan engine apart from missing Vulkan hardware', async () => {
+  mockVulkanStatus('not_packaged');
+  const unload = jest.spyOn(vulkanEngine, 'unload').mockResolvedValue();
+  await expect(llmService.loadModel('/models/small.gguf')).rejects.toThrow(/not included in this APK/);
+  expect(unload).toHaveBeenCalled();
+  mockVulkanStatus('no_vulkan_device');
+  await expect(llmService.loadModel('/models/small.gguf')).rejects.toThrow(/reports no Vulkan GPU/);
+  expect(native).not.toHaveBeenCalled();
+});
+
+it('refuses explicit Vulkan when the native load used no GPU layers', async () => {
+  mockVulkanReady();
+  jest.spyOn(vulkanEngine, 'unload').mockResolvedValue();
+  jest.spyOn(vulkanEngine, 'loadModel').mockResolvedValue(
+    { backend: 'Vulkan: Adreno', requestedGpuLayers: 8, offloadedGpuLayers: 0, totalLayers: 29 });
+  await expect(llmService.loadModel('/models/small.gguf')).rejects.toThrow(/no GPU layers/);
+  expect(llmService.isModelLoaded()).toBe(false);
+  expect(native).not.toHaveBeenCalled();
 });

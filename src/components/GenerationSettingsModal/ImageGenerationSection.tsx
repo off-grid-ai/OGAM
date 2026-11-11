@@ -7,6 +7,7 @@ import { useAppStore } from '../../stores';
 import { hardwareService } from '../../services';
 import { createStyles } from './styles';
 import { ImageQualityBasicSliders, ImageQualityAdvancedSliders } from './ImageQualitySliders';
+import { ImageStylePicker } from '../ImageStylePicker';
 
 // ─── Image Model Picker ───────────────────────────────────────────────────────
 
@@ -290,6 +291,7 @@ export const ImageGenerationSection: React.FC = () => {
   return (
     <View style={styles.sectionCard}>
       <ImageModelPicker />
+      <ImageStylePicker />
 
       {/* Image Generation Mode Toggle */}
       <View style={styles.modeToggleContainer}>

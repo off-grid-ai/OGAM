@@ -475,6 +475,19 @@ class WhisperService {
     const { result } = __res;
     return cleanTranscription(result);
   }
+
+  /** Transcribes a file with timestamps in seconds (whisper.cpp reports 10 ms steps). `stop()` cancels. */
+  transcribeSegments(filePath: string, options?: { language?: string; onProgress?: (progress: number) => void }) {
+    if (!this.context) throw new Error('No Whisper model loaded');
+    const { stop, promise } = this.context.transcribe(filePath, { language: options?.language || this.defaultLanguage(), onProgress: options?.onProgress });
+    return {
+      stop: async (): Promise<void> => { await stop(); },
+      promise: promise.then((r) => {
+        if (r.isAborted) throw new Error('cancelled');
+        return (r.segments ?? []).map((sg) => ({ start: sg.t0 / 100, end: sg.t1 / 100, text: cleanTranscription(sg.text) })).filter((sg) => sg.text);
+      }),
+    };
+  }
 }
 
 export const whisperService = new WhisperService();

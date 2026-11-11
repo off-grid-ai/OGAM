@@ -18,8 +18,10 @@ import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useChatStore, useProjectStore, useAppStore } from '../stores';
+import { isChatUnlocked } from '../stores/encryptedChatStorage';
 import { Conversation } from '../types';
 import { RootStackParamList } from '../navigation/types';
+import { useActiveTextModel } from '../hooks/useActiveTextModel';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProjectChats'>;
@@ -173,7 +175,9 @@ export const ProjectChatsScreen: React.FC = () => {
   const { downloadedModels, activeModelId } = useAppStore();
 
   const project = getProject(projectId);
-  const hasModels = downloadedModels.length > 0;
+  // A connected remote model (Ollama, LM Studio...) counts, as it does on Home and in the chat list.
+  const { modelId: activeTextModelId } = useActiveTextModel();
+  const hasModels = downloadedModels.length > 0 || !!activeTextModelId;
 
   // Get chats for this project
   const projectChats = visibleConversations(conversations, hideLocked, vaultOpen)
@@ -190,10 +194,15 @@ export const ProjectChatsScreen: React.FC = () => {
       setAlertState(showAlert('No Model', 'Please download a model first from the Models tab.'));
       return;
     }
-    const modelId = activeModelId || downloadedModels[0]?.id;
+    const modelId = activeTextModelId || activeModelId || downloadedModels[0]?.id;
     if (modelId) {
-      const newConversationId = createConversation(modelId, undefined, projectId);
-      navigation.navigate('Chat', { conversationId: newConversationId, projectId });
+      try {
+        const newConversationId = createConversation(modelId, undefined, projectId);
+        navigation.navigate('Chat', { conversationId: newConversationId, projectId });
+      } catch (e) {
+        // A locked protected project refuses new chats until it is unlocked.
+        setAlertState(showAlert('Protected project', e instanceof Error ? e.message : String(e)));
+      }
     }
   };
 
@@ -214,11 +223,11 @@ export const ProjectChatsScreen: React.FC = () => {
           <View style={styles.chatContent}>
             <View style={styles.chatHeader}>
               <Text style={styles.chatTitle} numberOfLines={1}>
-                {item.pinVerifier ? 'Locked conversation' : item.title}
+                {item.pinVerifier && !isChatUnlocked(item.id) ? 'Locked conversation' : item.title}
               </Text>
               <Text style={styles.chatDate}>{formatDate(item.updatedAt)}</Text>
             </View>
-            {item.pinVerifier ? <Text style={styles.chatPreview}>PIN required</Text> : lastMessage && (
+            {item.pinVerifier && !isChatUnlocked(item.id) ? <Text style={styles.chatPreview}>PIN required</Text> : lastMessage && (
               <Text style={styles.chatPreview} numberOfLines={1}>
                 {lastMessage.role === 'user' ? 'You: ' : ''}{lastMessage.content}
               </Text>

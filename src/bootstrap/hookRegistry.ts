@@ -1,11 +1,11 @@
 /**
- * Function-hook seam. Pro features register plain functions against named hooks
- * during activation; core calls them when present and falls back to a no-op /
+ * Function-hook seam. Features register plain functions against named hooks
+ * at startup; core calls them when present and falls back to a no-op /
  * default when absent. Use this for behaviour (not UI — see slotRegistry for UI):
  * reading the audio interface mode, triggering speech after generation, and
  * augmenting the prompt in voice mode.
  *
- * Free builds register nothing, so callHook returns undefined and core keeps
+ * With nothing registered, callHook returns undefined and core keeps
  * its default behaviour.
  */
 type HookFn = (...args: any[]) => any;
@@ -28,20 +28,30 @@ export function _clearHooksForTesting(): void {
   }
 }
 
-/** Known hook names, centralised so core and pro stay in sync. */
+/** Known hook names, centralised so core and features stay in sync. */
 export const HOOKS = {
+  /** () => string[] — the ids of PIN-protected projects (their study results and documents never reach plain storage). */
+  protectedProjectIds: 'projects.protectedIds',
+  /** () => boolean — whether a model is writing an answer right now (never re-lock chats mid-reply). */
+  generationActive: 'models.generationActive',
+  /** (latestTokens: number, budgetTokens: number) => void — the person's latest message was too long for the model and its start was cut; tell them in the chat. */
+  messageCut: 'chat.messageCut',
+  /** (modelId: string | null) => Promise<void> — make sure a text model is loaded (null: the one in use, else the first downloaded). */
+  ensureTextModel: 'models.ensureText',
+  /** (modelId: string) => void — an agent that has its own model was made active; the app loads that model in the background. */
+  agentModelChosen: 'agent.modelChosen',
   /** () => boolean — whether a message can be spoken (TTS enabled + ready). */
   audioCanSpeak: 'audio.canSpeak',
   /** (text: string, messageId: string) => void — speak a message aloud. */
   audioSpeak: 'audio.speak',
   /** () => void — stop any in-progress speech. */
   audioStop: 'audio.stop',
-  /** (content: string) => void — fired as the assistant message streams; pro
+  /** (content: string) => void — fired as the assistant message streams; the voice feature
    *  uses it to synthesize/play speech sentence-by-sentence while generation is
    *  still in progress (no-op unless voice mode + engine ready). */
   audioOnStreamingToken: 'audio.onStreamingToken',
   /** (conversationId: string) => void — when streaming ends, speak the final
-   *  assistant message if voice mode is active (pro checks mode/readiness). */
+   *  assistant message if voice mode is active (it checks mode/readiness). */
   audioOnStreamingEnd: 'audio.onStreamingEnd',
   /** () => void — app went to background: pause speech if playing. */
   audioOnAppBackground: 'audio.onAppBackground',

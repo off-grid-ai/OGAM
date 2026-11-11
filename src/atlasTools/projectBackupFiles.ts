@@ -102,7 +102,8 @@ async function selectIncomingFiles(files: ProjectBackupFile[], merge: boolean): 
   return incoming;
 }
 
-export async function restoreProjectFiles(files: ProjectBackupFile[], projectIds: string[], merge = false): Promise<number> {
+/** Preflight project-file manifests before any app stores or SQLite indexes change. */
+export function validateProjectFiles(files: ProjectBackupFile[], projectIds: string[]): void {
   if (!Array.isArray(files) || !Array.isArray(projectIds) || projectIds.some(id => !safeProjectId(id)))
     throw new Error('Invalid project file backup manifest.');
   const allowed = new Set(projectIds);
@@ -117,6 +118,10 @@ export async function restoreProjectFiles(files: ProjectBackupFile[], projectIds
     total += file.size;
     if (total > MAX_FILE_BYTES) throw new Error('Project files exceed 25 MB in one portable backup.');
   }
+}
+
+export async function restoreProjectFiles(files: ProjectBackupFile[], projectIds: string[], merge = false): Promise<number> {
+  validateProjectFiles(files, projectIds);
   const incoming = await selectIncomingFiles(files, merge);
   const written: string[] = [];
   const restored: RestoredProjectFile[] = [];

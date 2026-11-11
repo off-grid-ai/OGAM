@@ -28,6 +28,7 @@ async function removeAppOwnedCopy(path: string | undefined): Promise<void> {
 export type { RagDocument, RagSearchResult } from './database';
 ;
 export { chunkDocument } from './chunking';
+export { isTextDocument } from './textDocument';
 export { retrievalService } from './retrieval';
 ;
 
@@ -42,6 +43,8 @@ interface IndexDocumentParams {
   fileName: string;
   fileSize: number;
   onProgress?: (progress: IndexProgress) => void;
+  /** Allow a document with the same name (an update that replaces the old version afterwards). */
+  replaceExisting?: boolean;
 }
 
 class RagService {
@@ -57,7 +60,7 @@ class RagService {
     // Prevent duplicate indexing of the same file
     const existing = isProtected ? protectedVault.list(projectId) : ragDatabase.getDocumentsByProject(projectId);
     if (isProtected && !protectedVault.isOpen(projectId)) throw new Error('Unlock this project to add documents.');
-    if (existing.some(d => d.path === filePath || d.name === fileName)) {
+    if (!params.replaceExisting && existing.some(d => d.path === filePath || d.name === fileName)) {
       throw new Error(`Document "${fileName}" is already in the knowledge base`);
     }
 
@@ -84,17 +87,23 @@ class RagService {
 
     if (isProtected) {
       // Protected project: chunks and embeddings go only into the encrypted vault, never rag.db.
-      onProgress?.({ stage: 'embedding', message: 'Generating embeddings...' });
-      await embeddingService.load();
-      const embeddings = await embeddingService.embedBatch(chunks.map(c => c.content));
-      onProgress?.({ stage: 'indexing', message: 'Encrypting...' });
-      const id = await protectedVault.addDocument(projectId, {
-        name: fileName, path: filePath, size: fileSize,
-        chunks: chunks.map((c, i) => ({ content: c.content, position: c.position, embedding: embeddings[i] })),
-      });
-      await removeOwnCopy(filePath);
-      onProgress?.({ stage: 'done', message: 'Done' });
-      return id;
+      // The extractor's durable copy (attachment.uri) holds the ORIGINAL plaintext bytes, so it
+      // is deleted with the picked file whether or not the vault write succeeds.
+      try {
+        onProgress?.({ stage: 'embedding', message: 'Generating embeddings...' });
+        await embeddingService.load();
+        const embeddings = await embeddingService.embedBatch(chunks.map(c => c.content));
+        onProgress?.({ stage: 'indexing', message: 'Encrypting...' });
+        const id = await protectedVault.addDocument(projectId, {
+          name: fileName, path: filePath, size: fileSize,
+          chunks: chunks.map((c, i) => ({ content: c.content, position: c.position, embedding: embeddings[i] })),
+        });
+        onProgress?.({ stage: 'done', message: 'Done' });
+        return id;
+      } finally {
+        await removeOwnCopy(filePath);
+        if (attachment.uri && attachment.uri !== filePath) await removeOwnCopy(attachment.uri);
+      }
     }
 
     onProgress?.({ stage: 'indexing', message: 'Indexing chunks...' });
@@ -160,6 +169,65 @@ class RagService {
     return total;
   }
 
+  /** Full text of one project document, in order (works for protected and ordinary projects). */
+  async readDocumentText(projectId: string, docId: number): Promise<string> {
+    if (isVaultDocId(docId)) {
+      const note = protectedVault.noteText(docId);
+      if (note !== undefined) return note;
+      return protectedVault.getEmbeddingsByProject(projectId).filter(r => r.doc_id === docId)
+        .sort((a, b) => a.position - b.position).map(r => r.content).join('\n');
+    }
+    await this.ensureReady();
+    // A plain-text document (e.g. a note written in Atlas) keeps its exact text in the app's own copy.
+    const doc = ragDatabase.getDocumentById(docId);
+    if (doc?.path?.startsWith(`${RNFS.DocumentDirectoryPath}/`) && /\.(md|txt)$/i.test(doc.path)) {
+      const text = await RNFS.readFile(doc.path, 'utf8').catch(() => null);
+      if (text !== null) return text;
+    }
+    return ragDatabase.getChunksByDocument(docId).map(c => c.content).join('\n');
+  }
+
+  /**
+   * Creates or updates a named text document in the project's knowledge base, shared by every
+   * chat in the project (e.g. "Current Progress"). `append` adds to the end of the current text.
+   * A protected project's note goes straight into its encrypted vault: no plain file is written.
+   */
+  async saveProjectNote(params: { projectId: string; name: string; text: string; mode?: 'replace' | 'append'; replacesDocId?: number }): Promise<number> {
+    const { projectId, mode = 'replace' } = params;
+    const name = params.name.trim().replace(/[\\/]/g, '_').slice(0, 80);
+    if (!name) throw new Error('The document needs a name.');
+    if (!params.text.trim()) throw new Error('The document text is empty.');
+    const existing = (await this.getDocumentsByProject(projectId))
+      .find(d => d.name.toLowerCase() === name.toLowerCase() || d.name.toLowerCase() === `${name.toLowerCase()}.md`);
+    const before = existing && mode === 'append' ? await this.readDocumentText(projectId, existing.id) : '';
+    const text = before ? `${before.trimEnd()}\n\n${params.text.trim()}` : params.text.trim();
+    let id: number;
+    if (isProtectedProject(projectId)) {
+      if (!protectedVault.isOpen(projectId)) throw new Error('Unlock this project to change its documents.');
+      const chunks = chunkDocument(text);
+      if (!chunks.length) throw new Error('Document produced no indexable content');
+      await embeddingService.load();
+      const embeddings = await embeddingService.embedBatch(chunks.map(c => c.content));
+      id = await protectedVault.addDocument(projectId, {
+        name, path: `atlas-note:${name}`, size: text.length, text,
+        chunks: chunks.map((c, i) => ({ content: c.content, position: c.position, embedding: embeddings[i] })),
+      });
+    } else {
+      // Indexing keeps its own durable copy; the temporary file is removed afterwards.
+      const tmp = `${RNFS.CachesDirectoryPath}/atlas-note-${Date.now()}.md`;
+      await RNFS.writeFile(tmp, text, 'utf8');
+      try {
+        id = await this.indexDocument({ projectId, filePath: tmp, fileName: name.endsWith('.md') ? name : `${name}.md`, fileSize: text.length, replaceExisting: true });
+      } finally { await RNFS.unlink(tmp).catch(() => undefined); }
+    }
+    // Remove the previous version only once the new one is stored (also the old name after a rename).
+    if (existing) await this.deleteDocument(existing.id);
+    if (params.replacesDocId !== undefined && params.replacesDocId !== existing?.id && params.replacesDocId !== id) {
+      await this.deleteDocument(params.replacesDocId);
+    }
+    return id;
+  }
+
   async deleteDocument(docId: number): Promise<void> {
     if (isVaultDocId(docId)) {
       const gone = await protectedVault.remove(docId);
@@ -217,8 +285,8 @@ class RagService {
   async deleteProjectDocuments(projectId: string): Promise<void> {
     await this.ensureReady();
     if (isProtectedProject(projectId)) {
-      const { useProjectStore } = require('../../stores/projectStore');
-      const { unlockedProjectPin } = require('../../stores/protectedProjectStorage');
+      const useProjectStore = require('../../stores/storeRefs').projectStoreRef();
+      const { unlockedProjectPin } = require('../../stores/protectionState');
       const verifier: string | undefined = useProjectStore.getState().getProject(projectId)?.pinVerifier;
       for (const doc of protectedVault.list(projectId)) await removeAppOwnedCopy(doc.path);
       await protectedVault.destroy(projectId, unlockedProjectPin(projectId), verifier);

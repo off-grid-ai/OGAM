@@ -1,0 +1,93 @@
+name: Android unit tests
+
+# Kotlin/JVM unit tests for the Android native modules (downloads, voices, Vulkan,
+# image generation). Runs on every push to Atlas branches and on demand.
+on:
+  push:
+    branches: [atlas-voice, 'claude/**']
+    paths: ['android/**', '.github/workflows/atlas-android-tests.yml']
+  workflow_dispatch:
+    inputs:
+      clean_artifacts:
+        description: 'Only delete saved build files older than a day (frees GitHub storage); runs no tests'
+        type: boolean
+        default: false
+
+jobs:
+  kotlin-tests:
+    if: ${{ !inputs.clean_artifacts }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Use the runner's Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+      - name: Install JS dependencies
+        run: npm ci --ignore-scripts
+      - name: Install llama.rn native artifacts
+        run: node node_modules/llama.rn/install/download-native-artifacts.js
+      - name: Apply audited native dependency patches
+        run: ./node_modules/.bin/patch-package
+      - name: Get natural-voice engine (sherpa-onnx)
+        run: |
+          mkdir -p android/app/libs
+          curl --fail --silent --show-error --location --retry 3 --proto '=https' --proto-redir '=https' -o android/app/libs/sherpa-onnx.aar https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.7/sherpa-onnx-1.13.7.aar
+          echo "c4ef49e309f24fcee5c106b8a279481aaecaabb078cd37b2cd6e9a62cc8a73c8  android/app/libs/sherpa-onnx.aar" | sha256sum -c -
+      - name: Kotlin unit tests
+        working-directory: android
+        run: |
+          set -o pipefail
+          ./gradlew :app:testDebugUnitTest -PreactNativeArchitectures=arm64-v8a --no-daemon 2>&1 | tee ../gradle-test.log || {
+            grep -E "^e: |FAILED|What went wrong|Execution failed|Caused by|AssertionError|Exception" ../gradle-test.log | head -40 | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          }
+      - name: Test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-unit-test-report
+          path: android/app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
+
+  # Run by hand (tick "clean_artifacts"): deletes saved build files (old APK copies) older than a day.
+  # Published APKs stay on their release pages; only the Actions copies go.
+  clean-artifacts:
+    if: ${{ inputs.clean_artifacts }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Delete saved build files older than a day
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          count=0
+          total=0
+          while IFS=$'\t' read -r id size name; do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" --silent
+            count=$((count + 1))
+            total=$((total + size))
+            echo "Deleted $name ($((size / 1024 / 1024)) MB)"
+          done < <(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select((now - (.created_at | fromdateiso8601)) > 86400) | [.id, .size_in_bytes, .name] | @tsv')
+          echo "Deleted $count saved build files, $((total / 1024 / 1024)) MB in all"

@@ -9,6 +9,16 @@ import logger from '../utils/logger';
 /** Every text-generation engine, defined ONCE here so callers never hardcode the concrete set. */
 const TEXT_ENGINES = [liteRTService, llmService];
 
+/** One small text job (rewrite, translate) on the loaded model. Throws `busyMessage` while a chat answer is still being written. */
+export async function completeSmallTask(messages: Message[], busyMessage: string): Promise<string> {
+  if (llmService.isCurrentlyGenerating()) throw new Error(busyMessage);
+  return llmService.generateResponse(messages, { disableThinking: true });
+}
+
+/** Which accelerator the loaded local model runs on, and how many layers (for the settings and hint text). */
+export const localGpuInfo = () => llmService.getGpuInfo();
+export const isLocalModelLoaded = (): boolean => llmService.isModelLoaded();
+
 /** What the active text model can do, resolved once so callers never branch on the concrete engine. */
 export interface EngineCapabilities {
   vision: boolean;

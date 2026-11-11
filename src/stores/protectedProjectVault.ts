@@ -15,11 +15,13 @@ import type { RagDocument } from '../services/rag/database';
 export interface VaultChunk { content: string; position: number; embedding: number[] }
 export interface VaultDoc {
   id: number; name: string; path: string; size: number; createdAt: string; enabled: number; chunks: VaultChunk[];
+  /** Exact text of a note written in Atlas (chunks alone drop spacing and overlap long paragraphs). */
+  text?: string;
 }
 export interface VaultEmbeddingRow {
   chunk_rowid: number; doc_id: number; name: string; content: string; position: number; embedding: number[];
 }
-export type NewVaultDoc = Pick<VaultDoc, 'name' | 'path' | 'size' | 'chunks'>;
+export type NewVaultDoc = Pick<VaultDoc, 'name' | 'path' | 'size' | 'chunks' | 'text'>;
 
 const open = new Map<string, VaultDoc[]>();
 let seq = 0;
@@ -50,8 +52,8 @@ const serial = <T>(fn: () => Promise<T>): Promise<T> => {
 };
 
 function credentials(projectId: string): { pin: string; verifier: string } {
-  const { useProjectStore } = require('./projectStore');
-  const { unlockedProjectPin } = require('./protectedProjectStorage');
+  const useProjectStore = require('./storeRefs').projectStoreRef();
+  const { unlockedProjectPin } = require('./protectionState');
   const project = useProjectStore.getState().projects.find((p: any) => p.id === projectId);
   const pin: string | undefined = unlockedProjectPin(projectId);
   if (!project?.pinVerifier || !pin) throw new Error('Unlock this project first.');
@@ -60,7 +62,8 @@ function credentials(projectId: string): { pin: string; verifier: string } {
 
 const round = (v: number[]) => v.map(x => Math.round(x * 1e5) / 1e5);
 
-async function writeFile(projectId: string, docs: VaultDoc[], pin: string, verifier: string): Promise<void> {
+async function writeFile(projectId: string, docs: VaultDoc[], key: { pin: string; verifier: string }): Promise<void> {
+  const { pin, verifier } = key;
   const plain = JSON.stringify({ v: 1, docs: docs.map(d => ({ ...d, chunks: d.chunks.map(c => ({ ...c, embedding: round(c.embedding) })) })) });
   const blob = await native().encryptProtectedItem('project', itemId(projectId), plain, pin, verifier);
   await RNFS.mkdir(dir());
@@ -89,7 +92,7 @@ export const protectedVault = {
     await serial(async () => {
       const docs = await readFile(projectId, pin, verifier);
       // The project may have re-locked while the file was being decrypted: keep nothing in memory then.
-      const { unlockedProjectPin } = require('./protectedProjectStorage');
+      const { unlockedProjectPin } = require('./protectionState');
       if (unlockedProjectPin(projectId) === pin) open.set(projectId, docs);
     });
   },
@@ -99,6 +102,15 @@ export const protectedVault = {
 
   list(projectId: string): RagDocument[] {
     return (open.get(projectId) ?? []).map(d => asRag(projectId, d)).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  },
+
+  /** The exact text of a note written in Atlas, if this document is one. */
+  noteText(docId: number): string | undefined {
+    for (const docs of open.values()) {
+      const d = docs.find(x => x.id === docId);
+      if (d) return d.text;
+    }
+    return undefined;
   },
 
   ownerOf(docId: number): string | undefined {
@@ -113,7 +125,7 @@ export const protectedVault = {
       if (!docs) throw new Error('This project\'s documents are not open. Lock and unlock the project, then try again.');
       const added: VaultDoc = { ...doc, id: newVaultDocId(), createdAt: new Date().toISOString(), enabled: 1 };
       const next = [...docs, added];
-      await writeFile(projectId, next, pin, verifier); // on disk first, then in memory
+      await writeFile(projectId, next, { pin, verifier }); // on disk first, then in memory
       open.set(projectId, next);
       return added.id;
     });
@@ -125,7 +137,7 @@ export const protectedVault = {
       if (!projectId) throw new Error('Unlock this project first.');
       const { pin, verifier } = credentials(projectId);
       const next = open.get(projectId)!.map(d => (d.id === docId ? { ...d, enabled: enabled ? 1 : 0 } : d));
-      await writeFile(projectId, next, pin, verifier);
+      await writeFile(projectId, next, { pin, verifier });
       open.set(projectId, next);
     });
   },
@@ -139,7 +151,7 @@ export const protectedVault = {
       const docs = open.get(projectId)!;
       const gone = docs.find(d => d.id === docId);
       const next = docs.filter(d => d.id !== docId);
-      await writeFile(projectId, next, pin, verifier);
+      await writeFile(projectId, next, { pin, verifier });
       open.set(projectId, next);
       return gone;
     });
@@ -165,10 +177,10 @@ export const protectedVault = {
   },
 
   /** Writes documents moved in from rag.db (protecting a project that already has some) and proves they decrypt. */
-  async seal(projectId: string, pin: string, verifier: string, docs: VaultDoc[]): Promise<void> {
+  async seal(projectId: string, key: { pin: string; verifier: string }, docs: VaultDoc[]): Promise<void> {
     await serial(async () => {
-      await writeFile(projectId, docs, pin, verifier);
-      const back = await readFile(projectId, pin, verifier);
+      await writeFile(projectId, docs, key);
+      const back = await readFile(projectId, key.pin, key.verifier);
       if (back.length !== docs.length) throw new Error('Protected document verification failed.');
     });
   },

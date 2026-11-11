@@ -16,10 +16,8 @@ import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -68,19 +66,8 @@ class AtlasNearbySyncModule(private val ctx: ReactApplicationContext) :
             .setRandomizedEncryptionRequired(true).build())
         return generator.generateKey()
     }
-    private fun encrypt(key: SecretKey, plain: String): String {
-        val iv = freshBytes(12)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(128, iv))
-        return encode(iv + cipher.doFinal(plain.toByteArray(Charsets.UTF_8)))
-    }
-    private fun decrypt(key: SecretKey, value: String): String {
-        val all = decode(value)
-        require(all.size >= 29) { "Invalid encrypted peer packet" }
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, all.copyOfRange(0, 12)))
-        return String(cipher.doFinal(all.copyOfRange(12, all.size)), Charsets.UTF_8)
-    }
+    private fun encrypt(key: SecretKey, plain: String): String = encode(SyncCrypto.seal(key, plain))
+    private fun decrypt(key: SecretKey, value: String): String = SyncCrypto.open(key, decode(value))
     private fun peerKey(secret: ByteArray): SecretKey {
         require(secret.size == 32) { "Invalid pairing key" }
         return SecretKeySpec(secret, "AES")

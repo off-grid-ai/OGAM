@@ -1,47 +1,6 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLowPower, lowPowerEnabled, lowPowerActive, LOW_POWER_NOTE } from './lowPowerState';
 
-/**
- * Atlas low-battery mode. Below the threshold (and not charging):
- *  - switch to a small model (if chosen),
- *  - keep answers short (token cap + a one-line instruction),
- *  - turn off hands-free listening.
- * When charging or back above threshold + 5%, the previous model is restored.
- */
-interface LowPowerState {
-  enabled: boolean;
-  threshold: number;
-  modelId: string;
-  maxTokens: number;
-  active: boolean;
-  prevModelId: string;
-  /** model low-battery mode switched to (to switch back later) */
-  switchedTo: string;
-  battery: number | null;
-  charging: boolean;
-  set: (p: Partial<LowPowerState>) => void;
-}
-
-export const useLowPower = create<LowPowerState>()(
-  persist(
-    (set) => ({
-      enabled: false, threshold: 20, modelId: '', maxTokens: 256,
-      active: false, prevModelId: '', switchedTo: '', battery: null, charging: false,
-      set: (p) => set(p),
-    }),
-    {
-      name: 'atlas-low-power',
-      storage: createJSONStorage(() => AsyncStorage),
-      partialize: (s) => ({ enabled: s.enabled, threshold: s.threshold, modelId: s.modelId, maxTokens: s.maxTokens }),
-    },
-  ),
-);
-
-const offGrid = (): boolean => { try { return require('./offGrid').offGridOn(); } catch { return false; } };
-/** On when switched on, and always in off-grid (emergency) mode. */
-export const lowPowerEnabled = (): boolean => useLowPower.getState().enabled || offGrid();
-export const lowPowerActive = (): boolean => lowPowerEnabled() && useLowPower.getState().active;
+export { useLowPower, lowPowerEnabled, lowPowerActive, LOW_POWER_NOTE };
 
 /** The text model that uses the least battery per answer: fastest measured on this phone, else the smallest file. */
 export function batteryModel(): { id: string; why: string } | null {
@@ -57,7 +16,6 @@ export function batteryModel(): { id: string; why: string } | null {
     return { id: small.id, why: 'smallest model you have' };
   } catch { return null; }
 }
-export const LOW_POWER_NOTE = 'The phone battery is low: answer in a few short sentences, most important step first.';
 
 let timer: ReturnType<typeof setInterval> | null = null;
 

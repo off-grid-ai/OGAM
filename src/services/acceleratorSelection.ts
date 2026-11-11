@@ -25,10 +25,11 @@ export function acceleratorCandidates(
   );
   // NPU first (fastest for Q4_0/Q8_0 text), then OpenCL: the mature llama.rn GPU path on
   // Adreno that keeps tools and vision. Vulkan (no tools/vision yet) is next, so Mali and
-  // other GPUs without OpenCL still get the GPU. CPU is appended last by LLMService.
+  // other GPUs without OpenCL still get the GPU: for a model with a picture file it loads
+  // text only (a GPU text chat beats CPU with pictures). CPU is appended last by LLMService.
   if (availability.npu && eligibleHtpQuant && !vision) result.push('htp');
   if (availability.opencl) result.push('opencl');
-  if (availability.vulkan && !vision) result.push('vulkan');
+  if (availability.vulkan) result.push('vulkan');
   return result;
 }
 

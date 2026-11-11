@@ -1,7 +1,7 @@
 /**
  * QuickSettingsPopover Tests
  *
- * Atlas uses one unified Tools row. There is no separate Pro Tools/MCP row.
+ * Atlas uses one unified Tools row.
  */
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
@@ -19,7 +19,7 @@ jest.mock('react-native-vector-icons/Feather', () => {
 jest.mock('../../../src/theme', () => ({
   useTheme: () => ({ colors: COLORS }),
 }));
-jest.mock('../../../src/utils/haptics', () => ({ triggerHaptic: jest.fn() }));
+jest.mock('../../../src/services/haptics', () => ({ triggerHaptic: jest.fn() }));
 jest.mock('../../../src/bootstrap/slotRegistry', () => ({
   getSlot: () => null,
   SLOTS: { quickSettingsAudioRow: 'quickSettingsAudioRow' },
@@ -48,10 +48,9 @@ const baseProps = {
 describe('QuickSettingsPopover', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('renders the unified Tools row and no Pro Tools row', () => {
-    const { getByText, queryByText, getByTestId } = render(<QuickSettingsPopover {...baseProps} />);
+  it('renders the unified Tools row', () => {
+    const { getByText, getByTestId } = render(<QuickSettingsPopover {...baseProps} />);
     expect(getByText('Tools')).toBeTruthy();
-    expect(queryByText('Pro Tools')).toBeNull();
     expect(getByTestId('quick-tools')).toBeTruthy();
   });
 

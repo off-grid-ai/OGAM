@@ -33,10 +33,10 @@ describe('source-linked learning puzzles', () => {
     const entry = wordSearch.entries[0];
     const start = entry.row * wordSearch.size + entry.col;
     const end = (entry.row + entry.dr * (entry.answer.length - 1)) * wordSearch.size + entry.col + entry.dc * (entry.answer.length - 1);
-    expect(matchWordSearch(entry, start, end, wordSearch.size)).toBe(true);
-    expect(matchWordSearch(entry, end, start, wordSearch.size)).toBe(true);
+    expect(matchWordSearch(entry, { first: start, last: end }, wordSearch.size)).toBe(true);
+    expect(matchWordSearch(entry, { first: end, last: start }, wordSearch.size)).toBe(true);
     expect(wordSearch.cells[start]).toBe(entry.answer[0]);
-    expect(matchWordSearch(entry, start, start, wordSearch.size)).toBe(false);
+    expect(matchWordSearch(entry, { first: start, last: start }, wordSearch.size)).toBe(false);
   });
   it('rejects repeated words and overly long answers', () => {
     const wordSearch = buildWordSearch([...terms, terms[0], { answer: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', clue: 'Long', src: [4] }]);

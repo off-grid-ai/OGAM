@@ -59,8 +59,8 @@ These are load-bearing and evidence-verified. The architecture follows from them
 | **vLLM** (remote) | n/a (server) | optional BYO-server tier | Cloud TPU / GPU |
 
 **Ground truth - what is already wired (verified in code, 2026-07-06):**
-- **llama.rn** = text/VLM (GGUF) **and** the OuteTTS + Qwen3 TTS engines (`pro/audio/engine/tts/engines/{outetts,qwen3}` run on llama.rn). CPU/GPU.
-- **react-native-executorch `^0.8.1`** = **already a dependency**, powering **Kokoro TTS** (`pro/audio/engine/tts/engines/kokoro`, `useTextToSpeech` + `KOKORO_MEDIUM`). On iOS this already routes through CoreML (ANE-capable). Its embeddings/STT/vision hooks exist in the package but are not yet imported - extending to them is a small lift, iOS-NPU-only.
+- **llama.rn** = text/VLM (GGUF). CPU/GPU.
+- **react-native-executorch `^0.8.1`** = **already a dependency**, powering **Kokoro TTS** (`useTextToSpeech` + `KOKORO_MEDIUM`). On iOS this already routes through CoreML (ANE-capable). Its embeddings/STT/vision hooks exist in the package but are not yet imported - extending to them is a small lift, iOS-NPU-only.
 - **whisper.rn** = STT. **CoreMLDiffusionModule.swift** (iOS) + **LocalDreamModule.kt** (Android) = image-gen. The `ONNXImageModel` type / `onnxImageGeneratorService` name refers to the source model *format*; the runtimes are CoreML/LocalDream, **not** ONNX Runtime.
 - **onnxruntime-react-native is NOT in the app** - it is the one net-new engine this plan proposes, for fixed-shape breadth + the Android Hexagon path executorch cannot provide.
 

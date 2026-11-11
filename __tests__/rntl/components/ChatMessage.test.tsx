@@ -1582,3 +1582,176 @@ describe('ChatMessage', () => {
     });
   });
 });
+
+describe('chat layout', () => {
+  const { useAppStore } = require('../../../src/stores');
+  const flat = (node: any) => (Array.isArray(node.props.style) ? Object.assign({}, ...node.props.style.flat(Infinity).filter(Boolean)) : node.props.style ?? {});
+  const setLayout = (chatLayout?: 'clean' | 'bubbles') =>
+    useAppStore.getState().updateSettings({ appearance: { ...(useAppStore.getState().settings.appearance ?? {}), chatLayout } });
+
+  afterEach(() => setLayout(undefined));
+
+  it('shows a reply as plain text across the page by default, with a bubble only for your own message', () => {
+    const { getByTestId, getByText } = render(<ChatMessage message={createAssistantMessage('A plain answer')} />);
+    const bubble = getByText('A plain answer');
+    expect(bubble).toBeTruthy();
+    expect(flat(getByTestId('assistant-message')).marginVertical).toBe(4); // tighter than the 8 of the Bubbles look
+    expect(flat(getByTestId('assistant-message').children[0] as any).backgroundColor).toBe('transparent');
+    const user = render(<ChatMessage message={createUserMessage('My question')} />);
+    expect(user.getByText('My question')).toBeTruthy();
+    expect(flat(user.getByTestId('user-message').children[0] as any).borderRadius).toBe(18);
+  });
+
+  it('keeps every message in a box when Bubbles is chosen', () => {
+    setLayout('bubbles');
+    const { getByTestId } = render(<ChatMessage message={createAssistantMessage('A boxed answer')} />);
+    expect(flat(getByTestId('assistant-message').children[0] as any).backgroundColor).not.toBe('transparent');
+    expect(flat(getByTestId('assistant-message')).marginVertical).toBe(8);
+  });
+});
+
+describe('ChatMessage: fixing an old message without resending', () => {
+  it('SAVE keeps the conversation after it and says not to resend', () => {
+    jest.useFakeTimers();
+    const onEdit = jest.fn();
+    const { getByTestId, getByText, getByPlaceholderText } = render(
+      <ChatMessage message={createUserMessage('Original text')} onEdit={onEdit} showActions={true} />,
+    );
+    fireEvent(getByTestId('user-message'), 'longPress');
+    fireEvent.press(getByTestId('action-edit'));
+    act(() => { jest.advanceTimersByTime(400); });
+    fireEvent.changeText(getByPlaceholderText('Enter message...'), 'Fixed text');
+    fireEvent.press(getByText('SAVE'));
+    expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ content: 'Original text' }), 'Fixed text', { resend: false });
+    jest.useRealTimers();
+  });
+});
+
+describe('ChatMessage: which lessons a reply used', () => {
+  const { useAppStore } = require('../../../src/stores/appStore');
+  it('shows a small note when the reply was written with learned lessons, and hides it when switched off', () => {
+    const message = { ...createAssistantMessage('Use the 15th.'), generationMeta: { gpu: false, lessonsUsed: ['General', 'Taxes'] } } as any;
+    useAppStore.getState().updateSettings({ showLessonsUsed: true });
+    const on = render(<ChatMessage message={message} />);
+    expect(on.getByText('Used: General and Taxes lessons')).toBeTruthy();
+    on.unmount();
+    useAppStore.getState().updateSettings({ showLessonsUsed: false });
+    const off = render(<ChatMessage message={message} />);
+    expect(off.queryByTestId('lessons-used')).toBeNull();
+    useAppStore.getState().updateSettings({ showLessonsUsed: undefined });
+  });
+});
+
+describe('ChatMessage: check this answer', () => {
+  it('offers the action on a reply and calls back with that message', () => {
+    jest.useFakeTimers();
+    const onCheckAnswer = jest.fn();
+    const message = createAssistantMessage('The penalty is 5%.');
+    const { getByTestId } = render(<ChatMessage message={message} onCheckAnswer={onCheckAnswer} showActions={true} />);
+    fireEvent(getByTestId('assistant-message'), 'longPress');
+    fireEvent.press(getByTestId('action-check-answer'));
+    act(() => { jest.advanceTimersByTime(400); });
+    expect(onCheckAnswer).toHaveBeenCalledWith(expect.objectContaining({ content: 'The penalty is 5%.' }));
+    jest.useRealTimers();
+  });
+  it('does not offer it on your own message', () => {
+    const { getByTestId, queryByTestId } = render(<ChatMessage message={createUserMessage('hi')} onCheckAnswer={jest.fn()} showActions={true} />);
+    fireEvent(getByTestId('user-message'), 'longPress');
+    expect(queryByTestId('action-check-answer')).toBeNull();
+  });
+});
+
+describe('ChatMessage: source numbers', () => {
+  const { useChatStore } = require('../../../src/stores/chatStore');
+  it('shows a small raised number where a search result was cited, and lists the sources under the reply', () => {
+    const search = 'Results from Brave:\n\n1. [Tax deadlines](https://irs.example/deadlines)\n   Returns are due April 15.\n2. [Penalties](https://irs.example/penalties)\n   The late fee is 5% a month.';
+    const reply = { ...createAssistantMessage('Due April 15 [1]. The fee is 5% [2].'), id: 'a1' };
+    useChatStore.setState({
+      activeConversationId: 'c1',
+      conversations: [{ id: 'c1', title: 't', modelId: 'm', createdAt: '', updatedAt: '', messages: [
+        { id: 'u1', role: 'user', content: 'When?', timestamp: 1 },
+        { id: 't1', role: 'tool', toolName: 'web_search', content: search, timestamp: 2 },
+        reply,
+      ] }],
+    });
+    const view = render(<ChatMessage message={reply} />);
+    expect(view.getByText(/Due April 15¹\. The fee is 5%²\./)).toBeTruthy();
+    expect(view.getByTestId('reply-sources')).toBeTruthy();
+    expect(view.getAllByTestId(/^chip-/).length).toBe(2);
+  });
+  it('adds nothing to a reply that cites nothing', () => {
+    const reply = createAssistantMessage('Plain answer.');
+    useChatStore.setState({ activeConversationId: 'c1', conversations: [{ id: 'c1', title: 't', modelId: 'm', createdAt: '', updatedAt: '', messages: [reply] }] });
+    const view = render(<ChatMessage message={reply} />);
+    expect(view.queryByTestId('reply-sources')).toBeNull();
+  });
+});
+
+describe('ChatMessage: pin', () => {
+  it('pins a reply from the action menu without crashing (it reads the open chat)', () => {
+    const { useChatStore } = require('../../../src/stores/chatStore');
+    const { usePins } = require('../../../src/pins/store');
+    const reply = { ...createAssistantMessage('Worth keeping.'), id: 'pin-1' };
+    useChatStore.setState({ activeConversationId: 'c9', conversations: [{ id: 'c9', title: 'Trip', modelId: 'm', createdAt: '', updatedAt: '', messages: [reply] }] });
+    const { getByTestId } = render(<ChatMessage message={reply} showActions={true} />);
+    fireEvent(getByTestId('assistant-message'), 'longPress');
+    fireEvent.press(getByTestId('action-pin'));
+    expect(usePins.getState().pins.some((p: { id: string }) => p.id === 'pin-1')).toBe(true);
+  });
+});
+
+describe('ChatMessage: messaging-app look shows the time', () => {
+  const { useAppStore } = require('../../../src/stores/appStore');
+  it('shows the time inside a bubble in the iMessage look, and not in the Clean look', () => {
+    const message = createUserMessage('hello');
+    useAppStore.getState().updateSettings({ appearance: { chatLayout: 'imessage' } });
+    const on = render(<ChatMessage message={message} />);
+    expect(on.getByTestId('look-time')).toBeTruthy();
+    on.unmount();
+    useAppStore.getState().updateSettings({ appearance: { chatLayout: 'clean' } });
+    const off = render(<ChatMessage message={message} />);
+    expect(off.queryByTestId('look-time')).toBeNull();
+    useAppStore.getState().updateSettings({ appearance: undefined });
+  });
+});
+
+describe('ChatMessage: source numbers for project documents', () => {
+  const { useChatStore } = require('../../../src/stores/chatStore');
+  it('lists the document excerpts a reply was written from and raises the numbers it cites', () => {
+    const reply = { ...createAssistantMessage('The deadline is April 15 [1], and late filing costs 5% [2].'), id: 'r1',
+      generationMeta: { gpu: false, sources: [{ title: 'tax-guide.pdf (part 3)', quote: 'Returns are due April 15.' }, { title: 'penalties.md (part 1)', quote: 'The late fee is 5% a month.' }] } } as any;
+    useChatStore.setState({ activeConversationId: 'c1', conversations: [{ id: 'c1', title: 't', modelId: 'm', createdAt: '', updatedAt: '', messages: [{ id: 'u1', role: 'user', content: 'When?', timestamp: 1 }, reply] }] });
+    const view = render(<ChatMessage message={reply} />);
+    expect(view.getByText(/April 15¹, and late filing costs 5%²\./)).toBeTruthy();
+    expect(view.getAllByTestId(/^chip-/).length).toBe(2);
+  });
+});
+
+describe('ChatMessage: why this reply', () => {
+  it('lists the lessons and numbered excerpts the reply was written from', () => {
+    const alert = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => undefined);
+    const message = { ...createAssistantMessage('The rate is 5% [1].'), generationMeta: { gpu: false, lessonsUsed: ['General'], sources: [{ title: 'Tax guide (part 2)', quote: 'The rate is 5%.' }] } } as any;
+    const { getByTestId } = render(<ChatMessage message={message} showActions={true} />);
+    fireEvent(getByTestId('assistant-message'), 'longPress');
+    fireEvent.press(getByTestId('action-why'));
+    expect(alert).toHaveBeenCalledWith('Why this reply', expect.stringContaining('1. Tax guide (part 2): "The rate is 5%."'));
+    expect(alert.mock.calls[0][1]).toContain('Lessons used: General');
+    alert.mockRestore();
+  });
+  it('is not offered on your own message', () => {
+    const { getByTestId, queryByTestId } = render(<ChatMessage message={createUserMessage('hi')} showActions={true} />);
+    fireEvent(getByTestId('user-message'), 'longPress');
+    expect(queryByTestId('action-why')).toBeNull();
+  });
+});
+
+describe('ChatMessage: ask about this', () => {
+  it('quotes the reply into the message box', () => {
+    const { useQuoteDraft } = require('../../../src/utils/quoteDraft');
+    const { getByTestId } = render(<ChatMessage message={createAssistantMessage('The rate is 5%.')} showActions={true} />);
+    fireEvent(getByTestId('assistant-message'), 'longPress');
+    fireEvent.press(getByTestId('action-ask'));
+    expect(useQuoteDraft.getState().text).toBe('> The rate is 5%.\n\n');
+    useQuoteDraft.getState().set('');
+  });
+});

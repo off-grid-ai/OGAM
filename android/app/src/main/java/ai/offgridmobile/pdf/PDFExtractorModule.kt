@@ -4,11 +4,15 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.Arguments
 import ai.offgridmobile.SafePromise
 import io.legere.pdfiumandroid.PdfDocument
 import io.legere.pdfiumandroid.PdfiumCore
 import android.os.ParcelFileDescriptor
 import java.io.File
+import java.io.FileOutputStream
+import android.graphics.Bitmap
+import android.graphics.Color
 
 class PDFExtractorModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -68,6 +72,91 @@ class PDFExtractorModule(reactContext: ReactApplicationContext) : ReactContextBa
                 safeResolve(promise, sb.toString())
             } catch (e: Exception) {
                 safeReject(promise, "PDF_ERROR", "Failed to extract text: ${e.message}", e)
+            }
+        }.start()
+    }
+
+    /** How many pages the PDF has. */
+    @ReactMethod
+    fun pageCount(filePath: String, promise: Promise) {
+        Thread {
+            try {
+                val file = File(filePath)
+                if (!file.exists()) { safeReject(promise, "PDF_ERROR", "File not found: $filePath"); return@Thread }
+                val core = PdfiumCore(reactApplicationContext)
+                val fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+                val doc = core.newDocument(fd)
+                val count = doc.getPageCount()
+                doc.close()
+                fd.close()
+                safeResolve(promise, count)
+            } catch (e: Exception) {
+                safeReject(promise, "PDF_ERROR", "Failed to read the page count: ${e.message}", e)
+            }
+        }.start()
+    }
+
+    /**
+     * The text of `count` pages starting at the 0-based `start`, one string per page, in order (an empty string for a page with no
+     * text, for example a scan). Keeps page boundaries, which extractText loses, so a finding can cite its page.
+     */
+    @ReactMethod
+    fun extractPages(filePath: String, start: Double, count: Double, promise: Promise) {
+        Thread {
+            try {
+                val file = File(filePath)
+                if (!file.exists()) { safeReject(promise, "PDF_ERROR", "File not found: $filePath"); return@Thread }
+                val core = PdfiumCore(reactApplicationContext)
+                val fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+                val doc = core.newDocument(fd)
+                val total = doc.getPageCount()
+                val from = start.toInt().coerceAtLeast(0)
+                val to = (from + count.toInt()).coerceAtMost(total)
+                val result = Arguments.createArray()
+                for (i in from until to) {
+                    val sb = StringBuilder()
+                    extractPageText(doc, i, sb)
+                    result.pushString(sb.toString().trimEnd())
+                }
+                doc.close()
+                fd.close()
+                safeResolve(promise, result)
+            } catch (e: Exception) {
+                safeReject(promise, "PDF_ERROR", "Failed to extract pages: ${e.message}", e)
+            }
+        }.start()
+    }
+
+    /**
+     * Draws one page (0-based) as a PNG in the app cache, `maxWidth` pixels wide at most, and resolves its path. Used to read a
+     * scanned page with the vision model.
+     */
+    @ReactMethod
+    fun renderPage(filePath: String, pageIndex: Double, maxWidth: Double, promise: Promise) {
+        Thread {
+            try {
+                val file = File(filePath)
+                if (!file.exists()) { safeReject(promise, "PDF_ERROR", "File not found: $filePath"); return@Thread }
+                val core = PdfiumCore(reactApplicationContext)
+                val fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+                val doc = core.newDocument(fd)
+                val page = doc.openPage(pageIndex.toInt())
+                val wPt = page.getPageWidthPoint().toDouble().coerceAtLeast(1.0)
+                val hPt = page.getPageHeightPoint().toDouble().coerceAtLeast(1.0)
+                val w = maxWidth.toInt().coerceIn(200, 2000)
+                val h = (w * hPt / wPt).toInt().coerceAtLeast(1)
+                val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                bitmap.eraseColor(Color.WHITE)
+                page.renderPageBitmap(bitmap, 0, 0, w, h)
+                val out = File(reactApplicationContext.cacheDir, "pdf-page-${file.name.hashCode()}-${pageIndex.toInt()}.png")
+                FileOutputStream(out).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                bitmap.recycle()
+                page.close()
+                doc.close()
+                fd.close()
+                safeResolve(promise, out.absolutePath)
+            } catch (e: Exception) {
+                safeReject(promise, "PDF_ERROR", "Failed to draw the page: ${e.message}", e)
             }
         }.start()
     }

@@ -2,7 +2,7 @@ import React from 'react';
 import { type StyleProp, type ViewStyle } from 'react-native';
 import { AnimatedEntry } from './AnimatedEntry';
 import { AnimatedPressable } from './AnimatedPressable';
-import { type HapticType } from '../utils/haptics';
+import { type HapticType } from '../services/haptics';
 
 export interface AnimatedListItemProps {
   /** List index for stagger delay */

@@ -6,7 +6,7 @@ import Animated, {
   withSpring,
   useReducedMotion,
 } from 'react-native-reanimated';
-import { triggerHaptic, type HapticType } from '../utils/haptics';
+import { triggerHaptic, type HapticType } from '../services/haptics';
 
 // Use TouchableOpacity instead of Pressable as the base component.
 // Pressable wrapped in Reanimated's Animated.createAnimatedComponent inside

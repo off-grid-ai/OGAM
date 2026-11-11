@@ -82,11 +82,13 @@ android {
     namespace "ai.offgridmobile"
     defaultConfig {
         applicationId "ai.offgridmobile.atlas"
-        // The optional llama.kt Vulkan library requires API 29 (Android 10).
-        minSdkVersion project.findProperty('atlasVulkanEnabled') == 'true' ? 29 : rootProject.ext.minSdkVersion
+        // llama.kt (Vulkan text) is built for API 29. The app keeps API 24: the manifest
+        // overrides the library minimum and AtlasVulkanModule refuses to load it below API 29.
+        minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1784144538
-        versionName "0.0.104"
+        versionCode 1804544305
+        // CI passes -PatlasBuild=<run number>, so the version shown in the app says which build it is.
+        versionName "0.0.154" + (project.hasProperty('atlasBuild') ? " (build ${project.property('atlasBuild')})" : "")
     }
     signingConfigs {
         debug {
@@ -129,10 +131,6 @@ android {
             applicationIdSuffix ".dev"
         }
         release {
-            if (project.findProperty('atlasVulkanEnabled') == 'true') {
-                applicationIdSuffix '.vulkantest'
-                versionNameSuffix '-vulkan-test'
-            }
             // Experimental builds may retain debug signing. Published releases must
             // be signed with the permanent upload key and fail closed otherwise.
             if (project.findProperty('atlasRequireReleaseSigning') == 'true') {
@@ -172,8 +170,8 @@ configurations.all {
 }
 
 dependencies {
-    // Only experimental Vulkan builds compile the optional llama.kt engine.
-    // Normal Atlas releases keep their original llama.rn native packaging.
+    // Release builds package the llama.kt Vulkan text engine (-PatlasVulkanEnabled=true).
+    // Without it the app still runs: AtlasVulkanModule reports the engine as not packaged.
     if (project.findProperty('atlasVulkanEnabled') == 'true') {
         implementation project(':atlasLlamaKt')
     }
@@ -215,6 +213,16 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.8.7")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Atlas: unpacking voice files the user imports (.tar.bz2 from sherpa-onnx, .zip)
+    implementation("org.apache.commons:commons-compress:1.27.1")
+    // In-app QR scanner for offline device pairing: CameraX plus ML Kit's bundled QR model
+    // (works offline; no Google Play services download).
+    implementation("androidx.camera:camera-camera2:1.4.2")
+    implementation("androidx.camera:camera-lifecycle:1.4.2")
+    implementation("androidx.camera:camera-view:1.4.2")
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    // CameraX hands back a ListenableFuture (Guava) for the camera provider.
+    implementation("com.google.guava:guava:33.3.1-android")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.13")

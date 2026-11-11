@@ -29,6 +29,8 @@ internal class AtlasNativeDiffusion(private val context: Context) {
     @Volatile private var reportedStep = 0
     @Volatile private var requestedSteps = 0
     @Volatile private var phase = "Idle"
+    /** Where sd-cli writes the low-resolution picture of each step, while one is being made. */
+    @Volatile private var previewDir: File? = null
     @Volatile private var computeBackend = "not selected"
     @Volatile private var weightPrecision = "checkpoint precision"
     @Volatile private var deviceLabel = "not probed"
@@ -155,6 +157,18 @@ internal class AtlasNativeDiffusion(private val context: Context) {
             putDouble("secondsSinceLog", if (lastOutputMs > 0) (now - lastOutputMs) / 1000.0 else -1.0)
             putDouble("cpuTicks", ticks?.toDouble() ?: -1.0)
         }
+    }
+
+    /**
+     * The newest finished preview picture, or null. A file written in the last moment may
+     * still be open, so the one before it is used then.
+     */
+    fun latestPreview(): String? {
+        val now = System.currentTimeMillis()
+        return previewDir?.listFiles { f -> f.name.endsWith(".png") && f.length() > 0 }
+            ?.sortedByDescending { it.name }
+            ?.firstOrNull { now - it.lastModified() > 300 }
+            ?.absolutePath
     }
 
     fun available(): Boolean = File(context.applicationInfo.nativeLibraryDir, EXECUTABLE).isFile
@@ -288,6 +302,13 @@ internal class AtlasNativeDiffusion(private val context: Context) {
             if (!gpuRequested) cmd.add("--offload-to-cpu")
         }
         if (family == "chroma") cmd.addAll(listOf("--model-args", "chroma_use_dit_mask=false"))
+        // A rough picture of the image so far (the latent shown as colours, no extra decoding),
+        // written every few steps so the app can show the image taking shape.
+        val previews = File(context.cacheDir, "atlas-image-preview").apply { deleteRecursively(); mkdirs() }
+        previewDir = previews
+        val previewEvery = (if (params.hasKey("previewInterval")) params.getInt("previewInterval") else 2).coerceIn(1, 10)
+        cmd.addAll(listOf("--preview", "proj", "--preview-interval", previewEvery.toString(),
+            "--preview-path", File(previews, "step_%04d.png").absolutePath))
         if (params.hasKey("negativePrompt") && family != "flux") {
             params.getString("negativePrompt")?.takeIf { it.isNotEmpty() }?.let {
                 cmd.addAll(listOf("-n", it))

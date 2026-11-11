@@ -186,10 +186,7 @@ A row flagged HAS-UI-TEST may still carry a device caveat where the *trigger* is
 | 131 | 7 Tools | Tool router no false positive | HAS-SERVICE-TEST-ONLY | `__tests__/integration/chat/toolRouterFalsePositive.redflow.test.ts` | T041/DEV-Q4. Service-level only |
 | 132 | 7 Tools | Empty final turn keeps tool data | HAS-UI-TEST | `__tests__/integration/chat/toolEmptyFinal.redflow.test.tsx` | T042/DEV-Q5. tsx renders ChatScreen |
 | 133 | 7 Tools | Add / connect an MCP server | HAS-UI-TEST | `__tests__/rntl/components/McpServersScreen.test.tsx` (+ `McpAddServerSheet.test.tsx`) | Pro. Renders connecting/connected; live connect device |
-| 134 | 7 Tools | MCP server tools listed | HAS-UI-TEST | `__tests__/pro/ui/McpToolsScreen.test.tsx` | Pro. Lists per-server tools + toggles |
 | 135 | 7 Tools | Execute an MCP tool | HAS-UI-TEST | `__tests__/integration/happy/tools.happy.test.tsx` (MCP case) | Pro. Registered MCP tool executes, result in rendered ChatScreen |
-| 136 | 7 Tools | MCP tool error handled | HAS-SERVICE-TEST-ONLY | `__tests__/pro/mcp/McpToolExtension.extra.test.ts` | Pro. execute() never-throws at service level; no rendered stuck-spinner assert |
-| 137 | 7 Tools | MCP guide screen renders | HAS-UI-TEST | `__tests__/pro/ui/McpGuideScreen.test.tsx` | Pro. Guide screen renders |
 
 ## Phase 8 Remote
 

@@ -1,9 +1,12 @@
 package ai.offgridmobile
 
 import android.graphics.Color
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
+import ai.offgridmobile.atlasdevice.AtlasShortcuts
+import ai.offgridmobile.atlasdevice.ShareBridge
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
@@ -24,6 +27,13 @@ class MainActivity : ReactActivity() {
   override fun createReactActivityDelegate(): ReactActivityDelegate =
       DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled)
 
+  /** Text shared into Atlas while it runs (the intent stays for getInitialShare when the app side is not ready yet). */
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    ShareBridge.deliver(intent)
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     // Switch from SplashTheme back to AppTheme once React Native loads
     setTheme(R.style.AppTheme)
@@ -39,5 +49,6 @@ class MainActivity : ReactActivity() {
     )
     // Prevent restoring screen fragments for react-native-screens
     super.onCreate(null)
+    AtlasShortcuts.publish(this)
   }
 }

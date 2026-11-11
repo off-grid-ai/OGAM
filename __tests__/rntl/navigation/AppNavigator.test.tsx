@@ -8,7 +8,7 @@
  */
 
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { render, fireEvent } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAppStore } from '../../../src/stores/appStore';
 import { resetStores, setupWithActiveModel } from '../../utils/testHelpers';
@@ -97,7 +97,7 @@ jest.mock('../../../src/services/hardware', () => ({
   },
 }));
 
-jest.mock('../../../src/utils/haptics', () => ({
+jest.mock('../../../src/services/haptics', () => ({
   triggerHaptic: jest.fn(),
 }));
 
@@ -222,6 +222,24 @@ describe('AppNavigator', () => {
     });
   });
 
+  describe('holding a tab', () => {
+    it('opens the thing you most often want from it: Search from Home, Appearance from Settings', async () => {
+      const { getByTestId, findByTestId } = renderAppNavigator();
+      fireEvent(getByTestId('home-tab'), 'longPress');
+      expect(await findByTestId('search-input')).toBeTruthy();
+    });
+  });
+
+  describe('Multicolor accent', () => {
+    it('gives each tab its own color', () => {
+      useAppStore.getState().updateSettings({ appearance: { accent: 'multi' } });
+      const view = renderAppNavigator();
+      const iconColor = (id: string) => view.getByTestId(id).findAll((n: any) => n.props?.size === 22 && n.props?.color).map((n: any) => n.props.color)[0];
+      expect(iconColor('home-tab')).not.toBe(iconColor('chats-tab'));
+      expect(String(iconColor('chats-tab')).toLowerCase()).toMatch(/^#(047857|34d399)$/);
+    });
+  });
+
   describe('Tab bar safe area insets', () => {
     it('uses minimum paddingBottom of 20 when bottom inset is 0 (gesture navigation)', () => {
       mockInsets.bottom = 0;
@@ -295,7 +313,7 @@ describe('AppNavigator', () => {
       // all tabs should still be visible and not clipped by the system navigation bar
       mockInsets.bottom = 48;
       // The fullest bar: all five main tabs on.
-      useAppStore.setState({ settings: { ...useAppStore.getState().settings, navBar: { hidden: ['emergency', 'library', 'brief', 'compass', 'phrases', 'survival'] } } });
+      useAppStore.setState({ settings: { ...useAppStore.getState().settings, navBar: { hidden: ['emergency', 'library', 'brief', 'compass', 'phrases', 'recorder', 'language', 'survival'] } } });
       const { getAllByText, getByTestId } = renderAppNavigator();
 
       // All tab labels should be visible

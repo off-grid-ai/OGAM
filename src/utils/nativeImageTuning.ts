@@ -38,7 +38,7 @@ export function getImageTuning(model: ImageIdentity, settings: ImageSettings) {
   const family = model?.nativeImageFamily;
   const turbo = isTurbo(model);
   const recommendedSide = family === 'sdxl' ? 1024 : family === 'anima' ? 512 : 768;
-  const steps = turbo ? (family === 'anima' ? 8 : 8) : family === 'anima' ? 20 : 28;
+  const steps = turbo ? 8 : family === 'anima' ? 20 : 28;
   const side = (value: number) => value === SWEET_SPOT_SIZE
     ? recommendedSide : Math.max(512, Math.min(1024, value));
   return {

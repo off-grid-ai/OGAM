@@ -47,12 +47,11 @@ jest.mock('../../../package.json', () => ({ version: '1.0.0' }), {
 });
 
 const mockSetOnboardingComplete = jest.fn();
+// The update card looks for a newer build on its own; the Settings tests do not need the network.
+jest.mock('../../../src/services/appUpdate', () => ({ installedBuild: () => 143, checkForUpdate: jest.fn(async () => ({ current: 143, update: null })), downloadAndInstall: jest.fn() }));
 const mockSetThemeMode = jest.fn();
 const mockCompleteChecklistStep = jest.fn();
 const mockResetChecklist = jest.fn();
-// Mutated per-test to drive Pro banner visibility. `mock`-prefixed so jest.mock's
-// hoisted factory is allowed to reference it.
-const mockProState = { hasRegisteredPro: false, proBannerDismissed: false };
 jest.mock('../../../src/stores', () => ({
   useAppStore: jest.fn((selector?: any) => {
     const state = {
@@ -61,9 +60,6 @@ jest.mock('../../../src/stores', () => ({
       setThemeMode: mockSetThemeMode,
       completeChecklistStep: mockCompleteChecklistStep,
       resetChecklist: mockResetChecklist,
-      setProBannerDismissed: jest.fn(),
-      hasRegisteredPro: mockProState.hasRegisteredPro,
-      proBannerDismissed: mockProState.proBannerDismissed,
     };
     return selector ? selector(state) : state;
   }),
@@ -89,14 +85,6 @@ jest.mock('@react-navigation/native', () => ({
 describe('SettingsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockProState.hasRegisteredPro = false;
-    mockProState.proBannerDismissed = false;
-  });
-
-  // Atlas removed the Off Grid Pro upsell entirely.
-  it('never shows the Pro upsell banner', () => {
-    const { queryByText } = render(<SettingsScreen />);
-    expect(queryByText(/democratized/i)).toBeNull();
   });
 
   it('renders "Settings" title', () => {
@@ -179,12 +167,6 @@ describe('SettingsScreen', () => {
     const { queryByTestId } = render(<SettingsScreen />);
     expect(queryByTestId('follow-on-x')).toBeNull();
     expect(queryByTestId('join-slack')).toBeNull();
-  });
-
-  it('no longer renders the removed Pro Tools row', () => {
-    const { queryByText } = render(<SettingsScreen />);
-    // Pro Tools was removed from Settings — it must not surface (mirrors the Voice/TTS removal guard).
-    expect(queryByText('Pro Tools')).toBeNull();
   });
 
   it('renders Reset Onboarding button in __DEV__ mode', () => {

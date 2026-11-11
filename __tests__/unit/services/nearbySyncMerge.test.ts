@@ -76,4 +76,24 @@ describe('Atlas offline conflict-preserving merge', () => {
     expect(fromLeft).toHaveLength(2);
     expect(mergeConversations(fromLeft, fromRight).items).toHaveLength(2);
   });
+  it('treats a chat made on both phones (different ids, same title, one continues the other) as one chat', () => {
+    const local = { ...chat(['hello']), id: 'phone-a-chat' };
+    const remote = { ...chat(['hello', 'world'], '2026-01-02T00:00:00.000Z'), id: 'phone-b-chat' };
+    const result = mergeConversations([local], [remote]);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].id).toBe('phone-a-chat');
+    expect(result.items[0].messages.map(m => m.content)).toEqual(['hello', 'world']);
+    // And the other way round keeps this phone's longer chat without adding a second.
+    expect(mergeConversations([remote], [local]).items).toHaveLength(1);
+    // Syncing again changes nothing.
+    expect(mergeConversations(result.items, [remote]).items).toHaveLength(1);
+  });
+  it('keeps both chats when two phones made different chats with the same title', () => {
+    const result = mergeConversations([{ ...chat(['one']), id: 'a' }], [{ ...chat(['two']), id: 'b' }]);
+    expect(result.items).toHaveLength(2);
+  });
+  it('does not add an agent or project that is the same thing made on both phones', () => {
+    expect(mergeAgents([agent('Sage')], [{ ...agent('Sage', '2026-02-02T00:00:00.000Z'), id: 'agent-from-b' }]).items).toHaveLength(1);
+    expect(mergeAgents([agent('Sage')], [{ ...agent('Sage'), id: 'agent-from-b', systemPrompt: 'different' }]).items).toHaveLength(2);
+  });
 });

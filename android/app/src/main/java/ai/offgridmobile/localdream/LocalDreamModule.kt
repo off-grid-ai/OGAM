@@ -1075,6 +1075,7 @@ class LocalDreamModule(reactContext: ReactApplicationContext) :
                             m.putInt("step", step)
                             m.putInt("totalSteps", total)
                             m.putDouble("progress", if (total > 0) step.toDouble() / total else 0.0)
+                            directDiffusion.latestPreview()?.let { m.putString("previewPath", it) }
                             sendEvent(EVENT_PROGRESS, m)
                         })
                     safeResolve(promise, result)

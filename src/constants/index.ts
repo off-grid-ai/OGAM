@@ -8,18 +8,11 @@ export {
 } from './models';
 
 // External URLs
-export const WEDNESDAY_URL = 'https://wednesday.is';
+/** The GitHub repository whose releases hold Atlas updates and library packs. */
+export const ATLAS_REPO = 'coolchan03/Atlas';
 
-// Off Grid AI Desktop: the free, open-source desktop app (not a Pro feature).
-// Linked from Pro screens and from remote-server discovery alike.
+// Off Grid AI Desktop: the free, open-source desktop app. Linked from remote-server discovery.
 export const OFF_GRID_DESKTOP_URL = 'https://getoffgridai.co/desktop';
-
-export const PRO_AHA_FEATURES = [
-  'Ambient across your devices',
-  'Proactive, not reactive',
-  'Private by architecture',
-  'It acts, you approve',
-];
 
 // Hugging Face API configuration
 export const HF_API = {

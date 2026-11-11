@@ -7,12 +7,12 @@ import { useWindowDimensions } from 'react-native';
 export const WIDE_MIN_WIDTH = 720;
 export const READABLE_MAX_WIDTH = 920;
 
-export function useWideLayout(): { isWide: boolean; width: number; column: object } {
+export function useWideLayout(maxWidth: number = READABLE_MAX_WIDTH): { isWide: boolean; width: number; column: object } {
   const { width } = useWindowDimensions();
   const isWide = width >= WIDE_MIN_WIDTH;
   return {
     isWide,
     width,
-    column: isWide ? { width: '100%', maxWidth: READABLE_MAX_WIDTH, alignSelf: 'center' } : {},
+    column: isWide ? { width: '100%', maxWidth, alignSelf: 'center' } : {},
   };
 }

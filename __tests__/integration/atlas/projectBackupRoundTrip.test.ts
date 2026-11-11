@@ -11,6 +11,8 @@ const mockRestore = jest.fn(async (_files: any[], _ids: string[]) => 1);
 jest.mock('../../../src/atlasTools/projectBackupFiles', () => ({
   collectProjectFiles: (...a: any[]) => mockCollect(...a as [string[]]),
   restoreProjectFiles: (...a: any[]) => mockRestore(...a as [any[], string[]]),
+  // The real manifest check: backup.ts now validates every document before it changes anything.
+  validateProjectFiles: (...a: any[]) => (jest.requireActual('../../../src/atlasTools/projectBackupFiles') as any).validateProjectFiles(...a),
 }));
 jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: {
   getAllKeys: jest.fn(async () => [...mockStore.keys()]),
@@ -36,6 +38,8 @@ jest.mock('../../../src/stores/encryptedChatStorage', () => ({
   encryptedChatStorage: { getItem: jest.fn(async () => null), setItem: jest.fn(async () => undefined) },
 }));
 const projects = () => JSON.stringify({state:{projects:[{id:'therapy',name:'Therapy',systemPrompt:'Notes'}]},version:0});
+require('../../utils/registerStores').registerStoreRefs();
+
 describe('portable backup project file round trip', () => {
   beforeEach(() => {
     jest.clearAllMocks(); mockStore.clear(); mockArchive = '';
@@ -71,10 +75,25 @@ describe('portable backup project file round trip', () => {
     expect(JSON.parse(mockArchive).projectFiles).toBeUndefined();
     expect(mockCollect).not.toHaveBeenCalled();
   });
-  it('refuses corrupt restored project files before importing settings', async () => {
+  it('a failed document restore leaves the settings exactly as they were (rolled back)', async () => {
     await exportBackup('very-long-backup-password');
+    mockStore.set('local-llm-project-storage', JSON.stringify({ state: { projects: [{ id: 'therapy', name: 'Edited since the backup' }] }, version: 0 }));
+    const before = new Map(mockStore);
     mockRestore.mockRejectedValueOnce(new Error('Invalid project document in backup'));
     await expect(importBackup('very-long-backup-password')).rejects.toThrow(/Invalid project document/);
-    expect(AsyncStorage.multiSet).not.toHaveBeenCalled();
+    expect(new Map(mockStore)).toEqual(before);
+  });
+});
+
+describe('restoring a backup on the same phone', () => {
+  it("keeps this phone's protected projects that the backup does not contain", async () => {
+    const { keepDeviceProtected } = require('../../../src/atlasTools/backup');
+    const onPhone = { id: 'therapy', name: 'Locked project', pinVerifier: 'pin:v1:1', protectedBlob: 'atlasitem:v1:abc' };
+    mockStore.set('local-llm-project-storage', JSON.stringify({ state: { projects: [onPhone, { id: 'old', name: 'Old' }] }, version: 0 }));
+    const fromBackup = JSON.stringify({ state: { projects: [{ id: 'school', name: 'School' }] }, version: 0 });
+    (AsyncStorage as any).getItem = jest.fn(async (k: string) => mockStore.get(k) ?? null);
+    const merged = JSON.parse(await keepDeviceProtected('local-llm-project-storage', fromBackup));
+    // The backup replaces ordinary projects, but never deletes a protected one that lives only here.
+    expect(merged.state.projects.map((p: any) => p.id)).toEqual(['school', 'therapy']);
   });
 });

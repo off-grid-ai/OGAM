@@ -15,7 +15,7 @@
  * it's embedded once and reused across turns. The cache is persisted to disk so the
  * cold burst (~60 sequential CPU embeddings the first time MCP is used in a session)
  * happens once ever, not on the first message of every session — a real
- * time-to-first-token win for Pro/MCP users.
+ * time-to-first-token win for users with extension tools.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { embeddingService } from './rag/embedding';

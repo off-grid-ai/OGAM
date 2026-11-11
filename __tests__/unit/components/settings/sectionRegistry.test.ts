@@ -36,7 +36,7 @@ describe('settings section registry', () => {
   });
 
   it('re-renders a mounted consumer when a section registers afterwards (F6 reactivity)', () => {
-    // The Pro-activation flow registers a Settings section AFTER SettingsScreen mounted;
+    // A feature registers a Settings section AFTER SettingsScreen mounted;
     // without reactivity the screen showed nothing until an app restart. useSettingsSections
     // must push the update to an already-mounted consumer.
     const Consumer = () => {

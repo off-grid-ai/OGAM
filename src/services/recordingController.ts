@@ -16,7 +16,7 @@
  *
  * It owns coordination + state, not the recording mechanics — those stay in the
  * recorder, which is injected via registerHandlers (DIP). Lives in core so the core
- * footer mic and the pro hero mic both depend on this one contract.
+ * footer mic and the hero mic both depend on this one contract.
  */
 
 /** Explicit record lifecycle. `transcribing` is the post-stop window (whisper running). */

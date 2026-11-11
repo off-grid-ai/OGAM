@@ -4,6 +4,11 @@ import { useTheme } from '../theme';
 import { useLowPower, checkBatteryNow, batteryModel } from '../atlasTools/lowPower';
 import { useAppStore } from '../stores/appStore';
 import { ModelChips } from './ModelChips';
+const COLOR_FFF = '#fff';
+const literalStyles = StyleSheet.create({
+  s1: { flex: 1 },
+});
+
 
 /** Settings card for low-battery mode. */
 export function LowPowerCard() {
@@ -15,7 +20,7 @@ export function LowPowerCard() {
   return (
     <View style={[st.card, { backgroundColor: colors.surface }]}>
       <View style={st.row}>
-        <View style={{ flex: 1 }}>
+        <View style={literalStyles.s1}>
           <Text style={[st.h, { color: colors.text }]}>Low-battery mode</Text>
           <Text style={[st.p, { color: colors.textSecondary }]}>
             Below {s.threshold}% (not charging): smaller model, short answers, hands-free off.
@@ -32,7 +37,7 @@ export function LowPowerCard() {
           <View style={st.row}>
             {[10, 15, 20, 30, 40].map((n) => (
               <TouchableOpacity key={n} onPress={() => s.set({ threshold: n })} style={[st.pill, { backgroundColor: s.threshold === n ? colors.primary : colors.background }]}>
-                <Text style={{ color: s.threshold === n ? '#fff' : colors.text }}>{n}%</Text>
+                <Text style={{ color: s.threshold === n ? COLOR_FFF : colors.text }}>{n}%</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -40,7 +45,7 @@ export function LowPowerCard() {
           <View style={st.row}>
             {[128, 256, 512].map((n) => (
               <TouchableOpacity key={n} onPress={() => s.set({ maxTokens: n })} style={[st.pill, { backgroundColor: s.maxTokens === n ? colors.primary : colors.background }]}>
-                <Text style={{ color: s.maxTokens === n ? '#fff' : colors.text }}>{n} tokens</Text>
+                <Text style={{ color: s.maxTokens === n ? COLOR_FFF : colors.text }}>{n} tokens</Text>
               </TouchableOpacity>
             ))}
           </View>

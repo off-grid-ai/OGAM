@@ -4,6 +4,7 @@
  */
 import RNFS from 'react-native-fs';
 import { unzip } from 'react-native-zip-archive';
+import { docxToMarkdown, htmlToMarkdown, sheetMarkdown, slideMarkdown } from './markdownConvert';
 
 export const OFFICE_EXTENSIONS = ['.docx', '.pptx', '.xlsx', '.odt', '.ods', '.odp', '.epub', '.rtf'];
 
@@ -35,6 +36,19 @@ async function pptx(dir: string): Promise<string> {
   return out.join('\n\n');
 }
 
+async function pptxMarkdown(dir: string): Promise<string> {
+  const sd = `${dir}/ppt/slides`;
+  if (!(await RNFS.exists(sd))) return '';
+  const slides = (await RNFS.readDir(sd)).filter((f) => /^slide\d+\.xml$/.test(f.name)).sort((a, b) => num(a.name) - num(b.name));
+  const out: string[] = [];
+  for (const f of slides) {
+    const paragraphs = (await RNFS.readFile(f.path, 'utf8')).split('</a:p>').map((p) => tidy(p)).filter(Boolean);
+    const notes = tidy((await read(`${dir}/ppt/notesSlides/notesSlide${num(f.name)}.xml`)).replace(/<\/a:p>/g, '\n')).replace(/^\d+\s*$/m, '').trim();
+    out.push(slideMarkdown(num(f.name), { title: paragraphs[0] ?? '', paragraphs: paragraphs.slice(1), notes }));
+  }
+  return out.join('\n\n');
+}
+
 function colIndex(ref: string): number {
   const letters = ref.replace(/\d+/g, '');
   let n = 0;
@@ -42,19 +56,20 @@ function colIndex(ref: string): number {
   return n - 1;
 }
 
-async function xlsx(dir: string): Promise<string> {
+/** The sheets of a workbook as rows of cell values. */
+async function xlsxSheets(dir: string): Promise<Array<{ name: string; rows: string[][] }>> {
   const shared: string[] = [];
   const ss = await read(`${dir}/xl/sharedStrings.xml`);
   for (const m of ss.matchAll(/<si>([\s\S]*?)<\/si>/g)) shared.push(tidy(m[1]));
   const wb = await read(`${dir}/xl/workbook.xml`);
   const names = [...wb.matchAll(/<sheet [^>]*name="([^"]*)"/g)].map((m) => decode(m[1]));
   const wsDir = `${dir}/xl/worksheets`;
-  if (!(await RNFS.exists(wsDir))) return '';
+  if (!(await RNFS.exists(wsDir))) return [];
   const sheets = (await RNFS.readDir(wsDir)).filter((f) => /^sheet\d+\.xml$/.test(f.name)).sort((a, b) => num(a.name) - num(b.name));
-  const out: string[] = [];
+  const out: Array<{ name: string; rows: string[][] }> = [];
   for (const f of sheets) {
     const x = await RNFS.readFile(f.path, 'utf8');
-    const rows: string[] = [];
+    const rows: string[][] = [];
     for (const r of x.matchAll(/<row\b[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g)) {
       const cells: string[] = [];
       for (const c of (r[1] || '').matchAll(/<c ([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
@@ -67,13 +82,23 @@ async function xlsx(dir: string): Promise<string> {
         else v = decode(v);
         const i = ref ? colIndex(ref) : cells.length;
         while (cells.length < i) cells.push('');
-        cells[i] = v.includes(',') || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v;
+        cells[i] = v;
       }
-      if (cells.some((c) => c !== '')) rows.push(cells.join(','));
+      if (cells.some((c) => c !== '')) rows.push(cells);
     }
-    out.push(`--- Sheet: ${names[num(f.name) - 1] || f.name} ---\n${rows.join('\n')}`);
+    out.push({ name: names[num(f.name) - 1] || f.name, rows });
   }
-  return out.join('\n\n');
+  return out;
+}
+
+const csvCell = (v: string) => (v.includes(',') || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v);
+
+async function xlsx(dir: string): Promise<string> {
+  return (await xlsxSheets(dir)).map((s) => `--- Sheet: ${s.name} ---\n${s.rows.map((r) => r.map(csvCell).join(',')).join('\n')}`).join('\n\n');
+}
+
+async function xlsxMarkdown(dir: string): Promise<string> {
+  return (await xlsxSheets(dir)).map((s) => sheetMarkdown(s.name, s.rows)).join('\n\n');
 }
 
 async function odf(dir: string): Promise<string> {
@@ -99,6 +124,26 @@ async function epub(dir: string): Promise<string> {
     const body = h.replace(/<(script|style)[\s\S]*?<\/\1>/gi, '').replace(/<\/(p|div|h\d|li|tr)>/gi, '\n').replace(/<br\s*\/?>/gi, '\n');
     const t = tidy(body);
     if (t) out.push(t);
+  }
+  return out.join('\n\n');
+}
+
+async function epubMarkdown(dir: string): Promise<string> {
+  const container = await read(`${dir}/META-INF/container.xml`);
+  const opfRel = container.match(/full-path="([^"]+)"/)?.[1];
+  if (!opfRel) return '';
+  const opf = await read(`${dir}/${opfRel}`);
+  const base = opfRel.includes('/') ? opfRel.slice(0, opfRel.lastIndexOf('/') + 1) : '';
+  const items: Record<string, string> = {};
+  for (const m of opf.matchAll(/<item [^>]*>/g)) {
+    const id = m[0].match(/id="([^"]+)"/)?.[1]; const href = m[0].match(/href="([^"]+)"/)?.[1];
+    if (id && href && !decodeURIComponent(href).includes('..')) items[id] = decodeURIComponent(href);
+  }
+  const order = [...opf.matchAll(/<itemref [^>]*idref="([^"]+)"/g)].map((m) => items[m[1]]).filter(Boolean);
+  const out: string[] = [];
+  for (const href of order) {
+    const md = htmlToMarkdown(await read(`${dir}/${base}${href}`));
+    if (md) out.push(md);
   }
   return out.join('\n\n');
 }
@@ -139,6 +184,24 @@ export async function extractOffice(path: string, ext: string, maxChars: number)
     else if (ext === '.xlsx') text = await xlsx(dir);
     else if (ext === '.epub') text = await epub(dir);
     else text = await odf(dir);
+    if (!text.trim()) throw new Error('No text found in this file (it may contain only pictures).');
+    return text.length > maxChars ? `${text.slice(0, maxChars)}\n\n... [Content truncated due to length]` : text;
+  } finally {
+    RNFS.unlink(dir).catch(() => undefined);
+  }
+}
+
+/** The same files as Markdown: Word headings, lists and tables, slides as sections, sheets as tables, EPUB chapters with their headings. */
+export async function extractOfficeMarkdown(path: string, ext: string, maxChars: number): Promise<string> {
+  if (ext === '.rtf' || ext === '.odt' || ext === '.ods' || ext === '.odp') return extractOffice(path, ext, maxChars);
+  const dir = `${RNFS.CachesDirectoryPath}/office_${Date.now()}`;
+  try {
+    await unzip(path, dir);
+    let text = '';
+    if (ext === '.docx') text = docxToMarkdown(await read(`${dir}/word/document.xml`));
+    else if (ext === '.pptx') text = await pptxMarkdown(dir);
+    else if (ext === '.xlsx') text = await xlsxMarkdown(dir);
+    else if (ext === '.epub') text = await epubMarkdown(dir);
     if (!text.trim()) throw new Error('No text found in this file (it may contain only pictures).');
     return text.length > maxChars ? `${text.slice(0, maxChars)}\n\n... [Content truncated due to length]` : text;
   } finally {

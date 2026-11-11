@@ -36,12 +36,17 @@ async function resolvePath(p?: string): Promise<string> {
   return path;
 }
 
+/** How long a question to the user waits. An unseen prompt (app in the background, another sheet on top) held the whole reply forever. */
+export const CONFIRM_TIMEOUT_MS = 2 * 60 * 1000;
+
 export function confirm(title: string, message: string, ok = 'Allow'): Promise<boolean> {
   return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), CONFIRM_TIMEOUT_MS); // no answer counts as Deny
+    const answer = (v: boolean) => { clearTimeout(timer); resolve(v); };
     Alert.alert(title, message, [
-      { text: 'Deny', style: 'cancel', onPress: () => resolve(false) },
-      { text: ok, onPress: () => resolve(true) },
-    ], { cancelable: true, onDismiss: () => resolve(false) });
+      { text: 'Deny', style: 'cancel', onPress: () => answer(false) },
+      { text: ok, onPress: () => answer(true) },
+    ], { cancelable: true, onDismiss: () => answer(false) });
   });
 }
 
@@ -52,7 +57,7 @@ export async function listFiles(path?: string): Promise<string> {
   if (!(await RNFS.exists(dir))) return `Folder not found: ${dir}`;
   const items = (await RNFS.readDir(dir)).sort((a: any, b: any) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name));
   if (!items.length) return `${dir} is empty.`;
-  return `${dir}\n` + items.slice(0, 200).map((it: any) => (it.isDirectory() ? `[folder] ${it.name}/` : `${it.name} (${kb(Number(it.size))})`)).join('\n');
+  return `${dir}\n${items.slice(0, 200).map((it: any) => (it.isDirectory() ? `[folder] ${it.name}/` : `${it.name} (${kb(Number(it.size))})`)).join('\n')}`;
 }
 
 /** Last time the assistant read one of your files (used to double-check web requests after it). */
@@ -103,7 +108,7 @@ export async function writeFile(path: string, content: string, append = false): 
     `${p}\n\n${content.slice(0, 400)}${content.length > 400 ? '\n...' : ''}`,
     append ? 'Add' : exists ? 'Replace' : 'Create',
   );
-  if (!ok) return 'The user declined. Nothing was written.';
+  if (!ok) return 'The user declined, or did not answer in time. Nothing was written.';
   await RNFS.mkdir(p.substring(0, p.lastIndexOf('/')));
   if (append && exists) await RNFS.appendFile(p, content, 'utf8');
   else await RNFS.writeFile(p, content, 'utf8');
@@ -143,7 +148,8 @@ export async function calendarEvents(daysAhead = 7, daysBack = 0): Promise<strin
   return ev.map((e) => `- ${f(e.begin, e.allDay)}${e.allDay ? ' (all day)' : ` to ${new Date(e.end).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`}: ${e.title}${e.location ? ` @ ${e.location}` : ''}`).join('\n');
 }
 
-export async function addCalendarEvent(title: string, start: string, end?: string, location = '', description = ''): Promise<string> {
+export async function addCalendarEvent(title: string, start: string, more: { end?: string; location?: string; description?: string } = {}): Promise<string> {
+  const { end, location = '', description = '' } = more;
   const s = Date.parse(start);
   if (isNaN(s)) return 'Could not understand the start time. Use a format like 2026-10-05T14:00.';
   const e = end && !isNaN(Date.parse(end)) ? Date.parse(end) : s + 3600000;
@@ -151,12 +157,36 @@ export async function addCalendarEvent(title: string, start: string, end?: strin
   return 'Opened the calendar with the event filled in. The user confirms and saves it there.';
 }
 
+/** The link that opens the phone's Messages or Email app with a draft filled in (nothing is sent from here). */
+export function messageUrl(kind: 'text' | 'email' | 'call', body: string, who: { to?: string; subject?: string } = {}): string {
+  const { to = '', subject = '' } = who;
+  if (kind === 'call') return `tel:${to.replace(/[^\d+*#]/g, '')}`;
+  if (kind === 'text') return `sms:${to.replace(/[^\d+,;]/g, '')}?body=${encodeURIComponent(body)}`;
+  const recipient = to.replace(/[^\w@+.,;-]/g, '');
+  return `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+/** Opens Messages or Email with the draft ready; the user reads it and presses send themselves. */
+export async function draftMessage(kind: string, body: string, who: { to?: string; subject?: string } = {}): Promise<string> {
+  const { to = '', subject = '' } = who;
+  const which = kind === 'email' ? 'email' : kind === 'call' ? 'call' : 'text';
+  if (which === 'call' && !to.replace(/\D/g, '')) return 'There is no phone number to call. Ask the user for it.';
+  if (which !== 'call' && !body.trim()) return 'The draft has no text. Write the message first.';
+  const { Linking } = require('react-native');
+  try {
+    await Linking.openURL(messageUrl(which, body, { to, subject }));
+  } catch {
+    return `This phone could not open ${which === 'email' ? 'an email app' : which === 'call' ? 'the phone app' : 'a messaging app'}.`;
+  }
+  if (which === 'call') return 'Opened the phone app with the number filled in. The call starts only when the user presses call.';
+  return `Opened ${which === 'email' ? 'the email app' : 'Messages'} with the draft filled in. Nothing is sent until the user presses send there.`;
+}
+
 /** Agent memory: facts the user wants the active agent to remember (stored on the phone). */
 export async function rememberFact(fact: string): Promise<string> {
   const { useAgentStore } = require('../stores/agentStore');
   const st = useAgentStore.getState();
   const agent = st.agents.find((a: any) => a.id === st.activeAgentId);
-  if (!agent) return 'No active agent to remember this for.';
   try {
     const { useChatStore } = require('../stores/chatStore');
     const cs = useChatStore.getState();
@@ -164,6 +194,11 @@ export async function rememberFact(fact: string): Promise<string> {
       return 'Not saved: this is a private chat, so nothing from it is remembered. (Tell the user they can say it again in a normal chat if they want it remembered.)';
     }
   } catch { /* ignore */ }
+  // No agent is the default for new chats: keep the fact with the user's "About you" notes so every chat has it.
+  if (!agent) {
+    const { useAboutMe } = require('../stores/aboutMeStore');
+    return useAboutMe.getState().addMemory(fact) === 'exists' ? 'Already remembered.' : `Remembered: ${fact.trim()}`;
+  }
   const memories: string[] = agent.memories || [];
   if (memories.some((m) => m.toLowerCase() === fact.toLowerCase())) return 'Already remembered.';
   st.updateAgent(agent.id, { memories: [...memories, fact.trim()].slice(-100) });

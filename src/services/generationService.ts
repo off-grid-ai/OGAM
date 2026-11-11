@@ -8,9 +8,9 @@ import { runToolLoop } from './generationToolLoop';
 import type { ToolResult } from './tools/types';
 import { providerRegistry } from './providers';
 import logger from '../utils/logger';
+import { startStallWatchdog } from './generationWatchdog';
 import { holdScreenAwake, releaseScreenAwake } from '../atlasTools/runtimePower';
 import { maybeScheduleSharePrompt } from '../utils/sharePrompt';
-import { checkProPromptForText } from './proPrompt';
 import { remoteServerManager } from './remoteServerManager';
 import {
   buildGenerationMetaImpl,
@@ -148,16 +148,34 @@ class GenerationService {
   private updateState(partial: Partial<GenerationState>): void {
     const wasGenerating = this.state.isGenerating;
     this.state = { ...this.state, ...partial };
-    if (!wasGenerating && this.state.isGenerating) holdScreenAwake('text-generation');
-    else if (wasGenerating && !this.state.isGenerating) releaseScreenAwake('text-generation');
+    if (!wasGenerating && this.state.isGenerating) { holdScreenAwake('text-generation'); this.watchForStall(); }
+    else if (wasGenerating && !this.state.isGenerating) { releaseScreenAwake('text-generation'); this.stopWatchingForStall(); }
     this.notifyListeners();
+  }
+
+  private stallWatch: (() => void) | null = null;
+  private stopWatchingForStall(): void { this.stallWatch?.(); this.stallWatch = null; }
+  /** Ends a reply that shows no progress for minutes, keeping what was written, instead of working forever. */
+  private watchForStall(): void {
+    this.stopWatchingForStall();
+    this.stallWatch = startStallWatchdog({
+      signature: () => {
+        const chat = useChatStore.getState();
+        const conv = chat.conversations.find(c => c.id === this.state.conversationId);
+        return `${chat.streamingMessage.length}|${chat.streamingReasoningContent.length}|${conv?.messages.length ?? 0}`;
+      },
+      onStall: () => {
+        logger.warn('[GenerationService] no progress for minutes - stopping the reply');
+        void this.stopGeneration().catch(() => { });
+        try { require('react-native').Alert.alert('Stopped waiting', 'The model made no progress for 5 minutes, so Atlas stopped it. What it had written is kept. Try again, or ask for a smaller piece at a time.'); } catch { /* no UI */ }
+      },
+    });
   }
 
   private checkSharePrompt(delayMs = SHARE_PROMPT_DELAY_MS): void {
     const s = useAppStore.getState();
     const count = s.incrementTextGenerationCount();
     maybeScheduleSharePrompt({ variant: 'text', count, hasEngaged: s.hasEngagedSharePrompt, delayMs });
-    checkProPromptForText(delayMs);
   }
 
   private buildToolLoopHandlers() { return buildToolLoopHandlersImpl(this); }

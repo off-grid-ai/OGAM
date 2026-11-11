@@ -11,8 +11,9 @@ import Animated, {
 import Icon from 'react-native-vector-icons/Feather';
 import { SpotlightTourProvider } from 'react-native-spotlight-tour';
 import { useTheme, useThemedStyles } from '../theme';
+import { sectionColor } from '../theme/appearance';
 import type { ThemeColors, ThemeShadows } from '../theme';
-import { triggerHaptic } from '../utils/haptics';
+import { triggerHaptic } from '../services/haptics';
 import { useAppStore } from '../stores';
 import { createSpotlightSteps } from '../components/onboarding/spotlightConfig';
 import {
@@ -32,6 +33,9 @@ import {
   SurvivalManualScreen,
   PhrasesScreen,
   StudyScreen,
+  PracticeScreen,
+  PlannerScreen,
+  RubricScreen,
   CompassScreen,
   MapsScreen,
   AtlasHubScreen,
@@ -40,6 +44,7 @@ import {
   DailyBriefScreen,
   ProjectChatsScreen,
   KnowledgeBaseScreen,
+  ProjectDocumentScreen,
   DocumentPreviewScreen,
   DownloadManagerScreen,
   ModelSettingsScreen,
@@ -49,10 +54,11 @@ import {
   AppearanceScreen,
   GalleryScreen,
   RemoteServersScreen,
-  ProDetailScreen,
   AboutScreen,
   ToolsScreen,
 } from '../screens';
+import { KnowledgeScreen } from '../knowledge/KnowledgeScreen';
+import { useLayoutClass } from '../hooks/useLayoutClass';
 import {
   RootStackParamList,
   MainTabParamList,
@@ -61,7 +67,23 @@ import { WorkspaceScreen } from '../screens/WorkspaceScreen';
 import { QuickHomeScreen } from '../screens/HomeScreen/QuickHome';
 import { PresentationScreen } from '../screens/PresentationScreen';
 import { useRegisteredScreens } from './screenRegistry';
-import { NAV_ITEMS, resolveNavBar, type NavItemId } from './navBar';
+import { NAV_ITEMS, TAB_LONG_PRESS, resolveNavBar, type NavItemId } from '../utils/navBar';
+import { openAppLink } from './appLinks';
+import { RecorderScreen } from '../atlasRecorder/RecorderScreen';
+import { RecordingDetailScreen } from '../atlasRecorder/RecordingDetailScreen';
+import { LanguageScreen } from '../language/LanguageScreen';
+import { LessonScreen } from '../language/LessonScreen';
+import { ListeningScreen } from '../language/ListeningScreen';
+import { CallScreen } from '../language/CallScreen';
+import { CrosswordScreen } from '../language/CrosswordScreen';
+import { SearchScreen } from '../search/SearchScreen';
+import { SkillsScreen } from '../skills/SkillsScreen';
+import { ScheduleScreen } from '../schedule/ScheduleScreen';
+import { PinsScreen } from '../pins/PinsScreen';
+import { TopicsScreen, TopicBoardScreen, TopicSquareScreen } from '../topics/TopicScreens';
+import { ShareScreen } from '../share/ShareScreen';
+import { WordSearchScreen } from '../language/WordSearchScreen';
+import { WordBookScreen } from '../language/WordBookScreen';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -70,7 +92,8 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 const TAB_ICON_MAP: Record<string, string> = Object.fromEntries(NAV_ITEMS.map((i) => [i.route, i.icon]));
 
 const TabBarIcon: React.FC<{ name: string; focused: boolean }> = ({ name, focused }) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+  const multi = useAppStore((st) => st.settings.appearance?.accent === 'multi' || st.settings.appearance?.layoutMode === 'colorful');
   const tabStyles = useThemedStyles(createTabBarStyles);
   const scale = useSharedValue(focused ? 1.1 : 1);
 
@@ -85,11 +108,11 @@ const TabBarIcon: React.FC<{ name: string; focused: boolean }> = ({ name, focuse
 
   return (
     <View style={tabStyles.iconContainer}>
-      <Animated.View style={animatedStyle}>
+      <Animated.View style={[animatedStyle, multi && !focused && tabStyles.dimmed]}>
         <Icon
           name={TAB_ICON_MAP[name] || 'circle'}
           size={22}
-          color={focused ? colors.primary : colors.textMuted}
+          color={multi ? (sectionColor(name, isDark) ?? colors.primary) : focused ? colors.primary : colors.textMuted}
         />
       </Animated.View>
       {focused && <View style={tabStyles.focusDot} />}
@@ -98,6 +121,7 @@ const TabBarIcon: React.FC<{ name: string; focused: boolean }> = ({ name, focuse
 };
 
 const createTabBarStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+  dimmed: { opacity: 0.55 },
   iconContainer: {
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
@@ -127,6 +151,8 @@ const EmptyTabPage: React.FC = () => null;
 
 const TAB_PAGES: Partial<Record<NavItemId, React.ComponentType<any>>> = {
   home: AdaptiveHomeScreen, chats: ChatsListScreen, workspace: WorkspaceScreen, models: ModelsScreen, settings: SettingsScreen,
+  // The briefing is a page of its own on the bar, like Chats, not a screen laid over the app.
+  brief: DailyBriefScreen,
 };
 const TAB_TEST_IDS: Record<string, string> = {
   HomeTab: 'home-tab', ChatsTab: 'chats-tab', ProjectsTab: 'projects-tab', ModelsTab: 'models-tab', SettingsTab: 'settings-tab',
@@ -143,6 +169,28 @@ const MainTabs: React.FC = () => {
   const density = appearance?.density ?? (appearance?.layoutMode === 'compact' ? 'compact' : appearance?.layoutMode === 'simple' ? 'spacious' : 'comfortable');
   const bar = density === 'compact' ? (labels ? 48 : 43) : density === 'spacious' ? (labels ? 70 : 57) : (labels ? 60 : 48);
   const tabBarHeight = bar + bottomInset;
+  // Tablets, unfolded foldables and landscape phones get a side rail; compact phones keep the bar.
+  const { navigationRail } = useLayoutClass();
+  const barStyle = navigationRail
+    ? {
+      backgroundColor: colors.surface,
+      borderRightColor: colors.border,
+      borderRightWidth: 1,
+      borderTopWidth: 0,
+      paddingTop: insets.top + 12,
+      paddingBottom: insets.bottom,
+      paddingLeft: insets.left,
+      minWidth: 88 + insets.left,
+    }
+    : {
+      backgroundColor: colors.surface,
+      borderTopColor: colors.border,
+      borderTopWidth: 1,
+      height: tabBarHeight,
+      paddingBottom: bottomInset,
+      paddingTop: density === 'compact' ? 4 : density === 'spacious' ? 13 : 10,
+      ...shadows.medium,
+    };
 
   return (
     <View style={mainTabsStyles.container}>
@@ -155,15 +203,9 @@ const MainTabs: React.FC = () => {
           animation: 'fade',
           lazy: true,
           tabBarShowLabel: labels,
-          tabBarStyle: {
-            backgroundColor: colors.surface,
-            borderTopColor: colors.border,
-            borderTopWidth: 1,
-            height: tabBarHeight,
-            paddingBottom: bottomInset,
-            paddingTop: density === 'compact' ? 4 : density === 'spacious' ? 13 : 10,
-            ...shadows.medium,
-          },
+          tabBarPosition: navigationRail ? 'left' : 'bottom',
+          tabBarVariant: navigationRail ? 'material' : 'uikit',
+          tabBarStyle: barStyle,
           tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: colors.textMuted,
           tabBarIcon: ({ focused }) => (
@@ -190,6 +232,14 @@ const MainTabs: React.FC = () => {
                 ...(shown ? {} : { tabBarButton: () => null, tabBarItemStyle: { display: 'none' as const } }),
               }}
               listeners={({ navigation }) => ({
+                // Hold a tab for the thing you most often want from it (New chat, Practice call, Search...).
+                tabLongPress: () => {
+                  const hold = TAB_LONG_PRESS[id];
+                  if (!hold) return;
+                  triggerHaptic('impactMedium');
+                  if (hold.link) openAppLink(hold.link);
+                  else if (hold.screen) (navigation.getParent() as any)?.navigate(hold.screen);
+                },
                 tabPress: (e: { preventDefault: () => void }) => {
                   triggerHaptic('selection');
                   if (item.target) {
@@ -213,8 +263,8 @@ export const AppNavigator: React.FC = () => {
   const hasCompletedOnboarding = useAppStore((s) => s.hasCompletedOnboarding);
   const downloadedModels = useAppStore((s) => s.downloadedModels);
   const steps = useMemo(() => createSpotlightSteps(), []);
-  // Reactive: screens registered at runtime (Pro activation re-runs loadProFeatures)
-  // mount as real routes live, so navigate('McpServers') works without an app restart.
+  // Reactive: screens registered at runtime 
+  // mount as real routes live, without an app restart.
   const registeredScreens = useRegisteredScreens();
 
   // Determine initial route
@@ -257,11 +307,15 @@ export const AppNavigator: React.FC = () => {
           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
         />
         <RootStack.Screen name="Learning" component={LearningScreen} />
+        <RootStack.Screen name="Knowledge" component={KnowledgeScreen} />
         <RootStack.Screen name="Emergency" component={EmergencyScreen} />
         <RootStack.Screen name="OfflineLibrary" component={OfflineLibraryScreen} />
         <RootStack.Screen name="SurvivalManual" component={SurvivalManualScreen} />
         <RootStack.Screen name="Phrases" component={PhrasesScreen} />
         <RootStack.Screen name="Study" component={StudyScreen} />
+        <RootStack.Screen name="Practice" component={PracticeScreen} />
+        <RootStack.Screen name="Planner" component={PlannerScreen} />
+        <RootStack.Screen name="Rubric" component={RubricScreen} />
         <RootStack.Screen name="Compass" component={CompassScreen} />
         <RootStack.Screen name="Maps" component={MapsScreen} />
         <RootStack.Screen name="AtlasHub" component={AtlasHubScreen} />
@@ -269,6 +323,24 @@ export const AppNavigator: React.FC = () => {
         <RootStack.Screen name="ModelTest" component={ModelTestScreen} />
         <RootStack.Screen name="DailyBrief" component={DailyBriefScreen} />
         <RootStack.Screen name="KnowledgeBase" component={KnowledgeBaseScreen} />
+        <RootStack.Screen name="ProjectDocument" component={ProjectDocumentScreen} />
+        <RootStack.Screen name="Recorder" component={RecorderScreen} />
+        <RootStack.Screen name="RecordingDetail" component={RecordingDetailScreen} />
+        <RootStack.Screen name="Language" component={LanguageScreen} />
+        <RootStack.Screen name="Lesson" component={LessonScreen} />
+        <RootStack.Screen name="Listening" component={ListeningScreen} />
+        <RootStack.Screen name="Call" component={CallScreen} />
+        <RootStack.Screen name="Crossword" component={CrosswordScreen} />
+        <RootStack.Screen name="Search" component={SearchScreen} />
+        <RootStack.Screen name="Skills" component={SkillsScreen} />
+        <RootStack.Screen name="Schedule" component={ScheduleScreen} />
+        <RootStack.Screen name="Pins" component={PinsScreen} />
+        <RootStack.Screen name="Topics" component={TopicsScreen} />
+        <RootStack.Screen name="TopicBoard" component={TopicBoardScreen} />
+        <RootStack.Screen name="TopicSquare" component={TopicSquareScreen} />
+        <RootStack.Screen name="Share" component={ShareScreen} />
+        <RootStack.Screen name="WordSearch" component={WordSearchScreen} />
+        <RootStack.Screen name="WordBook" component={WordBookScreen} />
         <RootStack.Screen name="DocumentPreview" component={DocumentPreviewScreen} />
         <RootStack.Screen name="ModelSettings" component={ModelSettingsScreen} />
         <RootStack.Screen name="RemoteServers" component={RemoteServersScreen} />
@@ -277,11 +349,6 @@ export const AppNavigator: React.FC = () => {
         <RootStack.Screen name="SecuritySettings" component={SecuritySettingsScreen} />
         <RootStack.Screen name="Appearance" component={AppearanceScreen} />
         <RootStack.Screen name="Presentations" component={PresentationScreen} />
-        <RootStack.Screen
-          name="ProDetail"
-          component={ProDetailScreen}
-          options={{ headerShown: false, animation: 'slide_from_bottom' }}
-        />
         <RootStack.Screen
           name="About"
           component={AboutScreen}

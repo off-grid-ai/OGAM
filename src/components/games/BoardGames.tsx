@@ -1,13 +1,54 @@
 /** Quiz board (Jeopardy), boss battle, exam simulator, spaced-repetition review, daily challenge and podcast quiz. */
 import React, { useEffect, useMemo, useState } from 'react';
-import { Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import type { JeopardyCategory, McQuestion, Statement } from '../../study/games/generate';
 import { closeEnough, shuffle, type ClozeItem } from '../../study/games/logic';
-import { dueItems, nextIntervalLabel, streakFrom, useStudyProgress, type ProgressItem, type Rating } from '../../study/progress';
+import { dueItems, nextIntervalLabel, streakFrom, useStudyProgress, type ProgressItem, type Rating, type StudyCard } from '../../study/progress';
 import { useStudyStore } from '../../study/engine';
 import { speakAndWait, stop } from '../../atlasVoice/tts';
 import { Banner, BAD, Card, Choice, Finished, GameButton, GOOD, ScoreLine, SourceLinks, Title, useGameColors, useRecord, type GameProps } from './kit';
+const COLOR_FFF = '#fff';
+const FONTWEIGHT_800 = '800';
+const FONTWEIGHT_400 = '400';
+const BACKGROUNDCOLOR_1E3A8A = '#1E3A8A';
+const COLOR_FBBF24 = '#FBBF24';
+const literalStyles = StyleSheet.create({
+  s1: { fontSize: 17, fontWeight: '600', marginBottom: 6 },
+  s2: { marginTop: 4 },
+  s3: { flexDirection: 'row', gap: 8 },
+  s4: { padding: 12, borderRadius: 8 },
+  s5: { fontWeight: '700' },
+  s6: { fontSize: 17 },
+  s7: { fontSize: 20, lineHeight: 28 },
+  s8: { fontSize: 20, fontWeight: '800', textAlign: 'center' },
+  s9: { flexDirection: 'row', gap: 10 },
+  s10: { flex: 1 },
+  s11: { flex: 1, padding: 3 },
+  s12: { fontWeight: '700', textAlign: 'center', minHeight: 36 },
+  s13: { height: 56, marginVertical: 3, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  s14: { fontSize: 20, fontWeight: '800' },
+  s15: { fontWeight: '700', marginVertical: 6 },
+  s16: { flexDirection: 'row' },
+  s17: { flexDirection: 'row', justifyContent: 'center', gap: 8, flexWrap: 'wrap' },
+  s18: { padding: 8, borderRadius: 8 },
+  s19: { fontSize: 12 },
+  s20: { alignItems: 'center' },
+  s21: { fontWeight: '800' },
+  s22: { width: '80%', height: 12, borderRadius: 6 },
+  s23: { marginVertical: 6 },
+  s24: { height: 12, borderRadius: 6 },
+  s25: { flexDirection: 'row', justifyContent: 'space-between' },
+  s26: { borderRadius: 8, padding: 12, marginTop: 8 },
+  s27: { fontSize: 19, minHeight: 90, marginTop: 6 },
+  s28: { flexDirection: 'row', gap: 6 },
+  s29: { flex: 1, padding: 10, borderRadius: 8 },
+  s30: { fontSize: 11 },
+  s31: { fontSize: 18 },
+  s32: { borderRadius: 8, padding: 12 },
+  s33: { fontSize: 18, fontWeight: '700' },
+});
+
 
 /** One multiple-choice question with feedback. */
 export function McView({ q, onAnswer, result, onOpenSource, revealNow = true }: {
@@ -18,7 +59,7 @@ export function McView({ q, onAnswer, result, onOpenSource, revealNow = true }: 
   useEffect(() => setPicked(null), [q]);
   return (
     <View>
-      <Text style={{ color: colors.text, fontSize: 17, fontWeight: '600', marginBottom: 6 }}>{q.q}</Text>
+      <Text style={[{ color: colors.text }, literalStyles.s1]}>{q.q}</Text>
       {q.options.map((o, k) => (
         <Choice key={k} label={o} disabled={picked !== null}
           onPress={() => { setPicked(k); onAnswer(k === q.answer); }}
@@ -26,7 +67,7 @@ export function McView({ q, onAnswer, result, onOpenSource, revealNow = true }: 
       ))}
       {picked !== null && revealNow && (
         <View>
-          {!!q.why && <Text style={{ color: colors.textSecondary, marginTop: 4 }}>{q.why}</Text>}
+          {!!q.why && <Text style={[{ color: colors.textSecondary }, literalStyles.s2]}>{q.why}</Text>}
           <SourceLinks nums={q.src} result={result} onOpenSource={onOpenSource} />
         </View>
       )}
@@ -53,11 +94,11 @@ export function JeopardyGame({ result, projectId, onOpenSource }: GameProps) {
       <View>
         <Banner>Pass the phone around. Each player taps a tile, says the answer out loud, then reveals it and marks themselves right or wrong.</Banner>
         <Text style={{ color: colors.text }}>Players: {players.length}</Text>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={literalStyles.s3}>
           {[1, 2, 3, 4].map((n) => (
             <TouchableOpacity key={n} onPress={() => { setPlayers(Array.from({ length: n }, (_, i) => `Player ${i + 1}`)); setScores(Array(n).fill(0)); }}
-              style={{ padding: 12, borderRadius: 8, backgroundColor: players.length === n ? colors.primary : colors.surface }}>
-              <Text style={{ color: players.length === n ? '#fff' : colors.text, fontWeight: '700' }}>{n}</Text>
+              style={[literalStyles.s4, { backgroundColor: players.length === n ? colors.primary : colors.surface }]}>
+              <Text style={[{ color: players.length === n ? COLOR_FFF : colors.text }, literalStyles.s5]}>{n}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -70,7 +111,7 @@ export function JeopardyGame({ result, projectId, onOpenSource }: GameProps) {
     return (
       <View>
         <Title>Final scores</Title>
-        {players.map((p, i) => <Text key={p} style={{ color: scores[i] === best ? GOOD : colors.text, fontSize: 17, fontWeight: scores[i] === best ? '800' : '400' }}>{p}: {scores[i]}</Text>)}
+        {players.map((p, i) => <Text key={p} style={[{ color: scores[i] === best ? GOOD : colors.text }, literalStyles.s6, { fontWeight: scores[i] === best ? FONTWEIGHT_800 : FONTWEIGHT_400 }]}>{p}: {scores[i]}</Text>)}
         <GameButton label="Play again" onPress={() => { setUsed([]); setScores(Array(players.length).fill(0)); setTurn(0); }} />
       </View>
     );
@@ -78,7 +119,7 @@ export function JeopardyGame({ result, projectId, onOpenSource }: GameProps) {
   if (open) {
     const clue = board[open.c].clues[open.k];
     const mark = (ok: boolean) => {
-      record(clue.clue, clue.answer, ok, clue.src);
+      record({ prompt: clue.clue, answer: clue.answer, src: clue.src }, ok);
       setScores((s) => s.map((v, i) => (i === turn ? v + (ok ? clue.value : -Math.round(clue.value / 2)) : v)));
       setUsed((u) => [...u, `${open.c}:${open.k}`]);
       setOpen(null); setRevealed(false); setTurn((t) => (t + 1) % players.length);
@@ -86,14 +127,14 @@ export function JeopardyGame({ result, projectId, onOpenSource }: GameProps) {
     return (
       <View>
         <Text style={{ color: colors.textSecondary }}>{players[turn]} · {board[open.c].name} for {clue.value}</Text>
-        <Card><Text style={{ color: colors.text, fontSize: 20, lineHeight: 28 }}>{clue.clue}</Text></Card>
+        <Card><Text style={[{ color: colors.text }, literalStyles.s7]}>{clue.clue}</Text></Card>
         {!revealed ? <GameButton label="Reveal answer" onPress={() => setRevealed(true)} /> : (
           <View>
-            <Text style={{ color: colors.primary, fontSize: 20, fontWeight: '800', textAlign: 'center' }}>{clue.answer}</Text>
+            <Text style={[{ color: colors.primary }, literalStyles.s8]}>{clue.answer}</Text>
             <SourceLinks nums={clue.src} result={result} onOpenSource={onOpenSource} />
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <View style={{ flex: 1 }}><GameButton label="I was wrong" kind="plain" onPress={() => mark(false)} /></View>
-              <View style={{ flex: 1 }}><GameButton label="I was right" onPress={() => mark(true)} /></View>
+            <View style={literalStyles.s9}>
+              <View style={literalStyles.s10}><GameButton label="I was wrong" kind="plain" onPress={() => mark(false)} /></View>
+              <View style={literalStyles.s10}><GameButton label="I was right" onPress={() => mark(true)} /></View>
             </View>
           </View>
         )}
@@ -102,14 +143,14 @@ export function JeopardyGame({ result, projectId, onOpenSource }: GameProps) {
   }
   // Phones show one category column at a time; tablets show the whole board.
   const Column = ({ c }: { c: number }) => (
-    <View style={{ flex: 1, padding: 3 }}>
-      <Text style={{ color: colors.text, fontWeight: '700', textAlign: 'center', minHeight: 36 }} numberOfLines={2}>{board[c].name}</Text>
+    <View style={literalStyles.s11}>
+      <Text style={[{ color: colors.text }, literalStyles.s12]} numberOfLines={2}>{board[c].name}</Text>
       {board[c].clues.map((cl, k) => {
         const gone = used.includes(`${c}:${k}`);
         return (
           <TouchableOpacity key={k} disabled={gone} onPress={() => setOpen({ c, k })} accessibilityLabel={`${board[c].name} for ${cl.value}`}
-            style={{ height: 56, marginVertical: 3, borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: gone ? colors.surface : '#1E3A8A' }}>
-            <Text style={{ color: gone ? colors.textMuted : '#FBBF24', fontSize: 20, fontWeight: '800' }}>{gone ? '' : cl.value}</Text>
+            style={[literalStyles.s13, { backgroundColor: gone ? colors.surface : BACKGROUNDCOLOR_1E3A8A }]}>
+            <Text style={[{ color: gone ? colors.textMuted : COLOR_FBBF24 }, literalStyles.s14]}>{gone ? '' : cl.value}</Text>
           </TouchableOpacity>
         );
       })}
@@ -118,15 +159,15 @@ export function JeopardyGame({ result, projectId, onOpenSource }: GameProps) {
   return (
     <View>
       <Text style={{ color: colors.textSecondary }}>{players.map((p, i) => `${p}: ${scores[i]}`).join('   ')}</Text>
-      <Text style={{ color: colors.text, fontWeight: '700', marginVertical: 6 }}>{players[turn]}, pick a tile</Text>
-      <View style={{ flexDirection: 'row' }}>
+      <Text style={[{ color: colors.text }, literalStyles.s15]}>{players[turn]}, pick a tile</Text>
+      <View style={literalStyles.s16}>
         {board.length <= 2 ? board.map((_, c) => <Column key={c} c={c} />) : <Column c={col} />}
       </View>
       {board.length > 2 && (
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <View style={literalStyles.s17}>
           {board.map((b, c) => (
-            <TouchableOpacity key={b.name} onPress={() => setCol(c)} style={{ padding: 8, borderRadius: 8, backgroundColor: col === c ? colors.primary : colors.surface }}>
-              <Text style={{ color: col === c ? '#fff' : colors.text, fontSize: 12 }}>{b.name}</Text>
+            <TouchableOpacity key={b.name} onPress={() => setCol(c)} style={[literalStyles.s18, { backgroundColor: col === c ? colors.primary : colors.surface }]}>
+              <Text style={[{ color: col === c ? COLOR_FFF : colors.text }, literalStyles.s19]}>{b.name}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -166,7 +207,7 @@ export function BossGame({ result, projectId, onOpenSource }: GameProps) {
   const lost = hearts <= 0 || (!won && i >= questions.length);
   if (won || lost) {
     return (
-      <View style={{ alignItems: 'center' }}>
+      <View style={literalStyles.s20}>
         <BossArt n={boss} hurt={won} />
         <Title>{won ? `You defeated ${name}!` : `${name} wins this time`}</Title>
         <GameButton label="Fight again" onPress={() => { setI(0); setHp(maxHp); setHearts(3); setStreak(0); setAnswered(false); }} />
@@ -176,18 +217,18 @@ export function BossGame({ result, projectId, onOpenSource }: GameProps) {
   const q = questions[i];
   return (
     <View>
-      <View style={{ alignItems: 'center' }}>
+      <View style={literalStyles.s20}>
         <BossArt n={boss} hurt={hurt} />
-        <Text style={{ color: colors.text, fontWeight: '800' }}>{name}</Text>
-        <View style={{ width: '80%', height: 12, borderRadius: 6, backgroundColor: colors.surface, marginVertical: 6 }}>
-          <View style={{ width: `${Math.max(0, (hp / maxHp) * 100)}%`, height: 12, borderRadius: 6, backgroundColor: BAD }} />
+        <Text style={[{ color: colors.text }, literalStyles.s21]}>{name}</Text>
+        <View style={[literalStyles.s22, { backgroundColor: colors.surface }, literalStyles.s23]}>
+          <View style={[{ width: `${Math.max(0, (hp / maxHp) * 100)}%` }, literalStyles.s24, { backgroundColor: BAD }]} />
         </View>
         <Text style={{ color: colors.text }}>{'♥'.repeat(hearts)}{'♡'.repeat(3 - hearts)}{streak >= 2 ? `   streak x${streak}` : ''}</Text>
       </View>
       <Card>
         <McView q={q} result={result} onOpenSource={onOpenSource} onAnswer={(ok) => {
           setAnswered(true);
-          record(q.q, q.options[q.answer], ok, q.src);
+          record({ prompt: q.q, answer: q.options[q.answer], src: q.src }, ok);
           if (ok) {
             const dmg = (q.difficulty ?? 2) * 10 + streak * 5;
             setHp((h) => h - dmg); setStreak((s) => s + 1); setHurt(true); setTimeout(() => setHurt(false), 400);
@@ -221,8 +262,8 @@ export function ExamGame({ result, projectId, onOpenSource }: GameProps) {
     return () => clearInterval(t);
   }, [started, i, all.length]);
   const finished = started && (i >= all.length || left === 0);
-  const answer = (ok: boolean, prompt: string, ans: string, src?: number[]) => {
-    record(prompt, ans, ok, src);
+  const answer = (ok: boolean, card: StudyCard) => {
+    record(card, ok);
     setAnswers((a) => [...a, ok]); setTyped('');
     setTimeout(() => setI((x) => x + 1), 250);
   };
@@ -259,26 +300,26 @@ export function ExamGame({ result, projectId, onOpenSource }: GameProps) {
   const x = all[i];
   return (
     <View>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+      <View style={literalStyles.s25}>
         <Text style={{ color: colors.text }}>Question {i + 1} of {all.length}</Text>
-        <Text style={{ color: left < 60 ? BAD : colors.text, fontWeight: '700' }}>{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}</Text>
+        <Text style={[{ color: left < 60 ? BAD : colors.text }, literalStyles.s5]}>{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}</Text>
       </View>
       <Card>
-        {x.kind === 'mc' && <McView key={i} q={x.q} result={result} onOpenSource={onOpenSource} revealNow={false} onAnswer={(ok) => answer(ok, x.q.q, x.q.options[x.q.answer], x.q.src)} />}
+        {x.kind === 'mc' && <McView key={i} q={x.q} result={result} onOpenSource={onOpenSource} revealNow={false} onAnswer={(ok) => answer(ok, { prompt: x.q.q, answer: x.q.options[x.q.answer], src: x.q.src })} />}
         {x.kind === 'tf' && (
           <View>
-            <Text style={{ color: colors.text, fontSize: 17 }}>True or false: {x.s.text}</Text>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <View style={{ flex: 1 }}><GameButton label="False" kind="plain" onPress={() => answer(!x.s.isTrue, x.s.text, x.s.isTrue ? 'True' : 'False', x.s.src)} /></View>
-              <View style={{ flex: 1 }}><GameButton label="True" onPress={() => answer(x.s.isTrue, x.s.text, x.s.isTrue ? 'True' : 'False', x.s.src)} /></View>
+            <Text style={[{ color: colors.text }, literalStyles.s6]}>True or false: {x.s.text}</Text>
+            <View style={literalStyles.s9}>
+              <View style={literalStyles.s10}><GameButton label="False" kind="plain" onPress={() => answer(!x.s.isTrue, { prompt: x.s.text, answer: x.s.isTrue ? 'True' : 'False', src: x.s.src })} /></View>
+              <View style={literalStyles.s10}><GameButton label="True" onPress={() => answer(x.s.isTrue, { prompt: x.s.text, answer: x.s.isTrue ? 'True' : 'False', src: x.s.src })} /></View>
             </View>
           </View>
         )}
         {x.kind === 'cloze' && (
           <View>
-            <Text style={{ color: colors.text, fontSize: 17 }}>{x.c.sentence}</Text>
-            <TextInput value={typed} onChangeText={setTyped} autoCapitalize="characters" placeholder="Missing word" placeholderTextColor={colors.textMuted} style={{ color: colors.text, backgroundColor: colors.background, borderRadius: 8, padding: 12, marginTop: 8 }} />
-            <GameButton label="Answer" disabled={!typed.trim()} onPress={() => answer(closeEnough(typed, x.c.answer), x.c.sentence, x.c.answer, x.c.src)} />
+            <Text style={[{ color: colors.text }, literalStyles.s6]}>{x.c.sentence}</Text>
+            <TextInput value={typed} onChangeText={setTyped} autoCapitalize="characters" placeholder="Missing word" placeholderTextColor={colors.textMuted} style={[{ color: colors.text, backgroundColor: colors.background }, literalStyles.s26]} />
+            <GameButton label="Answer" disabled={!typed.trim()} onPress={() => answer(closeEnough(typed, x.c.answer), { prompt: x.c.sentence, answer: x.c.answer, src: x.c.src })} />
           </View>
         )}
       </Card>
@@ -305,7 +346,7 @@ export function ReviewGame({ projectId }: GameProps) {
       <Card>
         <Title>{done ? `Done! ${done} reviewed.` : 'Nothing due right now.'}</Title>
         <Text style={{ color: colors.textSecondary }}>{total ? `${total} items in this project's review deck.` : 'Play any project game or make flashcards; what you learn appears here for review.'}</Text>
-        {!!nextDue && <Text style={{ color: colors.textSecondary, marginTop: 4 }}>Next review: {new Date(nextDue.due).toLocaleString()}</Text>}
+        {!!nextDue && <Text style={[{ color: colors.textSecondary }, literalStyles.s2]}>Next review: {new Date(nextDue.due).toLocaleString()}</Text>}
         <GameButton label="Check again" kind="plain" onPress={() => setQueue(dueItems(projectId, Date.now(), 40))} />
       </Card>
     );
@@ -315,18 +356,18 @@ export function ReviewGame({ projectId }: GameProps) {
       <Text style={{ color: colors.textSecondary }}>{queue.length} due · {done} done today</Text>
       <TouchableOpacity onPress={() => setFlipped((f) => !f)} accessibilityRole="button" accessibilityLabel={flipped ? `Answer: ${item.answer}` : `Question: ${item.prompt}. Tap to show the answer.`}>
         <Card>
-          <Text style={{ color: colors.textMuted, fontSize: 12 }}>{flipped ? 'Answer' : 'Question (tap to flip)'}</Text>
-          <Text style={{ color: colors.text, fontSize: 19, minHeight: 90, marginTop: 6 }}>{flipped ? item.answer : item.prompt}</Text>
+          <Text style={[{ color: colors.textMuted }, literalStyles.s19]}>{flipped ? 'Answer' : 'Question (tap to flip)'}</Text>
+          <Text style={[{ color: colors.text }, literalStyles.s27]}>{flipped ? item.answer : item.prompt}</Text>
         </Card>
       </TouchableOpacity>
       {flipped ? (
-        <View style={{ flexDirection: 'row', gap: 6 }}>
+        <View style={literalStyles.s28}>
           {RATINGS.map(({ r, label }) => (
             <TouchableOpacity key={r} onPress={() => { rate(item.key, r); setFlipped(false); setDone((d) => d + 1); setQueue((q) => (r === 'again' ? [...q.slice(1), item] : q.slice(1))); }}
               accessibilityRole="button" accessibilityLabel={`${label}, next in ${nextIntervalLabel(item, r)}`}
-              style={{ flex: 1, padding: 10, borderRadius: 8, backgroundColor: r === 'again' ? `${BAD}33` : r === 'easy' ? `${GOOD}33` : colors.surface, alignItems: 'center' }}>
-              <Text style={{ color: colors.text, fontWeight: '700' }}>{label}</Text>
-              <Text style={{ color: colors.textMuted, fontSize: 11 }}>{nextIntervalLabel(item, r)}</Text>
+              style={[literalStyles.s29, { backgroundColor: r === 'again' ? `${BAD}33` : r === 'easy' ? `${GOOD}33` : colors.surface }, literalStyles.s20]}>
+              <Text style={[{ color: colors.text }, literalStyles.s5]}>{label}</Text>
+              <Text style={[{ color: colors.textMuted }, literalStyles.s30]}>{nextIntervalLabel(item, r)}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -372,30 +413,30 @@ export function DailyGame({ result, projectId, onOpenSource }: GameProps) {
     return <Finished score={score} max={tasks.length} note={`streak ${streakFrom([...doneDays, today], today)} days`} />;
   }
   const t = tasks[i];
-  const next = (ok: boolean) => { record(t.prompt, t.answer, ok, t.src); if (ok) setScore((s) => s + 1); setShown(false); setTyped(''); setI((x) => x + 1); };
+  const next = (ok: boolean) => { record({ prompt: t.prompt, answer: t.answer, src: t.src }, ok); if (ok) setScore((s) => s + 1); setShown(false); setTyped(''); setI((x) => x + 1); };
   return (
     <View>
       <Text style={{ color: colors.textSecondary }}>Daily challenge · {i + 1} of {tasks.length} · streak {streak} 🔥</Text>
       <Card>
-        <Text style={{ color: colors.text, fontSize: 18 }}>{t.kind === 'tf' ? `True or false: ${t.prompt}` : t.prompt}</Text>
+        <Text style={[{ color: colors.text }, literalStyles.s31]}>{t.kind === 'tf' ? `True or false: ${t.prompt}` : t.prompt}</Text>
         <SourceLinks nums={t.src} result={result} onOpenSource={onOpenSource} />
       </Card>
       {t.kind === 'tf' ? (
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <View style={{ flex: 1 }}><GameButton label="False" kind="plain" onPress={() => next(!(t as any).isTrue)} /></View>
-          <View style={{ flex: 1 }}><GameButton label="True" onPress={() => next(!!(t as any).isTrue)} /></View>
+        <View style={literalStyles.s9}>
+          <View style={literalStyles.s10}><GameButton label="False" kind="plain" onPress={() => next(!(t as any).isTrue)} /></View>
+          <View style={literalStyles.s10}><GameButton label="True" onPress={() => next(!!(t as any).isTrue)} /></View>
         </View>
       ) : t.kind === 'cloze' ? (
         <View>
-          <TextInput value={typed} onChangeText={setTyped} autoCapitalize="characters" placeholder="Missing word" placeholderTextColor={colors.textMuted} style={{ color: colors.text, backgroundColor: colors.surface, borderRadius: 8, padding: 12 }} />
+          <TextInput value={typed} onChangeText={setTyped} autoCapitalize="characters" placeholder="Missing word" placeholderTextColor={colors.textMuted} style={[{ color: colors.text, backgroundColor: colors.surface }, literalStyles.s32]} />
           <GameButton label="Answer" disabled={!typed.trim()} onPress={() => next(closeEnough(typed, t.answer))} />
         </View>
       ) : !shown ? <GameButton label="Show answer" onPress={() => setShown(true)} /> : (
         <View>
-          <Text style={{ color: colors.primary, fontSize: 18, fontWeight: '700' }}>{t.answer}</Text>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <View style={{ flex: 1 }}><GameButton label="Didn't know" kind="plain" onPress={() => next(false)} /></View>
-            <View style={{ flex: 1 }}><GameButton label="Knew it" onPress={() => next(true)} /></View>
+          <Text style={[{ color: colors.primary }, literalStyles.s33]}>{t.answer}</Text>
+          <View style={literalStyles.s9}>
+            <View style={literalStyles.s10}><GameButton label="Didn't know" kind="plain" onPress={() => next(false)} /></View>
+            <View style={literalStyles.s10}><GameButton label="Knew it" onPress={() => next(true)} /></View>
           </View>
         </View>
       )}
@@ -421,19 +462,19 @@ export function PodcastQuizGame({ result, projectId, onOpenSource }: GameProps) 
     const line = lines[q.line ?? 0];
     if (!line) return;
     setReplaying(true);
-    await speakAndWait(line.text, 1, 'podcast-quiz');
+    await speakAndWait(line.text, { messageId: 'podcast-quiz' });
     setReplaying(false);
   };
   return (
     <View>
       <ScoreLine score={score} max={questions.length} extra={`question ${i + 1}`} />
       <Card>
-        <McView q={q} result={result} onOpenSource={onOpenSource} onAnswer={(ok) => { setAnswered(true); if (ok) setScore((s) => s + 1); record(q.q, q.options[q.answer], ok); }} />
+        <McView q={q} result={result} onOpenSource={onOpenSource} onAnswer={(ok) => { setAnswered(true); if (ok) setScore((s) => s + 1); record({ prompt: q.q, answer: q.options[q.answer] }, ok); }} />
       </Card>
       {answered && (
         <View>
           {!!lines[q.line ?? 0] && (
-            <Card><Text style={{ color: colors.textMuted, fontSize: 12 }}>The part that answers it:</Text><Text style={{ color: colors.text }}>{lines[q.line ?? 0].text}</Text></Card>
+            <Card><Text style={[{ color: colors.textMuted }, literalStyles.s19]}>The part that answers it:</Text><Text style={{ color: colors.text }}>{lines[q.line ?? 0].text}</Text></Card>
           )}
           <GameButton label={replaying ? 'Playing...' : 'Replay that part'} kind="plain" disabled={replaying} onPress={replay} />
           <GameButton label="Next question" onPress={() => { stop(); setAnswered(false); setI((x) => x + 1); }} />

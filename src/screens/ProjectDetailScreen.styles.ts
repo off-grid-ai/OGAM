@@ -2,6 +2,14 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 
 export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+  startsWrap: { marginTop: SPACING.md, gap: SPACING.xs },
+  startsLabel: { ...TYPOGRAPHY.meta, color: colors.textMuted, marginHorizontal: SPACING.lg },
+  startsRow: { gap: SPACING.sm, paddingHorizontal: SPACING.lg },
+  start: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.xs,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
+  },
+  startText: { ...TYPOGRAPHY.bodySmall, color: colors.text },
   container: {
     flex: 1,
     backgroundColor: colors.background,

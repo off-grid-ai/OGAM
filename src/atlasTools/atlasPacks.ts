@@ -1,9 +1,12 @@
 import RNFS from 'react-native-fs';
 import { useProjectStore } from '../stores/projectStore';
-import { importZipFromPath, PackResult } from './packImport';
+import { zip } from 'react-native-zip-archive';
+import { ATLAS_REPO } from '../constants';
+import { importZipFromPath, MANIFEST_NAME, type PackManifest, type PackResult } from './packImport';
+import { packsForTier, type TierId } from './emergencyTiers';
 
 /** Atlas library packs, built automatically on GitHub (release "atlas-library") and downloaded on demand. */
-export const ATLAS_REPO = 'coolchan03/Atlas';
+export { ATLAS_REPO };
 export const ATLAS_LIBRARY_PROJECT = 'Atlas - Library';
 
 export interface AtlasPack { name: string; label: string; size: number; url: string; updated: string }
@@ -44,20 +47,59 @@ export function atlasLibraryProjectId(): string {
   return p.id;
 }
 
-/** Download a pack and add every book part to the "Atlas - Library" project. */
-export async function installAtlasPack(pack: AtlasPack, onProgress: (msg: string, frac?: number) => void): Promise<PackResult> {
-  const tmp = `${RNFS.CachesDirectoryPath}/${pack.name}`;
+async function downloadPack(pack: AtlasPack, toFile: string, onProgress: (msg: string, frac?: number) => void): Promise<void> {
   const { promise } = RNFS.downloadFile({
     fromUrl: pack.url,
-    toFile: tmp,
+    toFile,
     progressInterval: 1000,
     progress: (p: any) => onProgress(`Downloading ${Math.round((p.bytesWritten / Math.max(1, p.contentLength)) * 100)}%`, p.bytesWritten / Math.max(1, p.contentLength)),
   } as any);
   const res = await promise;
   if (res.statusCode && res.statusCode >= 400) throw new Error(`Download failed (HTTP ${res.statusCode})`);
+}
+
+/** Download a pack and add every book part to the "Atlas - Library" project. */
+export async function installAtlasPack(pack: AtlasPack, onProgress: (msg: string, frac?: number) => void): Promise<PackResult> {
+  const tmp = `${RNFS.CachesDirectoryPath}/${pack.name}`;
+  await downloadPack(pack, tmp, onProgress);
   try {
-    return await importZipFromPath(atlasLibraryProjectId(), tmp, pack.name, (m) => onProgress(m));
+    return await importZipFromPath(atlasLibraryProjectId(), { path: tmp, name: pack.name }, { onProgress: (m) => onProgress(m) });
   } finally {
     RNFS.unlink(tmp).catch(() => undefined);
+  }
+}
+
+/**
+ * Download every pack of a package size into one zip, and let the person save it where they choose (an SD card or a flash
+ * drive). Android saves one file per save, so the packs are bundled into a single file. Resolves the saved file's name, or null
+ * if the person closed the save dialog.
+ */
+export async function saveTierToDrive(tier: TierId, packs: AtlasPack[], onProgress: (msg: string, frac?: number) => void): Promise<string | null> {
+  const chosen = packsForTier(tier, packs);
+  if (!chosen.length) throw new Error('No packs of that size are published yet.');
+  const stage = `${RNFS.CachesDirectoryPath}/atlas-bundle-${tier}`;
+  const out = `${RNFS.CachesDirectoryPath}/Atlas-Emergency-${tier}.zip`;
+  await RNFS.unlink(stage).catch(() => undefined);
+  await RNFS.mkdir(stage);
+  try {
+    for (let i = 0; i < chosen.length; i++) {
+      const p = chosen[i];
+      await downloadPack(p, `${stage}/${p.name}`, (m, f) => onProgress(`Pack ${i + 1} of ${chosen.length}: ${m}`, f === undefined ? undefined : (i + f) / chosen.length));
+    }
+    const manifest: PackManifest = { tier, created: new Date().toISOString(), packs: [] };
+    for (const p of chosen) manifest.packs.push({ name: p.name, size: Number((await RNFS.stat(`${stage}/${p.name}`)).size) });
+    await RNFS.writeFile(`${stage}/${MANIFEST_NAME}`, JSON.stringify(manifest), 'utf8');
+    onProgress('Putting the packs into one file...');
+    await RNFS.unlink(out).catch(() => undefined);
+    await zip(stage, out);
+    const { saveDocuments } = require('@react-native-documents/picker');
+    const [saved] = await saveDocuments({ sourceUris: [`file://${out}`], mimeType: 'application/zip', fileName: `Atlas-Emergency-${tier}.zip`, copy: true });
+    return saved?.name ?? `Atlas-Emergency-${tier}.zip`;
+  } catch (e: any) {
+    if (e?.code === 'OPERATION_CANCELED') return null;
+    throw e;
+  } finally {
+    RNFS.unlink(stage).catch(() => undefined);
+    RNFS.unlink(out).catch(() => undefined);
   }
 }

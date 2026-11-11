@@ -21,8 +21,7 @@ function subscribe(onStoreChange: () => void): () => void {
 }
 
 export function registerScreen(screen: RegisteredScreen): void {
-  // Dedupe by name. loadProFeatures can run more than once (dev Fast Refresh, or
-  // a future re-activate-on-purchase without restart); duplicate route names
+  // Dedupe by name. Registration can run more than once (dev Fast Refresh); duplicate route names
   // crash the navigator (the duplicate-screen render bug). First wins. Mirrors
   // the guard in sectionRegistry.
   if (screens.some(s => s.name === screen.name)) return;
@@ -37,7 +36,7 @@ export function getRegisteredScreens(): RegisteredScreen[] {
 /**
  * Reactive read of whether a screen with the given name is registered.
  * Subscribes via useSyncExternalStore so a screen registered AFTER a consumer
- * mounted (e.g. Pro activated at runtime, which re-runs loadProFeatures) makes
+ * mounted (e.g. a feature registered at runtime) makes
  * the consumer re-render. Mirrors useSlot in slotRegistry.
  */
 export function useHasRegisteredScreen(name: string): boolean {
@@ -46,10 +45,8 @@ export function useHasRegisteredScreen(name: string): boolean {
 
 /**
  * Reactive read of the full registered-screen list. The navigator subscribes via
- * useSyncExternalStore so a screen registered AFTER it mounted — Pro activated at
- * runtime, which re-runs loadProFeatures — re-renders the navigator and mounts the
- * route live, with no app restart. This is what makes navigate('McpServers') work
- * the instant a license activates.
+ * useSyncExternalStore so a screen registered AFTER it mounted — registered at
+ * runtime re-renders the navigator and mounts the route live, with no app restart.
  */
 export function useRegisteredScreens(): RegisteredScreen[] {
   return useSyncExternalStore(subscribe, () => screens);

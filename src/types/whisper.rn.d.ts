@@ -24,6 +24,10 @@ declare module 'whisper.rn' {
 
   export interface TranscribeResult {
     result: string;
+    language?: string;
+    /** Timed segments; t0/t1 are in 10 ms steps. */
+    segments?: { text: string; t0: number; t1: number }[];
+    isAborted?: boolean;
   }
 
   export interface RealtimeTranscribeEvent {

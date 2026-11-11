@@ -9,6 +9,7 @@
  */
 export function installRealSqlite(): void {
   jest.resetModules();
+  require('../../src/bootstrap/atlasHooks').registerAtlasHooks();
   doMockRealSqlite();
 }
 

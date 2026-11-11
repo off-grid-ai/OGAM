@@ -23,8 +23,9 @@ import { llmService } from '../services/llm';
 import { activeModelService } from '../services/activeModelService';
 import { ragService } from '../services/rag';
 import { useAppStore } from '../stores/appStore';
-import { useAgentStore, Agent, agentPromptWithLessons } from '../stores/agentStore';
-import { useLearningStore, newItem, BankItem, LearnConfig, PerAgent } from './store';
+import { Agent, agentPromptWithLessons } from '../stores/agentStore';
+import { learningAgent, setLessons } from './agents';
+import { useLearningStore, newItem, BankItem, LearnConfig, LearnReport, ReportSource, PerAgent } from './store';
 import type { Message } from '../types';
 import logger from '../utils/logger';
 import { ensureTextModel } from '../atlasTools/models';
@@ -77,12 +78,15 @@ async function ask(system: string, user: string, role: Role): Promise<string> {
 }
 
 // ------------------------------------------------------------------ research
-async function research(cfg: LearnConfig, query: string): Promise<string> {
-  const parts: string[] = [];
+/** What the learner read for a question: the text it is shown (each source numbered) and the same sources as a list. */
+interface Research { text: string; list: ReportSource[] }
+
+async function research(cfg: LearnConfig, query: string): Promise<Research> {
+  const found: Array<{ title: string; kind: ReportSource['kind']; content: string; url?: string }> = [];
   if (cfg.projectId) {
     try {
       const res: any = await ragService.searchProject(cfg.projectId, query);
-      (res?.chunks || []).slice(0, 3).forEach((c: any) => parts.push(`[${c.name}] ${String(c.content).replace(/\s+/g, ' ').slice(0, 800)}`));
+      (res?.chunks || []).slice(0, 3).forEach((c: any) => found.push({ title: String(c.name), kind: 'project', content: String(c.content).replace(/\s+/g, ' ').slice(0, 800) }));
     } catch (e) { logger.log(`[Learning] knowledge search failed: ${String(e)}`); }
   }
   if (cfg.useLibrary) {
@@ -91,7 +95,7 @@ async function research(cfg: LearnConfig, query: string): Promise<string> {
       const hits = await searchLibrary(query, 2);
       for (const h of hits.slice(0, 1)) {
         const a = await readArticle(h.uri, h.path, 900);
-        parts.push(`[${h.library}: ${a.title}] ${a.text.replace(/\s+/g, ' ').slice(0, 800)}`);
+        found.push({ title: `${h.library}: ${a.title}`, kind: 'library', content: a.text.replace(/\s+/g, ' ').slice(0, 800) });
       }
     } catch { /* no library */ }
   }
@@ -100,12 +104,20 @@ async function research(cfg: LearnConfig, query: string): Promise<string> {
       const { offGridOn } = require('../atlasTools/offGrid');
       if (!offGridOn()) {
         const { searchWeb } = require('../services/tools/webSearchProviders');
-        const r = await searchWeb(query, (q: string) => require('../services/tools/handlers').braveSearch(q));
-        r.results.slice(0, 2).forEach((w: any) => { if (w.snippet) parts.push(`[web: ${w.title}] ${w.snippet.slice(0, 500)}`); });
+        const domains = (cfg.webDomains || '').split(',').map((d: string) => d.trim().toLowerCase()).filter(Boolean);
+        const webQuery = domains.length ? `${query} site:${domains.join(' OR site:')}` : query;
+        const r = await searchWeb(webQuery, (q: string) => require('../services/tools/handlers').braveSearch(q));
+        const results: any[] = domains.length
+          ? r.results.filter((w: any) => domains.some((d: string) => (w.url || '').toLowerCase().includes(d)))
+          : r.results;
+        results.slice(0, 2).forEach((w: any) => { if (w.snippet) found.push({ title: String(w.title), kind: 'web', content: w.snippet.slice(0, 500), url: w.url }); });
       }
     } catch { /* offline */ }
   }
-  return parts.join('\n\n');
+  return {
+    text: found.map((f, i) => `[${i + 1}] (${f.title}) ${f.content}`).join('\n\n'),
+    list: found.map((f, i) => ({ n: i + 1, title: f.title, kind: f.kind, url: f.url })),
+  };
 }
 
 const numbered = (items: { q: string }[]) => items.map((b, i) => `${i + 1}. ${b.q}`).join('\n');
@@ -113,12 +125,12 @@ const numbered = (items: { q: string }[]) => items.map((b, i) => `${i + 1}. ${b.
 function rulings(text: string, n: number): Map<number, { ok: boolean; reason: string }> {
   const out = new Map<number, { ok: boolean; reason: string }>();
   for (const line of text.split('\n')) {
-    const clean = line.replace(/\*\*/g, '');
+    const plain = line.replace(/\*\*/g, '');
     const V = '(APPROVE[D]?|ACCEPT(?:ED)?|PASS(?:ED)?|OK|REJECT(?:ED)?|FAIL(?:ED)?)';
     const V2 = '(APPROVE[D]?|ACCEPT(?:ED)?|PASS(?:ED)?|REJECT(?:ED)?|FAIL(?:ED)?)'; // later on the line: no bare "ok" (questions use it)
     // Prefer a verdict right after the number; otherwise the first verdict word later on the line.
-    const m = clean.match(new RegExp(`^\\s*(?:[-*•]\\s*)?(?:Q(?:uestion)?|R(?:eport)?|#)?\\s*(\\d{1,2})\\s*[:.)\\-–—]?\\s*(?:[-–—:]\\s*)?${V}\\b\\s*[:\\-–—(]*\\s*(.*)$`, 'i'))
-      || clean.match(new RegExp(`^\\s*(?:[-*•]\\s*)?(?:Q(?:uestion)?|R(?:eport)?|#)?\\s*(\\d{1,2})\\b[^\\n]*?[\\s:–—-]${V2}\\b\\s*[:\\-–—(]*\\s*(.*)$`, 'i'));
+    const m = plain.match(new RegExp(`^\\s*(?:[-*•]\\s*)?(?:Q(?:uestion)?|R(?:eport)?|#)?\\s*(\\d{1,2})\\s*[:.)\\-–—]?\\s*(?:[-–—:]\\s*)?${V}\\b\\s*[:\\-–—(]*\\s*(.*)$`, 'i'))
+      || plain.match(new RegExp(`^\\s*(?:[-*•]\\s*)?(?:Q(?:uestion)?|R(?:eport)?|#)?\\s*(\\d{1,2})\\b[^\\n]*?[\\s:–—-]${V2}\\b\\s*[:\\-–—(]*\\s*(.*)$`, 'i'));
     if (!m) continue;
     const i = Number(m[1]);
     if (i < 1 || i > n) continue;
@@ -159,7 +171,7 @@ function learnerSystem(agent: Agent, st: PerAgent, cfg: LearnConfig): string {
 async function buildBank(agent: Agent, cfg: LearnConfig): Promise<void> {
   const st = L().get(agent.id);
   const round = st.round + 1;
-  const done = st.bank.filter((b) => b.status === 'answered').map((b) => b.q).slice(-25);
+  const done = st.bank.filter((b) => b.status === 'answered').map((b) => b.q).slice(-60);
   const gaps = st.bank.filter((b) => b.status === 'failed').map((b) => b.q).slice(-8);
   status(`Learner is writing question bank (round ${round})...`);
   const raw = await ask(
@@ -180,7 +192,7 @@ async function buildBank(agent: Agent, cfg: LearnConfig): Promise<void> {
   status('Judge is reviewing the question bank...');
   const verdict = await ask(
     `You are the judge. You check that study questions stay on the task, are specific, safe and not duplicates.${st.judgeNote ? `\nManager's note to you: ${st.judgeNote}` : ''}`,
-    `TASK: ${cfg.topic}\n\nQUESTIONS:\n${numbered(items)}\n\nFor EVERY question write one line: "<number>: APPROVE" or "<number>: REJECT - <short reason>". Reject only questions that are off the task, too vague, unsafe, or duplicates.`,
+    `TASK: ${cfg.topic}\n${done.length ? `\nAlready answered (do not repeat any of these):\n${done.join('\n')}\n` : ''}\nQUESTIONS:\n${numbered(items)}\n\nFor EVERY question write one line: "<number>: APPROVE" or "<number>: REJECT - <short reason>". Reject only questions that are off the task, too vague, unsafe, duplicates, or already answered.`,
     'judge',
   );
   const r = rulings(verdict, items.length);
@@ -230,16 +242,18 @@ async function buildBank(agent: Agent, cfg: LearnConfig): Promise<void> {
 async function writeReport(agent: Agent, cfg: LearnConfig, item: BankItem): Promise<void> {
   const st = L().get(agent.id);
   status(`Learner is researching: ${item.q.slice(0, 60)}...`);
-  const src = await research(cfg, item.q);
+  const { text: src, list: sourceList } = await research(cfg, item.q);
   if (stopRequested) return;
   status('Learner is writing a report...');
   const report = await ask(
     learnerSystem(agent, st, cfg),
-    `${src ? `SOURCES:\n${src}\n\n` : 'No sources found: use what you know, and say so.\n\n'}TASK: ${cfg.topic}\nQUESTION: ${item.q}\n${item.feedback ? `Judge feedback on your last try: ${item.feedback}\n` : ''}\nWrite a simple report:\nANSWER: 2-5 plain sentences.\nKEY POINTS: 2-4 short bullets.\nREASONING: why this is right, step by step, and which source supports it.\nUNSURE: anything you could not confirm (or "nothing").`,
+    `${src ? `SOURCES:\n${src}\n\n` : 'No sources found: use what you know, and say so.\n\n'}TASK: ${cfg.topic}\nQUESTION: ${item.q}\n${item.feedback ? `Judge feedback on your last try: ${item.feedback}\n` : ''}\nWrite a simple report:\nANSWER: 2-5 plain sentences.\nKEY POINTS: 2-4 short bullets.\nREASONING: why this is right, step by step, and which source supports it. Cite each source you use by its number in square brackets, like [1]. Draw on as many of the available sources as fit — do not rely on only one.\nUNSURE: anything you could not confirm (or "nothing").`,
     'learner',
   );
   L().log({ agentId: agent.id, kind: 'report', title: `Report: ${item.q.slice(0, 70)}`, body: report.slice(0, 2500) });
+  const entry: LearnReport = { id: `${item.id}:${item.tries + 1}`, itemId: item.id, q: item.q, text: report.slice(0, 8000), sources: src.slice(0, 3000), sourceList, at: Date.now(), status: 'waiting' };
   L().patch(agent.id, {
+    reportLog: [entry, ...(st.reportLog ?? [])].slice(0, 100),
     pendingReports: [...st.pendingReports, { itemId: item.id, q: item.q, report: report.slice(0, 1600), sources: src.slice(0, 1200) }],
     reportsSinceJudge: st.reportsSinceJudge + 1,
     totalReports: st.totalReports + 1,
@@ -247,7 +261,8 @@ async function writeReport(agent: Agent, cfg: LearnConfig, item: BankItem): Prom
   L().updateItem(agent.id, item.id, { tries: item.tries + 1 });
 }
 
-async function saveNote(agent: Agent, cfg: LearnConfig, q: string, answer: string): Promise<void> {
+async function saveNote(agent: Agent, cfg: LearnConfig, note: { q: string; answer: string }): Promise<void> {
+  const { q, answer } = note;
   if (cfg.mode !== 'keep' || !cfg.projectId) return;
   try {
     const dir = `${RNFS.DocumentDirectoryPath}/learned`;
@@ -259,6 +274,14 @@ async function saveNote(agent: Agent, cfg: LearnConfig, q: string, answer: strin
     await RNFS.writeFile(path, body, 'utf8');
     await ragService.indexDocument({ projectId: cfg.projectId, filePath: path, fileName: name, fileSize: body.length });
   } catch (e) { logger.log(`[Learning] could not save note: ${String(e)}`); }
+}
+
+/** Records the judge's ruling on the newest report written for a question. */
+function markReport(agentId: string, itemId: string, patch: Partial<LearnReport>): void {
+  const log = L().get(agentId).reportLog ?? [];
+  const i = log.findIndex((r) => r.itemId === itemId);
+  if (i < 0) return;
+  L().patch(agentId, { reportLog: log.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
 }
 
 async function judgeReports(agent: Agent, cfg: LearnConfig): Promise<void> {
@@ -282,6 +305,7 @@ async function judgeReports(agent: Agent, cfg: LearnConfig): Promise<void> {
     if (sc) scores.push(Math.min(10, parseFloat(sc[1])));
     const item = L().get(agent.id).bank.find((b) => b.id === rep.itemId);
     if (!item) continue;
+    markReport(agent.id, rep.itemId, { status: v ? (v.ok ? 'pass' : 'fail') : 'waiting', score: sc ? parseFloat(sc[1]) : undefined, why: v?.reason });
     if (!v) {
       // No clear verdict: never count it as learned. Try once more, then give up on it.
       if (item.tries < 2) L().updateItem(agent.id, item.id, { status: 'approved', feedback: 'The judge could not read your report clearly. Use the ANSWER / KEY POINTS / REASONING format.' });
@@ -292,8 +316,10 @@ async function judgeReports(agent: Agent, cfg: LearnConfig): Promise<void> {
       pass++;
       L().updateItem(agent.id, item.id, { status: 'answered', reason: undefined });
       const cur = L().get(agent.id);
-      L().patch(agent.id, { notes: [{ q: rep.q, answer: rep.report, at: Date.now(), score: sc ? parseFloat(sc[1]) : undefined }, ...cur.notes].slice(0, 200) });
-      await saveNote(agent, cfg, rep.q, rep.report);
+      // The judge read a shortened copy; what is kept and saved is the full report.
+      const full = (cur.reportLog ?? []).find((x) => x.itemId === rep.itemId)?.text ?? rep.report;
+      L().patch(agent.id, { notes: [{ q: rep.q, answer: full, at: Date.now(), score: sc ? parseFloat(sc[1]) : undefined }, ...cur.notes].slice(0, 200) });
+      await saveNote(agent, cfg, { q: rep.q, answer: full });
     } else if (item.tries < 2) {
       L().updateItem(agent.id, item.id, { status: 'approved', feedback: v.reason }); // back in the queue for one redo
     } else {
@@ -336,7 +362,7 @@ async function managerReview(agent: Agent, cfg: LearnConfig): Promise<void> {
   const lessons = tagged(out, 'LESSON').slice(0, 12);
   if (lessons.length) {
     const text = lessons.map((l) => `- ${l}`).join('\n');
-    if (cfg.mode === 'keep') useAgentStore.getState().updateAgent(agent.id, { lessons: text });
+    if (cfg.mode === 'keep') setLessons(agent.id, text);
     else L().patch(agent.id, { sessionLessons: text });
   }
   L().log({
@@ -359,7 +385,7 @@ export async function startLearning(agentId: string): Promise<void> {
   let workedThisRun = false;
   try {
     while (!stopRequested) {
-      const agent = useAgentStore.getState().getAgent(agentId);
+      const agent = learningAgent(agentId);
       const cfg = L().getConfig(agentId);
       roleModels = { learner: cfg.learnerModelId || baseModel, judge: cfg.judgeModelId || baseModel, manager: cfg.managerModelId || baseModel };
       if (!agent) throw new Error('Agent not found');
@@ -385,9 +411,9 @@ export async function startLearning(agentId: string): Promise<void> {
         const st2 = L().get(agentId);
         const noMoreQuestions = !st2.bank.some((b) => b.status === 'approved' && !st2.pendingReports.some((p) => p.itemId === b.id));
         if (st2.reportsSinceJudge >= Math.max(1, cfg.reportsPerJudge) || noMoreQuestions) {
-          await judgeReports(useAgentStore.getState().getAgent(agentId)!, cfg);
+          await judgeReports(learningAgent(agentId)!, cfg);
           if (L().get(agentId).judgesSinceManager >= Math.max(1, cfg.judgesPerManager) && !stopRequested) {
-            await managerReview(useAgentStore.getState().getAgent(agentId)!, cfg);
+            await managerReview(learningAgent(agentId)!, cfg);
           }
         }
         problems = 0;
@@ -424,7 +450,7 @@ export function stopLearning(): void {
 
 /** Run the manager now. */
 export async function auditNow(agentId: string): Promise<void> {
-  const agent = useAgentStore.getState().getAgent(agentId);
+  const agent = learningAgent(agentId);
   const cfg = L().getConfig(agentId);
   if (!agent || running) return;
   running = true;
@@ -435,16 +461,16 @@ export async function auditNow(agentId: string): Promise<void> {
 
 /** Session mode: give the session's lessons and judge-approved answers to the agent. */
 export async function keepSession(agentId: string): Promise<string> {
-  const agent = useAgentStore.getState().getAgent(agentId);
+  const agent = learningAgent(agentId);
   const cfg = L().getConfig(agentId);
   const st = L().get(agentId);
   if (!agent) return 'Agent not found';
   const merged = [agent.lessons?.trim(), st.sessionLessons.trim()].filter(Boolean).join('\n');
   const lines = [...new Set(merged.split('\n').map((l) => l.trim()).filter(Boolean))].slice(-16);
-  useAgentStore.getState().updateAgent(agentId, { lessons: lines.join('\n') });
+  setLessons(agentId, lines.join('\n'));
   let saved = 0;
   if (cfg.projectId) {
-    for (const n of st.notes.slice(0, 60)) { await saveNote(agent, { ...cfg, mode: 'keep' }, n.q, n.answer); saved++; }
+    for (const n of st.notes.slice(0, 60)) { await saveNote(agent, { ...cfg, mode: 'keep' }, { q: n.q, answer: n.answer }); saved++; }
   }
   L().patch(agentId, { sessionLessons: '', notes: [] });
   return `Kept ${lines.length} lessons${cfg.projectId ? ` and ${saved} answers (saved to the project's knowledge base)` : ''}.`;

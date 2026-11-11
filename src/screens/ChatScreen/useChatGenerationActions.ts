@@ -1,7 +1,17 @@
 /* eslint-disable max-params, complexity -- Generation orchestrator retains the legacy routing and retry interfaces. */
 /* eslint-disable max-lines -- cohesive generation-action orchestrator (send/regenerate/dispatch/route share the same GenerationDeps + session state); splitting it would scatter tightly-coupled turn logic. */
+import { useSkills } from '../../skills/skillsStore';
+import { relevantTools } from '../../services/tools/relevantTools';
+import { locationNote } from '../../atlasMaps/locationNote';
+import { expertKnowledgeNote } from '../../knowledge/chatHook';
+import { chartNote } from '../../study/chart';
+import { skillsNote } from '../../skills/selectSkills';
+import { learnedNote } from '../../learning/learnedNote';
+import { setTurnSources, sourcesFromChunks } from '../../services/rag/turnSources';
+import { needsReadingInParts, readInParts } from '../../services/readInParts';
 import { Dispatch, SetStateAction } from 'react';
-import { resolveAgentPrompt, activeAgentTools } from '../../stores/agentStore';
+import { resolveAgentPrompt } from '../../services/agentPrompt';
+import { toolsForConversation } from '../../services/tools/chatTools';
 import { offGridOn, NETWORK_TOOLS } from '../../atlasTools/offGrid';
 import { useChatPrefs } from '../../atlasTools/chatPrefs';
 import { thinkingNote } from '../../atlasTools/thinking';
@@ -55,6 +65,8 @@ export type GenerationDeps = {
     imageSteps?: number;
     imageGuidanceScale?: number;
     enabledTools?: string[];
+    trimTools?: boolean;
+    shareLocation?: boolean;
     cacheType?: CacheType;
     thinkingEnabled?: boolean;
   };
@@ -263,8 +275,10 @@ export async function handleImageGenerationFn(
     prompt, conversationId,
     previewInterval: 2,
   });
-  if (!result && deps.imageGenState.error && !deps.imageGenState.error.includes('cancelled')) {
-    deps.setAlertState(showAlert('Error', `Image generation failed: ${deps.imageGenState.error}`));
+  // Read the error fresh: deps is a render snapshot, so it held the previous run's error.
+  const failure = imageGenerationService.getState().error;
+  if (!result && failure && !failure.includes('cancelled')) {
+    deps.setAlertState(showAlert('Error', `Image generation failed: ${failure}`));
   }
   // Image gen finishes outside generationService — release any queued messages.
   generationService.drainQueue();
@@ -274,7 +288,11 @@ async function prepareContext(setDebugInfo: SetState<any>, systemPrompt: string,
   try {
     const contextDebug = await llmService.getContextDebugInfo(messages);
     setDebugInfo({ systemPrompt, ...contextDebug });
-    if (contextDebug.truncatedCount > 0 || contextDebug.contextUsagePercent > 70) {
+    // Clear when the context is nearly full. Clearing on every windowed chat threw away the cache each
+    // send, so the whole conversation was read again (minutes on a slow CPU). OpenCL keeps the old,
+    // cautious rule: its native cache must not be reused across a moved prompt start.
+    const openCl = /opencl/i.test(llmService.getGpuInfo?.()?.gpuBackend ?? '');
+    if (contextDebug.contextUsagePercent > 95 || (openCl && (contextDebug.truncatedCount > 0 || contextDebug.contextUsagePercent > 70))) {
       await llmService.clearKVCache(false).catch(() => { });
     }
   } catch { /* ignore */ }
@@ -330,7 +348,9 @@ async function generateWithCompactionRetry(
   }
   return turnInterrupted;
 }
-async function injectRagContext(projectId: string | undefined, query: string, prompt: string): Promise<string> {
+/** Exported for tests: project knowledge reaches every chat in the project through this prompt. */
+export async function injectRagContext(projectId: string | undefined, query: string, prompt: string, enabledTools: string[] = []): Promise<string> {
+  setTurnSources([]);
   if (!projectId) return prompt;
   try {
     const docs = await ragService.getDocumentsByProject(projectId);
@@ -341,11 +361,15 @@ async function injectRagContext(projectId: string | undefined, query: string, pr
       embeddingService.load().catch(err => logger.error('[RAG] Embedding warmup failed', err));
     }
     const docList = enabledDocs.map((d: import('../../services/rag').RagDocument) => `- ${d.name}`).join('\n');
-    let kbPrompt = `\n\nYou have a knowledge base with these documents:\n${docList}`;
-    kbPrompt += '\nUse the search_knowledge_base tool to look up specific information from these documents.';
+    let kbPrompt = `\n\nThis project has shared documents (the same for every chat in the project):\n${docList}`;
+    kbPrompt += '\nUse the excerpts below when they are relevant, and say which document you used.';
+    // Only point at tools this turn actually has: a missing tool makes small models stall or apologise.
+    if (enabledTools.includes('search_knowledge_base')) kbPrompt += '\nUse the search_knowledge_base tool to look up anything else in these documents.';
+    if (enabledTools.includes('update_project_document')) kbPrompt += '\nWhen the user asks, or the project instructions say so, update a shared document with update_project_document.';
     const r = await ragService.searchProject(projectId, query);
     if (r.chunks.length > 0) {
       kbPrompt += `\n\n${retrievalService.formatForPrompt(r)}`;
+      setTurnSources(sourcesFromChunks(r.chunks, enabledDocs)); // numbered as in the prompt, for the source list under the reply
     }
     return prompt + kbPrompt;
   } catch (err) {
@@ -363,7 +387,7 @@ const applyGemma4ThinkToken = (prompt: string, model: DownloadedModel | null | u
   return prepend ? `<|think|>\n${prompt}` : prompt;
 };
 
-function resolveToolsAndPrompt(deps: GenerationDeps, conversation: any, _messageText: string): { enabledTools: string[]; rawPrompt: string; localToolSupport: boolean } {
+function resolveToolsAndPrompt(deps: GenerationDeps, conversation: any, messageText: string): { enabledTools: string[]; rawPrompt: string; localToolSupport: boolean } {
   const project = conversation?.projectId ? useProjectStore.getState().getProject(conversation.projectId) : null;
   const { activeServerId, activeRemoteTextModelId } = useRemoteServerStore.getState();
   // Native tool-calling of the ACTIVE LOCAL engine (llama Jinja support / LiteRT loaded), resolved
@@ -372,17 +396,26 @@ function resolveToolsAndPrompt(deps: GenerationDeps, conversation: any, _message
   // Honour the UI gate: "N/A" (supportsToolCalling === false) means the picker is unreachable, so don't inject tools the user can't disable.
   const canUseTools = deps.supportsToolCalling !== false && (localToolSupport || !!(activeServerId && activeRemoteTextModelId));
 
-  // SINGLE source of truth for the turn's tools: ONLY what the user toggled (settings.enabledTools).
+  // SINGLE source of truth for the turn's tools: this chat's own choice, else its agent's defaults,
+  // else the app defaults (toolsForConversation, also what the chat's tool count shows).
   // No auto-injection — a project no longer silently adds search_knowledge_base. This keeps the tools
   // SENT identical to the tools the quick-settings count SHOWS (both read settings.enabledTools), so
   // the two can never drift ("0 tools" in the popover but "Tools sent in request (1)" — device 2026-07-14).
   // The user enables KB search explicitly when they want it.
-  const enabledTools = (canUseTools ? (activeAgentTools() ?? deps.settings.enabledTools ?? []) : [])
+  const allowed = (canUseTools ? toolsForConversation(conversation, deps.settings.enabledTools ?? []) : [])
     .filter((t: string) => !(offGridOn() && NETWORK_TOOLS.includes(t))); // off-grid mode: no internet tools
+  // Fewer tools means a faster first reply: keep the ones this message could need (and ones already used in this chat).
+  const enabledTools = deps.settings.trimTools === false ? allowed : relevantTools(messageText, allowed, {
+    used: (conversation?.messages ?? []).slice(-10).flatMap((m: any) => (m.toolCalls ?? []).map((c: any) => c.name)),
+    projectHasDocs: !!conversation?.projectId,
+  });
 
   const chatNote = (conversation as any)?.instructions?.trim();
   const rawPrompt = resolveAgentPrompt(project?.systemPrompt, deps.settings.systemPrompt || APP_CONFIG.defaultSystemPrompt)
     + (chatNote ? `\n\nInstructions for this chat:\n${chatNote}` : '')
+    + locationNote()
+    + learnedNote(messageText)
+    + skillsNote(messageText, useSkills.getState().skills, llmService.getPerformanceSettings?.()?.contextLength || 4096)
     + (llmService.isThinkingEnabled?.() ? thinkingNote(deps.settings as any) : '');
   return { enabledTools, rawPrompt, localToolSupport };
 }
@@ -390,6 +423,28 @@ function resolveToolsAndPrompt(deps: GenerationDeps, conversation: any, _message
  *  queued like sends during a generation, instead of starting a second, racing research turn. */
 let researchInFlight = false;
 export function isResearchInFlight(): boolean { return researchInFlight; }
+
+/** Reads a very long message in parts with the loaded model; returns the shorter text for the model, or the message itself. */
+async function condenseLongMessage(text: string, deps: GenerationDeps): Promise<string> {
+  const contextTokens = llmService.getPerformanceSettings?.()?.contextLength || useAppStore.getState().settings.contextLength || 4096;
+  if (!needsReadingInParts(text, contextTokens)) return text;
+  try {
+    const out = await readInParts({
+      text, contextTokens,
+      ask: (system, user) => llmService.generateWithMaxTokens([
+        { id: 'rip-s', role: 'system', content: system, timestamp: Date.now() },
+        { id: 'rip-u', role: 'user', content: user, timestamp: Date.now() },
+      ] as any, 220),
+      onProgress: (done, total) => deps.setResearchStatus?.(done < total ? `Reading your long message in parts: ${done + 1} of ${total}...` : null),
+    });
+    deps.setResearchStatus?.(null);
+    return out ?? text;
+  } catch (e) {
+    deps.setResearchStatus?.(null);
+    logger.warn(`[ChatGen] could not read the long message in parts: ${String((e as any)?.message ?? e)}`);
+    return text; // fall back to the usual cut, which tells the person
+  }
+}
 
 export async function startGenerationFn(deps: GenerationDeps, call: StartGenerationCall): Promise<void> {
   // PER-TURN stop truth (from the tool loop's outcome) — never the service's shared abort flag,
@@ -406,7 +461,8 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
     return;
   }
   const conversation = useChatStore.getState().conversations.find(c => c.id === targetConversationId);
-  const { enabledTools, rawPrompt, localToolSupport } = resolveToolsAndPrompt(deps, conversation, messageText);
+  const { enabledTools, rawPrompt: promptBase, localToolSupport } = resolveToolsAndPrompt(deps, conversation, messageText);
+  const rawPrompt = promptBase + await expertKnowledgeNote(messageText) + chartNote(messageText);
   let researchMessage = messageText;
   let usedOfflineProjectEvidence = false;
   if (deps.researchMode) {
@@ -434,13 +490,17 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
     }
     researchInFlight = false;
   }
+  // A message longer than the model can hold is read in parts and shown to the model as notes (the saved message is unchanged).
+  if (!deps.activeModelInfo?.isRemote && useAppStore.getState().settings.readLongInParts !== false && llmService.isModelLoaded()) {
+    researchMessage = await condenseLongMessage(researchMessage, deps);
+  }
   // Offline research already contains the selected document excerpts; do not inject them twice.
   let basePrompt = usedOfflineProjectEvidence
     ? rawPrompt
-    : await injectRagContext(conversation?.projectId, messageText, rawPrompt);
+    : await injectRagContext(conversation?.projectId, messageText, rawPrompt, enabledTools);
 
-  // In voice/audio mode the pro audio feature augments the prompt for spoken
-  // output. No-op (returns undefined) in free builds.
+  // In voice/audio mode the voice feature augments the prompt for spoken
+  // output. No-op (returns undefined) when none is registered.
   basePrompt = callHook<string>(HOOKS.audioAugmentPrompt, basePrompt) ?? basePrompt;
 
   const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;
@@ -691,10 +751,11 @@ export async function regenerateResponseFn(deps: GenerationDeps, call: Regenerat
   const messages = (conversation?.messages || []).filter((m: Message) => !m.isSystemInfo);
   const messagesUpToUser = messages.slice(0, messages.findIndex((m: Message) => m.id === userMessage.id) + 1)
     .map(m => m.id === userMessage.id ? { ...m, content: messageText } : m);
-  const { enabledTools, rawPrompt, localToolSupport } = resolveToolsAndPrompt(deps, conversation, messageText);
+  const { enabledTools, rawPrompt: promptBase, localToolSupport } = resolveToolsAndPrompt(deps, conversation, messageText);
+  const rawPrompt = promptBase + await expertKnowledgeNote(messageText) + chartNote(messageText);
   const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;
   const activeTools = enabledTools;
-  const basePrompt = await injectRagContext(conversation?.projectId, messageText, rawPrompt);
+  const basePrompt = await injectRagContext(conversation?.projectId, messageText, rawPrompt, enabledTools);
   const useTextHint = !isRemote && !localToolSupport && activeTools.length > 0;
   // MCP/extension hints come solely from augmentSystemPromptForTools in the tool loop
   // (see the send path above) — adding them here too would double-inject.
@@ -746,5 +807,9 @@ export async function regenerateResponseFn(deps: GenerationDeps, call: Regenerat
 }
 export type SelectProjectDeps = { activeConversationId: string | null | undefined; setConversationProject: (convId: string, projectId: string | null) => void; setShowProjectSelector: SetState<boolean> };
 export function handleSelectProjectFn(deps: SelectProjectDeps, project: Project | null): void {
-  if (deps.activeConversationId) deps.setConversationProject(deps.activeConversationId, project?.id || null);
+  try {
+    if (deps.activeConversationId) deps.setConversationProject(deps.activeConversationId, project?.id || null);
+  } catch (e) {
+    logger.warn('[Chat] could not move chat to project:', e instanceof Error ? e.message : e);
+  }
   deps.setShowProjectSelector(false); }

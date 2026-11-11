@@ -1,6 +1,6 @@
 {
   "name": "offgrid-mobile",
-  "version": "0.0.103",
+  "version": "0.0.154",
   "private": true,
   "scripts": {
     "android": "react-native run-android --mode=debug --appId ai.offgridmobile.dev",
@@ -39,7 +39,7 @@
     "@testing-library/react-native": "^13.3.3",
     "@types/react-native-vector-icons": "^6.4.18",
     "js-sha256": "^0.11.0",
-    "llama.rn": "0.13.0-rc.4",
+    "llama.rn": "0.13.0-rc.9",
     "node-html-parser": "^7.1.0",
     "patch-package": "^8.0.1",
     "qrcode-generator": "^1.4.4",
@@ -113,6 +113,6 @@
     "react": "19.2.0"
   },
   "allowScripts": {
-    "llama.rn@0.13.0-rc.4": true
+    "llama.rn@0.13.0-rc.9": true
   }
 }

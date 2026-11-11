@@ -10,7 +10,8 @@
  */
 
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { render, fireEvent } from '@testing-library/react-native';
+import { Clipboard } from 'react-native';
 import { MarkdownText, preprocessMarkdown } from '../../../src/components/MarkdownText';
 
 describe('MarkdownText', () => {
@@ -135,5 +136,17 @@ describe('preprocessMarkdown', () => {
     expect(preprocessMarkdown('The result of 3*4 is *twelve*')).toBe(
       String.raw`The result of 3\*4 is *twelve*`
     );
+  });
+
+  it('copies a table as spreadsheet cells or as Markdown, and a code block as code', () => {
+    const set = jest.spyOn(Clipboard, 'setString').mockImplementation(() => undefined);
+    const view = render(<MarkdownText>{'| Day | Plan |\n| --- | --- |\n| Mon | Run |\n| Tue | Rest |\n\n```\nconst x = 42;\n```'}</MarkdownText>);
+    fireEvent.press(view.getByTestId('copy-table-copy-table'));
+    expect(set).toHaveBeenLastCalledWith('Day\tPlan\nMon\tRun\nTue\tRest');
+    fireEvent.press(view.getByTestId('copy-table-copy-as-markdown'));
+    expect(set).toHaveBeenLastCalledWith('| Day | Plan |\n| --- | --- |\n| Mon | Run |\n| Tue | Rest |');
+    fireEvent.press(view.getByTestId('copy-code-copy-code'));
+    expect(set).toHaveBeenLastCalledWith('const x = 42;');
+    set.mockRestore();
   });
 });

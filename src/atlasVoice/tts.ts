@@ -45,14 +45,14 @@ export function warmUp(): void {
   Native.warmUp().catch(() => undefined);
 }
 
-/** Speak text. `messageId` lets a speak button know it is the one playing. */
-export function speak(text: string, messageId?: string): void {
+/** Speak text. `messageId` lets a speak button know it is the one playing. `rate` overrides the saved speed. */
+export function speak(text: string, messageId?: string, rate?: number): void {
   if (!ttsAvailable() || !text.trim()) return;
   ensureListeners();
   const key = `${messageId ?? 'msg'}~${++counter}`;
   const s = useAtlasVoiceStore.getState();
   s.setSpeaking(key, messageId ?? null);
-  Native.setRate(s.rate).catch(() => undefined);
+  Native.setRate(rate ?? s.rate).catch(() => undefined);
   Native.speak(text, key).catch((err: unknown) => {
     logger.error('[AtlasTts] speak failed', err);
     // An earlier failed utterance must not clear a newer active one.
@@ -60,6 +60,35 @@ export function speak(text: string, messageId?: string): void {
       useAtlasVoiceStore.getState().setSpeaking(null);
     }
   });
+}
+
+/**
+ * Starts speaking a reply that is still being written (natural voice only). Returns the utterance
+ * key, or null when this phone cannot (its own voice engine): the whole reply is spoken at the end then.
+ * `started` settles false if the voice refuses, and the speaking state is cleared.
+ */
+export function beginSpeechStream(messageId: string): { key: string; started: Promise<boolean> } | null {
+  if (!ttsAvailable() || !Native.speakStreamStart) return null;
+  ensureListeners();
+  const key = `${messageId}~${++counter}`;
+  const s = useAtlasVoiceStore.getState();
+  s.setSpeaking(key, messageId);
+  Native.setRate(s.rate).catch(() => undefined);
+  const clear = () => { if (useAtlasVoiceStore.getState().speakingKey === key) useAtlasVoiceStore.getState().setSpeaking(null); };
+  const started = Native.speakStreamStart(key)
+    .then((ok: boolean) => { if (!ok) clear(); return !!ok; })
+    .catch(() => { clear(); return false; });
+  return { key, started };
+}
+
+/** Adds text to the reply being spoken (see beginSpeechStream). */
+export function appendSpeechStream(text: string): void {
+  if (ttsAvailable() && text.trim()) Native.speakStreamAppend?.(text).catch(() => undefined);
+}
+
+/** No more text is coming: the voice finishes what it has and reports done. */
+export function endSpeechStream(): void {
+  if (ttsAvailable()) Native.speakStreamEnd?.().catch(() => undefined);
 }
 
 export function stop(): void {
@@ -80,16 +109,26 @@ export function keepScreenOn(on: boolean): void {
   Native.keepScreenOn?.(on).catch(() => undefined);
 }
 
+/**
+ * Lets a feature slow down some of its own spoken lines (the language course's slower-voice option)
+ * without this file knowing about the feature: `fn(messageId, rate)` returns the rate to use.
+ */
+let rateAdjuster: ((messageId: string, rate: number) => number) | null = null;
+export function setRateAdjuster(fn: ((messageId: string, rate: number) => number) | null): void { rateAdjuster = fn; }
+const adjusted = (messageId: string, rate: number) => (rateAdjuster ? rateAdjuster(messageId, rate) : rate);
+
 /** Speak in another language (BCP-47 like 'es-ES'). Calls onNoLanguage if the phone lacks that voice. */
 let noLangHandler: ((lang: string) => void) | null = null;
 export function onMissingLanguage(fn: ((lang: string) => void) | null): void { noLangHandler = fn; }
-export function speakIn(text: string, lang: string, messageId = 'phrase'): void {
+export function speakIn(text: string, lang: string, opts: { messageId?: string; voice?: string } = {}): void {
+  const { messageId = 'phrase', voice = '' } = opts;
   if (!ttsAvailable() || !text.trim()) return;
   ensureListeners();
+  Native.setVoice?.(voice).catch(() => undefined);
   const key = `${messageId}~${++counter}`;
   const s = useAtlasVoiceStore.getState();
   s.setSpeaking(key, messageId);
-  Native.setRate(Math.min(s.rate, 0.9)).catch(() => undefined);
+  Native.setRate(adjusted(messageId, Math.min(s.rate, 0.9))).catch(() => undefined);
   (Native.speakIn ? Native.speakIn(text, key, lang) : Native.speak(text, key)).catch(() => {
     if (useAtlasVoiceStore.getState().speakingKey === key) {
       useAtlasVoiceStore.getState().setSpeaking(null);
@@ -98,7 +137,18 @@ export function speakIn(text: string, lang: string, messageId = 'phrase'): void 
 }
 
 /** Speak and wait until finished (resolves false if stopped). Optional pitch / voice for podcast hosts. */
-export function speakAndWait(text: string, pitch = 1.0, messageId = 'podcast', voice = ''): Promise<boolean> {
+export function speakAndWait(text: string, opts: { pitch?: number; messageId?: string; voice?: string } = {}): Promise<boolean> {
+  const { pitch = 1.0, messageId = 'podcast', voice = '' } = opts;
+  return speakWait({ text, pitch, messageId, voice, lang: 'en-US' });
+}
+
+/** Speak in a language (e.g. "es-ES") and wait until finished (false if stopped). */
+export function speakInAndWait(text: string, lang: string, opts: { messageId?: string; voice?: string } = {}): Promise<boolean> {
+  const { messageId = 'lesson', voice = '' } = opts;
+  return speakWait({ text, pitch: 1.0, messageId, voice, lang });
+}
+
+function speakWait({ text, pitch, messageId, voice, lang }: { text: string; pitch: number; messageId: string; voice: string; lang: string }): Promise<boolean> {
   return new Promise((resolve) => {
     if (!ttsAvailable() || !text.trim()) { resolve(true); return; }
     ensureListeners();
@@ -121,8 +171,8 @@ export function speakAndWait(text: string, pitch = 1.0, messageId = 'podcast', v
     const unsub = useAtlasVoiceStore.subscribe((s) => { if (s.speakingKey !== myKey) finish(false); });
     waiters.set(myKey, finish);
     st.setSpeaking(myKey, messageId);
-    Native.setRate(st.rate).catch(() => undefined);
-    (Native.speakIn ? Native.speakIn(text, myKey, 'en-US') : Native.speak(text, myKey)).catch(() => finish(false));
+    Native.setRate(adjusted(messageId, st.rate)).catch(() => undefined);
+    (Native.speakIn ? Native.speakIn(text, myKey, lang) : Native.speak(text, myKey)).catch(() => finish(false));
   });
 }
 
@@ -148,6 +198,24 @@ export async function synthesizeToFile(text: string, outPath: string, lang = 'en
   await Native.setRate(useAtlasVoiceStore.getState().rate).catch(() => undefined);
   return Native.synthesizeToFile(text, outPath, lang);
 }
+
+/**
+ * Save one podcast line in a given host voice as a WAV file, without playing it. The voice
+ * is set only for this file and put back afterwards. Resolves the file path.
+ */
+export async function synthesizeLineToFile(text: string, target: { voice: string; path: string; pitch?: number }): Promise<string> {
+  const { voice, path: outPath, pitch = 1 } = target;
+  if (!ttsAvailable() || !Native.synthesizeToFile) throw new Error('Saving speech is not available on this phone.');
+  await Native.setVoice?.(voice).catch(() => undefined);
+  if (pitch !== 1) await Native.setPitch?.(pitch).catch(() => undefined);
+  try { return await synthesizeToFile(text, outPath); } finally {
+    await Native.setVoice?.('').catch(() => undefined);
+    if (pitch !== 1) await Native.setPitch?.(1).catch(() => undefined);
+  }
+}
+
+/** True when lines can be saved as audio files ahead of playback. */
+export const canPreRender = (): boolean => ttsAvailable() && !!Native.synthesizeToFile;
 
 export function cancelSynthesis(): void {
   if (!ttsAvailable()) return;

@@ -6,55 +6,10 @@
 import { ragService } from '../services/rag';
 import { runBackgroundJob } from '../services/llmJobQueue';
 import { knowledgeSource } from '../services/rag/knowledgeSource';
-import { ensureTextModel } from '../atlasTools/models';
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { callHook, HOOKS } from '../bootstrap/hookRegistry';
 import { buildCrossword, buildWordSearch, Crossword, LearningTerm, WordSearch, normalizeLearningWord } from './learningGames';
-
-export interface Source { n: number; doc: string; part: number; text: string; origin?: 'project' | 'library' | 'web'; url?: string }
-export interface Card { q: string; a: string; src: number[] }
-export interface QuizItem { q: string; options: string[]; answer: number; why: string; src: number[] }
-export interface PodcastLine { host: 'A' | 'B' | 'C'; text: string }
-export interface Slide { title: string; bullets: string[]; narration: string; src: number[] }
-
-export interface StudyResult {
-  kind: 'guide' | 'formulas' | 'cards' | 'quiz' | 'podcast' | 'slides' | 'answer' | 'outline' | 'crossword' | 'wordsearch' | 'match' | 'game';
-  createdAt: number;
-  topic: string;
-  title?: string;
-  sources: Source[];
-  text?: string;
-  cards?: Card[];
-  quiz?: QuizItem[];
-  podcast?: PodcastLine[];
-  hosts?: number;
-  slides?: Slide[];
-  learningTerms?: LearningTerm[];
-  crossword?: Crossword;
-  wordSearch?: WordSearch;
-  /** Project learning game payload (kind === 'game'), see src/study/games. */
-  game?: { type: string; data: any };
-}
-
-interface StudyState {
-  saved: Record<string, StudyResult[]>; // by project
-  add: (projectId: string, r: StudyResult) => void;
-  remove: (projectId: string, createdAt: number) => void;
-  update: (projectId: string, createdAt: number, patch: Partial<StudyResult>) => void;
-}
-export const useStudyStore = create<StudyState>()(
-  persist(
-    (set) => ({
-      saved: {},
-      // 150 items per project (games add many); the oldest beyond that are dropped.
-      add: (pid, r) => set((s) => ({ saved: { ...s.saved, [pid]: [r, ...(s.saved[pid] || [])].slice(0, 150) } })),
-      update: (pid, at, patch) => set((s) => ({ saved: { ...s.saved, [pid]: (s.saved[pid] || []).map((x) => (x.createdAt === at ? { ...x, ...patch } : x)) } })),
-      remove: (pid, at) => set((s) => ({ saved: { ...s.saved, [pid]: (s.saved[pid] || []).filter((x) => x.createdAt !== at) } })),
-    }),
-    { name: 'atlas-study', storage: createJSONStorage(() => AsyncStorage) },
-  ),
-);
+export * from './store';
+import { useStudyStore, type Source, type StudyResult, type Card, type QuizItem, type PodcastLine, type Slide } from './store';
 
 const SOURCE_CHARS = 700;
 /** Characters of source text that fit the loaded model's context (about 3 chars per token, minus room for the answer). */
@@ -74,7 +29,8 @@ export const trimSources = (src: Source[]): Source[] => {
 const tidy = (t: string) => t.replace(/\*\*|__/g, '').replace(/^\s*(?:[-*•]|\d+[.)])\s+(?=(?:Q|A|ANSWER|WHY|SRC|TITLE|SAY|[A-D])\s*[:).])/gim, '');
 
 /** Sources for a topic (search) or, with no topic, a spread across all documents. */
-export async function gatherSources(projectId: string, topic: string, share = 1, cache: { all?: any[] } = {}): Promise<Source[]> {
+export async function gatherSources(projectId: string, topic: string, more: { share?: number; cache?: { all?: any[] } } = {}): Promise<Source[]> {
+  const { share = 1, cache = {} } = more;
   let raw: { name: string; content: string; position: number }[] = [];
   if (topic.trim()) {
     const r: any = await ragService.searchProject(projectId, topic.trim());
@@ -112,7 +68,7 @@ const refs = (t: string) => [...new Set([...t.matchAll(/\[(\d{1,2})\]/g)].map((m
 export async function askModel(system: string, user: string): Promise<string> { return ask(system, user); }
 
 async function ask(system: string, user: string): Promise<string> {
-  await ensureTextModel(null);
+  await callHook(HOOKS.ensureTextModel, null);
   const { llmService } = require('../services/llm');
   return runBackgroundJob(async () => {
   const out: string = await llmService.generateResponse(
@@ -133,6 +89,18 @@ export function learningActivitiesEnabled(projectId: string): boolean {
 }
 
 /** Filter small-model puzzle output against the original project source text. */
+/**
+ * Everyday words that occur in almost any passage. They pass the "occurs in the source" check
+ * but say nothing about the study material, so they never become puzzle terms.
+ */
+const FILLER_TERMS = new Set(('ABOUT ABOVE AFTER AGAIN ALSO ALWAYS AMONG ANOTHER BECAUSE BEFORE BEING BELOW BETWEEN BOTH ' +
+  'CERTAIN COULD DIFFERENT DURING EACH EVERY EXAMPLE EXAMPLES FIRST FOLLOWING GENERAL GOOD GREAT HOWEVER IMPORTANT ' +
+  'INCLUDE INCLUDES INCLUDING INFORMATION LARGE LITTLE MANY MORE MOST MUCH MUST NEVER NUMBER OFTEN OTHER OTHERS PART ' +
+  'PEOPLE PERSON PLACE POSSIBLE SECOND SEVERAL SHOULD SIMILAR SINCE SMALL SOME SOMETHING SPECIFIC STILL SUCH THAN THAT ' +
+  'THEIR THEM THEN THERE THEREFORE THESE THEY THING THINGS THIS THOSE THROUGH TIME TIMES TOGETHER UNDER UNTIL USED USING ' +
+  'USUALLY VARIOUS VERY WAYS WELL WERE WHAT WHEN WHERE WHICH WHILE WITH WITHIN WITHOUT WOULD YEAR YEARS').split(' '));
+export const isFillerTerm = (word: string) => FILLER_TERMS.has(word.toUpperCase());
+
 export function parseGroundedLearningTerms(raw: string, sources: Source[]): LearningTerm[] {
   const out: LearningTerm[] = [];
   const used = new Set<string>();
@@ -142,10 +110,10 @@ export function parseGroundedLearningTerms(raw: string, sources: Source[]): Lear
     if (!match) continue;
     const answer = normalizeLearningWord(match[1]);
     const clue = match[2].trim();
-    if (answer.length < 3 || answer.length > 14 || used.has(answer) || clue.length < 8 ||
+    if (answer.length < 3 || answer.length > 14 || used.has(answer) || clue.length < 8 || isFillerTerm(answer) ||
         clue.toUpperCase().replace(/[^A-Z]/g, '').includes(answer)) continue;
     // The word must really occur in a source passage: prefer the cited one, else any.
-    const word = new RegExp('\\b' + answer + '\\b', 'i');
+    const word = new RegExp(`\\b${answer}\\b`, 'i');
     const cited = sources.find(s => s.n === Number(match[3]));
     const source = cited && word.test(cited.text) ? cited : sources.find(s => word.test(s.text));
     if (!source) continue;
@@ -293,6 +261,27 @@ export interface PodcastOptions {
   prompt: string; length?: PodcastLength; minutes?: number; hosts?: 1 | 2 | 3; style: PodcastStyle; research: boolean; funFacts?: boolean; title?: string;
   /** Checked between parts: true ends the episode early and keeps what is written so far. */
   shouldStop?: () => boolean;
+  /**
+   * Fixed outline: one part per item, each written ONLY from its own sources (news briefings:
+   * one part per real story). Skips planning, and keeps parts short when a source is thin so
+   * the model does not fill gaps with invented detail.
+   */
+  outline?: { topic: string; sources: Source[]; always?: boolean }[];
+  /** Outline mode: script lines to aim for per item, to reach the chosen length. */
+  linesPerItem?: number;
+  /**
+   * Outline mode: spoken words the episode should reach. Items are written in order until the script really has that many
+   * words (the last one written gets the goodbye), so a long outline is cut short and a thin one is not padded. Items left
+   * over are simply not used; `onItemsUsed` says how many were.
+   */
+  targetWords?: number;
+  /** The caller adds the opening greeting itself: the first part must not welcome listeners. */
+  noWelcome?: boolean;
+  onItemsUsed?: (count: number) => void;
+  /** Outline mode: a rule every part must follow (e.g. topics never to bring up). */
+  rules?: string;
+  /** Outline mode: who speaks in each part (e.g. the anchor and that topic's expert). */
+  castFor?: (index: number) => string | undefined;
   /** Fresh sources for one part's topic. Long episodes use it so each part draws on different passages. */
   sourcesFor?: (topic: string) => Promise<Source[]>;
 }
@@ -339,7 +328,7 @@ const STYLE_TEXT: Record<PodcastStyle, string> = {
   debate: 'a friendly debate: the hosts take different sides and weigh the evidence',
   interview: 'an interview: A is the interviewer, B is the expert guest',
   beginner: 'for complete beginners: simple words, everyday examples, no jargon',
-  news: 'a friendly daily news show: story by story, each explained simply with why it matters, upbeat but accurate',
+  news: 'a friendly daily news show: story by story, each explained simply, upbeat but accurate',
 };
 
 /** Extra research: offline library (Kiwix) first, then the web when online and not in off-grid mode. */
@@ -357,7 +346,7 @@ async function researchSources(query: string, startN: number, onStep: (m: string
     }
   } catch { /* no library */ }
   try {
-    const { offGridOn } = require('../atlasTools/offGrid');
+    const { offGridOn } = require('../atlasTools/offGridState');
     if (!offGridOn()) {
       onStep('Researching the web...');
       const { searchWeb } = require('../services/tools/webSearchProviders');
@@ -379,17 +368,109 @@ export async function generatePodcast(projectId: string, opts: PodcastOptions, o
   if (!learningActivitiesEnabled(projectId)) throw new Error('Enable Learning Activities in Project Settings before generating a podcast.');
   onStep('Reading your sources...');
   // With extra research on, leave room in the model's memory for the research sources.
-  let sources = await gatherSources(projectId, opts.prompt, opts.research ? 0.6 : 1);
+  let sources = await gatherSources(projectId, opts.prompt, { share: opts.research ? 0.6 : 1 });
   if (opts.research) {
     const extra = await researchSources(opts.prompt || sources.map((x) => x.doc).slice(0, 2).join(' '), sources.length + 1, onStep);
     sources = trimSources([...sources, ...extra]);
   }
   if (!sources.length) throw new Error('No sources: add documents to this project, or turn on extra research.');
   const chunkCache: { all?: any[] } = {};
-  return writeEpisode(sources, { ...opts, sourcesFor: opts.sourcesFor ?? ((topic) => gatherSources(projectId, topic, 1, chunkCache)) }, onStep);
+  return writeEpisode(sources, { ...opts, sourcesFor: opts.sourcesFor ?? ((topic) => gatherSources(projectId, topic, { cache: chunkCache })) }, onStep);
 }
 
 /** Writes the episode script from ready-made sources (projects, the daily briefing, ...). */
+const parseLines = (t: string, hosts: number): PodcastLine[] => t.split('\n').map((l) => {
+  const m = l.match(LINE_RE);
+  if (!m) return null;
+  const h = m[1].toUpperCase() as 'A' | 'B' | 'C';
+  const text = m[2].replace(/\[\d+\]|\*/g, '').trim();
+  return text ? { host: hosts === 1 ? 'A' : hosts === 2 && h === 'C' ? 'B' : h, text } : null;
+}).filter(Boolean) as PodcastLine[];
+
+/** Lines a part may have: about one per 180 characters of source, 3 to 8. */
+export const outlineLines = (sources: Source[]) =>
+  Math.max(3, Math.min(8, Math.round(sources.reduce((n, x) => n + x.text.length, 0) / 180)));
+
+const normal = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+const words = (t: string) => new Set(normal(t).split(' ').filter((w) => w.length > 3));
+/** Drops lines that say again what an earlier line already said (same words, or nearly): the model sometimes pads. */
+export function withoutRepeats(fresh: PodcastLine[], before: PodcastLine[]): PodcastLine[] {
+  const seen = before.map((l) => ({ n: normal(l.text), w: words(l.text) }));
+  const out: PodcastLine[] = [];
+  for (const l of fresh) {
+    const n = normal(l.text), w = words(l.text);
+    const same = seen.some((s) => {
+      if (s.n === n) return true;
+      if (w.size < 5 || s.w.size < 5) return false;
+      let shared = 0; w.forEach((x) => { if (s.w.has(x)) shared++; });
+      return shared / Math.min(w.size, s.w.size) >= 0.8;
+    });
+    if (same) continue;
+    seen.push({ n, w }); out.push(l);
+  }
+  return out;
+}
+
+/** Where an item sits in the episode, as an instruction for the writer. */
+function placement(spot: { first: boolean; last: boolean }, noWelcome?: boolean): string {
+  if (spot.first && spot.last) return `This is the WHOLE episode: ${noWelcome ? 'cover it' : 'welcome listeners, cover it'}, then say goodbye.`;
+  if (spot.first) return noWelcome ? 'This is the FIRST item: a greeting was already said, so start straight into it.' : 'This is the START: A welcomes listeners and names the episode, then covers this item.';
+  return spot.last ? 'This is the LAST item: cover it, then a one-line wrap-up and goodbye.' : 'Move on to this item with a short natural transition.';
+}
+
+/** How many lines an item gets: never more than its source can fill (no padding), but as many as the chosen length needs. */
+const itemLines = (opts: PodcastOptions, sources: Source[]): number =>
+  (opts.linesPerItem ? Math.min(opts.linesPerItem, Math.max(4, Math.round(sources.reduce((k, x) => k + x.text.length, 0) / 80))) : outlineLines(sources));
+
+/** With a length to reach, ask for about n lines (the hosts may explain why the story matters, from the source); otherwise at most n. */
+const howManyLines = (opts: PodcastOptions, n: number): string =>
+  (opts.linesPerItem ? `Write about ${n} lines (no fewer than ${Math.max(3, n - 2)}), each 1-2 sentences; never repeat a line already said` : `Write at most ${n} lines (each 1-2 sentences)`);
+
+async function writeOutlinedEpisode(
+  outline: { topic: string; sources: Source[]; always?: boolean }[], opts: PodcastOptions,
+  cfg: { cast: string; fmt: string; style: string; hosts: number; onStep: (m: string) => void },
+): Promise<StudyResult> {
+  const { onStep } = cfg;
+  const title = opts.title || opts.prompt || 'Episode';
+  const lines: PodcastLine[] = [];
+  const all: Source[] = [];
+  const wordCount = () => lines.reduce((n, l) => n + l.text.split(/\s+/).filter(Boolean).length, 0);
+  let used = 0;
+  let finished = false;
+  const storyStarts: number[] = [];
+  for (let i = 0; i < outline.length; i++) {
+    if (opts.shouldStop?.() && lines.length >= 4) break;
+    // Once the length is reached only the items marked `always` (a fun fact) are still written.
+    if (finished && !outline[i].always) continue;
+    onStep(`Writing part ${i + 1} of ${outline.length}: ${outline[i].topic.slice(0, 60)}...`);
+    const part = outline[i];
+    part.sources.forEach((x) => all.push(x));
+    const n = itemLines(opts, part.sources);
+    // With a word target, this is the last item once it should bring the script to the target (or when none are left).
+    const reaches = !!opts.targetWords && wordCount() + n * 12 >= opts.targetWords;
+    const alwaysAfter = outline.slice(i + 1).some((o) => o.always);
+    const last = i === outline.length - 1 || ((reaches || finished) && !alwaysAfter);
+    const where = placement({ first: i === 0, last }, opts.noWelcome);
+    const recap = lines.slice(-3).map((l) => `${l.host}: ${l.text}`).join('\n');
+    const covered = outline.slice(0, i).map((o) => `- ${o.topic.slice(0, 90)}`).join('\n');
+    const howMany = howManyLines(opts, n);
+    const cast = opts.castFor?.(i) ?? cfg.cast;
+    const t = await ask(
+      'You write natural spoken scripts from sources. Say ONLY what the sources say: never add names, numbers, dates, places or quotes that are not in them. Never tell the listener what to feel or think about the subject. Never mention source numbers.',
+      `SOURCES:\n${sourceBlock(part.sources)}\n\nEpisode: "${title}". Style: ${cfg.style}. Cast: ${cast}.\nThis item: ${part.topic}\n${where}\n${recap ? `Last lines so far:\n${recap}\n` : ''}${covered ? `Already covered (do not repeat or retell these):\n${covered}\n` : ''}${opts.rules ? `${opts.rules}\n` : ''}${howMany}, exactly in this format:\n${cfg.fmt}`,
+    );
+    const written = withoutRepeats(parseLines(t, cfg.hosts).slice(0, n + 2), lines);
+    if (lines.length && written.length) storyStarts.push(lines.length);
+    lines.push(...written);
+    if (!part.always) used++;
+    if (reaches) finished = true;
+    if (last) break;
+  }
+  opts.onItemsUsed?.(used);
+  if (lines.length < 2) throw new Error('The model did not write the script in the expected format. Try again or use a bigger model.');
+  return { kind: 'podcast', createdAt: Date.now(), topic: opts.prompt, title, sources: all.slice(0, 60), podcast: lines, hosts: cfg.hosts, storyStarts };
+}
+
 export async function writeEpisode(sources: Source[], opts: PodcastOptions, onStep: (m: string) => void = () => undefined): Promise<StudyResult> {
   const S = `SOURCES:\n${sourceBlock(sources)}\n\n`;
   // About 1.5 minutes of speech per written part (10 lines of ~25 words).
@@ -404,6 +485,7 @@ export async function writeEpisode(sources: Source[], opts: PodcastOptions, onSt
   const fmt = hosts === 1 ? 'A: ...' : hosts === 3 ? 'A: ...\nB: ...\nC: ...' : 'A: ...\nB: ...';
   const style = STYLE_TEXT[opts.style];
 
+  if (opts.outline?.length) return writeOutlinedEpisode(opts.outline, opts, { cast, fmt, style, hosts, onStep });
   onStep('Planning the episode...');
   const ask0 = opts.prompt ? `The listener asked for: ${opts.prompt}\n` : 'Pick the most interesting angle in these sources yourself.\n';
   // Short episodes are planned in one call. Long ones are planned a dozen parts at a time, each
@@ -434,13 +516,7 @@ export async function writeEpisode(sources: Source[], opts: PodcastOptions, onSt
   if (!topics.length) topics.push(opts.prompt || 'the main ideas');
 
   const lines: PodcastLine[] = [];
-  const parse = (t: string) => t.split('\n').map((l) => {
-    const m = l.match(LINE_RE);
-    if (!m) return null;
-    const h = m[1].toUpperCase() as 'A' | 'B' | 'C';
-    const text = m[2].replace(/\[\d+\]|\*/g, '').trim();
-    return text ? { host: hosts === 1 ? 'A' : hosts === 2 && h === 'C' ? 'B' : h, text } : null;
-  }).filter(Boolean) as PodcastLine[];
+  const parse = (t: string) => parseLines(t, hosts);
 
   let episodeSources = sources;
   let stoppedEarly = false;

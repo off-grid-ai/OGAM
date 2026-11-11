@@ -1,5 +1,6 @@
 package ai.offgridmobile.atlasvulkan
 
+import android.os.Build
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -13,7 +14,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
-/** Isolated experimental llama.kt bridge; the standard Atlas binary needs no llama.kt classes. */
+/** Isolated llama.kt Vulkan bridge. Classes are loaded reflectively so a build without llama.kt still starts. */
 class AtlasVulkanModule(private val ctx: ReactApplicationContext) : ReactContextBaseJavaModule(ctx) {
     private val worker = Executors.newSingleThreadExecutor()
     @Volatile private var engine: Any? = null
@@ -30,8 +31,43 @@ class AtlasVulkanModule(private val ctx: ReactApplicationContext) : ReactContext
     @ReactMethod
     fun removeListeners(count: Int) { /* No native observer is retained. */ }
 
-    private fun newEngine(): Any =
-        Class.forName("com.tensai.llamakt.LlamaEngine").getDeclaredConstructor().newInstance()
+    /** Classifies why the engine cannot start, so "not in this APK" is never shown as "unsupported GPU". */
+    private class RuntimeUnavailable(val code: String, message: String) : Exception(message)
+
+    private fun newEngine(): Any {
+        if (Build.VERSION.SDK_INT < MIN_SDK) {
+            throw RuntimeUnavailable(SDK_UNSUPPORTED,
+                "Vulkan text engine needs Android 10 or newer (this device runs API ${Build.VERSION.SDK_INT})")
+        }
+        // Load without static init: System.loadLibrary runs in the constructor branch below.
+        val engineClass = try { Class.forName(ENGINE_CLASS, false, javaClass.classLoader) }
+        catch (_: ClassNotFoundException) {
+            throw RuntimeUnavailable(NOT_PACKAGED, "The llama.kt Vulkan engine is not packaged in this APK")
+        }
+        return try { engineClass.getDeclaredConstructor().newInstance() }
+        catch (e: Throwable) {
+            // UnsatisfiedLinkError / ExceptionInInitializerError while loading libllamakt.so.
+            val cause = (e as? InvocationTargetException)?.targetException ?: e.cause ?: e
+            throw RuntimeUnavailable(NATIVE_LOAD_FAILED,
+                "The llama.kt native library could not be loaded: ${cause.message ?: cause.javaClass.simpleName}")
+        }
+    }
+
+    private fun listBackendMaps(instance: Any): List<Map<String, String>> =
+        (call(instance, "availableBackends") as List<*>).filterNotNull().map { backend ->
+            mapOf(
+                "name" to (call(backend, "getName") as? String ?: ""),
+                "description" to (call(backend, "getDescription") as? String ?: ""),
+                "type" to (call(backend, "getType") as? String ?: ""),
+            )
+        }
+
+    /** GGUF block count (repeating layers) or -1 when the header cannot be read. */
+    private fun readBlockCount(path: String): Long = try {
+        val companion = Class.forName(ENGINE_CLASS).getField("Companion").get(null)
+        val metadata = call(companion!!, "readMetadata", path)
+        (metadata?.let { call(it, "getBlockCount") } as? Long) ?: -1L
+    } catch (_: Throwable) { -1L }
 
     private fun call(target: Any, name: String, vararg args: Any?): Any? {
         val method = target.javaClass.methods.firstOrNull { it.name == name && it.parameterCount == args.size }
@@ -51,18 +87,57 @@ class AtlasVulkanModule(private val ctx: ReactApplicationContext) : ReactContext
     fun listBackends(promise: Promise) {
         worker.execute {
             try {
-                val instance = newEngine()
                 val out = Arguments.createArray()
-                for (backend in call(instance, "availableBackends") as List<*>) {
-                    if (backend == null) continue
+                for (backend in listBackendMaps(newEngine())) {
                     val map = Arguments.createMap()
-                    map.putString("name", call(backend, "getName") as? String)
-                    map.putString("description", call(backend, "getDescription") as? String)
-                    map.putString("type", call(backend, "getType") as? String)
+                    backend.forEach { (key, value) -> map.putString(key, value) }
                     out.pushMap(map)
                 }
                 promise.resolve(out)
-            } catch (e: Throwable) { promise.reject("VULKAN_RUNTIME_UNAVAILABLE", e.message ?: "Vulkan unavailable") }
+            } catch (e: RuntimeUnavailable) { promise.reject(e.code, e.message)
+            } catch (e: Throwable) { promise.reject(PROBE_FAILED, e.message ?: "Vulkan device probe failed") }
+        }
+    }
+
+    /**
+     * Diagnostic status that never rejects. `status` separates a missing native engine
+     * (not_packaged, native_load_failed, sdk_unsupported) from hardware without a Vulkan
+     * GPU (no_vulkan_device), so diagnostics can say which one applies.
+     */
+    @ReactMethod
+    fun runtimeStatus(promise: Promise) {
+        worker.execute {
+            val result = Arguments.createMap()
+            result.putInt("sdkInt", Build.VERSION.SDK_INT)
+            val devices = Arguments.createArray()
+            try {
+                val backends = listBackendMaps(newEngine())
+                var gpuCount = 0
+                for (backend in backends) {
+                    val map = Arguments.createMap()
+                    backend.forEach { (key, value) -> map.putString(key, value) }
+                    devices.pushMap(map)
+                    if (isVulkanGpu(backend)) gpuCount++
+                }
+                result.putBoolean("packaged", true)
+                result.putString("status", if (gpuCount > 0) "ok" else "no_vulkan_device")
+                result.putString("message",
+                    if (gpuCount > 0) "Vulkan GPU detected" else "The engine is installed, but no Vulkan GPU was reported by this device's driver")
+            } catch (e: RuntimeUnavailable) {
+                result.putBoolean("packaged", e.code != NOT_PACKAGED)
+                result.putString("status", when (e.code) {
+                    NOT_PACKAGED -> "not_packaged"
+                    SDK_UNSUPPORTED -> "sdk_unsupported"
+                    else -> "native_load_failed"
+                })
+                result.putString("message", e.message)
+            } catch (e: Throwable) {
+                result.putBoolean("packaged", true)
+                result.putString("status", "probe_failed")
+                result.putString("message", e.message ?: "Vulkan device probe failed")
+            }
+            result.putArray("devices", devices)
+            promise.resolve(result)
         }
     }
 
@@ -87,11 +162,20 @@ class AtlasVulkanModule(private val ctx: ReactApplicationContext) : ReactContext
                     call(candidate, "load", path, gpuLayers, context, threads, null, null, null)
                     engine = candidate
                     cancelled.set(false)
-                    promise.resolve(call(candidate, "activeBackend") as? String ?: "unknown")
+                    val backend = call(candidate, "activeBackend") as? String ?: "unknown"
+                    val blockCount = readBlockCount(path)
+                    val result = Arguments.createMap()
+                    result.putString("backend", backend)
+                    result.putInt("requestedGpuLayers", gpuLayers)
+                    result.putInt("offloadedGpuLayers",
+                        offloadedLayers(gpuLayers, blockCount, backend.startsWith("Vulkan", ignoreCase = true)))
+                    result.putInt("totalLayers", if (blockCount > 0) (blockCount + 1).toInt() else -1)
+                    promise.resolve(result)
                 } catch (failure: Throwable) {
                     try { call(candidate, "free") } catch (_: Throwable) {}
                     throw failure
                 }
+            } catch (e: RuntimeUnavailable) { promise.reject(e.code, e.message)
             } catch (e: Throwable) { promise.reject("VULKAN_LOAD_FAILED", e.message ?: "Load failed") }
         }
     }
@@ -242,5 +326,28 @@ class AtlasVulkanModule(private val ctx: ReactApplicationContext) : ReactContext
         worker.execute { engine?.let { try { call(it, "free") } catch (_: Throwable) {} }; engine = null }
         worker.shutdown()
         super.invalidate()
+    }
+
+    companion object {
+        const val MIN_SDK = 29
+        const val ENGINE_CLASS = "com.tensai.llamakt.LlamaEngine"
+        const val NOT_PACKAGED = "VULKAN_NOT_PACKAGED"
+        const val SDK_UNSUPPORTED = "VULKAN_SDK_UNSUPPORTED"
+        const val NATIVE_LOAD_FAILED = "VULKAN_NATIVE_LOAD_FAILED"
+        const val PROBE_FAILED = "VULKAN_PROBE_FAILED"
+
+        fun isVulkanGpu(backend: Map<String, String>): Boolean =
+            backend["type"].orEmpty().contains("gpu", ignoreCase = true) &&
+                "${backend["description"]} ${backend["name"]}".contains("vulkan", ignoreCase = true)
+
+        /**
+         * llama.cpp offloads min(n_gpu_layers, n_block + 1) layers (repeating blocks plus the
+         * output layer) to the selected GPU. -1 means the model header could not be read.
+         */
+        fun offloadedLayers(requested: Int, blockCount: Long, onVulkan: Boolean): Int = when {
+            !onVulkan || requested <= 0 -> 0
+            blockCount <= 0 -> -1
+            else -> minOf(requested.toLong(), blockCount + 1).toInt()
+        }
     }
 }

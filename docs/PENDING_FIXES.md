@@ -2,6 +2,12 @@
 
 Issues identified but not yet applied to code. Address before or alongside the next release.
 
+> **Status (0.0.105):** Fix #1 was already in the code (polling body wrapped in try/catch). Fix #2 is
+> applied in `DownloadManagerModule.startProgressPolling` (stranded rows marked `FAILED` /
+> `download_interrupted` with a retryable error event; RETRYING and WAITING_FOR_NETWORK rows are now
+> polled too; a system `CANCELLED` work state on a still-active row is handled the same way).
+> Unit-tested via `isStrandedWork`; the post-update scenario still needs a device check.
+
 ---
 
 ## 1. SQLiteException not caught in `startProgressPolling`

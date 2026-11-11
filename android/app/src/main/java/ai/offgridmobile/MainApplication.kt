@@ -17,6 +17,7 @@ import ai.offgridmobile.atlasvulkan.AtlasVulkanPackage
 import ai.offgridmobile.atlaskiwix.AtlasKiwixPackage
 import ai.offgridmobile.atlasdevice.AtlasDevicePackage
 import ai.offgridmobile.presentation.AtlasPresentationExporterPackage
+import ai.offgridmobile.atlasaudio.AtlasAudioPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -37,6 +38,7 @@ class MainApplication : Application(), ReactApplication {
           add(AtlasKiwixPackage())
           add(AtlasDevicePackage())
           add(AtlasPresentationExporterPackage())
+          add(AtlasAudioPackage())
         },
     )
   }

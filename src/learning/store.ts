@@ -23,6 +23,8 @@ export interface LearnConfig {
   useLibrary: boolean;
   /** Research on the web too (never in off-grid mode). */
   useWeb: boolean;
+  /** When useWeb is on: comma-separated domains to restrict results to (e.g. "scholar.google.com, arxiv.org"). Empty = no restriction. */
+  webDomains?: string;
   /** Keep making new question rounds after the bank is done (keep mode). */
   continuous: boolean;
   learnerModelId?: string;
@@ -46,6 +48,25 @@ export interface BankItem {
   round: number;
 }
 
+export interface ReportSource { n: number; title: string; kind: 'project' | 'library' | 'web'; url?: string }
+
+/** A report the learner wrote, kept in full with what the judge said about it, so it can be read. */
+export interface LearnReport {
+  id: string;
+  itemId: string;
+  q: string;
+  text: string;
+  sources: string;
+  /** The numbered sources the report was written from; [1], [2]... in its text refer to these. */
+  sourceList?: ReportSource[];
+  at: number;
+  /** waiting = not judged yet. */
+  status: 'waiting' | 'pass' | 'fail';
+  score?: number;
+  /** The judge's reason (why it failed, or why it passed). */
+  why?: string;
+}
+
 export interface PendingReport { itemId: string; q: string; report: string; sources: string }
 export interface LearnedNote { q: string; answer: string; at: number; score?: number }
 
@@ -53,6 +74,8 @@ export interface PerAgent {
   round: number;
   bank: BankItem[];
   pendingReports: PendingReport[];
+  /** Every report written (newest first, up to 100), in full. */
+  reportLog?: LearnReport[];
   reportsSinceJudge: number;
   judgesSinceManager: number;
   totalReports: number;
@@ -70,11 +93,13 @@ export interface PerAgent {
   sessionLessons: string;
   /** Last manager verdict: on track or drifting. */
   onTrack: boolean | null;
+  /** Lessons kept when learning without an agent (an agent keeps its own). */
+  lessons: string;
 }
 
 export const blankState = (): PerAgent => ({
-  round: 0, bank: [], pendingReports: [], reportsSinceJudge: 0, judgesSinceManager: 0, totalReports: 0,
-  direction: '', judgeNote: '', pendingFindings: [], scores: [], notes: [], sessionLessons: '', onTrack: null,
+  round: 0, bank: [], pendingReports: [], reportLog: [], reportsSinceJudge: 0, judgesSinceManager: 0, totalReports: 0,
+  direction: '', judgeNote: '', pendingFindings: [], scores: [], notes: [], sessionLessons: '', onTrack: null, lessons: '',
 });
 
 export const defaultLearnConfig = (): LearnConfig => ({
@@ -82,7 +107,14 @@ export const defaultLearnConfig = (): LearnConfig => ({
   useLibrary: true, useWeb: false, continuous: true,
 });
 
+/** A subject the AI studies on its own: its own topic, question bank, reports and lessons. */
+export interface Expert { id: string; name: string }
+
 interface LearningState {
+  /** Subjects beyond the general one (taxes, law, psychology...). Each keeps its own learning, so one expert never blurs into another. */
+  experts: Expert[];
+  addExpert: (name: string) => string;
+  removeExpert: (id: string) => void;
   config: Record<string, LearnConfig>;
   state: Record<string, PerAgent>;
   events: LearnEvent[];
@@ -99,6 +131,18 @@ interface LearningState {
 export const useLearningStore = create<LearningState>()(
   persist(
     (set, getS) => ({
+      experts: [],
+      addExpert: (name) => {
+        const base = name.trim().slice(0, 40) || 'Expert';
+        const id = `expert-${base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'x'}-${localUniqueId('e').slice(-4)}`;
+        set((s) => ({ experts: [...s.experts, { id, name: base }] }));
+        return id;
+      },
+      removeExpert: (id) => set((s) => {
+        const { [id]: _c, ...config } = s.config;
+        const { [id]: _s, ...state } = s.state;
+        return { experts: s.experts.filter((e) => e.id !== id), config, state, events: s.events.filter((e) => e.agentId !== id) };
+      }),
       config: {},
       state: {},
       events: [],

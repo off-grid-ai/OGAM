@@ -16,6 +16,9 @@ import {
   FlashAttentionToggle,
   KvCacheTypeToggle,
   ModelLoadingModeSelector,
+  WarmUpToggle,
+  MtpToggle,
+  TrimToolsToggle,
   CpuThreadsSlider,
   BatchSizeSlider,
 } from '../../components/settings/textGenAdvancedSections';
@@ -49,6 +52,9 @@ export const TextGenerationAdvanced: React.FC = () => {
       <FlashAttentionToggle />
       <KvCacheTypeToggle />
       <ModelLoadingModeSelector />
+      <WarmUpToggle />
+      <MtpToggle />
+      <TrimToolsToggle />
     </>
   );
 };
@@ -69,6 +75,9 @@ export const LiteRTTextGenerationAdvanced: React.FC = () => {
 
       <LiteRTBackendSelector />
       <ModelLoadingModeSelector />
+      <WarmUpToggle />
+      <MtpToggle />
+      <TrimToolsToggle />
     </>
   );
 };

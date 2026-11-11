@@ -303,5 +303,37 @@ class DownloadManagerModuleTest {
             as android.app.NotificationManager
         assertNotNull(mgr.getNotificationChannel("model_downloads"))
     }
+
+    // ── DownloadManagerModule.isStrandedWork ──────────────────────────────────
+
+    @Test
+    fun strandedWhenWorkManagerHasNoRecord() {
+        assertTrue(DownloadManagerModule.isStrandedWork(emptyList()))
+    }
+
+    @Test
+    fun strandedWhenAllWorkCancelledOrFailed() {
+        assertTrue(DownloadManagerModule.isStrandedWork(listOf(androidx.work.WorkInfo.State.CANCELLED)))
+        assertTrue(
+            DownloadManagerModule.isStrandedWork(
+                listOf(androidx.work.WorkInfo.State.FAILED, androidx.work.WorkInfo.State.CANCELLED),
+            ),
+        )
+    }
+
+    @Test
+    fun notStrandedWhileWorkIsLive() {
+        assertFalse(DownloadManagerModule.isStrandedWork(listOf(androidx.work.WorkInfo.State.RUNNING)))
+        assertFalse(DownloadManagerModule.isStrandedWork(listOf(androidx.work.WorkInfo.State.ENQUEUED)))
+        assertFalse(DownloadManagerModule.isStrandedWork(listOf(androidx.work.WorkInfo.State.BLOCKED)))
+    }
+
+    @Test
+    fun retryingAndWaitingRowsAreTreatedAsActive() {
+        assertTrue(DownloadStatus.RETRYING in DownloadManagerModule.ACTIVE_STATUSES)
+        assertTrue(DownloadStatus.WAITING_FOR_NETWORK in DownloadManagerModule.ACTIVE_STATUSES)
+        assertFalse(DownloadStatus.CANCELLED in DownloadManagerModule.ACTIVE_STATUSES)
+        assertFalse(DownloadStatus.COMPLETED in DownloadManagerModule.ACTIVE_STATUSES)
+    }
 }
 

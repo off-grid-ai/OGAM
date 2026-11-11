@@ -27,6 +27,9 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.xxl,
   },
+  contentWide: { maxWidth: 1180, paddingHorizontal: SPACING.xl },
+  columns: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: SPACING.xl },
+  column: { flex: 1, minWidth: 0 },
   section: { marginBottom: SPACING.lg },
   sectionTitle: {
     ...TYPOGRAPHY.label,

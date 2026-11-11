@@ -26,5 +26,4 @@ export { ThinkingIndicator } from './ThinkingIndicator';
 export { ProjectSelectorSheet } from './ProjectSelectorSheet';
 export { DebugSheet } from './DebugSheet';
 export { SharePromptSheet } from './SharePromptSheet';
-export { ProAhaSheet } from './ProAhaSheet';
 ;

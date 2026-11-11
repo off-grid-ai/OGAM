@@ -25,6 +25,8 @@ interface ActionMenuSheetProps {
   onSpeak: () => void;
   /** When provided, shows a "Select text" item (chat mode) for partial copy. */
   onSelectText?: () => void;
+  /** Pin this message to the Pinned page, and make slides from it. */
+  extras?: { pinned: boolean; onPin: () => void; onSlides?: () => void; onCheck?: () => void; onWhy?: () => void; onAsk?: () => void };
 }
 
 export function ActionMenuSheet({
@@ -46,6 +48,7 @@ export function ActionMenuSheet({
   onGenerateImage,
   onSpeak,
   onSelectText,
+  extras,
 }: ActionMenuSheetProps) {
   const { colors } = useTheme();
 
@@ -117,6 +120,37 @@ export function ActionMenuSheet({
           </AnimatedPressable>
         )}
 
+        {extras && (
+          <AnimatedPressable testID="action-pin" hapticType="selection" style={styles.actionSheetItem} onPress={extras.onPin}>
+            <Icon name="bookmark" size={18} color={colors.textSecondary} />
+            <Text style={styles.actionSheetText}>{extras.pinned ? 'Unpin' : 'Pin'}</Text>
+          </AnimatedPressable>
+        )}
+        {extras?.onCheck && !isUser && (
+          <AnimatedPressable testID="action-check-answer" hapticType="selection" style={styles.actionSheetItem} onPress={extras.onCheck}>
+            <Icon name="check-circle" size={18} color={colors.textSecondary} />
+            <Text style={styles.actionSheetText}>Check this answer</Text>
+          </AnimatedPressable>
+        )}
+        {extras?.onAsk && !isUser && (
+          <AnimatedPressable testID="action-ask" hapticType="selection" style={styles.actionSheetItem} onPress={extras.onAsk}>
+            <Icon name="corner-down-right" size={18} color={colors.textSecondary} />
+            <Text style={styles.actionSheetText}>Ask about this</Text>
+          </AnimatedPressable>
+        )}
+        {extras?.onWhy && !isUser && (
+          <AnimatedPressable testID="action-why" hapticType="selection" style={styles.actionSheetItem} onPress={extras.onWhy}>
+            <Icon name="help-circle" size={18} color={colors.textSecondary} />
+            <Text style={styles.actionSheetText}>Why this reply</Text>
+          </AnimatedPressable>
+        )}
+        {extras?.onSlides && !isUser && (
+          <AnimatedPressable testID="action-slides" hapticType="selection" style={styles.actionSheetItem} onPress={extras.onSlides}>
+            <Icon name="monitor" size={18} color={colors.textSecondary} />
+            <Text style={styles.actionSheetText}>Make slides from this</Text>
+          </AnimatedPressable>
+        )}
+
         {canSaveToProject && onSaveToProject && !isUser && (
           <AnimatedPressable testID="action-save-to-project" hapticType="selection"
             style={styles.actionSheetItem} onPress={onSaveToProject}>
@@ -183,6 +217,8 @@ interface EditSheetProps {
   defaultValue: string;
   onChangeText: (text: string) => void;
   onSave: () => void;
+  /** Save the change but keep the conversation after this message and do not ask again. */
+  onSaveOnly?: () => void;
   onCancel: () => void;
   styles: any;
   colors: any;
@@ -194,6 +230,7 @@ export function EditSheet({
   defaultValue,
   onChangeText,
   onSave,
+  onSaveOnly,
   onCancel,
   styles,
   colors,
@@ -215,6 +252,7 @@ export function EditSheet({
           placeholder="Enter message..."
           placeholderTextColor={colors.textMuted}
           textAlignVertical="top"
+          scrollEnabled
         />
         <View style={styles.editActions}>
           <AnimatedPressable
@@ -224,6 +262,16 @@ export function EditSheet({
           >
             <Text style={styles.editButtonText}>CANCEL</Text>
           </AnimatedPressable>
+          {!!onSaveOnly && (
+            <AnimatedPressable
+              hapticType="selection"
+              style={[styles.editButton, styles.editButtonCancel]}
+              onPress={onSaveOnly}
+              testID="edit-save-only"
+            >
+              <Text style={styles.editButtonText}>SAVE</Text>
+            </AnimatedPressable>
+          )}
           <AnimatedPressable
             hapticType="impactMedium"
             style={[styles.editButton, styles.editButtonSave]}

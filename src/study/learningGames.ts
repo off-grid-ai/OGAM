@@ -12,10 +12,12 @@ export function buildCrossword(terms: LearningTerm[], size = 17): Crossword {
   const entries: CrosswordEntry[] = [];
   const occupied = (r: number, c: number) => r >= 0 && r < size && c >= 0 && c < size && !!cells[r * size + c];
   const at = (r: number, c: number) => cells[r * size + c];
-  const put = (word: string, row: number, col: number, direction: 'across' | 'down') => {
+  const put = (word: string, pos: { row: number; col: number; direction: 'across' | 'down' }) => {
+    const { row, col, direction } = pos;
     for (let k = 0; k < word.length; k++) cells[(row + (direction === 'down' ? k : 0)) * size + col + (direction === 'across' ? k : 0)] = word[k];
   };
-  const canPlace = (word: string, row: number, col: number, direction: 'across' | 'down') => {
+  const canPlace = (word: string, pos: { row: number; col: number; direction: 'across' | 'down' }) => {
+    const { row, col, direction } = pos;
     const dr = direction === 'down' ? 1 : 0, dc = direction === 'across' ? 1 : 0;
     if (row < 0 || col < 0 || row + dr * (word.length - 1) >= size || col + dc * (word.length - 1) >= size) return -1;
     if (occupied(row - dr, col - dc) || occupied(row + dr * word.length, col + dc * word.length)) return -1;
@@ -40,15 +42,15 @@ export function buildCrossword(terms: LearningTerm[], size = 17): Crossword {
     } else {
       for (const dir of ['across', 'down'] as const) {
         for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
-          const overlap = canPlace(word, r, c, dir);
+          const overlap = canPlace(word, { row: r, col: c, direction: dir });
           if (overlap <= 0) continue;
           const score = overlap * 100 - Math.abs(r - size / 2) - Math.abs(c - size / 2);
           if (!best || score > best.score) best = { row: r, col: c, dir, score };
         }
       }
     }
-    if (!best || canPlace(word, best.row, best.col, best.dir) < 0) continue;
-    put(word, best.row, best.col, best.dir);
+    if (!best || canPlace(word, { row: best.row, col: best.col, direction: best.dir }) < 0) continue;
+    put(word, { row: best.row, col: best.col, direction: best.dir });
     entries.push({ ...item, id: entries.length, row: best.row, col: best.col, direction: best.dir, number: 0 });
   }
   const numbered = [...entries].sort((a, b) => a.row - b.row || a.col - b.col);
@@ -87,7 +89,8 @@ export function buildWordSearch(terms: LearningTerm[], size = 15): WordSearch {
   return { size, entries, cells: cells.map((cell, i) => cell || alphabet[(i * 17 + 7) % 26]) };
 }
 
-export function matchWordSearch(entry: WordSearchEntry, first: number, last: number, size: number): boolean {
+export function matchWordSearch(entry: WordSearchEntry, span: { first: number; last: number }, size: number): boolean {
+  const { first, last } = span;
   const start = entry.row * size + entry.col;
   const end = (entry.row + entry.dr * (entry.answer.length - 1)) * size +
     entry.col + entry.dc * (entry.answer.length - 1);

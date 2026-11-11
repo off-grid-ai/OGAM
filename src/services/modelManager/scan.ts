@@ -340,7 +340,9 @@ async function doScanForUntrackedTextModels(
 ): Promise<DownloadedModel[]> {
   const discoveredModels: DownloadedModel[] = [];
   const registeredModels = await getModels();
-  const registeredPaths = new Set(registeredModels.map(m => m.filePath));
+  // A model's attached MTP file (stored beside it as `<stem>.mtp-<name>.gguf`) is a draft helper, not a model:
+  // listing it as a "recovered" model offered something that cannot be loaded.
+  const registeredPaths = new Set(registeredModels.flatMap(m => [m.filePath, (m as { draftPath?: string }).draftPath].filter((p): p is string => !!p)));
 
   const dirExists = await RNFS.exists(modelsDir);
   if (!dirExists) return discoveredModels;
@@ -350,7 +352,7 @@ async function doScanForUntrackedTextModels(
   for (const item of items) {
     const lowerName = item.name.toLowerCase();
     const isMmProj = isMMProjFile(lowerName);
-    if (!item.isFile() || !item.name.endsWith('.gguf') || registeredPaths.has(item.path) || isMmProj) {
+    if (!item.isFile() || !item.name.endsWith('.gguf') || registeredPaths.has(item.path) || isMmProj || lowerName.includes('.mtp-')) {
       continue;
     }
 
@@ -422,18 +424,24 @@ export async function importLocalModel(opts: ImportLocalModelOpts): Promise<Down
   const resolvedMmProjSource = mmProjSourceUri ? resolveUri(mmProjSourceUri) : undefined;
 
   const destPath = `${modelsDir}/${fileName}`;
-  const destExists = await RNFS.exists(destPath);
-  if (destExists) throw new Error(`A model file named "${fileName}" already exists`);
-  if (mmProjFileName && await RNFS.exists(`${modelsDir}/${mmProjFileName}`)) {
-    throw new Error(`A file named "${mmProjFileName}" already exists`);
+  // Importing a file is an explicit request, so it REPLACES whatever is already under that name: an earlier copy that is still
+  // in the models folder, and/or an entry in the saved list that My Models no longer shows. Refusing ("already in your models
+  // list") left people unable to import a model they had removed, and keeping a same-size leftover left a damaged copy in
+  // place (the same size does not mean the same bytes). The entry is keyed by file name, so it is replaced, never duplicated.
+  const alreadyCopied = resolvedSource === destPath; // picked from the models folder itself: nothing to copy
+  if (!alreadyCopied && await RNFS.exists(destPath)) await RNFS.unlink(destPath);
+  if (mmProjFileName && resolvedMmProjSource !== `${modelsDir}/${mmProjFileName}` && await RNFS.exists(`${modelsDir}/${mmProjFileName}`)) {
+    await RNFS.unlink(`${modelsDir}/${mmProjFileName}`);
   }
 
   // Copy main model: progress 0→0.5 when mmproj present, 0→1 otherwise
   const mainProgressScale = mmProjFileName ? 0.5 : 1;
-  await copyFileWithProgress(resolvedSource, destPath, {
-    knownTotalBytes: sourceSize ?? null,
-    onProgress: onProgress ? (fraction: number) => onProgress({ fraction: fraction * mainProgressScale, fileName }) : undefined,
-  });
+  if (!alreadyCopied) {
+    await copyFileWithProgress(resolvedSource, destPath, {
+      knownTotalBytes: sourceSize ?? null,
+      onProgress: onProgress ? (fraction: number) => onProgress({ fraction: fraction * mainProgressScale, fileName }) : undefined,
+    });
+  }
 
   const quantMatch = fileName.match(/[_-](Q\d+[_\w]*|f16|f32)/i);
   const quantization = quantMatch ? quantMatch[1].toUpperCase() : 'Unknown';

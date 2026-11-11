@@ -9,6 +9,7 @@ import { useClearGpuCache } from '../../hooks/useImageGenerationSettings';
 import { getImageTuning, getImageSizeSlider, isDirectSDXL, getImageGuidance } from '../../utils/nativeImageTuning';
 import { createStyles } from './styles';
 import { ImageBackendModePicker } from '../../components/ImageBackendModePicker';
+import { ImageStylePicker } from '../../components/ImageStylePicker';
 
 // ─── Advanced Sub-Components ─────────────────────────────────────────────────
 
@@ -132,6 +133,7 @@ const ImageAdvancedSection: React.FC = () => {
       )}
 
       <DetectionMethodRow />
+      <ImageStylePicker />
       <EnhanceImageToggle />
 
       {Platform.OS === 'android' && <ImageGpuSection />}

@@ -25,6 +25,9 @@ try {
   // RNTL not present in a given suite's module graph — nothing to configure.
 }
 
+// The app wires its cross-layer hooks (load a model, tell the chat a message was cut) at start-up; tests need the same wiring.
+require('./src/bootstrap/atlasHooks').registerAtlasHooks();
+
 const shouldPrintJestConsole = process.env.DEBUG_JEST_CONSOLE === '1';
 
 // react-native-keyboard-controller ships a jest mock; without it, any test that
@@ -406,6 +409,10 @@ jest.mock('@react-native-documents/picker', () => ({
     csv: 'text/csv',
     pdf: 'application/pdf',
   },
+  // Android hands back a content:// uri; the device copies it into app storage. The fake "copy" is the same readable path.
+  // The "save to" dialog: the person picks a place; the fake accepts and reports the file name.
+  saveDocuments: jest.fn(async ({ fileName }: { fileName: string }) => [{ name: fileName }]),
+  keepLocalCopy: jest.fn(async ({ files }: { files: Array<{ uri: string }> }) => files.map((f) => ({ status: 'success', sourceUri: f.uri, localUri: f.uri }))),
   isErrorWithCode: jest.fn(() => false),
   errorCodes: {
     OPERATION_CANCELED: 'OPERATION_CANCELED',

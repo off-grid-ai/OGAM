@@ -128,7 +128,7 @@ export const SecuritySettingsScreen: React.FC = () => {
         <Card style={styles.infoCard}>
           <Icon name="info" size={18} color={colors.textMuted} />
           <Text style={styles.infoText}>
-            The optional app lock is separate from individual chat protection. Ordinary chats are not encrypted by default. A chat you explicitly protect is encrypted with its own Android Keystore key and unlocked by its PIN; the same PIN may protect several chats. Removing protection after verifying the PIN saves that chat normally. Private chats are not persisted. Password-protected manual backups are available, but protected chats are excluded from portable exports. Automatic sync is disabled.
+            The optional app lock is separate from individual chat protection. Ordinary chats are not encrypted by default. A chat you explicitly protect is encrypted with its own Android Keystore key and unlocked by its PIN; the same PIN may protect several chats. Removing protection after verifying the PIN saves that chat normally. Private chats are not persisted. Password-protected manual backups carry protected chats and projects only in sealed form: ones unlocked at backup time open on a new phone with their PIN; ones still locked can be restored only on this phone. Automatic sync is disabled.
           </Text>
         </Card>
       </ScrollView>

@@ -1,14 +1,20 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Clipboard } from 'react-native';
+import { CitationChips } from '../CitationChips';
+import { sourcesFromSearch, type CheckedCitation } from '../../study/citations';
+import { quoteForAsk, useQuoteDraft } from '../../utils/quoteDraft';
+import { whyThisReply } from '../../study/whyReply';
+import { sourcesBefore, citedNumbers, markSources } from '../../study/replySources';
+import React, { useMemo, useState } from 'react';
+import { Alert, View, Text, TouchableOpacity, Clipboard } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
-import { useUiModeStore, useAccordionExpanded } from '../../stores';
+import { useUiModeStore, useAccordionExpanded, useAppStore, useChatStore } from '../../stores';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import Icon from 'react-native-vector-icons/Feather';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../CustomAlert';
 import { AnimatedEntry } from '../AnimatedEntry';
-import { triggerHaptic } from '../../utils/haptics';
+import { triggerHaptic } from '../../services/haptics';
 import { createStyles } from './styles';
+import { useWideLayout } from '../../hooks/useWideLayout';
 import { MessageAttachments } from './components/MessageAttachments';
 import { MessageContent } from './components/MessageContent';
 import { GenerationMeta } from './components/GenerationMeta';
@@ -19,6 +25,9 @@ import { formatTime, formatDuration, buildMessageData } from './utils';
 import { ThinkingBlock } from './components/ThinkingBlock';
 import type { ChatMessageProps } from './types';
 import type { Message } from '../../types';
+import { applyMessageLook, messageTime } from '../../theme/messageLooks';
+import { usePins } from '../../pins/store';
+import { slidesFromReply } from '../../presentations/replySlides';
 
 function getToolIcon(toolName?: string): string {
   switch (toolName) {
@@ -83,6 +92,7 @@ const ToolResultBubbleInner: React.FC<ToolResultBubbleProps> = ({
           />
         )}
       </TouchableOpacity>
+      {hasDetails && (toolName === 'web_search') && <CitationChips cites={sourcesFromSearch(content)} />}
       {expanded && hasDetails && (
         <View style={styles.toolDetailContainer}>
           <MarkdownText dimmed>{content}</MarkdownText>
@@ -231,17 +241,38 @@ interface MessageBubbleProps {
   onToggleThinking: () => void;
   onLongPress: () => void;
   onMenuOpen: () => void;
+  /** Clean chat layout: smaller gaps between messages. */
+  clean?: boolean;
+  /** A name shown above the message (Discord style). */
+  label?: string;
+  /** Learned lessons the reply was written with, shown as a small note under it. */
+  lessonsUsed?: string[];
+  /** Numbered sources the reply cites, listed under it. */
+  sources?: CheckedCitation[];
+  /** The message's time, shown inside the bubble in a messaging-app look. */
+  time?: string;
+  timeStyle?: object;
+}
+
+/** The bubble's styles: Clean = plain-text replies and a rounded bubble for your own message; Bubbles = every message boxed. */
+function bubbleStyleFor(o: { styles: any; isUser: boolean; clean: boolean; isWide: boolean; hasAttachments: boolean }) {
+  const { styles, isUser, clean, isWide, hasAttachments } = o;
+  const base = [styles.bubble, isUser ? styles.userBubble : styles.assistantBubble];
+  const width = isWide ? { maxWidth: isUser ? '70%' as const : '92%' as const } : undefined;
+  if (clean) return [...base, isUser ? styles.cleanUserBubble : styles.cleanAssistantBubble, isUser ? width : undefined, hasAttachments ? styles.bubbleWithAttachments : undefined];
+  return [...base, width, hasAttachments ? styles.bubbleWithAttachments : undefined];
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({
   message, styles, colors, isUser, isStreaming, hasAttachments, bubbleStyle,
   parsedContent, showThinking, showActions, showGenerationDetails, metaExtra,
-  onImagePress, onToggleThinking, onLongPress, onMenuOpen,
+  onImagePress, onToggleThinking, onLongPress, onMenuOpen, clean, label, lessonsUsed, sources, time, timeStyle,
 }) => (
   <TouchableOpacity
     testID={isUser ? 'user-message' : 'assistant-message'}
     style={[
       styles.container,
+      clean ? styles.cleanContainer : undefined,
       isUser ? styles.userContainer : styles.assistantContainer,
     ]}
     activeOpacity={0.8}
@@ -249,6 +280,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     delayLongPress={300}
   >
     <View style={bubbleStyle}>
+      {!!label && <Text style={styles.lookLabel}>{label}</Text>}
       {hasAttachments && (
         <MessageAttachments
           attachments={message.attachments!}
@@ -269,6 +301,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         onToggleThinking={onToggleThinking}
         styles={styles}
       />
+      {!!time && <Text style={timeStyle} testID="look-time">{time}</Text>}
     </View>
 
     <RoutedToolsRow message={message} isUser={isUser} isStreaming={isStreaming} styles={styles} colors={colors} />
@@ -277,6 +310,15 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       <View testID="message-cutoff-indicator" style={styles.toolStatusRow}>
         <Icon name="alert-triangle" size={12} color={colors.textMuted} />
         <Text style={styles.toolStatusText}>Reply cut off at the token limit. Retry to continue.</Text>
+      </View>
+    )}
+
+    {!!sources?.length && <CitationChips cites={sources} testID="reply-sources" />}
+
+    {!!lessonsUsed?.length && (
+      <View style={styles.toolStatusRow} testID="lessons-used">
+        <Icon name="award" size={12} color={colors.textMuted} />
+        <Text style={styles.toolStatusText}>Used: {lessonsUsed.join(' and ')} lessons</Text>
       </View>
     )}
 
@@ -302,6 +344,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   onCopy,
   onRetry,
   onEdit,
+  onCheckAnswer,
   onDelete,
   onSaveToProject,
   onGenerateImage,
@@ -324,15 +367,29 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const [showThinking, setShowThinking] = useState(!!isStreaming);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
-  const { displayContent, parsedContent } = buildMessageData(message);
+  const { displayContent, parsedContent: rawParsed } = buildMessageData(message);
+  // Source numbers: a reply that cites a search result as [1] shows a small raised 1 and lists the sources under it.
+  const sources = useMemo(() => {
+    if (message.role !== 'assistant' || !/\[\d{1,2}\]/.test(rawParsed.response ?? '')) return [];
+    const chat = useChatStore.getState();
+    const msgs = chat.conversations.find((c: { id: string }) => c.id === chat.activeConversationId)?.messages ?? [];
+    const searched = sourcesBefore(msgs as any, message.id);
+    if (searched.length) return searched;
+    // No web search led to this reply: the numbers refer to the project-document excerpts it was written from.
+    return (message.generationMeta?.sources ?? []).map((s) => ({ title: s.title, quote: s.quote, file: s.file, verified: true }));
+  }, [message.id, message.role, rawParsed.response, message.generationMeta?.sources]);
+  const cited = citedNumbers(rawParsed.response ?? '', sources.length).length > 0;
+  const parsedContent = cited ? { ...rawParsed, response: markSources(rawParsed.response ?? '', sources.length) } : rawParsed;
 
   const isUser = message.role === 'user';
   const hasAttachments = Boolean(message.attachments?.length);
-  const bubbleStyle = [
-    styles.bubble,
-    isUser ? styles.userBubble : styles.assistantBubble,
-    hasAttachments ? styles.bubbleWithAttachments : undefined,
-  ];
+  // Tablet/unfolded column: shorter user bubbles, more room for long answers and code.
+  const { isWide } = useWideLayout();
+  const layout = useAppStore((s) => s.settings.appearance?.chatLayout ?? 'clean');
+  const showLessons = useAppStore((s) => s.settings.showLessonsUsed !== false);
+  const clean = layout === 'clean';
+  const { look, lookStyles, timeStyle } = applyMessageLook({ layout, isUser, background: colors.background, styles });
+  const bubbleStyle = look ? [...bubbleStyleFor({ styles, isUser, clean: false, isWide, hasAttachments }), look.bubble] : bubbleStyleFor({ styles, isUser, clean, isWide, hasAttachments });
 
   const handleCopy = () => {
     Clipboard.setString(displayContent);
@@ -351,6 +408,38 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     setShowActionMenu(false);
     onDelete?.(message);
   };
+  const pinned = usePins((st) => st.pins.some((p) => p.id === message.id));
+  const handlePin = () => {
+    setShowActionMenu(false);
+    if (pinned) { usePins.getState().remove(message.id); return; }
+    const chat = useChatStore.getState();
+    const conversation = chat.conversations.find((c: { id: string }) => c.id === chat.activeConversationId);
+    usePins.getState().add({ id: message.id, text: displayContent, role: message.role, conversationId: conversation?.id ?? null, conversationTitle: conversation?.title ?? 'Chat' });
+    triggerHaptic('notificationSuccess');
+  };
+  const handleAsk = () => {
+    setShowActionMenu(false);
+    useQuoteDraft.getState().set(quoteForAsk(displayContent));
+  };
+  const handleWhy = () => {
+    setShowActionMenu(false);
+    const why = whyThisReply(message.generationMeta);
+    Alert.alert('Why this reply', why || 'Nothing was recorded about what this reply was written from.');
+  };
+  const handleCheck = () => {
+    setShowActionMenu(false);
+    setTimeout(() => onCheckAnswer?.(message), 350); // let the menu finish closing
+  };
+
+  const handleSlides = () => {
+    setShowActionMenu(false);
+    const chat = useChatStore.getState();
+    const title = chat.conversations.find((c: { id: string }) => c.id === chat.activeConversationId)?.title;
+    const made = slidesFromReply(displayContent, title);
+    // Loaded when used: screens that mock the navigation library do not need it.
+    require('../../utils/navigationRef').navigationRef.navigate('Presentations', { slides: made.slides, name: made.name });
+  };
+
   const handleSaveToProject = () => {
     setShowActionMenu(false);
     onSaveToProject?.(message);
@@ -368,9 +457,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     setTimeout(() => setShowSelectText(true), 350);
   };
 
-  const handleSaveEdit = () => {
+  /** `resend` false only fixes the text: the conversation after it is kept and nothing is sent again. */
+  const handleSaveEdit = (resend = true) => {
     const trimmed = editedContent.trim();
-    if (trimmed !== message.content) onEdit?.(message, trimmed);
+    if (trimmed !== message.content) { if (resend) onEdit?.(message, trimmed); else onEdit?.(message, trimmed, { resend: false }); }
     setIsEditing(false);
   };
 
@@ -413,8 +503,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   }
   const messageBody = (
     <MessageBubble
+      clean={clean}
+      label={look?.label ? `${look.label} · ${messageTime(message.timestamp)}` : undefined}
+      lessonsUsed={!isUser && showLessons ? message.generationMeta?.lessonsUsed : undefined}
+      sources={cited ? sources : undefined}
+      time={look && !look.label ? messageTime(message.timestamp) : undefined}
+      timeStyle={timeStyle}
       message={message}
-      styles={styles}
+      styles={lookStyles}
       colors={colors}
       isUser={isUser}
       isStreaming={isStreaming}
@@ -461,10 +557,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         onRetry={handleRetry}
         onDelete={handleDelete}
         onSaveToProject={handleSaveToProject}
+        extras={{ pinned, onPin: handlePin, onSlides: isStreaming ? undefined : handleSlides, onCheck: isStreaming || !onCheckAnswer ? undefined : handleCheck, onWhy: isStreaming ? undefined : handleWhy, onAsk: isStreaming ? undefined : handleAsk }}
         onGenerateImage={handleGenerateImage}
         onSpeak={handleSpeak}
         onSelectText={handleSelectText}
-        onSaveEdit={handleSaveEdit}
+        onSaveEditOnly={isUser ? () => handleSaveEdit(false) : undefined}
+        onSaveEdit={() => handleSaveEdit(!isUser ? false : true)}
         onCancelEdit={handleCancelEdit}
         onCloseAlert={() => setAlertState(hideAlert())}
       />

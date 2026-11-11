@@ -207,6 +207,7 @@ jobs:
         with:
           name: atlas-image-build-diagnostics
           if-no-files-found: ignore
+          retention-days: 3
           path: |
             android/app/build/reports/tests/
             android/app/build/test-results/
@@ -215,3 +216,4 @@ jobs:
         with:
           name: atlas-native-image-experimental-apk
           path: android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 2

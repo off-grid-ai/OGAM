@@ -25,4 +25,10 @@ const hashes = iconPaths.map(p => crypto.createHash('sha256').update(fs.readFile
 if (hashes[0] !== hashes[1]) throw new Error('Android launcher and splash artwork diverged.');
 const ids = [...read('FUTURE_RELEASES.md').matchAll(/^\s*- \[ \] \*\*FF-\d\d/gm)];
 if (ids.length !== 9) throw new Error('User-authored nine-item future-feature list is missing or modified.');
-console.log('Reconciled Atlas release contract passed: Workspace, no-agent, chat folders, privacy modules, icon, and roadmap.');
+const releaseWorkflow = read('.github/workflows/atlas-apk.yml');
+if (!/assembleRelease[^\n]*-PatlasVulkanEnabled=true/.test(releaseWorkflow) ||
+    !releaseWorkflow.includes('lib/arm64-v8a/libllamakt.so'))
+  throw new Error('Official APK must build and verify the llama.kt Vulkan text engine.');
+if (read('android/app/build.gradle').includes('.vulkantest'))
+  throw new Error('Vulkan builds must update the normal Atlas app, not install a side-by-side copy.');
+console.log('Reconciled Atlas release contract passed: Workspace, no-agent, chat folders, privacy modules, icon, Vulkan engine and roadmap.');

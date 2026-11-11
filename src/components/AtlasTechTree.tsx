@@ -1,6 +1,20 @@
 import React, { useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../theme';
+const OPACITY_1 = 1;
+const OPACITY_0_55 = 0.55;
+const literalStyles = StyleSheet.create({
+  s1: { gap:12 },
+  s2: { fontSize:19 },
+  s3: { fontSize:20 },
+  s4: { padding:12, borderRadius:9, borderWidth:1 },
+  s5: { fontWeight:'600' },
+  s6: { fontSize:12 },
+  s7: { padding:13 },
+  s8: { borderRadius:9 },
+  s9: { textAlign:'center' },
+});
+
 
 interface Tech { id: string; name: string; cost: number; requires: string[] }
 export const TECH_TREE: Tech[] = [
@@ -28,19 +42,19 @@ export function AtlasTechTree() {
     setUnlocked(ids=>[...ids,tech.id]);setScience(value=>value-tech.cost);setTurn(t=>t+1);
   };
   const restart = () => {setUnlocked([]);setScience(30);setTurn(0);};
-  return <View style={{gap:12}}>
-    <Text style={{color:colors.text,fontSize:19}}>Civilization Tech Tree</Text>
+  return <View style={literalStyles.s1}>
+    <Text style={[{ color:colors.text }, literalStyles.s2]}>Civilization Tech Tree</Text>
     <Text style={{color:colors.textSecondary}}>Science: {science} · Research actions: {turn} · Goal: unlock Spaceflight</Text>
-    {won && <Text style={{color:colors.text,fontSize:20}}>Spaceflight unlocked! Your civilization reached the stars.</Text>}
+    {won && <Text style={[{ color:colors.text }, literalStyles.s3]}>Spaceflight unlocked! Your civilization reached the stars.</Text>}
     {!won && science < 5 && <Text style={{color:colors.error}}>Limited science remains. You may need to restart and avoid optional technologies.</Text>}
     {TECH_TREE.map(tech=>{
       const done=unlocked.includes(tech.id), prerequisites=tech.requires.every(id=>unlocked.includes(id));
       const enabled=!done&&prerequisites&&tech.cost<=science&&!won;
-      return <TouchableOpacity key={tech.id} disabled={!enabled} onPress={()=>research(tech)} style={{padding:12,borderRadius:9,borderWidth:1,borderColor:colors.border,backgroundColor:colors.surface,opacity:enabled||done?1:0.55}}>
-        <Text style={{color:colors.text,fontWeight:'600'}}>{done?'✓ ':prerequisites?'◯ ':'🔒 '}{tech.name} · {tech.cost} science</Text>
-        <Text style={{color:colors.textSecondary,fontSize:12}}>{done?'Researched':tech.requires.length?'Requires: '+tech.requires.map(id=>TECH_TREE.find(t=>t.id===id)?.name).join(', '):'Available from the start'}</Text>
+      return <TouchableOpacity key={tech.id} disabled={!enabled} onPress={()=>research(tech)} style={[literalStyles.s4, { borderColor:colors.border, backgroundColor:colors.surface, opacity: enabled||done ? OPACITY_1 : OPACITY_0_55 }]}>
+        <Text style={[{ color:colors.text }, literalStyles.s5]}>{done?'✓ ':prerequisites?'◯ ':'🔒 '}{tech.name} · {tech.cost} science</Text>
+        <Text style={[{ color:colors.textSecondary }, literalStyles.s6]}>{done?'Researched':tech.requires.length?`Requires: ${tech.requires.map(id=>TECH_TREE.find(t=>t.id===id)?.name).join(', ')}`:'Available from the start'}</Text>
       </TouchableOpacity>;
     })}
-    <TouchableOpacity onPress={restart} style={{padding:13,backgroundColor:colors.surface,borderRadius:9}}><Text style={{color:colors.text,textAlign:'center'}}>Restart civilization</Text></TouchableOpacity>
+    <TouchableOpacity onPress={restart} style={[literalStyles.s7, { backgroundColor:colors.surface }, literalStyles.s8]}><Text style={[{ color:colors.text }, literalStyles.s9]}>Restart civilization</Text></TouchableOpacity>
   </View>;
 }

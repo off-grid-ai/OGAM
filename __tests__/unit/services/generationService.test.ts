@@ -763,6 +763,27 @@ describe('generationService', () => {
       expect(chatState.isStreaming).toBe(false);
     });
 
+    it('stores the final parsed answer when streaming left a stale revised character', async () => {
+      const convId = setupWithConversation();
+      setupWithActiveModel();
+      mockedLlmService.generateResponse.mockImplementation((async (
+        _messages: any,
+        { onStream, onComplete }: any = {}
+      ) => {
+        onStream?.({ content: 'Hello <' });
+        onStream?.({ content: 'e' });
+        onComplete?.({ content: 'Hello be', reasoningContent: '', parsedContent: 'Hello be' });
+        return 'Hello be';
+      }) as any);
+
+      await generationService.generateResponse(convId, [
+        createMessage({ role: 'user', content: 'Hi' }),
+      ]);
+
+      const assistant = useChatStore.getState().getConversationMessages(convId).find(m => m.role === 'assistant');
+      expect(assistant?.content).toBe('Hello be');
+    });
+
     it('includes generation metadata on finalized message', async () => {
       const convId = setupWithConversation();
       setupWithActiveModel({ name: 'Test Model' });

@@ -4,7 +4,7 @@ import { protectedVault } from '../../stores/protectedProjectVault';
 /** True when the project's documents live in its encrypted vault instead of rag.db. */
 export function isProtectedProject(projectId: string): boolean {
   try {
-    const { useProjectStore } = require('../../stores/projectStore');
+    const useProjectStore = require('../../stores/storeRefs').projectStoreRef();
     return !!useProjectStore.getState().getProject?.(projectId)?.pinVerifier;
   } catch { return false; }
 }

@@ -6,7 +6,12 @@ const app = fs.readFileSync(path.join(root, 'android/app/build.gradle'), 'utf8')
 const project = fs.readFileSync(path.join(root, 'android/build.gradle'), 'utf8');
 const native = fs.readFileSync(path.join(root, 'android/atlasLlamaKt/build.gradle'), 'utf8');
 assert.doesNotMatch(app, /\.vulkantest/, 'Vulkan APK must upgrade the normal Atlas app in place');
-assert.match(app, /minSdkVersion project\.findProperty\('atlasVulkanEnabled'\) == 'true' \? 29 : rootProject\.ext\.minSdkVersion/, 'Only experimental Vulkan APK may require API 29');
+assert.match(app, /minSdkVersion rootProject\.ext\.minSdkVersion/, 'Atlas must keep its stable minimum SDK');
+const manifest = fs.readFileSync(path.join(root, 'android/app/src/main/AndroidManifest.xml'), 'utf8');
+assert.match(manifest, /tools:overrideLibrary="com\.tensai\.llamakt"/, 'API 29 llama.kt must be explicitly overridden');
+const bridge = fs.readFileSync(path.join(root, 'android/app/src/main/java/ai/offgridmobile/atlasvulkan/AtlasVulkanModule.kt'), 'utf8');
+assert.match(bridge, /Build\.VERSION\.SDK_INT < MIN_SDK/, 'Bridge must refuse to load llama.kt below API 29');
+assert.match(bridge, /const val MIN_SDK = 29/, 'Bridge API floor must match llama.kt');
 assert.match(project, /minSdkVersion = 24/, 'Stable Android app minimum SDK must remain 24');
 assert.match(native, /minSdkVersion 29/, 'Native llama.kt module requires API 29');
 console.log('PASS in-place Vulkan APK identity and SDK version compatibility gate');

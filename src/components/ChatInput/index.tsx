@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { useQuoteDraft } from '../../utils/quoteDraft';
 import { RewriteButton } from '../RewriteButton';
 import { View, TextInput, TouchableOpacity, StyleSheet, Platform, ActionSheetIOS } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -8,7 +9,7 @@ import { VoiceRecordButton } from '../VoiceRecordButton';
 import { RecordingHint } from './RecordingHint';
 import { ComposerIconsRow } from './ComposerIconsRow';
 import { AttachStep } from 'react-native-spotlight-tour';
-import { triggerHaptic } from '../../utils/haptics';
+import { triggerHaptic } from '../../services/haptics';
 import logger from '../../utils/logger';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../CustomAlert';
 import { createStyles, PILL_ICON_SIZE } from './styles';
@@ -23,6 +24,8 @@ import { useUiModeStore } from '../../stores';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 
 interface ChatInputProps {
+  /** Text put in the box when it appears (a project's quick start); the person edits and sends it. */
+  starterText?: string;
   onSend: (message: string, attachments?: MediaAttachment[], imageMode?: ImageModeState) => void;
   onStop?: () => void;
   disabled?: boolean;
@@ -39,8 +42,6 @@ interface ChatInputProps {
   onToolsPress?: () => void;
   enabledToolCount?: number;
   supportsToolCalling?: boolean;
-  mcpToolCount?: number;
-  onMcpPress?: () => void;
   supportsThinking?: boolean;
   onRepairVision?: () => void;
   /** Whether the active text model is a remote (server) model. Remote models
@@ -50,7 +51,6 @@ interface ChatInputProps {
   /** True when the active model IS a vision model but its projector isn't installed (repairable). */
   visionNeedsRepair?: boolean;
   activeSpotlight?: number | null;
-  showSettingsDot?: boolean;
   /** Opens the shared fullscreen image viewer when a pending (pre-send)
    * attachment thumbnail is tapped — the same handler in-message images use. */
   onImagePress?: (uri: string) => void;
@@ -60,7 +60,7 @@ const IMAGE_MODE_CYCLE: ImageModeState[] = ['auto', 'force', 'disabled'];
 
 /**
  * Expanded width of the collapsing pill-icons row. '+' and the settings gear
- * are always present; the thinking toggle and the pro mode-toggle are
+ * are always present; the thinking toggle and the mode toggle are
  * conditional. Sizing to the real count prevents the rightmost icons from
  * being clipped by the row's `overflow: hidden`.
  */
@@ -111,6 +111,7 @@ const buildNoVisionAlert = (opts: {
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export const ChatInput: React.FC<ChatInputProps> = ({
+  starterText,
   onSend,
   onStop,
   disabled,
@@ -129,17 +130,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   enabledToolCount = 0,
   supportsToolCalling = false,
   supportsThinking = false,
-  mcpToolCount = 0,
-  onMcpPress,
   onRepairVision,
   isRemote = false,
   activeSpotlight = null,
-  showSettingsDot = false,
   onImagePress,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(starterText ?? '');
+  useEffect(() => { if (starterText) setMessage(starterText); }, [starterText]);
+  // "Ask about this" on a reply puts a quote of it in front of what is being typed.
+  const quote = useQuoteDraft((q) => q.text);
+  useEffect(() => {
+    if (!quote) return;
+    setMessage((m) => (m ? `${m}\n\n${quote}` : quote));
+    useQuoteDraft.getState().set('');
+  }, [quote]);
   const [imageMode, setImageMode] = useState<ImageModeState>('auto');
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const quickSettings = useKeyboardAwarePopover();
@@ -261,9 +267,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  // ─── Audio mode: pro renders the mic-only layout via a slot ─────────────────
-  // Free builds have no audio slot, so interfaceMode never becomes 'audio' and
-  // this branch is skipped entirely.
+  // ─── Audio mode: the voice feature renders the mic-only layout via a slot ─────────────────
+  // With no audio slot, interfaceMode never becomes 'audio' and this branch is skipped.
   const AudioInput = getSlot(SLOTS.chatInputAudioMode);
   if (isAudioMode && AudioInput) {
     return (
@@ -297,8 +302,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         onImageModeToggle={handleImageModeToggle}
         onThinkingToggle={handleThinkingToggle}
         onToolsPress={onToolsPress}
-        onMcpPress={onMcpPress}
-        mcpToolCount={mcpToolCount}
         onVisionPress={handleVisionPress}
         onPickDocument={handlePickDocument}
         onAttachPress={handleAttachPress}
@@ -312,7 +315,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     );
   }
 
-  // Pro-only inline Chat↔Audio toggle (empty slot in free builds → null).
+  // Inline Chat↔Audio toggle (empty slot → null).
   const pillIconsExpandedWidth = computePillIconsWidth();
 
   const actionButton = canSend ? (
@@ -383,7 +386,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onAttachPress={handleAttachPress}
                 quickSettingsTriggerRef={quickSettings.triggerRef}
                 onQuickSettingsPress={handleQuickSettingsPress}
-                showSettingsDot={showSettingsDot}
                 disabled={disabled}
               />
             </>
@@ -419,8 +421,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         supportsToolCalling={supportsToolCalling}
         enabledToolCount={enabledToolCount}
         onToolsPress={onToolsPress}
-        mcpToolCount={mcpToolCount}
-        onMcpPress={onMcpPress}
       />
       <CustomAlert
         visible={alertState.visible}

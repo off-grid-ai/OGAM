@@ -12,14 +12,19 @@ export async function saveReportToProject(
 ): Promise<string> {
   const project = useProjectStore.getState().getProject(projectId);
   if (!project) throw new Error('The project no longer exists.');
-  if (project.pinVerifier) throw new Error('Reports cannot be saved into a PIN-protected project: the report would be written as a plain file first.');
-  // The document index is plain text: a PIN-locked or private chat must never be copied into it.
   const chat = useChatStore.getState().conversations.find(c => c.id === conversationId);
-  if (chat?.pinVerifier) throw new Error('This chat is PIN-locked. Saving it to the project would store it unencrypted.');
   if (chat?.isPrivate) throw new Error('Private chats are not saved anywhere, including projects.');
   if (message.role !== 'assistant' || !message.content.trim()) {
     throw new Error('Only complete assistant text replies can be saved.');
   }
+  if (project.pinVerifier) {
+    // A protected project stores the report in its encrypted vault; no plain file is written.
+    const name = `Research ${new Date(message.timestamp || Date.now()).toISOString().slice(0, 16).replace('T', ' ')}`;
+    await ragService.saveProjectNote({ projectId, name, text: `# Research report\n\n${message.content.trim()}`, mode: 'replace' });
+    return name;
+  }
+  // The ordinary document index is plain text: a PIN-locked chat must never be copied into it.
+  if (chat?.pinVerifier) throw new Error('This chat is PIN-locked. Saving it to the project would store it unencrypted.');
   const base = `${RNFS.DocumentDirectoryPath}/${APP_OWNED_DOC_DIR}`;
   const safeChatId = conversationId.replace(/[^a-zA-Z0-9_-]/g, '_');
   const safeMessageId = message.id.replace(/[^a-zA-Z0-9_-]/g, '_');

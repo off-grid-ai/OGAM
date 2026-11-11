@@ -14,6 +14,7 @@ Repository: https://github.com/coolchan03/Atlas
 - [ ] **FF-02 - Actual phone call screen**
   - Original: "Actual phone call screen"
   - To decide later: phone-call-like full-screen AI voice UI, or integration with actual cellular calls; do not silently assume either interpretation.
+  - **Decided by the user (2026-10-19):** make voice mode look like a regular phone call (in-app UI, not cellular calls). Implemented in 0.0.105 (`src/atlasVoice/AudioInput.tsx`): full-screen call screen with caller name, call timer, Mute / Speaker / Hands-free, End call, talk-over interruption and a phone-conversation reply style. Not checked off until verified on the Razr and onn tablet.
 
 - [ ] **FF-03 - Automatic cloud backup**
   - Original: "Auto cloud backup"
@@ -39,6 +40,8 @@ Repository: https://github.com/coolchan03/Atlas
   - Explore user-approved workflows with other apps; example: a recorder that saves audio and identifies/labels speakers.
   - **Wording to confirm:** original says "auto transactions"; it might mean "automatic transcriptions." Keep this uncertainty until clarified.
   - Define microphone permissions, recording consent, storage and whether processing must remain on-device before implementation.
+  - **0.0.105 (user-requested):** first version built: opt-in Recorder with a visible indicator, on-device
+    transcript with speaker labels, kept only on the phone and not in backups. Unchecked until tested on a device.
 
 - [ ] **FF-08 - Live camera**
   - Original: "Live camera?"

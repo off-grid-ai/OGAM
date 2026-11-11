@@ -27,12 +27,13 @@ export function textAppearanceFor(appearance?: Appearance): TextAppearance {
 export function setTextAppearance(next: TextAppearance): void {
   if (next.key === current.key) return;
   current = next;
+  try { require('../utils/logger').default.log(`[FONT] appearance ${next.key} heading=${next.heading} body=${next.body}`); } catch { /* logger unavailable */ }
   listeners.forEach(l => l());
 }
 export const getTextAppearance = (): TextAppearance => current;
 
 /** Plain system families the app uses by default; only these follow the chosen font. Code (monospace, Menlo) stays. */
-const FOLLOWS_FONT = new Set(['sans-serif', 'serif', ...FONT_CHOICES.filter(f => f.id !== 'mono').flatMap(f => [f.heading, f.body])]);
+const FOLLOWS_FONT = new Set(['sans-serif', 'serif', ...FONT_CHOICES.filter(f => f.id !== 'mono' && f.id !== 'pixel').flatMap(f => [f.heading, f.body])]);
 /** Every family that is real text, so it scales; anything else (an icon font) does not. */
 const TEXT_FAMILIES = new Set(['sans-serif', 'serif', 'monospace', 'Menlo', ...FONT_CHOICES.flatMap(f => [f.heading, f.body])]);
 
@@ -100,11 +101,19 @@ let installed = false;
  */
 export function installTextAppearance(modules: any[] = reactNativeTextModules()): void {
   if (installed && modules.length === TEXT_MODULE_COUNT) return;
+  const result: string[] = [];
   for (const mod of modules) {
     const original = mod?.default;
-    if (!original || original.__atlasText || (typeof original !== 'function' && typeof original !== 'object')) continue;
-    mod.default = withTextAppearance(original);
+    if (!original || original.__atlasText || (typeof original !== 'function' && typeof original !== 'object')) { result.push(original?.__atlasText ? 'already' : 'missing'); continue; }
+    const wrapped = withTextAppearance(original);
+    try { mod.default = wrapped; } catch { /* read-only export: define it below */ }
+    if (mod.default !== wrapped) {
+      try { Object.defineProperty(mod, 'default', { value: wrapped, configurable: true, enumerable: true, writable: true }); } catch { /* reported below */ }
+    }
+    result.push(mod.default === wrapped ? 'patched' : 'FAILED');
   }
+  // Shows in Settings -> Debug Logs, so a font that does not change can be traced on the device.
+  try { require('../utils/logger').default.log(`[FONT] text patch: ${result.join(', ')}`); } catch { /* logger unavailable */ }
   if (modules.length === TEXT_MODULE_COUNT) installed = true;
 }
 

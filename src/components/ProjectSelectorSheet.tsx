@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View,
+  StyleSheet, View,
   Text,
   ScrollView,
   TouchableOpacity,
@@ -10,6 +10,14 @@ import { useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { Project } from '../types';
+import { isProtectedProjectUnlocked } from '../stores/protectedProjectStorage';
+const literalStyles = StyleSheet.create({
+  s1: { opacity: 0.45 },
+});
+
+
+/** A protected project accepts chats only while it is unlocked. */
+const isLockedProject = (p: { id: string; pinVerifier?: string }) => !!p.pinVerifier && !isProtectedProjectUnlocked(p.id);
 
 interface ProjectSelectorSheetProps {
   visible: boolean;
@@ -66,11 +74,11 @@ export const ProjectSelectorSheet: React.FC<ProjectSelectorSheetProps> = ({
         {projects.map((project) => (
           <TouchableOpacity
             key={project.id}
-            disabled={!!project.pinVerifier}
+            disabled={isLockedProject(project)}
             style={[
               styles.projectOption,
               activeProject?.id === project.id && styles.projectOptionSelected,
-              project.pinVerifier && { opacity: 0.45 },
+              isLockedProject(project) && literalStyles.s1,
             ]}
             onPress={() => handleSelect(project)}
           >
@@ -82,7 +90,9 @@ export const ProjectSelectorSheet: React.FC<ProjectSelectorSheetProps> = ({
             <View style={styles.projectOptionInfo}>
               <Text style={styles.projectOptionName}>{project.name}</Text>
               <Text style={styles.projectOptionDesc} numberOfLines={1}>
-                {project.pinVerifier ? 'Protected project · chats cannot be added until permanently unprotected' : project.description}
+                {!project.pinVerifier ? project.description
+                  : isLockedProject(project) ? 'Protected project · unlock it to add chats'
+                    : 'Protected project · this chat will be encrypted with its PIN'}
               </Text>
             </View>
             {activeProject?.id === project.id && (

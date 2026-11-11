@@ -121,13 +121,13 @@ export function buildVoiceNoteHandlers(deps: VoiceNoteHandlerDeps) {
   };
 
   const onAutoSend = deps.isAudioMode
-    ? (text: string, audio: { uri: string; format: 'wav' | 'mp3'; durationSeconds: number }) => {
+    ? (text: string, audio?: { uri: string; format: 'wav' | 'mp3'; durationSeconds: number }) => {
         if (isNonSpeech(text)) {
           // Silence/noise: don't send a fake message; let hands-free listen again.
           try { require('../../atlasVoice/store').useAtlasVoiceStore.getState().markDone(); } catch { /* ignore */ }
           return;
         }
-        sendVoiceNote(text, buildVoiceAttachment(audio));
+        sendVoiceNote(text, audio ? buildVoiceAttachment(audio) : undefined);
       }
     : undefined;
 

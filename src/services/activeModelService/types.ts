@@ -43,6 +43,8 @@ export interface TextRuntimeInfo {
   backendDetail?: string;
   contextLength?: number;
   gpuLayers?: number;
+  /** Offloadable layers in the model (block_count + 1), when known. */
+  totalLayers?: number;
   fallbackNotice?: string | null;
   loadDurationMs?: number | null;
 }

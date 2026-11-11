@@ -1,7 +1,7 @@
 import React, { useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { MainTabParamList } from '../../navigation/types';
 import Icon from 'react-native-vector-icons/Feather';
 import { AttachStep } from 'react-native-spotlight-tour';
@@ -13,19 +13,23 @@ import { createStyles } from './styles';
 import { initialFilterState } from './constants';
 import { TextModelsTab } from './TextModelsTab';
 import { ImageModelsTab } from './ImageModelsTab';
-import { VoiceModelsUpsell } from '../../components/models/VoiceModelsUpsell';
 import { TranscriptionModelsTab } from './TranscriptionModelsTab';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
+const literalStyles = StyleSheet.create({
+  s1: { flexDirection: 'row', alignItems: 'center', marginLeft: 'auto', marginRight: 8 },
+  s2: { marginLeft: 6, fontWeight: '600' },
+});
+
 
 export const ModelsScreen: React.FC = () => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const vm = useModelsScreen();
-  // Pro fills this slot with the real voice-models panel (engine + downloads).
-  // The Voice tab always renders; when the slot is empty (free / non-pro) we
-  // show an upsell so users can see what Pro adds.
+  // The voice feature fills this slot with the real voice-models panel (engine + downloads).
+  // The Voice tab always renders; with the slot empty it shows nothing.
   const VoiceModelsPanel = useSlot(SLOTS.modelsScreenVoiceTab);
   const route = useRoute<RouteProp<MainTabParamList, 'ModelsTab'>>();
+  const navigation = useNavigation<any>();
 
   // Reset to model list view when tab loses focus (e.g. user switches away)
   // vm.setSelectedModel / vm.setModelFiles are useState setters — stable across renders.
@@ -40,8 +44,14 @@ export const ModelsScreen: React.FC = () => {
       // tab with the HF search prefilled (the debounced search in useTextModels fires
       // on the query change). Guarded so it seeds once per navigation.
       if (initialSearchQuery && !didAutoSelect.current) {
+        didAutoSelect.current = true;
         vm.setActiveTab('text');
         vm.setSearchQuery(initialSearchQuery);
+      }
+      // Used once: tab params stay on the route, and would send the person back to this tab and
+      // search every time they return to Models.
+      if (initialTab || repairModelId || initialSearchQuery) {
+        navigation.setParams({ initialTab: undefined, repairModelId: undefined, initialSearchQuery: undefined });
       }
       if (repairModelId && !didAutoSelect.current) {
         didAutoSelect.current = true;
@@ -69,13 +79,13 @@ export const ModelsScreen: React.FC = () => {
         <View style={styles.header}>
           <Text style={styles.title}>Models</Text>
           <TouchableOpacity
-            style={[styles.downloadManagerButton, { flexDirection: 'row', alignItems: 'center', marginLeft: 'auto', marginRight: 8 }]}
+            style={[styles.downloadManagerButton, literalStyles.s1]}
             onPress={() => vm.navigation.navigate('MyModels')}
             testID="my-models"
             accessibilityLabel="My models: delete, move to SD card, add vision file"
           >
             <Icon name="hard-drive" size={18} color={colors.text} />
-            <Text style={{ color: colors.text, marginLeft: 6, fontWeight: '600' }}>My models</Text>
+            <Text style={[{ color: colors.text }, literalStyles.s2]}>My models</Text>
           </TouchableOpacity>
           <AttachStep index={10}>
             <TouchableOpacity
@@ -262,12 +272,8 @@ export const ModelsScreen: React.FC = () => {
         />
       )}
 
-      {/* Voice Models Tab: pro panel when registered, otherwise an upsell. */}
-      {vm.activeTab === 'voice' && (
-        VoiceModelsPanel
-          ? <VoiceModelsPanel />
-          : <VoiceModelsUpsell onGetPro={() => vm.navigation.navigate('ProDetail')} />
-      )}
+      {/* Voice Models Tab: the voice panel registered in the modelsScreen.voiceTab slot. */}
+      {vm.activeTab === 'voice' && VoiceModelsPanel && <VoiceModelsPanel />}
 
       {/* Transcription Models Tab (speech-to-text, core). */}
       {vm.activeTab === 'transcription' && <TranscriptionModelsTab />}

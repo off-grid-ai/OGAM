@@ -7,6 +7,8 @@ import { liteRTService } from './litert';
 import { useChatStore, useRemoteServerStore, useAppStore } from '../stores';
 import { Message } from '../types';
 import { getToolsAsOpenAISchema, executeToolCall } from './tools';
+import { withTimeout } from '../utils/withTimeout';
+import { fileClaimNote } from './fileClaim';
 import type { ToolCall, ToolResult } from './tools/types';
 import { normalizeToolResult, toolErrorResult, toolResultModelContent } from './tools/toolResult';
 import { modelInputImageUris, modelInputAudioUris } from './modelMedia';
@@ -277,12 +279,18 @@ function getLastUserQuery(messages: Message[]): string {
  * handler behave identically: success/empty/error all become a typed result whose
  * model-facing string (toolResultModelContent) explicitly states failure/empty.
  */
+/** A tool that has not answered by now is stopped and reported to the model as a failure, so the turn can go on. */
+export const TOOL_TIMEOUT_MS = 3 * 60 * 1000;
+/** Tools that legitimately run for minutes (they search and read many pages, or make media). */
+const LONG_TOOL = /research|podcast|image|video|download|sync|backup/i;
+export const toolTimeoutFor = (name: string): number => (LONG_TOOL.test(name) ? 10 * 60 * 1000 : TOOL_TIMEOUT_MS);
+
 async function executeToolCallSafely(tc: ToolCall): Promise<ToolResult> {
   const exts = getToolExtensions();
   const ext = exts.find(e => e.canHandle(tc.name));
   const start = Date.now();
   try {
-    const raw = ext ? await ext.execute(tc) : await executeToolCall(tc);
+    const raw = await withTimeout(Promise.resolve(ext ? ext.execute(tc) : executeToolCall(tc)), toolTimeoutFor(tc.name), `The "${tc.name}" tool`);
     return normalizeToolResult(tc, raw);
   } catch (err) {
     logger.error(`[ToolLoop] tool "${tc.name}" threw — surfacing as a typed error result`, err);
@@ -676,7 +684,7 @@ async function callLLMWithRetry(
 ): Promise<{ fullResponse: string; toolCalls: ToolCall[]; interrupted?: boolean }> {
   // Append tool-use behavioral guidance to the system prompt when tools are present.
   // Only covers the "when and how" — schemas are injected separately by each engine.
-  // Also append extension system-prompt hints so the model knows about MCP/pro tools.
+  // Also append extension system-prompt hints so the model knows about extension tools.
   // We shallow-copy messages to avoid mutating the caller's array.
   const exts = getToolExtensions();
   const extCount = exts.reduce((n, e) => n + e.enabledToolCount(), 0);
@@ -774,13 +782,18 @@ function buildStreamHandler(ctx: ToolLoopContext, state: ToolLoopState): ((data:
   };
 }
 
-function emitFinalResponse(ctx: ToolLoopContext, state: ToolLoopState, displayResponse: string): void {
+function emitFinalResponse(ctx: ToolLoopContext, state: ToolLoopState, reply: { text: string; messages: Message[] }): void {
+  const displayResponse = reply.text;
+  // The model may claim it saved a file it never wrote; say so in the reply itself.
+  const note = fileClaimNote(displayResponse, reply.messages);
   if (!state.streamedContent) {
     if (!state.thinkingDoneFired) {
       ctx.onThinkingDone();
       ctx.callbacks?.onFirstToken?.();
     }
-    ctx.onFinalResponse(displayResponse || '_(No response)_');
+    ctx.onFinalResponse((displayResponse || '_(No response)_') + note);
+  } else if (note) {
+    useChatStore.getState().appendToStreamingMessage(note);
   }
 }
 
@@ -791,7 +804,7 @@ async function forceFinalTextResponse(ctx: ToolLoopContext, state: ToolLoopState
   state.firstTokenFired = false;
   const forcedOnStream = buildStreamHandler(ctx, state);
   const { fullResponse: forcedResponse } = await callLLMWithRetry(loopMessages, [], { onStream: forcedOnStream, forceRemote: ctx.forceRemote, disableThinking: true, conversationId: ctx.conversationId, ctx });
-  emitFinalResponse(ctx, state, forcedResponse);
+  emitFinalResponse(ctx, state, { text: forcedResponse, messages: loopMessages });
 }
 
 /**
@@ -914,10 +927,10 @@ export async function runToolLoop(ctx: ToolLoopContext): Promise<ToolLoopOutcome
         const { fullResponse: fallbackResp } = await callLLMWithRetry(
           loopMessages, [], { onStream: fallbackOnStream, forceRemote: ctx.forceRemote, disableThinking: true, conversationId: ctx.conversationId, ctx },
         );
-        emitFinalResponse(ctx, state, fallbackResp);
+        emitFinalResponse(ctx, state, { text: fallbackResp, messages: loopMessages });
         return { interrupted: false };
       }
-      emitFinalResponse(ctx, state, displayResponse);
+      emitFinalResponse(ctx, state, { text: displayResponse, messages: loopMessages });
       return { interrupted: false };
     }
 

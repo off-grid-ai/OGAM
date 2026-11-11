@@ -50,6 +50,29 @@ export const useSpeedStats = create<SpeedState>()(persist((set) => ({
   partialize: (s) => ({ byModel: s.byModel }),
 }));
 
+/** Models whose settings were tuned with "Find the best settings" (so the slow-reply hint stops suggesting it). */
+interface TunedState { at: Record<string, number>; mark: (modelId: string) => void }
+export const useTuned = create<TunedState>()(persist((set) => ({
+  at: {},
+  mark: (modelId) => set((st) => ({ at: { ...st.at, [modelId]: Date.now() } })),
+}), { name: 'atlas-tuned-models', storage: createJSONStorage(() => AsyncStorage), partialize: (s) => ({ at: s.at }) }));
+
+/** Models whose slow-reply hint was dismissed. */
+interface HintState { off: Record<string, true>; dismiss: (modelId: string) => void }
+export const useSlowHint = create<HintState>()(persist((set) => ({
+  off: {},
+  dismiss: (modelId) => set((st) => ({ off: { ...st.off, [modelId]: true } })),
+}), { name: 'atlas-slow-hint', storage: createJSONStorage(() => AsyncStorage), partialize: (s) => ({ off: s.off }) }));
+
+/** Below this writing speed (tokens per second) answers are a real wait. */
+export const SLOW_TPS = 3;
+
+/** True when chat should suggest finding better settings: a local model that is slow on at least two replies, not tuned or dismissed yet. */
+export function shouldSuggestTuning(o: { modelId: string | null | undefined; speed: ModelSpeed | undefined; tuned: boolean; dismissed: boolean }): boolean {
+  const { modelId, speed } = o;
+  return !!modelId && !o.tuned && !o.dismissed && !!speed && speed.samples >= 2 && speed.decode > 0 && speed.decode < SLOW_TPS;
+}
+
 const THINK_MULT: Record<string, number> = { low: 1.6, medium: 2.5, high: 4 };
 
 /** Record a finished generation for the model that's in use now. Never throws. */

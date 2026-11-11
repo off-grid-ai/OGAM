@@ -2,15 +2,13 @@ import { nextLevel, levelOf, LEVEL_LABEL } from '../../atlasTools/thinking';
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Modal, TouchableWithoutFeedback, Dimensions } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../theme';
 import { ImageModeState } from '../../types';
 import { useAppStore } from '../../stores';
-import { triggerHaptic } from '../../utils/haptics';
+import { triggerHaptic } from '../../services/haptics';
 import { FONTS } from '../../constants';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 
-const TOOL_WARNING_COLOR = '#F59E0B';
 
 // Popovers are anchored from the screen's right edge (`right: anchorX`) and
 // extend leftward. When the trigger is far left (e.g. the audio-mode "+"), a
@@ -83,8 +81,6 @@ interface QuickSettingsPopoverProps {
   supportsToolCalling: boolean;
   enabledToolCount: number;
   onToolsPress?: () => void;
-  mcpToolCount?: number;
-  onMcpPress?: () => void;
 }
 
 function getImageModeBadge(mode: ImageModeState, colors: any) {
@@ -115,27 +111,20 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
   visible, onClose, anchorY, anchorX,
   imageMode, onImageModeToggle, imageModelLoaded, supportsThinking,
   supportsToolCalling, enabledToolCount, onToolsPress,
-  mcpToolCount = 0, onMcpPress,
 }) => {
   const { colors } = useTheme();
-  const { settings, updateSettings, toolCountHintDismissed } = useAppStore();
+  const { settings, updateSettings } = useAppStore();
 
   if (!visible) return null;
 
   const imgBadge = getImageModeBadge(imageMode, colors);
   const tools = getToolsStyle(supportsToolCalling, enabledToolCount, colors);
-  // The "Voice" row is provided by the pro audio feature via a slot. Free
-  // builds render nothing here.
+  // The "Voice" row is provided by the voice feature via a slot. With no
+  // slot registered nothing renders here.
   const AudioRow = getSlot(SLOTS.quickSettingsAudioRow);
 
-  // Tools and MCP warnings are independent — each turns amber at 3+
-  const showToolsWarning = supportsToolCalling && enabledToolCount >= 3 && !toolCountHintDismissed;
-  const showMcpWarning = mcpToolCount >= 3;
-
-  const toolIconColor = showToolsWarning ? TOOL_WARNING_COLOR : tools.iconColor;
-  const toolBadgeBg = showToolsWarning ? TOOL_WARNING_COLOR : tools.badgeBg;
-  const mcpDefaultBg = mcpToolCount > 0 ? colors.primary : colors.textMuted;
-  const mcpBadgeBg = showMcpWarning ? TOOL_WARNING_COLOR : mcpDefaultBg;
+  const toolIconColor = tools.iconColor;
+  const toolBadgeBg = tools.badgeBg;
 
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>

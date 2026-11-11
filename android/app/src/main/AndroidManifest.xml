@@ -1,7 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+    <!-- llama.kt is API 29; AtlasVulkanModule only loads it on API 29+. -->
+    <uses-sdk tools:overrideLibrary="com.tensai.llamakt" />
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Lets Atlas hand a downloaded update to Android's installer (the person still confirms the install) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
@@ -9,6 +13,9 @@
 
     <!-- For voice recording -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- In-app QR scanner for pairing devices for offline sync (asked only when scanning). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <!-- For haptic feedback -->
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -29,10 +36,13 @@
          the app is backgrounded / the screen is off (WorkManager foreground worker). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Android 13+ needs this to SHOW the ongoing download notification (requested at runtime). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Scheduled tasks: set their alarms again after a reboot. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- For reading and creating calendar events -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
@@ -48,6 +58,10 @@
     <queries>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <!-- Android 11+: lets Atlas find the phone's own speech recognizer (e.g. Google/Gboard). -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 
@@ -71,6 +85,11 @@
       <uses-native-library android:name="libvndksupport.so" android:required="false" />
       <uses-native-library android:name="libcdsprpc.so" android:required="false" />
       <activity
+        android:name="ai.offgridmobile.atlasdevice.AtlasQrScanActivity"
+        android:exported="false"
+        android:screenOrientation="portrait"
+        android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+      <activity
         android:name=".MainActivity"
         android:label="@string/app_name"
         android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
@@ -89,6 +108,18 @@
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="atlas" android:host="sync" />
         </intent-filter>
+        <!-- Launcher shortcuts (hold the Atlas icon): atlas://app/chat, call, record, brief -->
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <data android:scheme="atlas" android:host="app" />
+        </intent-filter>
+        <!-- Share text or a link from any app into Atlas. -->
+        <intent-filter>
+            <action android:name="android.intent.action.SEND" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <data android:mimeType="text/plain" />
+        </intent-filter>
         <!-- MCP OAuth redirect: offgrid://oauth/callback returns from the browser -->
         <intent-filter>
             <action android:name="android.intent.action.VIEW" />
@@ -97,6 +128,27 @@
             <data android:scheme="offgrid" android:host="oauth" />
         </intent-filter>
       </activity>
+
+      <!-- "Ask Atlas" in the menu that appears when text is selected in any app. -->
+      <activity-alias
+          android:name=".AskAtlasText"
+          android:targetActivity=".MainActivity"
+          android:label="Ask Atlas"
+          android:exported="true">
+          <intent-filter>
+              <action android:name="android.intent.action.PROCESS_TEXT" />
+              <category android:name="android.intent.category.DEFAULT" />
+              <data android:mimeType="text/plain" />
+          </intent-filter>
+      </activity-alias>
+
+<!-- Scheduled tasks: the alarm that shows a notification, and the reboot hook that sets the alarms again -->
+      <receiver android:name=".atlasdevice.TaskAlarmReceiver" android:exported="false" />
+      <receiver android:name=".atlasdevice.TaskAlarmBootReceiver" android:exported="true">
+          <intent-filter>
+              <action android:name="android.intent.action.BOOT_COMPLETED" />
+          </intent-filter>
+      </receiver>
 
 <!-- Receiver for background download completion events -->
       <receiver
@@ -124,6 +176,13 @@
               android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
               android:value="User-started on-device AI model loading and inference that must continue when the app is backgrounded or the display turns off." />
       </service>
+      <!-- Background audio: plays pre-rendered WAV files (daily briefing, episodes) when
+           the app is backgrounded. mediaPlayback is the standard Android FGS type for this. -->
+      <service
+          android:name=".atlasaudio.AtlasAudioService"
+          android:exported="false"
+          android:foregroundServiceType="mediaPlayback" />
+
         <!-- Atlas: lets other apps (browser, document viewers) open files the assistant made -->
         <provider
             android:name=".atlasdevice.AtlasFileProvider"

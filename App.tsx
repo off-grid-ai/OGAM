@@ -5,7 +5,7 @@
 
 import 'react-native-gesture-handler';
 import React, { useEffect, useState, useCallback } from 'react';
-import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
+import { ActivityIndicator, AppState, Image, View, StyleSheet, LogBox } from 'react-native';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -17,8 +17,6 @@ import logger from './src/utils/logger';
 import { useAppStore, useAuthStore, useRemoteServerStore, useWhisperStore } from './src/stores';
 import { useDebugLogsStore } from './src/stores/debugLogsStore';
 import { initDebugLogFile, appendDebugLine } from './src/utils/debugLogFile';
-import { loadProFeatures } from './src/bootstrap/loadProFeatures';
-import { checkProStatus } from './src/services/proLicenseService';
 import { hydrateDownloadStore } from './src/services/downloadHydration';
 import { initActiveDownloadPersistence } from './src/services/activeDownloadPersistence';
 import { restoreQueuedDownloads } from './src/services/restoreQueuedDownloads';
@@ -26,7 +24,6 @@ import { startLoadPolicySync } from './src/services/loadPolicySync';
 import { registerCoreDownloadProviders } from './src/services/modelDownloadService/registerProviders';
 import { useDownloadListeners } from './src/hooks/useDownloads';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { useSlot, SLOTS } from './src/bootstrap/slotRegistry';
 import { LockScreen } from './src/screens';
 import { useAppState } from './src/hooks/useAppState';
 import { useDownloadStore } from './src/stores/downloadStore';
@@ -38,9 +35,17 @@ import { startCtxRecovery } from './src/atlasTools/ctxGuard';
 import { purgePrivateChatImages } from './src/services/privateImagePurge';
 import { startTextAppearance } from './src/theme/globalText';
 import { useNearbyPairingIntent } from './src/services/nearbySync/useNearbyPairingIntent';
+import { startShareIntake, flushShare } from './src/share/shareIntake';
+import { UndoBar } from './src/chats/UndoBar';
+import { startScheduler } from './src/schedule/runner';
+import { refreshLastFix } from './src/atlasMaps/locationNote';
+import { navigationRef } from './src/utils/navigationRef';
+import { startAppLinks, flushAppLink } from './src/navigation/appLinks';
+import { registerAtlasHooks } from './src/bootstrap/atlasHooks';
 
 // Atlas: free read-aloud + voice mode + hands-free mode using the phone's own voice.
 registerAtlasVoice();
+registerAtlasHooks();
 startLowPowerMonitor();
 autoPickAcceleration();
 startCtxRecovery();
@@ -83,18 +88,24 @@ const ensureRemoteServerStoreHydrated = async () => {
 
 function App() {
   useNearbyPairingIntent();
+  useEffect(() => startShareIntake(), []);
+  useEffect(() => startAppLinks(), []);
+  useEffect(() => startScheduler(), []);
+  // Keep the last GPS reading fresh (only if location was already allowed) so the AI can say roughly where you are.
+  useEffect(() => {
+    void refreshLastFix();
+    void require('./src/knowledge/controller').recoverKnowledge().catch(() => undefined);
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') void refreshLastFix(); });
+    return () => sub.remove();
+  }, []);
   useDownloadListeners();
-  // Reactive: when Pro is activated at runtime (license key → loadProFeatures),
-  // the appRoot slot (TTS engine bridge) registers and this re-renders to mount
-  // it live — no restart needed.
-  const AppRoot = useSlot(SLOTS.appRoot);
   const [isInitializing, setIsInitializing] = useState(true);
   const setDeviceInfo = useAppStore((s) => s.setDeviceInfo);
   const setModelRecommendation = useAppStore((s) => s.setModelRecommendation);
   const setDownloadedModels = useAppStore((s) => s.setDownloadedModels);
   const setDownloadedImageModels = useAppStore((s) => s.setDownloadedImageModels);
 
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, backdrop } = useTheme();
 
   const {
     isEnabled: authEnabled,
@@ -282,38 +293,13 @@ function App() {
       // Initialize RAG database tables
       ragService.ensureReady().catch((err) => logger.error('Failed to initialize RAG service on startup', err));
 
-      // Read the cached Pro entitlement before Pro features load. checkProStatus
-      // returns the Keychain cache immediately and fires a background Keygen
-      // revalidation so the next launch stays fresh.
-      //
-      // Pro is optional: a failure here (keychain locked, no network) must never
-      // abort app init or hang the splash screen, so it is isolated and only logs.
-      let isPro = false;
-      try {
-        isPro = await checkProStatus();
-      } catch (proError) {
-        logger.error('[App] Pro check failed, continuing without entitlement:', proError);
-      }
-
-      try {
-        // Load pro features — only activates if the keychain entitlement is set
-        // (or in dev, where loadProFeatures force-unlocks).
-        await loadProFeatures(isPro);
-
-        // Reconcile the persisted Pro flag with the actual entitlement on every
-        // boot. Setting it to the resolved value (not only ever true) means a
-        // cleared/expired license also flips it back to false — previously it
-        // only ever went true, so a stale persisted true stuck forever.
-        // DEV builds force-unlock for local testing, unless the Settings
-        // "Turn off Pro (DEV)" toggle is set. Never force-unlocks in release.
-        const devUnlock = __DEV__ && !useAppStore.getState().devProDisabled;
-        useAppStore.getState().setHasRegisteredPro(isPro || devUnlock);
-      } catch (proError) {
-        logger.error('[App] Pro feature load failed, continuing without Pro:', proError);
-      }
-
       // Show the UI immediately
       setIsInitializing(false);
+      // A little later, once a day: is a newer build published? (Settings > App updates turns this off.)
+      setTimeout(() => {
+        // An update check is optional: it must never throw into the app.
+        try { void Promise.resolve(require('./src/services/appUpdate').announceUpdateOnce()).catch(() => undefined); } catch { /* ignore */ }
+      }, 8000);
 
       // Reconcile downloaded Whisper models against disk at startup. presentModelIds
       // isn't persisted (the filesystem is the source of truth), so it rehydrates
@@ -376,11 +362,13 @@ function App() {
   }
 
   return (
-    <GestureHandlerRootView style={styles.flex}>
+    <GestureHandlerRootView style={[styles.flex, backdrop ? { backgroundColor: backdrop.solid } : null]}>
+      {backdrop ? <BackdropImage uri={backdrop.uri} dim={backdrop.dim} /> : null}
       <SafeAreaProvider>
         <SystemBars style={isDark ? 'light' : 'dark'} />
-        {AppRoot ? <AppRoot /> : null}
         <NavigationContainer
+          ref={navigationRef}
+          onReady={() => { flushShare(); flushAppLink(); }}
           theme={{
             dark: isDark,
             colors: {
@@ -413,10 +401,18 @@ function App() {
         >
           <AppNavigator />
         </NavigationContainer>
+        <UndoBar />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
+
+const BackdropImage: React.FC<{ uri: string; dim: number }> = ({ uri, dim }) => (
+  <>
+    <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(0,0,0,${dim})` }]} />
+  </>
+);
 
 const styles = StyleSheet.create({
   flex: {

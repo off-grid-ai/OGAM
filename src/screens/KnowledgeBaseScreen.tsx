@@ -10,7 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
 import { pick, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
@@ -21,6 +21,7 @@ import { useTheme, useThemedStyles } from '../theme';
 import { createStyles } from './KnowledgeBaseScreen.styles';
 import { useProjectStore } from '../stores';
 import { ragService } from '../services/rag';
+import { isTextDocument } from '../services/rag/textDocument';
 import type { RagDocument } from '../services/rag';
 import { RootStackParamList } from '../navigation/types';
 import { isPickerStuck } from '../utils/pickerErrorUtils';
@@ -64,6 +65,13 @@ export const KnowledgeBaseScreen: React.FC = () => {
   useEffect(() => {
     loadKbDocs();
   }, [loadKbDocs]);
+
+  // Reload when coming back from writing or editing a shared document.
+  const firstFocus = useRef(true);
+  useFocusEffect(useCallback(() => {
+    if (firstFocus.current) { firstFocus.current = false; return; }
+    loadKbDocs();
+  }, [loadKbDocs]));
 
   const handleAddDocument = async () => {
     if (isPickingRef.current) {
@@ -186,7 +194,9 @@ export const KnowledgeBaseScreen: React.FC = () => {
   const renderDoc = ({ item }: { item: RagDocument }) => (
     <TouchableOpacity
       style={styles.docRow}
-      onPress={() => navigation.navigate('DocumentPreview', { filePath: item.path, fileName: item.name, fileSize: item.size })}
+      onPress={() => (isTextDocument(item)
+        ? navigation.navigate('ProjectDocument', { projectId, docId: item.id, name: item.name })
+        : navigation.navigate('DocumentPreview', { filePath: item.path, fileName: item.name, fileSize: item.size }))}
       activeOpacity={0.7}
     >
       <View style={styles.docInfo}>
@@ -215,6 +225,9 @@ export const KnowledgeBaseScreen: React.FC = () => {
             {project?.name || 'Knowledge Base'}
           </Text>
         </View>
+        <TouchableOpacity onPress={() => navigation.navigate('ProjectDocument', { projectId })} style={styles.addButton} accessibilityLabel="Write a shared document">
+          <Icon name="edit-3" size={20} color={colors.primary} />
+        </TouchableOpacity>
         <TouchableOpacity onPress={handleImportPack} style={styles.addButton} disabled={isPicking || !!indexingFile} accessibilityLabel="Import a .zip pack">
           <Icon name="package" size={20} color={colors.primary} />
         </TouchableOpacity>

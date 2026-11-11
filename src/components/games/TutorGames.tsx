@@ -1,6 +1,6 @@
 /** Games that talk with you, grounded in the project: teach it back, Socratic tutor, explain at my level, mnemonics, memory palace, concept map. */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, ActivityIndicator, ScrollView, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import Svg, { Line, Rect, Text as SvgText, G } from 'react-native-svg';
 import { MarkdownText } from '../MarkdownText';
 import {
@@ -11,10 +11,46 @@ import { acronymMatches, layoutConceptMap, similarity } from '../../study/games/
 import { useStudyStore } from '../../study/engine';
 import type { LearningTerm } from '../../study/learningGames';
 import { Banner, BAD, Card, Choice, Finished, GameButton, GOOD, SourceLinks, Title, useGameColors, useRecord, type GameProps } from './kit';
+const COLOR_FFF = '#fff';
+const ALIGNSELF_FLEX_END = 'flex-end';
+const ALIGNSELF_FLEX_START = 'flex-start';
+const literalStyles = StyleSheet.create({
+  s1: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 10 },
+  s2: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  s3: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14 },
+  s4: { borderRadius: 10, padding: 12, minHeight: 130, textAlignVertical: 'top' },
+  s5: { marginTop: 6 },
+  s6: { maxHeight: 420 },
+  s7: { maxWidth: '88%' },
+  s8: { borderRadius: 12, padding: 10, marginVertical: 4 },
+  s9: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  s10: { flex: 1 },
+  s11: { borderRadius: 10, padding: 12 },
+  s12: { flexDirection: 'row', gap: 4, marginVertical: 6 },
+  s13: { flex: 1, paddingVertical: 10, borderRadius: 8 },
+  s14: { alignItems: 'center' },
+  s15: { fontSize: 11, textAlign: 'center' },
+  s16: { borderRadius: 10, padding: 12, minHeight: 100, textAlignVertical: 'top' },
+  s17: { fontSize: 12 },
+  s18: { fontSize: 22, fontWeight: '800', letterSpacing: 2 },
+  s19: { marginTop: 4 },
+  s20: { marginTop: 4, fontStyle: 'italic' },
+  s21: { fontSize: 22, fontWeight: '800', marginVertical: 6 },
+  s22: { fontSize: 16, lineHeight: 23 },
+  s23: { fontSize: 16, marginVertical: 6 },
+  s24: { borderRadius: 8, padding: 12 },
+  s25: { fontWeight: '700', marginTop: 6 },
+  s26: { flexDirection: 'row', gap: 8 },
+  s27: { alignSelf: 'center' },
+  s28: { borderRadius: 12 },
+  s29: { fontSize: 18 },
+  s30: { fontWeight: '700' },
+});
+
 
 const Busy = ({ label }: { label: string }) => {
   const colors = useGameColors();
-  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 10 }}><ActivityIndicator color={colors.primary} /><Text style={{ color: colors.textSecondary }}>{label}</Text></View>;
+  return <View style={literalStyles.s1}><ActivityIndicator color={colors.primary} /><Text style={{ color: colors.textSecondary }}>{label}</Text></View>;
 };
 
 // ----------------------------------------------------------------- Feynman: teach it back
@@ -34,23 +70,23 @@ export function FeynmanGame({ result, projectId, onOpenSource }: GameProps) {
       const g = await gradeExplanation(result.sources, concept, text);
       setGrade(g);
       const t = terms.find((x) => x.answer === concept);
-      if (t) record(t.clue, t.answer, g.score >= 7, t.src);
+      if (t) record({ prompt: t.clue, answer: t.answer, src: t.src }, g.score >= 7);
     } catch (e: any) { setError(String(e?.message || e)); }
     finally { setBusy(false); }
   };
   return (
     <View>
       <Banner>Explain the idea in your own words, as if teaching a friend. You can type, or use the keyboard's microphone. The AI checks it against your documents.</Banner>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+      <View style={literalStyles.s2}>
         {concepts.slice(0, 10).map((c) => (
-          <TouchableOpacity key={c} onPress={() => { setConcept(c); setGrade(null); setText(''); }} style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, backgroundColor: concept === c ? colors.primary : colors.surface }}>
-            <Text style={{ color: concept === c ? '#fff' : colors.text }}>{c}</Text>
+          <TouchableOpacity key={c} onPress={() => { setConcept(c); setGrade(null); setText(''); }} style={[literalStyles.s3, { backgroundColor: concept === c ? colors.primary : colors.surface }]}>
+            <Text style={{ color: concept === c ? COLOR_FFF : colors.text }}>{c}</Text>
           </TouchableOpacity>
         ))}
       </View>
       <Title>Explain: {concept}</Title>
       <TextInput value={text} onChangeText={setText} multiline placeholder="Start explaining..." placeholderTextColor={colors.textMuted}
-        style={{ color: colors.text, backgroundColor: colors.surface, borderRadius: 10, padding: 12, minHeight: 130, textAlignVertical: 'top' }} />
+        style={[{ color: colors.text, backgroundColor: colors.surface }, literalStyles.s4]} />
       <GameButton label={busy ? 'Checking...' : 'Check my explanation'} disabled={busy || text.trim().split(/\s+/).length < 8} onPress={submit} />
       {busy && <Busy label="Comparing with your documents..." />}
       {!!error && <Text style={{ color: BAD }}>{error}</Text>}
@@ -64,7 +100,7 @@ export function FeynmanGame({ result, projectId, onOpenSource }: GameProps) {
           {grade.missed.map((m, i) => (
             <Card key={`m${i}`} highlight="#CA8A04"><Text style={{ color: colors.text }}>Missed: {m.point}</Text><SourceLinks nums={m.src} result={result} onOpenSource={onOpenSource} /></Card>
           ))}
-          {!!grade.followUp && <Text style={{ color: colors.text, marginTop: 6 }}>Think about: {grade.followUp}</Text>}
+          {!!grade.followUp && <Text style={[{ color: colors.text }, literalStyles.s5]}>Think about: {grade.followUp}</Text>}
           <GameButton label="Try again" kind="plain" onPress={() => setGrade(null)} />
         </View>
       )}
@@ -99,18 +135,18 @@ export function TutorGame({ result }: GameProps) {
   return (
     <View>
       <Banner>Goal: {goal}. The tutor asks questions instead of giving answers, using only your documents.</Banner>
-      <ScrollView ref={scroll} style={{ maxHeight: 420 }} nestedScrollEnabled>
+      <ScrollView ref={scroll} style={literalStyles.s6} nestedScrollEnabled>
         {history.map((m, i) => (
-          <View key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '88%', backgroundColor: m.role === 'user' ? colors.primary : colors.surface, borderRadius: 12, padding: 10, marginVertical: 4 }}>
-            <Text style={{ color: m.role === 'user' ? '#fff' : colors.text }}>{m.content}</Text>
+          <View key={i} style={[{ alignSelf: m.role === 'user' ? ALIGNSELF_FLEX_END : ALIGNSELF_FLEX_START }, literalStyles.s7, { backgroundColor: m.role === 'user' ? colors.primary : colors.surface }, literalStyles.s8]}>
+            <Text style={{ color: m.role === 'user' ? COLOR_FFF : colors.text }}>{m.content}</Text>
           </View>
         ))}
         {busy && <Busy label="Tutor is thinking..." />}
       </ScrollView>
       {!!error && <Text style={{ color: BAD }}>{error}</Text>}
-      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+      <View style={literalStyles.s9}>
         <TextInput value={text} onChangeText={setText} placeholder="Your answer" placeholderTextColor={colors.textMuted} onSubmitEditing={send}
-          style={{ flex: 1, color: colors.text, backgroundColor: colors.surface, borderRadius: 10, padding: 12 }} />
+          style={[literalStyles.s10, { color: colors.text, backgroundColor: colors.surface }, literalStyles.s11]} />
         <GameButton label="Send" onPress={send} disabled={busy || !text.trim()} />
       </View>
     </View>
@@ -142,11 +178,11 @@ export function LevelsGame({ result, projectId }: GameProps) {
   return (
     <View>
       <Title>{topic}</Title>
-      <View style={{ flexDirection: 'row', gap: 4, marginVertical: 6 }}>
+      <View style={literalStyles.s12}>
         {LEVELS.map((l, i) => (
           <TouchableOpacity key={l} onPress={() => setLevel(i)} accessibilityRole="button" accessibilityState={{ selected: level === i }}
-            style={{ flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: level === i ? colors.primary : colors.surface, alignItems: 'center' }}>
-            <Text style={{ color: level === i ? '#fff' : colors.text, fontSize: 11, textAlign: 'center' }}>{l}</Text>
+            style={[literalStyles.s13, { backgroundColor: level === i ? colors.primary : colors.surface }, literalStyles.s14]}>
+            <Text style={[{ color: level === i ? COLOR_FFF : colors.text }, literalStyles.s15]}>{l}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -183,16 +219,16 @@ export function MnemonicGame({ result, projectId }: GameProps) {
     <View>
       <Banner>Type a list you need to remember (steps, names, parts), in order. You get an acronym, a sentence, a rhyme and a story.</Banner>
       <TextInput value={list} onChangeText={setList} multiline placeholder={'e.g.\nAirway\nBreathing\nCirculation'} placeholderTextColor={colors.textMuted}
-        style={{ color: colors.text, backgroundColor: colors.surface, borderRadius: 10, padding: 12, minHeight: 100, textAlignVertical: 'top' }} />
+        style={[{ color: colors.text, backgroundColor: colors.surface }, literalStyles.s16]} />
       <GameButton label={busy ? 'Making...' : 'Make mnemonics'} onPress={make} disabled={busy} />
       {!!error && <Text style={{ color: BAD }}>{error}</Text>}
       {results.map((r, i) => (
         <Card key={i}>
-          <Text style={{ color: colors.textMuted, fontSize: 12 }}>{r.items.join(' · ')}</Text>
-          <Text style={{ color: colors.primary, fontSize: 22, fontWeight: '800', letterSpacing: 2 }}>{r.acronym}</Text>
-          {!!r.sentence && <Text style={{ color: colors.text, marginTop: 4 }}>“{r.sentence}”</Text>}
-          {!!r.rhyme && <Text style={{ color: colors.text, marginTop: 4, fontStyle: 'italic' }}>{r.rhyme}</Text>}
-          {!!r.story && <Text style={{ color: colors.textSecondary, marginTop: 4 }}>{r.story}</Text>}
+          <Text style={[{ color: colors.textMuted }, literalStyles.s17]}>{r.items.join(' · ')}</Text>
+          <Text style={[{ color: colors.primary }, literalStyles.s18]}>{r.acronym}</Text>
+          {!!r.sentence && <Text style={[{ color: colors.text }, literalStyles.s19]}>“{r.sentence}”</Text>}
+          {!!r.rhyme && <Text style={[{ color: colors.text }, literalStyles.s20]}>{r.rhyme}</Text>}
+          {!!r.story && <Text style={[{ color: colors.textSecondary }, literalStyles.s19]}>{r.story}</Text>}
         </Card>
       ))}
     </View>
@@ -228,16 +264,16 @@ export function PalaceGame({ result, projectId, onOpenSource }: GameProps) {
         <Text style={{ color: colors.textMuted }}>🏠 {st.room}</Text>
         {mode === 'walk' ? (
           <View>
-            <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800', marginVertical: 6 }}>{st.term}</Text>
-            <Text style={{ color: colors.text, fontSize: 16, lineHeight: 23 }}>{st.image}</Text>
-            {!!clue && <Text style={{ color: colors.textSecondary, marginTop: 6 }}>{clue}</Text>}
+            <Text style={[{ color: colors.text }, literalStyles.s21]}>{st.term}</Text>
+            <Text style={[{ color: colors.text }, literalStyles.s22]}>{st.image}</Text>
+            {!!clue && <Text style={[{ color: colors.textSecondary }, literalStyles.s5]}>{clue}</Text>}
             <SourceLinks nums={st.src} result={result} onOpenSource={onOpenSource} />
           </View>
         ) : (
           <View>
-            <Text style={{ color: colors.text, fontSize: 16, marginVertical: 6 }}>What did you leave in the {st.room.toLowerCase()}?</Text>
-            <TextInput value={typed} onChangeText={setTyped} editable={checked === null} autoCapitalize="characters" placeholder="Term" placeholderTextColor={colors.textMuted} style={{ color: colors.text, backgroundColor: colors.background, borderRadius: 8, padding: 12 }} />
-            {checked !== null && <Text style={{ color: checked ? GOOD : BAD, fontWeight: '700', marginTop: 6 }}>{checked ? 'Yes!' : `It was ${st.term}: ${st.image}`}</Text>}
+            <Text style={[{ color: colors.text }, literalStyles.s23]}>What did you leave in the {st.room.toLowerCase()}?</Text>
+            <TextInput value={typed} onChangeText={setTyped} editable={checked === null} autoCapitalize="characters" placeholder="Term" placeholderTextColor={colors.textMuted} style={[{ color: colors.text, backgroundColor: colors.background }, literalStyles.s24]} />
+            {checked !== null && <Text style={[{ color: checked ? GOOD : BAD }, literalStyles.s25]}>{checked ? 'Yes!' : `It was ${st.term}: ${st.image}`}</Text>}
           </View>
         )}
       </Card>
@@ -245,7 +281,7 @@ export function PalaceGame({ result, projectId, onOpenSource }: GameProps) {
         : checked === null ? <GameButton label="Check" disabled={!typed.trim()} onPress={() => {
           const ok = similarity(typed, st.term) >= 0.8;
           setChecked(ok); if (ok) setScore((s) => s + 1);
-          record(`Memory palace, ${st.room}: ${clue || st.image}`, st.term, ok, st.src);
+          record({ prompt: `Memory palace, ${st.room}: ${clue || st.image}`, answer: st.term, src: st.src }, ok);
         }} />
           : <GameButton label="Next room" onPress={() => { setChecked(null); setTyped(''); setI((x) => x + 1); }} />}
     </View>
@@ -277,14 +313,14 @@ export function ConceptMapGame({ result, projectId, onOpenSource }: GameProps) {
   }, [edge, laid]);
   return (
     <View>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
+      <View style={literalStyles.s26}>
         <GameButton label="Explore" kind={quiz ? 'plain' : 'primary'} onPress={() => setQuiz(false)} />
         <GameButton label="Quiz the links" kind={quiz ? 'primary' : 'plain'} onPress={() => { setQuiz(true); setQi(0); setScore(0); setPicked(null); }} />
       </View>
       {!quiz ? (
         <View>
           <Banner>Tap an idea to see how it connects.</Banner>
-          <Svg width={W} height={H} style={{ alignSelf: 'center', backgroundColor: colors.surface, borderRadius: 12 }}>
+          <Svg width={W} height={H} style={[literalStyles.s27, { backgroundColor: colors.surface }, literalStyles.s28]}>
             {map.edges.map((e, i) => {
               const a = pos(e.from), b = pos(e.to);
               const active = selected && (e.from === selected || e.to === selected);
@@ -311,13 +347,13 @@ export function ConceptMapGame({ result, projectId, onOpenSource }: GameProps) {
         </View>
       ) : !edge ? <Finished score={score} max={map.edges.length} onAgain={() => { setQi(0); setScore(0); }} /> : (
         <View>
-          <Card><Text style={{ color: colors.text, fontSize: 18 }}>{label(edge.from)} <Text style={{ color: colors.primary, fontWeight: '700' }}>{edge.label}</Text> ...?</Text></Card>
+          <Card><Text style={[{ color: colors.text }, literalStyles.s29]}>{label(edge.from)} <Text style={[{ color: colors.primary }, literalStyles.s30]}>{edge.label}</Text> ...?</Text></Card>
           {options.map((id) => (
             <Choice key={id} label={label(id)} disabled={picked !== null} onPress={() => {
               setPicked(id);
               const ok = id === edge.to;
               if (ok) setScore((s) => s + 1);
-              record(`${label(edge.from)} ${edge.label} ...?`, label(edge.to), ok, edge.src);
+              record({ prompt: `${label(edge.from)} ${edge.label} ...?`, answer: label(edge.to), src: edge.src }, ok);
             }} state={picked === null ? null : id === edge.to ? 'right' : id === picked ? 'wrong' : null} />
           ))}
           {picked !== null && <GameButton label="Next link" onPress={() => { setPicked(null); setQi((x) => x + 1); }} />}

@@ -8,6 +8,7 @@ import { generateId } from '../utils/generateId';
 import { callHook, HOOKS } from '../bootstrap/hookRegistry';
 import type { PersistStorage, StorageValue } from 'zustand/middleware';
 import { enforceForageSafety } from '../utils/forageSafety';
+import { registerChatStore } from './storeRefs';
 
 /** Field ID replies get the code-enforced foraging safety net. */
 function isFieldIdConversation(conv: Conversation | undefined): boolean {
@@ -25,18 +26,29 @@ type PersistedChats = { conversations: Conversation[]; activeConversationId: str
  */
 export function skipUnchangedChatWrites(inner: PersistStorage<PersistedChats>): PersistStorage<PersistedChats> {
   let last: { conversations: Conversation[]; activeConversationId: string | null } | null = null;
+  let writes: Promise<void> = Promise.resolve();
+  const enqueue = (write: () => Promise<void>): Promise<void> => {
+    const next = writes.then(write);
+    // A rejected write must reach the caller, but it must not block future saves.
+    writes = next.catch(() => undefined);
+    return next;
+  };
   const same = (value: StorageValue<PersistedChats>) => !!last &&
     last.activeConversationId === value.state.activeConversationId &&
     last.conversations.length === value.state.conversations.length &&
     last.conversations.every((c, i) => c === value.state.conversations[i]);
   return {
-    getItem: (name) => inner.getItem(name),
-    setItem: (name, value) => {
+    getItem: (name) => writes.then(() => inner.getItem(name)),
+    setItem: (name, value) => enqueue(async () => {
       if (same(value)) return;
+      await inner.setItem(name, value);
+      // Never mark a failed or still-pending write as safely persisted.
       last = { conversations: value.state.conversations, activeConversationId: value.state.activeConversationId };
-      return inner.setItem(name, value);
-    },
-    removeItem: (name) => { last = null; return inner.removeItem(name); },
+    }),
+    removeItem: (name) => enqueue(async () => {
+      await inner.removeItem(name);
+      last = null;
+    }),
   };
 }
 
@@ -107,6 +119,8 @@ interface ChatState {
   isThinking: boolean;
   createConversation: (modelId: string, title?: string, projectId?: string, privateChat?: boolean) => string;
   deleteConversation: (conversationId: string) => void;
+  /** Put back a conversation that was just deleted (the Undo bar). */
+  restoreConversation: (conversation: Conversation) => void;
   setActiveConversation: (conversationId: string | null) => void;
   getActiveConversation: () => Conversation | null;
   setConversationProject: (conversationId: string, projectId: string | null) => void;
@@ -115,6 +129,8 @@ interface ChatState {
   renameConversation: (conversationId: string, title: string) => void;
   setConversationPinVerifier: (conversationId: string, verifier: string | null) => void;
   setConversationAgent: (conversationId: string, agentId: string | null) => void;
+  /** Tools for this chat only; null = back to the agent's or app's defaults. */
+  setConversationTools: (conversationId: string, tools: string[] | null) => void;
   /** Unfile every conversation filed under a project (used when the project is deleted,
    *  so no chat is left pointing at a project that no longer exists). */
   unfileConversationsForProject: (projectId: string) => void;
@@ -152,8 +168,9 @@ export const useChatStore = create<ChatState>()(
       // Preserve the existing four-argument API until chat callers migrate to options.
       // eslint-disable-next-line max-params
       createConversation: (modelId, title, projectId, privateChat = false) => {
-        if (projectId && require('./projectStore').useProjectStore.getState().getProject(projectId)?.pinVerifier) {
-          throw new Error('This project is encrypted. Create chats separately until protected project content can be encrypted together.');
+        const protectedProject = !!projectId && !!require('./projectStore').useProjectStore.getState().getProject(projectId)?.pinVerifier;
+        if (protectedProject && !require('./protectedProjectStorage').isProtectedProjectUnlocked(projectId)) {
+          throw new Error('Unlock this protected project to start a chat in it.');
         }
         const id = generateId();
         const conversation: Conversation = {
@@ -172,6 +189,8 @@ export const useChatStore = create<ChatState>()(
           conversations: [conversation, ...state.conversations],
           activeConversationId: id,
         }));
+        // A chat in a protected project is sealed with the project's PIN as soon as it is saved.
+        if (protectedProject && !privateChat) require('./protectedProjectStorage').sealNewProjectChat(id, projectId);
 
         return id;
       },
@@ -181,6 +200,12 @@ export const useChatStore = create<ChatState>()(
           conversations: state.conversations.filter((c) => c.id !== conversationId),
           activeConversationId: state.activeConversationId === conversationId ? null : state.activeConversationId,
         }));
+      },
+
+      restoreConversation: (conversation) => {
+        set((state) => state.conversations.some((c) => c.id === conversation.id)
+          ? state
+          : { conversations: [conversation, ...state.conversations] });
       },
 
       setActiveConversation: (conversationId) => {
@@ -195,6 +220,11 @@ export const useChatStore = create<ChatState>()(
       setConversationAgent: (conversationId, agentId) => {
         set((state) => ({ conversations: mapConversation(state.conversations, conversationId,
           (conv) => ({ ...conv, agentId: agentId ?? undefined, updatedAt: nextUpdatedAt(conv.updatedAt) })) }));
+      },
+
+      setConversationTools: (conversationId, tools) => {
+        set((state) => ({ conversations: mapConversation(state.conversations, conversationId,
+          (conv) => ({ ...conv, enabledTools: tools ?? undefined, updatedAt: nextUpdatedAt(conv.updatedAt) })) }));
       },
 
       setConversationPinVerifier: () => {
@@ -218,16 +248,22 @@ export const useChatStore = create<ChatState>()(
       },
 
       setConversationProject: (conversationId, projectId) => {
-        if (projectId && require('./projectStore').useProjectStore.getState().getProject(projectId)?.pinVerifier) {
-          throw new Error('Protected projects cannot accept unencrypted chats. Permanently unprotect the project first.');
+        const into = !!projectId && !!require('./projectStore').useProjectStore.getState().getProject(projectId)?.pinVerifier;
+        const conv = get().conversations.find((c) => c.id === conversationId);
+        if (into && !require('./protectedProjectStorage').isProtectedProjectUnlocked(projectId)) {
+          throw new Error('Unlock this protected project to move a chat into it.');
         }
+        if (into && conv?.isPrivate) throw new Error('Temporary private chats are not saved, so they cannot join a protected project.');
         set((state) => ({
-          conversations: state.conversations.map((conv) =>
-            conv.id !== conversationId
-              ? conv
-              : { ...conv, projectId: projectId || undefined, updatedAt: nextUpdatedAt(conv.updatedAt) }
+          conversations: state.conversations.map((c) =>
+            c.id !== conversationId
+              ? c
+              : { ...c, projectId: projectId || undefined, updatedAt: nextUpdatedAt(c.updatedAt) }
           ),
         }));
+        // Joining a protected project: seal the chat with the project's PIN (a chat that already
+        // has its own PIN keeps it).
+        if (into && !conv?.pinVerifier) require('./protectedProjectStorage').sealNewProjectChat(conversationId, projectId);
       },
 
       unfileConversationsForProject: (projectId) => {
@@ -330,9 +366,9 @@ export const useChatStore = create<ChatState>()(
           isStreaming: true,
           isThinking: false,
         }));
-        // Feed only the ANSWER to pro audio for real-time sentence-by-sentence
+        // Feed only the ANSWER to the voice feature for real-time sentence-by-sentence
         // TTS (never the reasoning) — no-op unless voice mode + engine ready;
-        // free builds register nothing.
+        // nothing happens when no voice feature is registered.
         callHook(HOOKS.audioOnStreamingToken, speakableStreamingAnswer(get().streamingMessage, get().streamingReasoningContent));
       },
 
@@ -439,3 +475,6 @@ export const useChatStore = create<ChatState>()(
     }
   )
 );
+
+// The persist adapter and the vaults under this store reach it through this handle (no import cycle).
+registerChatStore(useChatStore);

@@ -24,6 +24,8 @@ import { getDisplayMessages } from './types';
 import { saveReportToProject } from '../../services/researchReportStorage';
 import { saveImageToGallery } from './useSaveImage';
 import { needsVisionRepair } from '../../utils/visionRepair';
+import { checkAnswerPrompt } from '../../services/checkAnswer';
+import { toggleChatTool, toolsForConversation } from '../../services/tools/chatTools';
 import {
   isSuspiciousRecoveredImageModel,
   isSuspiciousRecoveredTextModel,
@@ -126,7 +128,7 @@ export const useChatScreen = () => {
   // snappy — nothing heavy runs until the user actually sends a message.
 
   // Stop TTS when navigating away, app backgrounded, or screen locked.
-  // No-op without the pro audio feature.
+  // No-op without the voice feature.
   useEffect(() => {
     const unsubBlur = navigation.addListener('blur', () => {
       callHook(HOOKS.audioStop);
@@ -335,8 +337,8 @@ export const useChatScreen = () => {
   // audio.stop mid-answer and aborted the current answer's streaming-TTS queue
   // (the "streams, then stops speaking once the answer is prepared" bug).
 
-  // When streaming ends, the pro audio feature speaks the final assistant
-  // message (only if voice mode is active + TTS ready). No-op in free builds.
+  // When streaming ends, the voice feature speaks the final assistant
+  // message (only if voice mode is active + TTS ready). No-op when none is registered.
   useEffect(() => {
     const was = prevStreamingRef.current;
     prevStreamingRef.current = isStreamingForThisConversation;
@@ -348,8 +350,10 @@ export const useChatScreen = () => {
     await startGenerationFn(genDeps, { setDebugInfo, targetConversationId, messageText });
   };
   startGenerationRef.current = startGeneration;
-  const enabledTools = supportsToolCalling ? (settings.enabledTools || []) : [];
+  // This chat's tools (its own choice, else its agent's, else the app defaults); toggling changes only this chat.
+  const enabledTools = supportsToolCalling ? toolsForConversation(activeConversation, settings.enabledTools || []) : [];
   const handleToggleTool = (toolId: string) => {
+    if (activeConversationId) { toggleChatTool(activeConversationId, toolId); return; }
     const cur = settings.enabledTools || [];
     useAppStore.getState().updateSettings({ enabledTools: cur.includes(toolId) ? cur.filter((id: string) => id !== toolId) : [...cur, toolId] });
   };
@@ -386,6 +390,14 @@ export const useChatScreen = () => {
   const handleSend = (text: string, attachments?: MediaAttachment[], imageMode?: 'auto' | 'force' | 'disabled') =>
     handleSendFn(genDeps, { text, attachments, imageMode: researchMode ? 'disabled' : imageMode, startGeneration, setDebugInfo });
 
+  /** "Check this answer": sends a follow-up asking the model to check that reply, with the figures nothing earlier supports. */
+  const handleCheckAnswer = (message: Message) => {
+    const msgs = activeConversation?.messages ?? [];
+    const upTo = msgs.findIndex((m) => m.id === message.id);
+    const earlier = (upTo < 0 ? msgs : msgs.slice(0, upTo)).map((m) => m.content);
+    handleSend(checkAnswerPrompt(message.content, earlier));
+  };
+
   // After picking a text model, replay the stashed message (no retype needed).
   const handleModelSelect = async (model: DownloadedModel) => {
     await handleModelSelectFn(modelDeps, model);
@@ -406,7 +418,7 @@ export const useChatScreen = () => {
     supportsToolCalling, supportsThinking,
     debugInfo, alertState, setAlertState,
     showScrollToBottom, setShowScrollToBottom,
-    isClassifying, animateLastN, queueCount, queuedTexts,
+    isClassifying, animateLastN, queueCount, queuedTexts, starter: route.params?.starter,
     viewerImageUri, setViewerImageUri, imageGenState,
     researchMode, setResearchMode, researchDepth, setResearchDepth, researchStatus,
     enabledTools, handleToggleTool,
@@ -421,6 +433,7 @@ export const useChatScreen = () => {
     visionNeedsRepair: !activeModelInfo.isRemote && needsVisionRepair(activeModel),
     navigation, hardwareService,
     handleSend,
+    handleCheckAnswer,
     handleStop: () => handleStopFn(genDeps),
     handleModelSelect,
     handleUnloadModel: () => handleUnloadModelFn(modelDeps),
@@ -451,8 +464,10 @@ export const useChatScreen = () => {
     handleCopyMessage: (_content: string) => { },
     handleRetryMessage: (message: Message) =>
       handleRetryMessageFn(message, genDeps, { activeConversationId, hasActiveModel, activeConversation, deleteMessagesAfter, setDebugInfo }),
-    handleEditMessage: (message: Message, newContent: string) =>
-      handleEditMessageFn(genDeps, { message, newContent, activeConversationId, hasActiveModel, activeConversation, updateMessageContent, deleteMessagesAfter, setDebugInfo }),
+    handleEditMessage: (message: Message, newContent: string, opts?: { resend?: boolean }) =>
+      (opts?.resend === false && activeConversationId
+        ? Promise.resolve(updateMessageContent(activeConversationId, message.id, newContent)) // fix the text only: keep the rest of the chat
+        : handleEditMessageFn(genDeps, { message, newContent, activeConversationId, hasActiveModel, activeConversation, updateMessageContent, deleteMessagesAfter, setDebugInfo })),
     handleSelectProject: (project: Project | null) => {
       setPendingProjectId(project?.id);
       if (!activeConversationId) {

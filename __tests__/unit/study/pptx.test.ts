@@ -3,10 +3,10 @@ import RNFS from 'react-native-fs';
 import { zip } from 'react-native-zip-archive';
 import { buildPptxFiles, deckSlides, writePptx, xmlEscape } from '../../../src/study/pptx';
 
-const deck = deckSlides('Water & <Fire>', 'sub "title"', [
+const deck = deckSlides('Water & <Fire>', 'sub "title"', { slides: [
   { title: 'Why boil', bullets: ['Kills germs & bacteria', 'Under 2000 m: 1 minute'], narration: 'n', src: [1] },
   { title: 'Empty', bullets: [], narration: 'n', src: [] },
-], [{ n: 1, doc: 'water.pdf', part: 1, text: 't' }, { n: 2, doc: 'water.pdf', part: 2, text: 'u' }]);
+], sources: [{ n: 1, doc: 'water.pdf', part: 1, text: 't' }, { n: 2, doc: 'water.pdf', part: 2, text: 'u' }] });
 
 describe('PowerPoint export', () => {
   it('adds a title slide and one sources slide listing each document once', () => {

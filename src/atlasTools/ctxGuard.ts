@@ -66,7 +66,7 @@ export async function loadFailed(engine: Engine, modelId: string): Promise<numbe
     const raw = await AsyncStorage.getItem(PENDING);
     await AsyncStorage.removeItem(PENDING);
     const p = raw ? JSON.parse(raw) : null;
-    if (!p || p.engine !== engine || p.modelId !== modelId || !(p.tried > p.good)) return null;
+    if (!p || p.engine !== engine || p.modelId !== modelId || p.tried <= p.good) return null;
     setBack(engine, p.good);
     if (Platform.OS === 'android') ToastAndroid.show(`Memory size ${k(p.tried)} didn't work with this model - set back to ${k(p.good)}.`, ToastAndroid.LONG);
     return p.good;
@@ -81,7 +81,7 @@ export async function recoverAfterCrash(): Promise<string | null> {
     const p = JSON.parse(raw);
     if (p?.session === SESSION) return null; // a load running right now
     await AsyncStorage.removeItem(PENDING);
-    if (!p || Date.now() - p.at > 24 * 3600e3 || !(p.tried > p.good)) return null;
+    if (!p || Date.now() - p.at > 24 * 3600e3 || p.tried <= p.good) return null;
     if (requestedCtx(p.engine) !== p.tried) return null; // already changed since
     setBack(p.engine, p.good);
     return `Atlas closed while loading the model with memory size ${k(p.tried)} - that's too much for this phone with this model. It's set back to ${k(p.good)}.`;

@@ -1,6 +1,3 @@
-[submodule "pro"]
-	path = pro
-	url = https://github.com/off-grid-ai/mobile-pro.git
 [submodule "vendor/llama-kt"]
 	path = vendor/llama-kt
 	url = https://github.com/hokanosekai/llama.kt.git

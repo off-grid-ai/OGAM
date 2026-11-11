@@ -62,4 +62,15 @@ describe('shared flexible context window', () => {
     expect(result.messages).toHaveLength(2);
     expect(result.promptTokens).toBeGreaterThan(0);
   });
+
+  it('starts the prompt at the same message across consecutive turns once it has to drop some', async () => {
+    const chat = (n: number) => [
+      msg('system', 'system', 'Rules'),
+      ...Array.from({ length: n }, (_, i) => msg(`m${i}`, i % 2 ? 'assistant' : 'user', 'z'.repeat(40))),
+    ];
+    // Each turn adds a user and a reply (2 messages). The first kept message must not move on every turn.
+    const firstKept = async (n: number) => (await fit(chat(n), 600, 64)).messages.find(m => m.role !== 'system')!.id;
+    const starts = [await firstKept(40), await firstKept(42), await firstKept(44)];
+    expect(new Set(starts).size).toBe(1);
+  });
 });

@@ -8,6 +8,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.util.Locale
 
@@ -146,17 +147,7 @@ class AtlasTtsModule(private val ctx: ReactApplicationContext) : ReactContextBas
         }
     }
 
-    private fun chunks(text: String, max: Int): List<String> {
-        val out = mutableListOf<String>()
-        val sentences = text.split(Regex("(?<=[.!?\\n])\\s+"))
-        val sb = StringBuilder()
-        for (s in sentences) {
-            if (sb.length + s.length + 1 > max && sb.isNotEmpty()) { out.add(sb.toString()); sb.setLength(0) }
-            if (s.length > max) { s.chunked(max).forEach { out.add(it) } } else { if (sb.isNotEmpty()) sb.append(' '); sb.append(s) }
-        }
-        if (sb.isNotEmpty()) out.add(sb.toString())
-        return out.filter { it.isNotBlank() }
-    }
+    private fun chunks(text: String, max: Int): List<String> = SpeechChunks.chunks(text, max)
 
     private fun doSpeak(text: String, id: String, lang: String = "") {
         val engine = tts ?: return
@@ -189,7 +180,8 @@ class AtlasTtsModule(private val ctx: ReactApplicationContext) : ReactContextBas
             if (useNeural(lang)) {
                 try { tts?.stop() } catch (_: Exception) {}
                 val sid = if (voiceName.startsWith("sid:")) voiceName.removePrefix("sid:").toIntOrNull() ?: neuralSid else neuralSid
-                val parts = chunks(text, 380)
+                // The first piece is one sentence, so the voice starts speaking sooner.
+                val parts = SpeechChunks.speechParts(text, 380)
                 if (parts.isEmpty()) emit("AtlasTtsDone", utteranceId) else neural.speak(parts, utteranceId, sid, rate)
                 promise.resolve(true); return
             }
@@ -279,6 +271,33 @@ class AtlasTtsModule(private val ctx: ReactApplicationContext) : ReactContextBas
         }.start()
     }
 
+    /**
+     * Speaks a reply while it is still being written (natural voice only; resolves false for the
+     * phone's own voice, which cannot take text this way). Add sentences with speakStreamAppend and
+     * finish with speakStreamEnd.
+     */
+    @ReactMethod
+    fun speakStreamStart(utteranceId: String, promise: Promise) {
+        try {
+            if (!useNeural("")) { promise.resolve(false); return }
+            try { tts?.stop() } catch (_: Exception) {}
+            val sid = if (voiceName.startsWith("sid:")) voiceName.removePrefix("sid:").toIntOrNull() ?: neuralSid else neuralSid
+            neural.speakStreamStart(utteranceId, sid, rate)
+            promise.resolve(true)
+        } catch (e: Exception) { promise.reject("TTS_ERROR", e) }
+    }
+
+    @ReactMethod
+    fun speakStreamAppend(text: String, promise: Promise) {
+        try { neural.speakStreamAppend(SpeechChunks.chunks(text, 380)); promise.resolve(true) }
+        catch (e: Exception) { promise.reject("TTS_ERROR", e) }
+    }
+
+    @ReactMethod
+    fun speakStreamEnd(promise: Promise) {
+        try { neural.speakStreamEnd(); promise.resolve(true) } catch (e: Exception) { promise.reject("TTS_ERROR", e) }
+    }
+
     @ReactMethod
     fun cancelSynthesis(promise: Promise) { fileCancel = true; promise.resolve(true) }
 
@@ -332,17 +351,23 @@ class AtlasTtsModule(private val ctx: ReactApplicationContext) : ReactContextBas
     @ReactMethod
     fun isSpeaking(promise: Promise) { promise.resolve(tts?.isSpeaking ?: false) }
 
-    /** Use a downloaded natural voice (folder name under voices/), or "" for the phone's voice. Resolves the number of speakers. */
+    /**
+     * Use a downloaded natural voice (folder name under voices/), or "" for the phone's voice.
+     * `style` may hold `accent` ("gb"/"us": pronunciation dictionary of multi-accent Kokoro) and
+     * `depth` (1 = as recorded, lower = deeper). Resolves the number of speakers.
+     */
     @ReactMethod
-    fun setNeuralVoice(id: String, sid: Int, promise: Promise) {
+    fun setNeuralVoice(id: String, sid: Int, style: ReadableMap?, promise: Promise) {
         neuralSid = sid
+        val accent = if (style?.hasKey("accent") == true) style.getString("accent") ?: "" else ""
+        neural.depth = if (style?.hasKey("depth") == true) style.getDouble("depth").toFloat() else 1f
         val g = ++voiceGen
         if (id.isBlank()) { neuralDir = ""; neural.releaseAsync(); promise.resolve(0); return }
         val dir = findVoice(id)
         if (dir == null) { neuralDir = ""; promise.reject("NO_VOICE", "Voice not downloaded (if it was on an SD card, put the card back)"); return }
         Thread {
             try {
-                neural.load(dir.path)
+                neural.load(dir.path, accent)
                 if (g == voiceGen) { neuralDir = dir.path; promise.resolve(neural.numSpeakers()) }
                 else promise.resolve(0) // a newer choice was made while this one loaded
             } catch (e: Throwable) { if (g == voiceGen) neuralDir = ""; promise.reject("VOICE_LOAD", e.message ?: e.toString()) }
@@ -380,58 +405,43 @@ class AtlasTtsModule(private val ctx: ReactApplicationContext) : ReactContextBas
     fun downloadNeuralVoice(id: String, url: String, promise: Promise) {
         cancelled.remove(id)
         Thread {
+            try {
+                val dest = ModelPack.download(url, voicesRoot(), id, { cancelled.contains(id) }) { p -> progress(id, p) }
+                promise.resolve(dest.path)
+            } catch (e: Throwable) {
+                promise.reject("VOICE_DOWNLOAD", if (cancelled.contains(id)) "cancelled" else (e.message ?: e.toString()))
+            }
+        }.start()
+    }
+
+    /**
+     * Imports a voice file the user downloaded (a sherpa-onnx .tar.bz2 or .zip of a Piper/VITS,
+     * Kokoro or KittenTTS voice). Unpacks it into voices/<id>, checks it is a voice Atlas can
+     * play, and resolves the new id.
+     */
+    @ReactMethod
+    fun importNeuralVoice(uri: String, name: String, promise: Promise) {
+        Thread {
+            val id = VoiceImport.idFor(name)
             val root = voicesRoot()
             val tmp = java.io.File(root, "$id.part")
             try {
                 tmp.deleteRecursively(); tmp.mkdirs()
-                var conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                conn.connectTimeout = 30000; conn.readTimeout = 60000; conn.instanceFollowRedirects = true
-                conn.setRequestProperty("User-Agent", "Atlas")
-                var hops = 0
-                while (conn.responseCode in 300..399 && hops++ < 5) {
-                    val loc = conn.getHeaderField("Location") ?: break
-                    conn.disconnect()
-                    conn = java.net.URL(conn.url, loc).openConnection() as java.net.HttpURLConnection
-                    conn.connectTimeout = 30000; conn.readTimeout = 60000; conn.setRequestProperty("User-Agent", "Atlas")
-                }
-                if (conn.responseCode >= 400) throw IllegalStateException("HTTP ${conn.responseCode}")
-                val total = conn.contentLengthLong
-                var read = 0L
-                var last = 0L
-                val counting = object : java.io.FilterInputStream(java.io.BufferedInputStream(conn.inputStream, 1 shl 16)) {
-                    override fun read(b: ByteArray, off: Int, len: Int): Int {
-                        if (cancelled.contains(id)) throw java.io.InterruptedIOException("cancelled")
-                        val n = super.read(b, off, len)
-                        if (n > 0) {
-                            read += n
-                            val now = System.currentTimeMillis()
-                            if (now - last > 500) { last = now; progress(id, if (total > 0) read.toDouble() / total else -1.0) }
-                        }
-                        return n
-                    }
-                }
-                java.util.zip.ZipInputStream(counting).use { zip ->
-                    val base = tmp.canonicalPath
-                    var e = zip.nextEntry
-                    while (e != null) {
-                        val out = java.io.File(tmp, e.name)
-                        if (!out.canonicalPath.startsWith(base + java.io.File.separator)) throw SecurityException("bad zip entry")
-                        if (e.isDirectory) out.mkdirs() else { out.parentFile?.mkdirs(); java.io.FileOutputStream(out).use { zip.copyTo(it, 1 shl 16) } }
-                        e = zip.nextEntry
-                    }
-                }
-                // the zip may contain one top folder: flatten it
+                val input = ctx.contentResolver.openInputStream(android.net.Uri.parse(uri))
+                    ?: throw IllegalStateException("Could not open the file")
+                input.use { VoiceImport.unpack(it, tmp) }
                 val kids = tmp.listFiles() ?: emptyArray()
                 val src = if (kids.size == 1 && kids[0].isDirectory) kids[0] else tmp
+                VoiceImport.problem(src)?.let { throw IllegalArgumentException(it) }
                 val dest = java.io.File(root, id)
+                if (dest.path == neuralDir || dest.path == neural.loadedDir) { neuralDir = ""; try { neural.release() } catch (_: Throwable) {} }
                 dest.deleteRecursively()
                 if (!src.renameTo(dest)) throw IllegalStateException("Could not move voice files")
                 tmp.deleteRecursively()
-                progress(id, 1.0)
-                promise.resolve(dest.path)
+                promise.resolve(id)
             } catch (e: Throwable) {
                 tmp.deleteRecursively()
-                promise.reject("VOICE_DOWNLOAD", if (cancelled.contains(id)) "cancelled" else (e.message ?: e.toString()))
+                promise.reject("VOICE_IMPORT", e.message ?: e.toString())
             }
         }.start()
     }

@@ -574,7 +574,7 @@ describe('LLMService', () => {
         const onComplete = jest.fn();
         const result = await llmService.generateResponse([createUserMessage('hi')], { onComplete });
         expect(result).toBe('The clean answer.');
-        expect(onComplete).toHaveBeenCalledWith({ content: 'The clean answer.', reasoningContent: 'the reasoning' });
+        expect(onComplete).toHaveBeenCalledWith({ content: 'The clean answer.', reasoningContent: 'the reasoning', parsedContent: 'The clean answer.' });
       });
 
       it('FAIL-SAFE: empty filtered content from auto → the raw text still surfaces (answer never blank)', async () => {
@@ -1683,6 +1683,7 @@ describe('LLMService', () => {
           ...useAppStore.getState().settings,
           temperature: 0.2,
           maxTokens: 512,
+          maxTokensMode: 'manual' as const,
           topP: 0.8,
           repeatPenalty: 1.3,
         },
@@ -1695,6 +1696,19 @@ describe('LLMService', () => {
       expect(callArgs.n_predict).toBe(512);
       expect(callArgs.top_p).toBe(0.8);
       expect(callArgs.penalty_repeat).toBe(1.3);
+    });
+
+    it('sizes the reply to the context window when the length is automatic', async () => {
+      mockedRNFS.exists.mockResolvedValue(true);
+      const ctx = createMockLlamaContext({
+        completion: jest.fn(async (_p: any, cb: any) => { cb({ token: 'OK' }); return { text: 'OK', tokens_predicted: 1 }; }),
+        tokenize: jest.fn(() => Promise.resolve({ tokens: [1, 2, 3] })),
+      });
+      mockedInitLlama.mockResolvedValue(ctx as any);
+      await llmService.loadModel('/models/test.gguf');
+      useAppStore.setState({ settings: { ...useAppStore.getState().settings, maxTokens: 512, maxTokensMode: 'auto' as const } });
+      await llmService.generateResponse([createUserMessage('Hi')]);
+      expect(ctx.completion.mock.calls[0]![0]!.n_predict).toBeGreaterThan(512);
     });
   });
 
@@ -2366,7 +2380,7 @@ describe('LLMService', () => {
       await llmService.loadModel('/models/test-Q4_0.gguf');
 
       expect(mockedInitLlama).toHaveBeenCalledWith(
-        expect.objectContaining({ devices: ['HTP0'], n_gpu_layers: 99 }),
+        expect.objectContaining({ devices: ['HTP0'], n_gpu_layers: 99 }), expect.any(Function),
       );
     });
 

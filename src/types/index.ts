@@ -71,6 +71,12 @@ export interface LlamaDownloadedModel extends DownloadedModelBase {
   mmProjFileSize?: number;
   /** Atlas: the user attached this vision file themselves (keep it even if the names don't match). */
   mmProjManual?: boolean;
+  /** Atlas: an MTP (multi-token prediction / draft) file the user attached; the engine drafts tokens with it to speed up replies. */
+  draftPath?: string;
+  draftFileName?: string;
+  draftFileSize?: number;
+  /** Atlas: the model file has MTP layers built in (a hybrid MTP GGUF), so no separate MTP file is needed. */
+  embeddedMtp?: boolean;
 }
 
 export interface LiteRTDownloadedModel extends DownloadedModelBase {
@@ -171,6 +177,10 @@ export interface MediaAttachment {
 
 // Generation metadata - details about how a message was generated
 export interface GenerationMeta {
+  /** Which learned lessons the reply was written with (General, and the matching expert). */
+  lessonsUsed?: string[];
+  /** Project-document excerpts the reply was written from, numbered 1 to n as the model saw them. */
+  sources?: Array<{ title: string; quote: string; file?: { path: string; name: string; size: number } }>;
   /** Whether GPU was used for inference */
   gpu: boolean;
   /** GPU backend name (e.g., 'Metal', 'CPU') */
@@ -230,7 +240,7 @@ export interface Message {
   /** True when this assistant message was generated while interfaceMode === 'audio' */
   isAudioModeMessage?: boolean;
   /** Audio-mode message payload (saved voice note / synthesized clip): the on-disk audio
-   *  file path, a precomputed waveform envelope, and the clip duration. Read by the pro
+   *  file path, a precomputed waveform envelope, and the clip duration. Read by the voice
    *  audio UI (MessageAudioMode / AudioMessageBubble) and set by the TTS save path.
    *  Optional — only audio-mode messages carry them. (Distinct from the same-named field
    *  on MediaAttachment above, which describes an inbound audio attachment.) */
@@ -260,6 +270,8 @@ export interface Conversation {
   protectedBlob?: string;
   /** Atlas: extra instructions just for this chat (added under the agent and project instructions). */
   instructions?: string;
+  /** Atlas: tools chosen for this chat only; unset = the agent's (or app's) default tools. */
+  enabledTools?: string[];
 }
 
 
@@ -376,6 +388,10 @@ export interface Project {
   allowGames?: boolean;
   allowQuizzes?: boolean;
   allowPodcasts?: boolean;
+  /** A built-in course shown on the project page (the Learn a language project). */
+  course?: 'language';
+  /** What the project is for (school, work...): sets its starting instructions and quick starts. Omitted = general. */
+  kind?: 'general' | 'school' | 'work';
   id: string;
   name: string;
   description: string;

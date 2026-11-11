@@ -3,7 +3,8 @@ import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Switch, Text
 import { useTheme } from '../theme';
 import { useAtlasVoiceStore } from './store';
 import { speak } from './tts';
-import { NEURAL_VOICES, useNeuralVoices, refreshInstalled, downloadVoice, cancelVoiceDownload, deleteVoice, selectVoice, neuralAvailable } from './neural';
+import { VoiceProfilesCard } from './VoiceProfilesCard';
+import { voiceCatalog, useNeuralVoices, refreshInstalled, downloadVoice, cancelVoiceDownload, deleteVoice, selectVoice, neuralAvailable, importVoiceFile } from './neural';
 
 const RATES = [0.75, 1, 1.25, 1.5];
 
@@ -22,6 +23,7 @@ export function AtlasVoicePanel() {
   const sid = useAtlasVoiceStore((s) => s.neuralSid);
   const progress = useNeuralVoices((s) => s.progress);
   const installed = useNeuralVoices((s) => s.installed);
+  const speakerCount = useNeuralVoices((s) => s.speakerCount);
   const [loading, setLoading] = useState<string | null>(null);
   useEffect(() => { refreshInstalled().catch(() => undefined); }, []);
   const choose = async (id: string, speaker?: number) => {
@@ -35,6 +37,14 @@ export function AtlasVoicePanel() {
     try { await downloadVoice(id); await choose(id, 0); }
     catch (e: any) { if (!/cancel/i.test(String(e?.message))) Alert.alert('Download failed', `${String(e?.message || e)}\n\nYou need internet for the download. After that the voice works offline.`); }
   };
+  const importFile = async () => {
+    try {
+      const id = await importVoiceFile();
+      if (id) await choose(id, 0);
+    } catch (e: any) {
+      if (!/cancel/i.test(String(e?.code || e?.message))) Alert.alert('Could not import this voice', String(e?.message || e));
+    }
+  };
   const mb = (b: number) => `${Math.round(b / 1e6)} MB`;
   return (
     <ScrollView contentContainerStyle={styles.wrap}>
@@ -47,41 +57,52 @@ export function AtlasVoicePanel() {
           </Text>
           <TouchableOpacity onPress={() => choose('')} style={[styles.voiceRow, { borderColor: !current ? colors.primary : colors.border }]}>
             <View style={styles.flex}>
-              <Text style={{ color: colors.text, fontWeight: '600' }}>Phone voice</Text>
-              <Text style={{ color: colors.textMuted, fontSize: 12 }}>Built in, uses least battery</Text>
+              <Text style={[styles.name, { color: colors.text }]}>Phone voice</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Built in, uses least battery</Text>
             </View>
             {loading === 'phone' ? <ActivityIndicator color={colors.primary} /> : !current ? <Text style={{ color: colors.primary }}>In use</Text> : null}
           </TouchableOpacity>
-          {NEURAL_VOICES.map((v) => {
+          {voiceCatalog(installed).map((v) => {
             const have = installed[v.id] !== undefined;
             const p = progress[v.id];
             const inUse = current === v.id;
             return (
-              <View key={v.id} style={[styles.voiceRow, { borderColor: inUse ? colors.primary : colors.border, flexDirection: 'column', alignItems: 'stretch' }]}>
+              <View key={v.id} style={[styles.voiceRow, styles.voiceColumn, { borderColor: inUse ? colors.primary : colors.border }]}>
                 <View style={styles.rowBetween}>
                   <TouchableOpacity style={styles.flex} disabled={!have} onPress={() => choose(v.id, inUse ? sid : 0)}>
-                    <Text style={{ color: colors.text, fontWeight: '600' }}>{v.name}</Text>
-                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>{v.desc} {have ? `(${mb(installed[v.id])} on phone)` : v.size}</Text>
+                    <Text style={[styles.name, { color: colors.text }]}>{v.name}</Text>
+                    <Text style={[styles.meta, { color: colors.textMuted }]}>{v.desc} {have ? `(${mb(installed[v.id])} on phone)` : v.size}</Text>
                   </TouchableOpacity>
                   {loading === v.id ? <ActivityIndicator color={colors.primary} />
                     : p !== undefined ? (
                       <TouchableOpacity onPress={() => cancelVoiceDownload(v.id)}><Text style={{ color: colors.primary }}>{p >= 0 ? `${Math.round(p * 100)}%` : '...'} ✕</Text></TouchableOpacity>
                     ) : have ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                      <View style={styles.actions}>
                         {inUse ? <Text style={{ color: colors.primary }}>In use</Text> : <TouchableOpacity onPress={() => choose(v.id, 0)}><Text style={{ color: colors.primary }}>Use</Text></TouchableOpacity>}
                         <TouchableOpacity onPress={() => Alert.alert('Delete voice?', v.name, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => { deleteVoice(v.id).catch((e) => Alert.alert('Could not delete', String(e?.message || e))); } }])}>
                           <Text style={{ color: colors.textMuted }}>Delete</Text>
                         </TouchableOpacity>
                       </View>
                     ) : (
-                      <TouchableOpacity onPress={() => get(v.id)}><Text style={{ color: colors.primary, fontWeight: '600' }}>Download</Text></TouchableOpacity>
+                      <TouchableOpacity onPress={() => get(v.id)}><Text style={[styles.name, { color: colors.primary }]}>Download</Text></TouchableOpacity>
                     )}
                 </View>
+                {inUse && v.imported && (speakerCount[v.id] ?? 0) > 1 && (
+                  <View style={[styles.row, styles.stepper]} testID="imported-speaker-stepper">
+                    <TouchableOpacity disabled={sid <= 0} onPress={() => choose(v.id, sid - 1)} style={[styles.pill, { backgroundColor: colors.background }]} accessibilityLabel="Previous speaker">
+                      <Text style={{ color: colors.text }}>-</Text>
+                    </TouchableOpacity>
+                    <Text style={[styles.p, styles.stepperText, { color: colors.text }]}>Speaker {sid + 1} of {speakerCount[v.id]}</Text>
+                    <TouchableOpacity disabled={sid >= speakerCount[v.id] - 1} onPress={() => choose(v.id, sid + 1)} style={[styles.pill, { backgroundColor: colors.background }]} accessibilityLabel="Next speaker">
+                      <Text style={{ color: colors.text }}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
                 {inUse && v.speakers && (
-                  <View style={[styles.row, { flexWrap: 'wrap', marginTop: 10 }]}>
+                  <View style={[styles.row, styles.speakers]}>
                     {v.speakers.map((k) => (
                       <TouchableOpacity key={k.sid} onPress={() => choose(v.id, k.sid)} style={[styles.pill, { backgroundColor: sid === k.sid ? colors.primary : colors.background }]}>
-                        <Text style={{ color: sid === k.sid ? colors.background : colors.text, fontSize: 13 }}>{k.name} · {k.accent}</Text>
+                        <Text style={[styles.speaker, { color: sid === k.sid ? colors.background : colors.text }]}>{k.name} · {k.accent}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -91,6 +112,20 @@ export function AtlasVoicePanel() {
           })}
         </View>
       )}
+      {neuralAvailable() && (
+        <View style={card}>
+          <Text style={[styles.h, { color: colors.text }]}>Import a voice</Text>
+          <Text style={[styles.p, { color: colors.textSecondary }]}>
+            Add a voice you downloaded yourself. Atlas plays sherpa-onnx voices: Piper (files named vits-piper-...),
+            Kokoro and KittenTTS, as the .tar.bz2 or .zip from the sherpa-onnx "tts-models" release on GitHub.
+            Listen to Piper voices first at rhasspy.github.io/piper-samples.
+          </Text>
+          <TouchableOpacity testID="voice-import" style={[styles.btn, { borderColor: colors.primary }]} onPress={importFile}>
+            <Text style={{ color: colors.primary }}>Import voice file</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      <VoiceProfilesCard />
       <View style={card}>
         <Text style={[styles.h, { color: colors.text }]}>Phone voice settings</Text>
         <Text style={[styles.p, { color: colors.textSecondary }]}>
@@ -131,8 +166,10 @@ export function AtlasVoicePanel() {
       <View style={card}>
         <Text style={[styles.h, { color: colors.text }]}>Talking to the app</Text>
         <Text style={[styles.p, { color: colors.textSecondary }]}>
-          To talk instead of type, download a speech-to-text (Whisper) model in the Transcription tab. Then tap the
-          phone icon at the top of a chat. Turn on Hands-free for a back-and-forth conversation like a phone call.
+          To talk instead of type, download a speech-to-text (Whisper) model in the Transcription tab. Without one,
+          Atlas uses your phone's own speech recognition (for example Google speech, used by Gboard voice typing),
+          asking it to stay offline; download its offline language in the phone's settings so nothing is sent online.
+          Then tap the phone icon at the top of a chat. Turn on Hands-free for a back-and-forth conversation like a phone call.
         </Text>
       </View>
     </ScrollView>
@@ -149,5 +186,13 @@ const styles = StyleSheet.create({
   pill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16 },
   rowBetween: { flexDirection: 'row', alignItems: 'center' },
   flex: { flex: 1, paddingRight: 10 },
+  name: { fontWeight: '600' },
+  meta: { fontSize: 12 },
+  voiceColumn: { flexDirection: 'column', alignItems: 'stretch' },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  speakers: { flexWrap: 'wrap', marginTop: 10 },
+  speaker: { fontSize: 13 },
+  stepper: { alignItems: 'center', marginTop: 10 },
+  stepperText: { minWidth: 120, textAlign: 'center' },
   voiceRow: { borderWidth: 1, borderRadius: 10, padding: 12, marginTop: 10, flexDirection: 'row', alignItems: 'center' },
 });

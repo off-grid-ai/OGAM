@@ -104,34 +104,6 @@ Add at: Repo → **Settings → Secrets and variables → Actions → New reposi
 
 ---
 
-## Private pro submodule in CI (open-core: don't leak pro source)
-
-The `pro-build` CI job builds the app WITH the private `@offgrid/pro` submodule
-(`off-grid-ai/mobile-pro`). It is gated so the private source can never be reached by a
-public / fork PR:
-
-- Runs **only on `push`** (`if: github.event_name == 'push'`) - never on `pull_request`.
-  Fork PRs get the free/stub build (metro aliases `@offgrid/pro` -> `proStub.js` when
-  `pro/` is absent), which is correct for open-source contributions.
-- Reads `PRO_REPO_TOKEN` from a **protected GitHub Environment** so only maintainer-
-  approved runs can access it.
-
-### One-time GitHub setup for the pro build
-
-1. **Create a fine-grained PAT** - read-only, scoped to `off-grid-ai/mobile-pro` **only**:
-   github.com/settings/tokens?type=beta → Repository access: only `mobile-pro`,
-   Permissions: **Contents: Read-only**. Copy the token.
-2. **Create a protected Environment** - Repo → Settings → Environments → **New
-   environment** named `pro-build`. Add a **Required reviewer** (a maintainer) and/or
-   restrict to protected branches, so the token is only released on approved runs.
-3. **Add the token to that environment** - inside the `pro-build` environment →
-   **Environment secrets** → add `PRO_REPO_TOKEN` = the PAT from step 1. (Environment
-   secret, not a plain repo secret - that's what scopes it to this gated job.)
-
-Why a token at all: submodule checkout of a **private** repo needs auth. Scoping it
-read-only + single-repo + environment-gated means a leak (which the fork rule already
-prevents) still couldn't write or reach anything else.
-
 ## Test it
 
 **Build-only (no upload, no store secrets) - runs in CI now:**
