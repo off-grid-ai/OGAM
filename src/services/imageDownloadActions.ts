@@ -152,11 +152,14 @@ async function cleanupImageModelDir(modelId: string): Promise<void> {
   }
 }
 
-function setMultifileFailed(syntheticId: string, deps: ImageDownloadDeps, message?: string): void {
+/** Keeps the part's own code (disk_full, a native network reason) so the row and the failure
+ *  analytics say why; multifile_failed only when the error carries none. */
+function setMultifileFailed(syntheticId: string, deps: ImageDownloadDeps, error: any): void {
+  const message: string | undefined = error?.message;
   deps.setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(message)));
   useDownloadStore.getState().setStatus(syntheticId, 'failed', {
+    ...failureDetails(error, 'multifile_failed'),
     message: message || 'Multi-file download failed',
-    code: 'multifile_failed',
   });
 }
 
@@ -412,7 +415,7 @@ export async function downloadHuggingFaceModel(
       await cleanupImageModelDir(modelInfo.id);
       return;
     }
-    setMultifileFailed(syntheticId, deps, error?.message);
+    setMultifileFailed(syntheticId, deps, error);
     await cleanupImageModelDir(modelInfo.id);
   } finally {
     clearMultifileRuntime(modelInfo.id);

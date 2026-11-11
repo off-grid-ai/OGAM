@@ -160,9 +160,24 @@ describe('a Hugging Face multi-file download', () => {
 
     expect(row(HF_KEY).status).toBe('failed');
     expect(row(HF_KEY).errorMessage).toBe('Network failed');
+    expect(row(HF_KEY).errorCode).toBe('multifile_failed'); // the part carried no code of its own
     expect(await boundary.fs!.exists(`${imageModelsDir}/test-hf-model`)).toBe(false);
     expect(await registeredIds()).toEqual([]);
     expect(titles()).toEqual(['Download Failed']);
+  });
+
+  it('keeps the native code of the part that failed, so the row says why', async () => {
+    device.serve(UNET_URL, { hold: true });
+
+    const done = actions.downloadHuggingFaceModel(hfModel(), deps());
+    await until(() => device.running().length === 1);
+    await device.fail(device.running()[0], 'Not enough space on the phone', 'disk_full');
+    await done;
+
+    expect(row(HF_KEY).status).toBe('failed');
+    expect(row(HF_KEY).errorCode).toBe('disk_full');
+    expect(row(HF_KEY).errorMessage).toBe('Not enough space on the phone');
+    expect(await registeredIds()).toEqual([]);
   });
 
   it('fails, and does not register, when a part arrives empty', async () => {
