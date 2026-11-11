@@ -254,6 +254,7 @@ export const LearningScreen: React.FC = () => {
               <Text style={[styles.counts, { color }]}>
                 {r.status === 'pass' ? 'Judge passed' : r.status === 'fail' ? 'Judge failed' : 'Pending'}{r.score !== undefined ? ` · ${r.score}/10` : ''} · {new Date(r.at).toLocaleString()}
               </Text>
+              {!isOpen && !!r.sourceList?.length && <Text style={styles.counts}>{r.sourceList.length} sources</Text>}
               {isOpen && <Text style={styles.eventBody} selectable>{markSources(r.text, r.sourceList?.length ?? 0)}</Text>}
               {isOpen && !!r.sourceList?.length && (
                 <View testID={`report-sources-${r.id}`}>

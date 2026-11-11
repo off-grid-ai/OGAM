@@ -41,7 +41,7 @@ it('shows each report in full with the judge\'s verdict, and chats without an ag
     reportLog: [{ id: 'a:1', itemId: 'a', q: 'How long to boil water?', text: long, sources: 'WHO note', at: 1, status: 'pass', score: 8, why: 'Matches the source' }] } } });
   const view = rtl.render(React.createElement(LearningScreen));
   expect(view.getByText('How long to boil water?')).toBeTruthy();
-  expect(view.getByText(/Judge passed it · 8\/10/)).toBeTruthy();
+  expect(view.getByText(/Judge passed · 8\/10/)).toBeTruthy();
   rtl.fireEvent.press(view.getByTestId('learn-report-a:1'));
   expect(view.getByText(/Judge: Matches the source/)).toBeTruthy();
   expect(view.getByText(/Sources it had/)).toBeTruthy();
@@ -92,9 +92,11 @@ it('numbers the sources a report used: small raised numbers in the text and a li
     sourceList: [{ n: 1, title: 'IRS deadlines', kind: 'web', url: 'https://irs.example' }, { n: 2, title: 'Tax guide', kind: 'project' }, { n: 3, title: 'Penalties', kind: 'library' }],
   }] } } });
   const view = rtl.render(React.createElement(LearningScreen));
-  expect(view.getByText(/April 15¹\. REASONING: the penalty is 5%³\./)).toBeTruthy();
+  // Collapsed card shows the source count badge but not the body text.
   expect(view.getByText('3 sources')).toBeTruthy();
+  // Expand the report card, then the body text and full source list become visible.
   rtl.fireEvent.press(view.getByTestId('learn-report-s:1'));
+  expect(view.getByText(/April 15¹\. REASONING: the penalty is 5%³\./)).toBeTruthy();
   expect(view.getByText(/¹ IRS deadlines \(web\) https:\/\/irs.example/)).toBeTruthy();
   expect(view.getByText(/² Tax guide \(project\)/)).toBeTruthy();
   expect(view.getByText(/³ Penalties \(library\)/)).toBeTruthy();
