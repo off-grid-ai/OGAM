@@ -10,12 +10,9 @@ import { activeModelService } from './activeModelService';
 import { makeModelKey } from '../utils/modelKey';
 import { statFile } from '../utils/fileStat';
 import { failureDetails } from '../utils/downloadErrors';
+import { queuedPlaceholderId, rememberStart } from './queuedStarts';
 import type { ModelFile, DownloadedModel } from '../types';
 
-/** Placeholder downloadId for a row that exists only to represent the QUEUED state
- *  before a real native download has been started (which may wait for a concurrency
- *  slot). Reconciled to the real id by download.ts's retryEntry once the start begins. */
-const queuedPlaceholderId = (modelKey: string) => `queued:${modelKey}`;
 
 type CompanionFile = { name: string; url: string; sizeBytes: number; sha256?: string };
 
@@ -110,6 +107,9 @@ export async function startModelDownload(
   // One tap downloads everything the model needs: every part of a split model, its vision projector
   // and its MTP head, on one progress bar.
   const companions = companionFiles(file);
+  // Refused before the native start (no space), the row has nothing to resume: Retry makes this
+  // same start again.
+  rememberStart(modelKey, () => startModelDownload(modelId, file, opts));
 
   // Publish a QUEUED row to the store IMMEDIATELY, before starting the (possibly
   // slot-limited) native download. Without this, a queued download had no store entry
