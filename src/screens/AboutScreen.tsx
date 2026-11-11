@@ -13,6 +13,7 @@ import { appVersionLabel } from '../utils/appVersion';
 import { gatherDiagnostics } from '../atlasTools/diagnostics';
 import { BuildInfo, getBackendDevicesInfo } from 'llama.rn';
 import { ModelGpuTest } from '../components/ModelGpuTest';
+import { AppUpdateCard } from '../components/settings/AppUpdateCard';
 
 
 export const AboutScreen: React.FC = () => {
@@ -92,6 +93,8 @@ export const AboutScreen: React.FC = () => {
             <Icon name="external-link" size={14} color={colors.textMuted} />
           </AnimatedListItem>
         </View>
+
+        <AppUpdateCard />
       </ScrollView>
 
 

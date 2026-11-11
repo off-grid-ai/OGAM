@@ -58,6 +58,8 @@ import {
   ToolsScreen,
 } from '../screens';
 import { KnowledgeScreen } from '../knowledge/KnowledgeScreen';
+import { BackupScreen } from '../screens/BackupScreen';
+import { AssistantAccessScreen } from '../screens/AssistantAccessScreen';
 import { useLayoutClass } from '../hooks/useLayoutClass';
 import {
   RootStackParamList,
@@ -348,6 +350,8 @@ export const AppNavigator: React.FC = () => {
         <RootStack.Screen name="StorageSettings" component={StorageSettingsScreen} />
         <RootStack.Screen name="SecuritySettings" component={SecuritySettingsScreen} />
         <RootStack.Screen name="Appearance" component={AppearanceScreen} />
+        <RootStack.Screen name="Backup" component={BackupScreen} options={{ headerShown: false }} />
+        <RootStack.Screen name="AssistantAccess" component={AssistantAccessScreen} options={{ headerShown: false }} />
         <RootStack.Screen name="Presentations" component={PresentationScreen} />
         <RootStack.Screen
           name="About"

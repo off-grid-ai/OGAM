@@ -2,7 +2,9 @@ package ai.offgridmobile.atlasdevice
 
 import android.content.ContentUris
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Environment
 import android.provider.CalendarContract
@@ -21,6 +23,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import kotlin.math.sqrt
 
 /** Atlas assistant access to the phone: all-files permission, opening files, calendar. */
 class AtlasDeviceModule(private val ctx: ReactApplicationContext) : ReactContextBaseJavaModule(ctx), SensorEventListener {
@@ -73,6 +76,7 @@ class AtlasDeviceModule(private val ctx: ReactApplicationContext) : ReactContext
     private var mag: FloatArray? = null
     private var lastEmit = 0L
     private var listening = false
+    private var pressureListener: SensorEventListener? = null
 
     /** True only if the phone has a magnetometer (a real compass). */
     @ReactMethod
@@ -122,7 +126,15 @@ class AtlasDeviceModule(private val ctx: ReactApplicationContext) : ReactContext
     override fun onSensorChanged(e: SensorEvent) {
         when (e.sensor.type) {
             Sensor.TYPE_ROTATION_VECTOR -> SensorManager.getRotationMatrixFromVector(rot, e.values)
-            Sensor.TYPE_ACCELEROMETER -> { grav = e.values.clone(); if (mag == null) return; if (!SensorManager.getRotationMatrix(rot, null, grav, mag)) return }
+            Sensor.TYPE_ACCELEROMETER -> {
+                val ax = e.values[0].toDouble(); val ay = e.values[1].toDouble(); val az = e.values[2].toDouble()
+                val g = sqrt(ax * ax + ay * ay + az * az) / 9.80665
+                try {
+                    val am = Arguments.createMap(); am.putDouble("x", ax); am.putDouble("y", ay); am.putDouble("z", az); am.putDouble("g", g)
+                    ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java).emit("AtlasAccelerometer", am)
+                } catch (_: Exception) {}
+                grav = e.values.clone(); if (mag == null) return; if (!SensorManager.getRotationMatrix(rot, null, grav, mag)) return
+            }
             Sensor.TYPE_MAGNETIC_FIELD -> { mag = e.values.clone(); if (grav == null) return; if (!SensorManager.getRotationMatrix(rot, null, grav, mag)) return }
             else -> return
         }
@@ -147,6 +159,12 @@ class AtlasDeviceModule(private val ctx: ReactApplicationContext) : ReactContext
         try {
             val map = Arguments.createMap(); map.putDouble("heading", deg)
             ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java).emit("AtlasCompass", map)
+        } catch (_: Exception) {}
+        try {
+            val om = Arguments.createMap()
+            om.putDouble("pitch", Math.toDegrees(orient[1].toDouble()))
+            om.putDouble("roll", Math.toDegrees(orient[2].toDouble()))
+            ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java).emit("AtlasOrientation", om)
         } catch (_: Exception) {}
     }
 
@@ -223,10 +241,53 @@ class AtlasDeviceModule(private val ctx: ReactApplicationContext) : ReactContext
         try { promise.resolve(locMgr.getProviders(true).any { it == android.location.LocationManager.GPS_PROVIDER || it == android.location.LocationManager.NETWORK_PROVIDER }) } catch (_: Exception) { promise.resolve(false) }
     }
 
+    @ReactMethod
+    fun startPressure(promise: Promise) {
+        if (pressureListener != null) { promise.resolve(true); return }
+        val ps = sensors.getDefaultSensor(Sensor.TYPE_PRESSURE)
+        if (ps == null) { promise.resolve(false); return }
+        val l = object : SensorEventListener {
+            override fun onSensorChanged(e: SensorEvent) {
+                val hpa = e.values[0].toDouble()
+                val altM = SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, hpa.toFloat()).toDouble()
+                try {
+                    val pm = Arguments.createMap(); pm.putDouble("hpa", hpa); pm.putDouble("altM", altM)
+                    ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java).emit("AtlasPressure", pm)
+                } catch (_: Exception) {}
+            }
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }
+        sensors.registerListener(l, ps, SensorManager.SENSOR_DELAY_NORMAL)
+        pressureListener = l
+        promise.resolve(true)
+    }
+
+    @ReactMethod
+    fun stopPressure(promise: Promise) {
+        pressureListener?.let { sensors.unregisterListener(it) }
+        pressureListener = null
+        promise.resolve(true)
+    }
+
+    @ReactMethod
+    fun getBatteryTemperature(promise: Promise) {
+        try {
+            val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            val intent = ctx.registerReceiver(null, filter)
+            val temp = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE) ?: Int.MIN_VALUE
+            promise.resolve(if (temp == Int.MIN_VALUE) -999.0 else temp / 10.0)
+        } catch (e: Exception) { promise.resolve(-999.0) }
+    }
+
     @ReactMethod fun addListener(eventName: String) {}
     @ReactMethod fun removeListeners(count: Int) {}
 
-    override fun invalidate() { try { sensors.unregisterListener(this) } catch (_: Exception) {}; try { locListener?.let { locMgr.removeUpdates(it) } } catch (_: Exception) {}; super.invalidate() }
+    override fun invalidate() {
+        try { sensors.unregisterListener(this) } catch (_: Exception) {}
+        try { pressureListener?.let { sensors.unregisterListener(it) }; pressureListener = null } catch (_: Exception) {}
+        try { locListener?.let { locMgr.removeUpdates(it) } } catch (_: Exception) {}
+        super.invalidate()
+    }
 
     /** App storage places: the phone, and any SD card (app folders there need no permission). */
     @ReactMethod
