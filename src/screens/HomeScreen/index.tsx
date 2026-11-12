@@ -47,6 +47,7 @@ import { transcriptionModelName } from '../../services/whisperModels';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useUiModeStore } from '../../stores/uiModeStore';
 import { SLOTS, useSlot } from '../../bootstrap/slotRegistry';
+import { useHasRegisteredScreen } from '../../navigation/screenRegistry';
 import { useOpenSync } from '../../hooks/useOpenSync';
 import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabels';
 import { openSupportEmail } from '../../utils/supportEmail';
@@ -85,6 +86,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const SyncHomeCard = useSlot(SLOTS.homeSyncCard);
   const HomeNotificationsButton = useSlot(SLOTS.homeNotificationsButton);
   const { isSyncUnlocked, openSync, openSyncNotifications } = useOpenSync();
+  // Notes is Pro: without it the row leads to the upgrade screen.
+  const notesUnlocked = useHasRegisteredScreen('Notes');
   const isProActive = useIsProActive();
   const openProTools = useOpenProTools();
 
@@ -353,7 +356,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </AnimatedEntry>
           )}
 
-          {/* After your recent work: Clipboard, Sync, Gallery and feedback in one surface with hairlines
+          {/* After your recent work: Clipboard, Sync, Gallery, Notes and feedback in one surface with hairlines
               (desktop's one surface), not a stack of boxes. Pro's Sync slot renders bare rows. */}
           <AnimatedEntry index={5} staggerMs={50} trigger={focusTrigger}>
             <ListGroup style={styles.linksGroup}>
@@ -384,6 +387,29 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                     videos
                   </Text>
                 </View>
+                <Icon name="chevron-right" size={16} color={colors.textMuted} />
+              </AnimatedPressable>
+              {/* Notes is Pro: a row like its neighbours; without Pro the crown says why it opens the upgrade page. */}
+              <AnimatedPressable
+                style={styles.galleryCard}
+                onPress={() =>
+                  notesUnlocked
+                    ? navigation.navigate('Notes' as never)
+                    : navigation.navigate('ProDetail')
+                }
+                hapticType="selection"
+                testID="home-notes-card"
+                accessibilityRole="button"
+                accessibilityLabel={notesUnlocked ? 'Notes' : 'Notes, part of Off Grid AI Pro'}
+              >
+                <Icon name="file-text" size={18} color={colors.textSecondary} />
+                <View style={styles.galleryCardInfo}>
+                  <Text style={styles.galleryCardTitle}>Notes</Text>
+                  <Text style={styles.galleryCardMeta} numberOfLines={1}>Write privately, with your model's help.</Text>
+                </View>
+                {notesUnlocked ? null : (
+                  <IconMC name="crown" size={14} color={colors.textMuted} />
+                )}
                 <Icon name="chevron-right" size={16} color={colors.textMuted} />
               </AnimatedPressable>
               {/* A row like its neighbours, not a row with a button in it (design philosophy: rhythm). */}

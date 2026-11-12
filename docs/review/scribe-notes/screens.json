@@ -1,0 +1,249 @@
+[
+ {
+  "id": "home",
+  "name": "Home: Notes row",
+  "group": "Notes",
+  "what": "Home lists Notes under Gallery: 'Write privately, with your model's help.'",
+  "file": "screens/v/home-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Redesign merge",
+    "at": "2026-11-11T07:40:00Z",
+    "file": "screens/v/home-1.jpg"
+   }
+  ]
+ },
+ {
+  "id": "notes-list",
+  "name": "Notes list",
+  "group": "Notes",
+  "what": "Tap Notes on Home: one glass list on the living field, rows animate in, each with title, what it says and when.",
+  "file": "screens/v/notes-list-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Redesign merge",
+    "at": "2026-11-11T07:40:00Z",
+    "file": "screens/v/notes-list-1.jpg",
+    "clip": "screens/v/notes-list-1.mp4"
+   }
+  ],
+  "clip": "screens/v/notes-list-1.mp4"
+ },
+ {
+  "id": "notes-search",
+  "name": "Search notes",
+  "group": "Notes",
+  "what": "Search reads titles and text; no match says so in one line, and the field clears with one tap.",
+  "file": "screens/v/notes-search-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Redesign merge",
+    "at": "2026-11-11T07:40:00Z",
+    "file": "screens/v/notes-search-1.jpg",
+    "clip": "screens/v/notes-search-1.mp4"
+   }
+  ],
+  "clip": "screens/v/notes-search-1.mp4"
+ },
+ {
+  "id": "note-new",
+  "name": "New note",
+  "group": "Notes",
+  "what": "New answers at once and opens an empty note, focused, with the format bar over the keyboard.",
+  "file": "screens/v/note-new-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Redesign merge",
+    "at": "2026-11-11T07:40:00Z",
+    "file": "screens/v/note-new-1.jpg",
+    "clip": "screens/v/note-new-1.mp4"
+   }
+  ],
+  "clip": "screens/v/note-new-1.mp4"
+ },
+ {
+  "id": "note-write",
+  "name": "Writing a note",
+  "group": "Notes",
+  "what": "Typing into the note; the first line becomes its title in the list.",
+  "file": "screens/v/note-write-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Redesign merge",
+    "at": "2026-11-11T07:40:00Z",
+    "file": "screens/v/note-write-1.jpg",
+    "clip": "screens/v/note-write-1.mp4"
+   }
+  ],
+  "clip": "screens/v/note-write-1.mp4"
+ },
+ {
+  "id": "notes-return",
+  "name": "Back to the list",
+  "group": "Notes",
+  "what": "Back from a note: the list shows the edit at the top.",
+  "file": "screens/v/notes-return-2.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Spinner stuck",
+    "at": "2026-11-11T07:40:00Z",
+    "file": "screens/v/notes-return-1.jpg",
+    "clip": "screens/v/notes-return-1.mp4",
+    "what": "Before: a refresh spinner turned above the list for good after coming back from a note (iOS)."
+   },
+   {
+    "v": 2,
+    "label": "Spinner only on pull",
+    "at": "2026-11-11T07:58:00Z",
+    "file": "screens/v/notes-return-2.jpg",
+    "clip": "screens/v/notes-return-2.mp4",
+    "what": "After: the list updates silently on return; the spinner shows only for a pull."
+   }
+  ],
+  "clip": "screens/v/notes-return-2.mp4"
+ },
+ {
+  "id": "scribe-underlines",
+  "name": "Scribe underlines in chat",
+  "group": "Scribe",
+  "what": "Typing in the chat composer: Scribe underlines spelling and grammar, on the phone, no network.",
+  "file": "screens/v/scribe-underlines-2.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Spelling silent",
+    "at": "2026-11-11T07:40:00Z",
+    "file": "screens/v/scribe-underlines-1.jpg",
+    "what": "Before: only rule checks (lowercase i); misspellings were not flagged in the dev app, the dictionary never loaded."
+   },
+   {
+    "v": 2,
+    "label": "Spelling flagged",
+    "at": "2026-11-11T07:58:00Z",
+    "file": "screens/v/scribe-underlines-2.jpg",
+    "clip": "screens/v/scribe-underlines-2.mp4",
+    "what": "After: recieved, mesage, definately, tomorow are underlined."
+   }
+  ],
+  "clip": "screens/v/scribe-underlines-2.mp4"
+ },
+ {
+  "id": "scribe-fixbar",
+  "name": "Fix bar",
+  "group": "Scribe",
+  "what": "Caret on a flagged word: up to three fixes, Add to dictionary, Ignore.",
+  "file": "screens/v/scribe-fixbar-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Redesign merge",
+    "at": "2026-11-11T07:58:00Z",
+    "file": "screens/v/scribe-fixbar-1.jpg"
+   }
+  ]
+ },
+ {
+  "id": "scribe-fixed",
+  "name": "A fix applied",
+  "group": "Scribe",
+  "what": "Tap a fix: the word changes and the bar goes, since the caret is now on clean text.",
+  "file": "screens/v/scribe-fixed-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Redesign merge",
+    "at": "2026-11-11T07:58:00Z",
+    "file": "screens/v/scribe-fixed-1.jpg",
+    "clip": "screens/v/scribe-fixed-1.mp4"
+   }
+  ],
+  "clip": "screens/v/scribe-fixed-1.mp4"
+ },
+ {
+  "id": "scribe-select",
+  "name": "Select All: iOS menu over Improve",
+  "group": "Scribe",
+  "what": "After Select All, iOS puts its edit menu over the Improve bar. A tap in the selection hides it.",
+  "file": "screens/v/scribe-select-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Open question",
+    "at": "2026-11-11T07:58:00Z",
+    "file": "screens/v/scribe-select-1.jpg"
+   }
+  ]
+ },
+ {
+  "id": "scribe-selected",
+  "name": "Improve on a selection",
+  "group": "Scribe",
+  "what": "With text selected, the bar offers Improve.",
+  "file": "screens/v/scribe-selected-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Redesign merge",
+    "at": "2026-11-11T07:58:00Z",
+    "file": "screens/v/scribe-selected-1.jpg"
+   }
+  ]
+ },
+ {
+  "id": "improve",
+  "name": "Improve",
+  "group": "Scribe",
+  "what": "Improve: the quick fix first ('5 fixed'), then the model's version streams in. Change and Tone chips, Another version, a quicker-model hint.",
+  "file": "screens/v/improve-2.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Think tags leaked",
+    "at": "2026-11-11T07:40:00Z",
+    "file": "screens/v/improve-1.jpg",
+    "clip": "screens/v/improve-1.mp4",
+    "what": "Before: K2 Horizon's empty <ifm|think></ifm|think> streamed into the version until it finished."
+   },
+   {
+    "v": 2,
+    "label": "Clean stream",
+    "at": "2026-11-11T07:58:00Z",
+    "file": "screens/v/improve-2.jpg",
+    "clip": "screens/v/improve-2.mp4",
+    "what": "After: the version streams with no tags."
+   }
+  ],
+  "clip": "screens/v/improve-2.mp4"
+ },
+ {
+  "id": "improve-replace",
+  "name": "Replace",
+  "group": "Scribe",
+  "what": "Replace puts the picked version in the composer; nothing stale stays selected.",
+  "file": "screens/v/improve-replace-2.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Stale selection",
+    "at": "2026-11-11T07:40:00Z",
+    "file": "screens/v/improve-replace-1.jpg",
+    "what": "Before: after a Replace, Improve opened on 'tomorro', the old range on the new text."
+   },
+   {
+    "v": 2,
+    "label": "Caret after the version",
+    "at": "2026-11-11T07:58:00Z",
+    "file": "screens/v/improve-replace-2.jpg",
+    "clip": "screens/v/improve-replace-2.mp4",
+    "what": "After: the caret sits after the version; Improve is offered only for a new selection."
+   }
+  ],
+  "clip": "screens/v/improve-replace-2.mp4"
+ }
+]

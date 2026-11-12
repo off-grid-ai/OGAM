@@ -2422,6 +2422,34 @@ PODS:
     - Yoga
   - react-native-voice (3.2.4):
     - React-Core
+  - react-native-webview (14.0.1):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
   - react-native-zeroconf (0.14.0):
     - React-Core
   - React-NativeModulesApple (0.83.1):
@@ -3708,6 +3736,7 @@ DEPENDENCIES:
   - react-native-tcp-socket (from `../node_modules/react-native-tcp-socket`)
   - react-native-video (from `../node_modules/react-native-video`)
   - "react-native-voice (from `../node_modules/@react-native-voice/voice`)"
+  - react-native-webview (from `../node_modules/react-native-webview`)
   - react-native-zeroconf (from `../node_modules/react-native-zeroconf`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-networking (from `../node_modules/react-native/ReactCommon/react/networking`)
@@ -3894,6 +3923,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-video"
   react-native-voice:
     :path: "../node_modules/@react-native-voice/voice"
+  react-native-webview:
+    :path: "../node_modules/react-native-webview"
   react-native-zeroconf:
     :path: "../node_modules/react-native-zeroconf"
   React-NativeModulesApple:
@@ -4007,7 +4038,7 @@ SPEC CHECKSUMS:
   FBLazyVector: 309703e71d3f2f1ed7dc7889d58309c9d77a95a4
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
-  hermes-engine: f85e00f9677c37fbf39c61d75ec89a2d30350643
+  hermes-engine: 3de70ea2100f1780402cf146bb8110a0cdb2f34e
   llama-rn: 53a01726396fa990e5936defd65b2dab2f327889
   MMKV: 86859fdfa2b0b21db1fd6e48788474a6416a2c77
   MMKVCore: 3d16ce9f7d411e135020915fde98a056859a1efa
@@ -4055,7 +4086,7 @@ SPEC CHECKSUMS:
   react-native-blob-util: 0889ba082222c5b3372cf632b825fe575c1e1d9a
   react-native-document-picker: dc2d83366e47e89e7c51e8a41eab99c1d54e941c
   react-native-document-viewer: 8c6ed07e7e27352743fa98e8dd6d288ad925b884
-  react-native-executorch: fc6d2954450df7779a839f82c87ab6cd584d5e23
+  react-native-executorch: 9594c3967dbb8c8ce562623050e2502a16bb710a
   react-native-get-random-values: d16467cf726c618e9c7a8c3c39c31faa2244bbba
   react-native-image-picker: 0314366753615115fa55c3cc937ac44cb7e75702
   react-native-keyboard-controller: 7534b5a39d1e8b2b79f86e8e998ed71c7154f69f
@@ -4064,6 +4095,7 @@ SPEC CHECKSUMS:
   react-native-tcp-socket: 7c7e53a07f122ecf00fb3626684bc0ca82c4f044
   react-native-video: 61841250a61ed594812b0bd4ce3f03549d574efc
   react-native-voice: 908a0eba96c8c3d643e4f98b7232c6557d0a6f9c
+  react-native-webview: 254a8650a0213d9adcb2d5103a245c701edd9649
   react-native-zeroconf: eb2e5584308f20f5fc3eb0cea2ceafbbd345b48b
   React-NativeModulesApple: a2c3d2cbec893956a5b3e4060322db2984fff75b
   React-networking: 3f98bd96893a294376e7e03730947a08d474c380
