@@ -23,6 +23,7 @@
 #            ANDROID_KEY_PASSWORD, PLAY_STORE_JSON_KEY
 #   iOS:     ASC_API_KEY_P8, ASC_KEY_ID, ASC_ISSUER_ID (TestFlight upload)
 #            IOS_CERTIFICATE_P12, IOS_CERTIFICATE_PASSWORD, IOS_PROVISION_PROFILE,
+#            IOS_SHARE_PROVISION_PROFILE (the Share -> Improve extension),
 #            KEYCHAIN_PASSWORD (signing)
 name: UAT build (dev → internal testers)
 
@@ -218,6 +219,7 @@ jobs:
           IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
           IOS_PROVISION_PROFILE: ${{ secrets.IOS_PROVISION_PROFILE }}
+          IOS_SHARE_PROVISION_PROFILE: ${{ secrets.IOS_SHARE_PROVISION_PROFILE }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: bash scripts/uat.sh --build-only --ios
       - name: Save Xcode module cache
@@ -306,6 +308,7 @@ jobs:
           IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
           IOS_PROVISION_PROFILE: ${{ secrets.IOS_PROVISION_PROFILE }}
+          IOS_SHARE_PROVISION_PROFILE: ${{ secrets.IOS_SHARE_PROVISION_PROFILE }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: bash scripts/uat.sh --upload-only --ios
 
