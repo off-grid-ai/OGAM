@@ -297,6 +297,19 @@ platform :ios do
         code_sign_identity: "Apple Distribution",
         profile_name: profile_name
       )
+      # The Share -> Improve extension is its own signed bundle with its own App Store profile.
+      share_profile = ENV["OFFGRID_SHARE_PROFILE_NAME"]
+      UI.user_error!("IOS_SHARE_PROVISION_PROFILE is missing: the ImproveShare extension cannot be signed") unless share_profile
+      update_code_signing_settings(
+        path: "ios/OffgridMobile.xcodeproj",
+        targets: ["ImproveShare"],
+        build_configurations: ["Release"],
+        use_automatic_signing: false,
+        team_id: APPLE_TEAM_ID,
+        bundle_identifier: "ai.offgridmobile.ImproveShare",
+        code_sign_identity: "Apple Distribution",
+        profile_name: share_profile
+      )
       build_app(
         workspace: "ios/OffgridMobile.xcworkspace",
         scheme: "OffgridMobile",
@@ -308,7 +321,10 @@ platform :ios do
           teamID: APPLE_TEAM_ID,
           signingStyle: "manual",
           signingCertificate: "Apple Distribution",
-          provisioningProfiles: { "ai.offgridmobile" => profile_name }
+          provisioningProfiles: {
+            "ai.offgridmobile" => profile_name,
+            "ai.offgridmobile.ImproveShare" => share_profile
+          }
         },
         output_directory: "build",
         output_name: "OffgridMobile.ipa"
@@ -536,6 +552,14 @@ platform :ios do
     UI.user_error!("IOS_PROVISION_PROFILE is not a readable provisioning profile") unless profile && profile["Name"]
     ENV["OFFGRID_PROFILE_NAME"] = profile["Name"]
     UI.message("Signing manually with profile '#{profile['Name']}' (expires #{profile['ExpirationDate']})")
+    if ENV["IOS_SHARE_PROVISION_PROFILE"].to_s.strip != ""
+      share_path = write_tmp_b64(ENV["IOS_SHARE_PROVISION_PROFILE"], "share.mobileprovision")
+      install_provisioning_profile(path: share_path)
+      share = Plist.parse_xml(`security cms -D -i #{share_path.shellescape}`)
+      UI.user_error!("IOS_SHARE_PROVISION_PROFILE is not a readable provisioning profile") unless share && share["Name"]
+      ENV["OFFGRID_SHARE_PROFILE_NAME"] = share["Name"]
+      UI.message("ImproveShare signs with profile '#{share['Name']}' (expires #{share['ExpirationDate']})")
+    end
 
     # Apple Distribution certificates chain to Apple's WWDR G3 intermediate. A runner without it
     # holds the identity but treats it as untrusted, so codesign sees no valid identity.
