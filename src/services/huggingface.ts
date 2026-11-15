@@ -45,9 +45,8 @@ class HuggingFaceService {
 
   /**
    * What the person searches: the shared search (@offgrid/models), so the phone and the desktop
-   * show the same results. Uploads that are hidden by rule (abliterated, uncensored and the like)
-   * never appear; every upload of one model is one result, led by the most trusted one, with the
-   * others counted as variants; a model a newer release replaces goes last.
+   * show the same results. Every upload of one model is one result, led by the most trusted one,
+   * with the others counted as variants; a model a newer release replaces goes last.
    */
   async searchModels(
     query: string = '',

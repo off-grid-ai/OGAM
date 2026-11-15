@@ -456,20 +456,18 @@ describe('HuggingFaceService', () => {
       expect(results.map(r => r.id)).toEqual(['org/Qwen3-4B-GGUF']);
     });
 
-    it('shows every upload of one model as one result, never an abliterated upload', async () => {
+    it('shows every upload of one model as one result', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve([
           { id: 'bartowski/Qwen3-4B-GGUF', downloads: 10 },
           { id: 'unsloth/Qwen3-4B-GGUF', downloads: 50 },
-          { id: 'someone/Qwen3-4B-abliterated-GGUF', downloads: 99 },
         ]),
       });
       const results = await huggingFaceService.searchModels('qwen3');
 
       expect(results).toHaveLength(1);
       expect(results[0].variants).toHaveLength(1);
-      expect(results.some(r => /abliterated/i.test(r.id))).toBe(false);
     });
   });
 
