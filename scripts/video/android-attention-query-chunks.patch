@@ -1,5 +1,5 @@
 diff --git a/src/core/ggml_extend.cpp b/src/core/ggml_extend.cpp
-index 041730c..4f7d015 100644
+index 041730c..6524b82 100644
 --- a/src/core/ggml_extend.cpp
 +++ b/src/core/ggml_extend.cpp
 @@ -694,6 +694,46 @@ ggml_tensor* ggml_ext_attention_ext(GGMLRunnerContext* runner_ctx,
@@ -39,10 +39,10 @@ index 041730c..4f7d015 100644
 +                    q_in->nb[1], q_in->nb[2], q_in->nb[3], start * q_in->nb[1]));
 +                auto part = ggml_flash_attn_ext(ctx, query, k_in, v_in, nullptr, scale / kv_scale, 0, 0);
 +                if (!ggml_backend_supports_op(backend, part)) return nullptr;
-+                ggml_flash_attn_ext_set_prec(part, GGML_PREC_F32);
++                ggml_prec_set_acc(part, GGML_PREC_F32);
 +                joined = joined ? ggml_concat(ctx, joined, part, 2) : part;
 +            }
-+            if (kv_scale != 1.0f) joined = ggml_ext_scale(ctx, joined, 1.0f / kv_scale);
++            if (kv_scale != 1.0f) joined = ggml_ext_scale(runner_ctx, joined, 1.0f / kv_scale);
 +            return joined;
 +        }
 +#endif
