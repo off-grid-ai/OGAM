@@ -1,8 +1,8 @@
 diff --git a/include/stable-diffusion.h b/include/stable-diffusion.h
-index f4ea0ea..658f377 100644
+index 3a06aea..80b9a7a 100644
 --- a/include/stable-diffusion.h
 +++ b/include/stable-diffusion.h
-@@ -492,10 +492,16 @@ typedef struct {
+@@ -515,6 +515,9 @@ typedef struct {
      int sample_pass;
      int total_steps;
  } sd_preview_info_t;
@@ -11,8 +11,11 @@ index f4ea0ea..658f377 100644
 +typedef void (*sd_video_decoded_frame_cb_t)(const sd_image_t* frame, void* data);
  typedef bool (*sd_graph_eval_callback_t)(struct ggml_tensor* t, bool ask, void* user_data);
  
- SD_API void sd_set_log_callback(sd_log_cb_t sd_log_cb, void* data);
- SD_API void sd_set_progress_callback(sd_progress_cb_t cb, void* data);
+ // Resolves <image:source> markers. Pixels are borrowed and copied before the
+@@ -529,6 +532,9 @@ SD_API void sd_set_progress_callback(sd_progress_cb_t cb, void* data);
+ // total == 0 means unknown; sample_pass counts from 1 since callback registration.
+ // Register/clear only while the context is idle. Passing nullptr clears the callback.
+ SD_API void sd_set_generation_progress_callback(sd_ctx_t* ctx, sd_generation_progress_cb_t cb, void* data);
 +// Reports final video decode sections and the first complete frame, without an extra decode.
 +// total == 0 means the section count is not yet known. Does not report sampling previews.
 +SD_API void sd_set_video_decode_callback(sd_video_decode_progress_cb_t progress, sd_video_decoded_frame_cb_t frame, void* data);
@@ -20,7 +23,7 @@ index f4ea0ea..658f377 100644
  // negative interval previews only completed logical step -interval. Zero previews the final
  // completed step of the first sampling pass (base-resolution or high-noise).
 diff --git a/src/core/util.cpp b/src/core/util.cpp
-index a691b42..8c5aead 100644
+index 9de1ace..1f2707c 100644
 --- a/src/core/util.cpp
 +++ b/src/core/util.cpp
 @@ -373,6 +373,46 @@ int32_t sd_get_num_physical_cores() {
@@ -113,10 +116,10 @@ index 0929f60..2995514 100644
  void* sd_get_progress_callback_data();
  
 diff --git a/src/model/vae/wan_vae.hpp b/src/model/vae/wan_vae.hpp
-index 6b94bcb..4f49f18 100644
+index d44fe92..473e9fd 100644
 --- a/src/model/vae/wan_vae.hpp
 +++ b/src/model/vae/wan_vae.hpp
-@@ -1517,6 +1517,9 @@ namespace WAN {
+@@ -1502,6 +1502,9 @@ namespace WAN {
              free_cache_ctx_and_buffer();
              ae.clear_cache();
  
@@ -126,7 +129,7 @@ index 6b94bcb..4f49f18 100644
              auto output = process_vae_temporal_tiles(input, plan, [&](const sd::Tensor<float>& input_tile, const VAETemporalTile& tile) {
                  LOG_VERBOSE("Wan VAE temporal tile %d/%d: latent frames [%lld, %lld)",
                              tile.index + 1,
-@@ -1526,9 +1529,11 @@ namespace WAN {
+@@ -1511,9 +1514,11 @@ namespace WAN {
                  auto get_graph = [&]() -> ggml_cgraph* {
                      return build_temporal_tile_graph(input_tile, static_cast<int>(tile.start), config.decode_frames);
                  };
@@ -140,10 +143,10 @@ index 6b94bcb..4f49f18 100644
  
              free_cache_ctx_and_buffer();
 diff --git a/src/pipeline/video.cpp b/src/pipeline/video.cpp
-index a07b931..edabed1 100644
+index ab64540..9e28eeb 100644
 --- a/src/pipeline/video.cpp
 +++ b/src/pipeline/video.cpp
-@@ -1285,7 +1285,11 @@ namespace sd::pipeline {
+@@ -1288,7 +1288,11 @@ namespace sd::pipeline {
                      (int)video_latent.shape()[3]);
          // auto z = sd::load_tensor_from_file_as_tensor<float>("ltx_vae_z.bin");
          int64_t t4            = ggml_time_ms();
@@ -156,7 +159,7 @@ index a07b931..edabed1 100644
          int64_t t5            = ggml_time_ms();
          LOG_INFO("decode_first_stage completed, taking %.2fs", (t5 - t4) * 1.0f / 1000);
          if (vid.empty()) {
-@@ -1312,6 +1316,7 @@ namespace sd::pipeline {
+@@ -1315,6 +1319,7 @@ namespace sd::pipeline {
  
          for (int64_t i = 0; i < vid.shape()[2]; i++) {
              result_images[i] = tensor_to_sd_image(vid, static_cast<int>(i));

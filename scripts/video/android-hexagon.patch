@@ -1,5 +1,5 @@
 diff --git a/src/ggml-hexagon/CMakeLists.txt b/src/ggml-hexagon/CMakeLists.txt
-index 845b922..0a9f237 100644
+index fea5770c..bc967f31 100644
 --- a/src/ggml-hexagon/CMakeLists.txt
 +++ b/src/ggml-hexagon/CMakeLists.txt
 @@ -1,3 +1,9 @@
@@ -13,20 +13,33 @@ index 845b922..0a9f237 100644
  file(TO_CMAKE_PATH "${HEXAGON_TOOLS_ROOT}" HEXAGON_TOOLS_ROOT)
  
 diff --git a/src/ggml-hexagon/ggml-hexagon.cpp b/src/ggml-hexagon/ggml-hexagon.cpp
-index 9a35002..0ca4222 100644
+index 03da443c..fc018678 100644
 --- a/src/ggml-hexagon/ggml-hexagon.cpp
 +++ b/src/ggml-hexagon/ggml-hexagon.cpp
-@@ -3887,7 +3887,12 @@ void ggml_hexagon_session::allocate(const ggml_hexagon_device_config & config) n
-     char session_uri[256];
-     {
-         char htp_uri[256];
--        snprintf(htp_uri, sizeof(htp_uri), "file:///libggml-htp-v%u.so?htp_iface_skel_handle_invoke&_modver=1.0", opt_arch);
-+        const char * video_htp_dir = getenv("OFFGRID_VIDEO_HTP_DIR");
-+        if (video_htp_dir && *video_htp_dir) {
-+            snprintf(htp_uri, sizeof(htp_uri), "file:///liboffgrid-video-htp-v%u.so?htp_iface_skel_handle_invoke&_modver=1.0", opt_arch);
-+        } else {
-+            throw std::runtime_error("Video Hexagon runtime directory is not configured");
-+        }
+@@ -2117,8 +2117,15 @@ void ggml_hexagon_session::allocate(const ggml_hexagon_device_config & config) n
+         }
+     }
  
-         struct remote_rpc_get_uri u = {};
-         u.session_id      = this->session_id;
++    // Off Grid: the video runtime ships its DSP library under its own name, so it never loads the
++    // llama.cpp engine's libggml-htp, and only once the app has configured where it lives.
++    const char * video_htp_dir = getenv("OFFGRID_VIDEO_HTP_DIR");
++    if (!video_htp_dir || !*video_htp_dir) {
++        throw std::runtime_error("Video Hexagon runtime directory is not configured");
++    }
++
+     auto open_session = [&](const std::string & prefix, std::string & uri_out) -> int {
+-        const std::string htp_uri = prefix + "libggml-htp-v" + std::to_string(opt_arch) +
++        const std::string htp_uri = prefix + "liboffgrid-video-htp-v" + std::to_string(opt_arch) +
+                                     ".so?htp_iface_skel_handle_invoke&_modver=1.0";
+ 
+         std::vector<char> session_uri(htp_uri.size() + 256);
+@@ -2145,7 +2152,8 @@ void ggml_hexagon_session::allocate(const ggml_hexagon_device_config & config) n
+         return htp_iface_open(session_uri.data(), &this->handle);
+     };
+ 
+-    const std::string lib_dir = htp_lib_dir();
++    // Off Grid: the video DSP library lives where the app put it, never beside another engine.
++    const std::string lib_dir = video_htp_dir;
+ 
+     std::string session_uri;
+     int err = AEE_EFAILED;

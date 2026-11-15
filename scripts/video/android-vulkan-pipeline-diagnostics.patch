@@ -1,10 +1,11 @@
+diff --git a/src/ggml-vulkan/ggml-vulkan.cpp b/src/ggml-vulkan/ggml-vulkan.cpp
+index ffa1c242..4b4c7767 100644
 --- a/src/ggml-vulkan/ggml-vulkan.cpp
 +++ b/src/ggml-vulkan/ggml-vulkan.cpp
-@@ -586,6 +586,21 @@
-     GGML_ASSERT(parameter_count > 0);
+@@ -608,6 +608,21 @@ static void ggml_vk_create_pipeline_func(vk_device& device, vk_pipeline& pipelin
      GGML_ASSERT(parameter_count <= MAX_PARAMETER_COUNT);
      GGML_ASSERT(wg_denoms[0] > 0 && wg_denoms[1] > 0 && wg_denoms[2] > 0); // NOLINT
-+
+ 
 +#ifdef __ANDROID__
 +    // The Adreno compiler can terminate the process inside pipeline creation,
 +    // before Vulkan can return an error. Record the lazy shader variant first.
@@ -19,6 +20,7 @@
 +                      require_full_subgroups ? 1 : 0, spv_size);
 +    }
 +#endif
- 
++
      vk::ShaderModuleCreateInfo shader_module_create_info({}, spv_size, reinterpret_cast<const uint32_t *>(spv_data));
  
+     // Patch SPIR-V to enable supported FP16 float controls, avoiding the need

@@ -1,6 +1,8 @@
+diff --git a/src/core/ggml_extend.cpp b/src/core/ggml_extend.cpp
+index 041730c..4f7d015 100644
 --- a/src/core/ggml_extend.cpp
 +++ b/src/core/ggml_extend.cpp
-@@ -721,6 +721,46 @@
+@@ -694,6 +694,46 @@ ggml_tensor* ggml_ext_attention_ext(GGMLRunnerContext* runner_ctx,
              mask_in = ggml_cast(ctx, mask_in, GGML_TYPE_F16);
          }
  
@@ -47,9 +49,11 @@
          auto out = ggml_flash_attn_ext(ctx, q_in, k_in, v_in, mask_in, scale / kv_scale, 0, 0);
          if (!ggml_backend_supports_op(backend, out)) {
              return nullptr;
+diff --git a/src/model/diffusion/wan.hpp b/src/model/diffusion/wan.hpp
+index 124020e..bfcf802 100644
 --- a/src/model/diffusion/wan.hpp
 +++ b/src/model/diffusion/wan.hpp
-@@ -988,7 +988,25 @@
+@@ -991,7 +991,25 @@ namespace WAN {
                                   float vace_strength                             = 1.f,
                                   const sd::Tensor<float>& audio_embed_tensor     = {},
                                   const sd::Tensor<float>& ref_latent_tensor      = {}) {

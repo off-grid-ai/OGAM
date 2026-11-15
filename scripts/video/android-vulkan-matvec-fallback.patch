@@ -1,6 +1,8 @@
+diff --git a/src/ggml-vulkan/ggml-vulkan.cpp b/src/ggml-vulkan/ggml-vulkan.cpp
+index 4b4c7767..e263e2fd 100644
 --- a/src/ggml-vulkan/ggml-vulkan.cpp
 +++ b/src/ggml-vulkan/ggml-vulkan.cpp
-@@ -15333,6 +15333,33 @@
+@@ -16732,6 +16732,33 @@ static bool ggml_backend_vk_device_supports_op(ggml_backend_dev_t dev, const ggm
          case GGML_OP_MUL_MAT_ID:
              {
                  ggml_type src0_type = op->src[0]->type;
@@ -32,5 +34,5 @@
 +                }
 +#endif
                  if (src0_type == GGML_TYPE_I8) {
-                     return op->op == GGML_OP_MUL_MAT &&
-                            ggml_vk_can_use_mul_mat_i8_tensorwise(device, op);
+                     return false;
+                 }

@@ -1,6 +1,8 @@
+diff --git a/src/ggml-vulkan/ggml-vulkan.cpp b/src/ggml-vulkan/ggml-vulkan.cpp
+index 0c926c90..ffa1c242 100644
 --- a/src/ggml-vulkan/ggml-vulkan.cpp
 +++ b/src/ggml-vulkan/ggml-vulkan.cpp
-@@ -146,6 +146,15 @@
+@@ -165,6 +165,15 @@ bool ggml_vk_lightning_indexer_k_type_supported(ggml_type type) {
      return std::find(lightning_indexer_k_types.begin(), lightning_indexer_k_types.end(), type) != lightning_indexer_k_types.end();
  }
  void ggml_vk_print_device_fault_info(const vk_device& device) {
