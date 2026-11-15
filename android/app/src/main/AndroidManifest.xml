@@ -117,6 +117,21 @@
         </intent-filter>
       </activity>
 
+      <!-- Scribe "Improve" in the selection menu: the app shows better versions and the chosen one
+           replaces the selection in the calling app. Stays open, invisible, until then. -->
+      <activity
+          android:name="ai.offgridmobile.scribe.ImproveTextActivity"
+          android:label="@string/improve_text_action_label"
+          android:exported="true"
+          android:excludeFromRecents="true"
+          android:theme="@android:style/Theme.Translucent.NoTitleBar">
+        <intent-filter>
+          <action android:name="android.intent.action.PROCESS_TEXT" />
+          <category android:name="android.intent.category.DEFAULT" />
+          <data android:mimeType="text/plain" />
+        </intent-filter>
+      </activity>
+
 <!-- Receiver for background download completion events -->
       <receiver
           android:name=".download.DownloadCompleteBroadcastReceiver"

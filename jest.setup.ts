@@ -61,6 +61,11 @@ jest.mock('react-native-keyboard-controller', () =>
   require('react-native-keyboard-controller/jest'),
 );
 
+// The WebView is a device boundary: Notes' editor page runs in it. Any test that loads Pro (the
+// licensed app harness) imports the Notes screens, and the real module reaches for its native half.
+// Behind it, the real editor page runs in jsdom, as the Notes tests use it.
+jest.mock('react-native-webview', () => require('./__tests__/harness/noteWebView').webViewModule());
+
 // react-native-edge-to-edge drives the system bars natively; stub its components
 // so tests rendering App don't reach the native module.
 jest.mock('react-native-edge-to-edge', () => ({

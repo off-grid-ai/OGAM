@@ -23,6 +23,7 @@ import { failureDetails } from '../../../utils/downloadErrors';
 import { mapStoreStatus } from '../storeStatus';
 import { uniformDownloadId } from '../uniformId';
 import { startModelDownload } from '../../startModelDownload';
+import { restartNeverStarted } from '../../queuedStarts';
 import type { DownloadParams } from '../../backgroundDownloadTypes';
 import type { ModelFile } from '../../../types';
 import type { DownloadProvider, ModelDownload } from '../types';
@@ -160,6 +161,8 @@ export const textProvider: DownloadProvider = {
   async retry(id: string): Promise<void> {
     const entry = findEntry(keyOf(id));
     if (!entry) return;
+    // Never reached the downloader (refused for space): nothing to resume, so it starts again.
+    if (await restartNeverStarted(entry)) return;
     if (entry.errorCode === 'finalize_failed' && entry.downloadId) {
       // The download finished and saving it failed: save it again from the bytes on disk. The native
       // row is completed, so a native retry refused it and the person had to download it all again.

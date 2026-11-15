@@ -4,6 +4,7 @@ import { BackgroundDownloadInfo, BackgroundDownloadStatus } from '../types';
 import logger from '../utils/logger';
 import { downloadEventError } from '../utils/downloadErrors';
 import { assertFreeSpace } from './freeSpace';
+import { startReachedDownloader } from './queuedStarts';
 import { serializeQueue, saveQueuedDownloads } from './queuedDownloadPersistence';
 import type {
   DownloadParams,
@@ -180,6 +181,8 @@ class BackgroundDownloadService {
       sha256: params.sha256,
       hideNotification: params.hideNotification ?? false,
     });
+    // A transfer now exists: from here on Retry resumes it rather than starting it again.
+    startReachedDownloader(params.modelKey);
     return {
       downloadId: result.downloadId,
       fileName: result.fileName,

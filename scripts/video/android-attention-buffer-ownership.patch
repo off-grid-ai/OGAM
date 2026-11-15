@@ -1,8 +1,8 @@
 diff --git a/src/core/ggml_extend.cpp b/src/core/ggml_extend.cpp
-index d9a06c6..e99525e 100644
+index 809eaa0..041730c 100644
 --- a/src/core/ggml_extend.cpp
 +++ b/src/core/ggml_extend.cpp
-@@ -797,11 +797,21 @@ ggml_tensor* ggml_ext_attention_ext(ggml_context* ctx,
+@@ -775,11 +775,21 @@ ggml_tensor* ggml_ext_attention_ext(GGMLRunnerContext* runner_ctx,
  
          auto kq = ggml_mul_mat(ctx, k, q);  // [N * n_head, L_q, L_k]
          ggml_prec_set_acc(kq, GGML_PREC_F32);

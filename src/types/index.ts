@@ -109,6 +109,8 @@ interface DownloadedModelBase {
   credibility?: ModelCredibility;
   /** Absent for local imports (no upstream) and for records written before this field existed. */
   origin?: ModelOrigin;
+  /** False when the model card says the model does not reason; unknown until the card is read. */
+  reasoning?: boolean;
 }
 
 export interface LlamaDownloadedModel extends DownloadedModelBase {

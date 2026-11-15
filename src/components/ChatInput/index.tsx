@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useStopTapGuard } from './useStopTapGuard';
 import { View, Text, TextInput, Animated, Platform, ActionSheetIOS } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
@@ -24,6 +24,7 @@ import { useRemoteServerStore } from '../../stores/remoteServerStore';
 import { remoteServerCapabilities } from '../../types/remoteServer';
 import { useUiModeStore } from '../../stores';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import { videoSeam } from '../../bootstrap/videoSeam';
 import { hardwareService } from '../../services/hardware';
 import { bestInstalledVideoModel, videoPacksForPhone } from '../../services/phoneVideoPacks';
@@ -197,6 +198,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const [message, setMessage] = useState('');
+  const [selection, setSelection] = useState({ start: 0, end: 0 });
+  // A Scribe fix or Improve pick rewrites the text in code, where the field reports no new
+  // selection: move ours to the caret it hands back, or a later Improve acts on a stale range.
+  const applyScribeChange = useCallback((next: string, caret: number) => {
+    setMessage(next);
+    setSelection({ start: caret, end: caret });
+  }, []);
   // Focus draws light to the field (brand: its edge glows while you are inside it).
   const [isFocused, setIsFocused] = useState(false);
   const [localAssistantEnabled, setLocalAssistantEnabled] = useState(false);
@@ -269,11 +277,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     addAudioAttachment,
     clearAttachments,
     onHaptic: () => triggerHaptic('impactMedium'),
-    appendTranscript: text =>
+    appendTranscript: heard => {
+      const text = callHook<string>(HOOKS.dictationFormat, heard, 'plain') ?? heard;
       setMessage(prev => {
         const prefix = prev.trim() ? `${prev.trim()} ` : '';
         return prefix + text;
-      }),
+      });
+    },
   });
 
   const {
@@ -539,6 +549,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   // Free builds have no audio slot, so interfaceMode never becomes 'audio' and
   // this branch is skipped entirely.
   const AudioInput = getSlot(SLOTS.chatInputAudioMode);
+  // Scribe (Pro): underlines in the composer and the fix for the word at the caret.
+  const ScribeText = getSlot(SLOTS.scribeInputText);
+  const ScribeBar = getSlot(SLOTS.scribeInputBar);
   if (isAudioMode && AudioInput) {
     return (
       <>
@@ -674,6 +687,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           onChange={styleId => pickStyle(styleKind, styleId)}
         />
       ) : null}
+      {/* Scribe's fix for the word at the caret, or Improve for a selection: inside the box it acts on. */}
+      {ScribeBar && !showVoiceStatus ? (
+        <ScribeBar text={message} selection={selection} onChangeText={applyScribeChange} />
+      ) : null}
       <View style={styles.mainRow}>
         <View style={[styles.pill, styles.pillInComposer]} testID="composer-pill" accessibilityState={{ selected: isFocused }}>
           {showVoiceStatus ? (
@@ -710,8 +727,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 ref={inputRef}
                 testID="chat-input"
                 style={styles.pillInput}
-                value={message}
+                value={ScribeText ? undefined : message}
                 onChangeText={setMessage}
+                onSelectionChange={e => setSelection(e.nativeEvent.selection)}
                 placeholder={
                   imageMode === 'video' ? 'Describe a video' : imageMode === 'force' ? 'Describe a picture' : placeholder
                 }
@@ -723,7 +741,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 returnKeyType="default"
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
-              />
+              >
+                {ScribeText ? <ScribeText text={message} /> : null}
+              </TextInput>
               <ComposerIconsRow
                 hasText={hasText}
                 iconsAnim={iconsAnim}

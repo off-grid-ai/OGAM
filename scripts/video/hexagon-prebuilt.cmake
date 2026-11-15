@@ -14,6 +14,11 @@ target_include_directories(htp_iface PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/htp"
   "${VIDEO_HEXAGON_ROOT}")
 target_link_options(htp_iface PUBLIC -llog -ldl)
-ggml_add_backend_library(ggml-hexagon ggml-hexagon.cpp htp-drv.cpp htp-drv.h libdl.h ../../include/ggml-hexagon.h)
+# Same sources as ggml's own src/ggml-hexagon/CMakeLists.txt (ggml 1.0 split the backend up).
+ggml_add_backend_library(ggml-hexagon
+  ggml-hexagon.cpp htp-common.h
+  htp-kparams.cpp htp-kparams.h htp-opnode.cpp htp-opnode.h
+  htp-fusion.cpp htp-fusion.h htp-repack.cpp htp-repack.h
+  htp-drv.cpp htp-drv.h libdl.h ../../include/ggml-hexagon.h)
 target_link_libraries(ggml-hexagon PRIVATE htp_iface)
 target_include_directories(ggml-hexagon PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/htp" "${VIDEO_HEXAGON_ROOT}")

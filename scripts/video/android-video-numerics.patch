@@ -1,6 +1,8 @@
+diff --git a/src/pipeline/video.cpp b/src/pipeline/video.cpp
+index 9e28eeb..0dc33be 100644
 --- a/src/pipeline/video.cpp
 +++ b/src/pipeline/video.cpp
-@@ -1214,6 +1214,32 @@
+@@ -1264,6 +1264,32 @@ namespace sd::pipeline {
          return embeds;
      }
  
@@ -33,7 +35,7 @@
      static sd_image_t* decode_video_outputs(StableDiffusionGGML* sd,
                                              const GenerationRequest& request,
                                              const sd::Tensor<float>& final_latent,
-@@ -1226,6 +1252,9 @@
+@@ -1276,6 +1302,9 @@ namespace sd::pipeline {
              LOG_ERROR("cancelling video decode");
              return nullptr;
          }
@@ -43,7 +45,7 @@
          sd::Tensor<float> video_latent = final_latent;
          if ((sd_version_is_ltxav(sd->version) || sd_version_is_minimax_h3(sd->version)) &&
              video_latent.shape()[3] > sd->get_latent_channel()) {
-@@ -1254,6 +1283,9 @@
+@@ -1304,6 +1333,9 @@ namespace sd::pipeline {
                      (int)vid.shape()[1],
                      (int)vid.shape()[2],
                      (int)vid.shape()[3]);

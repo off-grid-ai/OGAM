@@ -23,4 +23,3 @@ ggml android-hexagon-precision.patch android
 . video-decode-observer.patch android,ios
 . android-video-numerics.patch android
 . stop-between-prompt-passes.patch android,ios
-ggml metal-group-norm-batch.patch ios

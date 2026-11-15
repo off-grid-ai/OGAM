@@ -27,13 +27,14 @@ describe('isRetryable branches', () => {
     expect(isRetryable('http_416')).toBe(true);
     expect(isRetryable('http_429')).toBe(true);
     expect(isRetryable('unknown_error')).toBe(true);
+    // "Free up space and retry": Retry starts a download refused for space again once space is free.
+    expect(isRetryable('disk_full')).toBe(true);
   });
 
   it('returns false for non-retryable error codes', () => {
     expect(isRetryable('http_404')).toBe(false);
     expect(isRetryable('http_403')).toBe(false);
     expect(isRetryable('http_401')).toBe(false);
-    expect(isRetryable('disk_full')).toBe(false);
     expect(isRetryable('user_cancelled')).toBe(false);
   });
 });

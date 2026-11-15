@@ -1,8 +1,8 @@
 diff --git a/src/conditioning/conditioner.hpp b/src/conditioning/conditioner.hpp
-index 7796a40..33ec41e 100644
+index eeebb77..fb77810 100644
 --- a/src/conditioning/conditioner.hpp
 +++ b/src/conditioning/conditioner.hpp
-@@ -1570,7 +1570,10 @@ struct T5CLIPEmbedder : public Conditioner {
+@@ -1597,7 +1597,10 @@ struct T5CLIPEmbedder : public Conditioner {
                                                     input_ids,
                                                     t5_attn_mask_chunk,
                                                     false);

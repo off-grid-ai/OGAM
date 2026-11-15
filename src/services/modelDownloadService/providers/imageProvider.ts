@@ -27,6 +27,7 @@ import { mapStoreStatus } from '../storeStatus';
 import { uniformDownloadId } from '../uniformId';
 import { startImageModelDownload } from '../../imageModelDownloadOwner';
 import { keptImageZipName, pauseSyntheticImageDownload, resumeSyntheticImageDownload } from '../../imageDownloadActions';
+import { restartNeverStarted } from '../../queuedStarts';
 import type { DownloadProvider, ModelDownload } from '../types';
 
 /**
@@ -131,6 +132,8 @@ export const imageProvider: DownloadProvider = {
     const modelId = modelIdOf(id);
     const entry = findEntry(modelId);
     if (!entry) return;
+    // Never reached the downloader (refused for space): nothing to resume, so it starts again.
+    if (await restartNeverStarted(entry)) return;
     // A zip interrupted MID-TRANSFER resumes natively (UI-free, do it here). But an image whose bytes
     // FINISHED and then failed EXTRACTION (ImageModelIncompleteError — missing unet.bin/clip.weight),
     // or a multi-file download (synthetic `image-multi:` row), has NO live native row to resume:

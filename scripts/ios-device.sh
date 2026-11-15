@@ -13,7 +13,7 @@
 # these signing overrides.
 #
 # Override per-machine with env vars if your device/profile/team differ:
-#   IOS_DEVICE_ID  — target a specific device UDID
+#   IOS_DEVICE_ID  — target a specific device (hardware UDID or devicectl identifier)
 #   IOS_TEAM       — development team id
 #   IOS_PROFILE    — set to force MANUAL signing with a named profile (fallback)
 #   IOS_METRO_HOST (or METRO_HOST) — address the phone uses to reach Metro
@@ -110,9 +110,38 @@ wake_device() {
   [ "$(tunnel_state "$udid")" = "connected" ]
 }
 
+# IOS_DEVICE_ID may be the hardware UDID (00008150-...) or the CoreDevice
+# identifier `devicectl list devices` prints; both resolve to the hardware UDID
+# that xcodebuild and the tunnel check use. Prints "udid<TAB>name", or nothing.
+resolve_device() {
+  local json
+  json="$(mktemp)"
+  xcrun devicectl list devices --json-output "$json" >/dev/null 2>&1 || { rm -f "$json"; return 0; }
+  python3 - "$json" "$1" <<'PY'
+import json, sys
+try:
+    devices = json.load(open(sys.argv[1]))["result"]["devices"]
+except Exception:
+    sys.exit(0)
+want = sys.argv[2].lower()
+for dev in devices:
+    udid = dev.get("hardwareProperties", {}).get("udid", "")
+    if want in (udid.lower(), dev.get("identifier", "").lower()):
+        print(f'{udid}\t{dev.get("deviceProperties", {}).get("name", "?")}')
+        break
+PY
+  rm -f "$json"
+}
+
 if [ -n "${IOS_DEVICE_ID:-}" ]; then
-  DEVICE_ID="$IOS_DEVICE_ID"
-  DEVICE_NAME="IOS_DEVICE_ID override"
+  RESOLVED="$(resolve_device "$IOS_DEVICE_ID")"
+  if [ -z "$RESOLVED" ]; then
+    echo "IOS_DEVICE_ID '$IOS_DEVICE_ID' matches no device xcrun knows." >&2
+    echo "Use a UDID or identifier from: xcrun devicectl list devices" >&2
+    exit 1
+  fi
+  DEVICE_ID="${RESOLVED%%$'\t'*}"
+  DEVICE_NAME="${RESOLVED#*$'\t'}"
 else
   CANDIDATE="$(list_candidates | head -1)"
   if [ -z "$CANDIDATE" ]; then

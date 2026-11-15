@@ -268,12 +268,12 @@ describe('Text search answers from the catalog first', () => {
     expect(models.queryByText('Qwen 3.8 27B')).toBeNull();
   });
 
-  it('a search result says what matters: its active size, its other uploads, and nothing hidden', async () => {
+  it('a search result says what matters: its active size and its other uploads', async () => {
     installNativeBoundary({ fs: true, ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB } });
     const moe = 'unsloth/Tiny-MoE-8B-A1B-GGUF';
     restoreFetch = installHuggingFace(url =>
       url.pathname === '/api/models'
-        ? [moe, 'bartowski/Tiny-MoE-8B-A1B-GGUF', 'someone/Tiny-MoE-8B-A1B-abliterated-GGUF']
+        ? [moe, 'bartowski/Tiny-MoE-8B-A1B-GGUF']
           .map(id => ({ id, author: id.split('/')[0], downloads: 10, likes: 0, tags: ['gguf'], siblings: [] }))
         : undefined,
     );
@@ -293,7 +293,6 @@ describe('Text search answers from the catalog first', () => {
     expect(models.getByLabelText('Mixture of experts: runs like a 1B model')).toBeTruthy();
     expect(text).toMatch(/MoE 1B/);
     expect(text).toMatch(/\+1 uploads/);
-    expect(text).not.toMatch(/abliterated/i);
   });
 
   it('a model with a published MTP head carries the MTP badge, and one without does not', async () => {

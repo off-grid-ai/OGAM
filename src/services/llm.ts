@@ -2,7 +2,7 @@ import { LlamaContext, RNLlamaOAICompatibleMessage } from 'llama.rn';
 import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 import { statFile } from '../utils/fileStat';
-import { Message, INFERENCE_BACKENDS } from '../types';
+import { Message, INFERENCE_BACKENDS, type DownloadedModel } from '../types';
 import { APP_CONFIG } from '../constants';
 import { useAppStore } from '../stores/appStore';
 import {
@@ -362,8 +362,13 @@ class LLMService {
   getMultimodalSupport(): MultimodalSupport | null { return this.multimodalSupport; }
   supportsVision(): boolean { return this.multimodalSupport?.vision || false; }
   supportsToolCalling(): boolean { return this.toolCallingSupported; }
-  supportsThinking(): boolean { return this.thinkingSupported; }
-  isThinkingEnabled(): boolean { return this.thinkingSupported && useAppStore.getState().settings.thinkingEnabled; }
+  supportsThinking(): boolean { return this.thinkingSupported && this.loadedModelRecord()?.reasoning !== false; }
+  isThinkingEnabled(): boolean { return this.supportsThinking() && useAppStore.getState().settings.thinkingEnabled; }
+  /** The downloaded-model record for the file this engine holds. */
+  private loadedModelRecord(): DownloadedModel | undefined {
+    const path = this.currentModelPath;
+    return path ? useAppStore.getState().downloadedModels.find(m => m.filePath === path) : undefined;
+  }
   isGemma4Model(): boolean {
     const path = this.currentModelPath?.toLowerCase() ?? '';
     return path.includes('gemma-4') || path.includes('gemma4');
@@ -429,7 +434,7 @@ class LLMService {
     return { lastTruncated: end === 'token-limit', lastEndedEarly: end === 'ended-early' };
   }
   getLoadedModelPath(): string | null { return this.currentModelPath; }
-  async generateResponse(messages: Message[], options?: { onStream?: StreamCallback; onComplete?: CompleteCallback; disableThinking?: boolean }): Promise<string> {
+  async generateResponse(messages: Message[], options?: { onStream?: StreamCallback; onComplete?: CompleteCallback; disableThinking?: boolean; maxTokens?: number }): Promise<string> {
     const { onStream, onComplete, ...opts } = options ?? {};
     const ctx = this.stopAware(this.usableContext());
     if (this.isGenerating) throw new Error('Generation already in progress');
@@ -451,7 +456,9 @@ class LLMService {
       // regardless of the global thinkingEnabled — a rewrite is not a reasoning task, and
       // letting it think leaked "Thinking Process:..." into the enhanced prompt (B30).
       const thinkingOn = this.isThinkingEnabled() && !opts?.disableThinking;
-      const completionParams = { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift() }), ...buildThinkingCompletionParams(thinkingOn, this.isGemma4Model(), settings.reasoningBudget) };
+      // A utility caller may need more room than the chat setting (a model that thinks before a rewrite).
+      const completionSettings = opts?.maxTokens ? { ...settings, maxTokens: opts.maxTokens } : settings;
+      const completionParams = { messages: oaiMessages, ...buildCompletionParams(completionSettings, { disableCtxShift: this.shouldDisableCtxShift() }), ...buildThinkingCompletionParams(thinkingOn, this.isGemma4Model(), settings.reasoningBudget) };
       logger.log(`[LLM][THINKING] thinkingSupported=${this.thinkingSupported}, thinkingEnabled=${useAppStore.getState().settings.thinkingEnabled}, isThinkingEnabled=${this.isThinkingEnabled()}, enable_thinking=${(completionParams as any).enable_thinking}, reasoning_format=${(completionParams as any).reasoning_format}`);
       logger.log(`[WIRE-LLAMA-PARAMS] ${JSON.stringify({ model: this.currentModelPath, params: { ...completionParams, messages: undefined } })}`); // [WIRE] settings→native params (temp/thinking/etc), messages elided
       const completionResult = await safeCompletion(ctx, () => ctx.completion(completionParams, (data: any) => {

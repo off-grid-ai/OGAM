@@ -17,6 +17,7 @@ import { getQnnWarningMessage, showQnnWarningAlert } from './imageDownloadQnn';
 import { ensureImageExtractionComplete, validateMultifileComplete } from './imageModelIntegrity';
 export { validateMultifileComplete } from './imageModelIntegrity';
 import logger from '../utils/logger';
+import { queuedPlaceholderId, rememberStart } from './queuedStarts';
 
 // ImageDownloadDeps now lives in ./types (so imageDownloadQnn can import it without cycling back
 // here). Re-exported for existing importers.
@@ -502,6 +503,9 @@ export async function proceedWithDownload(
   modelInfo: ImageModelDescriptor,
   deps: ImageDownloadDeps,
 ): Promise<void> {
+  // Until a transfer exists (refused for space), the row has nothing to resume: Retry makes this
+  // same start again, for every kind of image download below.
+  rememberStart(makeImageModelKey(modelInfo.id), () => proceedWithDownload(modelInfo, deps));
   if (modelInfo.huggingFaceRepo && modelInfo.huggingFaceFiles) {
     await downloadHuggingFaceModel(modelInfo, deps);
     return;
@@ -548,7 +552,7 @@ export async function proceedWithDownload(
 
   // Publish a QUEUED row IMMEDIATELY, before awaiting the (slot-limited) native start (same
   // pattern as text) — else a queued image download has no store entry until a slot frees.
-  const placeholderId = `queued:${modelKey}`; // reconciled to the real id on start
+  const placeholderId = queuedPlaceholderId(modelKey); // reconciled to the real id on start
   const created = addImageEntry({
     modelId: modelInfo.id,
     downloadId: placeholderId,

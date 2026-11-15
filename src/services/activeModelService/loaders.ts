@@ -11,6 +11,7 @@ import { liteRTService } from '../litert';
 import { unloadAllTextEngines, unloadOtherTextEngines } from '../engines';
 import { localDreamGeneratorService as onnxImageGeneratorService } from '../localDreamGenerator';
 import { modelManager } from '../modelManager';
+import { recordModelCardReasoning } from '../modelCardReasoning';
 import { hardwareService } from '../hardware';
 import { modelResidencyManager } from '../modelResidency';
 import logger from '../../utils/logger';
@@ -227,6 +228,8 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
       if (timeoutId !== null) clearTimeout(timeoutId);
     }
     const multimodalSupport = llmService.getMultimodalSupport();
+    // The template can offer a thinking switch the model never uses; its model card says so.
+    if (llmService.supportsThinking()) recordModelCardReasoning(ctx.model).catch(() => undefined);
 
     // Init can fail from incompatibility or temporary memory pressure. Clear only
     // the link and size, keeping vision metadata so repair remains available.

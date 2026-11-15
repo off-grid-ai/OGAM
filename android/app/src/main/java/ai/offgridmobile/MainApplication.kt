@@ -17,6 +17,7 @@ import ai.offgridmobile.devicememory.DeviceMemoryPackage
 import ai.offgridmobile.problemreport.ProblemReportPackage
 import ai.offgridmobile.mediashare.MediaSharePackage
 import ai.offgridmobile.clipboard.SyncClipboardPackage
+import ai.offgridmobile.scribe.ScribeEntryPackage
 import ai.offgridmobile.directory.SyncDirectorySourcePackage
 import ai.offgridmobile.downloads.SyncDownloadsPackage
 import ai.offgridmobile.sync.BlobChannelPackage
@@ -42,6 +43,7 @@ class MainApplication : Application(), ReactApplication {
           add(ProblemReportPackage())
           add(MediaSharePackage())
           add(SyncClipboardPackage())
+          add(ScribeEntryPackage())
           add(SyncDirectorySourcePackage())
           add(MeshResidencyPackage())
           add(SyncScreenshotPackage())

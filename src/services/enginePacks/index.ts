@@ -217,8 +217,14 @@ export async function checkEngineUpdatesNow(
   if (!useAppStore.getState().settings.engineUpdates) return 'off';
   try {
     await AsyncStorage.setItem(LAST_CHECK_KEY, String(now));
-    const status = await engine.getStatus();
-    if ((JSON.parse(status.state) as { trial?: unknown }).trial) return 'staged'; // one already waits for the next launch
+    let status = await engine.getStatus();
+    // The pack on trial is the one this process runs, untested at launch (no model yet): test it now.
+    if (status.trial && status.source === 'pack') {
+      await settleTrial(engine, status);
+      status = await engine.getStatus();
+    }
+    const trial = (JSON.parse(status.state) as { trial?: { id: string } }).trial;
+    if (trial) return trial.id === status.bootPackId ? 'current' : 'staged'; // a waiting pack loads on the next launch
     return (await checkForUpdate(engine, status, source)) ? 'staged' : 'current';
   } catch (error) {
     logger.warn('[EnginePack] check failed:', error);

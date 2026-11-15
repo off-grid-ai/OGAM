@@ -111,6 +111,9 @@ const RETRYABLE_CODES = new Set([
   // (a kept zip is processed again, a missing or partial download starts over). No source URL and
   // no download metadata stay out: a retry has nothing to start from, the row says remove it.
   'extract_failed', 'multifile_failed', 'download_failed', 'resume_failed', 'files_missing', 'retry_failed',
+  // Its message says "Free up space and retry". A download refused before it started has nothing to
+  // resume: Retry starts it again from the original request (services/queuedStarts).
+  'disk_full',
 ]);
 
 export function isRetryable(reasonCode?: string): boolean {
