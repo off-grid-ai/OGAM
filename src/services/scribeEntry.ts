@@ -49,7 +49,7 @@ let waiting: ImproveRequest | null = null;
 let linked = 0;
 
 /** The text an iOS Share link carries (`<bundle id>://improve?text=…`), or null. */
-export function improveTextFromUrl(url: string): string | null {
+function improveTextFromUrl(url: string): string | null {
   if (!IMPROVE_URL.test(url)) return null;
   const query = url.split('?')[1]?.split('#')[0] ?? '';
   for (const part of query.split('&')) {
