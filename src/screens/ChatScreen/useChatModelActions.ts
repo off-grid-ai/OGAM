@@ -367,5 +367,5 @@ export function useChatModelStateSync(deps: ModelStateSyncDeps): void {
     });
     setSupportsToolCalling(caps.tools);
     setSupportsThinking(caps.thinking);
-  }, [activeModelId, activeModel?.engine, isModelLoading, activeRemoteTextModelId, activeRemoteModel?.capabilities?.supportsToolCalling, activeRemoteModel?.capabilities?.supportsThinking, activeRemoteModel?.capabilities?.thinkingLevelsOnly]);
+  }, [activeModelId, activeModel?.engine, activeModel?.reasoning, isModelLoading, activeRemoteTextModelId, activeRemoteModel?.capabilities?.supportsToolCalling, activeRemoteModel?.capabilities?.supportsThinking, activeRemoteModel?.capabilities?.thinkingLevelsOnly]);
 }

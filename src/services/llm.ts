@@ -2,7 +2,7 @@ import { LlamaContext, RNLlamaOAICompatibleMessage } from 'llama.rn';
 import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 import { statFile } from '../utils/fileStat';
-import { Message, INFERENCE_BACKENDS } from '../types';
+import { Message, INFERENCE_BACKENDS, type DownloadedModel } from '../types';
 import { APP_CONFIG } from '../constants';
 import { useAppStore } from '../stores/appStore';
 import {
@@ -23,6 +23,7 @@ import { generateWithToolsImpl } from './llmToolGeneration';
 import type { ToolCall } from './tools/types';
 import type { MultimodalSupport, LLMPerformanceSettings, LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
+import { recordModelCardReasoning } from './modelCardReasoning';
 import { stateCacheBudgetMb, MOBILE_BACKEND_ROWS, splitGgufPartNames, type MobileBackend } from '@offgrid/models';
 import { saveKvSession, loadKvSession } from './kvSessionStore';
 import { readModelFileType } from './modelHeader';
@@ -247,6 +248,9 @@ class LLMService {
     Object.assign(this, captureGpuInfo(context, gpuAttemptFailed, nGpuLayers));
     useAppStore.getState().setModelMaxContext(getModelMaxContext(context));
     logger.log(`[LLM] Model loaded, vision: ${this.supportsVision()}, tools: ${this.toolCallingSupported}, thinking: ${this.thinkingSupported}`);
+    // The template can offer a thinking switch the model never uses; its model card says so.
+    const record = this.loadedModelRecord();
+    if (thinkingSupported && record) recordModelCardReasoning(record).catch(() => undefined);
   }
   async loadModel(modelPath: string, mmProjPath?: string, opts?: { override?: boolean }): Promise<void> {
     const mutex = this.acquireContextMutex();
@@ -362,8 +366,13 @@ class LLMService {
   getMultimodalSupport(): MultimodalSupport | null { return this.multimodalSupport; }
   supportsVision(): boolean { return this.multimodalSupport?.vision || false; }
   supportsToolCalling(): boolean { return this.toolCallingSupported; }
-  supportsThinking(): boolean { return this.thinkingSupported; }
-  isThinkingEnabled(): boolean { return this.thinkingSupported && useAppStore.getState().settings.thinkingEnabled; }
+  supportsThinking(): boolean { return this.thinkingSupported && this.loadedModelRecord()?.reasoning !== false; }
+  isThinkingEnabled(): boolean { return this.supportsThinking() && useAppStore.getState().settings.thinkingEnabled; }
+  /** The downloaded-model record for the file this engine holds. */
+  private loadedModelRecord(): DownloadedModel | undefined {
+    const path = this.currentModelPath;
+    return path ? useAppStore.getState().downloadedModels.find(m => m.filePath === path) : undefined;
+  }
   isGemma4Model(): boolean {
     const path = this.currentModelPath?.toLowerCase() ?? '';
     return path.includes('gemma-4') || path.includes('gemma4');
