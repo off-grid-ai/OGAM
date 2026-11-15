@@ -9,7 +9,7 @@ PODS:
   - hermes-engine (0.14.0):
     - hermes-engine/Pre-built (= 0.14.0)
   - hermes-engine/Pre-built (0.14.0)
-  - llama-rn (0.13.0-b12406):
+  - llama-rn (0.13.0-b12415):
     - boost
     - DoubleConversion
     - fast_float
@@ -4039,7 +4039,7 @@ SPEC CHECKSUMS:
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
   hermes-engine: 3de70ea2100f1780402cf146bb8110a0cdb2f34e
-  llama-rn: 94c1e97ece93587ee6a8ea379cd86d923be90012
+  llama-rn: bfdf5c61c08dd88728c58a16fa608ef70a7e36bc
   MMKV: 86859fdfa2b0b21db1fd6e48788474a6416a2c77
   MMKVCore: 3d16ce9f7d411e135020915fde98a056859a1efa
   OffgridFilm: d93b098e7b123a8f4b3d10145a3736cf38ff1481
@@ -4153,4 +4153,4 @@ SPEC CHECKSUMS:
 
 PODFILE CHECKSUM: 32f6bb13eb430c47b1b6b939f57ef56676c9ad96
 
-COCOAPODS: 1.15.2
+COCOAPODS: 1.16.2
