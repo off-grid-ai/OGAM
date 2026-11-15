@@ -2,34 +2,19 @@ import Foundation
 import UIKit
 
 /**
- * JS side of Share -> Improve. The ImproveShare extension puts the shared text on a named
- * pasteboard only this team's apps can read (no paste prompt, no App Group), named after this
- * app's bundle id, and opens `<bundle id>://improve`. The app takes it once; the pick is copied,
- * so `finish` has nothing to return.
+ * JS side of Share -> Improve on iOS. The ImproveShare extension hands the text over in the link it
+ * opens (`<bundle id>://improve?text=…`), which JS reads through Linking; nothing waits here. The
+ * pick is copied, so `finish` has nothing to return. Android's module holds PROCESS_TEXT requests.
  */
 @objc(ScribeEntryModule)
 final class ScribeEntryModule: NSObject {
-  static let pasteboardName = UIPasteboard.Name(
-    "\(Bundle.main.bundleIdentifier ?? "ai.offgridmobile").scribe.improve"
-  )
-
   @objc static func requiresMainQueueSetup() -> Bool { false }
 
   @objc func takePending(
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    DispatchQueue.main.async {
-      guard
-        let board = UIPasteboard(name: Self.pasteboardName, create: false),
-        let text = board.string, !text.isEmpty
-      else {
-        resolve(nil)
-        return
-      }
-      UIPasteboard.remove(withName: Self.pasteboardName)
-      resolve(["id": UUID().uuidString, "text": text, "apply": "copy"])
-    }
+    resolve(nil)
   }
 
   @objc func finish(

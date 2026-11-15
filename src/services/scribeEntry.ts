@@ -38,24 +38,75 @@ const native: ScribeEntryNative | undefined = NativeModules.ScribeEntryModule;
  * (dev, release) it opens the one it belongs to. `offgrid://improve` still works.
  */
 const IMPROVE_URL = /^[a-z][a-z0-9+.-]*:\/\/improve(?:[/?#]|$)/i;
+/**
+ * iOS is still bringing the app in when it reports `active`. A screen pushed then never finishes
+ * its transition, and the stack stops taking touches: Back, the swipe and every button go dead.
+ */
+const SETTLE_MS = 400;
 let current: string | null = null;
+/** iOS: a request that came in a link, waiting for the navigator. */
+let waiting: ImproveRequest | null = null;
+let linked = 0;
+
+/** The text an iOS Share link carries (`<bundle id>://improve?text=…`), or null. */
+export function improveTextFromUrl(url: string): string | null {
+  if (!IMPROVE_URL.test(url)) return null;
+  const query = url.split('?')[1]?.split('#')[0] ?? '';
+  for (const part of query.split('&')) {
+    const at = part.indexOf('=');
+    if (at < 0 || part.slice(0, at) !== 'text') continue;
+    try {
+      const text = decodeURIComponent(part.slice(at + 1));
+      return text.trim() ? text : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Hold a link's text for openPendingImprove; true when the link carried some. */
+function holdLinked(url: string | null): boolean {
+  const text = url ? improveTextFromUrl(url) : null;
+  if (!text) return false;
+  waiting = { id: `link-${++linked}`, text, apply: 'copy' };
+  return true;
+}
+
+/** Resolves once the app is in front and done arriving. */
+async function settled(): Promise<void> {
+  if (AppState.currentState !== 'active') {
+    await new Promise<void>(resolve => {
+      const sub = AppState.addEventListener('change', state => {
+        if (state !== 'active') return;
+        sub.remove();
+        resolve();
+      });
+    });
+  }
+  await new Promise(resolve => setTimeout(resolve, SETTLE_MS));
+}
 let navigator: ImproveNavigator | null = null;
 
 /** Show the waiting request, if any. Safe to call often: each request is taken once. */
 export async function openPendingImprove(): Promise<void> {
   if (!native || !navigator?.isReady()) return;
-  const request = await native.takePending();
+  const request = waiting ?? (await native.takePending());
+  waiting = null;
   if (!request) return;
   // A request still open on screen is answered with nothing, so its caller is never left waiting.
   if (current) await finishImprove(null);
   const navigate = navigator.navigate.bind(navigator);
   if (!navigator.hasRoute('ScribeImprove')) {
     await native.finish(request.id, null);
+    await settled();
     navigate('ProDetail');
     return;
   }
   current = request.id;
-  navigate('ScribeImprove', { text: request.text, apply: request.apply });
+  await settled();
+  // From outside the app, Improve opens in place: no push animation for iOS to leave half done.
+  navigate('ScribeImprove', { text: request.text, apply: request.apply, entry: 'outside' });
 }
 
 /** Give the chosen text back to the app it came from (null leaves its text as it was). */
@@ -80,9 +131,17 @@ export function startScribeEntry(appNavigator: ImproveNavigator): () => void {
       if (state === 'active') open();
     }),
     Linking.addEventListener('url', ({ url }) => {
-      if (IMPROVE_URL.test(url)) open();
+      if (!IMPROVE_URL.test(url)) return;
+      holdLinked(url);
+      open();
     }),
   ];
+  // Opened from cold by a Share link: the link is the launch URL, not an event.
+  Linking.getInitialURL()
+    .then(url => {
+      if (holdLinked(url)) open();
+    })
+    .catch(() => undefined);
   if (Platform.OS === 'android') {
     subs.push(
       new NativeEventEmitter(NativeModules.ScribeEntryModule).addListener(
