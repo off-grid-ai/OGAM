@@ -40,7 +40,11 @@ export function createKeychainBoundary() {
       items.delete(opts?.service ?? '');
       return Promise.resolve(true);
     },
-    ACCESSIBLE: { AFTER_FIRST_UNLOCK: 'AfterFirstUnlock' },
+    ACCESSIBLE: {
+      AFTER_FIRST_UNLOCK: 'AfterFirstUnlock',
+      WHEN_PASSCODE_SET_THIS_DEVICE_ONLY: 'AccessibleWhenPasscodeSetThisDeviceOnly',
+    },
+    ACCESS_CONTROL: { BIOMETRY_ANY_OR_DEVICE_PASSCODE: 'BiometryAnyOrDevicePasscode' },
   };
 }
 
