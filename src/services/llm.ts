@@ -23,7 +23,6 @@ import { generateWithToolsImpl } from './llmToolGeneration';
 import type { ToolCall } from './tools/types';
 import type { MultimodalSupport, LLMPerformanceSettings, LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
-import { recordModelCardReasoning } from './modelCardReasoning';
 import { stateCacheBudgetMb, MOBILE_BACKEND_ROWS, splitGgufPartNames, type MobileBackend } from '@offgrid/models';
 import { saveKvSession, loadKvSession } from './kvSessionStore';
 import { readModelFileType } from './modelHeader';
@@ -248,9 +247,6 @@ class LLMService {
     Object.assign(this, captureGpuInfo(context, gpuAttemptFailed, nGpuLayers));
     useAppStore.getState().setModelMaxContext(getModelMaxContext(context));
     logger.log(`[LLM] Model loaded, vision: ${this.supportsVision()}, tools: ${this.toolCallingSupported}, thinking: ${this.thinkingSupported}`);
-    // The template can offer a thinking switch the model never uses; its model card says so.
-    const record = this.loadedModelRecord();
-    if (thinkingSupported && record) recordModelCardReasoning(record).catch(() => undefined);
   }
   async loadModel(modelPath: string, mmProjPath?: string, opts?: { override?: boolean }): Promise<void> {
     const mutex = this.acquireContextMutex();
