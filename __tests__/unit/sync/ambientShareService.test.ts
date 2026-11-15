@@ -30,6 +30,7 @@ describe('sharing a file to another device without being asked', () => {
     settings: true,
     notes: true,
     writing: true,
+    vault: false,
     screenshots: false,
     downloads: false,
     generatedMedia: false,

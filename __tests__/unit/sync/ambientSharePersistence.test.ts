@@ -35,6 +35,7 @@ describe('what the phone remembers about ambient sharing', () => {
     settings: true,
     notes: true,
     writing: true,
+    vault: false,
     screenshots: true,
     downloads: false,
     generatedMedia: false,
