@@ -4,7 +4,7 @@
  * The tools picker is a full page (it replaced the old bottom-sheet drawer). Tests:
  * - Renders the page header and all free tool rows
  * - Pro Tools row is pinned to the top of the listing and is shown to everyone
- * - Pro Tools routing: free -> ProDetail upsell, pro -> the Pro Tools screen
+ * - Pro Tools routing: free -> the Get Pro checkout sheet, pro -> the Pro Tools screen
  * - Tool toggles flow through the core settings store
  * - Back button navigates back
  *
@@ -14,6 +14,7 @@
 
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import InAppBrowser from 'react-native-inappbrowser-reborn';
 import { ToolsScreen } from '../../../src/screens/ToolsScreen';
 import { AVAILABLE_TOOLS } from '../../../src/services/tools/registry';
 import { registerScreen, _clearScreensForTesting } from '../../../src/navigation/screenRegistry';
@@ -22,6 +23,11 @@ import { useAppStore } from '../../../src/stores/appStore';
 import { withNavigatorRoutes } from '../../harness/realNavigation';
 
 jest.unmock('@react-navigation/native');
+// The checkout sheet is native (the in-app browser): the device boundary.
+jest.mock('react-native-inappbrowser-reborn', () => ({
+  __esModule: true,
+  default: { isAvailable: jest.fn(() => Promise.resolve(true)), open: jest.fn(() => Promise.resolve()), close: jest.fn() },
+}));
 
 const PRO_VIDEO_TOOL_IDS = ['generate_video', 'make_film'];
 const FREE_TOOLS = AVAILABLE_TOOLS.filter(tool => !PRO_VIDEO_TOOL_IDS.includes(tool.id));
@@ -45,6 +51,7 @@ const renderTools = () =>
 
 describe('ToolsScreen', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     _clearScreensForTesting();
     const app = useAppStore.getState();
     app.updateSettings({ enabledTools: ['web_search', 'calculator'] });
@@ -75,10 +82,11 @@ describe('ToolsScreen', () => {
     expect(getByText('Pro tools')).toBeTruthy();
   });
 
-  it('routes a free user to the Pro upsell when Pro Tools is pressed', async () => {
-    const { getByTestId, findByTestId, queryByTestId } = renderTools();
+  it('opens the Get Pro sheet for a free user when Pro Tools is pressed', async () => {
+    const { getByTestId, queryByTestId } = renderTools();
     fireEvent.press(getByTestId('tools-pro-tools'));
-    expect(await findByTestId('route-ProDetail')).toBeTruthy();
+    await waitFor(() => expect(InAppBrowser.open).toHaveBeenCalledTimes(1));
+    expect(queryByTestId('route-ProDetail')).toBeNull();
     expect(queryByTestId(`route-${PRO_TOOLS_SCREEN}`)).toBeNull();
   });
 

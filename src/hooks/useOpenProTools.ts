@@ -6,6 +6,7 @@ import { useAppStore } from '../stores/appStore';
 import { selectHasProAccess } from '../stores/proAccessSlice';
 import { PRO_TOOLS_SCREEN } from './useIsProActive';
 import { proGateShown } from '../services/analytics/analytics';
+import { useGetPro } from './useGetPro';
 
 /**
  * One callback for "open the Pro Tools destination", used everywhere the user can
@@ -13,13 +14,14 @@ import { proGateShown } from '../services/analytics/analytics';
  *
  * Pro active  -> the Pro Tools screen (email/calendar + MCP servers) is registered,
  *                so navigate straight into it and show what is available.
- * Free        -> the screen is not registered, so route to the Pro upsell page.
+ * Free        -> the screen is not registered, so open Get Pro (the checkout sheet).
  *
  * Routing on the registered screen (not on a license flag) keeps this in step with
  * useIsProActive and the rest of the app's single definition of "Pro is active".
  */
 export function useOpenProTools(): () => void {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const getPro = useGetPro();
   return () => {
     const hasAccess = selectHasProAccess(useAppStore.getState());
     const hasProScreen = getRegisteredScreens().some(s => s.name === PRO_TOOLS_SCREEN);
@@ -27,7 +29,7 @@ export function useOpenProTools(): () => void {
       navigation.navigate(PRO_TOOLS_SCREEN as any);
     } else {
       proGateShown('tools');
-      navigation.navigate('ProDetail');
+      getPro('pro-tools');
     }
   };
 }

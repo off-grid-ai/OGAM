@@ -2,15 +2,21 @@
  * useOpenProTools — the single "open the Pro Tools destination" callback shared by
  * the chat quick-settings row and the Tools page. It routes on whether the Pro
  * Tools screen is registered (the same signal as useIsProActive):
- *   - free (screen not registered) -> ProDetail upsell
+ *   - free (screen not registered) -> the Get Pro checkout sheet, no page in between
  *   - pro  (screen registered)     -> the Pro Tools screen
  *
  * The real navigator runs; the test reads which screen the app is on after the tap.
  */
 jest.unmock('@react-navigation/native');
+// The checkout sheet is native (the in-app browser): the device boundary.
+jest.mock('react-native-inappbrowser-reborn', () => ({
+  __esModule: true,
+  default: { isAvailable: jest.fn(() => Promise.resolve(true)), open: jest.fn(() => Promise.resolve()), close: jest.fn() },
+}));
 
 import { Text, TouchableOpacity } from 'react-native';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import InAppBrowser from 'react-native-inappbrowser-reborn';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useOpenProTools } from '../../../src/hooks/useOpenProTools';
@@ -59,10 +65,12 @@ describe('useOpenProTools', () => {
     _clearScreensForTesting();
   });
 
-  it('routes a free user to the Pro upsell', () => {
+  it('opens the Get Pro sheet for a free user, without a page in between', async () => {
     const { getByTestId } = render(<Probe />);
     fireEvent.press(getByTestId('open'));
-    expect(onScreen()).toBe('ProDetail');
+    await waitFor(() => expect(InAppBrowser.open).toHaveBeenCalledTimes(1));
+    expect((InAppBrowser.open as jest.Mock).mock.calls[0][0]).toMatch(/\/pro\/app\/.*utm_medium=pro-tools/);
+    expect(onScreen()).toBe('Home');
   });
 
   it('routes a pro user to the Pro Tools screen once it is registered', () => {
@@ -78,7 +86,7 @@ describe('useOpenProTools', () => {
     expect(onScreen()).toBe(PRO_TOOLS_SCREEN);
   });
 
-  it('routes to the purchase screen as soon as live access is removed', () => {
+  it('opens the Get Pro sheet as soon as live access is removed', async () => {
     registerScreen({ name: PRO_TOOLS_SCREEN, component: () => null });
     useAppStore.setState({
       hasRegisteredPro: false,
@@ -90,6 +98,7 @@ describe('useOpenProTools', () => {
     const { getByTestId } = render(<Probe />);
     fireEvent.press(getByTestId('open'));
 
-    expect(onScreen()).toBe('ProDetail');
+    await waitFor(() => expect(InAppBrowser.open).toHaveBeenCalledTimes(1));
+    expect(onScreen()).toBe('Home');
   });
 });

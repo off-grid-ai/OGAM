@@ -52,6 +52,7 @@ import { useOpenSync } from '../../hooks/useOpenSync';
 import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabels';
 import { openSupportEmail } from '../../utils/supportEmail';
 import { SCROLL_DEPTH_PROPS } from '../../constants/scrollDepth';
+import { useGetPro } from '../../hooks/useGetPro';
 
 type HomeScreenProps = {
   navigation: HomeScreenNavigationProp;
@@ -86,6 +87,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const SyncHomeCard = useSlot(SLOTS.homeSyncCard);
   const HomeNotificationsButton = useSlot(SLOTS.homeNotificationsButton);
   const { isSyncUnlocked, openSync, openSyncNotifications } = useOpenSync();
+  const getPro = useGetPro();
   // Notes is Pro: without it the row leads to the upgrade screen.
   const notesUnlocked = useHasRegisteredScreen('Notes');
   // Vault is Pro too, reached the same way.
@@ -188,7 +190,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       notes: () => navigation.navigate('Notes' as never),
       improve: () => navigation.navigate('Notes' as never),
       vault: () => navigation.navigate('Vault' as never),
-      pro: () => navigation.navigate('ProDetail'),
+      pro: () => getPro('home-showcase'),
       desktop: () => { Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'home-showcase')).catch(() => {}); },
     },
     isProActive,
@@ -263,7 +265,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                   <HomeNotificationsButton onOpen={openSyncNotifications} />
                 ) : null}
                 <TouchableOpacity
-                  onPress={() => navigation.navigate('ProDetail')}
+                  onPress={() => getPro('home-crown')}
                   style={styles.crownButton}
                   accessibilityRole="button"
                   accessibilityLabel="Open Off Grid AI Pro"
@@ -372,7 +374,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                   onOpenClipboard={() =>
                     isSyncUnlocked
                       ? navigation.navigate('Clipboard' as never)
-                      : navigation.navigate('ProDetail')
+                      : getPro('home-clipboard')
                   }
                 />
               ) : null}
@@ -400,7 +402,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 onPress={() =>
                   notesUnlocked
                     ? navigation.navigate('Notes' as never)
-                    : navigation.navigate('ProDetail')
+                    : getPro('home-notes')
                 }
                 hapticType="selection"
                 testID="home-notes-card"
@@ -423,7 +425,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 onPress={() =>
                   vaultUnlocked
                     ? navigation.navigate('Vault' as never)
-                    : navigation.navigate('ProDetail')
+                    : getPro('home-vault')
                 }
                 hapticType="selection"
                 testID="home-vault-card"

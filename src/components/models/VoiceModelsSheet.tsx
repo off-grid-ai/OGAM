@@ -1,12 +1,12 @@
 import React from 'react';
 import { View, Dimensions } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { AppSheet } from '../../components/AppSheet';
 import { VoiceModelsUpsell } from './VoiceModelsUpsell';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { proGateShown } from '../../services/analytics/analytics';
+import { useGetPro } from '../../hooks/useGetPro';
 
 type Props = {
   visible: boolean;
@@ -31,7 +31,7 @@ export const VoiceModelsSheet: React.FC<Props> = ({
   onBackToModels,
 }) => {
   const styles = useThemedStyles(createStyles);
-  const navigation = useNavigation();
+  const getPro = useGetPro();
   // Reactive: picks up the pro Voice panel live when Pro is activated at runtime
   // (loadProFeatures registers the slot), without needing an app restart.
   const VoicePanel = useSlot(SLOTS.modelsScreenVoiceTab);
@@ -42,7 +42,7 @@ export const VoiceModelsSheet: React.FC<Props> = ({
   const handleGetPro = () => {
     proGateShown('voice');
     onClose();
-    (navigation as unknown as { navigate: (name: string) => void }).navigate('ProDetail');
+    getPro('voice-sheet');
   };
 
   return (

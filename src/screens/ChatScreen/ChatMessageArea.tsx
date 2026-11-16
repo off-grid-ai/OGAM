@@ -42,6 +42,7 @@ import { SPACING } from '../../constants';
 import { proGateShown } from '../../services/analytics/analytics';
 import { toolsForTurn, useHasSearchableKnowledge } from '../../services/documents/searchableKnowledge';
 import { scrollToContentEnd } from './scrollToContentEnd';
+import { useGetPro } from '../../hooks/useGetPro';
 
 export type ChatMessageAreaProps = {
   assistantSelected: boolean;
@@ -221,6 +222,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   }, [chat.activeConversationId]);
   const interfaceMode = useUiModeStore(s => s.interfaceMode);
   const tabNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const getPro = useGetPro();
   const toolCountHintDismissed = useAppStore(state => state.toolCountHintDismissed);
   // Subscribe to Pro activation so this re-renders the moment a license is
   // activated. loadProFeatures() registers the tool extensions + the Pro Tools
@@ -567,14 +569,14 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           onAssistantEnableTools={enableAssistantTools}
           onAssistantUpgrade={() => {
             proGateShown('assistant');
-            tabNav.navigate('ProDetail');
+            getPro('chat-assistant');
           }}
           onAssistantSetupSync={() => tabNav.navigate('Sync')}
           onFindComputer={() => tabNav.navigate('RemoteServers')}
           onGetVideoModel={() => tabNav.navigate('Main', { screen: 'ModelsTab', params: { initialTab: 'video' } })}
           onVideoUpgrade={() => {
             proGateShown('video');
-            tabNav.navigate('ProDetail');
+            getPro('chat-video');
           }}
         />
       </View>

@@ -43,6 +43,7 @@ import { openSupportEmail } from '../utils/supportEmail';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
 import { useIsFocused } from '@react-navigation/native';
 import { LivingField } from '../components/LivingField';
+import { useGetPro } from '../hooks/useGetPro';
 
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'SettingsTab'>,
@@ -76,6 +77,7 @@ export const SettingsScreen: React.FC = () => {
   const settingsSections = useSettingsSections();
   const hasSync = useHasRegisteredScreen('Sync');
   const { isSyncUnlocked, openSync } = useOpenSync();
+  const getPro = useGetPro();
   const setOnboardingComplete = useAppStore(s => s.setOnboardingComplete);
   const themeMode = useAppStore(s => s.themeMode);
   const setThemeMode = useAppStore(s => s.setThemeMode);
@@ -179,7 +181,7 @@ export const SettingsScreen: React.FC = () => {
         {/* PRO Banner */}
         <ProUpsellBanner
           trigger={focusTrigger}
-          onGetPro={() => navigation.navigate('ProDetail')}
+          onGetPro={() => getPro('settings-banner')}
         />
 
         {/* Navigation Items. Appearance is the first row of the same list, not a card of its own
@@ -292,7 +294,7 @@ export const SettingsScreen: React.FC = () => {
             {/* Pro is the last row of this list, not a card on its own (hand tests 60-62). */}
             <TouchableOpacity
               style={[styles.navItem, styles.navItemLast]}
-              onPress={() => navigation.navigate('ProDetail')}
+              onPress={() => getPro('settings')}
               activeOpacity={0.75}
               accessibilityRole="button"
               accessibilityLabel={`Off Grid AI Pro. ${proStatusLabel}`}
