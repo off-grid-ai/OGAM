@@ -106,7 +106,7 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
       ) : null}
       {onTitlePress ? (
         <TouchableOpacity
-          style={styles.titleBlock}
+          style={styles.titleButton}
           onPress={onTitlePress}
           accessibilityRole="button"
           accessibilityLabel={title}
@@ -148,5 +148,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   backButton: { width: 44, height: 44, margin: -8, alignItems: 'center' as const, justifyContent: 'center' as const },
   title: { ...TYPOGRAPHY.h2, color: colors.text, flex: 1 },
   titleBlock: { flex: 1 },
+  // A row, so the title's flex grows sideways, not down, and the text stays level with the back arrow.
+  titleButton: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const },
   subtitle: { ...TYPOGRAPHY.meta, fontFamily: FONTS.mono, color: colors.textMuted },
 });
