@@ -520,6 +520,17 @@ jest.mock('react-native-device-info', () => ({
   getBundleId: jest.fn(() => 'ai.offgridmobile'),
   getManufacturerSync: jest.fn(() => 'Google'),
   isEmulatorSync: jest.fn(() => false),
+  // Who installed the app (Android). Play is com.android.vending; adb / a sideload gives ''.
+  getInstallerPackageName: jest.fn(() => Promise.resolve('com.android.vending')),
+}));
+
+// The stores' own review dialog (SKStoreReviewController / Play In-App Review) - the phone's UI.
+jest.mock('react-native-in-app-review', () => ({
+  __esModule: true,
+  default: {
+    isAvailable: jest.fn(() => true),
+    RequestInAppReview: jest.fn(() => Promise.resolve(true)),
+  },
 }));
 
 // react-native-image-picker mock

@@ -1,6 +1,8 @@
 import { Linking, Platform } from 'react-native';
+import InAppReview from 'react-native-in-app-review';
+import { getInstallerPackageName } from 'react-native-device-info';
 
-// Star button (Settings + share sheet) points at the mobile repo specifically.
+// Star button (Settings) points at the mobile repo specifically.
 const GITHUB_URL = 'https://github.com/off-grid-ai/mobile';
 // Community links (Settings "Stay in the loop" card + About screen). Single source of truth.
 const FOLLOW_X_URL = 'https://x.com/alichherawalla';
@@ -35,9 +37,43 @@ export async function rateOnStore(): Promise<void> {
   await Linking.openURL(canOpenPlayApp ? PLAY_MARKET_URL : PLAY_WEB_URL);
 }
 
+// Play's in-app review only shows for a build Play installed. Any other install source (adb, a
+// sideloaded APK, another store) gets a silent no-op from Play, so it goes to the store link instead.
+const PLAY_INSTALLER = 'com.android.vending';
+
+async function nativeReviewAvailable(): Promise<boolean> {
+  if (!InAppReview.isAvailable()) return false;
+  if (Platform.OS !== 'android') return true;
+  const installer = await getInstallerPackageName().catch(() => '');
+  return installer === PLAY_INSTALLER;
+}
+
+/** How a rating ask was answered: the store's own dialog, or the store page as a fallback. */
+export type ReviewRoute = 'native' | 'store_link';
+
+/**
+ * Ask for a rating with the store's own dialog: SKStoreReviewController on iOS, the Play In-App
+ * Review API on Android. The person rates without leaving the app.
+ *
+ * Falls back to `rateOnStore()` when the dialog cannot show: no native module, a non-Play install
+ * on Android, or the request itself failing.
+ */
+export async function requestStoreReview(): Promise<ReviewRoute> {
+  if (await nativeReviewAvailable()) {
+    try {
+      await InAppReview.RequestInAppReview();
+      return 'native';
+    } catch {
+      // Fall through to the store page.
+    }
+  }
+  await rateOnStore();
+  return 'store_link';
+}
+
 export { GITHUB_URL, FOLLOW_X_URL, SLACK_INVITE_URL };
 
-type ShareVariant = 'text' | 'image';
+export type ShareVariant = 'text' | 'image';
 
 // Shown at most ONCE per app session. In-memory only, so it naturally resets on
 // relaunch (a new session). Replaces the old 2/10/20 count cadence, which re-showed
@@ -50,8 +86,8 @@ export function resetSharePromptSession(): void {
 }
 
 /**
- * Schedule the "Support Open-Source AI" sheet — at most ONCE per app session, and
- * never after the user has already engaged it (that flag is persisted). Skips the
+ * Schedule the rating ask — at most ONCE per app session, and never after the user
+ * has rated or chosen "Don't ask again" (that flag is persisted). Skips the
  * very first generation (count < 2) so it doesn't stack with first-run sheets. The
  * SINGLE trigger for both the text and image generation paths (no per-path cadence).
  */

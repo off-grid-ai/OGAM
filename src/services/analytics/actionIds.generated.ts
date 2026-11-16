@@ -450,6 +450,7 @@ export const FIXED_ACTION_IDS: readonly string[] = [
   "setup-card",
   "share-prompt-maybe-later",
   "share-prompt-never-show",
+  "share-prompt-rate",
   "shot-strip",
   "sort-pill",
   "speculative-draft-stepper",
