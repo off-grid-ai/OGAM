@@ -1,44 +1,40 @@
 /**
- * HAPPY-PATH (UI integration, HEAVY entry point) — the "Support Open-Source AI" share sheet dismisses
- * after the user shares on X and does NOT re-nag on later generations.
+ * HAPPY-PATH (UI integration, HEAVY entry point) — the rating ask dismisses after the user taps Rate
+ * and does NOT re-nag on later generations.
  *
- * Row T096 (Area 14): "Trigger the support sheet → tap Rate Us → return to app → the sheet is
- * dismissed (doesn't re-nag)". Device finding (docs/DEVICE_TEST_FINDINGS.md): "Support-sheet dismissal —
- * the 'support open source AI' share sheet dismisses correctly after returning from X (doesn't re-nag)."
+ * Row T096 (Area 14): "Trigger the rating ask → tap Rate → the sheet is dismissed (doesn't re-nag)".
  *
  * Heavy entry point: the REAL ChatScreen is mounted; the REAL generationService drives the REAL trigger
- * (checkSharePrompt increments the real textGenerationCount and, via shouldShowSharePrompt, emits the
- * prompt after 2 text generations, then again every 10th). The REAL SharePromptSheet renders inside
- * ChatScreen. We arrive at the sheet by SENDING real messages (never store.setState / emitSharePrompt),
- * tap the real store-rating button, and assert on the rendered UI:
- *   1. after the share, the sheet is gone, AND
- *   2. after driving generations up to the every-10th re-trigger count, the sheet does NOT re-appear.
+ * (checkSharePrompt increments the real textGenerationCount and emits the prompt on the 2nd text
+ * generation, once per session). The REAL SharePromptSheet renders inside ChatScreen. We arrive at the
+ * sheet by SENDING real messages (never store.setState / emitSharePrompt), tap Rate, and assert on the
+ * rendered UI and the store-dialog leaf:
+ *   1. after Rate, the sheet is gone and the store's own review dialog was requested, AND
+ *   2. after more generations, the sheet does NOT re-appear.
  *
- * The ONLY device boundary faked is Linking.openURL (the leaf that hands the X compose intent to the OS —
- * "tap Rate Us"), plus the engine leaf via chatHarness. The re-nag guard under test is the real
- * `hasEngagedSharePrompt` persistence: handleEngage sets it, and the real checkSharePrompt honors it.
+ * Device boundaries faked: the store review dialog (react-native-in-app-review) and Linking.openURL,
+ * plus the engine leaf via chatHarness. The re-nag guard under test is the real persisted
+ * `hasEngagedSharePrompt`: Rate sets it, and the real checkSharePrompt honors it.
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
 // Real navigation: the app's own NavigationContainer and routes (chatHarness navigation: 'real').
 jest.unmock('@react-navigation/native');
 
-const SHEET_TITLE = 'Support Open-Source AI';
+const SHEET_TITLE = 'Did that just work for you?';
 
-// Either store's label is correct - which one renders depends on the platform the suite runs as,
-// and the point of this test is the dismiss-and-do-not-re-nag behaviour, not the platform split.
-const RATE_LABEL = /^Rate on (the App Store|Google Play)$/;
+const RATE_LABEL = 'Rate Off Grid AI';
 
 describe('happy — support-share sheet dismisses after rating and does not re-nag (T096)', () => {
   it('llama.cpp: 2nd generation shows the sheet; rating dismisses it; the 10th does not re-nag', async () => {
     const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.render();
 
-    // The X-share device leaf. Same module graph as the freshly-required SharePromptSheet (installNativeBoundary
-    // resets modules, so we grab Linking from the post-reset react-native instance the component uses).
-     
+    // The store's review dialog and the store-page leaf. Same module graph as the freshly-required
+    // SharePromptSheet (installNativeBoundary resets modules, so grab the post-reset instances).
     const { Linking } = require('react-native');
     const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
+    const review = require('react-native-in-app-review').default.RequestInAppReview as jest.Mock;
 
     // PRE-CONDITION: after the 1st generation the sheet must NOT be up (count===1 is skipped to avoid
     // stacking sheets) — so a later "the sheet is present" assertion is a real observed transition, not a
@@ -52,8 +48,8 @@ describe('happy — support-share sheet dismisses after rating and does not re-n
     await h.rtl.waitFor(() => { expect(h.view!.getByText(SHEET_TITLE)).toBeTruthy(); }, { timeout: 15000 });
     expect(h.view!.getByText(RATE_LABEL)).toBeTruthy();
 
-    // GESTURE: tap the rate button — the REAL handleEngage sets hasEngagedSharePrompt, opens the
-    // store review page (the faked device leaf), and closes the sheet.
+    // GESTURE: tap Rate — the sheet sets hasEngagedSharePrompt, closes, and once it has closed asks
+    // the store for its own review dialog (the faked device leaf).
     h.rtl.fireEvent.press(h.view!.getByText(RATE_LABEL));
 
     // ASSERT (1): the sheet is dismissed after the share. Its title is gone from the rendered tree.
@@ -62,14 +58,9 @@ describe('happy — support-share sheet dismisses after rating and does not re-n
     // took 9.6s. The assertion is unchanged - the wait just stops racing the hardware. It only surfaced
     // now because CI never reached jest before; the typecheck gate died first on an unbuilt package.
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(SHEET_TITLE)).toBeNull(); }, { timeout: 15000 });
-    // The store review page was actually handed to the OS (return-from-store boundary). Which store
-    // depends on the platform the test runs as, so accept either - the point is that the OS was asked
-    // to open a REVIEW destination, not that we hardcode one platform's URL into a shared test.
-    await h.rtl.waitFor(() => {
-      expect(openURL).toHaveBeenCalledWith(
-        expect.stringMatching(/^(https:\/\/apps\.apple\.com\/app\/id|market:\/\/details|https:\/\/play\.google\.com\/store)/),
-      );
-    });
+    // The store's own dialog was asked for, in the app. Nothing was sent out to a store page.
+    await h.rtl.waitFor(() => { expect(review).toHaveBeenCalledTimes(1); });
+    expect(openURL).not.toHaveBeenCalled();
 
     // "RETURN TO APP" + keep using it: drive generations up to the every-10th re-trigger count (10). If the
     // re-nag guard were broken, checkSharePrompt(10) would emit the prompt again and the sheet would reappear.
@@ -82,7 +73,7 @@ describe('happy — support-share sheet dismisses after rating and does not re-n
     expect(h.view!.queryByText(SHEET_TITLE)).toBeNull();
   }, 60000);
 
-  it("llama.cpp: Don't show again dismisses the sheet and keeps it hidden in a new session", async () => {
+  it("llama.cpp: Don't ask again dismisses the sheet and keeps it hidden in a new session", async () => {
     const h = await setupChatScreen({ navigation: 'real', engine: 'llama', platform: 'android' });
     h.render();
 
@@ -91,10 +82,10 @@ describe('happy — support-share sheet dismisses after rating and does not re-n
 
     await h.send('second opt-out prompt', { text: 'reply two' });
     await h.rtl.waitFor(() => {
-      expect(h.view!.getByText("Don't show again")).toBeTruthy();
+      expect(h.view!.getByText("Don't ask again")).toBeTruthy();
     }, { timeout: 15000 });
 
-    h.rtl.fireEvent.press(h.view!.getByText("Don't show again"));
+    h.rtl.fireEvent.press(h.view!.getByText("Don't ask again"));
     await h.rtl.waitFor(() => {
       expect(h.view!.queryByText(SHEET_TITLE)).toBeNull();
     }, { timeout: 15000 });

@@ -138,6 +138,10 @@ A video model pack reports downloads once for the whole pack: `model` is its cat
 | `features_snapshot` | once a day: one `true`/`false` property per feature that is switched on. `video_generation` is true when a local video model is active or a remote video model is picked. OGAD: `image_generation`, `tts`, `voice_input` are true while a model is picked for them; `vision` while the chat model reads images; `capture` while screen capture runs; `meetings` after a meeting recorded in the last 30 days. |
 | `usage_snapshot` | once a day, beside `features_snapshot`: how much the person has. Counts: `chats`, `messages`, `user_messages`, `projects`, `knowledge_documents`, `generated_images`, `generated_videos`, `films`, `models_text`, `models_image`, `models_video`, `models_stt`, `models_tts`, `mcp_servers`, `paired_devices`, `remote_servers`. Each count is rounded down to the nearest of 0, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000. OGAD also counts `models_vision` and `models_embedding`. Appearance: `theme` (`system`, `light`, `dark`); OGAM `font_scale` (the system text size, one decimal); OGAD `ui_animations` (`true`, `false`) and `zoom_level` (page zoom in half steps, -5 to 5). Never a name or a word. |
 | `problem_reported` | none |
+| `rating_prompt_shown` | OGAM: the in-chat rating ask showed. `trigger` (`text`, `image`: the 2nd successful reply or image this session) |
+| `rating_prompt_rate_tapped` | OGAM: `trigger`, `route` (`native`: the store's own review dialog; `store_link`: the store page, when the dialog cannot show) |
+| `rating_prompt_dismissed` | OGAM: `trigger`, `choice` (`not_now`: Not now, swipe or tap outside; `never`: Don't ask again) |
+| `github_star_tapped` | OGAM: `source` (`settings`) |
 
 ### Flows (funnels)
 
