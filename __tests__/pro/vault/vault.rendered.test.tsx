@@ -10,7 +10,10 @@
  * show every kind with its own line: a card by its last digits, an identity, a one-time code, a
  * secure note. A cancelled prompt leaves the vault locked and says so. A vault whose key is gone
  * (the app was reinstalled) cannot be opened, and Start over makes a new one. A locked vault takes
- * no write.
+ * no write. A save cut off half way (the old file gone, the new one not yet moved in) still opens.
+ * An open item goes back to the list when the vault locks. Editing a login from a paired device
+ * keeps its folder and favourite. With Vault sync on, the empty vault says items arrive from the
+ * desktop and offers no Sync sharing button.
  *
  * The real Vault screens in a real navigator over the real phoneVault and @offgrid/sync's seal and
  * merge. Device boundaries only: the disk (memfs-backed react-native-fs), the Keychain (the
@@ -394,5 +397,65 @@ describePro('Vault on the phone', () => {
     await phone.vault.save({ kind: 'note', title: 'Two', body: 'y' }, id);
     expect(phone.vault.entry(id)?.item.title).toBe('Two');
     expect(phone.vault.recordsFor([id])).toHaveLength(1);
+  });
+
+  it('a save cut off half way still opens', async () => {
+    const phone = installPhone();
+    await phone.vault.unlock();
+    await phone.vault.save({ kind: 'note', title: 'Kept', body: 'x' });
+    phone.vault.lock();
+    // The phone stopped after removing the old file and before moving the new one in.
+    const dir = `${phone.fs.DocumentDirectoryPath}/vault`;
+    await phone.fs.module.moveFile(`${dir}/vault.sealed`, `${dir}/vault.sealed.tmp`);
+
+    await phone.vault.unlock();
+    expect(phone.vault.entries().map(e => e.item.title)).toEqual(['Kept']);
+  });
+
+  it('an open item goes back to the list when the vault locks', async () => {
+    const phone = installPhone();
+    const { rtl, view, navigation } = openVault();
+    await view.findByTestId('vault-empty-new');
+    await rtl.act(() =>
+      phone.vault.save({ kind: 'login', title: 'Mail', username: '', password: 'pw', urls: ['https://mail.example'] }),
+    );
+    // No username: the line under the title is the website.
+    expect(await view.findByText('https://mail.example')).toBeTruthy();
+    rtl.fireEvent.press(view.getByTestId('vault-item-0'));
+    await view.findByTestId('vault-item-delete');
+
+    rtl.act(() => phone.vault.lock());
+    await rtl.waitFor(() => expect(navigation.getCurrentRoute().name).toBe('Vault'));
+    await view.findByTestId('vault-unlock');
+  });
+
+  it('editing a login from a paired device keeps its folder and favourite', async () => {
+    const phone = installPhone();
+    const { rtl, view } = openVault();
+    await view.findByTestId('vault-empty-new');
+    await rtl.act(() =>
+      phone.fromPeer([
+        { kind: 'login', title: 'Bank', folder: 'Money', favorite: true, urls: [], username: 'sam', password: 'old', notes: 'PIN at home.' },
+        { kind: 'identity', title: 'Work', fullName: 'Sam Lee', email: '', phone: '', address1: '', address2: '', city: '', region: '', postalCode: '', country: '' },
+      ]),
+    );
+    // No email: an identity is listed by its name.
+    expect(await view.findByText('Sam Lee')).toBeTruthy();
+    rtl.fireEvent.press(view.getByLabelText('Bank'));
+    rtl.fireEvent.press(await view.findByTestId('vault-item-edit'));
+    await saveLogin(rtl, view, { password: 'new' });
+
+    const bank = phone.vault.entries().find(e => e.item.title === 'Bank')!;
+    expect(bank.item).toMatchObject({ folder: 'Money', favorite: true, password: 'new', notes: 'PIN at home.' });
+  });
+
+  it('with Vault sync on, the empty vault says items arrive from the desktop', async () => {
+    installPhone();
+    const { stateSyncService } = require('../../../pro/sync/stateSyncService');
+    await stateSyncService.setCategoryEnabled('vault', true);
+    const { view } = openVault();
+    await view.findByTestId('vault-empty-new');
+    expect(view.getByText(/arrive while its vault is unlocked/)).toBeTruthy();
+    expect(view.queryByTestId('vault-sync-settings')).toBeNull();
   });
 });
