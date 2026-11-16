@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TextInput,
-  Linking,
   ScrollView,
 } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
@@ -15,11 +14,8 @@ import {
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { SPACING, TYPOGRAPHY } from '../../constants';
-import {
-  activateProByKey,
-  PRO_PAY_PAGE_URL,
-} from '../../services/proLicenseService';
-import { withUtm } from '../../utils/utm';
+import { activateProByKey } from '../../services/proLicenseService';
+import { openProCheckout } from '../../services/proCheckout';
 import { AppSheet } from '../../components/AppSheet';
 
 type ErrorMsg = Pick<
@@ -102,10 +98,10 @@ export const ProUnlockModal: React.FC<Props> = ({
     }
   };
 
-  // Not a member yet — send them to the web pay page. The buyer's key is emailed
+  // Not a member yet — open checkout in a sheet. The buyer's key is emailed
   // to them after checkout, then pasted here.
   const handleGetPro = () => {
-    Linking.openURL(withUtm(PRO_PAY_PAGE_URL, 'pro-unlock')).catch(() => {
+    openProCheckout('pro-unlock').catch(() => {
       setError({
         title: 'Could not open Pro',
         description: 'Please try again.',

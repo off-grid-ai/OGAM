@@ -20,7 +20,7 @@ import {
 } from '../../constants';
 import { selectHasProAccess } from '../../stores/proAccessSlice';
 import { useAppStore } from '../../stores';
-import { PRO_PAY_PAGE_URL } from '../../services/proLicenseService';
+import { openProCheckout } from '../../services/proCheckout';
 import { withUtm } from '../../utils/utm';
 import { loadProFeatures } from '../../bootstrap/loadProFeatures';
 import { getPricingCopy } from '../../utils/proPricing';
@@ -86,7 +86,7 @@ export const ProDetailScreen: React.FC = () => {
   const deviceStatusColor = hasProAccess ? colors.primary : colors.textMuted;
 
   const openPayPage = () => {
-    Linking.openURL(withUtm(PRO_PAY_PAGE_URL, 'pro-detail')).catch(() => {});
+    openProCheckout('pro-detail').catch(() => {});
   };
   const openDesktop = () => {
     Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'pro-detail')).catch(
