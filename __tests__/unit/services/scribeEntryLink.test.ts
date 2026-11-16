@@ -41,7 +41,7 @@ interface SharePhone {
 
 /** As ShareViewController encodes it: letters and digits stay, everything else is percent-encoded. */
 const encodeAsExtension = (text: string): string =>
-  encodeURIComponent(text).replace(/[!'()*._~-]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+  encodeURIComponent(text).replace(/[!'()*._~-]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 
 let mesh: LicensedMesh;
 let app: App | undefined;
