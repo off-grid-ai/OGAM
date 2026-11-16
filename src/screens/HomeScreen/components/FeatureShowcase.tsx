@@ -42,6 +42,10 @@ export interface FeatureOpeners {
   documents: () => void;
   sync: () => void;
   tools: () => void;
+  notes: () => void;
+  /** Where Improve can be tried on this phone (Notes' Improve this paragraph). */
+  improve: () => void;
+  vault: () => void;
   pro: () => void;
   desktop: () => void;
 }
@@ -64,6 +68,9 @@ export function showcaseFeatures(use: FeatureUse, open: FeatureOpeners, isPro: b
     { key: 'voice', icon: 'volume-2', pro: true, tried: use.hasVoice, title: 'Hear every answer.', line: 'Replies read aloud in a voice you pick.', onPress: open.voice },
     { key: 'mac-dictation', icon: 'type', mac: true, pro: true, tried: false, title: 'Talk, and it types where you are.', line: 'Hold one shortcut in any app on your computer.', onPress: open.desktop },
     { key: 'tools', icon: 'calendar', pro: true, tried: false, title: 'Have it draft your emails.', line: 'It writes them. You check and send.', onPress: open.tools },
+    { key: 'notes', icon: 'file-text', pro: true, tried: false, title: 'Notes that stay on your phone.', line: 'Folders, headings with /, and help rewriting.', onPress: open.notes },
+    { key: 'improve', icon: 'edit-3', pro: true, tried: false, title: 'Clearer writing in any app.', line: 'Share your text to Off Grid AI. It comes back better.', onPress: open.improve },
+    { key: 'vault', icon: 'lock', pro: true, tried: false, title: 'Your passwords, locked on this phone.', line: 'Open with your face or fingerprint.', onPress: open.vault },
     { key: 'mac-recall', icon: 'search', mac: true, pro: true, tried: false, title: 'Find anything that was on your screen.', line: 'Search what your computer saw, meetings too.', onPress: open.desktop },
     { key: 'sync', icon: 'refresh-cw', pro: true, tried: false, title: 'Your chats, on every device.', line: 'Start on your computer, finish here.', onPress: open.sync },
     { key: 'mac-meetings', icon: 'users', mac: true, pro: true, tried: false, title: 'Meetings, written up for you.', line: 'Recorded and transcribed on your computer.', onPress: open.desktop },

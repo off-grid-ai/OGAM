@@ -25,6 +25,9 @@ const openers = (): FeatureOpeners => ({
   documents: opener(),
   sync: opener(),
   tools: opener(),
+  notes: opener(),
+  improve: opener(),
+  vault: opener(),
   pro: opener(),
   desktop: opener(),
 });
@@ -32,7 +35,7 @@ const fresh: FeatureUse = { imagesMade: 0, videosMade: 0, hasVoice: false, hasSp
 const keys = (features: ShowcaseFeature[]) => features.map(f => f.key);
 const MAC_KEYS = ['mac-clipboard', 'mac-dictation', 'mac-meetings', 'mac-models', 'mac-recall'];
 /** Pro features on this phone: without Pro their cards open Pro. */
-const PHONE_PRO_KEYS = ['sync', 'tools', 'video', 'voice'];
+const PHONE_PRO_KEYS = ['improve', 'notes', 'sync', 'tools', 'vault', 'video', 'voice'];
 const FREE_PHONE_KEYS = ['documents', 'image', 'speech'];
 const sorted = (list: string[]) => [...list].sort();
 
@@ -161,7 +164,7 @@ describe('FeatureShowcase', () => {
     expect(card('mac-recall').props.accessibilityLabel).toMatch(/ On your computer\. Pro\.$/);
     // A title may run to two lines, not be cut at one.
     expect(view.getByText(of('mac-dictation').title).props.numberOfLines).toBe(2);
-    expect(view.getAllByRole('tab')).toHaveLength(12);
+    expect(view.getAllByRole('tab')).toHaveLength(features.length);
     expect(selectedPip(view)).toBe(0);
   });
 
