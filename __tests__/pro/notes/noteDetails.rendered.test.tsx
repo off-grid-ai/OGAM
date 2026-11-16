@@ -6,7 +6,8 @@
  * A name that is empty or another note's, or a folder that already holds a note of that name, is
  * refused with the reason and nothing moves. Earlier versions lists what the note said before
  * (never the text on screen); picking one asks first, and restoring it puts that text back while
- * the text there now stays in Earlier versions, so a restore can be undone.
+ * the text there now stays in Earlier versions, so a restore can be undone. A version whose file
+ * is gone says it could not be restored, and the text stays as it is.
  *
  * The real Note screen in a real navigator over the real notes library, notes index and
  * @offgrid/notes, with the real editor page. Device boundaries only: the disk (memfs-backed
@@ -174,5 +175,32 @@ describePro('Note details', () => {
     await leave(rtl, navigation);
     await rtl.waitFor(async () => expect(await phone.text(plan)).toBe('First draft.\n'));
     expect(await phone.versions(plan)).toContain('Second draft.\n');
+  });
+
+  it('a version whose file is gone says so, and the text stays', async () => {
+    const start = new Date('2026-11-16T09:00:00Z');
+    jest.useFakeTimers({
+      now: start,
+      doNotFake: ['nextTick', 'setImmediate', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'queueMicrotask'],
+    });
+    const phone = await installPhone();
+    const plan = await phone.write('Plan', 'First draft.\n');
+    jest.setSystemTime(new Date(start.getTime() + 60 * 60 * 1000));
+    const opened = await phone.library.readNote(plan);
+    await phone.library.saveNote(plan, 'Second draft.\n', opened.mtime);
+    await phone.notesIndex.load(true);
+
+    const { rtl, view } = openNote(plan);
+    await openDetails(rtl, view, /Second draft\./);
+    const firstDraftId = (await phone.library.listVersions(plan))[1]!.id;
+    await view.findByTestId(`note-version-${firstDraftId}`);
+    // The version file goes from the disk while the list is open.
+    const RNFS = require('react-native-fs');
+    await RNFS.unlink(`${RNFS.DocumentDirectoryPath}/notes-history/${encodeURIComponent(plan)}/${firstDraftId}.txt`);
+    rtl.fireEvent.press(view.getByTestId(`note-version-${firstDraftId}`));
+    rtl.fireEvent.press(rtl.within(await view.findByTestId('app-alert')).getByLabelText('Restore'));
+
+    expect(await view.findByTestId('note-notice')).toBeTruthy();
+    expect(notePage().text()).toMatch(/Second draft\./);
   });
 });
