@@ -4,7 +4,8 @@
  * SPEC: Vault sync is off until I turn it on in Sync sharing. With it off, nothing moves either way.
  * Turned on while the phone's vault is open, the two vaults exchange at once: the Mac's logins
  * arrive here and the phone's go to the Mac. A login I add or delete on the phone reaches the Mac a
- * moment later, a deletion as a deletion. A locked phone takes nothing; when I unlock it, it asks
+ * moment later, a deletion as a deletion, and one deleted on the Mac goes from the phone. Turned off
+ * again, nothing more moves. A locked phone takes nothing; when I unlock it, it asks
  * for and gets whatever it missed.
  *
  * The real App with Pro decided by a real licence, paired with a Mac on the LAN by the code the Sync
@@ -14,6 +15,8 @@
  * (memfs-backed react-native-fs), AsyncStorage, the Keychain, SQLite and the native TCP / mDNS
  * modules.
  */
+// Loaded first for the device boundary's shared test budget: a pairing journey outlasts jest's default.
+import '../../harness/nativeBoundary';
 import type { LicensedMesh } from '../../harness/licensedMesh';
 import type { PairedPeer } from '../../harness/proHarness';
 import { proIsPresent, requirePro } from '../helpers/requirePro';
@@ -60,6 +63,8 @@ interface MacVault {
   records: Map<string, VaultRecord>;
   titles(): string[];
   add(item: VaultItem): string;
+  /** Delete an item on the Mac: a tombstone newer than what it replaces. */
+  remove(id: string): void;
   announce(): Promise<number>;
 }
 
@@ -117,6 +122,10 @@ async function installPhone() {
       records.set(id, { id, modifiedAt: sync.vaultSyncTime(Date.now()), deleted: false, item });
       return id;
     },
+    remove: id => {
+      const previous = records.get(id)!;
+      records.set(id, { id, modifiedAt: previous.modifiedAt + 1000, deleted: true });
+    },
     announce: () => coordinator.announce(),
   };
 
@@ -129,7 +138,9 @@ async function installPhone() {
 
   /** Sync sharing's Vault switch, as the person flips it. */
   const setVaultSync = async (on: boolean) => {
-    rtl.fireEvent.press(await view.findByTestId('sync-open-sharing'));
+    if (!view.queryByTestId('sync-vault-toggle')) {
+      rtl.fireEvent.press(await view.findByTestId('sync-open-sharing'));
+    }
     const toggle = await view.findByTestId('sync-vault-toggle');
     await rtl.act(async () => {
       rtl.fireEvent(toggle, 'valueChange', on);
@@ -201,5 +212,33 @@ describePro('Vault sync with a paired Mac', () => {
 
     await phone.rtl.act(() => phone.phoneVault.unlock());
     await waitFor(() => phone.phoneTitles().join() === 'Mail', 'the missed login after unlock');
+  });
+
+  it('a login deleted on the Mac goes from the phone', async () => {
+    const phone = await installPhone();
+    await phone.setVaultSync(true);
+    const id = phone.mac.add(login('Mail'));
+    await phone.rtl.act(() => phone.phoneVault.unlock());
+    await waitFor(() => phone.phoneTitles().join() === 'Mail', 'the Mac login on the phone');
+
+    phone.mac.remove(id);
+    await phone.mac.announce();
+    await waitFor(() => phone.phoneTitles().length === 0, 'the deletion on the phone');
+  });
+
+  it('turned off again, nothing more moves', async () => {
+    const phone = await installPhone();
+    await phone.setVaultSync(true);
+    await phone.rtl.act(() => phone.phoneVault.unlock());
+    await phone.setVaultSync(false);
+
+    phone.mac.add(login('Mail'));
+    await phone.mac.announce();
+    await phone.rtl.act(() => phone.phoneVault.save(login('Bank')).then(() => undefined));
+    // Past the phone's one-second announce delay, and the round trips after it.
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    await settle();
+    expect(phone.phoneTitles()).toEqual(['Bank']);
+    expect(phone.mac.titles()).toEqual(['Mail']);
   });
 });
