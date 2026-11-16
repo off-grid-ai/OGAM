@@ -250,12 +250,16 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   swipeableContainer: {
     overflow: 'visible' as const,
   },
+  // Part of the header bar between the title and the search: the bar's background, stacked over the
+  // header's shadow, so the screen shows one bar with one shadow under the search.
   subtitle: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
     paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.xs,
+    backgroundColor: colors.background,
+    zIndex: 1,
   },
   list: {
     paddingHorizontal: SPACING.xl,

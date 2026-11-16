@@ -24,7 +24,11 @@ export async function loadProFeatures(isPro?: boolean): Promise<boolean> {
     return false; // proStub.js returns null — free build via metro extraNodeModules
   }
   if (typeof pro.configureProEntitlementProvider === 'function') {
-    pro.configureProEntitlementProvider(registerProEntitlementProvider);
+    pro.configureProEntitlementProvider(registerProEntitlementProvider, {
+      // A debug build's Pro (DEV) unlock has no licence to lose: a check that finds none keeps it.
+      keepWithoutLicence: () =>
+        __DEV__ && !require('../stores/appStore').useAppStore.getState().devProDisabled,
+    });
   }
   logger.log('[BOOT-PRO] proEntitlementLifecycle.start');
   await proEntitlementLifecycle.start();

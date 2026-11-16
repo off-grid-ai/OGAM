@@ -241,6 +241,52 @@ describePro('Notes sync on the phone', () => {
     expect(phone.siblings(NOTE)).toEqual([]);
   });
 
+  // Typing fast on the Mac: each save is a revision, some arrive late and some never arrive (the
+  // Mac sends from the live file, so an older save's bytes fail verification). The phone never
+  // touched the note, so none of this is a conflict (Wyckson's "Dagstart" copies).
+  const at = (s: number) => new Date(Date.UTC(2026, 10, 16, 9, 0, s)).toISOString();
+  const V1 = '# Dagstart\n\nKoffie';
+  const V2 = '# Dagstart\n\nKoffie en';
+  const V3 = '# Dagstart\n\nKoffie en planning';
+
+  it('fast saves on the desktop that skip a step or arrive late make no conflict copy here', async () => {
+    const phone = await installPhone();
+    await phone.receive(revision({ path: NOTE, bytes: utf8(V1), modifiedAt: at(1) }), utf8(V1));
+    // V2 never arrives first; V3 is based on it.
+    await phone.receive(
+      revision({ path: NOTE, bytes: utf8(V3), baseHash: sha256(utf8(V2)), modifiedAt: at(3) }),
+      utf8(V3),
+    );
+    expect((await phone.bytes(NOTE)).toString('utf8')).toBe(V3);
+    // V2 turns up after V3: it is older, so it changes nothing.
+    await phone.receive(
+      revision({ path: NOTE, bytes: utf8(V2), baseHash: sha256(utf8(V1)), modifiedAt: at(2) }),
+      utf8(V2),
+    );
+    expect((await phone.bytes(NOTE)).toString('utf8')).toBe(V3);
+    expect(phone.siblings(NOTE)).toEqual([]);
+  });
+
+  it('once this phone edits the note, a desktop save it never saw is a conflict again', async () => {
+    const phone = await installPhone();
+    await phone.receive(revision({ path: NOTE, bytes: utf8(V1), modifiedAt: at(1) }), utf8(V1));
+    const opened = await phone.library.readNote(NOTE);
+    await phone.library.saveNote(NOTE, '# Dagstart\n\nThee', opened.mtime);
+
+    await phone.receive(
+      revision({ path: NOTE, bytes: utf8(V3), baseHash: sha256(utf8(V2)), modifiedAt: LATE }),
+      utf8(V3),
+    );
+
+    // Both devices changed it: the desktop's edit at the path, this phone's kept beside it.
+    expect((await phone.bytes(NOTE)).toString('utf8')).toBe(V3);
+    const copies = phone.siblings(NOTE);
+    expect(copies).toHaveLength(1);
+    expect(Buffer.from(await phone.fs.module.readFile(copies[0], 'base64'), 'base64').toString('utf8')).toBe(
+      '# Dagstart\n\nThee',
+    );
+  });
+
   it('a conflict the desktop wins keeps its edit at the path and this phone\'s beside it', async () => {
     const phone = await installPhone();
     phone.fs.seedTextFile(phone.file(NOTE), LOCAL);

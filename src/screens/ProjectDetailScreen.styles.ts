@@ -1,9 +1,10 @@
 import { cardSurface } from '../theme/surface';
+import { headerSurface } from '../components/ScreenHeader';
 import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 
-export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -14,7 +15,8 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    // On the living field like every header: no surface slab.
+    // A bar the page scrolls under, like every header.
+    ...headerSurface(colors, shadows),
     zIndex: 2,
   },
   // 44pt targets for the header's controls.

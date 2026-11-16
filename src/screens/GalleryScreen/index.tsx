@@ -6,6 +6,7 @@ import { TouchableOpacity } from '../../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import Icon from 'react-native-vector-icons/Feather';
 import { AliveScreen } from '../../components/AliveScreen';
+import { HeaderStatusFill } from '../../components/ScreenHeader';
 import { useNavigation, useRoute, RouteProp, type NavigationProp } from '@react-navigation/native';
 import { CustomAlert, hideAlert } from '../../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -114,6 +115,7 @@ export const GalleryScreen: React.FC = () => {
   return (
     <AliveScreen testID="gallery-screen" style={styles.container}>
       <View style={styles.header}>
+        <HeaderStatusFill />
         {isSelectMode ? (
           <>
             <TouchableOpacity

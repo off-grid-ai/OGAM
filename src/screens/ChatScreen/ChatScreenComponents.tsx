@@ -10,6 +10,7 @@ import { LoadingDots } from '../../components/LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ModelSelectorModal } from '../../components';
+import { HeaderStatusFill } from '../../components/ScreenHeader';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
 import { createStyles } from './styles';
 import { useTheme } from '../../theme';
@@ -32,6 +33,7 @@ export const NoModelScreen: React.FC<{
 }> = ({ styles, colors, navigation, hasAvailableModels, showModelSelector, setShowModelSelector, onSelectModel, onUnloadModel, isModelLoading }) => (
   <SafeAreaView style={styles.container} edges={['top']}>
     <View style={styles.header}>
+      <HeaderStatusFill />
       <View style={styles.headerRow}>
         <TouchableOpacity
           style={styles.backButton}
@@ -98,6 +100,7 @@ export const ChatHeader: React.FC<{
   modelName?: string;
 }> = ({ styles, colors, activeConversation, activeProject, navigation, onOpenModels, setShowSettingsPanel, setShowProjectSelector, isRemote, documentCount, onOpenDocuments, modelName }) => (
   <View style={styles.header}>
+    <HeaderStatusFill />
     <View style={styles.headerRow}>
       <TouchableOpacity
         style={styles.backButton}
