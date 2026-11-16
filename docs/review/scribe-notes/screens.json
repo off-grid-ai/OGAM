@@ -1,249 +1,524 @@
 [
- {
-  "id": "home",
-  "name": "Home: Notes row",
-  "group": "Notes",
-  "what": "Home lists Notes under Gallery: 'Write privately, with your model's help.'",
-  "file": "screens/v/home-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Redesign merge",
-    "at": "2026-11-11T07:40:00Z",
-    "file": "screens/v/home-1.jpg"
-   }
-  ]
- },
- {
-  "id": "notes-list",
-  "name": "Notes list",
-  "group": "Notes",
-  "what": "Tap Notes on Home: one glass list on the living field, rows animate in, each with title, what it says and when.",
-  "file": "screens/v/notes-list-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Redesign merge",
-    "at": "2026-11-11T07:40:00Z",
-    "file": "screens/v/notes-list-1.jpg",
-    "clip": "screens/v/notes-list-1.mp4"
-   }
-  ],
-  "clip": "screens/v/notes-list-1.mp4"
- },
- {
-  "id": "notes-search",
-  "name": "Search notes",
-  "group": "Notes",
-  "what": "Search reads titles and text; no match says so in one line, and the field clears with one tap.",
-  "file": "screens/v/notes-search-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Redesign merge",
-    "at": "2026-11-11T07:40:00Z",
+  {
+    "id": "home",
+    "name": "Home: Notes row",
+    "group": "Notes",
+    "what": "Home lists Notes and, new, Vault: 'Your passwords, sealed on this phone.'",
+    "file": "screens/v/home-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Redesign merge",
+        "at": "2026-11-11T07:40:00Z",
+        "file": "screens/v/home-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:35:00Z",
+        "file": "screens/v/home-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "notes-list",
+    "name": "Notes list",
+    "group": "Notes",
+    "what": "Folders sit on top of the list with their note count. The folder icon in the header makes a new one.",
+    "file": "screens/v/notes-list-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Redesign merge",
+        "at": "2026-11-11T07:40:00Z",
+        "file": "screens/v/notes-list-1.jpg",
+        "clip": "screens/v/notes-list-1.mp4"
+      },
+      {
+        "v": 2,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:35:00Z",
+        "file": "screens/v/notes-list-2.jpg"
+      }
+    ]
+  },
+  {
+    "id": "notes-search",
+    "name": "Search notes",
+    "group": "Notes",
+    "what": "Search reads titles and text; no match says so in one line, and the field clears with one tap.",
     "file": "screens/v/notes-search-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Redesign merge",
+        "at": "2026-11-11T07:40:00Z",
+        "file": "screens/v/notes-search-1.jpg",
+        "clip": "screens/v/notes-search-1.mp4"
+      }
+    ],
     "clip": "screens/v/notes-search-1.mp4"
-   }
-  ],
-  "clip": "screens/v/notes-search-1.mp4"
- },
- {
-  "id": "note-new",
-  "name": "New note",
-  "group": "Notes",
-  "what": "New answers at once and opens an empty note, focused, with the format bar over the keyboard.",
-  "file": "screens/v/note-new-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Redesign merge",
-    "at": "2026-11-11T07:40:00Z",
+  },
+  {
+    "id": "note-new",
+    "name": "New note",
+    "group": "Notes",
+    "what": "New answers at once and opens an empty note, focused, with the format bar over the keyboard.",
     "file": "screens/v/note-new-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Redesign merge",
+        "at": "2026-11-11T07:40:00Z",
+        "file": "screens/v/note-new-1.jpg",
+        "clip": "screens/v/note-new-1.mp4"
+      }
+    ],
     "clip": "screens/v/note-new-1.mp4"
-   }
-  ],
-  "clip": "screens/v/note-new-1.mp4"
- },
- {
-  "id": "note-write",
-  "name": "Writing a note",
-  "group": "Notes",
-  "what": "Typing into the note; the first line becomes its title in the list.",
-  "file": "screens/v/note-write-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Redesign merge",
-    "at": "2026-11-11T07:40:00Z",
+  },
+  {
+    "id": "note-write",
+    "name": "Writing a note",
+    "group": "Notes",
+    "what": "Typing into the note; the first line becomes its title in the list.",
     "file": "screens/v/note-write-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Redesign merge",
+        "at": "2026-11-11T07:40:00Z",
+        "file": "screens/v/note-write-1.jpg",
+        "clip": "screens/v/note-write-1.mp4"
+      }
+    ],
     "clip": "screens/v/note-write-1.mp4"
-   }
-  ],
-  "clip": "screens/v/note-write-1.mp4"
- },
- {
-  "id": "notes-return",
-  "name": "Back to the list",
-  "group": "Notes",
-  "what": "Back from a note: the list shows the edit at the top.",
-  "file": "screens/v/notes-return-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Spinner stuck",
-    "at": "2026-11-11T07:40:00Z",
-    "file": "screens/v/notes-return-1.jpg",
-    "clip": "screens/v/notes-return-1.mp4",
-    "what": "Before: a refresh spinner turned above the list for good after coming back from a note (iOS)."
-   },
-   {
-    "v": 2,
-    "label": "Spinner only on pull",
-    "at": "2026-11-11T07:58:00Z",
+  },
+  {
+    "id": "notes-return",
+    "name": "Back to the list",
+    "group": "Notes",
+    "what": "Back from a note: the list shows the edit at the top.",
     "file": "screens/v/notes-return-2.jpg",
-    "clip": "screens/v/notes-return-2.mp4",
-    "what": "After: the list updates silently on return; the spinner shows only for a pull."
-   }
-  ],
-  "clip": "screens/v/notes-return-2.mp4"
- },
- {
-  "id": "scribe-underlines",
-  "name": "Scribe underlines in chat",
-  "group": "Scribe",
-  "what": "Typing in the chat composer: Scribe underlines spelling and grammar, on the phone, no network.",
-  "file": "screens/v/scribe-underlines-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Spelling silent",
-    "at": "2026-11-11T07:40:00Z",
-    "file": "screens/v/scribe-underlines-1.jpg",
-    "what": "Before: only rule checks (lowercase i); misspellings were not flagged in the dev app, the dictionary never loaded."
-   },
-   {
-    "v": 2,
-    "label": "Spelling flagged",
-    "at": "2026-11-11T07:58:00Z",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Spinner stuck",
+        "at": "2026-11-11T07:40:00Z",
+        "file": "screens/v/notes-return-1.jpg",
+        "clip": "screens/v/notes-return-1.mp4",
+        "what": "Before: a refresh spinner turned above the list for good after coming back from a note (iOS)."
+      },
+      {
+        "v": 2,
+        "label": "Spinner only on pull",
+        "at": "2026-11-11T07:58:00Z",
+        "file": "screens/v/notes-return-2.jpg",
+        "clip": "screens/v/notes-return-2.mp4",
+        "what": "After: the list updates silently on return; the spinner shows only for a pull."
+      }
+    ],
+    "clip": "screens/v/notes-return-2.mp4"
+  },
+  {
+    "id": "scribe-underlines",
+    "name": "Scribe underlines in chat",
+    "group": "Scribe",
+    "what": "Typing in the chat composer: Scribe underlines spelling and grammar, on the phone, no network.",
     "file": "screens/v/scribe-underlines-2.jpg",
-    "clip": "screens/v/scribe-underlines-2.mp4",
-    "what": "After: recieved, mesage, definately, tomorow are underlined."
-   }
-  ],
-  "clip": "screens/v/scribe-underlines-2.mp4"
- },
- {
-  "id": "scribe-fixbar",
-  "name": "Fix bar",
-  "group": "Scribe",
-  "what": "Caret on a flagged word: up to three fixes, Add to dictionary, Ignore.",
-  "file": "screens/v/scribe-fixbar-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Redesign merge",
-    "at": "2026-11-11T07:58:00Z",
-    "file": "screens/v/scribe-fixbar-1.jpg"
-   }
-  ]
- },
- {
-  "id": "scribe-fixed",
-  "name": "A fix applied",
-  "group": "Scribe",
-  "what": "Tap a fix: the word changes and the bar goes, since the caret is now on clean text.",
-  "file": "screens/v/scribe-fixed-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Redesign merge",
-    "at": "2026-11-11T07:58:00Z",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Spelling silent",
+        "at": "2026-11-11T07:40:00Z",
+        "file": "screens/v/scribe-underlines-1.jpg",
+        "what": "Before: only rule checks (lowercase i); misspellings were not flagged in the dev app, the dictionary never loaded."
+      },
+      {
+        "v": 2,
+        "label": "Spelling flagged",
+        "at": "2026-11-11T07:58:00Z",
+        "file": "screens/v/scribe-underlines-2.jpg",
+        "clip": "screens/v/scribe-underlines-2.mp4",
+        "what": "After: recieved, mesage, definately, tomorow are underlined."
+      }
+    ],
+    "clip": "screens/v/scribe-underlines-2.mp4"
+  },
+  {
+    "id": "scribe-fixbar",
+    "name": "Fix bar",
+    "group": "Scribe",
+    "what": "Caret on a flagged word: up to three fixes, Add to dictionary, Ignore.",
+    "file": "screens/v/scribe-fixbar-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Redesign merge",
+        "at": "2026-11-11T07:58:00Z",
+        "file": "screens/v/scribe-fixbar-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "scribe-fixed",
+    "name": "A fix applied",
+    "group": "Scribe",
+    "what": "Tap a fix: the word changes and the bar goes, since the caret is now on clean text.",
     "file": "screens/v/scribe-fixed-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Redesign merge",
+        "at": "2026-11-11T07:58:00Z",
+        "file": "screens/v/scribe-fixed-1.jpg",
+        "clip": "screens/v/scribe-fixed-1.mp4"
+      }
+    ],
     "clip": "screens/v/scribe-fixed-1.mp4"
-   }
-  ],
-  "clip": "screens/v/scribe-fixed-1.mp4"
- },
- {
-  "id": "scribe-select",
-  "name": "Select All: iOS menu over Improve",
-  "group": "Scribe",
-  "what": "After Select All, iOS puts its edit menu over the Improve bar. A tap in the selection hides it.",
-  "file": "screens/v/scribe-select-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Open question",
-    "at": "2026-11-11T07:58:00Z",
-    "file": "screens/v/scribe-select-1.jpg"
-   }
-  ]
- },
- {
-  "id": "scribe-selected",
-  "name": "Improve on a selection",
-  "group": "Scribe",
-  "what": "With text selected, the bar offers Improve.",
-  "file": "screens/v/scribe-selected-1.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Redesign merge",
-    "at": "2026-11-11T07:58:00Z",
-    "file": "screens/v/scribe-selected-1.jpg"
-   }
-  ]
- },
- {
-  "id": "improve",
-  "name": "Improve",
-  "group": "Scribe",
-  "what": "Improve: the quick fix first ('5 fixed'), then the model's version streams in. Change and Tone chips, Another version, a quicker-model hint.",
-  "file": "screens/v/improve-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Think tags leaked",
-    "at": "2026-11-11T07:40:00Z",
-    "file": "screens/v/improve-1.jpg",
-    "clip": "screens/v/improve-1.mp4",
-    "what": "Before: K2 Horizon's empty <ifm|think></ifm|think> streamed into the version until it finished."
-   },
-   {
-    "v": 2,
-    "label": "Clean stream",
-    "at": "2026-11-11T07:58:00Z",
+  },
+  {
+    "id": "scribe-select",
+    "name": "Select All: iOS menu over Improve",
+    "group": "Scribe",
+    "what": "After Select All, iOS puts its edit menu over the Improve bar. A tap in the selection hides it.",
+    "file": "screens/v/scribe-select-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Open question",
+        "at": "2026-11-11T07:58:00Z",
+        "file": "screens/v/scribe-select-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "scribe-selected",
+    "name": "Improve on a selection",
+    "group": "Scribe",
+    "what": "With text selected, the bar offers Improve.",
+    "file": "screens/v/scribe-selected-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Redesign merge",
+        "at": "2026-11-11T07:58:00Z",
+        "file": "screens/v/scribe-selected-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "improve",
+    "name": "Improve",
+    "group": "Scribe",
+    "what": "Improve: the quick fix first ('5 fixed'), then the model's version streams in. Change and Tone chips, Another version, a quicker-model hint.",
     "file": "screens/v/improve-2.jpg",
-    "clip": "screens/v/improve-2.mp4",
-    "what": "After: the version streams with no tags."
-   }
-  ],
-  "clip": "screens/v/improve-2.mp4"
- },
- {
-  "id": "improve-replace",
-  "name": "Replace",
-  "group": "Scribe",
-  "what": "Replace puts the picked version in the composer; nothing stale stays selected.",
-  "file": "screens/v/improve-replace-2.jpg",
-  "versions": [
-   {
-    "v": 1,
-    "label": "Stale selection",
-    "at": "2026-11-11T07:40:00Z",
-    "file": "screens/v/improve-replace-1.jpg",
-    "what": "Before: after a Replace, Improve opened on 'tomorro', the old range on the new text."
-   },
-   {
-    "v": 2,
-    "label": "Caret after the version",
-    "at": "2026-11-11T07:58:00Z",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Think tags leaked",
+        "at": "2026-11-11T07:40:00Z",
+        "file": "screens/v/improve-1.jpg",
+        "clip": "screens/v/improve-1.mp4",
+        "what": "Before: K2 Horizon's empty <ifm|think></ifm|think> streamed into the version until it finished."
+      },
+      {
+        "v": 2,
+        "label": "Clean stream",
+        "at": "2026-11-11T07:58:00Z",
+        "file": "screens/v/improve-2.jpg",
+        "clip": "screens/v/improve-2.mp4",
+        "what": "After: the version streams with no tags."
+      }
+    ],
+    "clip": "screens/v/improve-2.mp4"
+  },
+  {
+    "id": "improve-replace",
+    "name": "Replace",
+    "group": "Scribe",
+    "what": "Replace puts the picked version in the composer; nothing stale stays selected.",
     "file": "screens/v/improve-replace-2.jpg",
-    "clip": "screens/v/improve-replace-2.mp4",
-    "what": "After: the caret sits after the version; Improve is offered only for a new selection."
-   }
-  ],
-  "clip": "screens/v/improve-replace-2.mp4"
- }
+    "versions": [
+      {
+        "v": 1,
+        "label": "Stale selection",
+        "at": "2026-11-11T07:40:00Z",
+        "file": "screens/v/improve-replace-1.jpg",
+        "what": "Before: after a Replace, Improve opened on 'tomorro', the old range on the new text."
+      },
+      {
+        "v": 2,
+        "label": "Caret after the version",
+        "at": "2026-11-11T07:58:00Z",
+        "file": "screens/v/improve-replace-2.jpg",
+        "clip": "screens/v/improve-replace-2.mp4",
+        "what": "After: the caret sits after the version; Improve is offered only for a new selection."
+      }
+    ],
+    "clip": "screens/v/improve-replace-2.mp4"
+  },
+  {
+    "id": "folder-new",
+    "name": "New folder",
+    "group": "Notes",
+    "what": "The folder icon opens New folder. The field starts empty with a Folder name hint, and typing gives the name as typed.",
+    "file": "screens/v/folder-new-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:35:00Z",
+        "file": "screens/v/folder-new-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Clip (16 Nov)",
+        "at": "2026-11-16T05:45:00Z",
+        "file": "screens/v/folder-new-2.jpg",
+        "clip": "screens/v/folder-new-2.mp4"
+      }
+    ],
+    "clip": "screens/v/folder-new-2.mp4"
+  },
+  {
+    "id": "folder-actions",
+    "name": "Folder actions",
+    "group": "Notes",
+    "what": "Long-press a folder: Rename or Delete. Delete asks again and says its notes go to the trash here and on paired devices.",
+    "file": "screens/v/folder-actions-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:35:00Z",
+        "file": "screens/v/folder-actions-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "folder-rename",
+    "name": "Rename folder",
+    "group": "Notes",
+    "what": "Rename keeps links to its notes working (they are rewritten).",
+    "file": "screens/v/folder-rename-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:35:00Z",
+        "file": "screens/v/folder-rename-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "note-blocks",
+    "name": "/ blocks",
+    "group": "Notes",
+    "what": "Type / on a line: the Blocks menu opens under it, as on the Mac. It used to open below the last line, out of sight.",
+    "file": "screens/v/note-blocks-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:35:00Z",
+        "file": "screens/v/note-blocks-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Clip (16 Nov)",
+        "at": "2026-11-16T05:45:00Z",
+        "file": "screens/v/note-blocks-2.jpg",
+        "clip": "screens/v/note-blocks-2.mp4"
+      }
+    ],
+    "clip": "screens/v/note-blocks-2.mp4"
+  },
+  {
+    "id": "note-block-applied",
+    "name": "A block applied",
+    "group": "Notes",
+    "what": "Heading 2 picked from the / menu: the line is a heading and H2 is lit in the format bar. The pen at the left of the bar is Improve this paragraph.",
+    "file": "screens/v/note-block-applied-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:35:00Z",
+        "file": "screens/v/note-block-applied-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "improve-paragraph",
+    "name": "Improve this paragraph",
+    "group": "Scribe",
+    "what": "The pen in the format bar sends the paragraph at the cursor to Improve. Replace puts the picked version back in its place.",
+    "file": "screens/v/improve-paragraph-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:35:00Z",
+        "file": "screens/v/improve-paragraph-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "note-details",
+    "name": "Name and folder",
+    "group": "Notes",
+    "what": "Tap the note's title: any name, and any folder. Typing replaces the old name.",
+    "file": "screens/v/note-details-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:35:00Z",
+        "file": "screens/v/note-details-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "note-moved",
+    "name": "Renamed and moved",
+    "group": "Notes",
+    "what": "Saved: the header shows the new name and its folder underneath. Links to the note follow.",
+    "file": "screens/v/note-moved-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:35:00Z",
+        "file": "screens/v/note-moved-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "share-improve",
+    "name": "Share → Improve",
+    "group": "Scribe",
+    "what": "Share text from another app to Improve: it opens on the shared text, not the last chat, and Back works. The text now travels in the link the extension opens.",
+    "file": "screens/v/share-improve-2.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:35:00Z",
+        "file": "screens/v/share-improve-1.jpg"
+      },
+      {
+        "v": 2,
+        "label": "Clip (16 Nov)",
+        "at": "2026-11-16T05:45:00Z",
+        "file": "screens/v/share-improve-2.jpg",
+        "clip": "screens/v/share-improve-2.mp4"
+      }
+    ],
+    "clip": "screens/v/share-improve-2.mp4"
+  },
+  {
+    "id": "vault-locked",
+    "name": "Vault locked",
+    "group": "Vault",
+    "what": "Vault opens locked: Face ID, fingerprint or passcode unlocks it. The store is sealed with a key in the Keychain.",
+    "file": "screens/v/vault-locked-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:35:00Z",
+        "file": "screens/v/vault-locked-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "vault-list",
+    "name": "Vault",
+    "group": "Vault",
+    "what": "Unlocked: search, add (+), lock. One row per login.",
+    "file": "screens/v/vault-list-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:35:00Z",
+        "file": "screens/v/vault-list-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "vault-item",
+    "name": "A login",
+    "group": "Vault",
+    "what": "Username, password (hidden until the eye), website, each with copy.",
+    "file": "screens/v/vault-item-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:35:00Z",
+        "file": "screens/v/vault-item-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "vault-new",
+    "name": "New login",
+    "group": "Vault",
+    "what": "Title, username, password, website, one-time code secret, notes.",
+    "file": "screens/v/vault-new-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:35:00Z",
+        "file": "screens/v/vault-new-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "sync-vault",
+    "name": "Vault in Sync sharing",
+    "group": "Vault",
+    "what": "Sync sharing → Vault: off by default. On, logins travel to paired devices while the vault is open on both.",
+    "file": "screens/v/sync-vault-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:35:00Z",
+        "file": "screens/v/sync-vault-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "note-versions",
+    "name": "Earlier versions",
+    "group": "Notes",
+    "what": "The note sheet lists earlier versions with time and word count. Saves within 5 minutes fold into one, as on the Mac.",
+    "file": "screens/v/note-versions-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:41:00Z",
+        "file": "screens/v/note-versions-1.jpg"
+      }
+    ]
+  },
+  {
+    "id": "note-restore",
+    "name": "Restore a version",
+    "group": "Notes",
+    "what": "Tap a version: Restore asks first, and the text you have now stays in Earlier versions, so a restore can be undone.",
+    "file": "screens/v/note-restore-1.jpg",
+    "versions": [
+      {
+        "v": 1,
+        "label": "Notes parity + Vault (16 Nov)",
+        "at": "2026-11-16T04:41:00Z",
+        "file": "screens/v/note-restore-1.jpg"
+      }
+    ]
+  }
 ]
