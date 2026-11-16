@@ -751,7 +751,7 @@ describe('Pro mobile saved-device management journey', () => {
     // ago, so this is the transition and not a still frame.
     expect(
       within(ui!.getByTestId('sync-home-card')).getByText(
-        '0 connected · 1 saved · visible',
+        '0 of 1 device connected',
       ),
     ).toBeTruthy();
     fireEvent.press(ui.getByTestId('open-sync-from-home'));
@@ -770,7 +770,7 @@ describe('Pro mobile saved-device management journey', () => {
     await waitFor(() =>
       expect(
         within(ui!.getByTestId('sync-home-card')).getByText(
-          /1 connected · 1 saved/,
+          /1 of 1 device connected/,
         ),
       ).toBeTruthy(),
     );
