@@ -1,77 +1,96 @@
 /**
  * SharePromptSheet Component Tests
  *
- * Tests for the share/star prompt bottom sheet.
+ * The in-chat rating ask: Rate opens the store's own review dialog once the sheet has closed.
+ * Faked: the store dialog (react-native-in-app-review) and Linking - the phone's UI.
  * Priority: P1 (High)
  */
 
 import React from 'react';
 import { Linking } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import InAppReview from 'react-native-in-app-review';
 import { SharePromptSheet } from '../../../src/components/SharePromptSheet';
 import { useAppStore } from '../../../src/stores/appStore';
-import { GITHUB_URL } from '../../../src/utils/sharePrompt';
 
 jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as any);
-
-// Either store's label is right - which one renders depends on the platform the suite runs as.
-const RATE_LABEL = /^Rate on (the App Store|Google Play)$/;
 jest.spyOn(Linking, 'canOpenURL').mockResolvedValue(false);
 
+const request = InAppReview.RequestInAppReview as jest.Mock;
+const isAvailable = InAppReview.isAvailable as jest.Mock;
+
+/** Mounted the way ChatScreen mounts it: closing flips `visible` off. */
+function Host({ onClose }: { onClose: () => void }) {
+  const [visible, setVisible] = React.useState(true);
+  return (
+    <SharePromptSheet
+      visible={visible}
+      trigger="text"
+      onClose={() => {
+        onClose();
+        setVisible(false);
+      }}
+    />
+  );
+}
+
 function renderSheet(onClose = jest.fn()) {
-  const result = render(<SharePromptSheet visible={true} onClose={onClose} />);
-  return { ...result, onClose };
+  return { ...render(<Host onClose={onClose} />), onClose };
 }
 
 describe('SharePromptSheet', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    isAvailable.mockReturnValue(true);
+    request.mockResolvedValue(true);
     useAppStore.setState({ hasEngagedSharePrompt: false });
   });
 
-  it('renders message, support actions, and both dismissal choices', () => {
+  it('asks one short question with Rate and both dismissal choices, and no GitHub button', () => {
+    const { getByText, queryByText } = renderSheet();
+    expect(getByText('Did that just work for you?')).toBeTruthy();
+    expect(getByText('Rate Off Grid AI')).toBeTruthy();
+    expect(getByText('Not now')).toBeTruthy();
+    expect(getByText("Don't ask again")).toBeTruthy();
+    expect(queryByText(/GitHub/)).toBeNull();
+    expect(queryByText(/completely free/)).toBeNull();
+  });
+
+  it('Rate closes the sheet, marks it done, then opens the store dialog in the app', async () => {
+    const { getByText, onClose } = renderSheet();
+    fireEvent.press(getByText('Rate Off Grid AI'));
+    expect(onClose).toHaveBeenCalled();
+    expect(useAppStore.getState().hasEngagedSharePrompt).toBe(true);
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    expect(Linking.openURL).not.toHaveBeenCalled();
+  });
+
+  it('Rate falls back to the store page when the native dialog is unavailable', async () => {
+    isAvailable.mockReturnValue(false);
     const { getByText } = renderSheet();
-    expect(getByText(/Off Grid AI is completely free/)).toBeTruthy();
-    expect(getByText('Star on GitHub')).toBeTruthy();
-    expect(getByText(RATE_LABEL)).toBeTruthy();
-    expect(getByText('Maybe later')).toBeTruthy();
-    expect(getByText("Don't show again")).toBeTruthy();
-  });
-
-  it('opens GitHub URL, marks engaged, and closes on Star press', () => {
-    const { getByText, onClose } = renderSheet();
-    fireEvent.press(getByText('Star on GitHub'));
-    expect(Linking.openURL).toHaveBeenCalledWith(GITHUB_URL);
-    expect(onClose).toHaveBeenCalled();
-    expect(useAppStore.getState().hasEngagedSharePrompt).toBe(true);
-  });
-
-  it('opens this platform store to rate, marks engaged, and closes on press', async () => {
-    const { getByText, onClose } = renderSheet();
-    fireEvent.press(getByText(RATE_LABEL));
-    // Engagement + close are synchronous; opening the store resolves on the next tick.
-    expect(onClose).toHaveBeenCalled();
-    expect(useAppStore.getState().hasEngagedSharePrompt).toBe(true);
+    fireEvent.press(getByText('Rate Off Grid AI'));
     await waitFor(() => {
-      // Whichever store this platform has - never the other one's.
       expect(Linking.openURL).toHaveBeenCalledWith(
-        expect.stringMatching(/^(https:\/\/apps\.apple\.com\/app\/id|market:\/\/details|https:\/\/play\.google\.com\/store)/),
+        expect.stringMatching(/^(https:\/\/apps\.apple\.com\/app\/id|https:\/\/play\.google\.com\/store)/),
       );
     });
+    expect(request).not.toHaveBeenCalled();
   });
 
-  it('closes without marking engaged on Maybe later press', () => {
+  it('Not now closes without marking done or asking for a rating', () => {
     const { getByText, onClose } = renderSheet();
-    fireEvent.press(getByText('Maybe later'));
+    fireEvent.press(getByText('Not now'));
     expect(onClose).toHaveBeenCalled();
     expect(useAppStore.getState().hasEngagedSharePrompt).toBe(false);
+    expect(request).not.toHaveBeenCalled();
   });
 
-  it("persists the dismissal and closes on Don't show again press", () => {
+  it("Don't ask again persists the choice and never asks for a rating", () => {
     const { getByText, onClose } = renderSheet();
-    fireEvent.press(getByText("Don't show again"));
+    fireEvent.press(getByText("Don't ask again"));
     expect(onClose).toHaveBeenCalled();
     expect(useAppStore.getState().hasEngagedSharePrompt).toBe(true);
+    expect(request).not.toHaveBeenCalled();
     expect(Linking.openURL).not.toHaveBeenCalled();
   });
 });

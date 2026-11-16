@@ -265,7 +265,12 @@ export const AppNavigator: React.FC = () => {
         />
         <RootStack.Screen name="GalleryVideo" component={GalleryVideoScreen} />
         {registeredScreens.map(s => (
-          <RootStack.Screen key={s.name} name={s.name as any} component={s.component} />
+          <RootStack.Screen
+            key={s.name}
+            name={s.name as any}
+            component={s.component}
+            options={s.options as any}
+          />
         ))}
       </RootStack.Navigator>
   );

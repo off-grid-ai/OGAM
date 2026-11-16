@@ -3,6 +3,8 @@ import { useSyncExternalStore, type ComponentType } from 'react';
 export interface RegisteredScreen {
   name: string;
   component: ComponentType<any>;
+  /** Stack options, as React Navigation takes them (an object, or a function of the route). */
+  options?: object | ((props: { route: { params?: any } }) => object);
 }
 
 // Immutable list: registerScreen replaces the array with a new reference, so

@@ -262,6 +262,11 @@ export interface AppState extends ProAccessSlice {
   imageGenerationCount: number;
   incrementTextGenerationCount: () => number;
   incrementImageGenerationCount: () => number;
+  /**
+   * The rating ask in chat is done for good: the person tapped Rate or "Don't ask again". Only the
+   * rating ask sets it; GitHub lives in Settings and never touches it. (Key kept from the old
+   * "Support Open-Source AI" sheet so earlier answers still hold.)
+   */
   hasEngagedSharePrompt: boolean;
   /** The backend the "Use fastest settings" benchmark measured fastest on this device. */
   speedBenchmarkBackend: InferenceBackend | null;

@@ -14,7 +14,7 @@ final class DownloadManagerModuleTests: XCTestCase {
     // Both sessions: the background one keeps tasks across runs, and it exists only once a module
     // has set the sessions up, so the first test makes one before clearing them.
     if DownloadManagerModule.sharedSession == nil || DownloadManagerModule.backgroundSession == nil {
-      _ = DownloadManagerModule()
+      waitForRestore(DownloadManagerModule())
     }
     for session in [DownloadManagerModule.sharedSession, DownloadManagerModule.backgroundSession].compactMap({ $0 }) {
       let deadline = Date().addingTimeInterval(5)
@@ -34,6 +34,21 @@ final class DownloadManagerModuleTests: XCTestCase {
     UserDefaults.standard.removeObject(forKey: "ai.offgridmobile.activeDownloads")
     UserDefaults.standard.removeObject(forKey: "ai.offgridmobile.downloadmanager.state.v1")
     module = DownloadManagerModule()
+    // The restore ends by saving the state. Before it ends, a test's entries could be saved with it
+    // and loaded by the next test's module; and "initially empty" must see the restored state.
+    waitForRestore(module)
+  }
+
+  override func tearDown() {
+    // XCTest keeps every finished test case, so a module left here would live on into later tests.
+    if let module { waitForRestore(module) }
+    module = nil
+    UserDefaults.standard.removeObject(forKey: "ai.offgridmobile.downloadmanager.state.v1")
+    super.tearDown()
+  }
+
+  private func waitForRestore(_ module: DownloadManagerModule) {
+    XCTAssertEqual(module.restoreDone.wait(timeout: .now() + 10), .success, "restore from the sessions did not finish")
   }
 
   // MARK: requiresMainQueueSetup

@@ -11,6 +11,9 @@ buildscript {
         // for metadata during an offline/local build.
         androidXAnnotationVersion = "1.5.0"
         androidXBrowserVersion = "1.4.0"
+        // react-native-in-app-review reads these with no default.
+        playReviewVersion = "2.0.2"
+        playServicesVersion = "18.5.0"
     }
     repositories {
         google()

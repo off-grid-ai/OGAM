@@ -156,7 +156,12 @@ export function setKeychainUnreadable(unreadable: boolean): void {
 /** The module for `jest.mock('react-native-keychain', () => require('<harness>').keychainModule())`. */
 export function keychainModule() {
   return {
-    ACCESSIBLE: { AFTER_FIRST_UNLOCK: 'AfterFirstUnlock', WHEN_UNLOCKED: 'AccessibleWhenUnlocked' },
+    ACCESSIBLE: {
+      AFTER_FIRST_UNLOCK: 'AfterFirstUnlock',
+      WHEN_UNLOCKED: 'AccessibleWhenUnlocked',
+      WHEN_PASSCODE_SET_THIS_DEVICE_ONLY: 'AccessibleWhenPasscodeSetThisDeviceOnly',
+    },
+    ACCESS_CONTROL: { BIOMETRY_ANY_OR_DEVICE_PASSCODE: 'BiometryAnyOrDevicePasscode' },
     setGenericPassword: async (username: string, password: string, options: { service: string }) => {
       keychainState().items.set(options.service, { username, password });
       return true;

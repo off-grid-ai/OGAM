@@ -20,7 +20,7 @@ import {
   ProAhaSheet,
 } from '../../components';
 import { useEjectAllModels } from '../../hooks/useEjectAllModels';
-import { subscribeSharePrompt } from '../../utils/sharePrompt';
+import { subscribeSharePrompt, type ShareVariant } from '../../utils/sharePrompt';
 import { subscribeProPrompt } from '../../services/proPrompt';
 import type { Message } from '../../types';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -173,7 +173,8 @@ export const ChatScreen: React.FC = () => {
   // previously lived here floated the input mid-screen, so it was removed.
 
   const [sharePromptVisible, setSharePromptVisible] = useState(false);
-  useEffect(() => subscribeSharePrompt(() => setSharePromptVisible(true)), []);
+  const [sharePromptTrigger, setSharePromptTrigger] = useState<ShareVariant>('text');
+  useEffect(() => subscribeSharePrompt(t => { setSharePromptTrigger(t); setSharePromptVisible(true); }), []);
 
   const [proAhaVisible, setProAhaVisible] = useState(false);
   const proAhaShownThisSession = useRef(false);
@@ -423,6 +424,7 @@ export const ChatScreen: React.FC = () => {
       {alertEl}
       <SharePromptSheet
         visible={sharePromptVisible}
+        trigger={sharePromptTrigger}
         onClose={() => setSharePromptVisible(false)}
       />
       <ProAhaSheet

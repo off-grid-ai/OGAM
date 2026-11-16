@@ -88,6 +88,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const { isSyncUnlocked, openSync, openSyncNotifications } = useOpenSync();
   // Notes is Pro: without it the row leads to the upgrade screen.
   const notesUnlocked = useHasRegisteredScreen('Notes');
+  // Vault is Pro too, reached the same way.
+  const vaultUnlocked = useHasRegisteredScreen('Vault');
   const isProActive = useIsProActive();
   const openProTools = useOpenProTools();
 
@@ -183,6 +185,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       documents: () => navigation.navigate('Main', { screen: 'ProjectsTab' }),
       sync: openSync,
       tools: openProTools,
+      notes: () => navigation.navigate('Notes' as never),
+      improve: () => navigation.navigate('Notes' as never),
+      vault: () => navigation.navigate('Vault' as never),
       pro: () => navigation.navigate('ProDetail'),
       desktop: () => { Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'home-showcase')).catch(() => {}); },
     },
@@ -408,6 +413,29 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                   <Text style={styles.galleryCardMeta} numberOfLines={1}>Write privately, with your model's help.</Text>
                 </View>
                 {notesUnlocked ? null : (
+                  <IconMC name="crown" size={14} color={colors.textMuted} />
+                )}
+                <Icon name="chevron-right" size={16} color={colors.textMuted} />
+              </AnimatedPressable>
+              {/* Vault is Pro: the same row as Notes; without Pro the crown says why it opens the upgrade page. */}
+              <AnimatedPressable
+                style={styles.galleryCard}
+                onPress={() =>
+                  vaultUnlocked
+                    ? navigation.navigate('Vault' as never)
+                    : navigation.navigate('ProDetail')
+                }
+                hapticType="selection"
+                testID="home-vault-card"
+                accessibilityRole="button"
+                accessibilityLabel={vaultUnlocked ? 'Vault' : 'Vault, part of Off Grid AI Pro'}
+              >
+                <Icon name="lock" size={18} color={colors.textSecondary} />
+                <View style={styles.galleryCardInfo}>
+                  <Text style={styles.galleryCardTitle}>Vault</Text>
+                  <Text style={styles.galleryCardMeta} numberOfLines={1}>Your passwords, sealed on this phone.</Text>
+                </View>
+                {vaultUnlocked ? null : (
                   <IconMC name="crown" size={14} color={colors.textMuted} />
                 )}
                 <Icon name="chevron-right" size={16} color={colors.textMuted} />

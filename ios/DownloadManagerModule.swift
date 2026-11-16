@@ -238,6 +238,9 @@ class DownloadManagerModule: RCTEventEmitter {
   private var lifecycleObserved = false
 
   var downloads: [String: DownloadInfo] = [:]
+  /// Left once init's restore from the sessions has finished and saved its state; it ends on a
+  /// background queue after init returns, so anything that must see the restored state waits here.
+  let restoreDone = DispatchGroup()
   var taskToDownloadId: [Int: String] = [:] // URLSessionTask.taskIdentifier -> downloadId
   var nextDownloadId: Int64 = 1
   var pollingTimer: Timer?
@@ -726,6 +729,7 @@ class DownloadManagerModule: RCTEventEmitter {
     var found: [(URLSessionTask, URLSession)] = []
     let group = DispatchGroup()
     let lock = NSLock()
+    restoreDone.enter()
     for owner in [session, DownloadManagerModule.backgroundSession].compactMap({ $0 }) {
       group.enter()
       owner.getAllTasks { tasks in
@@ -778,6 +782,7 @@ class DownloadManagerModule: RCTEventEmitter {
         self.persistStateLocked()
         DispatchQueue.main.async(execute: self.returnRestoredTasksIfActive)
         NSLog("[DownloadManager] Restored %d URLSession tasks (%d downloads), %d orphaned → failed", self.taskToDownloadId.count, self.downloads.count, orphanedIds.count)
+        self.restoreDone.leave()
       }
     }
   }

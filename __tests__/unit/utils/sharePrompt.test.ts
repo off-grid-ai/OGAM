@@ -5,7 +5,10 @@ import {
   subscribeSharePrompt,
   emitSharePrompt,
   rateOnStore,
+  requestStoreReview,
 } from '../../../src/utils/sharePrompt';
+import InAppReview from 'react-native-in-app-review';
+import { getInstallerPackageName } from 'react-native-device-info';
 
 describe('maybeScheduleSharePrompt — at most once per session', () => {
   beforeEach(() => { jest.useFakeTimers(); resetSharePromptSession(); });
@@ -92,6 +95,62 @@ describe('rateOnStore', () => {
     expect(openURL).toHaveBeenCalledWith(
       'https://play.google.com/store/apps/details?id=ai.offgridmobile',
     );
+  });
+});
+
+describe('requestStoreReview - the store\'s own dialog, else the store page', () => {
+  const openURL = Linking.openURL as jest.Mock;
+  const isAvailable = InAppReview.isAvailable as jest.Mock;
+  const request = InAppReview.RequestInAppReview as jest.Mock;
+  const installer = getInstallerPackageName as jest.Mock;
+  const originalPlatform = Platform.OS;
+  const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, value: os });
+
+  beforeEach(() => {
+    openURL.mockReset().mockResolvedValue(undefined);
+    (Linking.canOpenURL as jest.Mock).mockReset().mockResolvedValue(false);
+    isAvailable.mockReset().mockReturnValue(true);
+    request.mockReset().mockResolvedValue(true);
+    installer.mockReset().mockResolvedValue('com.android.vending');
+  });
+
+  afterAll(() => setOS(originalPlatform));
+
+  it('opens SKStoreReviewController on iOS and never leaves the app', async () => {
+    setOS('ios');
+    await expect(requestStoreReview()).resolves.toBe('native');
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(openURL).not.toHaveBeenCalled();
+  });
+
+  it('opens the Play in-app review on a Play-installed Android build', async () => {
+    setOS('android');
+    await expect(requestStoreReview()).resolves.toBe('native');
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(openURL).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the Play page for a sideloaded APK (no Play install source)', async () => {
+    setOS('android');
+    installer.mockResolvedValue('');
+    await expect(requestStoreReview()).resolves.toBe('store_link');
+    expect(request).not.toHaveBeenCalled();
+    expect(openURL).toHaveBeenCalledWith('https://play.google.com/store/apps/details?id=ai.offgridmobile');
+  });
+
+  it('falls back to the store page when the native dialog is unavailable', async () => {
+    setOS('ios');
+    isAvailable.mockReturnValue(false);
+    await expect(requestStoreReview()).resolves.toBe('store_link');
+    expect(request).not.toHaveBeenCalled();
+    expect(openURL).toHaveBeenCalledWith('https://apps.apple.com/app/id6759299882?action=write-review');
+  });
+
+  it('falls back to the store page when the native request fails', async () => {
+    setOS('android');
+    request.mockRejectedValue(new Error('GOOGLE_SERVICES_NOT_AVAILABLE'));
+    await expect(requestStoreReview()).resolves.toBe('store_link');
+    expect(openURL).toHaveBeenCalledWith('https://play.google.com/store/apps/details?id=ai.offgridmobile');
   });
 });
 

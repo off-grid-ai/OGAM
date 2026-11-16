@@ -18,6 +18,10 @@ interface ScreenHeaderProps {
   /** A second line under the title, e.g. a file's size. */
   subtitle?: string;
   variant?: 'screen' | 'tab';
+  /** Makes the title a button, e.g. to rename what it names. */
+  onTitlePress?: () => void;
+  /** What tapping the title does, for a screen reader ("Rename"). */
+  titleHint?: string;
 }
 
 /**
@@ -39,9 +43,25 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   backTestID,
   subtitle,
   variant = 'screen',
+  onTitlePress,
+  titleHint,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const titleText = subtitle ? (
+    <View style={styles.titleBlock}>
+      <Text style={styles.title} numberOfLines={1}>
+        {title}
+      </Text>
+      <Text style={styles.subtitle} numberOfLines={1}>
+        {subtitle}
+      </Text>
+    </View>
+  ) : (
+    <Text style={styles.title} numberOfLines={1}>
+      {title}
+    </Text>
+  );
 
   return (
     <View
@@ -59,19 +79,19 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
       ) : null}
-      {subtitle ? (
-        <View style={styles.titleBlock}>
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
-          </Text>
-          <Text style={styles.subtitle} numberOfLines={1}>
-            {subtitle}
-          </Text>
-        </View>
+      {onTitlePress ? (
+        <TouchableOpacity
+          style={styles.titleBlock}
+          onPress={onTitlePress}
+          accessibilityRole="button"
+          accessibilityLabel={title}
+          accessibilityHint={titleHint}
+          testID={testID ? `${testID}-title` : undefined}
+        >
+          {titleText}
+        </TouchableOpacity>
       ) : (
-        <Text style={styles.title} numberOfLines={1}>
-          {title}
-        </Text>
+        titleText
       )}
       {right}
     </View>

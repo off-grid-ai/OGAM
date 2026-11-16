@@ -538,6 +538,29 @@ export function track(
   capture(event);
 }
 
+/** What led to the rating ask: the 2nd successful reply (`text`) or image (`image`). */
+export type RatingTrigger = 'text' | 'image';
+
+/** The in-chat rating ask. `platform` rides on every event, so these carry only the trigger. */
+export function ratingPromptShown(trigger: RatingTrigger): void {
+  capture('rating_prompt_shown', { trigger });
+}
+
+/** `route`: `native` (the store's own dialog) or `store_link` (the fallback store page). */
+export function ratingPromptRateTapped(trigger: RatingTrigger, route: 'native' | 'store_link'): void {
+  capture('rating_prompt_rate_tapped', { trigger, route });
+}
+
+/** `choice`: `not_now` (Not now, swipe or tap outside) or `never` (Don't ask again). */
+export function ratingPromptDismissed(trigger: RatingTrigger, choice: 'not_now' | 'never'): void {
+  capture('rating_prompt_dismissed', { trigger, choice });
+}
+
+/** The "Star on GitHub" row was tapped. */
+export function githubStarTapped(source: 'settings'): void {
+  capture('github_star_tapped', { source });
+}
+
 export function featureUsed(feature: Feature): void {
   capture('feature_used', { feature });
 }

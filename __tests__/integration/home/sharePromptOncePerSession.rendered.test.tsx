@@ -26,7 +26,7 @@ function Host({ onShow }: { onShow: () => void }) {
   return <SharePromptSheet visible={visible} onClose={() => setVisible(false)} />;
 }
 
-const TITLE = /Support Open-Source AI/i;
+const TITLE = /Did that just work for you\?/;
 
 describe('share prompt — once per session (rendered)', () => {
   beforeEach(() => { jest.useFakeTimers(); resetSharePromptSession(); });

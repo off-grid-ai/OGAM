@@ -520,6 +520,17 @@ jest.mock('react-native-device-info', () => ({
   getBundleId: jest.fn(() => 'ai.offgridmobile'),
   getManufacturerSync: jest.fn(() => 'Google'),
   isEmulatorSync: jest.fn(() => false),
+  // Who installed the app (Android). Play is com.android.vending; adb / a sideload gives ''.
+  getInstallerPackageName: jest.fn(() => Promise.resolve('com.android.vending')),
+}));
+
+// The stores' own review dialog (SKStoreReviewController / Play In-App Review) - the phone's UI.
+jest.mock('react-native-in-app-review', () => ({
+  __esModule: true,
+  default: {
+    isAvailable: jest.fn(() => true),
+    RequestInAppReview: jest.fn(() => Promise.resolve(true)),
+  },
 }));
 
 // react-native-image-picker mock
@@ -549,7 +560,11 @@ jest.mock('react-native-keychain', () => ({
   setGenericPassword: jest.fn(() => Promise.resolve(true)),
   getGenericPassword: jest.fn(() => Promise.resolve(false)),
   resetGenericPassword: jest.fn(() => Promise.resolve(true)),
-  ACCESSIBLE: { AFTER_FIRST_UNLOCK: 'AfterFirstUnlock' },
+  ACCESSIBLE: {
+    AFTER_FIRST_UNLOCK: 'AfterFirstUnlock',
+    WHEN_PASSCODE_SET_THIS_DEVICE_ONLY: 'AccessibleWhenPasscodeSetThisDeviceOnly',
+  },
+  ACCESS_CONTROL: { BIOMETRY_ANY_OR_DEVICE_PASSCODE: 'BiometryAnyOrDevicePasscode' },
 }));
 
 

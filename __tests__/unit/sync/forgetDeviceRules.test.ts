@@ -26,6 +26,7 @@ const PREFERENCES: SyncPreferences = {
   settings: true,
   notes: true,
   writing: true,
+  vault: false,
   screenshots: true,
   downloads: false,
   generatedMedia: false,
