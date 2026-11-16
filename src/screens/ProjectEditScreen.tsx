@@ -16,6 +16,7 @@ import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
+import { HeaderStatusFill, headerSurface } from '../components/ScreenHeader';
 import { useProjectStore } from '../stores';
 import { PROJECT_DELETE_FALLBACK_REASON } from '../stores/projectDeleteOutcome';
 import { Button } from '../components/Button';
@@ -114,6 +115,7 @@ export const ProjectEditScreen: React.FC = () => {
       >
         {/* Header */}
         <View style={styles.header}>
+          <HeaderStatusFill />
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton} testID="project-edit-cancel" accessibilityRole="button">
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
@@ -195,7 +197,7 @@ export const ProjectEditScreen: React.FC = () => {
   );
 };
 
-const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -211,6 +213,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingVertical: SPACING.md,
     borderBottomWidth: 0.5,
     borderBottomColor: colors.borderLight,
+    ...headerSurface(colors, shadows),
     zIndex: 1,
   },
   // Cancel and Save are 44pt targets.

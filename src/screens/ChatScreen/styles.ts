@@ -2,6 +2,7 @@ import { StyleSheet } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { createImageStyles } from './stylesImage';
+import { headerSurface } from '../../components/ScreenHeader';
 
 const createLayoutStyles = (colors: ThemeColors) => ({
   container: { flex: 1, backgroundColor: colors.background },
@@ -9,16 +10,16 @@ const createLayoutStyles = (colors: ThemeColors) => ({
   messageList: { paddingVertical: 16 },
 });
 
-const createHeaderStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   header: {
     // The 24 pt gutter every other screen uses (hand test 34: chat sat at 16).
     paddingHorizontal: SPACING.xl,
     paddingTop: 16,
     paddingBottom: 12,
-    // See-through over the living field, with a hairline under it (no slab, no shadow).
+    // A bar the messages scroll under: its own surface and edge shadow, a hairline under it.
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderLight,
-    backgroundColor: 'transparent',
+    ...headerSurface(colors, shadows),
     zIndex: 10,
   },
   headerRow: {

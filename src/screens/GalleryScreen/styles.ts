@@ -1,4 +1,5 @@
 import { cardSurface } from '../../theme/surface';
+import { headerSurface } from '../../components/ScreenHeader';
 import { StyleSheet, Dimensions } from 'react-native';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
@@ -13,7 +14,7 @@ const GRID_GUTTER = SPACING.xl;
 const GRID_SPACING = SPACING.sm;
 const CELL_SIZE = (screenWidth - GRID_GUTTER * 2 - GRID_SPACING * (COLUMN_COUNT - 1)) / COLUMN_COUNT;
 
-const createHeaderStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -25,6 +26,7 @@ const createHeaderStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingVertical: SPACING.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderLight,
+    ...headerSurface(colors, shadows),
     zIndex: 1,
   },
   // 44 pt frames pulled back, so the header keeps its height (Back was 32, Select 36).

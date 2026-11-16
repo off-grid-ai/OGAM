@@ -1,10 +1,34 @@
 import React, { type ReactNode } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TouchableOpacity } from './Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { FONTS, SPACING, TYPOGRAPHY } from '../constants';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
+
+/**
+ * The header bar's surface: its own background and a soft edge shadow, so content scrolls under a
+ * real bar instead of showing through it. Every screen's own header bar uses this too.
+ */
+export const headerSurface = (colors: ThemeColors, shadows: ThemeShadows) => ({
+  backgroundColor: colors.background,
+  ...shadows.edge,
+});
+
+/** Runs a header bar's background up under the status bar, so the two read as one surface. */
+export const HeaderStatusFill: React.FC = () => {
+  const { colors } = useTheme();
+  const { top } = useSafeAreaInsets();
+  return (
+    <View
+      pointerEvents="none"
+      style={[fillStyles.fill, { top: -top, height: top, backgroundColor: colors.background }]}
+    />
+  );
+};
+
+const fillStyles = StyleSheet.create({ fill: { position: 'absolute', left: 0, right: 0 } });
 
 interface ScreenHeaderProps {
   title: string;
@@ -68,6 +92,7 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
       style={[styles.header, variant === 'tab' && styles.tabHeader]}
       testID={testID}
     >
+      <HeaderStatusFill />
       {onBack ? (
         <TouchableOpacity
           style={styles.backButton}
@@ -98,9 +123,9 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   );
 };
 
-const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
-  // The header sits on the living field like the rest of the screen: no slab, no shadow, a hairline
-  // under it, and the screen's 24px gutter (brand Mobile profile).
+const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+  // The header is a surface above the screen: its own background and a soft shadow for depth, a
+  // hairline under it, and the screen's 24px gutter (brand Mobile profile).
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -110,6 +135,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     minHeight: 60,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderLight,
+    ...headerSurface(colors, shadows),
     zIndex: 1,
   },
   tabHeader: {

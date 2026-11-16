@@ -22,6 +22,7 @@ import { useChatStore, useProjectStore, useAppStore, useRemoteServerStore } from
 import { Conversation } from '../types';
 import { RootStackParamList } from '../navigation/types';
 import { SectionLabel } from '../components/SectionLabel';
+import { HeaderStatusFill } from '../components/ScreenHeader';
 import { useProjectDocumentCounts } from '../hooks/useProjectDocumentCounts';
 import { formatWhen } from '../utils/localTime';
 import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
@@ -180,6 +181,7 @@ export const ProjectDetailScreen: React.FC = () => {
     <AliveScreen style={styles.container} testID="project-detail-screen">
       {/* Header: back, the name, edit. */}
       <View style={styles.header}>
+        <HeaderStatusFill />
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
