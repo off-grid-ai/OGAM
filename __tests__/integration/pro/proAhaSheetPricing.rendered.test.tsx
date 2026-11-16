@@ -1,10 +1,10 @@
 /**
- * The Pro offer that appears in chat states the current price.
+ * The Pro offer that appears in chat names the plans, not a price.
  *
  * SPEC (OGAM user's view): after a free user has had enough real conversations to know the
- * product (their 10th completed reply), chat offers Off Grid AI Pro once. That offer states the
- * current founder price - $119 once for life, or $7.99 a month - and never an older tier ($49,
- * $69) or a yearly plan ("/yr", "year"). Before the 10th reply, no offer and no price is on screen.
+ * product (their 10th completed reply), chat offers Off Grid AI Pro once. That offer names the
+ * two plans - once for life, or monthly - and no dollar price (the checkout sheet shows the live
+ * one) and no yearly plan ("/yr", "year"). Before the 10th reply, no offer is on screen.
  *
  * Journey: the REAL ChatScreen and the REAL generation pipeline over the llama.rn native fake
  * (chatHarness). The user types and sends ten messages across two chats (five each, then a new
@@ -19,10 +19,10 @@ jest.unmock('@react-navigation/native');
 const OFFER_HEADLINE = 'It already knows what you did today.';
 // The chat offer appears a moment after the reply finishes; give it more than that moment.
 const OFFER_SETTLE_MS = 2_000;
-const STALE_PRICE_COPY = [/\$49/, /\$69/, /\/yr/i, /year/i];
+const PRICE_OR_YEARLY = [/\$\s?\d/, /\/yr/i, /year/i];
 
 describe('Pro offer in chat states the current price (rendered)', () => {
-  it('after the 10th reply the offer shows $119 once for life or $7.99 a month, and no old or yearly price', async () => {
+  it('after the 10th reply the offer names once for life or monthly, with no price or yearly plan', async () => {
     const h = await setupChatScreen({ navigation: 'real', engine: 'llama' });
     const view = h.render();
 
@@ -38,11 +38,10 @@ describe('Pro offer in chat states the current price (rendered)', () => {
     }
 
     // BEFORE: nine replies in, and past the moment an offer would appear, there is no offer and
-    // no price on screen.
+    // no plan copy on screen.
     await h.settle(OFFER_SETTLE_MS);
     expect(view.queryByText(OFFER_HEADLINE)).toBeNull();
-    expect(view.queryByText(/\$119/)).toBeNull();
-    expect(view.queryByText(/\$7\.99/)).toBeNull();
+    expect(view.queryByText(/once for life, or monthly/)).toBeNull();
 
     await h.send('question number 10', { text: 'Answer number 10.' });
     await h.rtl.waitFor(() => expect(view.getByText('Answer number 10.')).toBeTruthy());
@@ -50,9 +49,8 @@ describe('Pro offer in chat states the current price (rendered)', () => {
     await h.rtl.waitFor(() => expect(view.getByText(OFFER_HEADLINE)).toBeTruthy(), {
       timeout: OFFER_SETTLE_MS + 2_000,
     });
-    expect(view.getByText(/\$119 once for life/)).toBeTruthy();
-    expect(view.getByText(/\$7\.99 a month/)).toBeTruthy();
-    for (const stale of STALE_PRICE_COPY) {
+    expect(view.getByText(/once for life, or monthly/)).toBeTruthy();
+    for (const stale of PRICE_OR_YEARLY) {
       expect(view.queryAllByText(stale)).toHaveLength(0);
     }
   }, 120_000);

@@ -2,11 +2,9 @@
  * Off Grid AI Pro pricing copy, shared by every Pro surface so they stay in sync.
  *
  * Two plans, matching getoffgridai.co/pro: a one-time lifetime purchase and a monthly
- * subscription. Both are founder rates that only ever go up as we grow. The app states the
- * next tier ($119 / $7.99) because the website's first tier ($69 / $4.99) is nearly full
- * and a release outlives it. The numbers are hardcoded and bumped in a new release
- * when a tier fills. The web pay page
- * (getoffgridai.co/pro/#buy) is where checkout happens and holds the authoritative price.
+ * subscription. The app names the plans but never a price: Get Pro opens the checkout sheet
+ * (getoffgridai.co/pro/app/, see services/proCheckout), which shows the live price, so a
+ * price change never needs an app release.
  */
 export interface ProPricingCopy {
   /** Small uppercase eyebrow label. */
@@ -26,10 +24,10 @@ export interface ProPricingCopy {
 export function getPricingCopy(): ProPricingCopy {
   return {
     label: 'FOUNDER RATE',
-    title: '$119 lifetime or $7.99/month',
+    title: 'Lifetime or monthly',
     subtitle: "Lock in today's rate - it only goes up, never down. One license covers up to 5 devices, laptop and phone.",
     cta: 'Get Pro',
-    sheetSubheadline: 'Off Grid AI Pro - $119 once for life, or $7.99 a month.',
+    sheetSubheadline: 'Off Grid AI Pro - pay once for life, or monthly.',
     sheetFooter: 'Founder rate, locked in when you join. Monthly renews; lifetime is a one-time payment.',
   };
 }

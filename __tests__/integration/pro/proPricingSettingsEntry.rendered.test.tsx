@@ -1,9 +1,9 @@
 /**
  * Pro pricing on screen, reached from Settings.
  *
- * SPEC (OGAM user's view): the Pro screen states the current founder price - $119 for a lifetime
- * licence or $7.99 a month - and never an older tier ($49, $69) or a yearly plan ("/yr", "year").
- * Pro has no yearly plan; it has a lifetime purchase and a monthly subscription.
+ * SPEC (OGAM user's view): the Pro screen names the two plans - lifetime or monthly - and no dollar
+ * price (Get Pro opens the checkout sheet, which shows the live one) and no yearly plan ("/yr",
+ * "year"). Pro has no yearly plan; it has a lifetime purchase and a monthly subscription.
  *
  * Journey: the REAL App boots over the native boundary as a returning user (onboarding done on an
  * earlier launch, persisted on disk), skips model setup, taps the real Settings tab, then opens Pro
@@ -25,7 +25,7 @@ jest.mock(
   { virtual: true },
 );
 
-const STALE_PRICE_COPY = [/\$49/, /\$69/, /\/yr/i, /year/i];
+const PRICE_OR_YEARLY = [/\$\s?\d/, /\/yr/i, /year/i];
 
 type DevGlobal = { __DEV__?: boolean };
 const originalDev = (global as DevGlobal).__DEV__;
@@ -61,33 +61,30 @@ async function openSettingsAsReturningUser() {
 
 type View = Awaited<ReturnType<typeof openSettingsAsReturningUser>>['view'];
 
-function expectCurrentPricingOnly(view: View) {
-  expect(view.getByText(/\$119 lifetime/)).toBeTruthy();
-  expect(view.getByText(/\$7\.99\/month/)).toBeTruthy();
-  for (const stale of STALE_PRICE_COPY) {
+function expectPlansWithoutPrice(view: View) {
+  expect(view.getByText('Lifetime or monthly')).toBeTruthy();
+  for (const stale of PRICE_OR_YEARLY) {
     expect(view.queryAllByText(stale)).toHaveLength(0);
   }
 }
 
 describe('Pro pricing reached from Settings (rendered, real App)', () => {
-  it('the "Off Grid AI Pro" row opens Pro showing $119 lifetime and $7.99 a month, no yearly or old tier', async () => {
+  it('the "Off Grid AI Pro" row opens Pro naming lifetime or monthly, with no price or yearly plan', async () => {
     const { view, rtl } = await openSettingsAsReturningUser();
 
-    // BEFORE: on Settings, no price is shown yet.
-    expect(view.queryByText(/\$119/)).toBeNull();
-    expect(view.queryByText(/\$7\.99/)).toBeNull();
+    // BEFORE: on Settings, the Pro screen is not open yet.
+    expect(view.queryByText('Lifetime or monthly')).toBeNull();
 
     rtl.fireEvent.press(view.getByLabelText(/^Off Grid AI Pro\. /));
     await rtl.waitFor(() => expect(view.getByText('Intelligence, democratized.')).toBeTruthy());
 
-    expectCurrentPricingOnly(view);
+    expectPlansWithoutPrice(view);
     view.unmount();
   });
 
-  it('the upsell banner "Get Pro" button opens Pro showing the same current pricing', async () => {
+  it('the upsell banner "Get Pro" button opens Pro naming the same plans', async () => {
     const { view, rtl } = await openSettingsAsReturningUser();
 
-    expect(view.queryByText(/\$119/)).toBeNull();
     expect(view.queryByText('Intelligence, democratized.')).toBeNull();
 
     // The Settings upsell banner carries its own "Get Pro" button.
@@ -100,7 +97,7 @@ describe('Pro pricing reached from Settings (rendered, real App)', () => {
     rtl.fireEvent.press(rtl.within(banner!).getByText('Get Pro'));
     await rtl.waitFor(() => expect(view.getByText('Intelligence, democratized.')).toBeTruthy());
 
-    expectCurrentPricingOnly(view);
+    expectPlansWithoutPrice(view);
     view.unmount();
   });
 });
