@@ -37,7 +37,7 @@ export const ProUnlockModal: React.FC<Props> = ({
   onClose,
   onUnlocked,
 }) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
 
   const [licenseKey, setLicenseKey] = useState('');
@@ -101,7 +101,7 @@ export const ProUnlockModal: React.FC<Props> = ({
   // Not a member yet — open checkout in a sheet. The buyer's key is emailed
   // to them after checkout, then pasted here.
   const handleGetPro = () => {
-    openProCheckout('pro-unlock').catch(() => {
+    openProCheckout('pro-unlock', isDark ? 'dark' : 'light').catch(() => {
       setError({
         title: 'Could not open Pro',
         description: 'Please try again.',

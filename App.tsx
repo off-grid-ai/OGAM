@@ -12,6 +12,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { openPendingImprove, startScribeEntry } from './src/services/scribeEntry';
+import { startProCheckoutReturn } from './src/services/proCheckout';
 import { AliveProvider } from './src/components/AliveProvider';
 import { AppNavigator } from './src/navigation';
 import { getRegisteredScreens } from './src/navigation/screenRegistry';
@@ -164,6 +165,14 @@ function App() {
         navigate: (name, params) =>
           (appNavigationRef.navigate as unknown as (route: string, args?: object) => void)(name, params),
         hasRoute: name => getRegisteredScreens().some(screen => screen.name === name),
+      }),
+    [],
+  );
+  // Paid in the checkout sheet: its "Paste your key in the app" link opens the key field.
+  useEffect(
+    () =>
+      startProCheckoutReturn(() => {
+        if (appNavigationRef.isReady()) appNavigationRef.navigate('ProDetail', { unlock: true });
       }),
     [],
   );
