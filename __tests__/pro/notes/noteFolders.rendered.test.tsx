@@ -7,7 +7,8 @@
  * to its notes from other notes follow, so they still open. A name that is empty, already taken, or
  * differs only in capital letters is refused with the reason, and nothing moves. Delete asks a
  * second time, saying how many notes go; then the notes move to the library's trash and the folder
- * goes. An empty folder says it is empty.
+ * goes. An empty folder says it is empty. New inside a folder makes the note there. A search reads
+ * every note in every folder, says where each one is, and says when nothing matches.
  *
  * The real Notes screen in a real navigator over the real notes library, notes index and
  * @offgrid/notes. Device boundary only: the disk (memfs-backed react-native-fs).
@@ -138,6 +139,11 @@ describePro('Note folders', () => {
     await phone.write('Work/Plan', 'Ship it.\n');
     await phone.notesIndex.newFolder('', 'Empty');
 
+    const library = openNotes();
+    await library.view.findByTestId('notes-folder-Work');
+    expect(library.view.getByLabelText('Work, folder').props.accessibilityHint).toBe('1 note');
+    library.view.unmount();
+
     const inWork = openNotes('Work');
     await inWork.view.findByTestId('note-Work/Plan.md');
     inWork.view.unmount();
@@ -225,5 +231,38 @@ describePro('Note folders', () => {
     rtl.fireEvent.press(rtl.within(view.getByTestId('app-alert')).getByLabelText('Delete'));
     await rtl.waitFor(() => expect(view.queryByTestId('notes-folder-Spare')).toBeNull());
     expect(await phone.exists('Spare')).toBe(false);
+  });
+
+  it('New inside a folder makes the note there and opens it', async () => {
+    const phone = await installPhone();
+    await phone.write('Work/Plan', 'Ship it.\n');
+    const { rtl, view, navigation } = openNotes('Work');
+    await view.findByTestId('note-Work/Plan.md');
+
+    rtl.fireEvent.press(view.getByTestId('notes-new'));
+    await rtl.waitFor(() =>
+      expect(navigation.getCurrentRoute()).toMatchObject({
+        name: 'Note',
+        params: { path: 'Work/Untitled.md', fresh: true },
+      }),
+    );
+    expect(await phone.exists('Work/Untitled.md')).toBe(true);
+  });
+
+  it('a search reads every note in every folder, says where each is, and says when nothing matches', async () => {
+    const phone = await installPhone();
+    await phone.write('Work/Plan', 'Book the venue.\n');
+    await phone.write('Groceries', 'Milk.\n');
+    const { rtl, view } = openNotes();
+    await view.findByTestId('note-Groceries.md');
+
+    rtl.fireEvent.changeText(view.getByTestId('notes-search'), 'venue');
+    const found = await view.findByTestId('note-Work/Plan.md');
+    expect(found.props.accessibilityHint).toMatch(/, in Work$/);
+    expect(view.queryByTestId('note-Groceries.md')).toBeNull();
+    expect(view.queryByTestId('notes-folder-Work')).toBeNull();
+
+    rtl.fireEvent.changeText(view.getByTestId('notes-search'), 'nothing like this');
+    expect(await view.findByText(/No note matches/)).toBeTruthy();
   });
 });
