@@ -90,6 +90,19 @@ it('with Crash reports only, usage events are dropped and a crash arrives scrubb
   expect(exception).toMatchObject({ type: 'TypeError', value: 'Cannot open' });
 });
 
+it('a once-per-session event used before opting in to Usage is still sent once after', async () => {
+  const { analytics, endpoint, flush } = await setup({ crashes: true });
+  analytics.featureUsed('notes');
+  analytics.boostPromo('shown', 'home');
+  await analytics.setAnalyticsConsent({ usage: true }, 'settings');
+  analytics.featureUsed('notes');
+  analytics.boostPromo('shown', 'home');
+  await flush();
+  await waitFor(() => expect(endpoint.named('boost_promo_shown')).toHaveLength(1));
+  expect(endpoint.named('feature_used').map(event => event.properties.feature)).toEqual(['notes']);
+  expect(endpoint.named('boost_promo_shown')[0].properties.surface).toBe('home');
+});
+
 it('turning Crash reports off keeps usage flowing on a rebuilt client with the same ID', async () => {
   const { analytics, endpoint, flush } = await setup({ usage: true, crashes: true });
   analytics.track('chat_created');

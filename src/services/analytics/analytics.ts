@@ -572,9 +572,12 @@ export function githubStarTapped(source: 'settings'): void {
 const ONCE_PER_SESSION: ReadonlySet<Feature> = new Set<Feature>(['scribe', 'improve', 'notes', 'vault']);
 const usedThisSession = new Set<Feature>();
 
+/** Usage events can go out now. A once-per-session event spends its one send only then. */
+const usageLive = (): boolean => client !== null && clientUsage;
+
 export function featureUsed(feature: Feature): void {
   if (ONCE_PER_SESSION.has(feature)) {
-    if (usedThisSession.has(feature)) return;
+    if (!usageLive() || usedThisSession.has(feature)) return;
     usedThisSession.add(feature);
   }
   capture('feature_used', { feature });
@@ -584,7 +587,7 @@ export function featureUsed(feature: Feature): void {
 export function boostPromo(action: 'shown' | 'clicked' | 'dismissed', surface: BoostPromoSurface): void {
   // Shown on every visit to the screen, so sent once per session per surface (the event budget).
   if (action === 'shown') {
-    if (promoShownThisSession.has(surface)) return;
+    if (!usageLive() || promoShownThisSession.has(surface)) return;
     promoShownThisSession.add(surface);
   }
   capture(`boost_promo_${action}`, { surface });
