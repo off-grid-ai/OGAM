@@ -1,6 +1,6 @@
 import { videoModelDisplayName } from '../../utils/modelHelpers';
 import { useAppStore } from '../../stores/appStore';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, Image, Linking } from 'react-native';
 import { OFF_GRID_DESKTOP_URL } from '../../constants';
 import { withUtm } from '../../utils/utm';
@@ -13,6 +13,7 @@ import {
   Card,
   CustomAlert,
   hideAlert,
+  showAlert,
   ModelSelectorModal,
 } from '../../components';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
@@ -55,7 +56,7 @@ import { SCROLL_DEPTH_PROPS } from '../../constants/scrollDepth';
 import { useGetPro } from '../../hooks/useGetPro';
 import { boostPromoLink, boostPromoVisible } from '@offgrid/models';
 import { boostPromo } from '../../services/analytics/analytics';
-import { openWebSheet } from '../../services/proCheckout';
+import { OfflineError, openWebSheet } from '../../services/proCheckout';
 
 type HomeScreenProps = {
   navigation: HomeScreenNavigationProp;
@@ -175,6 +176,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   };
 
   const boostClosedVersion = useAppStore(s => s.boostPromoClosedVersion);
+  const homeBoostShown = boostPromoVisible(boostClosedVersion);
+  // The offer is one of Home's cards: counted shown with Home, like the Models card with Models.
+  useEffect(() => {
+    if (homeBoostShown && isFocused) boostPromo('shown', 'home');
+  }, [homeBoostShown, isFocused]);
   // The top of Home: everything it does, free and Pro, what this person has not tried first.
   const showcase = showcaseFeatures(
     {
@@ -182,7 +188,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       videosMade: generatedVideos.length,
       hasVoice: (modelCounts.voice ?? 0) > 0,
       hasSpeech: (modelCounts.speech ?? 0) > 0,
-      showBoost: boostPromoVisible(boostClosedVersion),
+      showBoost: homeBoostShown,
     },
     {
       image: () => (downloadedImageModels.length > 0 ? startNewChat() : presentModelSheet('image')),
@@ -197,10 +203,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       vault: () => navigation.navigate('Vault' as never),
       pro: () => getPro('home-showcase'),
       desktop: () => { Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'home-showcase')).catch(() => {}); },
-      // Offline, the Models tab: its promo card says so and offers the page again.
+      // Offline, say so here, where it was tapped; any other failure, the offer on the Models tab.
       boost: () => {
         boostPromo('clicked', 'home');
-        openWebSheet(boostPromoLink('mobile', 'home')).catch(() => navigation.navigate('Main', { screen: 'ModelsTab' }));
+        openWebSheet(boostPromoLink('mobile', 'home')).catch((e: unknown) => {
+          if (e instanceof OfflineError) {
+            setAlertState(showAlert("You're offline", 'Connect to the internet to see the offer.'));
+          } else {
+            navigation.navigate('Main', { screen: 'ModelsTab' });
+          }
+        });
       },
     },
     isProActive,
