@@ -1,9 +1,9 @@
 /**
  * Pro pricing on screen, reached from Settings.
  *
- * SPEC (OGAM user's view): the Pro screen names the two plans - lifetime or monthly - and no dollar
- * price (Get Pro opens the checkout sheet, which shows the live one) and no yearly plan ("/yr",
- * "year"). Pro has no yearly plan; it has a lifetime purchase and a monthly subscription.
+ * SPEC (OGAM user's view): for someone without Pro, both Pro entries in Settings open the checkout
+ * sheet (getoffgridai.co/pro/app/), which shows the live price. The app itself shows no dollar
+ * price and no yearly plan ("/yr", "year"): Pro is a lifetime purchase or a monthly subscription.
  *
  * Journey: the REAL App boots over the native boundary as a returning user (onboarding done on an
  * earlier launch, persisted on disk), skips model setup, taps the real Settings tab, then opens Pro
@@ -61,31 +61,40 @@ async function openSettingsAsReturningUser() {
 
 type View = Awaited<ReturnType<typeof openSettingsAsReturningUser>>['view'];
 
-function expectPlansWithoutPrice(view: View) {
-  expect(view.getByText('Lifetime or monthly')).toBeTruthy();
+function expectNoPriceInApp(view: View) {
   for (const stale of PRICE_OR_YEARLY) {
     expect(view.queryAllByText(stale)).toHaveLength(0);
   }
 }
 
-describe('Pro pricing reached from Settings (rendered, real App)', () => {
-  it('the "Off Grid AI Pro" row opens Pro naming lifetime or monthly, with no price or yearly plan', async () => {
-    const { view, rtl } = await openSettingsAsReturningUser();
+/** BOUNDARY: no in-app browser module under jest, so checkout opens through the system browser. */
+function watchOpenedUrls(): string[] {
+  const { Linking } = require('react-native');
+  const opened: string[] = [];
+  Linking.openURL = async (url: string) => { opened.push(url); };
+  return opened;
+}
 
-    // BEFORE: on Settings, the Pro screen is not open yet.
-    expect(view.queryByText('Lifetime or monthly')).toBeNull();
+const checkoutFrom = (medium: string) =>
+  new RegExp(`^https://getoffgridai\\.co/pro/app/\\?theme=(dark|light)&.*utm_medium=${medium}(&|$)`);
+
+describe('Pro pricing reached from Settings (rendered, real App)', () => {
+  it('the "Off Grid AI Pro" row opens the checkout sheet, and the app shows no price or yearly plan', async () => {
+    const { view, rtl } = await openSettingsAsReturningUser();
+    const opened = watchOpenedUrls();
+    expectNoPriceInApp(view);
 
     rtl.fireEvent.press(view.getByLabelText(/^Off Grid AI Pro\. /));
-    await rtl.waitFor(() => expect(view.getByText('Intelligence, democratized.')).toBeTruthy());
+    await rtl.waitFor(() => expect(opened).toHaveLength(1));
 
-    expectPlansWithoutPrice(view);
+    expect(opened[0]).toMatch(checkoutFrom('settings'));
+    expect(view.queryByText('Intelligence, democratized.')).toBeNull();
     view.unmount();
   });
 
-  it('the upsell banner "Get Pro" button opens Pro naming the same plans', async () => {
+  it('the upsell banner "Get Pro" button opens the same checkout sheet', async () => {
     const { view, rtl } = await openSettingsAsReturningUser();
-
-    expect(view.queryByText('Intelligence, democratized.')).toBeNull();
+    const opened = watchOpenedUrls();
 
     // The Settings upsell banner carries its own "Get Pro" button.
     // Home stays mounted behind the tabs with a "Get Pro" of its own, so scope to the banner.
@@ -95,9 +104,10 @@ describe('Pro pricing reached from Settings (rendered, real App)', () => {
     }
     expect(banner).not.toBeNull();
     rtl.fireEvent.press(rtl.within(banner!).getByText('Get Pro'));
-    await rtl.waitFor(() => expect(view.getByText('Intelligence, democratized.')).toBeTruthy());
+    await rtl.waitFor(() => expect(opened).toHaveLength(1));
 
-    expectPlansWithoutPrice(view);
+    expect(opened[0]).toMatch(checkoutFrom('settings-banner'));
+    expectNoPriceInApp(view);
     view.unmount();
   });
 });

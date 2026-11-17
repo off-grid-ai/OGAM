@@ -6,8 +6,9 @@
  * supplied by the Jest environment, but every Off Grid screen, store action, and route is real.
  */
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Linking } from 'react-native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { AppNavigator } from '../../../src/navigation/AppNavigator';
 import { useAppStore } from '../../../src/stores/appStore';
 import { createDeviceInfo, createDownloadedModel } from '../../utils/factories';
@@ -32,7 +33,11 @@ describe('Pro entry from Home', () => {
     app.setOnboardingComplete(false);
   });
 
-  it('opens the Pro screen with its two valid actions and no device-licence shortcut', () => {
+  it('the crown opens the checkout sheet, not the Pro page, for someone without Pro', async () => {
+    // BOUNDARY: no in-app browser module under jest, so checkout opens through the system browser.
+    const opened: string[] = [];
+    const openURL = Linking.openURL;
+    Linking.openURL = async (url: string) => { opened.push(url); };
     const ui = render(
       <NavigationContainer>
         <AppNavigator />
@@ -41,7 +46,27 @@ describe('Pro entry from Home', () => {
 
     fireEvent.press(ui.getByLabelText('Open Off Grid AI Pro'));
 
-    expect(ui.getByText('Off Grid AI Pro')).toBeTruthy();
+    await waitFor(() => expect(opened).toHaveLength(1));
+    expect(opened[0]).toMatch(/^https:\/\/getoffgridai\.co\/pro\/app\/\?theme=(dark|light)&.*utm_medium=home-crown/);
+    expect(ui.queryByText('I have a license key')).toBeNull();
+
+    Linking.openURL = openURL;
+    ui.unmount();
+  });
+
+  it('the Pro page has its two valid actions and no device-licence shortcut', async () => {
+    const nav = createNavigationContainerRef();
+    const ui = render(
+      <NavigationContainer ref={nav}>
+        <AppNavigator />
+      </NavigationContainer>,
+    );
+
+    // The Pro page is reached from the sheet's "Have a key?" or by someone with Pro.
+    await waitFor(() => expect(nav.isReady()).toBe(true));
+    act(() => (nav.navigate as (name: string) => void)('ProDetail'));
+
+    expect(await ui.findByText('Off Grid AI Pro')).toBeTruthy();
     expect(ui.getAllByText('Get Pro').length).toBeGreaterThan(0);
     expect(ui.getByText('I have a license key')).toBeTruthy();
     expect(ui.queryByText('Use Pro from another device')).toBeNull();
