@@ -133,7 +133,7 @@ A video model pack reports downloads once for the whole pack: `model` is its cat
 | `meeting_stopped` | OGAD: `reason` (`user`, `inactivity`, `max_duration`), `duration_ms`. Never the meeting, its platform or who was in it. |
 | `brain_action` | OGAD: `action`: `capture_paused`, `capture_resumed`, `search` (a meaning search on the Search screen, at most once a minute; never the terms), `action_accepted`, `action_dismissed`, `vault_unlocked`, `vault_exported` |
 | `reply_regenerated` | none |
-| `boost_promo_shown`, `boost_promo_clicked`, `boost_promo_dismissed` | the private cloud promo: seen (once per session per surface), its button, or closed. `surface`: `models`, `model_settings` |
+| `boost_promo_shown`, `boost_promo_clicked`, `boost_promo_dismissed` | the private cloud promo: seen (once per session per surface), its button, or closed. `surface`: `models`, `model_settings`, `onboarding`, `home` (OGAM) |
 | `project_created` | none |
 | `document_added` | `file_type` (an extension the app opens, else `other`; `none` without one), `size_bucket` |
 | `feature_used` | `feature`: `voice_input`, `tts`, `image_generation`, `video_generation`, `vision`, `web_search`, `tools`, `mcp_tool`, `remote_server`, `browser_action`, `clipboard`, `meetings`, `sync`, `capture` (OGAD), `scribe` (a fix, an ignore or a word learned), `improve` (a rewrite made), `notes` (a note saved), `vault` (the vault opened or an item saved). OGAM sends `scribe`, `improve`, `notes` and `vault` at most once per session; OGAD sends each feature at most once in 10 minutes. |

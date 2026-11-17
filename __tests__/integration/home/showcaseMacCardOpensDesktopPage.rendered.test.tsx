@@ -7,11 +7,14 @@
  * records the URL the app hands it.
  */
 import { launchApp, restoreBuildFlavor, type AnalyticsApp } from '../../harness/analyticsApp';
+import { websiteReach } from '../../harness/websiteReach';
 
 jest.unmock('@react-navigation/native');
 
 let app: AnalyticsApp | null = null;
+let undoReach = (): void => undefined;
 afterEach(async () => {
+  undoReach();
   app?.view.unmount();
   app?.endpoint.restore();
   app = null;
@@ -21,6 +24,8 @@ afterEach(async () => {
 it('a Mac card opens the Desktop page with the carousel\'s utm; a phone Pro card opens the checkout sheet', async () => {
   // A store build without a licence: Pro is off (a dev build unlocks Pro, so the Pro card would open video).
   app = await launchApp({ release: true, returningUser: true });
+  // Our site answers, so the sheets open.
+  undoReach = websiteReach(true);
   const { view, rtl } = app;
   await view.findByTestId('home-screen');
   const { Linking } = require('react-native');
@@ -37,4 +42,11 @@ it('a Mac card opens the Desktop page with the carousel\'s utm; a phone Pro card
   // No in-app browser module under jest, so the checkout sheet opens through the system browser.
   await rtl.waitFor(() => expect(opened).toHaveLength(2));
   expect(opened[1]).toMatch(/^https:\/\/getoffgridai\.co\/pro\/app\/\?theme=(dark|light)&.*utm_medium=home-showcase/);
+
+  // The private cloud card opens its offer page, tagged as coming from Home.
+  rtl.fireEvent.press(view.getByTestId('feature-showcase-boost'));
+  await rtl.waitFor(() => expect(opened).toHaveLength(3));
+  expect(opened[2]).toBe(
+    'https://getoffgridai.co/boost?utm_source=off-grid-mobile-app&utm_medium=boost-home&utm_campaign=in-app',
+  );
 });

@@ -30,8 +30,9 @@ const openers = (): FeatureOpeners => ({
   vault: opener(),
   pro: opener(),
   desktop: opener(),
+  boost: opener(),
 });
-const fresh: FeatureUse = { imagesMade: 0, videosMade: 0, hasVoice: false, hasSpeech: false };
+const fresh: FeatureUse = { imagesMade: 0, videosMade: 0, hasVoice: false, hasSpeech: false, showBoost: false };
 const keys = (features: ShowcaseFeature[]) => features.map(f => f.key);
 const MAC_KEYS = ['mac-clipboard', 'mac-dictation', 'mac-meetings', 'mac-models', 'mac-recall'];
 /** Pro features on this phone: without Pro their cards open Pro. */
@@ -53,10 +54,21 @@ describe('showcaseFeatures', () => {
     }
   });
 
+  it('offers the private cloud with the free phone features while the promo is open, and opens its page', () => {
+    const opened: string[] = [];
+    const features = showcaseFeatures({ ...fresh, showBoost: true }, { ...openers(), boost: () => opened.push('boost') }, false);
+    const boost = features.find(f => f.key === 'boost')!;
+    expect(keys(features).indexOf('boost')).toBe(FREE_PHONE_KEYS.length);
+    expect(boost.pro || boost.mac).toBeFalsy();
+    boost.onPress();
+    expect(opened).toEqual(['boost']);
+    expect(keys(showcaseFeatures(fresh, openers(), false))).not.toContain('boost');
+  });
+
   it('puts what you have tried last, keeping the order within each group', () => {
     const order = keys(showcaseFeatures(fresh, openers(), true));
     const features = showcaseFeatures(
-      { imagesMade: 2, videosMade: 1, hasVoice: true, hasSpeech: true },
+      { imagesMade: 2, videosMade: 1, hasVoice: true, hasSpeech: true, showBoost: false },
       openers(),
       true,
     );

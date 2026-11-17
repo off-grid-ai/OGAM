@@ -53,6 +53,9 @@ import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabe
 import { openSupportEmail } from '../../utils/supportEmail';
 import { SCROLL_DEPTH_PROPS } from '../../constants/scrollDepth';
 import { useGetPro } from '../../hooks/useGetPro';
+import { boostPromoLink, boostPromoVisible } from '@offgrid/models';
+import { boostPromo } from '../../services/analytics/analytics';
+import { openWebSheet } from '../../services/proCheckout';
 
 type HomeScreenProps = {
   navigation: HomeScreenNavigationProp;
@@ -171,6 +174,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     voice: voiceSummary ? 1 : 0,
   };
 
+  const boostClosedVersion = useAppStore(s => s.boostPromoClosedVersion);
   // The top of Home: everything it does, free and Pro, what this person has not tried first.
   const showcase = showcaseFeatures(
     {
@@ -178,6 +182,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       videosMade: generatedVideos.length,
       hasVoice: (modelCounts.voice ?? 0) > 0,
       hasSpeech: (modelCounts.speech ?? 0) > 0,
+      showBoost: boostPromoVisible(boostClosedVersion),
     },
     {
       image: () => (downloadedImageModels.length > 0 ? startNewChat() : presentModelSheet('image')),
@@ -192,6 +197,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       vault: () => navigation.navigate('Vault' as never),
       pro: () => getPro('home-showcase'),
       desktop: () => { Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'home-showcase')).catch(() => {}); },
+      // Offline, the Models tab: its promo card says so and offers the page again.
+      boost: () => {
+        boostPromo('clicked', 'home');
+        openWebSheet(boostPromoLink('mobile', 'home')).catch(() => navigation.navigate('Main', { screen: 'ModelsTab' }));
+      },
     },
     isProActive,
   );
