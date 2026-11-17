@@ -53,7 +53,17 @@ async function siteReachable(url: string): Promise<boolean> {
  * Opens one of our web pages in a sheet over the app, else in the system browser. Rejects with
  * OfflineError when the site does not answer.
  */
-export async function openWebSheet(url: string): Promise<void> {
+export function openWebSheet(url: string): Promise<void> {
+  // A second tap while the first is still opening joins it: two opens would make iOS refuse the
+  // second sheet, and the page would open again in the browser behind it.
+  opening ??= openOnce(url).finally(() => {
+    opening = null;
+  });
+  return opening;
+}
+let opening: Promise<void> | null = null;
+
+async function openOnce(url: string): Promise<void> {
   if (!(await siteReachable(url))) throw new OfflineError();
   if (await InAppBrowser.isAvailable().catch(() => false)) {
     // The sheet can still refuse (Android: "No activity" under the new architecture); then the

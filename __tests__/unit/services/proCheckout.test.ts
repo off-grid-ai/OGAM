@@ -41,6 +41,18 @@ describe('openProCheckout', () => {
     expect(options.modalPresentationStyle).toBe('pageSheet');
   });
 
+  it('a second tap while the sheet is opening joins it: one sheet, and no browser behind it', async () => {
+    (InAppBrowser.isAvailable as jest.Mock).mockResolvedValue(true);
+    (InAppBrowser.open as jest.Mock).mockResolvedValue({ type: 'cancel' });
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    await Promise.all([openProCheckout('home', 'dark'), openProCheckout('home', 'dark')]);
+    expect(InAppBrowser.open).toHaveBeenCalledTimes(1);
+    expect(openURL).not.toHaveBeenCalled();
+    // Once it settles, the next tap opens again.
+    await openProCheckout('home', 'dark');
+    expect(InAppBrowser.open).toHaveBeenCalledTimes(2);
+  });
+
   it('falls back to the system browser where no in-app browser exists', async () => {
     (InAppBrowser.isAvailable as jest.Mock).mockResolvedValue(false);
     const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
