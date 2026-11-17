@@ -27,6 +27,7 @@ import {
   guideAnswerParts,
   guideAnswerBlocks,
   guideFlowAnswer,
+  guideFlowAnswerById,
   guideGrounding,
   guideStarterAnswer,
   guideTurnsToSend,
@@ -48,6 +49,7 @@ import { useAppStore } from '../../stores';
 import { selectHasProAccess } from '../../stores/proAccessSlice';
 import type { RootStackParamList } from '../../navigation/types';
 import { askGuide, type GuideTurn } from '../../services/guideAsk';
+import { guideQuestionVector } from '../../services/guideVector';
 import { GUIDE_GROUPS, firstLookTopics, mobileGuideTopics, type MobileGuideTopic } from './guideTopics';
 import { GuidePicture } from './GuidePicture';
 
@@ -101,19 +103,21 @@ const AskPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) => vo
   const firstLook = firstLookTopics(topics, GUIDE_FIRST_LOOK.mobile);
   const toEnd = () => requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
 
-  /** Ask a question; a retry resends the last one, already on screen, without a second copy. */
-  const ask = async (question: string, retry = false) => {
+  /** Ask a question; a retry resends the last one, already on screen, without a second copy. A
+   * pick from a "Which one?" list asks with that flow's id, so its steps come back exactly. */
+  const ask = async (question: string, retry = false, flowId?: string) => {
     const text = question.trim();
     if (!text || waiting) return;
     const history: GuideTurn[] = retry ? turns : [...turns, { role: 'user', content: text }];
     if (!retry) setDraft('');
-    // A starter's or a "how do I…" answer is built from the guide itself: the app's own labels in
-    // order, instant, and there with no model.
-    const starter = retry
+    // A starter's or a picked flow's answer is built from the guide itself: instant, and there with no model.
+    const instant = retry
       ? null
-      : guideStarterAnswer('mobile', text, topics) ?? guideFlowAnswer('mobile', text, topics, { platform: PLATFORM });
-    if (starter) {
-      setTurns([...history, { role: 'assistant', content: starter }]);
+      : flowId
+        ? guideFlowAnswerById('mobile', flowId, topics)
+        : guideStarterAnswer('mobile', text, topics);
+    if (instant) {
+      setTurns([...history, { role: 'assistant', content: instant }]);
       toEnd();
       return;
     }
@@ -121,8 +125,18 @@ const AskPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) => vo
     setWaiting(true);
     setMissed(null);
     toEnd();
+    // A "how do I…" answer is the app's own steps, found by what the question means when the
+    // built-in search model can say it, else by its words; the model answers what no flow fits.
+    const vector = await guideQuestionVector(text);
+    const steps = retry ? null : guideFlowAnswer('mobile', text, topics, { platform: PLATFORM, vector });
+    if (steps) {
+      setWaiting(false);
+      setTurns([...history, { role: 'assistant', content: steps }]);
+      toEnd();
+      return;
+    }
     // Only the topics this conversation is about: a small model answers better reading less.
-    const result = await askGuide(guideGrounding('mobile', topics, history, { platform: PLATFORM }), guideTurnsToSend(history));
+    const result = await askGuide(guideGrounding('mobile', topics, history, { platform: PLATFORM, vector }), guideTurnsToSend(history));
     setWaiting(false);
     if ('answer' in result) setTurns([...history, { role: 'assistant', content: result.answer }]);
     else setMissed({ why: result.error, question: text });
@@ -192,6 +206,23 @@ const AskPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) => vo
               {guideAnswerBlocks(guideAnswerParts(turn.content, topics)).map((block, j) =>
                 block.kind === 'text' ? (
                   <MarkdownText key={j}>{block.text}</MarkdownText>
+                ) : block.kind === 'picks' ? (
+                  <View key={j} style={styles.picks}>
+                    {block.picks.map(pick => (
+                      <TouchableOpacity
+                        key={pick.id}
+                        style={styles.pickRow}
+                        onPress={() => { ask(pick.label, false, pick.id).catch(() => undefined); }}
+                        disabled={waiting}
+                        accessibilityRole="button"
+                        accessibilityLabel={pick.label}
+                        testID={`guide-pick-${pick.id}`}
+                      >
+                        <Text style={styles.pickText}>{pick.label}</Text>
+                        <Icon name="chevron-right" size={16} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 ) : block.topics.length === 1 ? (
                   <AnswerCard key={j} topic={block.topics[0]} onShow={onShow} />
                 ) : (
@@ -391,6 +422,15 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   userText: { ...TYPOGRAPHY.body, color: colors.onPrimary },
   answer: { gap: SPACING.md },
   answerCard: { ...cardSurface(colors), padding: SPACING.sm, gap: SPACING.sm },
+  picks: { ...cardSurface(colors), paddingVertical: SPACING.xs },
+  pickRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm + 2,
+  },
+  pickText: { ...TYPOGRAPHY.bodySmall, flex: 1, color: colors.text },
   tileGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: SPACING.sm },
   tile: { ...cardSurface(colors), width: '48.5%' as const, padding: SPACING.md, gap: SPACING.xs },
   answerCardRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.sm, paddingHorizontal: SPACING.xs },
