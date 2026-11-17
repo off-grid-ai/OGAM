@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { BOOST_PROMO, boostPromoCopy, boostPromoLink, boostPromoVisible, type BoostPromoSurface } from '@offgrid/models';
@@ -10,7 +10,7 @@ import { useAppStore } from '../stores';
 import { AnimatedPressable } from './AnimatedPressable';
 import { Button } from './Button';
 import { boostPromo } from '../services/analytics/analytics';
-import { openWebSheet } from '../services/proCheckout';
+import { OfflineError, openWebSheet } from '../services/proCheckout';
 
 const COPY = boostPromoCopy('phone');
 
@@ -25,6 +25,8 @@ export const BoostPromoCard: React.FC<{ surface: BoostPromoSurface }> = ({ surfa
   const closedVersion = useAppStore(s => s.boostPromoClosedVersion);
   const closeBoostPromo = useAppStore(s => s.closeBoostPromo);
   const visible = boostPromoVisible(closedVersion);
+  const [opening, setOpening] = useState(false);
+  const [offline, setOffline] = useState(false);
 
   useEffect(() => {
     if (visible) boostPromo('shown', surface);
@@ -34,7 +36,11 @@ export const BoostPromoCard: React.FC<{ surface: BoostPromoSurface }> = ({ surfa
 
   const claim = (): void => {
     boostPromo('clicked', surface);
-    openWebSheet(boostPromoLink('mobile', surface)).catch(() => undefined);
+    setOpening(true);
+    openWebSheet(boostPromoLink('mobile', surface))
+      .then(() => setOffline(false))
+      .catch((e: unknown) => setOffline(e instanceof OfflineError))
+      .finally(() => setOpening(false));
   };
   const close = (): void => {
     boostPromo('dismissed', surface);
@@ -57,8 +63,13 @@ export const BoostPromoCard: React.FC<{ surface: BoostPromoSurface }> = ({ surfa
       </View>
       <Text style={styles.body}>{COPY.body}</Text>
       <View style={styles.action}>
-        <Button title={COPY.action} onPress={claim} testID="boost-promo-claim" />
+        <Button title={COPY.action} onPress={claim} loading={opening} testID="boost-promo-claim" />
       </View>
+      {offline ? (
+        <Text style={styles.offline} testID="boost-promo-offline">
+          You're offline. Connect to the internet to see the offer.
+        </Text>
+      ) : null}
     </View>
   );
 };
@@ -69,4 +80,5 @@ const createStyles = (colors: ThemeColors) => ({
   title: { ...TYPOGRAPHY.h3, color: colors.text, flex: 1 },
   body: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
   action: { flexDirection: 'row' as const, marginTop: SPACING.xs },
+  offline: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
 });

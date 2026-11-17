@@ -16,11 +16,15 @@ import InAppBrowser from 'react-native-inappbrowser-reborn';
 import { BOOST_PROMO } from '@offgrid/models';
 import { BoostPromoCard } from '../../../src/components/BoostPromoCard';
 import { useAppStore } from '../../../src/stores/appStore';
+import { websiteReach } from '../../harness/websiteReach';
 
+let undoReach: () => void;
 beforeEach(() => {
   useAppStore.setState({ boostPromoClosedVersion: null });
   (InAppBrowser.open as jest.Mock).mockClear();
+  undoReach = websiteReach(true);
 });
+afterEach(() => undoReach());
 
 describe('the private cloud promo', () => {
   it('shows the offer and opens its page in a sheet, tagged with where it was tapped', async () => {
@@ -33,6 +37,15 @@ describe('the private cloud promo', () => {
     expect((InAppBrowser.open as jest.Mock).mock.calls[0][0]).toMatch(
       /^https:\/\/getoffgridai\.co\/boost\?utm_source=off-grid-mobile-app&utm_medium=boost-models&/,
     );
+  });
+
+  it('says it is offline instead of opening a page that cannot load', async () => {
+    undoReach();
+    undoReach = websiteReach(false);
+    const view = render(<BoostPromoCard surface="models" />);
+    fireEvent.press(view.getByTestId('boost-promo-claim'));
+    await waitFor(() => expect(view.getByTestId('boost-promo-offline')).toBeTruthy());
+    expect(InAppBrowser.open).not.toHaveBeenCalled();
   });
 
   it('stays closed once closed, on every surface', () => {
