@@ -39,7 +39,7 @@ export type RootStackParamList = {
   GalleryImage: { imageId: string };
   GalleryVideo: { videoId: string };
   /** unlock: open the license-key field on arrival (the checkout sheet's way back). */
-  ProDetail: { unlock?: boolean } | undefined;
+  ProDetail: { unlock?: boolean; offline?: boolean } | undefined;
   About: undefined;
   Tools: undefined;
 };

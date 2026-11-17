@@ -16,6 +16,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 import { useGetPro } from '../../../src/hooks/useGetPro';
 import { useAppStore } from '../../../src/stores/appStore';
+import { websiteReach } from '../../harness/websiteReach';
 
 const Stack = createNativeStackNavigator();
 const navigation = createNavigationContainerRef<Record<string, undefined>>();
@@ -41,8 +42,11 @@ const Probe = () => (
 const onScreen = () => navigation.getCurrentRoute()?.name;
 
 describe('useGetPro', () => {
+  let undoReach: () => void;
+  afterEach(() => undoReach());
   beforeEach(() => {
     jest.clearAllMocks();
+    undoReach = websiteReach(true);
     const app = useAppStore.getState();
     app.setHasRegisteredPro(false);
     app.setHasSavedProCredential(false);
@@ -78,5 +82,23 @@ describe('useGetPro', () => {
     fireEvent.press(getByTestId('get-pro'));
     expect(onScreen()).toBe('ProDetail');
     expect(InAppBrowser.open).not.toHaveBeenCalled();
+  });
+
+  it('opens the Pro page, saying it is offline, when the checkout cannot load', async () => {
+    undoReach();
+    undoReach = websiteReach(false);
+    const { getByTestId } = render(<Probe />);
+    fireEvent.press(getByTestId('get-pro'));
+    await waitFor(() => expect(onScreen()).toBe('ProDetail'));
+    expect(navigation.getCurrentRoute()?.params).toEqual({ offline: true });
+    expect(InAppBrowser.open).not.toHaveBeenCalled();
+  });
+
+  it('opens the Pro page when no sheet can open at all', async () => {
+    (InAppBrowser.open as jest.Mock).mockRejectedValueOnce(new Error('no browser'));
+    const { getByTestId } = render(<Probe />);
+    fireEvent.press(getByTestId('get-pro'));
+    await waitFor(() => expect(onScreen()).toBe('ProDetail'));
+    expect(navigation.getCurrentRoute()?.params).toBeUndefined();
   });
 });
