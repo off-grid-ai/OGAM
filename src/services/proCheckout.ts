@@ -20,7 +20,11 @@ export const PRO_UNLOCK_URL = 'offgrid://pro/unlock';
  * light or dark. Rejects only when nothing could open.
  */
 export async function openProCheckout(medium: string, theme: 'dark' | 'light'): Promise<void> {
-  const url = withUtm(`${PRO_CHECKOUT_SHEET_URL}?theme=${theme}`, medium);
+  await openWebSheet(withUtm(`${PRO_CHECKOUT_SHEET_URL}?theme=${theme}`, medium));
+}
+
+/** Opens one of our web pages in a sheet over the app, else in the system browser. */
+export async function openWebSheet(url: string): Promise<void> {
   if (await InAppBrowser.isAvailable().catch(() => false)) {
     await InAppBrowser.open(url, {
       modalPresentationStyle: 'pageSheet',
