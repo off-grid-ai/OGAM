@@ -1,0 +1,4 @@
+[
+ {"id": "android-sheet", "name": "Get Pro: checkout sheet", "group": "Get Pro", "what": "The crown opens the same page in a Chrome Custom Tab over the app, with the live price.", "file": "screens/android-sheet.jpg"},
+ {"id": "android-key-field", "name": "Back in the app: key field", "group": "Get Pro", "what": "'Have a key?' closes the Custom Tab and opens 'Enter your license key' in the app.", "file": "screens/android-key-field.jpg"}
+]
