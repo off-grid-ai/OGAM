@@ -36,7 +36,7 @@ export class OfflineError extends Error {
 const REACH_WAIT_MS = 5000;
 
 /** Whether our website answers at all (any status counts). */
-export async function siteReachable(url: string): Promise<boolean> {
+async function siteReachable(url: string): Promise<boolean> {
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), REACH_WAIT_MS);
   try {
