@@ -28,5 +28,7 @@ export { RemoteServersScreen } from './RemoteServersScreen';
 export { RemoteServerEditorScreen } from './RemoteServerEditorScreen';
 export { ProDetailScreen } from './ProDetailScreen';
 export { AboutScreen } from './AboutScreen';
+export { GuideScreen } from './GuideScreen';
+export { GuideTopicScreen } from './GuideScreen/GuideTopicScreen';
 export { AnalyticsInfoScreen } from './AnalyticsInfoScreen';
 export { ToolsScreen } from './ToolsScreen';

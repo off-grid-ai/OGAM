@@ -274,6 +274,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 {HomeNotificationsButton ? (
                   <HomeNotificationsButton onOpen={openSyncNotifications} />
                 ) : null}
+                {/* What it does for you: every feature, and an Ask box (Mac, 2026-11-17). */}
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('Guide')}
+                  style={styles.crownButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="What it does for you"
+                  testID="home-guide-button"
+                >
+                  <Icon name="info" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => getPro('home-crown')}
                   style={styles.crownButton}
