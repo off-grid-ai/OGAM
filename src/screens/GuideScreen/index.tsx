@@ -10,8 +10,6 @@
  */
 import React, { useMemo, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -20,6 +18,8 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
+// The same keyboard view as Chat: edge-to-edge-aware on Android, real keyboard frame on iPhone.
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import {
   GUIDE_FIRST_LOOK,
   GUIDE_STARTERS,
@@ -66,15 +66,19 @@ export const GuideScreen: React.FC = () => {
 
   return (
     <AliveScreen style={styles.container} edges={['top', 'bottom']} testID="guide-screen">
-      <ScreenHeader title="What it does for you" onBack={() => navigation.goBack()} />
-      <UnderlineTabs tabs={TABS} active={tab} onChange={setTab} />
-      {/* Both stay mounted, so a conversation is still there after a look at the features. */}
-      <View style={[styles.pane, tab !== 'ask' && styles.hidden]}>
-        <AskPane topics={topics} onShow={show} />
-      </View>
-      <View style={[styles.pane, tab !== 'features' && styles.hidden]}>
-        <FeaturesPane topics={topics} onShow={show} />
-      </View>
+      {/* The keyboard view wraps the whole screen, as in Chat: it measures from its parent, so deeper
+          down it lifts the Ask box by less than the keyboard and leaves it covered on iPhone. */}
+      <KeyboardAvoidingView style={styles.pane} behavior="padding" keyboardVerticalOffset={0}>
+        <ScreenHeader title="What it does for you" onBack={() => navigation.goBack()} />
+        <UnderlineTabs tabs={TABS} active={tab} onChange={setTab} />
+        {/* Both stay mounted, so a conversation is still there after a look at the features. */}
+        <View style={[styles.pane, tab !== 'ask' && styles.hidden]}>
+          <AskPane topics={topics} onShow={show} />
+        </View>
+        <View style={[styles.pane, tab !== 'features' && styles.hidden]}>
+          <FeaturesPane topics={topics} onShow={show} />
+        </View>
+      </KeyboardAvoidingView>
     </AliveScreen>
   );
 };
@@ -120,11 +124,7 @@ const AskPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) => vo
   const canSend = draft.trim().length > 0 && !waiting;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.pane}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 96 : 0}
-    >
+    <View style={styles.pane}>
       <ScrollView
         {...SCROLL_DEPTH_PROPS}
         ref={scrollRef}
@@ -259,7 +259,7 @@ const AskPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) => vo
           <Icon name="arrow-up" size={18} color={canSend ? colors.onPrimary : colors.textMuted} />
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
