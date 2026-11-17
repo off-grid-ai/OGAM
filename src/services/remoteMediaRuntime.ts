@@ -72,10 +72,13 @@ export async function request<T>(
     });
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
-      // A refused key read "User not found." on the film screen (OpenRouter, 17 Nov): say what it is and where to fix it.
-      const message = response.status === 401 || response.status === 403
+      // A refused key read "User not found." on the film screen (OpenRouter, 17 Nov): say what it is and
+      // where to fix it. A 403 can also be a good key without access to this model: keep the server's reason.
+      const message = response.status === 401
         ? `${server.name} did not accept its key. Check it in Settings › Remote servers.`
-        : remoteHttpErrorMessage(detail, response.status);
+        : response.status === 403
+          ? `${remoteHttpErrorMessage(detail, response.status).replace(/[.!]?\s*$/, '.')} The key may lack access to this model; check it in Settings › Remote servers.`
+          : remoteHttpErrorMessage(detail, response.status);
       throwRemoteError(detail, message);
     }
     // Keep caller cancellation attached until the response body is
