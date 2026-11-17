@@ -56,15 +56,17 @@ export async function siteReachable(url: string): Promise<boolean> {
 export async function openWebSheet(url: string): Promise<void> {
   if (!(await siteReachable(url))) throw new OfflineError();
   if (await InAppBrowser.isAvailable().catch(() => false)) {
-    await InAppBrowser.open(url, {
+    // The sheet can still refuse (Android: "No activity" under the new architecture); then the
+    // system browser opens the page, so the tap is never a dead end.
+    const opened = await InAppBrowser.open(url, {
       modalPresentationStyle: 'pageSheet',
       dismissButtonStyle: 'close',
       modalEnabled: true,
       showTitle: false,
       enableUrlBarHiding: true,
       enableDefaultShare: false,
-    });
-    return;
+    }).then(() => true, () => false);
+    if (opened) return;
   }
   await Linking.openURL(url);
 }
