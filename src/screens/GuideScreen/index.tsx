@@ -110,6 +110,8 @@ const AskPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) => vo
     if (!text || waiting) return;
     const history: GuideTurn[] = retry ? turns : [...turns, { role: 'user', content: text }];
     if (!retry) setDraft('');
+    // A new question, answered or not, replaces any earlier failure and its Try again.
+    setMissed(null);
     // A starter's or a picked flow's answer is built from the guide itself: instant, and there with no model.
     const instant = retry
       ? null
@@ -123,7 +125,6 @@ const AskPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) => vo
     }
     setTurns(history);
     setWaiting(true);
-    setMissed(null);
     toEnd();
     // A "how do I…" answer is the app's own steps, found by what the question means when the
     // built-in search model can say it, else by its words; the model answers what no flow fits.
