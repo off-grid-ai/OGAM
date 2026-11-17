@@ -20,7 +20,7 @@ import {
 } from '../../constants';
 import { selectHasProAccess } from '../../stores/proAccessSlice';
 import { useAppStore } from '../../stores';
-import { openProCheckout } from '../../services/proCheckout';
+import { OfflineError, openProCheckout } from '../../services/proCheckout';
 import { withUtm } from '../../utils/utm';
 import { loadProFeatures } from '../../bootstrap/loadProFeatures';
 import { getPricingCopy } from '../../utils/proPricing';
@@ -86,8 +86,16 @@ export const ProDetailScreen: React.FC = () => {
     : null;
   const deviceStatusColor = hasProAccess ? colors.primary : colors.textMuted;
 
+  // Offline, the checkout page cannot load: this page says so under the buy button, and the next
+  // tap tries again.
+  const [offline, setOffline] = useState(route.params?.offline === true);
+  const [opening, setOpening] = useState(false);
   const openPayPage = () => {
-    openProCheckout('pro-detail', isDark ? 'dark' : 'light').catch(() => {});
+    setOpening(true);
+    openProCheckout('pro-detail', isDark ? 'dark' : 'light')
+      .then(() => setOffline(false))
+      .catch((e: unknown) => setOffline(e instanceof OfflineError))
+      .finally(() => setOpening(false));
   };
   const openDesktop = () => {
     Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'pro-detail')).catch(
@@ -232,8 +240,15 @@ export const ProDetailScreen: React.FC = () => {
               variant="primary"
               size="large"
               onPress={openPayPage}
+              loading={opening}
               style={styles.ctaButton}
+              testID="pro-buy"
             />
+            {offline ? (
+              <Text style={styles.offlineNote} testID="pro-offline">
+                You're offline. Connect to the internet to buy Pro.
+              </Text>
+            ) : null}
             <Button
               title="I have a license key"
               variant="secondary"
@@ -428,6 +443,13 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     marginBottom: SPACING.md,
   },
   verifyButton: { marginHorizontal: SPACING.xl, marginBottom: SPACING.xl },
+  offlineNote: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textMuted,
+    textAlign: 'center' as const,
+    marginHorizontal: SPACING.xl,
+    marginBottom: SPACING.md,
+  },
 
   // Desktop companion link
   desktopRow: {
