@@ -44,7 +44,7 @@ describe('guide flows match the phone app', () => {
 
   const flows = GUIDE_FLOWS.filter(f => checked.includes(f) && f.surface === 'mobile');
   it.each(flows.map(f => [f.id, f] as const))('%s names only labels the app shows', (_id, flow) => {
-    const missing = guideFlowLabels(flow).filter(label => !texts.some(t => t.includes(label)));
+    const missing = guideFlowLabels(flow).filter((label: string) => !texts.some(t => t.includes(label)));
     expect(missing).toEqual([]);
   });
 });
