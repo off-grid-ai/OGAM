@@ -26,6 +26,7 @@ import { proGateShown } from '../../services/analytics/analytics';
 import { UnderlineTabs } from '../../components/UnderlineTabs';
 import { useIsFocused } from '@react-navigation/native';
 import { LivingField } from '../../components/LivingField';
+import { useGetPro } from '../../hooks/useGetPro';
 
 const MODEL_TABS: ReadonlyArray<{
   key: ModelTab;
@@ -72,6 +73,7 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({
   embedded = false,
 }) => {
   const { colors } = useTheme();
+  const getPro = useGetPro();
   const styles = useThemedStyles(createStyles);
   const vm = useModelsScreen();
   const [selectedVideoModel, setSelectedVideoModel] = useState<HFSearchResult | null>(null);
@@ -259,7 +261,7 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({
           : <VideoUpsell
               onGetPro={() => {
                 proGateShown('video');
-                vm.navigation.navigate('ProDetail');
+                getPro('models-video');
               }}
             />
       )}
@@ -305,7 +307,7 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({
           : <VoiceModelsUpsell
               onGetPro={() => {
                 proGateShown('voice');
-                vm.navigation.navigate('ProDetail');
+                getPro('models-voice');
               }}
             />
       )}

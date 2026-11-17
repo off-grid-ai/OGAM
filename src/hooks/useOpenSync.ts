@@ -5,6 +5,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { selectHasProAccess } from '../stores/proAccessSlice';
 import { useAppStore } from '../stores';
 import { proGateShown } from '../services/analytics/analytics';
+import { useGetPro } from './useGetPro';
 
 /**
  * Single navigation gate for the user-facing Sync control center.
@@ -24,14 +25,17 @@ export function useOpenSync(): {
   // longer Pro, and Sync is the feature the roster exists to meter - it kept working while the Pro
   // screen's own header read "Device Not Active".
   const isSyncUnlocked = useAppStore(selectHasProAccess);
+  const getPro = useGetPro();
   const openSync = useCallback(() => {
-    if (!isSyncUnlocked) proGateShown('sync');
-    navigation.navigate(isSyncUnlocked ? 'Sync' : 'ProDetail');
-  }, [isSyncUnlocked, navigation]);
+    if (isSyncUnlocked) return navigation.navigate('Sync');
+    proGateShown('sync');
+    getPro('sync');
+  }, [isSyncUnlocked, navigation, getPro]);
   const openSyncNotifications = useCallback(() => {
-    if (!isSyncUnlocked) proGateShown('sync');
-    navigation.navigate(isSyncUnlocked ? 'Notifications' : 'ProDetail');
-  }, [isSyncUnlocked, navigation]);
+    if (isSyncUnlocked) return navigation.navigate('Notifications');
+    proGateShown('sync');
+    getPro('sync-notifications');
+  }, [isSyncUnlocked, navigation, getPro]);
 
   return { isSyncUnlocked, openSync, openSyncNotifications };
 }

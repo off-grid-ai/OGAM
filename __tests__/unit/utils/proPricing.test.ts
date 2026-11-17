@@ -3,14 +3,16 @@ import { getPricingCopy } from '../../../src/utils/proPricing';
 describe('getPricingCopy', () => {
   const copy = getPricingCopy();
 
-  it('offers the two plans sold on getoffgridai.co - $119 lifetime and $7.99/month - and no yearly', () => {
-    expect(copy.title).toBe('$119 lifetime or $7.99/month');
-    expect(copy.sheetSubheadline).toMatch(/\$119 once/);
-    expect(copy.sheetSubheadline).toMatch(/\$7\.99 a month/);
+  it('names the two plans sold on getoffgridai.co - lifetime and monthly - and no yearly', () => {
+    expect(copy.title).toBe('Lifetime or monthly');
+    expect(copy.sheetSubheadline).toMatch(/once for life, or monthly/);
     // The yearly plan is not sold; it must not resurface anywhere in the copy.
     const all = Object.values(copy).join(' ');
     expect(all).not.toMatch(/\byear(ly)?\b|\/yr/i);
-    expect(all).not.toMatch(/\$49|\$39|\$69/);
+  });
+
+  it('states no price: the checkout sheet shows the live one, so a price change needs no release', () => {
+    expect(Object.values(copy).join(' ')).not.toMatch(/\$\s?\d/);
   });
 
   it('keeps the Get Pro CTA (the web pay-page trigger the Pro surfaces assert)', () => {

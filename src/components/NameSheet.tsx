@@ -104,8 +104,8 @@ export const NameSheet: React.FC<NameSheetProps> = ({
             {error}
           </Text>
         ) : null}
+        {/* One way to cancel: the header's Cancel (a second one beside Save said the same thing twice). */}
         <View style={styles.actions}>
-          <Button title="Cancel" variant="outline" size="small" disabled={saving} onPress={close} />
           <Button
             title={saving ? 'Saving...' : saveLabel}
             variant="primary"

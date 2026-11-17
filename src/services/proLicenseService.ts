@@ -3,7 +3,6 @@ import type {
   PersonalMeshReconciliationReason,
 } from '@offgrid/sync';
 
-export const PRO_PAY_PAGE_URL = 'https://getoffgridai.co/pro/#buy';
 
 export type ProTier = 'lifetime' | 'monthly' | 'annual' | 'subscription';
 

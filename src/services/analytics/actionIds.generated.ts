@@ -329,6 +329,7 @@ export const FIXED_ACTION_IDS: readonly string[] = [
   "note-editor-plain",
   "note-format-bar",
   "note-format-improve",
+  "note-format-more",
   "note-header",
   "note-link",
   "note-link-close",

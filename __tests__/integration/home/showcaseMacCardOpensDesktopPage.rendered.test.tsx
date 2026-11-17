@@ -1,7 +1,7 @@
 /**
  * Home's carousel: a card for something that lives on the Mac opens the Off Grid AI Desktop page,
  * tagged so the visit is counted as coming from this card (utm_medium home-showcase). A phone Pro
- * card, for someone without Pro, opens Pro instead.
+ * card, for someone without Pro, opens the Pro checkout sheet instead.
  *
  * The real App on Home. The OS's link opener (Linking.openURL) is the device boundary: the test
  * records the URL the app hands it.
@@ -18,7 +18,7 @@ afterEach(async () => {
   restoreBuildFlavor();
 });
 
-it('a Mac card opens the Desktop page with the carousel\'s utm; a phone Pro card opens Pro', async () => {
+it('a Mac card opens the Desktop page with the carousel\'s utm; a phone Pro card opens the checkout sheet', async () => {
   // A store build without a licence: Pro is off (a dev build unlocks Pro, so the Pro card would open video).
   app = await launchApp({ release: true, returningUser: true });
   const { view, rtl } = app;
@@ -34,6 +34,7 @@ it('a Mac card opens the Desktop page with the carousel\'s utm; a phone Pro card
   );
 
   rtl.fireEvent.press(view.getByTestId('feature-showcase-video'));
-  expect(await view.findByText('Off Grid AI Pro', {}, { timeout: 10_000 })).toBeTruthy();
-  expect(opened).toHaveLength(1);
+  // No in-app browser module under jest, so the checkout sheet opens through the system browser.
+  await rtl.waitFor(() => expect(opened).toHaveLength(2));
+  expect(opened[1]).toMatch(/^https:\/\/getoffgridai\.co\/pro\/app\/\?theme=(dark|light)&.*utm_medium=home-showcase/);
 });

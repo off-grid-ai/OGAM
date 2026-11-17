@@ -29,6 +29,7 @@ import { useAppStore } from '../stores/appStore';
 import { useRemoteServerStore } from '../stores/remoteServerStore';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
+import { useGetPro } from '../hooks/useGetPro';
 
 const productionSessionFactory = (): AutoSetupSession =>
   createAutoSetupSession();
@@ -61,6 +62,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
     session.snapshot,
   );
   const { colors } = useTheme();
+  const getPro = useGetPro();
   const styles = useThemedStyles(createStyles);
   const VoiceIndicator = useSlot(SLOTS.autoSetupVoiceIndicator);
   // A paired Off Grid AI Desktop makes videos for a phone that cannot run a video model itself.
@@ -365,7 +367,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
           <VoiceIndicator
             onPress={() => {
               proGateShown('voice');
-              navigation.push('ProDetail');
+              getPro('auto-setup-voice');
             }}
             style={styles.voiceItem}
           />

@@ -55,7 +55,7 @@ export const DesktopPromoCard: React.FC = () => {
         </TouchableOpacity>
       </View>
       <Text style={styles.desktopCardBody}>
-        Chat, image, voice, and projects that answer from your own docs - on your Mac, on-device. Plus a private layer that remembers what you see, rewinds your day, searches it all at once, and drafts to-dos and actions you approve. Your chats and files never leave the device.
+        Everything here, on your Mac, plus a private memory of your day you can search. Nothing leaves your Mac.
       </Text>
       <View style={styles.desktopCardCtaRow}>
         <View style={styles.desktopCardCta}>

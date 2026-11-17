@@ -1,4 +1,3 @@
-import { useNavigation } from '@react-navigation/native';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { VideoUpsell } from '../models/VideoUpsell';
 import { SearchTab } from './SearchTab';
@@ -40,6 +39,7 @@ import {
   isUnsupportedJetsamImageModel,
 } from '../../utils/modelSelectorFilters';
 import logger from '../../utils/logger';
+import { useGetPro } from '../../hooks/useGetPro';
 
 type TabType = 'text' | 'image' | 'video' | 'search';
 
@@ -96,7 +96,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   onBrowseModels,
 }) => {
   const { colors } = useTheme();
-  const navigation = useNavigation();
+  const getPro = useGetPro();
   // Video is Pro: the picker body fills this slot; free builds show the upgrade screen.
   const VideoTab = useSlot(SLOTS.modelSelectorVideoTab);
   const styles = useThemedStyles(createAllStyles);
@@ -355,7 +355,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
               onGetPro={() => {
                 proGateShown('video');
                 onClose();
-                (navigation as unknown as { navigate: (name: string) => void }).navigate('ProDetail');
+                getPro('model-selector-video');
               }}
             />
           )

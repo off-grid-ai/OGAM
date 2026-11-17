@@ -6,7 +6,7 @@ import {
   Linking,
 } from 'react-native';
 import { TouchableOpacity } from '../../components/Touchable';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../../components';
@@ -20,7 +20,7 @@ import {
 } from '../../constants';
 import { selectHasProAccess } from '../../stores/proAccessSlice';
 import { useAppStore } from '../../stores';
-import { PRO_PAY_PAGE_URL } from '../../services/proLicenseService';
+import { openProCheckout } from '../../services/proCheckout';
 import { withUtm } from '../../utils/utm';
 import { loadProFeatures } from '../../bootstrap/loadProFeatures';
 import { getPricingCopy } from '../../utils/proPricing';
@@ -70,11 +70,12 @@ const PILLARS = [
 export const ProDetailScreen: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
   const hasSavedProCredential = useAppStore(s => s.hasSavedProCredential);
   const isProActive = useAppStore(s => s.isProActive);
   const hasProAccess = useAppStore(selectHasProAccess);
+  const route = useRoute<RouteProp<RootStackParamList, 'ProDetail'>>();
   const [verifyModalVisible, setVerifyModalVisible] = useState(false);
   const pricing = getPricingCopy();
   const isDevelopmentAccess = __DEV__ && isProActive && !hasSavedProCredential;
@@ -86,7 +87,7 @@ export const ProDetailScreen: React.FC = () => {
   const deviceStatusColor = hasProAccess ? colors.primary : colors.textMuted;
 
   const openPayPage = () => {
-    Linking.openURL(withUtm(PRO_PAY_PAGE_URL, 'pro-detail')).catch(() => {});
+    openProCheckout('pro-detail', isDark ? 'dark' : 'light').catch(() => {});
   };
   const openDesktop = () => {
     Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'pro-detail')).catch(
@@ -94,6 +95,13 @@ export const ProDetailScreen: React.FC = () => {
     );
   };
   const openVerifyModal = () => setVerifyModalVisible(true);
+  // Back from the checkout sheet after paying: the key field opens, ready to paste.
+  const unlockOnArrival = route.params?.unlock === true;
+  useEffect(() => {
+    if (!unlockOnArrival) return;
+    setVerifyModalVisible(true);
+    navigation.setParams({ unlock: undefined });
+  }, [unlockOnArrival, navigation]);
 
   useEffect(() => {
     if (!hasProAccess) proPaywallViewed();

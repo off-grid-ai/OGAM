@@ -308,7 +308,7 @@ it('M16: a stale downloaded voice record does not offer Speak when its files are
   await require('../../pro').deactivate();
 });
 
-it('M15: the Pro purchase action opens the canonical payment page', async () => {
+it('M15: the Pro purchase action opens the checkout sheet page', async () => {
   const app = await launch();
   const { Linking } = require('react-native');
   const original = Linking.openURL;
@@ -318,7 +318,7 @@ it('M15: the Pro purchase action opens the canonical payment page', async () => 
     app.rtl.fireEvent.press(app.view.getByTestId('settings-tab'));
     app.rtl.fireEvent.press(await app.view.findByLabelText(/^Off Grid AI Pro\. /));
     app.rtl.fireEvent.press(await app.view.findByRole('button', { name: 'Get Pro' }));
-    await app.rtl.waitFor(() => expect(browserAddress).toMatch(/^https:\/\/getoffgridai\.co\/pro\/\?utm_source=off-grid-mobile-app.*#buy$/));
+    await app.rtl.waitFor(() => expect(browserAddress).toMatch(/^https:\/\/getoffgridai\.co\/pro\/app\/\?theme=(dark|light)&utm_source=off-grid-mobile-app/));
   } finally {
     Linking.openURL = original;
     app.view.unmount();

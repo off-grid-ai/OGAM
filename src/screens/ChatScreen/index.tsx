@@ -48,6 +48,7 @@ import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabe
 import { useChatStore } from '../../stores';
 import { useIsFocused } from '@react-navigation/native';
 import { LivingField } from '../../components/LivingField';
+import { useGetPro } from '../../hooks/useGetPro';
 
 function countConversationImages(messages: Message[] | undefined): number {
   return (messages || []).reduce(
@@ -62,6 +63,7 @@ export const ChatScreen: React.FC = () => {
   const rootNavigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { colors } = useTheme();
+  const getPro = useGetPro();
   const styles = useThemedStyles(createStyles);
   const isFocused = useIsFocused();
   const chat = useChatScreen();
@@ -430,7 +432,7 @@ export const ChatScreen: React.FC = () => {
       <ProAhaSheet
         visible={proAhaVisible}
         onClose={() => setProAhaVisible(false)}
-        onRegister={() => rootNavigation.navigate('ProDetail')}
+        onRegister={() => getPro('pro-aha')}
       />
     </SafeAreaView>
   );

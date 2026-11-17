@@ -16,7 +16,9 @@ import {
 } from '../../../src/constants';
 import { withUtm } from '../../../src/utils/utm';
 
-const PAY_URL = 'https://getoffgridai.co/pro/#buy';
+// Get Pro opens the checkout sheet page, in the app's theme (light in these tests). Without an in-app
+// browser (as here) it opens in the system browser.
+const PAY_URL = 'https://getoffgridai.co/pro/app/?theme=light';
 const KEY = 'key/abc123';
 
 // The device's keychain: stateful, and a write can be held (a slow secure-enclave write).
@@ -82,12 +84,12 @@ describe('ProDetailScreen', () => {
     expect(queryByText('Use Pro from another device')).toBeNull();
   });
 
-  it('Get Pro opens the web pay page directly without a modal', () => {
+  it('Get Pro opens the web pay page directly without a modal', async () => {
     const { getAllByText, queryByText } = render(<ProDetailScreen />);
     fireEvent.press(getAllByText('Get Pro')[0]);
-    expect(linkingSpy).toHaveBeenCalledWith(withUtm(PAY_URL, 'pro-detail'));
+    await waitFor(() => expect(linkingSpy).toHaveBeenCalledWith(withUtm(PAY_URL, 'pro-detail')));
     expect(linkingSpy).toHaveBeenCalledWith(
-      'https://getoffgridai.co/pro/?utm_source=off-grid-mobile-app&utm_medium=pro-detail&utm_campaign=in-app#buy',
+      'https://getoffgridai.co/pro/app/?theme=light&utm_source=off-grid-mobile-app&utm_medium=pro-detail&utm_campaign=in-app',
     );
     // No in-app activation step for paying.
     expect(queryByText('Enter your license key')).toBeNull();
@@ -265,11 +267,11 @@ describe('ProDetailScreen', () => {
     await waitFor(() => expect(ui.getByText('Pro activated')).toBeTruthy());
   });
 
-  it('"Not a member yet? Get Pro" in the modal opens the pay page', () => {
+  it('"Not a member yet? Get Pro" in the modal opens the pay page', async () => {
     const { getByText } = render(<ProDetailScreen />);
     fireEvent.press(getByText('I have a license key'));
     fireEvent.press(getByText('Not a member yet? Get Pro'));
-    expect(linkingSpy).toHaveBeenCalledWith(withUtm(PAY_URL, 'pro-unlock'));
+    await waitFor(() => expect(linkingSpy).toHaveBeenCalledWith(withUtm(PAY_URL, 'pro-unlock')));
   });
 
   /** Activate a licence through the screen, then close the success card: the person now owns Pro. */

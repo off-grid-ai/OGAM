@@ -1,0 +1,30 @@
+[
+ {
+  "id": "sheet",
+  "name": "Get Pro: checkout sheet",
+  "group": "Get Pro",
+  "what": "Get Pro opens getoffgridai.co/pro/app/ in a sheet over the app, in the app's theme, with the live price. 'Have a key? Enter it in the app' is the first line, above the fold.",
+  "file": "screens/iphone-sheet.jpg"
+ },
+ {
+  "id": "sheet-dark",
+  "name": "Checkout sheet, dark",
+  "group": "Get Pro",
+  "what": "The same page when the app is dark (theme passed in the link, so it follows the app, not the phone).",
+  "file": "screens/web-sheet-dark.jpg"
+ },
+ {
+  "id": "thank-you",
+  "name": "After paying, in the sheet",
+  "group": "Get Pro",
+  "what": "/thank-you/ in the app's sheet shows only the confirmation and 'Paste your key in the app'. (Shot with a test session, so it says 'Check your payment'; a real payment says 'You're in.')",
+  "file": "screens/web-thank-you-in-app.jpg"
+ },
+ {
+  "id": "key-field",
+  "name": "Back in the app: key field",
+  "group": "Get Pro",
+  "what": "'Have a key? Enter it in the app' (offgrid://pro/unlock) closes the sheet and opens the license-key field in the app. The key is never typed on the web.",
+  "file": "screens/iphone-key-field.jpg"
+ }
+]

@@ -91,12 +91,13 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
-        <!-- MCP OAuth redirect: offgrid://oauth/callback returns from the browser -->
+        <!-- Returns from the browser: offgrid://oauth/callback (MCP OAuth) and offgrid://pro/unlock (paid in the checkout sheet) -->
         <intent-filter>
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.DEFAULT" />
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="offgrid" android:host="oauth" />
+            <data android:scheme="offgrid" android:host="pro" />
         </intent-filter>
       </activity>
 
