@@ -10,6 +10,7 @@
  */
 import React, { useMemo, useRef, useState } from 'react';
 import {
+  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -25,6 +26,7 @@ import {
   GUIDE_STARTERS,
   guideAnswerParts,
   guideAnswerBlocks,
+  guideFlowAnswer,
   guideGrounding,
   guideStarterAnswer,
   guideTurnsToSend,
@@ -48,6 +50,9 @@ import type { RootStackParamList } from '../../navigation/types';
 import { askGuide, type GuideTurn } from '../../services/guideAsk';
 import { GUIDE_GROUPS, firstLookTopics, mobileGuideTopics, type MobileGuideTopic } from './guideTopics';
 import { GuidePicture } from './GuidePicture';
+
+/** The flows this phone has: an iPhone is not offered Android's steps. */
+const PLATFORM = Platform.OS === 'android' ? 'android' : 'ios';
 
 type Tab = 'ask' | 'features';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -102,8 +107,11 @@ const AskPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) => vo
     if (!text || waiting) return;
     const history: GuideTurn[] = retry ? turns : [...turns, { role: 'user', content: text }];
     if (!retry) setDraft('');
-    // A starter's answer is built from the guide itself: instant, and there with no model.
-    const starter = retry ? null : guideStarterAnswer('mobile', text, topics);
+    // A starter's or a "how do I…" answer is built from the guide itself: the app's own labels in
+    // order, instant, and there with no model.
+    const starter = retry
+      ? null
+      : guideStarterAnswer('mobile', text, topics) ?? guideFlowAnswer('mobile', text, topics, { platform: PLATFORM });
     if (starter) {
       setTurns([...history, { role: 'assistant', content: starter }]);
       toEnd();
@@ -114,7 +122,7 @@ const AskPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) => vo
     setMissed(null);
     toEnd();
     // Only the topics this conversation is about: a small model answers better reading less.
-    const result = await askGuide(guideGrounding('mobile', topics, history), guideTurnsToSend(history));
+    const result = await askGuide(guideGrounding('mobile', topics, history, { platform: PLATFORM }), guideTurnsToSend(history));
     setWaiting(false);
     if ('answer' in result) setTurns([...history, { role: 'assistant', content: result.answer }]);
     else setMissed({ why: result.error, question: text });
