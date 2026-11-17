@@ -12,6 +12,7 @@ import { NavigationContainer, createNavigationContainerRef } from '@react-naviga
 import { AppNavigator } from '../../../src/navigation/AppNavigator';
 import { useAppStore } from '../../../src/stores/appStore';
 import { createDeviceInfo, createDownloadedModel } from '../../utils/factories';
+import { websiteReach } from '../../harness/websiteReach';
 
 describe('Pro entry from Home', () => {
   beforeEach(() => {
@@ -38,6 +39,8 @@ describe('Pro entry from Home', () => {
     const opened: string[] = [];
     const openURL = Linking.openURL;
     Linking.openURL = async (url: string) => { opened.push(url); };
+    // Our site answers, so checkout opens.
+    const undoReach = websiteReach(true);
     const ui = render(
       <NavigationContainer>
         <AppNavigator />
@@ -50,6 +53,7 @@ describe('Pro entry from Home', () => {
     expect(opened[0]).toMatch(/^https:\/\/getoffgridai\.co\/pro\/app\/\?theme=(dark|light)&.*utm_medium=home-crown/);
     expect(ui.queryByText('I have a license key')).toBeNull();
 
+    undoReach();
     Linking.openURL = openURL;
     ui.unmount();
   });
