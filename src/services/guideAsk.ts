@@ -28,7 +28,7 @@ export async function askGuide(system: string, turns: GuideTurn[]): Promise<Guid
       { id: 'guide-system', role: 'system', content: system, timestamp: now },
       ...turns.map((t, i) => ({ id: `guide-${i}`, role: t.role, content: t.content, timestamp: now })),
     ];
-    const text = await llmService.generateResponse(messages, { disableThinking: true, maxTokens: 700 });
+    const text = await llmService.generateResponse(messages, { disableThinking: true, maxTokens: 400 });
     return text.trim() ? { answer: text.trim() } : { error: 'failed' };
   } catch {
     return { error: 'failed' };
