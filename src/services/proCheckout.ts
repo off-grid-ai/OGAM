@@ -23,8 +23,38 @@ export async function openProCheckout(medium: string, theme: 'dark' | 'light'): 
   await openWebSheet(withUtm(`${PRO_CHECKOUT_SHEET_URL}?theme=${theme}`, medium));
 }
 
-/** Opens one of our web pages in a sheet over the app, else in the system browser. */
+/** Our website did not answer: the sheet would only show the browser's error page, so the
+ * caller shows its own offline state instead. */
+export class OfflineError extends Error {
+  constructor() {
+    super('offline');
+    this.name = 'OfflineError';
+  }
+}
+
+/** How long a page may take to answer before we call the phone offline. */
+const REACH_WAIT_MS = 5000;
+
+/** Whether our website answers at all (any status counts). */
+export async function siteReachable(url: string): Promise<boolean> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), REACH_WAIT_MS);
+  try {
+    await fetch(url, { method: 'HEAD', signal: abort.signal });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Opens one of our web pages in a sheet over the app, else in the system browser. Rejects with
+ * OfflineError when the site does not answer.
+ */
 export async function openWebSheet(url: string): Promise<void> {
+  if (!(await siteReachable(url))) throw new OfflineError();
   if (await InAppBrowser.isAvailable().catch(() => false)) {
     await InAppBrowser.open(url, {
       modalPresentationStyle: 'pageSheet',

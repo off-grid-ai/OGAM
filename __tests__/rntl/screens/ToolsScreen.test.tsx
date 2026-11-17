@@ -21,6 +21,7 @@ import { registerScreen, _clearScreensForTesting } from '../../../src/navigation
 import { PRO_TOOLS_SCREEN } from '../../../src/hooks/useIsProActive';
 import { useAppStore } from '../../../src/stores/appStore';
 import { withNavigatorRoutes } from '../../harness/realNavigation';
+import { websiteReach } from '../../harness/websiteReach';
 
 jest.unmock('@react-navigation/native');
 // The checkout sheet is native (the in-app browser): the device boundary.
@@ -48,6 +49,14 @@ const renderTools = () =>
       destinations: ['ProDetail', PRO_TOOLS_SCREEN],
     }),
   );
+
+
+// The checkout opens only once our site answers: online here.
+let undoReach = (): void => undefined;
+beforeEach(() => {
+  undoReach = websiteReach(true);
+});
+afterEach(() => undoReach());
 
 describe('ToolsScreen', () => {
   beforeEach(() => {

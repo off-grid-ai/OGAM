@@ -14,6 +14,7 @@ import {
   installNativeBoundary,
   requireRTL,
 } from '../../harness/nativeBoundary';
+import { websiteReach } from '../../harness/websiteReach';
 
 // The real navigation library, so a Settings row really pushes its screen (jest.setup stubs
 // useNavigation globally).
@@ -77,6 +78,14 @@ function watchOpenedUrls(): string[] {
 
 const checkoutFrom = (medium: string) =>
   new RegExp(`^https://getoffgridai\\.co/pro/app/\\?theme=(dark|light)&.*utm_medium=${medium}(&|$)`);
+
+
+// The checkout opens only once our site answers: online here.
+let undoReach = (): void => undefined;
+beforeEach(() => {
+  undoReach = websiteReach(true);
+});
+afterEach(() => undoReach());
 
 describe('Pro pricing reached from Settings (rendered, real App)', () => {
   it('the "Off Grid AI Pro" row opens the checkout sheet, and the app shows no price or yearly plan', async () => {

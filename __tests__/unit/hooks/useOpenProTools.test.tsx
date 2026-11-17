@@ -23,6 +23,7 @@ import { useOpenProTools } from '../../../src/hooks/useOpenProTools';
 import { registerScreen, _clearScreensForTesting } from '../../../src/navigation/screenRegistry';
 import { PRO_TOOLS_SCREEN } from '../../../src/hooks/useIsProActive';
 import { useAppStore } from '../../../src/stores/appStore';
+import { websiteReach } from '../../harness/websiteReach';
 
 const Stack = createNativeStackNavigator();
 const navigation = createNavigationContainerRef<Record<string, undefined>>();
@@ -49,6 +50,14 @@ const Probe = () => (
 );
 /** The screen the app is on now. */
 const onScreen = () => navigation.getCurrentRoute()?.name;
+
+
+// The checkout opens only once our site answers: online here.
+let undoReach = (): void => undefined;
+beforeEach(() => {
+  undoReach = websiteReach(true);
+});
+afterEach(() => undoReach());
 
 describe('useOpenProTools', () => {
   beforeEach(() => {

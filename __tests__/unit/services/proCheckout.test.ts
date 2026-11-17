@@ -6,7 +6,9 @@ jest.mock('react-native-inappbrowser-reborn', () => ({
 
 import { Linking } from 'react-native';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
+import { websiteReach } from '../../harness/websiteReach';
 import {
+  OfflineError,
   openProCheckout,
   startProCheckoutReturn,
   PRO_CHECKOUT_SHEET_URL,
@@ -14,7 +16,20 @@ import {
 } from '../../../src/services/proCheckout';
 
 describe('openProCheckout', () => {
-  beforeEach(() => jest.clearAllMocks());
+  let undoReach: () => void;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    undoReach = websiteReach(true);
+  });
+  afterEach(() => undoReach());
+
+  it('opens nothing when the site does not answer, and says the phone is offline', async () => {
+    undoReach();
+    undoReach = websiteReach(false);
+    (InAppBrowser.isAvailable as jest.Mock).mockResolvedValue(true);
+    await expect(openProCheckout('pro-detail', 'dark')).rejects.toBeInstanceOf(OfflineError);
+    expect(InAppBrowser.open).not.toHaveBeenCalled();
+  });
 
   it("opens the website checkout in a sheet, in the app's theme, tagged with where the tap came from", async () => {
     (InAppBrowser.isAvailable as jest.Mock).mockResolvedValue(true);
