@@ -104,7 +104,8 @@ export const ProDetailScreen: React.FC = () => {
   }, [unlockOnArrival, navigation]);
 
   useEffect(() => {
-    if (!hasProAccess) proPaywallViewed();
+    // "Have a key?" lands here to enter the key: the paywall was already counted when the sheet opened.
+    if (!hasProAccess && !unlockOnArrival) proPaywallViewed();
     // Once per visit: a paywall view is the screen opening, not every access change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
