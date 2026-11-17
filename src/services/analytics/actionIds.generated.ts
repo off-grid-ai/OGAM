@@ -842,6 +842,7 @@ export const TEMPLATE_ACTION_IDS: ReadonlyArray<readonly [string, string]> = [
   ["^.+-more-right$", "more-right"],
   ["^.+-voice-hint$", "voice-hint"],
   ["^chats-sort-.+$", "chats-sort"],
+  ["^guide-pick-.+$", "guide-pick"],
   ["^mcp-preset-.+$", "mcp-preset"],
   ["^model-card-.+$", "model-card"],
   ["^models-row-.+$", "models-row"],
