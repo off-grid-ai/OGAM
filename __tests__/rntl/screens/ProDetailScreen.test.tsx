@@ -38,6 +38,7 @@ import { ProUnlockModal } from '../../../src/screens/ProDetailScreen/ProUnlockMo
 import { createKeygenFake } from '../../harness/keygenFake';
 import { connectLicenceStack } from '../../harness/licenceStack';
 import { holdKeychainWrites } from '../../harness/deviceKeychain';
+import { websiteReach } from '../../harness/websiteReach';
 
 /**
  * The screen runs on the real licence stack: proLicenseService, the pro licence provider, the credential
@@ -51,10 +52,12 @@ describe('ProDetailScreen', () => {
   let linkingSpy: jest.SpyInstance;
 
   let disconnect: () => void;
+  let undoReach: () => void;
 
   beforeEach(() => {
     keygen.reset();
     keygen.install();
+    undoReach = websiteReach(true);
     disconnect = connectLicenceStack();
     useAppStore.setState({ hasRegisteredPro: false });
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
@@ -68,6 +71,7 @@ describe('ProDetailScreen', () => {
     linkingSpy.mockRestore();
     disconnect();
     await require('../../../src/services/proLicenseService').clearProForTesting();
+    undoReach();
     keygen.restore();
   });
 
@@ -93,6 +97,31 @@ describe('ProDetailScreen', () => {
     );
     // No in-app activation step for paying.
     expect(queryByText('Enter your license key')).toBeNull();
+  });
+
+  it('says it is offline under Get Pro when the pay page cannot load, and tries again on the next tap', async () => {
+    undoReach();
+    undoReach = websiteReach(false);
+    const { getByTestId, queryByTestId } = render(<ProDetailScreen />);
+    fireEvent.press(getByTestId('pro-buy'));
+    await waitFor(() => expect(getByTestId('pro-offline')).toBeTruthy());
+    expect(linkingSpy).not.toHaveBeenCalled();
+
+    undoReach();
+    undoReach = websiteReach(true);
+    fireEvent.press(getByTestId('pro-buy'));
+    await waitFor(() => expect(linkingSpy).toHaveBeenCalledWith(withUtm(PAY_URL, 'pro-detail')));
+    expect(queryByTestId('pro-offline')).toBeNull();
+  });
+
+  it('"Not a member yet? Get Pro" in the key sheet says it is offline when the pay page cannot load', async () => {
+    undoReach();
+    undoReach = websiteReach(false);
+    const { getByText } = render(<ProDetailScreen />);
+    fireEvent.press(getByText('I have a license key'));
+    fireEvent.press(getByText('Not a member yet? Get Pro'));
+    await waitFor(() => expect(getByText("You're offline")).toBeTruthy());
+    expect(linkingSpy).not.toHaveBeenCalled();
   });
 
   it('links to Off Grid AI Desktop from the Pro pitch', () => {

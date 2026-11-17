@@ -20,17 +20,63 @@ export const PRO_UNLOCK_URL = 'offgrid://pro/unlock';
  * light or dark. Rejects only when nothing could open.
  */
 export async function openProCheckout(medium: string, theme: 'dark' | 'light'): Promise<void> {
-  const url = withUtm(`${PRO_CHECKOUT_SHEET_URL}?theme=${theme}`, medium);
+  await openWebSheet(withUtm(`${PRO_CHECKOUT_SHEET_URL}?theme=${theme}`, medium));
+}
+
+/** Our website did not answer: the sheet would only show the browser's error page, so the
+ * caller shows its own offline state instead. */
+export class OfflineError extends Error {
+  constructor() {
+    super('offline');
+    this.name = 'OfflineError';
+  }
+}
+
+/** How long a page may take to answer before we call the phone offline. */
+const REACH_WAIT_MS = 5000;
+
+/** Whether our website answers at all (any status counts). */
+async function siteReachable(url: string): Promise<boolean> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), REACH_WAIT_MS);
+  try {
+    await fetch(url, { method: 'HEAD', signal: abort.signal });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Opens one of our web pages in a sheet over the app, else in the system browser. Rejects with
+ * OfflineError when the site does not answer.
+ */
+export function openWebSheet(url: string): Promise<void> {
+  // A second tap while the first is still opening joins it: two opens would make iOS refuse the
+  // second sheet, and the page would open again in the browser behind it.
+  opening ??= openOnce(url).finally(() => {
+    opening = null;
+  });
+  return opening;
+}
+let opening: Promise<void> | null = null;
+
+async function openOnce(url: string): Promise<void> {
+  if (!(await siteReachable(url))) throw new OfflineError();
   if (await InAppBrowser.isAvailable().catch(() => false)) {
-    await InAppBrowser.open(url, {
+    // The sheet can still refuse (Android: "No activity" under the new architecture); then the
+    // system browser opens the page, so the tap is never a dead end.
+    const opened = await InAppBrowser.open(url, {
       modalPresentationStyle: 'pageSheet',
       dismissButtonStyle: 'close',
       modalEnabled: true,
       showTitle: false,
       enableUrlBarHiding: true,
       enableDefaultShare: false,
-    });
-    return;
+    }).then(() => true, () => false);
+    if (opened) return;
   }
   await Linking.openURL(url);
 }

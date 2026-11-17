@@ -273,6 +273,9 @@ export interface AppState extends ProAccessSlice {
   setSpeedBenchmarkBackend: (backend: InferenceBackend | null) => void;
   setHasEngagedSharePrompt: (v: boolean) => void;
   toolCountHintDismissed: boolean;
+  /** The Boost promo version the person closed; a newer version shows the promo once more. */
+  boostPromoClosedVersion: string | null;
+  closeBoostPromo: (version: string) => void;
   setToolCountHintDismissed: () => void;
   loadedSettings: Partial<AppSettings> | null;
   setLoadedSettings: (settings: Partial<AppSettings> | null) => void;
@@ -608,6 +611,8 @@ export const useAppStore = create<AppState>()(
       ...createProAccessSlice(state => set(state)),
       toolCountHintDismissed: false,
       setToolCountHintDismissed: () => set({ toolCountHintDismissed: true }),
+      boostPromoClosedVersion: null,
+      closeBoostPromo: version => set({ boostPromoClosedVersion: version }),
       loadedSettings: null,
       setLoadedSettings: settings => set({ loadedSettings: settings }),
     }),
@@ -631,6 +636,7 @@ function persistedAppState(state: AppState) {
   return {
     showSyncStatusBar: state.showSyncStatusBar,
     themeMode: state.themeMode,
+    boostPromoClosedVersion: state.boostPromoClosedVersion,
     hasCompletedOnboarding: state.hasCompletedOnboarding,
     onboardingChecklist: state.onboardingChecklist,
     checklistDismissed: state.checklistDismissed,

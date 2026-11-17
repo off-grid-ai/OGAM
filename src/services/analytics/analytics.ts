@@ -20,8 +20,9 @@ import { analyticsBuildAllowed, createAnalyticsClient, type AnalyticsClient } fr
 import { scrubExceptionProperties } from './scrub';
 import { markForeground, markStageEnded, markStageStarted, takeUncleanExit } from './uncleanExit';
 import { maybePromptAfterFailure, maybePromptAfterFirstChat } from './consentPrompt';
+import type { BoostPromoSurface } from '@offgrid/models';
 import { SessionTally, type ScrollBucket, type SummaryCounter } from './sessionTally';
-import { setInteractionSink, setScreenSink } from './interactions';
+import { countScribe, setInteractionSink, setScreenSink, type ScribeAct, type ScribeOrigin } from './interactions';
 import {
   batteryPct,
   bytesToGb,
@@ -65,7 +66,11 @@ export type Feature =
   | 'browser_action'
   | 'clipboard'
   | 'meetings'
-  | 'sync';
+  | 'sync'
+  | 'scribe'
+  | 'improve'
+  | 'notes'
+  | 'vault';
 export type Modality = 'text' | 'vision' | 'image' | 'video' | 'stt' | 'tts' | 'embedding';
 export type Outcome = 'done' | 'stopped' | 'failed';
 
@@ -432,6 +437,8 @@ function cancelPersist(): void {
 function endSession(): void {
   const ended = session;
   session = null;
+  usedThisSession.clear();
+  promoShownThisSession.clear();
   if (ended && usageOn()) capture('session_summary', ended.summary(Date.now()));
   AsyncStorage.removeItem(PENDING_SESSION_KEY).catch(ignore);
 }
@@ -561,8 +568,37 @@ export function githubStarTapped(source: 'settings'): void {
   capture('github_star_tapped', { source });
 }
 
+/** Used many times in a sitting, so each is sent at most once per session (the event budget). */
+const ONCE_PER_SESSION: ReadonlySet<Feature> = new Set<Feature>(['scribe', 'improve', 'notes', 'vault']);
+const usedThisSession = new Set<Feature>();
+
+/** Usage events can go out now. A once-per-session event spends its one send only then. */
+const usageLive = (): boolean => client !== null && clientUsage;
+
 export function featureUsed(feature: Feature): void {
+  if (ONCE_PER_SESSION.has(feature)) {
+    if (!usageLive() || usedThisSession.has(feature)) return;
+    usedThisSession.add(feature);
+  }
   capture('feature_used', { feature });
+}
+
+/** The private cloud (Boost) promo: shown, its button tapped, or closed, and where. */
+export function boostPromo(action: 'shown' | 'clicked' | 'dismissed', surface: BoostPromoSurface): void {
+  // Shown on every visit to the screen, so sent once per session per surface (the event budget).
+  if (action === 'shown') {
+    if (!usageLive() || promoShownThisSession.has(surface)) return;
+    promoShownThisSession.add(surface);
+  }
+  capture(`boost_promo_${action}`, { surface });
+}
+const promoShownThisSession = new Set<BoostPromoSurface>();
+
+/** A Scribe fix applied or dismissed, a word learned, or an Improve run: counted, and the feature
+ * reported once per session. Never the text or the word. */
+export function scribeUsed(origin: ScribeOrigin, act: ScribeAct): void {
+  countScribe(origin, act);
+  featureUsed(act === 'improve' ? 'improve' : 'scribe');
 }
 
 export function messageSent(facts: { hasImage: boolean; hasDocument: boolean; toolsEnabled: boolean }): void {

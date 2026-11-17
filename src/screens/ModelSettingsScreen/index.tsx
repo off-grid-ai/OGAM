@@ -32,6 +32,7 @@ import { useRemoteServerStore } from '../../stores';
 import { AliveScreen } from '../../components/AliveScreen';
 import { SectionLabel } from '../../components/SectionLabel';
 import { ScreenHeader } from '../../components/ScreenHeader';
+import { BoostPromoCard } from '../../components/BoostPromoCard';
 
 type SettingsTab = 'general' | 'text' | 'image' | 'voice';
 
@@ -104,6 +105,7 @@ export const ModelSettingsScreen: React.FC = () => {
         style={styles.scrollView}
         contentContainerStyle={styles.content}
       >
+        {tab === 'general' && <BoostPromoCard surface="model_settings" />}
         {tab === 'general' && (
           <View style={styles.sectionsGroup}>
             {/* It places every modality (text, image, video, speech, voice, search), so it leads the card. */}

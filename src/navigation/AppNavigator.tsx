@@ -42,6 +42,8 @@ import {
   RemoteServerEditorScreen,
   ProDetailScreen,
   AboutScreen,
+  GuideScreen,
+  GuideTopicScreen,
   AnalyticsInfoScreen,
   ToolsScreen,
 } from '../screens';
@@ -248,6 +250,8 @@ export const AppNavigator: React.FC = () => {
           component={AboutScreen}
           options={{ headerShown: false }}
         />
+        <RootStack.Screen name="Guide" component={GuideScreen} />
+        <RootStack.Screen name="GuideTopic" component={GuideTopicScreen} />
         <RootStack.Screen name="AnalyticsInfo" component={AnalyticsInfoScreen} />
         <RootStack.Screen name="Tools" component={ToolsScreen} />
         <RootStack.Screen

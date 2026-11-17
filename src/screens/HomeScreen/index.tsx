@@ -1,6 +1,6 @@
 import { videoModelDisplayName } from '../../utils/modelHelpers';
 import { useAppStore } from '../../stores/appStore';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, Image, Linking } from 'react-native';
 import { OFF_GRID_DESKTOP_URL } from '../../constants';
 import { withUtm } from '../../utils/utm';
@@ -13,6 +13,7 @@ import {
   Card,
   CustomAlert,
   hideAlert,
+  showAlert,
   ModelSelectorModal,
 } from '../../components';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
@@ -53,6 +54,9 @@ import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabe
 import { openSupportEmail } from '../../utils/supportEmail';
 import { SCROLL_DEPTH_PROPS } from '../../constants/scrollDepth';
 import { useGetPro } from '../../hooks/useGetPro';
+import { boostPromoLink, boostPromoVisible } from '@offgrid/models';
+import { boostPromo } from '../../services/analytics/analytics';
+import { OfflineError, openWebSheet } from '../../services/proCheckout';
 
 type HomeScreenProps = {
   navigation: HomeScreenNavigationProp;
@@ -171,6 +175,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     voice: voiceSummary ? 1 : 0,
   };
 
+  const boostClosedVersion = useAppStore(s => s.boostPromoClosedVersion);
+  const homeBoostShown = boostPromoVisible(boostClosedVersion);
+  // The offer is one of Home's cards: counted shown with Home, like the Models card with Models.
+  useEffect(() => {
+    if (homeBoostShown && isFocused) boostPromo('shown', 'home');
+  }, [homeBoostShown, isFocused]);
   // The top of Home: everything it does, free and Pro, what this person has not tried first.
   const showcase = showcaseFeatures(
     {
@@ -178,6 +188,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       videosMade: generatedVideos.length,
       hasVoice: (modelCounts.voice ?? 0) > 0,
       hasSpeech: (modelCounts.speech ?? 0) > 0,
+      showBoost: homeBoostShown,
     },
     {
       image: () => (downloadedImageModels.length > 0 ? startNewChat() : presentModelSheet('image')),
@@ -192,6 +203,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       vault: () => navigation.navigate('Vault' as never),
       pro: () => getPro('home-showcase'),
       desktop: () => { Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'home-showcase')).catch(() => {}); },
+      // Offline, say so here, where it was tapped; any other failure, the offer on the Models tab.
+      boost: () => {
+        boostPromo('clicked', 'home');
+        openWebSheet(boostPromoLink('mobile', 'home')).catch((e: unknown) => {
+          if (e instanceof OfflineError) {
+            setAlertState(showAlert("You're offline", 'Connect to the internet to see the offer.'));
+          } else {
+            navigation.navigate('Main', { screen: 'ModelsTab' });
+          }
+        });
+      },
     },
     isProActive,
   );
@@ -261,6 +283,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 <Text style={styles.title} accessibilityRole="header" numberOfLines={1}>Off Grid AI</Text>
               </View>
               <View style={styles.headerActions}>
+                {/* What it does for you: every feature, and an Ask box (Mac, 2026-11-17).
+                    Order: info, notifications, Pro (Mac, 2026-11-17). */}
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('Guide')}
+                  style={styles.crownButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="What it does for you"
+                  testID="home-guide-button"
+                >
+                  <Icon name="info" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
                 {HomeNotificationsButton ? (
                   <HomeNotificationsButton onOpen={openSyncNotifications} />
                 ) : null}

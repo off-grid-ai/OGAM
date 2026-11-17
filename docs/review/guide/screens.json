@@ -1,0 +1,94 @@
+[
+ {
+  "id": "guide-flow",
+  "name": "What it does for you: the whole flow",
+  "group": "Guide",
+  "what": "Info button on Home, the Pro starter answered at once as a grid, Scribe and Notes playing their clips, a typed question about passwords, then Features.",
+  "file": "screens/pro-grid-android.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Guide on the phone (17 Nov)",
+    "at": "2026-11-17T08:30:00Z",
+    "file": "screens/pro-grid-android.jpg",
+    "clip": "screens/guide-android.mp4"
+   }
+  ],
+  "clip": "screens/guide-android.mp4"
+ },
+ {
+  "id": "pro-grid",
+  "name": "What does Pro add on my phone?",
+  "group": "Guide",
+  "what": "Answered from the guide itself, no model: the free list, every Pro feature as a two-column grid, the computer's Pro line and the price.",
+  "file": "screens/pro-grid-android.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Guide on the phone (17 Nov)",
+    "at": "2026-11-17T08:30:00Z",
+    "file": "screens/pro-grid-android.jpg"
+   }
+  ]
+ },
+ {
+  "id": "scribe-topic",
+  "name": "Scribe",
+  "group": "Guide",
+  "what": "Topic page: where it runs, the clip of Improve, what it does, and Get Pro.",
+  "file": "screens/scribe-topic-android.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Guide on the phone (17 Nov)",
+    "at": "2026-11-17T08:30:00Z",
+    "file": "screens/scribe-topic-android.jpg"
+   }
+  ]
+ },
+ {
+  "id": "notes-topic",
+  "name": "Notes",
+  "group": "Guide",
+  "what": "Topic page with the Notes clip (slash blocks).",
+  "file": "screens/notes-topic-android.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Guide on the phone (17 Nov)",
+    "at": "2026-11-17T08:30:00Z",
+    "file": "screens/notes-topic-android.jpg"
+   }
+  ]
+ },
+ {
+  "id": "ask-passwords",
+  "name": "Where do I keep my passwords?",
+  "group": "Guide",
+  "what": "A typed question goes to the phone's model with only the Vault topic: a short answer and the Vault card.",
+  "file": "screens/ask-passwords-android.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Guide on the phone (17 Nov)",
+    "at": "2026-11-17T08:30:00Z",
+    "file": "screens/ask-passwords-android.jpg"
+   }
+  ]
+ },
+ {
+  "id": "features",
+  "name": "Features",
+  "group": "Guide",
+  "what": "Every feature by group; a lock on Pro ones without Pro; Speech to text, Scribe and MCP tools by name.",
+  "file": "screens/features-android.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Guide on the phone (17 Nov)",
+    "at": "2026-11-17T08:30:00Z",
+    "file": "screens/features-android.jpg"
+   }
+  ]
+ }
+]

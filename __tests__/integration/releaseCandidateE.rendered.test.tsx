@@ -2,6 +2,7 @@
 import { pressImageAction } from '../harness/galleryRoutes';
 import { GB, installNativeBoundary, requireRTL } from '../harness/nativeBoundary';
 import { createDownloadedModel } from '../utils/factories';
+import { websiteReach } from '../harness/websiteReach';
 import type { LicensedMesh } from '../harness/licensedMesh';
 import type { GeneratedImage } from '../../src/types';
 
@@ -314,6 +315,8 @@ it('M15: the Pro purchase action opens the checkout sheet page', async () => {
   const original = Linking.openURL;
   let browserAddress = '';
   Linking.openURL = async (url: string) => { browserAddress = url; };
+  // Our site answers, so checkout opens.
+  const undoReach = websiteReach(true);
   try {
     app.rtl.fireEvent.press(app.view.getByTestId('settings-tab'));
     app.rtl.fireEvent.press(await app.view.findByLabelText(/^Off Grid AI Pro\. /));
@@ -321,6 +324,7 @@ it('M15: the Pro purchase action opens the checkout sheet page', async () => {
     await app.rtl.waitFor(() => expect(browserAddress).toMatch(/^https:\/\/getoffgridai\.co\/pro\/app\/\?theme=(dark|light)&utm_source=off-grid-mobile-app/));
   } finally {
     Linking.openURL = original;
+    undoReach();
     app.view.unmount();
   }
 });

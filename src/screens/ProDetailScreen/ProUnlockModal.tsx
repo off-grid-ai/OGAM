@@ -15,7 +15,7 @@ import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { SPACING, TYPOGRAPHY } from '../../constants';
 import { activateProByKey } from '../../services/proLicenseService';
-import { openProCheckout } from '../../services/proCheckout';
+import { OfflineError, openProCheckout } from '../../services/proCheckout';
 import { AppSheet } from '../../components/AppSheet';
 
 type ErrorMsg = Pick<
@@ -101,11 +101,12 @@ export const ProUnlockModal: React.FC<Props> = ({
   // Not a member yet — open checkout in a sheet. The buyer's key is emailed
   // to them after checkout, then pasted here.
   const handleGetPro = () => {
-    openProCheckout('pro-unlock', isDark ? 'dark' : 'light').catch(() => {
-      setError({
-        title: 'Could not open Pro',
-        description: 'Please try again.',
-      });
+    openProCheckout('pro-unlock', isDark ? 'dark' : 'light').catch((e: unknown) => {
+      setError(
+        e instanceof OfflineError
+          ? { title: "You're offline", description: 'Connect to the internet to buy Pro.' }
+          : { title: 'Could not open Pro', description: 'Please try again.' },
+      );
     });
   };
 

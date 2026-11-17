@@ -7,6 +7,9 @@ import { useTheme, useThemedStyles } from '../../../theme';
 import type { ThemeColors } from '../../../theme';
 import { cardSurface } from '../../../theme/surface';
 import { SPACING, TYPOGRAPHY } from '../../../constants';
+import { boostPromoCopy } from '@offgrid/models';
+
+const BOOST_COPY = boostPromoCopy('phone');
 
 export interface ShowcaseFeature {
   key: string;
@@ -32,6 +35,8 @@ export interface FeatureUse {
   videosMade: number;
   hasVoice: boolean;
   hasSpeech: boolean;
+  /** The private cloud offer still open (not closed on Models). */
+  showBoost: boolean;
 }
 
 export interface FeatureOpeners {
@@ -48,6 +53,8 @@ export interface FeatureOpeners {
   vault: () => void;
   pro: () => void;
   desktop: () => void;
+  /** The private cloud offer page. */
+  boost: () => void;
 }
 
 /**
@@ -63,6 +70,9 @@ export function showcaseFeatures(use: FeatureUse, open: FeatureOpeners, isPro: b
     { key: 'image', icon: 'image', tried: use.imagesMade > 0, title: 'Describe a picture and watch it appear.', line: 'Made on this phone, with no internet.', onPress: open.image },
     { key: 'speech', icon: 'mic', tried: use.hasSpeech, title: 'Talk instead of typing.', line: 'Your words turn to text right here.', onPress: open.speech },
     { key: 'documents', icon: 'file-text', tried: false, title: 'Ask your own files.', line: 'Add a PDF to a project, then ask it.', onPress: open.documents },
+    ...(use.showBoost
+      ? [{ key: 'boost', icon: 'cloud', tried: false, title: BOOST_COPY.title, line: BOOST_COPY.line, onPress: open.boost }]
+      : []),
     { key: 'video', icon: 'film', pro: true, tried: use.videosMade > 0, title: 'Turn a line into a clip.', line: 'Short videos, made on this phone.', onPress: open.video },
     { key: 'mac-models', icon: 'monitor', mac: true, tried: false, title: 'Smarter answers from your computer.', line: 'Your phone uses its bigger models.', onPress: open.desktop },
     { key: 'voice', icon: 'volume-2', pro: true, tried: use.hasVoice, title: 'Hear every answer.', line: 'Replies read aloud in a voice you pick.', onPress: open.voice },

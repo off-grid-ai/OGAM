@@ -1,0 +1,79 @@
+[
+ {
+  "id": "guide-flow-iphone",
+  "name": "What it does for you on iPhone: the whole flow",
+  "group": "Guide",
+  "what": "Info button on Home, the offline starter answered at once as a grid, a typed question with the keyboard up, the Voice mode card, then Features.",
+  "file": "screens/offline-grid-iphone.jpg",
+  "clip": "screens/guide-iphone.mp4",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Guide on iPhone (17 Nov)",
+    "at": "2026-11-17T08:58:00Z",
+    "file": "screens/offline-grid-iphone.jpg",
+    "clip": "screens/guide-iphone.mp4"
+   }
+  ]
+ },
+ {
+  "id": "guide-open-iphone",
+  "name": "Guide opens on Ask",
+  "group": "Guide",
+  "what": "Four starter questions and a first look at Chat, Voice mode, Video Studio and the computer app. The Ask box sits at the bottom.",
+  "file": "screens/guide-open-iphone.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Guide on iPhone (17 Nov)",
+    "at": "2026-11-17T08:58:00Z",
+    "file": "screens/guide-open-iphone.jpg"
+   }
+  ]
+ },
+ {
+  "id": "offline-grid-iphone",
+  "name": "What works without internet?",
+  "group": "Guide",
+  "what": "Answered from the guide itself, no model: the lead features as a grid, the rest as a list.",
+  "file": "screens/offline-grid-iphone.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Guide on iPhone (17 Nov)",
+    "at": "2026-11-17T08:58:00Z",
+    "file": "screens/offline-grid-iphone.jpg"
+   }
+  ]
+ },
+ {
+  "id": "ask-voice-iphone",
+  "name": "A typed question",
+  "group": "Guide",
+  "what": "'Can it read answers out loud?' answered by Qwen 3.5 0.8B on the phone in two lines, with the Voice mode card. The keyboard no longer covers the Ask box (fixed today).",
+  "file": "screens/ask-voice-iphone.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Guide on iPhone (17 Nov)",
+    "at": "2026-11-17T08:58:00Z",
+    "file": "screens/ask-voice-iphone.jpg"
+   }
+  ]
+ },
+ {
+  "id": "features-iphone",
+  "name": "Features",
+  "group": "Guide",
+  "what": "Every feature grouped: Chat and create, Write and keep, Your devices and tools.",
+  "file": "screens/features-iphone.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Guide on iPhone (17 Nov)",
+    "at": "2026-11-17T08:58:00Z",
+    "file": "screens/features-iphone.jpg"
+   }
+  ]
+ }
+]

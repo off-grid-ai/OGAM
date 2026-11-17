@@ -29,6 +29,7 @@ describe('session tally', () => {
       errors_shown: { 'models:alert': 1 },
       long_press: { 'chat:send-button': 1 },
       settings_changed: { 'theme=dark': 1 },
+      scribe: {},
     });
   });
 
@@ -96,6 +97,7 @@ describe('session tally', () => {
       errors_shown: {},
       long_press: {},
       settings_changed: {},
+      scribe: {},
     });
   });
 });

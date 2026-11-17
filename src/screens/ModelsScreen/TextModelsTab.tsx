@@ -42,6 +42,7 @@ import { uniformDownloadId } from '../../services/modelDownloadService/uniformId
 import { fetchModelFiles, preferredDownloadQuants } from '../../services/modelCatalogFiles';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
 import { DevicePicksRow } from '../../components/models/DevicePicksRow';
+import { BoostPromoCard } from '../../components/BoostPromoCard';
 import { devicePicks } from '../../services/devicePicks';
 import { sizeChoices } from './sizeChoices';
 
@@ -583,6 +584,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
           ListHeaderComponent={hasSearched ? null : (
             <>
               <DevicePicksRow ramGB={ramGB} onChat={() => navigation.navigate('Chat', {})} />
+              <BoostPromoCard surface="models" />
               {moreModels.length > 0 && <Text style={styles.recommendedTitle}>More models</Text>}
               {onboardingLiteRTCards}
             </>
