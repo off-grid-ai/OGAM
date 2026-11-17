@@ -8,7 +8,6 @@ import { cardSurface } from '../theme/surface';
 import { SPACING, TYPOGRAPHY } from '../constants';
 import { useAppStore } from '../stores';
 import { AnimatedPressable } from './AnimatedPressable';
-import { Button } from './Button';
 import { boostPromo } from '../services/analytics/analytics';
 import { OfflineError, openWebSheet } from '../services/proCheckout';
 
@@ -49,36 +48,56 @@ export const BoostPromoCard: React.FC<{ surface: BoostPromoSurface }> = ({ surfa
 
   return (
     <View style={styles.card} testID="boost-promo">
-      <View style={styles.head}>
-        <Text style={styles.title}>{COPY.title}</Text>
-        <AnimatedPressable
-          onPress={close}
-          hitSlop={14}
-          accessibilityRole="button"
-          accessibilityLabel={COPY.close}
-          testID="boost-promo-close"
-        >
-          <Icon name="x" size={16} color={colors.textMuted} />
-        </AnimatedPressable>
-      </View>
-      <Text style={styles.body}>{COPY.body}</Text>
-      <View style={styles.action}>
-        <Button title={COPY.action} onPress={claim} loading={opening} testID="boost-promo-claim" />
-      </View>
-      {offline ? (
-        <Text style={styles.offline} testID="boost-promo-offline">
-          You're offline. Connect to the internet to see the offer.
-        </Text>
-      ) : null}
+      <AnimatedPressable
+        style={styles.main}
+        onPress={claim}
+        disabled={opening}
+        accessibilityRole="button"
+        accessibilityLabel={COPY.action}
+        testID="boost-promo-claim"
+      >
+        <Icon name="cloud" size={18} color={colors.primary} />
+        <View style={styles.text}>
+          <Text style={styles.title}>{COPY.title}</Text>
+          {offline ? (
+            <Text style={styles.line} testID="boost-promo-offline">
+              You're offline. Connect to the internet to see the offer.
+            </Text>
+          ) : (
+            <Text style={styles.line}>
+              {COPY.line ? `${COPY.line} ` : null}
+              <Text style={styles.action}>{opening ? 'Opening…' : COPY.action}</Text>
+            </Text>
+          )}
+        </View>
+      </AnimatedPressable>
+      <AnimatedPressable
+        onPress={close}
+        hitSlop={14}
+        accessibilityRole="button"
+        accessibilityLabel={COPY.close}
+        testID="boost-promo-close"
+      >
+        <Icon name="x" size={16} color={colors.textMuted} />
+      </AnimatedPressable>
     </View>
   );
 };
 
+// One slim row: the offer and its link in two lines, close on the right. The whole row is the button.
 const createStyles = (colors: ThemeColors) => ({
-  card: { ...cardSurface(colors), padding: SPACING.lg, gap: SPACING.sm, marginBottom: SPACING.lg },
-  head: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: SPACING.sm },
-  title: { ...TYPOGRAPHY.h3, color: colors.text, flex: 1 },
-  body: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
-  action: { flexDirection: 'row' as const, marginTop: SPACING.xs },
-  offline: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
+  card: {
+    ...cardSurface(colors),
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    marginBottom: SPACING.lg,
+  },
+  main: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.md },
+  text: { flex: 1 },
+  title: { ...TYPOGRAPHY.bodySmall, color: colors.text },
+  line: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
+  action: { color: colors.primary },
 });
