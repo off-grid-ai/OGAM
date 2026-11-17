@@ -165,6 +165,8 @@ export interface OnboardingSlide {
 // Core onboarding slides. Optional feature packages contribute additional slide data through the
 // onboarding.additionalSlides hook so Core keeps one renderer without advertising unavailable
 // features in free builds.
+import { boostPromoCopy } from '@offgrid/models';
+
 export const ONBOARDING_SLIDES: readonly OnboardingSlide[] = [
   {
     id: 'freedom',
@@ -186,6 +188,13 @@ export const ONBOARDING_SLIDES: readonly OnboardingSlide[] = [
     title: 'Say It Simply.\nGet Something Stunning.',
     description:
       'Type \u201Cimagine a cat on the moon\u201D and watch your words become a vivid image in seconds. AI enhances your ideas automatically \u2014 no prompt engineering needed.',
+  },
+  {
+    // The private cloud offer (shared copy): models too big for the phone, on our servers.
+    id: 'boost',
+    keyword: 'BIGGER',
+    title: 'Smarter Answers,\nWithout a Bigger Phone.',
+    description: boostPromoCopy('phone').body,
   },
   {
     id: 'hardware',
