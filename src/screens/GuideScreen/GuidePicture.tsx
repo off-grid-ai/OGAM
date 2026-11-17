@@ -33,6 +33,8 @@ export const GuidePicture: React.FC<{ media: GuideMedia; label: string; height: 
           muted
           disableFocus
           playInBackground={false}
+          // A looping preview is not something to watch: the screen may sleep as usual.
+          preventsDisplaySleepDuringVideoPlayback={false}
           accessibilityLabel={label}
         />
       ) : (

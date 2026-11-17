@@ -19,9 +19,10 @@ function usesBuiltInModel(): boolean {
 
 /** The question's vector from the built-in search model, or undefined to match by words. */
 export async function guideQuestionVector(question: string): Promise<number[] | undefined> {
-  if (!usesBuiltInModel()) return undefined;
   try {
     return await embeddingService.runExclusive(async () => {
+      // Checked under the lock: a model switch queued ahead of this cannot slip in between.
+      if (!usesBuiltInModel()) return undefined;
       if (!embeddingService.isLoaded()) await embeddingService.load();
       return embeddingService.embed(question);
     });
