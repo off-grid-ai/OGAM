@@ -8,7 +8,7 @@
  */
 import { ms } from './values';
 
-const SUMMARY_COUNTERS = ['actions', 'errors_shown', 'long_press', 'settings_changed'] as const;
+const SUMMARY_COUNTERS = ['actions', 'errors_shown', 'long_press', 'settings_changed', 'scribe'] as const;
 export type SummaryCounter = (typeof SUMMARY_COUNTERS)[number];
 
 const SCROLL_BUCKETS = [0, 25, 50, 75, 100] as const;

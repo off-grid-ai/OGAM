@@ -35,6 +35,15 @@ export function countErrorShown(where: string): void {
   sink?.count('errors_shown', where);
 }
 
+/** Where Scribe ran on the phone: in the app (notes, chat), or through the share sheet. */
+export type ScribeOrigin = 'app' | 'share';
+export type ScribeAct = 'applied' | 'dismissed' | 'learned' | 'improve';
+
+/** A Scribe action, counted into the session's `scribe` map. Never the text or the word. */
+export function countScribe(origin: ScribeOrigin, act: ScribeAct): void {
+  sink?.count('scribe', `${origin}:${act}`);
+}
+
 /** How far down the screen's main list the person is (0..1). */
 export function reportScroll(fraction: number): void {
   sink?.scrolled(scrollBucket(fraction));
