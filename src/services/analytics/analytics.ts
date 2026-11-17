@@ -20,6 +20,7 @@ import { analyticsBuildAllowed, createAnalyticsClient, type AnalyticsClient } fr
 import { scrubExceptionProperties } from './scrub';
 import { markForeground, markStageEnded, markStageStarted, takeUncleanExit } from './uncleanExit';
 import { maybePromptAfterFailure, maybePromptAfterFirstChat } from './consentPrompt';
+import type { BoostPromoSurface } from '@offgrid/models';
 import { SessionTally, type ScrollBucket, type SummaryCounter } from './sessionTally';
 import { countScribe, setInteractionSink, setScreenSink, type ScribeAct, type ScribeOrigin } from './interactions';
 import {
@@ -437,6 +438,7 @@ function endSession(): void {
   const ended = session;
   session = null;
   usedThisSession.clear();
+  promoShownThisSession.clear();
   if (ended && usageOn()) capture('session_summary', ended.summary(Date.now()));
   AsyncStorage.removeItem(PENDING_SESSION_KEY).catch(ignore);
 }
@@ -577,6 +579,17 @@ export function featureUsed(feature: Feature): void {
   }
   capture('feature_used', { feature });
 }
+
+/** The private cloud (Boost) promo: shown, its button tapped, or closed, and where. */
+export function boostPromo(action: 'shown' | 'clicked' | 'dismissed', surface: BoostPromoSurface): void {
+  // Shown on every visit to the screen, so sent once per session per surface (the event budget).
+  if (action === 'shown') {
+    if (promoShownThisSession.has(surface)) return;
+    promoShownThisSession.add(surface);
+  }
+  capture(`boost_promo_${action}`, { surface });
+}
+const promoShownThisSession = new Set<BoostPromoSurface>();
 
 /** A Scribe fix applied or dismissed, a word learned, or an Improve run: counted, and the feature
  * reported once per session. Never the text or the word. */
