@@ -1,7 +1,7 @@
 /**
  * useGetPro — the one "Get Pro" action. Without Pro it opens the checkout sheet directly (no page
  * in between), a lapsed or deactivated key included; with Pro active it opens the Pro page.
- * The real navigator runs; the in-app browser is the device boundary.
+ * The real navigator runs; the in-app browser and the system browser are the device boundary.
  */
 jest.unmock('@react-navigation/native');
 jest.mock('react-native-inappbrowser-reborn', () => ({
@@ -9,7 +9,7 @@ jest.mock('react-native-inappbrowser-reborn', () => ({
   default: { isAvailable: jest.fn(() => Promise.resolve(true)), open: jest.fn(() => Promise.resolve()), close: jest.fn() },
 }));
 
-import { Text, TouchableOpacity } from 'react-native';
+import { Linking, Text, TouchableOpacity } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -94,8 +94,20 @@ describe('useGetPro', () => {
     expect(InAppBrowser.open).not.toHaveBeenCalled();
   });
 
-  it('opens the Pro page when no sheet can open at all', async () => {
-    (InAppBrowser.open as jest.Mock).mockRejectedValueOnce(new Error('no browser'));
+  it('opens the checkout in the system browser when the sheet refuses (Android "No activity")', async () => {
+    (InAppBrowser.open as jest.Mock).mockRejectedValueOnce(new Error('No activity'));
+    const { getByTestId } = render(<Probe />);
+    fireEvent.press(getByTestId('get-pro'));
+    await waitFor(() => expect(Linking.openURL).toHaveBeenCalledTimes(1));
+    expect((Linking.openURL as jest.Mock).mock.calls[0][0]).toBe(
+      (InAppBrowser.open as jest.Mock).mock.calls[0][0],
+    );
+    expect(onScreen()).toBe('Home');
+  });
+
+  it('opens the Pro page when neither the sheet nor the browser can open', async () => {
+    (InAppBrowser.open as jest.Mock).mockRejectedValueOnce(new Error('No activity'));
+    (Linking.openURL as jest.Mock).mockRejectedValueOnce(new Error('no browser'));
     const { getByTestId } = render(<Probe />);
     fireEvent.press(getByTestId('get-pro'));
     await waitFor(() => expect(onScreen()).toBe('ProDetail'));
