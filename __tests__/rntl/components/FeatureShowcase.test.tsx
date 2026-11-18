@@ -31,11 +31,12 @@ const openers = (): FeatureOpeners => ({
   pro: opener(),
   desktop: opener(),
   boost: opener(),
+  explain: () => undefined,
 });
 const fresh: FeatureUse = { imagesMade: 0, videosMade: 0, hasVoice: false, hasSpeech: false, showBoost: false };
 const keys = (features: ShowcaseFeature[]) => features.map(f => f.key);
 const MAC_KEYS = ['mac-clipboard', 'mac-dictation', 'mac-meetings', 'mac-models', 'mac-recall'];
-/** Pro features on this phone: without Pro their cards open Pro. */
+/** Pro features on this phone: without Pro their cards open their page in the info guide. */
 const PHONE_PRO_KEYS = ['improve', 'notes', 'sync', 'tools', 'vault', 'video', 'voice'];
 const FREE_PHONE_KEYS = ['documents', 'image', 'speech'];
 const sorted = (list: string[]) => [...list].sort();
@@ -94,10 +95,13 @@ describe('showcaseFeatures', () => {
     expect(features.filter(f => f.onPress === open.pro)).toHaveLength(0);
   });
 
-  it('without Pro: phone Pro cards open Pro; Mac cards, Pro or not, still open the Desktop page', () => {
-    const open = openers();
+  it('without Pro: phone Pro cards explain themselves in the info guide; Mac cards still open the Desktop page', () => {
+    const explained: string[] = [];
+    const open = { ...openers(), explain: (topic: string) => explained.push(topic) };
     const features = showcaseFeatures(fresh, open, false);
-    expect(sorted(features.filter(f => f.onPress === open.pro).map(f => f.key))).toEqual(PHONE_PRO_KEYS);
+    for (const key of PHONE_PRO_KEYS) features.find(f => f.key === key)!.onPress();
+    expect(sorted(explained)).toEqual(sorted(PHONE_PRO_KEYS.map(key => `phone-${key}`)));
+    expect(features.filter(f => f.onPress === open.pro)).toHaveLength(0);
     expect(sorted(features.filter(f => f.onPress === open.desktop).map(f => f.key))).toEqual(MAC_KEYS);
     for (const key of ['image', 'speech', 'documents'] as const) {
       expect(features.find(f => f.key === key)!.onPress).toBe(open[key]);
