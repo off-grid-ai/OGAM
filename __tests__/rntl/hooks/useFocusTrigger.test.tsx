@@ -1,10 +1,8 @@
 /**
  * useFocusTrigger Hook Tests
  *
- * Tests for the focus trigger hook:
- * - Returns 0 before the screen has been focused
- * - Increments when screen gains focus
- * - Does not increment when unfocused
+ * The trigger changes once, the first time a screen is seen, and never again: coming back to a
+ * tab shows it at once, and a tab switch never re-renders the screen to read focus.
  *
  * The real navigator runs: a stack with two screens. Focus moves the way it does in the app,
  * by navigating away and back.
@@ -40,24 +38,17 @@ function mount() {
 }
 
 describe('useFocusTrigger', () => {
-  it('starts at 0 on the first render', () => {
+  it('a screen that opens in view is already seen', () => {
     const { seen } = mount();
-    expect(seen[0]).toBe(0);
+    expect(seen[0]).toBe(1);
   });
 
-  it('increments each time the screen gains focus again', async () => {
+  it('coming back to a screen does not replay it, or re-render it to read focus', async () => {
     const { navigation, seen } = mount();
-    const before = seen.at(-1)!;
+    const renders = seen.length;
     await act(async () => navigation.navigate('Other'));
     await act(async () => navigation.goBack());
-    expect(seen.at(-1)).toBeGreaterThan(before);
-  });
-
-  it('does not increment while the screen is out of focus', async () => {
-    const { navigation, seen } = mount();
-    await act(async () => navigation.navigate('Other'));
-    const away = seen.at(-1)!;
-    await act(async () => navigation.setParams(undefined as never));
-    expect(seen.at(-1)).toBe(away);
+    expect(seen.at(-1)).toBe(1);
+    expect(seen.length).toBe(renders);
   });
 });

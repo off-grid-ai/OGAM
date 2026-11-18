@@ -79,7 +79,7 @@ const MEDIA: Record<string, GuideMedia> = {
   // Real phone screens from the screen reviews (mobile/docs/review) and the release shots, cropped
   // to the part that shows the feature. One take each, so both themes show it.
   'phone-images': screen(require('../../assets/guide/phone-images.webp'), 600 / 652),
-  // A real Video Studio run on iPhone through OpenRouter (17 Nov): the wait sped up, then the film plays.
+  // A real Video Studio run on iPhone through OpenRouter (17 Nov): the wait, Ready, then the film at 30 fps.
   'phone-video': screen(require('../../assets/guide/phone-video.webp'), 400 / 870, require('../../assets/guide/phone-video.mp4')),
   'phone-notes': screen(require('../../assets/guide/phone-notes.webp'), 480 / 640, require('../../assets/guide/phone-notes.mp4')),
   'phone-improve': screen(require('../../assets/guide/phone-improve.webp'), 480 / 600, require('../../assets/guide/phone-improve.mp4')),
@@ -87,6 +87,27 @@ const MEDIA: Record<string, GuideMedia> = {
   'phone-sync': screen(require('../../assets/guide/phone-sync.webp'), 600 / 745),
   'phone-tools': screen(require('../../assets/guide/phone-tools.webp'), 600 / 802),
   'phone-models': screen(require('../../assets/guide/phone-models.webp'), 600 / 802),
+  // The store shots' phone pairs (website/output/store-assets), cropped like Chat above.
+  'phone-vision': {
+    dark: require('../../assets/guide/phone-vision-dark.webp'),
+    light: require('../../assets/guide/phone-vision-light.webp'),
+    aspect: tall,
+  },
+  'phone-speech': {
+    dark: require('../../assets/guide/phone-speech-dark.webp'),
+    light: require('../../assets/guide/phone-speech-light.webp'),
+    aspect: tall,
+  },
+  'phone-documents': {
+    dark: require('../../assets/guide/phone-documents-dark.webp'),
+    light: require('../../assets/guide/phone-documents-light.webp'),
+    aspect: tall,
+  },
+  'phone-clipboard': {
+    dark: require('../../assets/guide/phone-clipboard-dark.webp'),
+    light: require('../../assets/guide/phone-clipboard-light.webp'),
+    aspect: 1200 / 555,
+  },
 };
 
 function screen(source: GuideMedia['light'], aspect: number, clip?: number): GuideMedia {

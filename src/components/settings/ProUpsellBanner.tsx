@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Linking } from 'react-native';
+import { View, Text, Linking, Image } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedEntry } from '../AnimatedEntry';
@@ -29,7 +29,7 @@ interface Props {
  * weights <= 400 per docs/design.
  */
 export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
   // A saved credential may need device reactivation, but it is never an upsell.
   // Debug access and active Pro features remain separate projections.
@@ -48,7 +48,14 @@ export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
       <View style={styles.card}>
         <View style={styles.header}>
           <View style={styles.headerText}>
-            <Text style={styles.title}>Off Grid AI Pro</Text>
+            <View style={styles.titleRow}>
+              <Image
+                source={isDark ? require('../../assets/home-logo-dark.png') : require('../../assets/home-logo-light.png')}
+                style={styles.logo}
+                accessibilityIgnoresInvertColors
+              />
+              <Text style={styles.title}>Off Grid AI Pro</Text>
+            </View>
             <Text style={styles.desc}>
               Keep your work in context with memory, Sync, and actions you approve.
             </Text>
@@ -96,8 +103,10 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     padding: SPACING.lg,
     paddingBottom: SPACING.md,
   },
+  titleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: SPACING.xs },
+  logo: { width: 28, height: 28, borderRadius: 6, marginRight: SPACING.sm },
   headerText: { flex: 1, marginRight: SPACING.md },
-  title: { ...TYPOGRAPHY.h2, color: colors.text, marginBottom: SPACING.xs },
+  title: { ...TYPOGRAPHY.h2, color: colors.text },
   desc: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, lineHeight: 18 },
   close: { padding: SPACING.xs, minWidth: 44, minHeight: 44, alignItems: 'center' as const },
   cta: { marginHorizontal: SPACING.lg, marginBottom: SPACING.md },

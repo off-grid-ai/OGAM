@@ -41,8 +41,7 @@ import { appBuildLabel, appVersion } from '../utils/appVersion';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { openSupportEmail } from '../utils/supportEmail';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
-import { useIsFocused } from '@react-navigation/native';
-import { LivingField } from '../components/LivingField';
+import { ScreenField } from '../components/LivingField';
 import { useGetPro } from '../hooks/useGetPro';
 
 type NavigationProp = CompositeNavigationProp<
@@ -71,7 +70,6 @@ export const SettingsScreen: React.FC = () => {
   const focusTrigger = useFocusTrigger();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const isFocused = useIsFocused();
   // Reactive: Pro sections registered at runtime (license-key activation re-runs
   // loadProFeatures) show up live without an app restart.
   const settingsSections = useSettingsSections();
@@ -171,7 +169,7 @@ export const SettingsScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* The living field behind the tab, resting while the tab is hidden. */}
-      <LivingField active={isFocused} />
+      <ScreenField />
       <ScreenHeader title="Settings" variant="tab" />
       <ScrollView
         {...SCROLL_DEPTH_PROPS}

@@ -41,7 +41,8 @@ export type RootStackParamList = {
   /** unlock: open the license-key field on arrival (the checkout sheet's way back). */
   ProDetail: { unlock?: boolean; offline?: boolean } | undefined;
   /** "What it does for you", from the info button on Home. */
-  Guide: undefined;
+  /** `ask`: a question to ask as the guide opens (a feature's "Ask more"); `at` makes each one new. */
+  Guide: { ask?: string; at?: number } | undefined;
   GuideTopic: { id: string };
   About: undefined;
   Tools: undefined;
@@ -59,5 +60,6 @@ export type MainTabParamList = {
         initialSearchQuery?: string;
       }
     | undefined;
+  ProTab: undefined;
   SettingsTab: undefined;
 };

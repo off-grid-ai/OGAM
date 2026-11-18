@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -111,6 +111,14 @@ export const AliveProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [signals, reducedMotion],
   );
 
+  // Android's field holds still (LivingField), so nothing listens to touches there.
+  if (Platform.OS === 'android') {
+    return (
+      <View style={styles.fill} collapsable={false}>
+        {children}
+      </View>
+    );
+  }
   return (
     <AliveContext.Provider value={signals}>
       <GestureDetector gesture={listen}>

@@ -8,7 +8,7 @@
  *
  * The words come from @offgrid/models, so this page and the desktop's guide never disagree.
  */
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   ScrollView,
@@ -16,7 +16,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useReducedMotion } from 'react-native-reanimated';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
 // The same keyboard view as Chat: edge-to-edge-aware on Android, real keyboard frame on iPhone.
@@ -26,6 +27,10 @@ import {
   GUIDE_STARTERS,
   guideAnswerParts,
   guideAnswerBlocks,
+  guideAnswerLength,
+  guideAnswerReveal,
+  guideTypingMs,
+  type GuideAnswerBlock,
   guideFlowAnswer,
   guideFlowAnswerById,
   guideGrounding,
@@ -67,20 +72,48 @@ const TABS = [
 export const GuideScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const styles = useThemedStyles(createStyles);
+  const { params } = useRoute<RouteProp<RootStackParamList, 'Guide'>>();
+  const { colors } = useTheme();
   const [tab, setTab] = useState<Tab>('ask');
+  // A new conversation is a fresh Ask pane; `asked` shows the New button once there is one to leave.
+  const [conversation, setConversation] = useState(0);
+  const [asked, setAsked] = useState(false);
   const topics = useMemo(() => mobileGuideTopics(), []);
   const show = (id: string) => navigation.navigate('GuideTopic', { id });
+  // A feature's "Ask more" comes back here with its question: it asks it on the Ask tab.
+  const pending = params?.ask ? { question: params.ask, at: params.at ?? 0 } : null;
+  useEffect(() => {
+    if (pending) setTab('ask');
+  }, [pending?.at]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <AliveScreen style={styles.container} edges={['top', 'bottom']} testID="guide-screen">
       {/* The keyboard view wraps the whole screen, as in Chat: it measures from its parent, so deeper
           down it lifts the Ask box by less than the keyboard and leaves it covered on iPhone. */}
       <KeyboardAvoidingView style={styles.pane} behavior="padding" keyboardVerticalOffset={0}>
-        <ScreenHeader title="What it does for you" onBack={() => navigation.goBack()} />
+        <ScreenHeader
+          title="What it does for you"
+          onBack={() => navigation.goBack()}
+          right={tab === 'ask' && asked ? (
+            <TouchableOpacity
+              onPress={() => {
+                setConversation(n => n + 1);
+                setAsked(false);
+                navigation.setParams({ ask: undefined, at: undefined });
+              }}
+              style={styles.newButton}
+              accessibilityRole="button"
+              accessibilityLabel="New question"
+              testID="guide-new"
+            >
+              <Icon name="edit" size={20} color={colors.text} />
+            </TouchableOpacity>
+          ) : undefined}
+        />
         <UnderlineTabs tabs={TABS} active={tab} onChange={setTab} />
         {/* Both stay mounted, so a conversation is still there after a look at the features. */}
         <View style={[styles.pane, tab !== 'ask' && styles.hidden]}>
-          <AskPane topics={topics} onShow={show} />
+          <AskPane key={conversation} topics={topics} onShow={show} pending={pending} onAsked={() => setAsked(true)} />
         </View>
         <View style={[styles.pane, tab !== 'features' && styles.hidden]}>
           <FeaturesPane topics={topics} onShow={show} />
@@ -90,7 +123,12 @@ export const GuideScreen: React.FC = () => {
   );
 };
 
-const AskPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) => void }> = ({ topics, onShow }) => {
+const AskPane: React.FC<{
+  topics: MobileGuideTopic[];
+  onShow: (id: string) => void;
+  pending: { question: string; at: number } | null;
+  onAsked: () => void;
+}> = ({ topics, onShow, pending, onAsked }) => {
   const navigation = useNavigation<Nav>();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -110,6 +148,7 @@ const AskPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) => vo
     if (!text || waiting) return;
     const history: GuideTurn[] = retry ? turns : [...turns, { role: 'user', content: text }];
     if (!retry) setDraft('');
+    onAsked();
     // A new question, answered or not, replaces any earlier failure and its Try again.
     setMissed(null);
     // A starter's or a picked flow's answer is built from the guide itself: instant, and there with no model.
@@ -143,6 +182,11 @@ const AskPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) => vo
     else setMissed({ why: result.error, question: text });
     toEnd();
   };
+
+  // A feature's "Ask more" asks once, as the pane opens or when another one comes in.
+  useEffect(() => {
+    if (pending) ask(pending.question).catch(() => undefined);
+  }, [pending?.at]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const canSend = draft.trim().length > 0 && !waiting;
 
@@ -204,36 +248,38 @@ const AskPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) => vo
             </View>
           ) : (
             <View key={i} style={styles.answer} testID="guide-answer">
-              {guideAnswerBlocks(guideAnswerParts(turn.content, topics)).map((block, j) =>
-                block.kind === 'text' ? (
-                  <MarkdownText key={j}>{block.text}</MarkdownText>
-                ) : block.kind === 'picks' ? (
-                  <View key={j} style={styles.picks}>
-                    {block.picks.map(pick => (
-                      <TouchableOpacity
-                        key={pick.id}
-                        style={styles.pickRow}
-                        onPress={() => { ask(pick.label, false, pick.id).catch(() => undefined); }}
-                        disabled={waiting}
-                        accessibilityRole="button"
-                        accessibilityLabel={pick.label}
-                        testID={`guide-pick-${pick.id}`}
-                      >
-                        <Text style={styles.pickText}>{pick.label}</Text>
-                        <Icon name="chevron-right" size={16} color={colors.textMuted} />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                ) : block.topics.length === 1 ? (
-                  <AnswerCard key={j} topic={block.topics[0]} onShow={onShow} />
-                ) : (
-                  <View key={j} style={styles.tileGrid}>
-                    {block.topics.map(t => (
-                      <AnswerTile key={t.id} topic={t} onShow={onShow} />
-                    ))}
-                  </View>
-                ),
-              )}
+              <TypedAnswer blocks={guideAnswerBlocks(guideAnswerParts(turn.content, topics))} onGrow={toEnd}>
+                {blocks => blocks.map((block, j) =>
+                  block.kind === 'text' ? (
+                    <MarkdownText key={j}>{block.text}</MarkdownText>
+                  ) : block.kind === 'picks' ? (
+                    <View key={j} style={styles.picks}>
+                      {block.picks.map(pick => (
+                        <TouchableOpacity
+                          key={pick.id}
+                          style={styles.pickRow}
+                          onPress={() => { ask(pick.label, false, pick.id).catch(() => undefined); }}
+                          disabled={waiting}
+                          accessibilityRole="button"
+                          accessibilityLabel={pick.label}
+                          testID={`guide-pick-${pick.id}`}
+                        >
+                          <Text style={styles.pickText}>{pick.label}</Text>
+                          <Icon name="chevron-right" size={16} color={colors.textMuted} />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : block.topics.length === 1 ? (
+                    <AnswerCard key={j} topic={block.topics[0]} onShow={onShow} />
+                  ) : (
+                    <View key={j} style={styles.tileGrid}>
+                      {block.topics.map(t => (
+                        <AnswerTile key={t.id} topic={t} onShow={onShow} />
+                      ))}
+                    </View>
+                  ),
+                )}
+              </TypedAnswer>
             </View>
           ),
         )}
@@ -304,6 +350,45 @@ const AskPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) => vo
 };
 
 /** One topic among several: name and line, no picture, so a row of them lines up. */
+/**
+ * An answer types out once, when it arrives: text first, then its cards, in under a second
+ * (the pace is shared with the desktop guide). With Reduce Motion on it shows whole.
+ */
+const TypedAnswer: React.FC<{
+  blocks: GuideAnswerBlock<MobileGuideTopic>[];
+  onGrow: () => void;
+  children: (blocks: GuideAnswerBlock<MobileGuideTopic>[]) => React.ReactNode;
+}> = ({ blocks, onGrow, children }) => {
+  const total = guideAnswerLength(blocks);
+  const reducedMotion = useReducedMotion();
+  const [shown, setShown] = useState(reducedMotion ? total : 0);
+  const grow = useRef(onGrow);
+  grow.current = onGrow;
+  useEffect(() => {
+    if (reducedMotion) {
+      setShown(total);
+      return undefined;
+    }
+    const start = Date.now();
+    const ms = guideTypingMs(total);
+    let frame = 0;
+    let last = 0;
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - start) / ms);
+      // About 30 steps a second: smooth to read, half the re-renders.
+      if (t === 1 || Date.now() - last >= 33) {
+        last = Date.now();
+        setShown(Math.ceil(total * t));
+        grow.current();
+      }
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [total, reducedMotion]);
+  return <>{children(shown >= total ? blocks : guideAnswerReveal(blocks, shown))}</>;
+};
+
 const AnswerTile: React.FC<{ topic: MobileGuideTopic; onShow: (id: string) => void }> = ({ topic, onShow }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -391,6 +476,7 @@ const FeaturesPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) 
 };
 
 const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+  newButton: { minWidth: 44, minHeight: 44, alignItems: 'center' as const, justifyContent: 'center' as const },
   container: { flex: 1, backgroundColor: colors.background },
   pane: { flex: 1 },
   hidden: { display: 'none' as const },

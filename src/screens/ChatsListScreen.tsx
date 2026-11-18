@@ -32,8 +32,7 @@ import { byRecentActivity } from '../utils/conversationOrdering';
 import { groupChats, DEFAULT_CHAT_GROUP_BY, DEFAULT_CHAT_SORT_BY } from '../utils/chatGrouping';
 import { ChatListOptionsSheet } from '../components/ChatListOptionsSheet';
 import { SCROLL_DEPTH_PROPS } from '../constants/scrollDepth';
-import { useIsFocused } from '@react-navigation/native';
-import { LivingField } from '../components/LivingField';
+import { ScreenField } from '../components/LivingField';
 import { chatKind } from '../utils/chatRow';
 import { chatTitle } from '../utils/chatTitle';
 type NavigationProp = CompositeNavigationProp<
@@ -48,7 +47,6 @@ export const ChatsListScreen: React.FC = () => {
   const focusTrigger = useFocusTrigger();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const isFocused = useIsFocused();
   const conversations = useChatStore(s => s.conversations);
   const { deleteConversation, setActiveConversation } = useChatStore.getState();
   const { getProject } = useProjectStore();
@@ -327,7 +325,7 @@ export const ChatsListScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* The living field behind the tab, resting while the tab is hidden. */}
-      <LivingField active={isFocused} />
+      <ScreenField />
       <ScreenHeader
         title="Chats"
         variant="tab"
