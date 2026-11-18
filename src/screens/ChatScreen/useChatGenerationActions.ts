@@ -24,7 +24,7 @@ import {
   wantsLeadingThinkToken,
   localModelAcceptsImages,
   stopAllTextEngines,
-  activeLiteRTContextTokens,
+  activeContextTokens,
   summarizeWithActiveEngine,
 } from '../../services/engines';
 import { needsVisionRepair } from '../../utils/visionRepair';
@@ -514,8 +514,7 @@ async function prepareContext(
   );
   const remoteStore = useRemoteServerStore.getState();
   if (remoteStore.activeServerId) {
-    const contextWindowTokens =
-      useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength;
+    const contextWindowTokens = activeContextTokens();
     setDebugInfo(null);
     return {
       contextPromptTokens: estimatedPromptTokens,
@@ -592,14 +591,7 @@ async function generateWithCompactionRetry(
           contextUsage,
         );
   };
-  const liteRTContextTokens = activeLiteRTContextTokens();
-  const contextWindowTokens =
-    liteRTContextTokens ??
-    (useRemoteServerStore.getState().activeServerId
-      ? useAppStore.getState().settings.contextLength ||
-        APP_CONFIG.maxContextLength
-      : llmService.getPerformanceSettings().contextLength ||
-        APP_CONFIG.maxContextLength);
+  const contextWindowTokens = activeContextTokens();
   const estimatedPromptTokens = Math.ceil(
     JSON.stringify(
       opts.messages.map(m => ({ role: m.role, content: m.content })),
@@ -616,7 +608,7 @@ async function generateWithCompactionRetry(
       systemPrompt: opts.prompt,
       allMessages: opts.messages,
       previousSummary: conversation?.compactionSummary,
-      contextLength: liteRTContextTokens,
+      contextLength: contextWindowTokens,
       summarize: summarizeWithActiveEngine,
     }).catch(() => opts.messages);
     if (!generationSession.isGeneratingFor(opts.id)) return true;
@@ -643,7 +635,7 @@ async function generateWithCompactionRetry(
         systemPrompt: opts.prompt,
         allMessages: messagesForFirstAttempt,
         previousSummary,
-        contextLength: liteRTContextTokens,
+        contextLength: contextWindowTokens,
         summarize: summarizeWithActiveEngine,
       })
       .catch(async () => {
@@ -697,8 +689,7 @@ async function generateWithTurnDocuments(opts: {
         ...(opts.projectId ? { projectId: opts.projectId } : {}),
         question: opts.question,
         systemPrompt: opts.systemPrompt,
-        contextLength:
-          useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength,
+        contextLength: activeContextTokens(),
         isRemote: opts.isRemote,
         knowledgeSearch: opts.knowledgeSearch,
         ...(documentScale ? { documentScale } : {}),

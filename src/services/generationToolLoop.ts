@@ -20,7 +20,7 @@ import { selectRelevantTools } from './litertToolSelector';
 import { isMcpEnabled } from './mcpContextBoost';
 import { selectToolsByEmbedding } from './toolEmbeddingRouter';
 import { providerRegistry } from './providers';
-import { activeLiteRTContextTokens, getActiveEngineService, isRemoteTextModelActive, summarizeWithActiveEngine } from './engines';
+import { activeContextTokens, activeLiteRTContextTokens, getActiveEngineService, isRemoteTextModelActive, summarizeWithActiveEngine } from './engines';
 import type { GenerationOptions, CompletionResult } from './providers/types';
 import logger from '../utils/logger';
 import {
@@ -435,7 +435,7 @@ async function executeToolCalls(
     ctx.callbacks?.onToolCallComplete?.(tc.name, result);
     const settings = useAppStore.getState().settings;
     const resultBudget = toolResultCharBudget({
-      contextLength: settings.contextLength,
+      contextLength: activeContextTokens(),
       promptChars: toolPromptChars(loopMessages, tools),
       replyReserveTokens: settings.maxTokens,
     });
@@ -752,7 +752,7 @@ function buildLiteRTToolCallHandler(
     ctx.callbacks?.onToolCallComplete?.(name, result);
     const settings = useAppStore.getState().settings;
     const resultBudget = toolResultCharBudget({
-      contextLength: settings.contextLength,
+      contextLength: activeContextTokens(),
       promptChars: toolPromptChars(promptMessages, tools),
       replyReserveTokens: settings.maxTokens,
     });
