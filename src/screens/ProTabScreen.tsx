@@ -3,8 +3,9 @@
  * feature; without it, the row opens the feature's page in the info guide, which says what it does
  * and has Get Pro. The list is the guide's own (@offgrid/models), so the two never disagree.
  */
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
+import { boostPromoCopy } from '@offgrid/models';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -13,6 +14,9 @@ import { TouchableOpacity } from '../components/Touchable';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ScreenField } from '../components/LivingField';
 import { ProUpsellBanner } from '../components/settings/ProUpsellBanner';
+import { CustomAlert, hideAlert, showAlert, initialAlertState, type AlertState } from '../components';
+import { useOpenBoost } from '../hooks/useOpenBoost';
+import { createCardStyles } from './ProTabScreen.styles';
 import { useTheme, useThemedStyles } from '../theme';
 import { useAppStore } from '../stores';
 import { selectHasProAccess } from '../stores/proAccessSlice';
@@ -32,7 +36,25 @@ export const ProTabScreen: React.FC = () => {
   const getPro = useGetPro();
   const focusTrigger = useFocusTrigger();
   const actionFor = useGuideAction();
-  const features = useMemo(() => mobileGuideTopics().filter(t => t.pro && t.where === 'phone'), []);
+  const topics = useMemo(() => mobileGuideTopics(), []);
+  const features = useMemo(() => topics.filter(t => t.pro && t.where === 'phone'), [topics]);
+  const cardStyles = useThemedStyles(createCardStyles);
+  const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
+  const openBoost = useOpenBoost('pro_tab', useCallback(
+    () => setAlertState(showAlert("You're offline", 'Connect to the internet to see the offer.')),
+    [],
+  ));
+  // Off Grid AI beyond this phone: Boost's cloud models, the desktop app and the browser extension.
+  const elsewhere = [
+    { key: 'boost', icon: 'cloud', title: BOOST.title, line: BOOST.line, onPress: openBoost },
+    ...(['computer', 'extension'] as const).flatMap(id => {
+      const topic = topics.find(t => t.id === id);
+      const action = topic ? actionFor(topic) : null;
+      return topic && action
+        ? [{ key: id, icon: topic.icon, title: topic.label, line: topic.tagline, onPress: action.onPress }]
+        : [];
+    }),
+  ];
 
   return (
     <SafeAreaView style={styles.container} edges={['top']} testID="pro-tab-screen">
@@ -40,6 +62,22 @@ export const ProTabScreen: React.FC = () => {
       <ScreenHeader title="Pro" variant="tab" />
       <ScrollView {...SCROLL_DEPTH_PROPS} style={styles.scrollView} contentContainerStyle={styles.content}>
         {hasPro ? null : <ProUpsellBanner trigger={focusTrigger} onGetPro={() => getPro('pro-tab')} />}
+        <View style={cardStyles.cards}>
+          {elsewhere.map(card => (
+            <TouchableOpacity
+              key={card.key}
+              style={cardStyles.card}
+              onPress={card.onPress}
+              accessibilityRole="button"
+              accessibilityLabel={`${card.title}. ${card.line}`}
+              testID={`pro-tab-card-${card.key}`}
+            >
+              <Icon name={card.icon} size={18} color={colors.primary} />
+              <Text style={cardStyles.title} numberOfLines={2}>{card.title}</Text>
+              <Text style={cardStyles.line} numberOfLines={3}>{card.line}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         <View style={styles.navSection}>
           {features.map((topic, index) => {
             const action = actionFor(topic);
@@ -84,6 +122,16 @@ export const ProTabScreen: React.FC = () => {
           </TouchableOpacity>
         ) : null}
       </ScrollView>
+      <CustomAlert
+        visible={alertState.visible}
+        title={alertState.title}
+        message={alertState.message}
+        buttons={alertState.buttons}
+        onClose={() => setAlertState(hideAlert())}
+      />
     </SafeAreaView>
   );
 };
+
+const BOOST = boostPromoCopy('phone');
+

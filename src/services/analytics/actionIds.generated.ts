@@ -833,6 +833,7 @@ export const TEMPLATE_ACTION_IDS: ReadonlyArray<readonly [string, string]> = [
   ["^note-version-.+$", "note-version"],
   ["^notes-folder-.+$", "notes-folder"],
   ["^pro-included-.+$", "pro-included"],
+  ["^pro-tab-card-.+$", "pro-tab-card"],
   ["^pro-tool-row-.+$", "pro-tool-row"],
   ["^theme-option-.+$", "theme-option"],
   ["^audio-badge-.+$", "audio-badge"],
