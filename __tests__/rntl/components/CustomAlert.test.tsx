@@ -18,6 +18,31 @@ import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { CustomAlert, showAlert, hideAlert, initialAlertState } from '../../../src/components/CustomAlert';
 
 describe('CustomAlert', () => {
+  it('a failure offers the info guide: one tap closes it and opens What it does for you', () => {
+    const { NavigationContext } = require('@react-navigation/native');
+    const opened: string[] = [];
+    let closed = 0;
+    const navigation = { navigate: (name: string) => opened.push(name) };
+    const { getByTestId } = render(
+      <NavigationContext.Provider value={navigation}>
+        <CustomAlert visible title="Download failed" message="The connection dropped." onClose={() => { closed += 1; }} />
+      </NavigationContext.Provider>,
+    );
+    fireEvent.press(getByTestId('app-alert-guide'));
+    expect(closed).toBe(1);
+    expect(opened).toEqual(['Guide']);
+  });
+
+  it('a question is not a failure, so it shows no guide line', () => {
+    const { NavigationContext } = require('@react-navigation/native');
+    const { queryByTestId } = render(
+      <NavigationContext.Provider value={{ navigate: () => undefined }}>
+        <CustomAlert visible title="Delete chat?" buttons={[{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive' }]} />
+      </NavigationContext.Provider>,
+    );
+    expect(queryByTestId('app-alert-guide')).toBeNull();
+  });
+
   it('renders title and message when visible', () => {
     const { getByText } = render(
       <CustomAlert visible={true} title="Test Alert" message="Test message" />,

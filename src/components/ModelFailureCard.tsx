@@ -6,6 +6,7 @@ import { useTheme } from '../theme';
 import type { ThemeColors } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { AnimatedPressable } from './AnimatedPressable';
+import { GuideHint } from './GuideHint';
 import {
   useModelFailureStore,
   type ModelFailure,
@@ -58,6 +59,7 @@ function FailureRow({ failure, onClose, onHide }: { failure: ModelFailure; onClo
         </AnimatedPressable>
       </View>
       <Text style={styles.message}>{failure.message}</Text>
+      {failure.severity === 'error' ? <GuideHint testID={`model-failure-guide-${failure.modelType}`} /> : null}
       {(failure.onRetry || (failure.overridable && failure.onLoadAnyway)) && (
         <View style={styles.actionsRow}>
           {failure.onRetry && (

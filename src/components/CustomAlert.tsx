@@ -10,6 +10,7 @@ import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { SPACING, TYPOGRAPHY } from '../constants';
 import { countErrorShown } from '../services/analytics/interactions';
+import { GuideHint } from './GuideHint';
 
 // AlertState + its factories are pure and live in utils/alertState so non-UI code can build an
 // alert state without importing this component (no-backward-layering-core). Re-exported here so
@@ -71,6 +72,8 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
           <LoadingDots color={colors.primary} style={styles.loadingIndicator} />
         ) : null}
         {message ? <Text style={[styles.message, prominentMessage && styles.messageProminent]} testID="app-alert-message">{message}</Text> : null}
+        {/* A failure points to the info guide, where you can ask how to fix it. */}
+        {isError ? <GuideHint onOpen={() => onClose?.()} testID="app-alert-guide" /> : null}
         {/* Three or more answers stack, so no label wraps and the recommended one reads first. */}
         <View style={[styles.buttonContainer, buttons.length > 2 && styles.buttonContainerStacked]}>
           {buttons.map((button, index) => (
