@@ -32,6 +32,14 @@ describe('LivingField', () => {
     expect(pattern.findAll(n => n.props.r === LIVING_FIELD.dotRadius).length).toBeGreaterThan(0);
   });
 
+  it('holds still at rest, so an idle screen redraws nothing', () => {
+    const { UNSAFE_root } = render(<LivingField />);
+    const states = UNSAFE_root.findAll(n => Array.isArray(n.props.style) && n.props.style.some((p: { animationPlayState?: string } | null) => p?.animationPlayState))
+      .map(n => n.props.style.find((p: { animationPlayState?: string } | null) => p?.animationPlayState).animationPlayState);
+    expect(states.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(states)).toEqual(new Set(['paused']));
+  });
+
   it('lets go of the app-state listener when the screen goes away, so a closed Home costs nothing', () => {
     const { AppState } = require('react-native');
     const remove = jest.fn();
