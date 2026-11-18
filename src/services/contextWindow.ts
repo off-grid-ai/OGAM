@@ -18,5 +18,8 @@ export function configuredContextTokens(): number {
       APP_CONFIG.maxContextLength
     );
   }
-  return llmService.getPerformanceSettings().contextLength || APP_CONFIG.maxContextLength;
+  return (
+    llmService.getPerformanceSettings().contextLength ||
+    APP_CONFIG.maxContextLength
+  );
 }
