@@ -53,6 +53,10 @@ module.exports = {
   // @offgrid/pro resolves — and so those copies aren't test-collected as duplicates.
   modulePathIgnorePatterns: ['<rootDir>/.claude/worktrees/'],
   moduleNameMapper: {
+    // Mirrors metro.config.js: @offgrid/i18n's JSX runtime lives in the shared repo, which has no React,
+    // so its `react/jsx-runtime` must be this app's React.
+    '^react/jsx-runtime$': '<rootDir>/node_modules/react/jsx-runtime.js',
+    '^react/jsx-dev-runtime$': '<rootDir>/node_modules/react/jsx-dev-runtime.js',
     '^@/(.*)$': '<rootDir>/src/$1',
     // Mirrors the metro alias so tests can import pro modules that reference core.
     '^@offgrid/core/(.*)$': '<rootDir>/src/$1',

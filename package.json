@@ -41,6 +41,7 @@
     "@kesha-antonov/react-native-background-downloader": "^4.5.6",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@offgrid/design": "file:../shared/packages/design",
+    "@offgrid/i18n": "file:../shared/packages/i18n",
     "@offgrid/models": "file:../shared/packages/models",
     "@offgrid/notes": "file:../shared/packages/notes",
     "@offgrid/notes-editor": "file:../shared/packages/notes-editor",
