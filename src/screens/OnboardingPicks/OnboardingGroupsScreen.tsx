@@ -70,7 +70,7 @@ export const OnboardingGroupsScreen: React.FC<Props> = ({ navigation }) => {
           title="Skip, set it up"
           variant="ghost"
           onPress={() => finishPicks(navigation, null)}
-          testID="onboarding-skip"
+          testID="onboarding-picks-skip"
         />
         <Button
           title="Continue"

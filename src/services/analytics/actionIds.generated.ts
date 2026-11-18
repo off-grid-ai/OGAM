@@ -375,6 +375,7 @@ export const FIXED_ACTION_IDS: readonly string[] = [
   "onboarding-groups",
   "onboarding-guide",
   "onboarding-next",
+  "onboarding-picks-skip",
   "onboarding-pro-offer",
   "onboarding-screen",
   "onboarding-skip",

@@ -109,6 +109,7 @@ it('What we share, from Auto Setup, lists what is and is not sent', async () => 
   app = await launchApp({ release: false });
   const { view, rtl } = app;
   rtl.fireEvent.press(await view.findByTestId('onboarding-skip'));
+  rtl.fireEvent.press(await view.findByTestId('onboarding-picks-skip'));
   rtl.fireEvent.press(await view.findByTestId('auto-setup-what-we-share', {}, { timeout: 10_000 }));
   expect(await view.findByTestId('analytics-we-share')).toBeTruthy();
   expect(view.getByText('Your chats, prompts, replies, transcripts or reasoning.')).toBeTruthy();

@@ -119,7 +119,7 @@ describe('onboarding picks on the phone', () => {
         ?.disabled,
     ).toBe(true);
 
-    fireEvent.press(view.getByTestId('onboarding-skip'));
+    fireEvent.press(view.getByTestId('onboarding-picks-skip'));
     await waitFor(() => expect(route()).toBe('AutoSetup'));
     expect(useAppStore.getState().onboardingPicks).toBeNull();
     expect(useAppStore.getState().hasCompletedOnboarding).toBe(true);
