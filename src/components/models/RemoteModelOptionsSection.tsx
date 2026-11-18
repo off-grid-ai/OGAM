@@ -8,6 +8,7 @@ import { useRemoteServerStore } from '../../stores/remoteServerStore';
 import { useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import type { RemoteModelCategory } from '../../types';
+import { isNetworkFailure } from '../../utils/networkFailure';
 
 interface Props {
   category: Exclude<RemoteModelCategory, 'text'>;
@@ -23,9 +24,7 @@ const KIND: Record<Props['category'], string> = {
 };
 
 function isTransportFailure(reason: unknown): boolean {
-  if (!(reason instanceof Error)) return false;
-  return reason.name === 'AbortError' ||
-    /network request failed|failed to fetch|fetch failed|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH/i.test(reason.message);
+  return (reason instanceof Error && reason.name === 'AbortError') || isNetworkFailure(reason);
 }
 
 /** Shared remote rows for image, transcription, and voice model pickers. */
