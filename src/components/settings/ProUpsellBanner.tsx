@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Linking } from 'react-native';
+import { View, Text, Linking, Image } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedEntry } from '../AnimatedEntry';
@@ -29,7 +29,7 @@ interface Props {
  * weights <= 400 per docs/design.
  */
 export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
   // A saved credential may need device reactivation, but it is never an upsell.
   // Debug access and active Pro features remain separate projections.
@@ -47,6 +47,11 @@ export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
     <AnimatedEntry index={0} staggerMs={40} trigger={trigger}>
       <View style={styles.card}>
         <View style={styles.header}>
+          <Image
+            source={isDark ? require('../../assets/home-logo-dark.png') : require('../../assets/home-logo-light.png')}
+            style={styles.logo}
+            accessibilityIgnoresInvertColors
+          />
           <View style={styles.headerText}>
             <Text style={styles.title}>Off Grid AI Pro</Text>
             <Text style={styles.desc}>
@@ -96,6 +101,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     padding: SPACING.lg,
     paddingBottom: SPACING.md,
   },
+  logo: { width: 40, height: 40, borderRadius: 8, marginRight: SPACING.md },
   headerText: { flex: 1, marginRight: SPACING.md },
   title: { ...TYPOGRAPHY.h2, color: colors.text, marginBottom: SPACING.xs },
   desc: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, lineHeight: 18 },

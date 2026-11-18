@@ -16,7 +16,6 @@ import { ScreenField } from '../components/LivingField';
 import { ProUpsellBanner } from '../components/settings/ProUpsellBanner';
 import { CustomAlert, hideAlert, showAlert, initialAlertState, type AlertState } from '../components';
 import { useOpenBoost } from '../hooks/useOpenBoost';
-import { createCardStyles } from './ProTabScreen.styles';
 import { useTheme, useThemedStyles } from '../theme';
 import { useAppStore } from '../stores';
 import { selectHasProAccess } from '../stores/proAccessSlice';
@@ -38,7 +37,6 @@ export const ProTabScreen: React.FC = () => {
   const actionFor = useGuideAction();
   const topics = useMemo(() => mobileGuideTopics(), []);
   const features = useMemo(() => topics.filter(t => t.pro && t.where === 'phone'), [topics]);
-  const cardStyles = useThemedStyles(createCardStyles);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const openBoost = useOpenBoost('pro_tab', useCallback(
     () => setAlertState(showAlert("You're offline", 'Connect to the internet to see the offer.')),
@@ -62,22 +60,6 @@ export const ProTabScreen: React.FC = () => {
       <ScreenHeader title="Pro" variant="tab" />
       <ScrollView {...SCROLL_DEPTH_PROPS} style={styles.scrollView} contentContainerStyle={styles.content}>
         {hasPro ? null : <ProUpsellBanner trigger={focusTrigger} onGetPro={() => getPro('pro-tab')} />}
-        <View style={cardStyles.cards}>
-          {elsewhere.map(card => (
-            <TouchableOpacity
-              key={card.key}
-              style={cardStyles.card}
-              onPress={card.onPress}
-              accessibilityRole="button"
-              accessibilityLabel={`${card.title}. ${card.line}`}
-              testID={`pro-tab-card-${card.key}`}
-            >
-              <Icon name={card.icon} size={18} color={colors.primary} />
-              <Text style={cardStyles.title} numberOfLines={2}>{card.title}</Text>
-              <Text style={cardStyles.line} numberOfLines={4}>{card.line}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
         <View style={styles.navSection}>
           {features.map((topic, index) => {
             const action = actionFor(topic);
@@ -121,6 +103,27 @@ export const ProTabScreen: React.FC = () => {
             <Icon name="chevron-right" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         ) : null}
+        <View style={styles.navSection}>
+          {elsewhere.map((card, index) => (
+            <TouchableOpacity
+              key={card.key}
+              style={[styles.navItem, index === elsewhere.length - 1 && styles.navItemLast]}
+              onPress={card.onPress}
+              accessibilityRole="button"
+              accessibilityLabel={`${card.title}. ${card.line}`}
+              testID={`pro-tab-card-${card.key}`}
+            >
+              <View style={styles.navItemIcon}>
+                <Icon name={card.icon} size={16} color={colors.textSecondary} />
+              </View>
+              <View style={styles.navItemContent}>
+                <Text style={styles.navItemTitle}>{card.title}</Text>
+                <Text style={styles.navItemDesc} numberOfLines={2}>{card.line}</Text>
+              </View>
+              <Icon name="external-link" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          ))}
+        </View>
       </ScrollView>
       <CustomAlert
         visible={alertState.visible}
