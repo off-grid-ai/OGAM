@@ -102,3 +102,6 @@ docs/wire-captures/
 # Generated native video runtime
 .video-build/
 native/video/*.xcframework/
+
+# Translation preview build (npm run build:preview)
+preview/dist/
