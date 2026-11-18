@@ -87,6 +87,27 @@ const MEDIA: Record<string, GuideMedia> = {
   'phone-sync': screen(require('../../assets/guide/phone-sync.webp'), 600 / 745),
   'phone-tools': screen(require('../../assets/guide/phone-tools.webp'), 600 / 802),
   'phone-models': screen(require('../../assets/guide/phone-models.webp'), 600 / 802),
+  // The store shots' phone pairs (website/output/store-assets), cropped like Chat above.
+  'phone-vision': {
+    dark: require('../../assets/guide/phone-vision-dark.webp'),
+    light: require('../../assets/guide/phone-vision-light.webp'),
+    aspect: tall,
+  },
+  'phone-speech': {
+    dark: require('../../assets/guide/phone-speech-dark.webp'),
+    light: require('../../assets/guide/phone-speech-light.webp'),
+    aspect: tall,
+  },
+  'phone-documents': {
+    dark: require('../../assets/guide/phone-documents-dark.webp'),
+    light: require('../../assets/guide/phone-documents-light.webp'),
+    aspect: tall,
+  },
+  'phone-clipboard': {
+    dark: require('../../assets/guide/phone-clipboard-dark.webp'),
+    light: require('../../assets/guide/phone-clipboard-light.webp'),
+    aspect: 1200 / 555,
+  },
 };
 
 function screen(source: GuideMedia['light'], aspect: number, clip?: number): GuideMedia {
