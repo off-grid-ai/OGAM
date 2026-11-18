@@ -172,7 +172,9 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderTopColor: colors.borderLight,
   },
   firstRow: { borderTopWidth: 0 },
+  // On the name's line, not centred on a description that wraps (design doc principle 6).
   toolIcon: {
+    alignSelf: 'flex-start' as const,
     width: 28,
     height: 28,
     alignItems: 'center' as const,

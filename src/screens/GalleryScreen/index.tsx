@@ -267,7 +267,7 @@ export const GalleryScreen: React.FC = () => {
                 accessibilityRole="button"
                 style={styles.videoRow}
               >
-                <Icon name="play-circle" size={24} color={colors.textSecondary} />
+                <Icon name="play-circle" size={24} color={colors.textSecondary} style={styles.videoRowIcon} />
                 <View style={styles.videoRowBody}>
                   <Text numberOfLines={2} style={styles.videoRowTitle}>
                     {item.prompt}

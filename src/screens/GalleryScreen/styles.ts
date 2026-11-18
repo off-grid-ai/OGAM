@@ -234,6 +234,8 @@ const createVideoStyles = (colors: ThemeColors) => ({
   videoGroup: { ...cardSurface(colors), overflow: 'hidden' as const },
   videoDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.borderLight, marginLeft: SPACING.lg },
   videoRowBody: { flex: 1 },
+  // On the title's first line, not centred on a two-line prompt (design doc principle 6).
+  videoRowIcon: { alignSelf: 'flex-start' as const },
   videoRowTitle: { color: colors.text },
   videoRowMeta: { color: colors.textMuted },
   videoPlayer: { width: '100%' as const, backgroundColor: colors.background },

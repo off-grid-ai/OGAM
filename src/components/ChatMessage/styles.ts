@@ -119,6 +119,8 @@ const createBubbleStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.textMuted,
     flex: 1,
   },
+  // On the label's first line, not centred on a label that wraps (design doc principle 6).
+  toolStatusIcon: { alignSelf: 'flex-start' as const, marginTop: 2 },
   toolStatusTextCompact: {
     flex: 0,
     flexShrink: 1,
