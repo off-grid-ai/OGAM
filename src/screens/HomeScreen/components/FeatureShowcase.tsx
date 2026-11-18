@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedPressable } from '../../../components/AnimatedPressable';
@@ -55,7 +56,20 @@ export interface FeatureOpeners {
   desktop: () => void;
   /** The private cloud offer page. */
   boost: () => void;
+  /** The info guide's page on one topic: what it does, and Get Pro from there. */
+  explain: (topicId: string) => void;
 }
+
+/** The info guide's page for each phone Pro card: without Pro, a card explains before it sells. */
+export const SHOWCASE_GUIDE_TOPIC: Record<string, string> = {
+  video: 'phone-video',
+  voice: 'phone-voice',
+  tools: 'phone-tools',
+  notes: 'phone-notes',
+  improve: 'phone-improve',
+  vault: 'phone-vault',
+  sync: 'phone-sync',
+};
 
 /**
  * Everything Off Grid AI does, free and Pro side by side, in the words of what you get. Home is the
@@ -92,11 +106,16 @@ export function showcaseFeatures(use: FeatureUse, open: FeatureOpeners, isPro: b
     ...all.filter(f => isFree(f) && !f.tried), ...all.filter(f => isFree(f) && f.tried),
     ...all.filter(f => !isFree(f) && !f.tried), ...all.filter(f => !isFree(f) && f.tried),
   ];
-  return ordered.map(({ tried: _tried, ...feature }) => ({
-    ...feature,
-    // A Mac feature opens the Mac app's page; a phone Pro feature opens Pro for someone without it.
-    onPress: !feature.mac && feature.pro && !isPro ? open.pro : feature.onPress,
-  }));
+  return ordered.map(({ tried: _tried, ...feature }) => {
+    // A Mac feature opens the Mac app's page. Without Pro, a phone Pro feature opens its page in the
+    // info guide, which says what it does and offers Pro from there (Mac, 2026-11-18).
+    const topic = SHOWCASE_GUIDE_TOPIC[feature.key];
+    const explain = !feature.mac && feature.pro && !isPro;
+    return {
+      ...feature,
+      onPress: explain ? (topic ? () => open.explain(topic) : open.pro) : feature.onPress,
+    };
+  });
 }
 
 /**
@@ -105,8 +124,10 @@ export function showcaseFeatures(use: FeatureUse, open: FeatureOpeners, isPro: b
  */
 export const FeatureShowcase: React.FC<{ features: ShowcaseFeature[]; active: boolean }> = ({
   features,
-  active,
+  active: uncovered,
 }) => {
+  // Home's focus is read here, so a tab switch re-renders only the row, not all of Home.
+  const active = useIsFocused() && uncovered;
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { width } = useWindowDimensions();
