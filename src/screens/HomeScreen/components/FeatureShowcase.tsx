@@ -61,7 +61,7 @@ export interface FeatureOpeners {
 }
 
 /** The info guide's page for each phone Pro card: without Pro, a card explains before it sells. */
-export const SHOWCASE_GUIDE_TOPIC: Record<string, string> = {
+const SHOWCASE_GUIDE_TOPIC: Record<string, string> = {
   video: 'phone-video',
   voice: 'phone-voice',
   tools: 'phone-tools',
