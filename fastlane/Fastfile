@@ -17,6 +17,7 @@ require 'digest'
 
 require "json"
 require "fileutils"
+require "tmpdir"
 require "plist"
 require "shellwords"
 
@@ -246,6 +247,15 @@ platform :android do
       "'latest on open testing', which could ship the wrong build. promote.sh recovers this from " \
       "the beta tag's 'Build: <n>' annotation."
     ) if version_code.nil? || version_code.to_s.strip.empty?
+    # Production gets the user-facing notes (scripts/promote.sh passes release-notes/<v>.play.txt),
+    # never the beta's commit list that the open-testing release carries. supply reads a release's
+    # notes from <metadata_path>/<language>/changelogs/<versionCode>.txt and writes them onto the
+    # promoted release in the same edit, so a folder holding just that file updates nothing else.
+    notes_file = options[:notes_file].to_s
+    UI.user_error!("android promote requires notes_file: (the user-facing Play notes)") unless File.exist?(notes_file)
+    notes_dir = Dir.mktmpdir("play-notes")
+    FileUtils.mkdir_p(File.join(notes_dir, "en-US", "changelogs"))
+    File.write(File.join(notes_dir, "en-US", "changelogs", "#{version_code}.txt"), File.read(notes_file).strip)
     # True promote-as-is: move the exact AAB (this versionCode) already on the open testing track
     # up to production. No gradle build, no new upload - the bytes users get are the bytes
     # tested. Lands as a draft so a human confirms the rollout percentage in the console.
@@ -256,8 +266,9 @@ platform :android do
       json_key: ENV["PLAY_STORE_JSON_KEY_PATH"],
       skip_upload_aab: true,
       skip_upload_apk: true,
+      metadata_path: notes_dir,
       skip_upload_metadata: true,
-      skip_upload_changelogs: true,
+      skip_upload_changelogs: false,
       skip_upload_images: true,
       skip_upload_screenshots: true,
       # A promoted release takes track_promote_release_status, which defaults to "completed" (a 100%
@@ -501,6 +512,16 @@ platform :ios do
     find_version.call.select_build(build_id: build.id)
     attached = find_version.call.build
     UI.user_error!("App Store #{options[:app_version]} still has no build #{options[:build_number]}") unless attached && attached.id == build.id
+    # What's New: App Store Connect copies the previous version's text into a new version, so
+    # without this 0.0.124 opened with 0.0.122's notes. Write the user-facing notes
+    # (release-notes/<v>.md, from scripts/promote.sh) into every language the version has.
+    notes_file = options[:notes_file].to_s
+    UI.user_error!("ios promote requires notes_file: (the user-facing What's New)") unless File.exist?(notes_file)
+    whats_new = File.read(notes_file).strip
+    localizations = find_version.call.get_app_store_version_localizations
+    UI.user_error!("App Store #{options[:app_version]} has no languages to write What's New into") if localizations.empty?
+    localizations.each { |loc| loc.update(attributes: { whats_new: whats_new }) }
+    UI.success("What's New set for #{localizations.map(&:locale).join(', ')}")
     UI.success("Attached TestFlight build #{options[:build_number]} to App Store #{options[:app_version]} (not submitted - submit in App Store Connect)")
   end
 

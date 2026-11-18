@@ -63,6 +63,24 @@ TARGET_VERSION=$(node scripts/lib/version.js target-from-beta "$BETA_TAG") || er
 CURRENT_VERSION=$(node -p "require('./package.json').version")
 info "Promoting ${BOLD}${BETA_TAG}${NC} → production ${BOLD}${TARGET_VERSION}${NC} (package.json currently ${CURRENT_VERSION})"
 
+# ── release notes: written for people, checked before anything ships ──
+# Store notes are what users read, so they are written by hand for each production release and
+# cover everything since the last production release, never the beta's commit list:
+#   release-notes/<version>.md        App Store What's New, the GitHub release and Slack (<= 4000)
+#   release-notes/<version>.play.txt  Play's "What's new" (Play caps it at 500 characters)
+STORE_NOTES="release-notes/${TARGET_VERSION}.md"
+PLAY_NOTES="release-notes/${TARGET_VERSION}.play.txt"
+for f in "$STORE_NOTES" "$PLAY_NOTES"; do
+  [ -s "$f" ] || error "Missing ${f}. Write the user-facing notes for ${TARGET_VERSION} (everything since the last production release) before promoting."
+done
+note_len() { node -e "process.stdout.write(String([...require('fs').readFileSync(process.argv[1],'utf8').trim()].length))" "$1"; }
+[ "$(note_len "$PLAY_NOTES")" -le 500 ] || error "${PLAY_NOTES} is $(note_len "$PLAY_NOTES") characters; Play allows 500."
+[ "$(note_len "$STORE_NOTES")" -le 4000 ] || error "${STORE_NOTES} is $(note_len "$STORE_NOTES") characters; the App Store allows 4000."
+if grep -Eq '\([0-9a-f]{7,40}\)' "$STORE_NOTES" "$PLAY_NOTES"; then
+  error "The release notes carry commit hashes. Store notes are for users: write the changes they will notice."
+fi
+info "Release notes: ${STORE_NOTES} and ${PLAY_NOTES}."
+
 # ── assert we are promoting what was tested: the beta tag's commit is on main ──
 git fetch --tags --quiet origin || error "Could not fetch tags/refs"
 git rev-parse -q --verify "refs/tags/${BETA_TAG}" >/dev/null || error "Tag ${BETA_TAG} not found locally (git fetch --tags)"
@@ -129,14 +147,14 @@ fi
 # ── 2. Play: promote the tested open-testing build to production (draft), version-pinned ──
 if [ "$DO_ANDROID" = 1 ]; then
   info "Play: promoting the tested open-testing build (versionCode ${TESTED_BUILD}) to production (draft)…"
-  bundle exec fastlane android promote version_code:"${TESTED_BUILD}"
+  bundle exec fastlane android promote version_code:"${TESTED_BUILD}" notes_file:"${ROOT_DIR}/${PLAY_NOTES}"
   info "Play done - open Play Console then Production and confirm the rollout %."
 fi
 
 # ── 3. App Store: attach the EXACT tested TestFlight build to a new version ──
 if [ "$DO_IOS" = 1 ]; then
   info "App Store: attaching the tested TestFlight build (${TESTED_BUILD}) to version ${TARGET_VERSION}…"
-  bundle exec fastlane ios promote app_version:"${TARGET_VERSION}" build_number:"${TESTED_BUILD}"
+  bundle exec fastlane ios promote app_version:"${TARGET_VERSION}" build_number:"${TESTED_BUILD}" notes_file:"${ROOT_DIR}/${STORE_NOTES}"
   info "App Store done - open App Store Connect and hit Submit for Review."
 fi
 
@@ -154,10 +172,15 @@ if [ "$DO_GITHUB" = 1 ]; then
   # A template ending in XXXXXX: GNU mktemp (Linux CI) rejects `-t name` without one. mktemp returns a REAL path; appending ".md" would orphan that file and misdirect the
   # `rm -f "$NOTES_FILE"` cleanup. Use the path mktemp actually created.
   NOTES_FILE="$(mktemp "${TMPDIR:-/tmp}/promote-notes.XXXXXX")"
-  # Carry the beta's own notes forward if present, else a minimal note.
-  gh release view "$BETA_TAG" --json body -q .body > "$NOTES_FILE" 2>/dev/null || echo "Off Grid ${TARGET_VERSION}" > "$NOTES_FILE"
+  # The user-facing notes, then the full change list since the last PRODUCTION release (never
+  # since the beta: the beta sits on the same commit, so that range is empty).
+  PREV_RELEASE=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude "v${TARGET_VERSION}" --exclude '*-beta*' "v${TARGET_VERSION}" 2>/dev/null || echo "")
+  { printf '## Highlights\n\n'; cat "$STORE_NOTES"
+    [ -n "$PREV_RELEASE" ] && printf '\n**Full Changelog**: https://github.com/off-grid-ai/OGAM/compare/%s...v%s\n' "$PREV_RELEASE" "$TARGET_VERSION"
+  } > "$NOTES_FILE"
   if gh release view "v${TARGET_VERSION}" >/dev/null 2>&1; then
-    warn "GitHub release v${TARGET_VERSION} already exists - skipping (idempotent re-run)."
+    warn "GitHub release v${TARGET_VERSION} already exists - refreshing its notes (idempotent re-run)."
+    gh release edit "v${TARGET_VERSION}" --notes-file "$NOTES_FILE"
   elif [ -n "$APK" ]; then
     gh release create "v${TARGET_VERSION}" "$APK" --title "Off Grid ${TARGET_VERSION}" --notes-file "$NOTES_FILE" --latest
     info "Cut GitHub release v${TARGET_VERSION} with the tested APK."
@@ -165,6 +188,13 @@ if [ "$DO_GITHUB" = 1 ]; then
     warn "No APK found on ${BETA_TAG} - creating the release without a binary (attach manually or run the iOS AltStore workflow)."
     gh release create "v${TARGET_VERSION}" --title "Off Grid ${TARGET_VERSION}" --notes-file "$NOTES_FILE" --latest
   fi
+  # Announce production in Slack, as uat.sh does for a beta. Fail-soft: a chat message must
+  # never fail a release. The webhook comes from .env.keygen locally (the SLACK_WEBHOOK_URL secret
+  # in CI); notify-slack-release.mjs no-ops without one.
+  SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-$(sed -n 's/^SLACK_WEBHOOK_URL=//p' "$ROOT_DIR/.env.keygen" 2>/dev/null)}" \
+    PRODUCT="Off Grid AI Mobile" VERSION="$TARGET_VERSION" CHANNEL_LABEL="production" \
+    RELEASE_URL="$(gh release view "v${TARGET_VERSION}" --json url -q .url 2>/dev/null)" NOTES_FILE="$NOTES_FILE" \
+    node "$ROOT_DIR/scripts/notify-slack-release.mjs" || true
   rm -f "$NOTES_FILE"
 fi
 
