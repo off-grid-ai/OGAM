@@ -1,0 +1,38 @@
+Use case: ui-mockup.
+Create a crisp high-fidelity realistic desktop application screenshot of the Off Grid AI guide page in dark mode. Output exactly 1600 x 1000 pixels (8:5). This is a flat screenshot edge-to-edge, no device frame, no perspective, no outer margins, no browser chrome.
+Reference image: the attached app screenshot is the exact visual reference for layout, spacing, thin line icon style, restrained dark appearance and background. Recreate its composition faithfully at the requested resolution. Retain the narrow full-height far-left icon rail, page header across the content, left feature navigation below the header, wide main pane, and bottom input anchored in the main pane. The reference's gallery is replaced by the specified question and answer state. Do not reproduce English gallery content or add a gallery.
+
+Precise layout in the 1600x1000 canvas:
+Far-left vertical icon rail about 64px wide, a thin hairline vertical separator. Small emerald outlined app chip logo near x30 y40, back arrow circle near y92, selected guide/info circle near y132. A stack of small quiet gray thin line navigation icons down the rail, small settings icon near bottom.
+Page header begins x96, y34. A tiny Geist Mono tracked uppercase label "OFF GRID AI" with a tiny emerald status dot. Below, large light Geist sans title "Was es für dich tut", around 40px, weight 300. Below, quiet gray Geist 14px sentence: "Alles läuft auf deinem eigenen Computer und Handy. Frag oder wähle eine Funktion."
+Content starts around y168. Left feature navigation from x96 to x326, about 230px wide. First selected guide row, thin emerald hairline rounded rectangular glass background, small thin sparkle outline icon, text "Frag Off Grid AI", neutral text, restrained emerald selection.
+Below, feature navigation with Geist Mono tiny uppercase tracked gray group labels, Geist sans regular gray items, 32px row rhythm and understated matching thin line outline icons. Keep all text legible, no clipping, exact umlauts:
+"SCHREIBEN"
+"Stimme"
+"Scribe"
+"Notizen"
+"ERINNERN"
+"Tag"
+"Rückblick"
+"Suche"
+"Zwischenablage"
+"MEETINGS UND MENSCHEN"
+"Meetings"
+"Personen"
+"ARBEIT ERLEDIGEN"
+"Chat"
+"Projekte"
+"Aufgaben"
+"Aktionen"
+Use quiet lock outline icons at right where matching reference. Do not add any other feature names.
+
+Main pane begins around x360, y170, width 1120. Heading in Geist light 24px: "Frag Off Grid AI".
+Below, around y240, a modest translucent charcoal question bubble with a 1px gray hairline, no avatar, exact text: "Wie fasse ich ein Meeting zusammen?"
+Below around y320, a wide restrained translucent glass answer card about 900px wide, 220px tall, subtle 1px neutral gray border, rounded 10px corners, generous but realistic desktop app padding. Tiny tracked Geist Mono uppercase gray label at top left: "SO GEHT ES".
+Inside the card, a clear horizontal sequence of three actual UI chips connected by fine gray right arrows:
+"Meetings" → "Aufnahme starten" → "Zusammenfassung".
+The chips are charcoal translucent small rounded rectangles with thin neutral gray outlines and thin monochrome outline icons (meeting/calendar, recording circle, document). No green fill on these chips, no numbering unless needed, no explanatory copy.
+Two smaller follow-up chips below the answer card: "Sprecher benennen", "Als Notiz speichern". Thin gray outline, subdued gray sans type, small appropriate line icons.
+Bottom input aligned to main pane at x360, near y925, width about 1120px, height 52px, rounded 12px dark translucent surface, thin gray border. Placeholder exact text "Frag etwas zu Off Grid AI". A small subdued emerald send button on right, thin line arrow.
+
+Brand requirements: only Geist sans (light 300-500) and Geist Mono (tiny uppercase labels). Sharp natural font rendering, visually exact German words and punctuation. Emerald #34D399 is the ONLY accent, used sparsely for selected state and tiny active indicator. Monochrome neutral grays elsewhere, near-black #0A0A0A background. Faint regular dot-lattice over background with soft emerald light glow around upper right/center-right, almost black low contrast. Subtle transparent glass surfaces, delicate hairline borders, no heavy shadows, no extra colors. Thin Phosphor-like outline icons throughout. Quiet, dense, practical desktop composition matching reference. Keep open space below the answer content as a natural chat area. No emojis, no flags, no illustration, no photographs, no decorative gradients apart from very faint emerald light. No floating setup toast, no additional text, no watermark.
