@@ -25,6 +25,10 @@ const ECHO_SIZE = 440;
  *  field redraws the whole screen every frame, a third of a core on a mid-range Android phone, so it
  *  rests while nobody touches the screen and breathes only on interaction (Android lag, 0.0.124). */
 const REST_AFTER_MS = 8000;
+/** The finger light and the press ring, sized for a phone (desktop's ALIVE values span a whole phone). */
+const TOUCH_LIGHT = 140;
+const RING_REACH = 130;
+const RING_BAND = 8;
 /** On Android the field holds still: no breathing, no finger light, no ring, no scroll drift. Even
  *  at rest those layers doubled the dropped frames while moving between screens, and smooth
  *  navigation matters more than the motion (Mac, 2026-11-18). iPhone keeps the living field. */
@@ -93,13 +97,14 @@ export const LivingField: React.FC<{
   // bitmap, so lighting dots inside the lattice re-rasterised the screen on every finger and scroll
   // frame (10% janky frames while scrolling; 0.6% with these layers apart).
   // Only the visible screen's field answers: a hidden tab's stays dark.
+  // Phone-sized: the desktop's 520 px ring crossed the whole screen. Same timing, a quarter the reach.
   const lightStyle = useAnimatedStyle(() => {
     const on = alive && active;
     return {
       opacity: on ? alive.touch.value : 0,
       transform: [
-        { translateX: on ? alive.touchX.value - originX.value - ALIVE.lightRadius : -2000 },
-        { translateY: on ? alive.touchY.value - originY.value - ALIVE.lightRadius : -2000 },
+        { translateX: on ? alive.touchX.value - originX.value - TOUCH_LIGHT : -2000 },
+        { translateY: on ? alive.touchY.value - originY.value - TOUCH_LIGHT : -2000 },
       ],
     };
   }, [active]);
@@ -109,8 +114,8 @@ export const LivingField: React.FC<{
     return {
       opacity: Math.max(0, 1 - radius / ALIVE.ringReach) * 0.9,
       transform: [
-        { translateX: on ? alive.ringX.value - originX.value - ALIVE.ringReach : -2000 },
-        { translateY: on ? alive.ringY.value - originY.value - ALIVE.ringReach : -2000 },
+        { translateX: on ? alive.ringX.value - originX.value - RING_REACH : -2000 },
+        { translateY: on ? alive.ringY.value - originY.value - RING_REACH : -2000 },
         { scale: Math.max(0.001, radius / ALIVE.ringReach) },
       ],
     };
@@ -162,19 +167,19 @@ export const LivingField: React.FC<{
       </Animated.View>
       {still ? null : (
       <>
-      <Animated.View renderToHardwareTextureAndroid style={[styles.touch, { width: ALIVE.lightRadius * 2, height: ALIVE.lightRadius * 2 }, lightStyle]}>
-        <Light id="field-touch" size={ALIVE.lightRadius * 2} color={colors.primary} stops={[litAlpha * 0.3, litAlpha * 0.1]} />
+      <Animated.View renderToHardwareTextureAndroid style={[styles.touch, { width: TOUCH_LIGHT * 2, height: TOUCH_LIGHT * 2 }, lightStyle]}>
+        <Light id="field-touch" size={TOUCH_LIGHT * 2} color={colors.primary} stops={[litAlpha * 0.22, litAlpha * 0.06]} />
       </Animated.View>
-      <Animated.View renderToHardwareTextureAndroid style={[styles.touch, { width: ALIVE.ringReach * 2, height: ALIVE.ringReach * 2 }, ringStyle]}>
-        <Svg width={ALIVE.ringReach * 2} height={ALIVE.ringReach * 2}>
+      <Animated.View renderToHardwareTextureAndroid style={[styles.touch, { width: RING_REACH * 2, height: RING_REACH * 2 }, ringStyle]}>
+        <Svg width={RING_REACH * 2} height={RING_REACH * 2}>
           <Circle
-            cx={ALIVE.ringReach}
-            cy={ALIVE.ringReach}
-            r={ALIVE.ringReach - ALIVE.ringBand / 2}
+            cx={RING_REACH}
+            cy={RING_REACH}
+            r={RING_REACH - RING_BAND / 2}
             fill="none"
             stroke={colors.primary}
-            strokeOpacity={litAlpha * 0.35}
-            strokeWidth={ALIVE.ringBand}
+            strokeOpacity={litAlpha * 0.2}
+            strokeWidth={RING_BAND}
           />
         </Svg>
       </Animated.View>
