@@ -445,7 +445,7 @@ describe('an install upgraded from v0.0.119', () => {
 
     // ── Home renders, past onboarding.
     expect(view.getByTestId('home-screen')).toBeTruthy();
-    expect(view.queryByTestId('onboarding-skip')).toBeNull();
+    expect(view.queryByTestId('onboarding-screen')).toBeNull();
     noCrash();
 
     // ── Gallery: the image v0.0.119 drew is there, and it loads from its file.

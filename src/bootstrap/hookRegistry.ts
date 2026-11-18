@@ -40,9 +40,6 @@ export function _clearHooksForTesting(): void {
 export const HOOKS = {
   /** Chats were deleted (ids): the document services drop what no remaining chat uses. */
   conversationsDeleted: 'chat.conversationsDeleted',
-  /** () => readonly OnboardingSlide[] — optional feature-owned onboarding content. Core owns the
-   *  renderer and navigation; feature packages contribute data only. */
-  onboardingAdditionalSlides: 'onboarding.additionalSlides',
   /** () => boolean | Promise<boolean> — whether a message can be spoken with available voice files. */
   audioCanSpeak: 'audio.canSpeak',
   /** (text: string, messageId: string) => void — speak a message aloud. */

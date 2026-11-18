@@ -121,7 +121,7 @@ describe('a reinstall that finds an expired Pro credential', () => {
     await waitFor(() => expect(ui.getByTestId('onboarding-screen')).toBeTruthy());
     expect(ui.queryByText('Off Grid AI Pro')).toBeNull();
 
-    fireEvent.press(ui.getByTestId('onboarding-skip'));
+    fireEvent.press(ui.getByTestId('onboarding-next'));
     fireEvent.press(await ui.findByTestId('onboarding-picks-skip'));
     fireEvent.press(await ui.findByTestId('auto-setup-skip'));
 
