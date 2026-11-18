@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, StyleSheet } from 'react-native';
+import { Easing, View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
@@ -108,6 +108,11 @@ const createTabBarStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
 });
 
+const TAB_FADE = {
+  animation: 'timing' as const,
+  config: { duration: 80, easing: Easing.out(Easing.quad) },
+};
+
 const mainTabsStyles = StyleSheet.create({
   container: { flex: 1 },
 });
@@ -126,6 +131,9 @@ const MainTabs: React.FC = () => {
         screenOptions={({ route }) => ({
           headerShown: false,
           animation: 'fade',
+          // The stock fade is 150 ms linear, on top of the screen's own render: tabs felt slow.
+          // A short ease-out fade still never pops, but the new tab is there almost at once.
+          transitionSpec: TAB_FADE,
           lazy: true,
           tabBarStyle: {
             backgroundColor: colors.surface,
