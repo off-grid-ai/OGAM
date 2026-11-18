@@ -1370,6 +1370,20 @@ describe('appStore', () => {
         c: any,
       ) => any;
 
+    it('an install from before onboarding asked keeps no picks, and finished onboarding stays finished', () => {
+      const merge = getMergeFn();
+      const result = merge({ hasCompletedOnboarding: true }, useAppStore.getState());
+      expect(result.onboardingPicks).toBeNull();
+      expect(result.hasCompletedOnboarding).toBe(true);
+    });
+
+    it('saved picks come back, and unreadable ones become none', () => {
+      const merge = getMergeFn();
+      const picks = { groups: ['chat', 'create'], parts: ['chat', 'images'] };
+      expect(merge({ onboardingPicks: picks }, useAppStore.getState()).onboardingPicks).toEqual(picks);
+      expect(merge({ onboardingPicks: { groups: 'chat' } }, useAppStore.getState()).onboardingPicks).toBeNull();
+    });
+
     it('migrates missing cacheType with flashAttn=true to q8_0', () => {
       const merge = getMergeFn();
       const result = merge(

@@ -41,6 +41,8 @@ const notesEditorPackagePath = path.resolve(sharedRoot, 'packages/notes-editor')
 // resolveRequest), so text children and readable props show in the app language. In English it hands React
 // the same props. Library code in node_modules keeps React's runtime.
 const i18nPackagePath = path.resolve(sharedRoot, 'packages/i18n');
+// @offgrid/features: the one feature list (onboarding groups and parts, tiers, model kinds).
+const featuresPackagePath = path.resolve(sharedRoot, 'packages/features');
 const i18nJsxRuntimes = {
   'react/jsx-runtime': path.resolve(i18nPackagePath, 'dist/jsx-runtime.cjs'),
   'react/jsx-dev-runtime': path.resolve(i18nPackagePath, 'dist/jsx-dev-runtime.cjs'),
@@ -82,6 +84,7 @@ const config = {
     uiPackagePath,
     designPackagePath,
     i18nPackagePath,
+    featuresPackagePath,
     sharedNodeModulesPath,
     ...linkedNodeModulesPaths,
   ],
@@ -118,6 +121,7 @@ const config = {
       '@offgrid/notes-editor/webview-html': path.resolve(notesEditorPackagePath, 'dist/webview-html.js'),
       '@offgrid/design': path.resolve(designPackagePath, 'dist/index.js'),
       '@offgrid/i18n': path.resolve(i18nPackagePath, 'dist/index.cjs'),
+      '@offgrid/features': path.resolve(featuresPackagePath, 'dist/index.js'),
       // @offgrid/sync owns this dependency in its package manifest. Metro still needs the
       // out-of-root file dependency mapped to a watched, built CommonJS entry.
       '@offgrid/automation': path.resolve(automationPackagePath, 'dist/index.js'),

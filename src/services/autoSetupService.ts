@@ -1,6 +1,8 @@
 import { modelDownloadService } from './modelDownloadService';
 import type { ModelDownload, ModelDownloadStartRequest } from './modelDownloadService/types';
 import { useAppStore } from '../stores';
+import { selectHasProAccess } from '../stores/proAccessSlice';
+import { setupKindsForPicks } from './onboardingPicks';
 import { activeModelService } from './activeModelService';
 import { flowFinished, flowStep } from './analytics/analytics';
 import { uniformDownloadId } from './modelDownloadService/uniformId';
@@ -198,6 +200,12 @@ function reportDownloadPhase(previous: AutoSetupSnapshot['phase'], next: AutoSet
   else if (next.phase === 'failed') flowFinished('onboarding', 'failed', next.error);
 }
 
+/** What onboarding's picks need is checked; with no picks, the chat model alone, as before. */
+function pickedKinds(): AutoSetupModelKind[] {
+  const app = useAppStore.getState();
+  return setupKindsForPicks(app.onboardingPicks, selectHasProAccess(app));
+}
+
 export function createAutoSetupSession(
   boundaries: AutoSetupSessionBoundaries = {},
 ): AutoSetupSession {
@@ -214,7 +222,7 @@ export function createAutoSetupSession(
     phase: 'loading_catalog',
     plans: [],
     selectedTier: tierFromPersistedIntent(),
-    selectedKinds: ['text'],
+    selectedKinds: pickedKinds(),
     installedIds: [],
     outcomes: {},
     error: null,
