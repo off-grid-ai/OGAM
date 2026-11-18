@@ -1,5 +1,15 @@
 cmake_minimum_required(VERSION 3.22)
 project(appmodules LANGUAGES C CXX)
+# Ninja runs cores + 2 compiles at once. The video runtime's largest files (ggml-vulkan.cpp,
+# ggml-opencl.cpp, stable-diffusion.cpp's models) take gigabytes each with debug info, so on a
+# 4-core, 16 GB CI runner six of them beside the Gradle daemon run it out of memory and the runner
+# is lost. OFFGRID_NATIVE_JOBS caps compiles (links run one at a time); unset, nothing changes.
+if(DEFINED ENV{OFFGRID_NATIVE_JOBS})
+  set_property(GLOBAL APPEND PROPERTY JOB_POOLS
+    offgrid_compile=$ENV{OFFGRID_NATIVE_JOBS} offgrid_link=1)
+  set(CMAKE_JOB_POOL_COMPILE offgrid_compile)
+  set(CMAKE_JOB_POOL_LINK offgrid_link)
+endif()
 include(${REACT_ANDROID_DIR}/cmake-utils/ReactNative-application.cmake)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_VISIBILITY_PRESET hidden)

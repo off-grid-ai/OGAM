@@ -19,6 +19,8 @@ jobs:
     env:
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
+      # Three native compiles at a time, as uat-dev.yml: ninja's six ran the runner out of memory.
+      OFFGRID_NATIVE_JOBS: '3'
 
     steps:
       - name: Checkout code
