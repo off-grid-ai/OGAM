@@ -44,6 +44,8 @@ function sandbox() {
   const remote = repo(mobile, {
     'package.json': JSON.stringify({ name: 'm', version: '0.0.119' }),
     'scripts/uat.sh': fs.readFileSync(UAT, 'utf8'),
+    // uat.sh sources it to find a Ruby new enough for fastlane.
+    'scripts/lib/ruby-path.sh': fs.readFileSync(path.join(path.dirname(UAT), 'lib/ruby-path.sh'), 'utf8'),
     '.gitignore': '',
   });
   // 0.0.119 is live (promote.sh pushed its plain tag), so the plan targets 0.0.120. Earlier betas of
