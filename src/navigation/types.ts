@@ -60,5 +60,6 @@ export type MainTabParamList = {
         initialSearchQuery?: string;
       }
     | undefined;
+  ProTab: undefined;
   SettingsTab: undefined;
 };

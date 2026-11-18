@@ -9,6 +9,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
+import { ProTabScreen } from '../screens/ProTabScreen';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { triggerHaptic } from '../utils/haptics';
@@ -62,6 +63,7 @@ const TAB_ICON_MAP: Record<string, string> = {
   ChatsTab: 'message-circle',
   ProjectsTab: 'folder',
   ModelsTab: 'cpu',
+  ProTab: 'award',
   SettingsTab: 'settings',
 };
 
@@ -183,6 +185,14 @@ const MainTabs: React.FC = () => {
           name="ModelsTab"
           component={ModelsScreen}
           options={{ tabBarLabel: 'Models', tabBarButtonTestID: 'models-tab' }}
+          listeners={() => ({
+            tabPress: () => { triggerHaptic('selection'); },
+          })}
+        />
+        <Tab.Screen
+          name="ProTab"
+          component={ProTabScreen}
+          options={{ tabBarLabel: 'Pro', tabBarButtonTestID: 'pro-tab' }}
           listeners={() => ({
             tabPress: () => { triggerHaptic('selection'); },
           })}
