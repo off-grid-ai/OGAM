@@ -6,7 +6,7 @@
 import React from 'react';
 import { Image, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
-import Video, { ResizeMode } from 'react-native-video';
+import Video, { ResizeMode, ViewType } from 'react-native-video';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { cardSurface } from '../../theme/surface';
@@ -29,6 +29,9 @@ export const GuidePicture: React.FC<{ media: GuideMedia; label: string; height: 
           source={{ uri: Image.resolveAssetSource(media.clip).uri }}
           style={shape}
           resizeMode={ResizeMode.CONTAIN}
+          // Android: a TextureView moves with the page and its rounded frame; the default
+          // SurfaceView sits apart and lags a beat behind while the page scrolls.
+          viewType={ViewType.TEXTURE}
           repeat
           muted
           disableFocus
