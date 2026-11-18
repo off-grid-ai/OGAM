@@ -79,7 +79,7 @@ const MEDIA: Record<string, GuideMedia> = {
   // Real phone screens from the screen reviews (mobile/docs/review) and the release shots, cropped
   // to the part that shows the feature. One take each, so both themes show it.
   'phone-images': screen(require('../../assets/guide/phone-images.webp'), 600 / 652),
-  // A real Video Studio run on iPhone through OpenRouter (17 Nov): the wait sped up, then the film plays.
+  // A real Video Studio run on iPhone through OpenRouter (17 Nov): the wait, Ready, then the film at 30 fps.
   'phone-video': screen(require('../../assets/guide/phone-video.webp'), 400 / 870, require('../../assets/guide/phone-video.mp4')),
   'phone-notes': screen(require('../../assets/guide/phone-notes.webp'), 480 / 640, require('../../assets/guide/phone-notes.mp4')),
   'phone-improve': screen(require('../../assets/guide/phone-improve.webp'), 480 / 600, require('../../assets/guide/phone-improve.mp4')),
