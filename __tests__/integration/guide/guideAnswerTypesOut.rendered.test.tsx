@@ -31,3 +31,17 @@ it('an answer types out, then shows whole with the cards it names', async () => 
     timeout: 3000,
   });
 });
+
+it("a feature's Ask more asks about it on the Ask tab, and New starts over", async () => {
+  app = await launchApp({ release: true, returningUser: true });
+  const { view, rtl } = app;
+  rtl.fireEvent.press(await view.findByTestId('home-guide-button'));
+  rtl.fireEvent.press(await view.findByTestId('guide-tab-features'));
+  rtl.fireEvent.press(await view.findByTestId('guide-topic-phone-vision'));
+  rtl.fireEvent.press(await view.findByTestId('guide-topic-ask'));
+
+  expect(await view.findByText('Tell me more about Vision.')).toBeTruthy();
+  rtl.fireEvent.press(await view.findByTestId('guide-new'));
+  await rtl.waitFor(() => expect(view.queryByText('Tell me more about Vision.')).toBeNull());
+  expect(view.queryByTestId('guide-new')).toBeNull();
+});

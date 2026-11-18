@@ -16,13 +16,14 @@ import type { ThemeColors, ThemeShadows } from '../../theme';
 import { cardSurface } from '../../theme/surface';
 import { FONTS, SPACING, TYPOGRAPHY } from '../../constants';
 import { SCROLL_DEPTH_PROPS } from '../../constants/scrollDepth';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { mobileGuideTopics } from './guideTopics';
 import { GuidePicture } from './GuidePicture';
 import { useGuideAction } from './useGuideAction';
 
 export const GuideTopicScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'GuideTopic'>>();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -57,17 +58,27 @@ export const GuideTopicScreen: React.FC = () => {
               ))}
             </View>
           </ScrollView>
-          {action ? (
-            <View style={styles.footer}>
+          <View style={styles.footer}>
+            {/* Ask the guide about this feature in your own words, beside the way in. */}
+            <Button
+              title="Ask more"
+              variant="secondary"
+              onPress={() => navigation.popTo('Guide', { ask: `Tell me more about ${topic.label}.`, at: Date.now() })}
+              icon={<Icon name="message-circle" size={16} color={colors.textSecondary} />}
+              style={styles.footerButton}
+              testID="guide-topic-ask"
+            />
+            {action ? (
               <Button
                 title={action.label}
                 variant="primary"
                 onPress={action.onPress}
                 icon={<Icon name={action.icon} size={16} color={colors.onPrimary} />}
+                style={styles.footerButton}
                 testID="guide-topic-action"
               />
-            </View>
-          ) : null}
+            ) : null}
+          </View>
         </>
       ) : (
         <View style={styles.content}>
@@ -100,5 +111,12 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   highlights: { gap: SPACING.sm },
   highlight: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: SPACING.sm },
   highlightText: { ...TYPOGRAPHY.body, color: colors.text, flex: 1 },
-  footer: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.sm, paddingBottom: SPACING.sm },
+  footer: {
+    flexDirection: 'row' as const,
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.sm,
+  },
+  footerButton: { flex: 1 },
 });
