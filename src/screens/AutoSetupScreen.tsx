@@ -20,7 +20,7 @@ import {
 } from '../services/autoSetupService';
 import {
   flowFinished,
-  flowStarted,
+  flowResumed,
   proGateShown,
   setAnalyticsConsent,
 } from '../services/analytics/analytics';
@@ -79,7 +79,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
   }, [session]);
 
   useEffect(() => {
-    flowStarted('onboarding', 'setup_shown');
+    flowResumed('onboarding', 'setup_shown');
   }, []);
 
   const [shareAnalytics, setShareAnalytics] = useState(

@@ -2,7 +2,7 @@
  * Onboarding step 1: what do you want to do? Pick any group. The groups come from
  * @offgrid/features; the picks are kept in the app store, so a restart resumes with them.
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
@@ -16,6 +16,7 @@ import { AliveScreen } from '../../components/AliveScreen';
 import { Button } from '../../components/Button';
 import { useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores/appStore';
+import { flowResumed } from '../../services/analytics/analytics';
 import type { RootStackParamList } from '../../navigation/types';
 import { PICKS_PLATFORM } from '../../services/onboardingPicks';
 import { GROUP_ICONS, PickRow } from './PickRow';
@@ -38,6 +39,9 @@ export const OnboardingGroupsScreen: React.FC<Props> = ({ navigation }) => {
   const styles = useThemedStyles(createPicksStyles);
   const picks = useAppStore(s => s.onboardingPicks) ?? DEFAULT_PICKS;
   const setPicks = useAppStore(s => s.setOnboardingPicks);
+  useEffect(() => {
+    flowResumed('onboarding', 'groups_shown');
+  }, []);
   return (
     <AliveScreen
       style={styles.container}

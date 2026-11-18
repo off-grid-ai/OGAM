@@ -504,3 +504,38 @@ it('withdrawing Usage drops usage events still queued, and a crash still arrives
   expect(endpoint.named('chat_created')).toEqual([]);
   expect(endpoint.named('$exception')[0].distinct_id).toBe(endpoint.named('project_created')[0].distinct_id);
 });
+
+it('onboarding picks before opting in arrive with every step when the person opts in on setup', async () => {
+  const { analytics, endpoint, flush } = await setup(null);
+  analytics.flowResumed('onboarding', 'groups_shown');
+  analytics.flowResumed('onboarding', 'features_shown');
+  analytics.flowResumed('onboarding', 'guide_shown');
+  analytics.onboardingPicked({ groups: ['chat', 'images'], parts: ['chat', 'vision', 'images'] });
+  analytics.flowResumed('onboarding', 'setup_shown');
+  await analytics.setAnalyticsConsent({ usage: true }, 'setup');
+  await flush();
+  await waitFor(() => expect(endpoint.named('onboarding_picks')).toHaveLength(1));
+  expect(endpoint.named('flow_started').map(e => e.properties.flow)).toEqual(['onboarding']);
+  expect(endpoint.named('flow_step').map(e => e.properties.step)).toEqual([
+    'groups_shown',
+    'features_shown',
+    'guide_shown',
+    'setup_shown',
+  ]);
+  expect(endpoint.named('onboarding_picks')[0].properties).toMatchObject({
+    groups: 'chat,images',
+    features: 'chat,vision,images',
+    skipped: false,
+  });
+});
+
+it('a skipped onboarding is sent at once when Usage is already on, and only once', async () => {
+  const { analytics, endpoint, flush } = await setup({ usage: true });
+  analytics.onboardingPicked(null);
+  await analytics.setAnalyticsConsent({ crashes: true }, 'setup');
+  await flush();
+  await waitFor(() => expect(endpoint.named('onboarding_picks')).toHaveLength(1));
+  const sent = endpoint.named('onboarding_picks')[0].properties;
+  expect(sent.skipped).toBe(true);
+  expect(sent.groups).toBeUndefined();
+});

@@ -2,7 +2,7 @@
  * Onboarding step 2: which ones? The features of each picked group, a section per group. Only
  * what is picked gets set up; a Pro pick offers Pro here.
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
@@ -17,6 +17,7 @@ import { Button } from '../../components/Button';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores/appStore';
+import { flowResumed } from '../../services/analytics/analytics';
 import { useGetPro } from '../../hooks/useGetPro';
 import type { RootStackParamList } from '../../navigation/types';
 import { PICKS_PLATFORM } from '../../services/onboardingPicks';
@@ -36,6 +37,9 @@ export const OnboardingFeaturesScreen: React.FC<Props> = ({ navigation }) => {
   const picks = useAppStore(s => s.onboardingPicks) ?? DEFAULT_PICKS;
   const setPicks = useAppStore(s => s.setOnboardingPicks);
   const getPro = useGetPro();
+  useEffect(() => {
+    flowResumed('onboarding', 'features_shown');
+  }, []);
   const groups = onboardingGroups(PICKS_PLATFORM).filter(g =>
     picks.groups.includes(g.id),
   );

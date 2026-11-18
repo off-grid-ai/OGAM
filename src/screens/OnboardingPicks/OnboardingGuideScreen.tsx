@@ -2,7 +2,7 @@
  * Onboarding step 3: how it works, for what you picked. Each pick is a card that opens its guide
  * page (its own route, so Back returns here); then model setup, with your picks checked.
  */
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,6 +16,7 @@ import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { cardSurface } from '../../theme/surface';
 import { useAppStore } from '../../stores/appStore';
+import { flowResumed } from '../../services/analytics/analytics';
 import type { RootStackParamList } from '../../navigation/types';
 import { pickedTopics } from '../../services/onboardingPicks';
 import { mobileGuideTopics } from '../GuideScreen/guideTopics';
@@ -31,6 +32,9 @@ export const OnboardingGuideScreen: React.FC<Props> = ({ navigation }) => {
   const styles = useThemedStyles(createPicksStyles);
   const own = useThemedStyles(createStyles);
   const picks = useAppStore(s => s.onboardingPicks) ?? DEFAULT_PICKS;
+  useEffect(() => {
+    flowResumed('onboarding', 'guide_shown');
+  }, []);
   const topics = useMemo(() => {
     const all = mobileGuideTopics();
     return pickedTopics(picks)
