@@ -144,4 +144,16 @@ describe('onboarding picks on the phone', () => {
       tierOf(partById('notes'), 'mobile') === 'pro',
     );
   });
+
+  it('with Pro already active, a Pro pick offers no Pro', async () => {
+    useAppStore.setState({
+      onboardingPicks: { groups: ['chat'], parts: ['chat', 'voice-mode'] },
+      isProActive: true,
+      proDeviceAdmission: 'active',
+    });
+    const { view, route } = mount();
+    fireEvent.press(view.getByTestId('onboarding-continue'));
+    await waitFor(() => expect(route()).toBe('OnboardingFeatures'));
+    expect(view.queryByTestId('onboarding-pro-offer')).toBeNull();
+  });
 });

@@ -17,6 +17,7 @@ import { Button } from '../../components/Button';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores/appStore';
+import { selectHasProAccess } from '../../stores/proAccessSlice';
 import { flowResumed } from '../../services/analytics/analytics';
 import { useGetPro } from '../../hooks/useGetPro';
 import type { RootStackParamList } from '../../navigation/types';
@@ -43,9 +44,13 @@ export const OnboardingFeaturesScreen: React.FC<Props> = ({ navigation }) => {
   const groups = onboardingGroups(PICKS_PLATFORM).filter(g =>
     picks.groups.includes(g.id),
   );
-  const proPicked = partsFor(picks.groups, PICKS_PLATFORM).some(
-    p => picks.parts.includes(p.id) && tierOf(p, PICKS_PLATFORM) === 'pro',
-  );
+  // With Pro already active the picks just work, so the Pro offer is only for people without it.
+  const hasPro = useAppStore(selectHasProAccess);
+  const proPicked =
+    !hasPro &&
+    partsFor(picks.groups, PICKS_PLATFORM).some(
+      p => picks.parts.includes(p.id) && tierOf(p, PICKS_PLATFORM) === 'pro',
+    );
   return (
     <AliveScreen
       style={styles.container}
