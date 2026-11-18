@@ -89,7 +89,7 @@ export function loadsOnPhone(id: string, ramGB: number, catalog: readonly ModelE
   const download = entry ? catalogEntryToDownload(entry) : null;
   if (!download) return undefined;
   const bytes = download.file.size + (download.file.mmProjFile?.size ?? 0);
-  return isLoadableOnDevice(bytes / 1e9, ramGB, textModelBudget());
+  return isLoadableOnDevice(bytes / 1e9, ramGB, textModelBudget(ramGB));
 }
 
 /** Fast, Balanced and Best among any kind of model (chat, image, speech) by the shared rule with the
@@ -149,6 +149,6 @@ function pickChat(downloads: ReturnType<typeof chatDownloads>, ramGB: number): D
     supersededBy: d.entry.supersededBy,
     nonCommercial: d.entry.nonCommercial,
     minLlamaBuild: d.entry.minLlamaBuild,
-  }), ramGB, textModelBudget())
+  }), ramGB, textModelBudget(ramGB))
     .map(({ slot, item }) => ({ slot, ...item }));
 }
