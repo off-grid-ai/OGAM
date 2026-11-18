@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AppState, Image, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, {
   css,
-  useAnimatedProps,
   useAnimatedReaction,
   useAnimatedStyle,
   useDerivedValue,
@@ -14,8 +13,7 @@ import Svg, { Circle, Defs, LinearGradient, Mask, Pattern, RadialGradient, Rect,
 import { useTheme } from '../theme';
 import { ALIVE, LIVING_FIELD } from '../constants';
 import { useAlive, type AliveSignals } from './AliveProvider';
-
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+import { useIsFocused } from '@react-navigation/native';
 
 const GLOW_SIZE = 560;
 /** Text never sits on the dots: the lattice is clear behind the status bar and a screen's header,
@@ -27,6 +25,26 @@ const ECHO_SIZE = 440;
  *  field redraws the whole screen every frame, a third of a core on a mid-range Android phone, so it
  *  rests while nobody touches the screen and breathes only on interaction (Android lag, 0.0.124). */
 const REST_AFTER_MS = 8000;
+/** On Android the field holds still: no breathing, no finger light, no ring, no scroll drift. Even
+ *  at rest those layers doubled the dropped frames while moving between screens, and smooth
+ *  navigation matters more than the motion (Mac, 2026-11-18). iPhone keeps the living field. */
+const STILL_FIELD = Platform.OS === 'android';
+// Android draws react-native-svg in software on the UI thread: the dot lattice took 43% of the UI
+// thread on every tab switch and the two lights another 18%. So Android shows the same field as
+// pictures (a dot tile and the two lights, made by scripts/make-field-assets.py), which the GPU
+// draws for free.
+const FIELD_IMAGES = {
+  light: {
+    dots: require('../assets/field/dots-light.png'),
+    glow: require('../assets/field/glow-light.png'),
+    echo: require('../assets/field/echo-light.png'),
+  },
+  dark: {
+    dots: require('../assets/field/dots-dark.png'),
+    glow: require('../assets/field/glow-dark.png'),
+    echo: require('../assets/field/echo-dark.png'),
+  },
+};
 
 /**
  * The living background, as desktop draws it: a dot lattice behind everything, an emerald light and
@@ -46,8 +64,10 @@ export const LivingField: React.FC<{
   const { width, height } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const appActive = useAppActive();
-  const alive = useAlive();
-  const canBreathe = active && appActive && !reducedMotion;
+  const motionAlive = useAlive();
+  const still = STILL_FIELD || reducedMotion;
+  const alive = still ? null : motionAlive;
+  const canBreathe = active && appActive && !still;
   const awake = useAwake(alive, canBreathe);
   const breathing = canBreathe && awake;
   const playState = breathing ? 'running' : 'paused';
@@ -64,23 +84,35 @@ export const LivingField: React.FC<{
 
   const { spacing, dotRadius } = LIVING_FIELD;
   const drift = useDerivedValue(() =>
-    alive && !reducedMotion ? -((alive.scrollY.value * ALIVE.scrollDrift) % spacing) : 0,
+    alive ? -((alive.scrollY.value * ALIVE.scrollDrift) % spacing) : 0,
   );
 
   const driftStyle = useAnimatedStyle(() => ({ transform: [{ translateY: drift.value }] }));
   // The light under the finger, and the ring a press sends out (desktop: 1.1 px/ms to 520 px).
-  // Three widening, fainter discs of lit dots make the light's soft falloff.
-  const lightOuter = useAnimatedProps(() => lightDisc(active ? alive : null, originX.value, originY.value, drift.value, 1, 0.35), [active]);
-  const lightMid = useAnimatedProps(() => lightDisc(active ? alive : null, originX.value, originY.value, drift.value, 0.6, 0.45), [active]);
-  const lightCore = useAnimatedProps(() => lightDisc(active ? alive : null, originX.value, originY.value, drift.value, 0.3, 0.6), [active]);
-  // Only the visible screen's field answers: a hidden tab's stays dark and costs no redraw.
-  const ringProps = useAnimatedProps(() => {
-    const radius = alive && active ? alive.ringRadius.value : ALIVE.ringReach;
+  // Each is drawn once and only moves, scales and fades: on Android an SVG redraws as one whole
+  // bitmap, so lighting dots inside the lattice re-rasterised the screen on every finger and scroll
+  // frame (10% janky frames while scrolling; 0.6% with these layers apart).
+  // Only the visible screen's field answers: a hidden tab's stays dark.
+  const lightStyle = useAnimatedStyle(() => {
+    const on = alive && active;
     return {
-      cx: alive ? alive.ringX.value - originX.value : -1000,
-      cy: alive ? alive.ringY.value - originY.value - drift.value : -1000,
-      r: radius,
+      opacity: on ? alive.touch.value : 0,
+      transform: [
+        { translateX: on ? alive.touchX.value - originX.value - ALIVE.lightRadius : -2000 },
+        { translateY: on ? alive.touchY.value - originY.value - ALIVE.lightRadius : -2000 },
+      ],
+    };
+  }, [active]);
+  const ringStyle = useAnimatedStyle(() => {
+    const on = alive && active;
+    const radius = on ? alive.ringRadius.value : ALIVE.ringReach;
+    return {
       opacity: Math.max(0, 1 - radius / ALIVE.ringReach) * 0.9,
+      transform: [
+        { translateX: on ? alive.ringX.value - originX.value - ALIVE.ringReach : -2000 },
+        { translateY: on ? alive.ringY.value - originY.value - ALIVE.ringReach : -2000 },
+        { scale: Math.max(0.001, radius / ALIVE.ringReach) },
+      ],
     };
   }, [active]);
 
@@ -90,15 +122,26 @@ export const LivingField: React.FC<{
   const litAlpha = isDark ? ALIVE.litAlphaDark : ALIVE.litAlphaLight;
   const latticeHeight = height + spacing;
 
+  if (STILL_FIELD) {
+    const images = isDark ? FIELD_IMAGES.dark : FIELD_IMAGES.light;
+    return (
+      <View style={styles.fill} pointerEvents="none" testID="living-field">
+        <Image source={images.glow} fadeDuration={0} style={[styles.light, styles.stillGlow, { left: -0.66 * width, top: -0.07 * height, width: GLOW_SIZE, height: GLOW_SIZE }]} />
+        <Image source={images.echo} fadeDuration={0} style={[styles.light, styles.stillEcho, { left: 0.41 * width, top: 0.6 * height, width: ECHO_SIZE, height: ECHO_SIZE }]} />
+        {/* Clear behind the status bar and header, as the drawn field's fade. */}
+        <Image source={images.dots} fadeDuration={0} resizeMode="repeat" style={[styles.stillDots, { top: HEADER_CLEAR + HEADER_FADE / 2, width, height: height - HEADER_CLEAR }]} />
+      </View>
+    );
+  }
   return (
     <View ref={fieldRef} onLayout={measure} style={styles.fill} pointerEvents="none" testID="living-field">
-      <Animated.View renderToHardwareTextureAndroid style={[styles.light, { left: -0.66 * width, top: -0.07 * height }, breath.glow, { animationPlayState: playState }]}>
+      <Animated.View renderToHardwareTextureAndroid style={[styles.light, { left: -0.66 * width, top: -0.07 * height }, still ? styles.stillGlow : breath.glow, still ? null : { animationPlayState: playState }]}>
         <Light id="field-glow" size={GLOW_SIZE} color={colors.primary} stops={[0.26, 0.09]} />
       </Animated.View>
-      <Animated.View renderToHardwareTextureAndroid style={[styles.light, { left: 0.41 * width, top: 0.6 * height }, breath.echo, { animationPlayState: playState }]}>
+      <Animated.View renderToHardwareTextureAndroid style={[styles.light, { left: 0.41 * width, top: 0.6 * height }, still ? styles.stillEcho : breath.echo, still ? null : { animationPlayState: playState }]}>
         <Light id="field-echo" size={ECHO_SIZE} color={colors.primaryDark} stops={[0.13, 0]} />
       </Animated.View>
-      <Animated.View renderToHardwareTextureAndroid style={[styles.lattice, { height: latticeHeight }, breath.lattice, { animationPlayState: playState }]}>
+      <Animated.View style={[styles.lattice, { height: latticeHeight }, still ? styles.stillLattice : breath.lattice, still ? null : { animationPlayState: playState }]}>
        <Animated.View style={driftStyle}>
         <Svg width={width} height={latticeHeight}>
           <Defs>
@@ -112,21 +155,31 @@ export const LivingField: React.FC<{
             <Mask id="field-header-clear" maskUnits="userSpaceOnUse" x="0" y="0" width={width} height={latticeHeight}>
               <Rect width={width} height={latticeHeight} fill="url(#field-header-fade)" />
             </Mask>
-            <Pattern id="field-dots-lit" width={spacing} height={spacing} patternUnits="userSpaceOnUse">
-              <Circle cx={spacing / 2} cy={spacing / 2} r={dotRadius * 1.15} fill={colors.primary} fillOpacity={litAlpha} />
-            </Pattern>
           </Defs>
           <Rect width={width} height={latticeHeight} fill="url(#field-dots)" mask="url(#field-header-clear)" />
-          {/* The light under a finger: lit dots in three widening, fainter rings of the pattern (a
-              soft falloff without a mask, which react-native-svg does not redraw as it animates). */}
-          <AnimatedCircle animatedProps={lightOuter} fill="url(#field-dots-lit)" />
-          <AnimatedCircle animatedProps={lightMid} fill="url(#field-dots-lit)" />
-          <AnimatedCircle animatedProps={lightCore} fill="url(#field-dots-lit)" />
-          {/* The ring a press sends out, stroked with the same lit dots. */}
-          <AnimatedCircle animatedProps={ringProps} fill="none" stroke="url(#field-dots-lit)" strokeWidth={ALIVE.ringBand} />
         </Svg>
        </Animated.View>
       </Animated.View>
+      {still ? null : (
+      <>
+      <Animated.View renderToHardwareTextureAndroid style={[styles.touch, { width: ALIVE.lightRadius * 2, height: ALIVE.lightRadius * 2 }, lightStyle]}>
+        <Light id="field-touch" size={ALIVE.lightRadius * 2} color={colors.primary} stops={[litAlpha * 0.3, litAlpha * 0.1]} />
+      </Animated.View>
+      <Animated.View renderToHardwareTextureAndroid style={[styles.touch, { width: ALIVE.ringReach * 2, height: ALIVE.ringReach * 2 }, ringStyle]}>
+        <Svg width={ALIVE.ringReach * 2} height={ALIVE.ringReach * 2}>
+          <Circle
+            cx={ALIVE.ringReach}
+            cy={ALIVE.ringReach}
+            r={ALIVE.ringReach - ALIVE.ringBand / 2}
+            fill="none"
+            stroke={colors.primary}
+            strokeOpacity={litAlpha * 0.35}
+            strokeWidth={ALIVE.ringBand}
+          />
+        </Svg>
+      </Animated.View>
+      </>
+      )}
     </View>
   );
 };
@@ -157,23 +210,11 @@ const breath = css.create({
   lattice: breathe(css.keyframes({ from: { opacity: 0.82 }, to: { opacity: 1 } })),
 });
 
-/** One disc of the finger's light, in the field's own coordinates. */
-function lightDisc(
-  alive: AliveSignals | null,
-  originX: number,
-  originY: number,
-  drift: number,
-  scale: number,
-  strength: number,
-) {
-  'worklet';
-  return {
-    cx: alive ? alive.touchX.value - originX : -1000,
-    cy: alive ? alive.touchY.value - originY - drift : -1000,
-    r: ALIVE.lightRadius * scale,
-    opacity: alive ? alive.touch.value * strength : 0,
-  };
-}
+/**
+ * A screen's field, resting while the screen is out of focus. It reads focus itself, so a tab
+ * switch re-renders only the field, never the screen around it.
+ */
+export const ScreenField: React.FC = () => <LivingField active={useIsFocused()} />;
 
 /** One soft round light: full at the centre, fading out by 72% of its radius. */
 const Light: React.FC<{ id: string; size: number; color: string; stops: [number, number] }> = ({
@@ -269,4 +310,10 @@ const styles = StyleSheet.create({
   // Desktop lights the left side of the page; the echo answers lower down (placed per screen size).
   light: { position: 'absolute' },
   lattice: { position: 'absolute', left: 0, right: 0, top: 0 },
+  touch: { position: 'absolute', left: 0, top: 0 },
+  // A still field sits mid-breath: the middle of each breathing range.
+  stillGlow: { opacity: 0.76 },
+  stillEcho: { opacity: 0.5 },
+  stillLattice: { opacity: 0.91 },
+  stillDots: { position: 'absolute', left: 0, opacity: 0.91 },
 });
