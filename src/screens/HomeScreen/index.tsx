@@ -332,14 +332,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </View>
           </View>
 
-          {/* What you picked in onboarding leads Home, one tap from each. */}
-          <HomePicks />
-
-          {/* Still while a sheet covers Home: nothing moves where you cannot see it (hand test 89). */}
+          {/* What you can do always leads Home (Mac, 2026-11-18). Still while a sheet covers Home:
+              nothing moves where you cannot see it (hand test 89). */}
           <FeatureShowcase
             features={showcase}
             active={pickerType === null && !modelsManagerOpen && !whisperOpen && !voiceOpen}
           />
+
+          {/* What you picked in onboarding comes next, one tap from each. */}
+          <HomePicks />
 
           {/* Collapsed Models summary — tap to open the manager sheet. Both the
               text (1) and image (13) tour steps anchor here now. */}
