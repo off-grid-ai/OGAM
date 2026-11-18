@@ -47,13 +47,15 @@ export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
     <AnimatedEntry index={0} staggerMs={40} trigger={trigger}>
       <View style={styles.card}>
         <View style={styles.header}>
-          <Image
-            source={isDark ? require('../../assets/home-logo-dark.png') : require('../../assets/home-logo-light.png')}
-            style={styles.logo}
-            accessibilityIgnoresInvertColors
-          />
           <View style={styles.headerText}>
-            <Text style={styles.title}>Off Grid AI Pro</Text>
+            <View style={styles.titleRow}>
+              <Image
+                source={isDark ? require('../../assets/home-logo-dark.png') : require('../../assets/home-logo-light.png')}
+                style={styles.logo}
+                accessibilityIgnoresInvertColors
+              />
+              <Text style={styles.title}>Off Grid AI Pro</Text>
+            </View>
             <Text style={styles.desc}>
               Keep your work in context with memory, Sync, and actions you approve.
             </Text>
@@ -101,9 +103,10 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     padding: SPACING.lg,
     paddingBottom: SPACING.md,
   },
-  logo: { width: 40, height: 40, borderRadius: 8, marginRight: SPACING.md },
+  titleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: SPACING.xs },
+  logo: { width: 28, height: 28, borderRadius: 6, marginRight: SPACING.sm },
   headerText: { flex: 1, marginRight: SPACING.md },
-  title: { ...TYPOGRAPHY.h2, color: colors.text, marginBottom: SPACING.xs },
+  title: { ...TYPOGRAPHY.h2, color: colors.text },
   desc: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, lineHeight: 18 },
   close: { padding: SPACING.xs, minWidth: 44, minHeight: 44, alignItems: 'center' as const },
   cta: { marginHorizontal: SPACING.lg, marginBottom: SPACING.md },
