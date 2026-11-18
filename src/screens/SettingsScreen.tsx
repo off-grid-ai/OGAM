@@ -194,6 +194,13 @@ export const SettingsScreen: React.FC = () => {
             />
             {[
               {
+                icon: 'star',
+                title: 'What you use',
+                desc: 'What leads Home and model setup',
+                screen: 'WhatYouUse' as const,
+                testID: 'open-what-you-use',
+              },
+              {
                 icon: 'sliders',
                 title: 'Model settings',
                 desc: 'Instructions, replies, and speed',

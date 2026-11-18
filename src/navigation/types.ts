@@ -5,6 +5,7 @@ export type RootStackParamList = {
   OnboardingGroups: undefined;
   OnboardingFeatures: undefined;
   OnboardingGuide: undefined;
+  WhatYouUse: undefined;
   AutoSetup: undefined;
   AdvancedSetup: undefined;
   AnalyticsInfo: undefined;

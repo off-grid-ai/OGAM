@@ -30,6 +30,7 @@ import { useHomeScreen, HomeScreenNavigationProp } from './hooks/useHomeScreen';
 import { RecentConversations } from './components/RecentConversations';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { DesktopPromoCard } from './components/DesktopPromoCard';
+import { HomePicks } from './components/HomePicks';
 import { FeatureShowcase, showcaseFeatures } from './components/FeatureShowcase';
 import { useIsProActive } from '../../hooks/useIsProActive';
 import { useOpenProTools } from '../../hooks/useOpenProTools';
@@ -330,6 +331,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               ) : null}
             </View>
           </View>
+
+          {/* What you picked in onboarding leads Home, one tap from each. */}
+          <HomePicks />
 
           {/* Still while a sheet covers Home: nothing moves where you cannot see it (hand test 89). */}
           <FeatureShowcase

@@ -1,6 +1,7 @@
 import { OnboardingGroupsScreen } from '../screens/OnboardingPicks/OnboardingGroupsScreen';
 import { OnboardingFeaturesScreen } from '../screens/OnboardingPicks/OnboardingFeaturesScreen';
 import { OnboardingGuideScreen } from '../screens/OnboardingPicks/OnboardingGuideScreen';
+import { WhatYouUseScreen } from '../screens/OnboardingPicks/WhatYouUseScreen';
 import React, { useEffect } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -245,6 +246,7 @@ export const AppNavigator: React.FC = () => {
         <RootStack.Screen name="OnboardingGroups" component={OnboardingGroupsScreen} />
         <RootStack.Screen name="OnboardingFeatures" component={OnboardingFeaturesScreen} />
         <RootStack.Screen name="OnboardingGuide" component={OnboardingGuideScreen} />
+        <RootStack.Screen name="WhatYouUse" component={WhatYouUseScreen} />
         <RootStack.Screen name="AutoSetup" component={AutoSetupScreen} />
         <RootStack.Screen name="AdvancedSetup" component={AdvancedSetupScreen} />
         <RootStack.Screen name="Main" component={MainTabs} />
