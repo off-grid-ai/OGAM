@@ -1,5 +1,7 @@
-Off Grid AI is smoother on Android. Scrolling and moving between tabs feel quicker, and your battery lasts longer.
+Every Pro feature now has its own tab, with Boost, the desktop app and the browser extension a tap away.
 
-Tap a Pro feature on Home to see what it does before you decide.
+Smoother on Android: lighter scrolling, faster tabs and longer battery life.
+
+Ask the app anything about itself and the answer types out. Start fresh with New, or tap Ask more on any feature.
 
 If something goes wrong, tap the info icon and ask how to fix it.
