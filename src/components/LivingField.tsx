@@ -1,13 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, {
   css,
   useAnimatedProps,
+  useAnimatedReaction,
   useAnimatedStyle,
   useDerivedValue,
   useReducedMotion,
   useSharedValue,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import Svg, { Circle, Defs, LinearGradient, Mask, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { useTheme } from '../theme';
 import { ALIVE, LIVING_FIELD } from '../constants';
@@ -21,6 +23,10 @@ const GLOW_SIZE = 560;
 const HEADER_CLEAR = 156;
 const HEADER_FADE = 40;
 const ECHO_SIZE = 440;
+/** How long the field keeps breathing after the last touch or scroll before it rests. A breathing
+ *  field redraws the whole screen every frame, a third of a core on a mid-range Android phone, so it
+ *  rests while nobody touches the screen and breathes only on interaction (Android lag, 0.0.124). */
+const REST_AFTER_MS = 8000;
 
 /**
  * The living background, as desktop draws it: a dot lattice behind everything, an emerald light and
@@ -41,7 +47,9 @@ export const LivingField: React.FC<{
   const reducedMotion = useReducedMotion();
   const appActive = useAppActive();
   const alive = useAlive();
-  const breathing = active && appActive && !reducedMotion;
+  const canBreathe = active && appActive && !reducedMotion;
+  const awake = useAwake(alive, canBreathe);
+  const breathing = canBreathe && awake;
   const playState = breathing ? 'running' : 'paused';
 
   // Where the field sits in the window, so a finger's window position maps onto its dots.
@@ -84,13 +92,13 @@ export const LivingField: React.FC<{
 
   return (
     <View ref={fieldRef} onLayout={measure} style={styles.fill} pointerEvents="none" testID="living-field">
-      <Animated.View style={[styles.light, { left: -0.66 * width, top: -0.07 * height }, breath.glow, { animationPlayState: playState }]}>
+      <Animated.View renderToHardwareTextureAndroid style={[styles.light, { left: -0.66 * width, top: -0.07 * height }, breath.glow, { animationPlayState: playState }]}>
         <Light id="field-glow" size={GLOW_SIZE} color={colors.primary} stops={[0.26, 0.09]} />
       </Animated.View>
-      <Animated.View style={[styles.light, { left: 0.41 * width, top: 0.6 * height }, breath.echo, { animationPlayState: playState }]}>
+      <Animated.View renderToHardwareTextureAndroid style={[styles.light, { left: 0.41 * width, top: 0.6 * height }, breath.echo, { animationPlayState: playState }]}>
         <Light id="field-echo" size={ECHO_SIZE} color={colors.primaryDark} stops={[0.13, 0]} />
       </Animated.View>
-      <Animated.View style={[styles.lattice, { height: latticeHeight }, breath.lattice, { animationPlayState: playState }]}>
+      <Animated.View renderToHardwareTextureAndroid style={[styles.lattice, { height: latticeHeight }, breath.lattice, { animationPlayState: playState }]}>
        <Animated.View style={driftStyle}>
         <Svg width={width} height={latticeHeight}>
           <Defs>
@@ -185,6 +193,66 @@ const Light: React.FC<{ id: string; size: number; color: string; stops: [number,
     <Rect width={size} height={size} fill={`url(#${id})`} />
   </Svg>
 );
+
+/**
+ * Whether the field should be breathing: only after a touch or scroll, until REST_AFTER_MS after the
+ * last one. At rest nothing redraws. Touches and scrolls are read on the UI thread; JavaScript hears
+ * only the wake from rest, and the timer checks the last activity before it lets the field rest.
+ */
+function useAwake(alive: AliveSignals | null, enabled: boolean): boolean {
+  const [awake, setAwake] = useState(false);
+  const resting = useSharedValue(true);
+  const lastActivity = useSharedValue(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const restLater = useCallback(
+    (delay: number) => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => {
+        const quietFor = Date.now() - lastActivity.value;
+        if (quietFor < REST_AFTER_MS) {
+          restLater(REST_AFTER_MS - quietFor);
+          return;
+        }
+        resting.value = true;
+        setAwake(false);
+      }, delay);
+    },
+    [lastActivity, resting],
+  );
+  const wake = useCallback(() => {
+    resting.value = false;
+    setAwake(true);
+    restLater(REST_AFTER_MS);
+  }, [resting, restLater]);
+
+  // A hidden screen or a backgrounded app rests at once; it wakes again on the next touch.
+  useEffect(() => {
+    if (enabled) return undefined;
+    if (timer.current) clearTimeout(timer.current);
+    resting.value = true;
+    setAwake(false);
+    return undefined;
+  }, [enabled, resting]);
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
+
+  useAnimatedReaction(
+    () => (alive ? [alive.touchX.value, alive.touchY.value, alive.scrollY.value] : null),
+    (now, before) => {
+      if (!enabled || !now || !before) return;
+      if (now[0] === before[0] && now[1] === before[1] && now[2] === before[2]) return;
+      lastActivity.value = Date.now();
+      if (resting.value) {
+        resting.value = false;
+        scheduleOnRN(wake);
+      }
+    },
+    [alive, enabled, wake],
+  );
+  return awake;
+}
 
 /** Whether the app is in the foreground: the field rests while it is in the background. */
 function useAppActive(): boolean {
