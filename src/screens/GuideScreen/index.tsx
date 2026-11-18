@@ -8,7 +8,7 @@
  *
  * The words come from @offgrid/models, so this page and the desktop's guide never disagree.
  */
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   ScrollView,
@@ -17,6 +17,7 @@ import {
   View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useReducedMotion } from 'react-native-reanimated';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
 // The same keyboard view as Chat: edge-to-edge-aware on Android, real keyboard frame on iPhone.
@@ -26,6 +27,10 @@ import {
   GUIDE_STARTERS,
   guideAnswerParts,
   guideAnswerBlocks,
+  guideAnswerLength,
+  guideAnswerReveal,
+  guideTypingMs,
+  type GuideAnswerBlock,
   guideFlowAnswer,
   guideFlowAnswerById,
   guideGrounding,
@@ -204,36 +209,38 @@ const AskPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) => vo
             </View>
           ) : (
             <View key={i} style={styles.answer} testID="guide-answer">
-              {guideAnswerBlocks(guideAnswerParts(turn.content, topics)).map((block, j) =>
-                block.kind === 'text' ? (
-                  <MarkdownText key={j}>{block.text}</MarkdownText>
-                ) : block.kind === 'picks' ? (
-                  <View key={j} style={styles.picks}>
-                    {block.picks.map(pick => (
-                      <TouchableOpacity
-                        key={pick.id}
-                        style={styles.pickRow}
-                        onPress={() => { ask(pick.label, false, pick.id).catch(() => undefined); }}
-                        disabled={waiting}
-                        accessibilityRole="button"
-                        accessibilityLabel={pick.label}
-                        testID={`guide-pick-${pick.id}`}
-                      >
-                        <Text style={styles.pickText}>{pick.label}</Text>
-                        <Icon name="chevron-right" size={16} color={colors.textMuted} />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                ) : block.topics.length === 1 ? (
-                  <AnswerCard key={j} topic={block.topics[0]} onShow={onShow} />
-                ) : (
-                  <View key={j} style={styles.tileGrid}>
-                    {block.topics.map(t => (
-                      <AnswerTile key={t.id} topic={t} onShow={onShow} />
-                    ))}
-                  </View>
-                ),
-              )}
+              <TypedAnswer blocks={guideAnswerBlocks(guideAnswerParts(turn.content, topics))} onGrow={toEnd}>
+                {blocks => blocks.map((block, j) =>
+                  block.kind === 'text' ? (
+                    <MarkdownText key={j}>{block.text}</MarkdownText>
+                  ) : block.kind === 'picks' ? (
+                    <View key={j} style={styles.picks}>
+                      {block.picks.map(pick => (
+                        <TouchableOpacity
+                          key={pick.id}
+                          style={styles.pickRow}
+                          onPress={() => { ask(pick.label, false, pick.id).catch(() => undefined); }}
+                          disabled={waiting}
+                          accessibilityRole="button"
+                          accessibilityLabel={pick.label}
+                          testID={`guide-pick-${pick.id}`}
+                        >
+                          <Text style={styles.pickText}>{pick.label}</Text>
+                          <Icon name="chevron-right" size={16} color={colors.textMuted} />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : block.topics.length === 1 ? (
+                    <AnswerCard key={j} topic={block.topics[0]} onShow={onShow} />
+                  ) : (
+                    <View key={j} style={styles.tileGrid}>
+                      {block.topics.map(t => (
+                        <AnswerTile key={t.id} topic={t} onShow={onShow} />
+                      ))}
+                    </View>
+                  ),
+                )}
+              </TypedAnswer>
             </View>
           ),
         )}
@@ -304,6 +311,45 @@ const AskPane: React.FC<{ topics: MobileGuideTopic[]; onShow: (id: string) => vo
 };
 
 /** One topic among several: name and line, no picture, so a row of them lines up. */
+/**
+ * An answer types out once, when it arrives: text first, then its cards, in under a second
+ * (the pace is shared with the desktop guide). With Reduce Motion on it shows whole.
+ */
+const TypedAnswer: React.FC<{
+  blocks: GuideAnswerBlock<MobileGuideTopic>[];
+  onGrow: () => void;
+  children: (blocks: GuideAnswerBlock<MobileGuideTopic>[]) => React.ReactNode;
+}> = ({ blocks, onGrow, children }) => {
+  const total = guideAnswerLength(blocks);
+  const reducedMotion = useReducedMotion();
+  const [shown, setShown] = useState(reducedMotion ? total : 0);
+  const grow = useRef(onGrow);
+  grow.current = onGrow;
+  useEffect(() => {
+    if (reducedMotion) {
+      setShown(total);
+      return undefined;
+    }
+    const start = Date.now();
+    const ms = guideTypingMs(total);
+    let frame = 0;
+    let last = 0;
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - start) / ms);
+      // About 30 steps a second: smooth to read, half the re-renders.
+      if (t === 1 || Date.now() - last >= 33) {
+        last = Date.now();
+        setShown(Math.ceil(total * t));
+        grow.current();
+      }
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [total, reducedMotion]);
+  return <>{children(shown >= total ? blocks : guideAnswerReveal(blocks, shown))}</>;
+};
+
 const AnswerTile: React.FC<{ topic: MobileGuideTopic; onShow: (id: string) => void }> = ({ topic, onShow }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
