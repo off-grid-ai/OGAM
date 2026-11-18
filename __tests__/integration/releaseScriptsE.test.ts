@@ -64,6 +64,9 @@ beforeEach(() => {
   writeFileSync(join(mobile, 'fastlane/Fastfile'), '# Native build boundary\n');
   writeFileSync(join(mobile, 'ios/OffgridMobile.xcodeproj/project.pbxproj'), 'MARKETING_VERSION = 0.0.1;\nCURRENT_PROJECT_VERSION = 1;\n');
   writeFileSync(join(mobile, 'package.json'), `${JSON.stringify({ name: 'release-fixture', version: '0.0.1' }, null, 2)}\n`);
+  mkdirSync(join(mobile, 'release-notes'));
+  writeFileSync(join(mobile, 'release-notes/0.0.1.md'), 'Chats open right at your newest message.\n');
+  writeFileSync(join(mobile, 'release-notes/0.0.1.play.txt'), 'Chats open right at your newest message.\n');
   git(mobile, 'add', '.');
   git(mobile, 'commit', '-m', 'Release fixture');
   git(mobile, 'push');
@@ -90,6 +93,27 @@ it('M2: refuses a beta that is not an ancestor of origin/main', () => {
   const result = run('promote', ['v0.0.1-beta.1']);
   expect(result.status).not.toBe(0);
   expect(result.stdout).toContain('NOT on origin/main');
+  expect(git(join(root, 'mobile-origin.git'), 'tag', '-l', 'v0.0.1')).toBe('');
+});
+
+it('refuses to promote without the notes people will read, and tags nothing', () => {
+  git(mobile, 'rm', '-q', 'release-notes/0.0.1.play.txt');
+  git(mobile, 'commit', '-m', 'No Play notes');
+  git(mobile, 'tag', '-a', 'v0.0.1-beta.1', '-m', 'Beta\n\nBuild: 100');
+  git(mobile, 'push', '--tags', 'origin', 'main');
+  const result = run('promote', ['v0.0.1-beta.1']);
+  expect(result.status).not.toBe(0);
+  expect(result.stdout).toContain('Missing release-notes/0.0.1.play.txt');
+  expect(git(join(root, 'mobile-origin.git'), 'tag', '-l', 'v0.0.1')).toBe('');
+});
+
+it('refuses store notes that are a commit list, and tags nothing', () => {
+  save(mobile, 'release-notes/0.0.1.md', '- Guide: a new question clears an earlier failure (708f05f62)\n');
+  git(mobile, 'tag', '-a', 'v0.0.1-beta.1', '-m', 'Beta\n\nBuild: 100');
+  git(mobile, 'push', '--tags', 'origin', 'main');
+  const result = run('promote', ['v0.0.1-beta.1']);
+  expect(result.status).not.toBe(0);
+  expect(result.stdout).toContain('commit hashes');
   expect(git(join(root, 'mobile-origin.git'), 'tag', '-l', 'v0.0.1')).toBe('');
 });
 
