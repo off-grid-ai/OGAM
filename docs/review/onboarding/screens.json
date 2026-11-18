@@ -1,0 +1,168 @@
+[
+ {
+  "id": "slides",
+  "name": "The slides",
+  "group": "Mobile onboarding",
+  "what": "The welcome slides, unchanged. Skip and the last Next now lead to the picks.",
+  "file": "screens/v/slides-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/slides-1.jpg",
+    "clip": "screens/v/slides-1.mp4"
+   }
+  ],
+  "clip": "screens/v/slides-1.mp4"
+ },
+ {
+  "id": "groups",
+  "name": "What do you want to do?",
+  "group": "Mobile onboarding",
+  "what": "Pick the jobs you want. Chat is picked to start.",
+  "file": "screens/v/groups-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/groups-1.jpg",
+    "clip": "screens/v/groups-1.mp4"
+   }
+  ],
+  "clip": "screens/v/groups-1.mp4"
+ },
+ {
+  "id": "features",
+  "name": "Which ones?",
+  "group": "Mobile onboarding",
+  "what": "The features in each picked group. With Pro already active there is no Get Pro offer.",
+  "file": "screens/v/features-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/features-1.jpg",
+    "clip": "screens/v/features-1.mp4"
+   }
+  ],
+  "clip": "screens/v/features-1.mp4"
+ },
+ {
+  "id": "guide",
+  "name": "How it works",
+  "group": "Mobile onboarding",
+  "what": "One card per pick. Tap to see it; then set up the models.",
+  "file": "screens/v/guide-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/guide-1.jpg",
+    "clip": "screens/v/guide-1.mp4"
+   }
+  ],
+  "clip": "screens/v/guide-1.mp4"
+ },
+ {
+  "id": "guide-topic",
+  "name": "How it works: Images",
+  "group": "Mobile onboarding",
+  "what": "A pick opens its guide page, with a way to start right away.",
+  "file": "screens/v/guide-topic-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/guide-topic-1.jpg",
+    "clip": "screens/v/guide-topic-1.mp4"
+   }
+  ],
+  "clip": "screens/v/guide-topic-1.mp4"
+ },
+ {
+  "id": "setup",
+  "name": "Model setup",
+  "group": "Mobile onboarding",
+  "what": "Model setup comes checked for the picks: text, image and speech here.",
+  "file": "screens/v/setup-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/setup-1.jpg",
+    "clip": "screens/v/setup-1.mp4"
+   }
+  ],
+  "clip": "screens/v/setup-1.mp4"
+ },
+ {
+  "id": "home",
+  "name": "Home: your picks",
+  "group": "Mobile onboarding",
+  "what": "Home leads with what you picked.",
+  "file": "screens/v/home-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/home-1.jpg",
+    "clip": "screens/v/home-1.mp4"
+   }
+  ],
+  "clip": "screens/v/home-1.mp4"
+ },
+ {
+  "id": "what-you-use",
+  "name": "Settings: What you use",
+  "group": "Mobile onboarding",
+  "what": "Change the picks any time. Home follows at once.",
+  "file": "screens/v/what-you-use-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/what-you-use-1.jpg",
+    "clip": "screens/v/what-you-use-1.mp4"
+   }
+  ],
+  "clip": "screens/v/what-you-use-1.mp4"
+ },
+ {
+  "id": "home-updated",
+  "name": "Home after a change",
+  "group": "Mobile onboarding",
+  "what": "Adding Ask your documents put Projects on Home.",
+  "file": "screens/v/home-updated-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/home-updated-1.jpg"
+   }
+  ]
+ },
+ {
+  "id": "sync-rows",
+  "name": "Sync: saved devices",
+  "group": "Mobile sync",
+  "what": "Each icon sits on its name line; the status dot sits on the first status line, under the icon.",
+  "file": "screens/v/sync-rows-1.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "On iPhone 17 Pro Max",
+    "at": "2026-11-18T14:15:00Z",
+    "file": "screens/v/sync-rows-1.jpg"
+   }
+  ]
+ }
+]

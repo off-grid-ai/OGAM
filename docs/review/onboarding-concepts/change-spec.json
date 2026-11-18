@@ -1,142 +1,151 @@
 {
- "title": "Onboarding picks",
- "features": [
-  "onboarding",
-  "guide"
- ],
- "concepts": [
-  "onboarding",
-  "guide"
- ],
- "reviews": [
-  {
-   "dir": "desktop/docs/review/onboarding",
-   "surface": "desktop",
-   "platform": "Mac",
-   "features": [
+  "title": "Onboarding picks",
+  "features": [
     "onboarding",
     "guide"
-   ]
-  }
- ],
- "require": {
-  "onboarding": [
-   "Mac",
-   "iPhone",
-   "Android"
-  ]
- },
- "calls": [
-  {
-   "id": "welcome-kept",
-   "screen": "desktop-welcome",
-   "surface": "desktop",
-   "kind": "UX \u00b7 flow",
-   "title": "The welcome screen stays before the picks",
-   "text": "The concept opened on What do you want to do?; the build keeps the existing welcome first.",
-   "what": "Onboarding.tsx shows the lamp welcome as step 1, then groups, details and how it works.",
-   "risk": "One more Continue before the first choice.",
-   "rec": "Keep it: it is today's first impression and says nothing leaves this computer.",
-   "recommended": "Keep the welcome",
-   "options": [
-    "Keep the welcome",
-    "Start on What do you want to do?"
-   ],
-   "files": [
-    "desktop/src/renderer/src/components/Onboarding.tsx"
-   ]
+  ],
+  "concepts": [
+    "onboarding",
+    "guide"
+  ],
+  "reviews": [
+    {
+      "dir": "desktop/docs/review/onboarding",
+      "surface": "desktop",
+      "platform": "Mac",
+      "features": [
+        "onboarding",
+        "guide"
+      ]
+    },
+    {
+      "dir": "mobile/docs/review/onboarding",
+      "surface": "mobile",
+      "platform": "iPhone",
+      "features": [
+        "onboarding",
+        "guide"
+      ]
+    }
+  ],
+  "require": {
+    "onboarding": [
+      "Mac",
+      "iPhone",
+      "Android"
+    ]
   },
-  {
-   "id": "pro-pitch-per-pick",
-   "screen": "desktop-how-meetings",
-   "surface": "desktop",
-   "kind": "Product \u00b7 Pro",
-   "title": "Pro is offered per pick, not as a grid for everyone",
-   "text": "The old Pro step listed eight Pro features to every new user. Now a picked Pro feature shows the price, Get Pro and Enter license key under it.",
-   "what": "GuideStep puts ProOffer under any Pro topic; the details step shows the license key box when a Pro feature is picked.",
-   "risk": "Someone who picks only free features never sees what Pro adds during setup. The Pro tab and the guide still show it.",
-   "rec": "Keep per pick: it answers what they asked for and stays quiet otherwise.",
-   "recommended": "Per pick only",
-   "options": [
-    "Per pick only",
-    "Add one line on Pro to the groups step"
-   ],
-   "files": [
-    "desktop/src/renderer/src/components/onboarding/GuideStep.tsx",
-    "desktop/src/renderer/src/components/onboarding/PickSteps.tsx"
-   ]
-  },
-  {
-   "id": "linux-pro-topics",
-   "screen": "desktop-how-chat",
-   "surface": "desktop",
-   "kind": "Platform \u00b7 guard",
-   "title": "A pick this platform lacks still shows (done)",
-   "text": "Today every Pro feature runs on macOS, Windows and Linux, so no pick is missing. A future feature that skips a platform would have vanished from Your picks.",
-   "what": "Done (f0e44b660): such a pick now shows with the line Coming to this computer soon, plus Get Pro.",
-   "risk": "None today; this guards the next feature that ships on fewer platforms.",
-   "rec": "Keep the guard.",
-   "recommended": "Keep the guard",
-   "options": [
-    "Keep the guard",
-    "Remove it"
-   ],
-   "files": [
-    "desktop/src/renderer/src/components/guide/guideKnowledge.ts",
-    "desktop/src/renderer/src/components/FeatureGuide.tsx"
-   ]
-  },
-  {
-   "id": "c8-video-player",
-   "screen": "desktop-how-chat",
-   "surface": "desktop",
-   "kind": "Engineering \u00b7 C8",
-   "title": "One video player for guide clips",
-   "text": "Desktop has the chat preview player in core and Video Studio's fuller player in Pro. The guide is core.",
-   "what": "Guide clips (step 15) need play, scrub, speed and full screen.",
-   "risk": "Two players drift; the guide cannot use the Pro one.",
-   "rec": "Move the fuller player into core; Video Studio, chat and the guide all use it.",
-   "recommended": "Move the full player to core",
-   "options": [
-    "Move the full player to core",
-    "Guide uses the chat preview as it is"
-   ],
-   "files": []
-  },
-  {
-   "id": "c9-voiceover-files",
-   "screen": "desktop-how-chat",
-   "surface": "desktop",
-   "kind": "Engineering \u00b7 C9",
-   "title": "Where voice-over audio lives",
-   "text": "Tour voice-overs are made on this Mac with Kokoro.",
-   "what": "The narration text and its hash live in shared; the audio files are generated into each app's assets.",
-   "risk": "A shared copy of audio loads differently in Vite and Metro: a build risk for little gain.",
-   "rec": "Same files written into each app; text and hash stay in shared.",
-   "recommended": "Per app, text in shared",
-   "options": [
-    "Per app, text in shared",
-    "One copy in the shared package"
-   ],
-   "files": []
-  },
-  {
-   "id": "c10-voice-language",
-   "screen": "desktop-how-chat",
-   "surface": "desktop",
-   "kind": "Product \u00b7 C10",
-   "title": "Voice-over voice and languages",
-   "text": "You chose all 12 app languages in one release.",
-   "what": "Tours speak in one Kokoro voice.",
-   "risk": "Audio in 12 languages is 12 times the files and checks; English-only audio in a German app feels half done.",
-   "rec": "One English voice you pick from 3 samples, with the captions translated in all 12 languages.",
-   "recommended": "English voice, translated captions",
-   "options": [
-    "English voice, translated captions",
-    "Voice in every language"
-   ],
-   "files": []
-  }
- ],
- "cleared": []
+  "calls": [
+    {
+      "id": "welcome-kept",
+      "screen": "desktop-welcome",
+      "surface": "desktop",
+      "kind": "UX \u00b7 flow",
+      "title": "The welcome screen stays before the picks",
+      "text": "The concept opened on What do you want to do?; the build keeps the existing welcome first.",
+      "what": "Onboarding.tsx shows the lamp welcome as step 1, then groups, details and how it works.",
+      "risk": "One more Continue before the first choice.",
+      "rec": "Keep it: it is today's first impression and says nothing leaves this computer.",
+      "recommended": "Keep the welcome",
+      "options": [
+        "Keep the welcome",
+        "Start on What do you want to do?"
+      ],
+      "files": [
+        "desktop/src/renderer/src/components/Onboarding.tsx"
+      ]
+    },
+    {
+      "id": "pro-pitch-per-pick",
+      "screen": "desktop-how-meetings",
+      "surface": "desktop",
+      "kind": "Product \u00b7 Pro",
+      "title": "Pro is offered per pick, not as a grid for everyone",
+      "text": "The old Pro step listed eight Pro features to every new user. Now a picked Pro feature shows the price, Get Pro and Enter license key under it.",
+      "what": "GuideStep puts ProOffer under any Pro topic; the details step shows the license key box when a Pro feature is picked.",
+      "risk": "Someone who picks only free features never sees what Pro adds during setup. The Pro tab and the guide still show it.",
+      "rec": "Keep per pick: it answers what they asked for and stays quiet otherwise.",
+      "recommended": "Per pick only",
+      "options": [
+        "Per pick only",
+        "Add one line on Pro to the groups step"
+      ],
+      "files": [
+        "desktop/src/renderer/src/components/onboarding/GuideStep.tsx",
+        "desktop/src/renderer/src/components/onboarding/PickSteps.tsx"
+      ]
+    },
+    {
+      "id": "linux-pro-topics",
+      "screen": "desktop-how-chat",
+      "surface": "desktop",
+      "kind": "Platform \u00b7 guard",
+      "title": "A pick this platform lacks still shows (done)",
+      "text": "Today every Pro feature runs on macOS, Windows and Linux, so no pick is missing. A future feature that skips a platform would have vanished from Your picks.",
+      "what": "Done (f0e44b660): such a pick now shows with the line Coming to this computer soon, plus Get Pro.",
+      "risk": "None today; this guards the next feature that ships on fewer platforms.",
+      "rec": "Keep the guard.",
+      "recommended": "Keep the guard",
+      "options": [
+        "Keep the guard",
+        "Remove it"
+      ],
+      "files": [
+        "desktop/src/renderer/src/components/guide/guideKnowledge.ts",
+        "desktop/src/renderer/src/components/FeatureGuide.tsx"
+      ]
+    },
+    {
+      "id": "c8-video-player",
+      "screen": "desktop-how-chat",
+      "surface": "desktop",
+      "kind": "Engineering \u00b7 C8",
+      "title": "One video player for guide clips",
+      "text": "Desktop has the chat preview player in core and Video Studio's fuller player in Pro. The guide is core.",
+      "what": "Guide clips (step 15) need play, scrub, speed and full screen.",
+      "risk": "Two players drift; the guide cannot use the Pro one.",
+      "rec": "Move the fuller player into core; Video Studio, chat and the guide all use it.",
+      "recommended": "Move the full player to core",
+      "options": [
+        "Move the full player to core",
+        "Guide uses the chat preview as it is"
+      ],
+      "files": []
+    },
+    {
+      "id": "c9-voiceover-files",
+      "screen": "desktop-how-chat",
+      "surface": "desktop",
+      "kind": "Engineering \u00b7 C9",
+      "title": "Where voice-over audio lives",
+      "text": "Tour voice-overs are made on this Mac with Kokoro.",
+      "what": "The narration text and its hash live in shared; the audio files are generated into each app's assets.",
+      "risk": "A shared copy of audio loads differently in Vite and Metro: a build risk for little gain.",
+      "rec": "Same files written into each app; text and hash stay in shared.",
+      "recommended": "Per app, text in shared",
+      "options": [
+        "Per app, text in shared",
+        "One copy in the shared package"
+      ],
+      "files": []
+    },
+    {
+      "id": "c10-voice-language",
+      "screen": "desktop-how-chat",
+      "surface": "desktop",
+      "kind": "Product \u00b7 C10",
+      "title": "Voice-over voice and languages",
+      "text": "You chose all 12 app languages in one release.",
+      "what": "Tours speak in one Kokoro voice.",
+      "risk": "Audio in 12 languages is 12 times the files and checks; English-only audio in a German app feels half done.",
+      "rec": "One English voice you pick from 3 samples, with the captions translated in all 12 languages.",
+      "recommended": "English voice, translated captions",
+      "options": [
+        "English voice, translated captions",
+        "Voice in every language"
+      ],
+      "files": []
+    }
+  ],
+  "cleared": []
 }
