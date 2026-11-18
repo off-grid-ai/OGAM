@@ -31,7 +31,6 @@ import {
   WEDNESDAY_URL,
 } from '../constants';
 import { callHook, HOOKS } from '../bootstrap/hookRegistry';
-import { useAppStore } from '../stores';
 import { RootStackParamList } from '../navigation/types';
 
 type OnboardingScreenProps = {
@@ -173,7 +172,6 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
-  const setOnboardingComplete = useAppStore(s => s.setOnboardingComplete);
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
@@ -192,9 +190,10 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
     completeOnboarding();
   };
 
+  // The slides lead into the picks: what you want to do, which ones, how it works, then setup.
+  // Onboarding counts as done once the picks are finished or skipped there.
   const completeOnboarding = () => {
-    setOnboardingComplete(true);
-    navigation.replace('AutoSetup');
+    navigation.replace('OnboardingGroups');
   };
 
   const renderSlide = ({

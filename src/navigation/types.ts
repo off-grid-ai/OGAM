@@ -2,6 +2,9 @@ import { NavigatorScreenParams } from '@react-navigation/native';
 
 export type RootStackParamList = {
   Onboarding: undefined;
+  OnboardingGroups: undefined;
+  OnboardingFeatures: undefined;
+  OnboardingGuide: undefined;
   AutoSetup: undefined;
   AdvancedSetup: undefined;
   AnalyticsInfo: undefined;

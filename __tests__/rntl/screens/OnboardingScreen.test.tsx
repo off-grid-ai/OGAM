@@ -18,7 +18,7 @@ import { useAppStore } from '../../../src/stores/appStore';
 import { ONBOARDING_SLIDES } from '../../../src/constants';
 
 const Stack = createNativeStackNavigator();
-const AutoSetupStub = () => <Text>AutoSetup screen</Text>;
+const GroupsStub = () => <Text>What do you want to do?</Text>;
 const LAST = ONBOARDING_SLIDES.length - 1;
 
 function mount() {
@@ -27,7 +27,7 @@ function mount() {
     <NavigationContainer ref={ref}>
       <Stack.Navigator>
         <Stack.Screen name="Onboarding" component={OnboardingScreen as React.ComponentType<any>} />
-        <Stack.Screen name="AutoSetup" component={AutoSetupStub} />
+        <Stack.Screen name="OnboardingGroups" component={GroupsStub} />
       </Stack.Navigator>
     </NavigationContainer>,
   );
@@ -83,14 +83,14 @@ describe('OnboardingScreen', () => {
     expect(pager(view).props.removeClippedSubviews).toBe(false);
   });
 
-  it('Skip finishes onboarding and opens model setup', async () => {
+  it('Skip leaves the slides for the picks; onboarding is done only once the picks are', async () => {
     const { view, route } = mount();
     expect(route()).toBe('Onboarding');
 
     fireEvent.press(view.getByText('Skip'));
 
-    await waitFor(() => expect(route()).toBe('AutoSetup'));
-    expect(useAppStore.getState().hasCompletedOnboarding).toBe(true);
+    await waitFor(() => expect(route()).toBe('OnboardingGroups'));
+    expect(useAppStore.getState().hasCompletedOnboarding).toBe(false);
   });
 
   it('swiping to the last slide turns Next into Get Started and hides Skip', async () => {
@@ -116,14 +116,14 @@ describe('OnboardingScreen', () => {
     expect(useAppStore.getState().hasCompletedOnboarding).toBe(false);
   });
 
-  it('Get Started on the last slide finishes onboarding and opens model setup', async () => {
+  it('Get Started on the last slide opens the picks', async () => {
     const { view, route } = mount();
     await swipeTo(view, LAST);
 
     fireEvent.press(view.getByTestId('onboarding-next'));
 
-    await waitFor(() => expect(route()).toBe('AutoSetup'));
-    expect(useAppStore.getState().hasCompletedOnboarding).toBe(true);
+    await waitFor(() => expect(route()).toBe('OnboardingGroups'));
+    expect(useAppStore.getState().hasCompletedOnboarding).toBe(false);
   });
 
   it('"made with love by Wednesday" opens wednesday.is', () => {
