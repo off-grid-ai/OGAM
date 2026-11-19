@@ -67,7 +67,7 @@ describe('the first chat model on its way', () => {
 
     // The message waits for the model, said in words, and nothing is generated yet.
     await h.rtl.waitFor(() => expect(view.getByText('1 queued')).toBeTruthy());
-    expect(view.getByTestId('queue-waiting-label').props.children).toMatch(/^Sends when .+ is ready · 40%$/);
+    expect(view.getByTestId('queue-waiting-label').props.children).toMatch(/^40% · sends when .+ is ready$/);
     expect(view.queryByTestId('queued-send-now-0')).toBeNull();
     expect(h.boundary.llama!.calls.completion).toHaveLength(0);
 

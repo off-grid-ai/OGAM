@@ -6,7 +6,7 @@ import type { ArrivingChatModel } from '../../services/arrivingChatModel';
 export function waitingLabel(model: ArrivingChatModel): string {
   return model.failed
     ? `${model.name} stopped downloading`
-    : `Sends when ${model.name} is ready · ${Math.round(model.progress * 100)}%`;
+    : `${Math.round(model.progress * 100)}% · sends when ${model.name} is ready`;
 }
 
 /** The queue as one chat shows it: only the messages written in that chat. */
