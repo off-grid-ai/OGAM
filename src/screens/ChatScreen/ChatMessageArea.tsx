@@ -25,6 +25,7 @@ import { generationService } from '../../services';
 import type { QueueActions } from '../../components/ChatInput/Toolbar';
 import { RestyleSheet } from '../../components/MediaStyles/RestyleSheet';
 import { EmptyChat, ImageProgressIndicator, starterMode } from './ChatScreenComponents';
+import { retryArrivingChatModel } from '../../services/arrivingChatModel';
 import type { ImageModeState } from '../../types';
 import { getPlaceholderText, useChatScreen } from './useChatScreen';
 import { createStyles } from './styles';
@@ -241,6 +242,9 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
     onRemove: id => generationService.removeFromQueue(id),
     onResume: () => generationService.resumeQueue(),
     onClear: () => generationService.clearQueue(),
+    onRetryModel: () => {
+      if (chat.arrivingTextModel) retryArrivingChatModel(chat.arrivingTextModel).catch(() => undefined);
+    },
   };
   const assistantAvailability = useAssistantToolAvailability();
   // extToolCount is the live MCP tool count (the email/calendar extension reports 0
@@ -350,13 +354,15 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
               activeProject={chat.activeProject}
               setShowProjectSelector={chat.setShowProjectSelector}
               isRemote={chat.activeModelInfo?.isRemote}
+              arriving={chat.arrivingTextModel}
+              onRetryArriving={queueActions.onRetryModel}
               mode={starterMode(composerMode)}
               // Text starters need a text model: with only an image model a tap drew a picture. Picture and clip
               // starters show only once the composer turned that mode on, which checked its model.
               onStarter={
                 composerMode === 'force' || composerMode === 'video'
                   ? prompt => chat.handleSend(prompt, undefined, composerMode)
-                  : chat.hasTextModel && !chat.isModelLoading
+                  : (chat.hasTextModel || chat.arrivingTextModel) && !chat.isModelLoading
                     ? prompt => chat.handleSend(prompt)
                     : undefined
               }
@@ -546,7 +552,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           onAssistantSelectedChange={onAssistantSelectedChange}
           onSend={chat.handleSend}
           onStop={chat.handleStop}
-          disabled={!chat.hasActiveModel}
+          disabled={!chat.hasActiveModel && !chat.arrivingTextModel}
           isGenerating={
             chat.isGeneratingForThisConversation || chat.isStreaming || chat.isThinking
           }
@@ -559,7 +565,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           queue={chat.queue}
           queueActions={queueActions}
           placeholder={getPlaceholderText({
-            hasModel: chat.hasActiveModel,
+            hasModel: chat.hasActiveModel || !!chat.arrivingTextModel,
             isModelLoading: chat.isModelLoading,
             supportsVision: chat.supportsVision,
             imageOnly: chat.imageModelLoaded && !chat.hasTextModel,

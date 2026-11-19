@@ -58,6 +58,7 @@ import { useGetPro } from '../../hooks/useGetPro';
 import { boostPromoVisible } from '@offgrid/models';
 import { boostPromo } from '../../services/analytics/analytics';
 import { useOpenBoost } from '../../hooks/useOpenBoost';
+import { useArrivingChatModel } from '../../services/arrivingChatModel';
 
 /** The private cloud offer is one of Home's cards: counted shown with Home, like the Models card with Models. */
 const BoostShownOnFocus: React.FC<{ shown: boolean }> = ({ shown }) => {
@@ -140,6 +141,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     continueChat,
     handleDeleteConversation,
   } = useHomeScreen(navigation);
+  const arrivingChat = useArrivingChatModel();
 
   // ── Collapsed Models control ──────────────────────────────────────────────
   const [modelsManagerOpen, setModelsManagerOpen] = React.useState(false);
@@ -318,7 +320,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               <Text style={styles.subtitle} textBreakStrategy="balanced">
                 Your chats and files never leave your device.
               </Text>
-              {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? (
+              {/* The first chat model on its way counts: its chat opens now and answers when it arrives. */}
+              {activeTextModelId || arrivingChat || activeImageModelId || remoteLabels.video || videoLabel ? (
                 <Button
                   title="New chat"
                   variant="hero"

@@ -15,6 +15,7 @@ import { AnimatedEntry } from '../../components/AnimatedEntry';
 import { createStyles } from './styles';
 import { useTheme } from '../../theme';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import type { ArrivingChatModel } from '../../services/arrivingChatModel';
 import { chatTitle, NEW_CHAT_TITLE } from '../../utils/chatTitle';
 
 type StylesType = ReturnType<typeof createStyles>;
@@ -189,6 +190,13 @@ export const ChatHeader: React.FC<{
   </View>
 );
 
+/** What an empty chat says while its first model downloads. */
+export function arrivingHint(model: ArrivingChatModel): string {
+  return model.failed
+    ? `${model.name} stopped downloading.`
+    : `${model.name} is downloading: ${Math.round(model.progress * 100)}%. Ask now. It answers when it is ready.`;
+}
+
 export const EmptyChat: React.FC<{
   styles: StylesType;
   colors: ColorsType;
@@ -201,7 +209,11 @@ export const EmptyChat: React.FC<{
   onStarter?: (prompt: string) => void;
   /** What the composer is making; its starters match. */
   mode?: StarterMode;
-}> = ({ styles, colors, activeModel, activeModelName, activeProject, setShowProjectSelector, isRemote, onStarter, mode = 'chat' }) => {
+  /** The first chat model while it downloads: the person can ask now. */
+  arriving?: ArrivingChatModel | null;
+  /** Starts the first chat model's stopped download again. */
+  onRetryArriving?: () => void;
+}> = ({ styles, colors, activeModel, activeModelName, activeProject, setShowProjectSelector, isRemote, onStarter, mode = 'chat', arriving, onRetryArriving }) => {
   const starters = STARTERS[mode];
   return (
   <View style={styles.emptyChat} testID={`empty-chat-${mode}`}>
@@ -216,12 +228,24 @@ export const EmptyChat: React.FC<{
     <AnimatedEntry index={2} staggerMs={60}>
       <Text style={styles.emptyChatText} testID="empty-chat-hint">
         {/* With no model chosen yet, no name: never "Unknown". */}
-        {starters.hint ??
-          (activeModelName || activeModel?.name
+        {starters.hint ?? (arriving && mode === 'chat'
+          ? arrivingHint(arriving)
+          : activeModelName || activeModel?.name
             ? `Ask anything. ${activeModelName || activeModel?.name} answers.`
             : 'Ask anything.')}
       </Text>
     </AnimatedEntry>
+    {arriving?.failed && onRetryArriving && (
+      <TouchableOpacity
+        style={[styles.starterChip, styles.starterChipLast]}
+        onPress={onRetryArriving}
+        accessibilityRole="button"
+        accessibilityLabel={`Retry downloading ${arriving.name}`}
+        testID="empty-chat-retry-download"
+      >
+        <Text style={styles.starterText}>Retry download</Text>
+      </TouchableOpacity>
+    )}
     {onStarter && (
       <AnimatedEntry index={3} staggerMs={60}>
         {/* A new person sees what they can ask: one tap sends it. */}

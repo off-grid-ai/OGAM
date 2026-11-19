@@ -237,6 +237,8 @@ export const ChatScreen: React.FC = () => {
   );
   if (
     !chat.hasActiveModel &&
+    // The first chat model on its way opens the chat: ask now, it answers when it arrives.
+    !chat.arrivingTextModel &&
     chat.displayMessages.length === 0 &&
     !chat.isModelLoading
   ) {

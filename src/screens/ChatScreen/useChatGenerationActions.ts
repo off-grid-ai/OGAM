@@ -52,6 +52,7 @@ import {
   GenerationMeta,
 } from '../../types';
 import logger from '../../utils/logger';
+import type { ArrivingChatModel } from '../../services/arrivingChatModel';
 import { featureUsed, messageSent, track } from '../../services/analytics/analytics';
 import { deleteChatImages, imagesNotDeletedAlert } from '../../services/chatImageCleanup';
 import { ModelReadyOutcome, ensureReadyOrAlert } from './modelReadiness';
@@ -119,6 +120,12 @@ export type GenerationDeps = {
   ensureTextModelForChat: () => Promise<boolean>;
   /** Stash a message to replay after the user picks a text model. */
   setPendingMessage?: (text: string, attachments?: MediaAttachment[]) => void;
+  /** The chat's deps after its next render. A turn resumed after a load reads these: the load changed
+   *  the model (a smaller one taken in place of a refused one, or the selection set on load), and the
+   *  deps the turn started with, or the last render's, can name the old one. */
+  nextRender?: () => Promise<GenerationDeps>;
+  /** The first chat model while it downloads, with none chosen: a chat message waits for it. */
+  arrivingTextModel?: ArrivingChatModel | null;
   /** Stamp the modality on an EXISTING user message (resend); a new send carries it on addMessage. */
   updateMessageTurnKind?: (
     conversationId: string,
@@ -776,7 +783,7 @@ export async function startGenerationFn(
     !deps.activeModelInfo?.isRemote &&
     deps.activeModel &&
     !(await ensureReadyOrAlert(deps, 'startGeneration', () => {
-      void startGenerationFn(deps, call);
+      void (deps.nextRender?.() ?? Promise.resolve(deps)).then(d => startGenerationFn(d, call));
     }))
   ) {
     generationSession.end('not-ready');
@@ -1143,12 +1150,38 @@ function reportMessageSent(attachments: MediaAttachment[] | undefined): void {
   });
   if (hasImage) featureUsed('vision');
 }
+/** A new chat for the first message: it takes the draft's styles and becomes the open chat. */
+function startConversation(deps: GenerationDeps, modelId: string): string {
+  const conversationId = deps.createConversation(modelId, undefined, deps.pendingProjectId);
+  adoptDraftStyles(conversationId);
+  deps.setActiveConversation(conversationId);
+  return conversationId;
+}
 export async function handleSendFn(
   deps: GenerationDeps,
   call: SendCall,
 ): Promise<void> {
   const { text, attachments, imageMode = 'auto', assistantEnabled, startGeneration } = call;
   abortPreload(); // user acted — stop background warming so it can't block them
+  // The first chat model is still downloading: the message waits in this chat's queue and goes when
+  // the model arrives. A picture or a clip the person asked for goes the usual way.
+  const arriving = deps.arrivingTextModel;
+  if (arriving && deps.hasTextModel === false && imageMode !== 'force' && imageMode !== 'video') {
+    const conversationId = deps.activeConversationId || startConversation(deps, arriving.modelId);
+    reportMessageSent(attachments);
+    generationService.enqueueMessage({
+      id: nextMsgId(),
+      conversationId,
+      text,
+      attachments,
+      messageText: text,
+      imageMode,
+      assistantEnabled,
+      styleIds: { image: chatStyleId(conversationId, 'image'), video: chatStyleId(conversationId, 'video') },
+      waitsForModel: true,
+    });
+    return;
+  }
   if (!deps.hasActiveModel) {
     deps.setAlertState(
       showAlert('No Model Selected', 'Please select a model first.'),
@@ -1159,21 +1192,15 @@ export async function handleSendFn(
   if (blockedImageForNonVisionModel(deps, attachments)) return;
   callHook(HOOKS.audioStop); // stop stale TTS on the new turn (not a streaming-flag effect — see useChatScreen)
   await modelResidencyManager.reclaimSttForGeneration(); // free idle Whisper before LLM+TTS so they don't OOM on tight devices
-  let targetConversationId = deps.activeConversationId;
-  if (!targetConversationId) {
-    const fallbackModelId =
+  const targetConversationId =
+    deps.activeConversationId ||
+    startConversation(
+      deps,
       deps.activeModelInfo?.modelId ||
-      deps.activeImageModel?.id ||
-      useAppStore.getState().activeVideoModelId ||
-      'video';
-    targetConversationId = deps.createConversation(
-      fallbackModelId!,
-      undefined,
-      deps.pendingProjectId,
+        deps.activeImageModel?.id ||
+        useAppStore.getState().activeVideoModelId ||
+        'video',
     );
-    adoptDraftStyles(targetConversationId);
-    deps.setActiveConversation(targetConversationId);
-  }
   reportMessageSent(attachments);
   // Cross-modality serialization: queue if any generation is running (routed later).
   if (
@@ -1355,7 +1382,7 @@ export async function regenerateResponseFn(
     !deps.activeModelInfo?.isRemote &&
     deps.activeModel &&
     !(await ensureReadyOrAlert(deps, 'regenerate', () => {
-      void regenerateResponseFn(deps, call);
+      void (deps.nextRender?.() ?? Promise.resolve(deps)).then(d => regenerateResponseFn(d, call));
     }))
   ) {
     generationSession.end('not-ready');

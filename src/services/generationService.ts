@@ -68,6 +68,8 @@ export interface QueuedMessage {
   now?: boolean;
   /** The chat's picture and clip styles when it was sent, so a style change while it waits cannot change it. */
   styleIds?: MediaStyleIds;
+  /** Sent while the first chat model was still downloading: it goes once a chat model is chosen. */
+  waitsForModel?: boolean;
 }
 
 /**
@@ -706,6 +708,11 @@ class GenerationService {
     }
     if (chatQueueHeld(this.state.queueHold, queue)) {
       logger.log(`[QUEUE-SM] held (${this.state.queueHold}) with ${queue.length} queued`);
+      return;
+    }
+    // A message sent while the first chat model downloads waits for it: sent before, it would find no model.
+    if (queue.some(entry => entry.waitsForModel) && useAppStore.getState().activeModelId === null) {
+      logger.log('[QUEUE-SM] waiting for the chat model to arrive');
       return;
     }
     const { batch: all, rest } = takeNextQueuedTurn(queue);
