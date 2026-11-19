@@ -15,5 +15,7 @@
 		<key>EXExtensionPointIdentifier</key>
 		<string>com.apple.background-asset-downloader-extension</string>
 	</dict>
+	<key>RCTNewArchEnabled</key>
+	<true/>
 </dict>
 </plist>
