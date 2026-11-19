@@ -1,0 +1,10 @@
+[
+ {"id": "first-open", "name": "First open of the side panel", "group": "Extension onboarding", "step": "welcome",
+  "what": "Today: nothing opens on install. The first open of the side panel is Settings with \"Not paired\" and \"Pair with desktop\". It never says what the extension does, what you can pick, or that it needs Off Grid AI on your computer with Pro.",
+  "file": "screens/v/first-open-0.jpg",
+  "versions": [{"v": 0, "label": "Before: on main", "at": "2026-11-19T07:00:00Z", "file": "screens/v/first-open-0.jpg"}]},
+ {"id": "no-desktop", "name": "No desktop running", "group": "Extension onboarding",
+  "what": "Today, with no desktop app found: \"Start Off Grid AI Desktop\" and a technical address. No link to get the app if you do not have it.",
+  "file": "screens/v/no-desktop-0.jpg",
+  "versions": [{"v": 0, "label": "Before: on main", "at": "2026-11-19T07:00:00Z", "file": "screens/v/no-desktop-0.jpg"}]}
+]
