@@ -97,6 +97,42 @@ end
 
 # Build the kwargs for an upload action: `api_key:` when the ASC_* secrets are present,
 # else `api_key_path:` (the pre-built JSON). One of the two must be set.
+# The bundled chat model's Apple-hosted asset packs need a Background Assets downloader extension
+# (ai.offgridmobile.BundledModel) and the App Group group.ai.offgridmobile on the app and the extension.
+# With the App Store Connect API key this makes the extension's App ID if it is missing, turns on App
+# Groups for both IDs, and fetches an App Store profile for each, so the app's profile carries the group.
+#
+# One step stays in the developer portal, because Apple's API cannot do it: create the App Group
+# group.ai.offgridmobile and tick it on both App IDs. Until then the profiles lack the group and this
+# stops with that instruction.
+def bundled_model_profiles
+  key = asc_api_key
+  UI.user_error!("The bundled model's signing needs ASC_KEY_ID, ASC_ISSUER_ID and ASC_API_KEY_P8") unless key
+  Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.from(hash: key)
+  app_id = "ai.offgridmobile"
+  ext_id = "ai.offgridmobile.BundledModel"
+  group = "group.ai.offgridmobile"
+  Spaceship::ConnectAPI::BundleId.find(identifier: ext_id) ||
+    Spaceship::ConnectAPI::BundleId.create(name: "Off Grid AI model download", platform: "IOS", identifier: ext_id)
+  [app_id, ext_id].each do |id|
+    bundle = Spaceship::ConnectAPI::BundleId.find(identifier: id)
+    next if bundle.get_capabilities.any? { |c| c.capability_type == "APP_GROUPS" }
+    bundle.create_capability(Spaceship::ConnectAPI::BundleIdCapability::Type::APP_GROUPS)
+    UI.message("Turned on App Groups for #{id}")
+  end
+  { app_id => "OFFGRID_PROFILE_NAME", ext_id => "OFFGRID_BUNDLED_MODEL_PROFILE_NAME" }.each do |id, env|
+    path = get_provisioning_profile(api_key: key, app_identifier: id, platform: "ios", skip_install: false)
+    profile = Plist.parse_xml(`security cms -D -i #{path.shellescape}`)
+    groups = Array(profile.dig("Entitlements", "com.apple.security.application-groups"))
+    unless groups.include?(group)
+      UI.user_error!("The profile for #{id} has no App Group #{group}. In the developer portal, create the " \
+                     "group #{group} and tick it on #{app_id} and #{ext_id}, then run the release again.")
+    end
+    ENV[env] = profile["Name"]
+    UI.message("#{id} signs with profile '#{profile['Name']}' (#{group})")
+  end
+end
+
 def asc_auth_kwargs
   key = asc_api_key
   return { api_key: key } if key
@@ -321,6 +357,19 @@ platform :ios do
         code_sign_identity: "Apple Distribution",
         profile_name: share_profile
       )
+      # The bundled model's Background Assets downloader (bundled_model_profiles).
+      bundled_profile = ENV["OFFGRID_BUNDLED_MODEL_PROFILE_NAME"]
+      UI.user_error!("No profile for the BundledModelDownloader extension (bundled_model_profiles)") unless bundled_profile
+      update_code_signing_settings(
+        path: "ios/OffgridMobile.xcodeproj",
+        targets: ["BundledModelDownloader"],
+        build_configurations: ["Release"],
+        use_automatic_signing: false,
+        team_id: APPLE_TEAM_ID,
+        bundle_identifier: "ai.offgridmobile.BundledModel",
+        code_sign_identity: "Apple Distribution",
+        profile_name: bundled_profile
+      )
       build_app(
         workspace: "ios/OffgridMobile.xcworkspace",
         scheme: "OffgridMobile",
@@ -334,7 +383,8 @@ platform :ios do
           signingCertificate: "Apple Distribution",
           provisioningProfiles: {
             "ai.offgridmobile" => profile_name,
-            "ai.offgridmobile.ImproveShare" => share_profile
+            "ai.offgridmobile.ImproveShare" => share_profile,
+            "ai.offgridmobile.BundledModel" => bundled_profile
           }
         },
         output_directory: "build",
@@ -468,6 +518,28 @@ platform :ios do
       force: true
     )
     UI.success("Uploaded to App Store (not submitted - submit in App Store Connect)")
+  end
+
+  desc "Upload the bundled chat model's asset packs (build/asset-packs/*.aar) to App Store Connect"
+  lane :upload_asset_packs do
+    require "base64"
+    key = asc_api_key
+    UI.user_error!("Uploading asset packs needs ASC_KEY_ID, ASC_ISSUER_ID and ASC_API_KEY_P8") unless key
+    Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.from(hash: key)
+    app = Spaceship::ConnectAPI::App.find(CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier))
+    # altool reads the API key from ~/.appstoreconnect/private_keys/AuthKey_<id>.p8.
+    keys_dir = File.expand_path("~/.appstoreconnect/private_keys")
+    FileUtils.mkdir_p(keys_dir)
+    p8 = ENV["ASC_API_KEY_P8"]
+    p8 = Base64.decode64(p8) unless p8.include?("BEGIN PRIVATE KEY")
+    File.write(File.join(keys_dir, "AuthKey_#{ENV['ASC_KEY_ID']}.p8"), p8)
+    packs = Dir[File.expand_path("../build/asset-packs/*.aar", __dir__)]
+    UI.user_error!("No asset packs in build/asset-packs (run scripts/build-ios-asset-packs.sh)") if packs.empty?
+    packs.each do |pack|
+      sh("xcrun", "altool", "--upload-asset-pack", pack, "--apple-id", app.id,
+         "--apiKey", ENV["ASC_KEY_ID"], "--apiIssuer", ENV["ASC_ISSUER_ID"])
+    end
+    UI.success("Uploaded #{packs.size} asset packs; App Store Connect processes them before the app version can use them")
   end
 
   desc "Push App Store listing metadata (no build)"
@@ -613,5 +685,6 @@ platform :ios do
           "IOS_CERTIFICATE_P12 (#{in_keychain.join(', ')}) is not a certificate the profile '#{profile['Name']}' lists (#{in_profile.join(', ')})."
       )
     end
+    bundled_model_profiles
   end
 end
