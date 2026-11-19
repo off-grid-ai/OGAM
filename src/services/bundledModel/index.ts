@@ -23,7 +23,7 @@ import { selectArrivedChatModel, startModelDownload } from '../startModelDownloa
 import type { DownloadedModel } from '../../types';
 import { BUNDLED_MODEL, BUNDLED_PACKS, bundledModelFile } from './model';
 import { bundledModelPort, type BundledModelPort, type PackState } from './port';
-import { bundledModelState, type BundledModelState } from './rule';
+import { asksForPacks, bundledModelState, type BundledModelState } from './rule';
 
 
 const SIZES = { [BUNDLED_MODEL.weights.pack]: BUNDLED_MODEL.weights.sizeBytes, [BUNDLED_MODEL.mmproj.pack]: BUNDLED_MODEL.mmproj.sizeBytes };
@@ -53,16 +53,34 @@ async function follow(port: BundledModelPort): Promise<void> {
     await Promise.all(BUNDLED_PACKS.map(name => port.removePack(name)));
     return;
   }
-  const packs = { ...(await port.getPacks(BUNDLED_PACKS)) };
-  if (await settle(port, bundledModelState(packs, BUNDLED_PACKS, SIZES))) return;
-  await new Promise<void>(resolve => {
-    const stop = port.onPack((state: PackState) => {
-      packs[state.name] = state;
-      settle(port, bundledModelState(packs, BUNDLED_PACKS, SIZES)).then(done => {
-        if (done) { stop(); resolve(); }
-      }, err => { logger.error('[BundledModel] pack update failed', err); stop(); resolve(); });
+  // Listen before asking, so a pack that lands while the ask is answered is not missed.
+  const early: PackState[] = [];
+  let onState: (state: PackState) => void = state => { early.push(state); };
+  const stop = port.onPack(state => onState(state));
+  try {
+    const packs: Record<string, PackState> = { ...(await port.getPacks(BUNDLED_PACKS)) };
+    // One ask per launch. A build with no packs refuses it, and stays absent.
+    if (asksForPacks(packs, BUNDLED_PACKS)) {
+      Object.assign(packs, await port.fetch(BUNDLED_PACKS).catch(err => {
+        logger.log('[BundledModel] no packs to fetch; the regular download serves', err);
+        return {};
+      }));
+    }
+    for (const state of early.splice(0)) packs[state.name] = state;
+    if (await settle(port, bundledModelState(packs, BUNDLED_PACKS, SIZES))) return;
+    await new Promise<void>(resolve => {
+      onState = state => {
+        packs[state.name] = state;
+        settle(port, bundledModelState(packs, BUNDLED_PACKS, SIZES)).then(done => {
+          if (done) resolve();
+        }, err => { logger.error('[BundledModel] pack update failed', err); resolve(); });
+      };
+      // Anything that came in while the first answer was shown.
+      early.splice(0).forEach(onState);
     });
-  });
+  } finally {
+    stop();
+  }
 }
 
 /** Shows `state` to the person; true once nothing more will happen this launch. */

@@ -37,3 +37,13 @@ export function bundledModelState(
   // landed and waiting for the rest.
   return { kind: 'arriving', bytes, total, waitsForWifi: states.some(s => s!.status === 'waiting_for_wifi') };
 }
+
+/**
+ * Whether to ask for the packs now. Play starts fast-follow packs by itself after a store install, but a
+ * download it paused, dropped or never started (and every local-testing install) stays "not_installed"
+ * until the app asks. A build with no packs (sideloaded) answers the ask with an error, and the regular
+ * download serves as before.
+ */
+export function asksForPacks(packs: Readonly<Record<string, PackState | undefined>>, names: readonly string[]): boolean {
+  return names.some(name => packs[name]?.status === 'not_installed');
+}

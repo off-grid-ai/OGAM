@@ -10,7 +10,7 @@ import { join } from 'path';
 import { installModelManagerDevice, type ModelManagerDevice } from '../../../harness/modelManagerDevice';
 import type { BundledModelPort, PackState } from '../../../../src/services/bundledModel/port';
 import { BUNDLED_MODEL, bundledModelFile } from '../../../../src/services/bundledModel/model';
-import { bundledModelState } from '../../../../src/services/bundledModel/rule';
+import { asksForPacks, bundledModelState } from '../../../../src/services/bundledModel/rule';
 
 const KEY = 'LiquidAI/LFM3-VL-2B-GGUF/LFM3-VL-2B-Q4_K_M.gguf';
 const WEIGHTS = 1099627808;
@@ -112,6 +112,13 @@ describe('bundledModelState', () => {
     expect(state(pack('chat_model', 'canceled', { totalBytes: 0 }), pack('chat_mmproj', 'completed', { totalBytes: 0, assetsPath: null })).kind).toBe('stopped');
   });
 
+  it('asks for the packs only when Play holds one it has not started', () => {
+    expect(asksForPacks({ chat_model: pack('chat_model', 'not_installed'), chat_mmproj: pack('chat_mmproj', 'completed') }, names)).toBe(true);
+    expect(asksForPacks({ chat_model: pack('chat_model', 'downloading'), chat_mmproj: pack('chat_mmproj', 'pending') }, names)).toBe(false);
+    expect(asksForPacks({ chat_model: pack('chat_model', 'failed'), chat_mmproj: pack('chat_mmproj', 'completed') }, names)).toBe(false);
+    expect(asksForPacks({}, names)).toBe(false);
+  });
+
   it('arrived only when every pack has landed with its folder', () => {
     expect(state(pack('chat_model', 'completed'), pack('chat_mmproj', 'completed'))).toEqual({
       kind: 'arrived', paths: { chat_model: '/data/assetpacks/chat_model/assets', chat_mmproj: '/data/assetpacks/chat_mmproj/assets' },
@@ -201,6 +208,46 @@ describe('startBundledModel', () => {
     await device.settle();
     // The regular download starts: the projector first, then the weights, on the one row.
     expect(device.nativeRows()).toContainEqual(expect.objectContaining({ modelId: 'LiquidAI/LFM3-VL-2B-GGUF' }));
+  });
+
+  it('packs Play has not started are asked for once, then arrive as the chat model', async () => {
+    const play = fakePlay({ chat_model: pack('chat_model', 'not_installed'), chat_mmproj: pack('chat_mmproj', 'not_installed') });
+    play.fetch = jest.fn(async (names: readonly string[]) =>
+      Object.fromEntries(names.map(n => [n, pack(n, 'pending')])));
+    const done = svc.startBundledModel(play);
+    await flush();
+    expect(play.fetch).toHaveBeenCalledTimes(1);
+    expect(downloads().downloads[KEY]).toEqual(expect.objectContaining({ status: 'running', combinedTotalBytes: WEIGHTS + MMPROJ }));
+
+    landPacks();
+    play.emit(pack('chat_model', 'completed'));
+    play.emit(pack('chat_mmproj', 'completed'));
+    await done;
+    expect(stores().useAppStore.getState().activeModelId).toBe(KEY);
+    expect(downloads().downloads[KEY]).toBeUndefined();
+    // Once per launch: a second start asks nothing more.
+    await svc.startBundledModel(play);
+    expect(play.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('a pack that lands while the ask is answered is not missed', async () => {
+    const play = fakePlay({ chat_model: pack('chat_model', 'not_installed'), chat_mmproj: pack('chat_mmproj', 'completed') });
+    play.fetch = jest.fn(async () => {
+      landPacks();
+      play.emit(pack('chat_model', 'completed'));
+      return { chat_model: pack('chat_model', 'pending') };
+    });
+    await svc.startBundledModel(play);
+    expect(stores().useAppStore.getState().activeModelId).toBe(KEY);
+  });
+
+  it('a build with no packs refuses the ask, and the regular download serves', async () => {
+    const play = fakePlay({ chat_model: pack('chat_model', 'not_installed'), chat_mmproj: pack('chat_mmproj', 'not_installed') });
+    play.fetch = jest.fn(async () => { throw new Error('APP_UNAVAILABLE'); });
+    await expect(svc.startBundledModel(play)).resolves.toBeUndefined();
+    expect(play.fetch).toHaveBeenCalledTimes(1);
+    expect(downloads().downloads[KEY]).toBeUndefined();
+    expect(stores().useAppStore.getState().downloadedModels.map(m => m.id)).not.toContain(KEY);
   });
 
   it('with no packs (sideloaded build) nothing changes', async () => {
