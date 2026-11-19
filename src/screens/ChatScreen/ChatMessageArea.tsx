@@ -24,7 +24,8 @@ import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { generationService } from '../../services';
 import type { QueueActions } from '../../components/ChatInput/Toolbar';
 import { RestyleSheet } from '../../components/MediaStyles/RestyleSheet';
-import { EmptyChat, ImageProgressIndicator } from './ChatScreenComponents';
+import { EmptyChat, ImageProgressIndicator, starterMode } from './ChatScreenComponents';
+import type { ImageModeState } from '../../types';
 import { getPlaceholderText, useChatScreen } from './useChatScreen';
 import { createStyles } from './styles';
 import { useTheme } from '../../theme';
@@ -200,6 +201,8 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   renderItem,
 }) => {
   const hasScrolledRef = React.useRef(false);
+  // What the composer is making: an empty chat suggests pictures or clips to match.
+  const [composerMode, setComposerMode] = useState<ImageModeState>('auto');
   // A chat opens at its newest message. The list renders in batches, so one scroll on the first
   // layout lands at the end of the first batch only; until you touch the list, every growth pins
   // it to the end again (hand test 51: a long chat opened from Home sat at its oldest message).
@@ -347,8 +350,16 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
               activeProject={chat.activeProject}
               setShowProjectSelector={chat.setShowProjectSelector}
               isRemote={chat.activeModelInfo?.isRemote}
-              // Starters are text prompts, so they need a text model: with only an image model a tap drew a picture.
-              onStarter={chat.hasTextModel && !chat.isModelLoading ? prompt => chat.handleSend(prompt) : undefined}
+              mode={starterMode(composerMode)}
+              // Text starters need a text model: with only an image model a tap drew a picture. Picture and clip
+              // starters show only once the composer turned that mode on, which checked its model.
+              onStarter={
+                composerMode === 'force' || composerMode === 'video'
+                  ? prompt => chat.handleSend(prompt, undefined, composerMode)
+                  : chat.hasTextModel && !chat.isModelLoading
+                    ? prompt => chat.handleSend(prompt)
+                    : undefined
+              }
             />
           );
         })()
@@ -529,6 +540,8 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           onSend={(prompt, kind) => chat.handleSend(prompt, undefined, kind === 'video' ? 'video' : 'force')}
         />
         <ChatInput
+          startMode={chat.startMode}
+          onImageModeChange={setComposerMode}
           assistantSelected={assistantSelected}
           onAssistantSelectedChange={onAssistantSelectedChange}
           onSend={chat.handleSend}

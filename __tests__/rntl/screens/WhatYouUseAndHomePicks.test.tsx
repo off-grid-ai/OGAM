@@ -38,11 +38,24 @@ function mount(first: 'Home' | 'WhatYouUse') {
       </Stack.Navigator>
     </NavigationContainer>,
   );
-  return { view, route: () => ref.getCurrentRoute()?.name };
+  return {
+    view,
+    route: () => ref.getCurrentRoute()?.name,
+    params: () => ref.getCurrentRoute()?.params,
+  };
 }
 
 describe('What you use and Home picks', () => {
-  beforeEach(() => useAppStore.setState({ onboardingPicks: null }));
+  beforeEach(() =>
+    useAppStore.setState({
+      onboardingPicks: null,
+      downloadedImageModels: [],
+      downloadedVideoModels: [],
+      activeModelId: null,
+      isProActive: false,
+      proDeviceAdmission: 'unknown',
+    }),
+  );
 
   it('no picks: Home shows no picks section, as it always was', () => {
     const { view } = mount('Home');
@@ -64,6 +77,36 @@ describe('What you use and Home picks', () => {
     expect(ids).toEqual(['home-pick-phone-images', 'home-pick-phone-chat']);
     fireEvent.press(view.getByTestId('home-pick-phone-chat'));
     await waitFor(() => expect(route()).not.toBe('Home'));
+  });
+
+  it('with no models yet, Images and Video Studio open their own Models tab, not Text', async () => {
+    useAppStore.setState({
+      onboardingPicks: { groups: ['create'], parts: ['images', 'video-studio'] },
+      // Video Studio is Pro: with Pro on, its row leads to the feature, not to Get Pro.
+      isProActive: true,
+      proDeviceAdmission: 'active',
+    });
+    const first = mount('Home');
+    fireEvent.press(first.view.getByTestId('home-pick-phone-video'));
+    await waitFor(() => expect(first.route()).toBe('Main'));
+    expect(first.params()).toEqual({ screen: 'ModelsTab', params: { initialTab: 'video' } });
+    first.view.unmount();
+
+    const second = mount('Home');
+    fireEvent.press(second.view.getByTestId('home-pick-phone-images'));
+    await waitFor(() => expect(second.route()).toBe('Main'));
+    expect(second.params()).toEqual({ screen: 'ModelsTab', params: { initialTab: 'image' } });
+  });
+
+  it('with an image model, Images opens a chat already making pictures', async () => {
+    useAppStore.setState({
+      onboardingPicks: { groups: ['create'], parts: ['images'] },
+      downloadedImageModels: [{ id: 'sd' } as never],
+    });
+    const { view, route, params } = mount('Home');
+    fireEvent.press(view.getByTestId('home-pick-phone-images'));
+    await waitFor(() => expect(route()).toBe('Chat'));
+    expect(params()).toEqual({ mode: 'image' });
   });
 
   it('What you use: a tap picks or unpicks and saves; the last one out leaves no picks', () => {

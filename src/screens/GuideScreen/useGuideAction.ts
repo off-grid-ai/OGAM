@@ -7,7 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { GUIDE_LINKS } from '@offgrid/models';
 import type { RootStackParamList } from '../../navigation/types';
-import { useAppStore } from '../../stores';
+import { useAppStore, useRemoteServerStore } from '../../stores';
 import { selectHasProAccess } from '../../stores/proAccessSlice';
 import { useHasRegisteredScreen } from '../../navigation/screenRegistry';
 import { useGetPro } from '../../hooks/useGetPro';
@@ -27,6 +27,8 @@ export interface GuideAction {
 
 const OPEN_LABEL: Record<GuideOpen, string> = {
   chat: 'Start a chat',
+  images: 'Make a picture',
+  video: 'Make a video',
   projects: 'Open Projects',
   models: 'Open Models',
   notes: 'Open Notes',
@@ -47,6 +49,9 @@ export function useGuideAction(): (topic: MobileGuideTopic) => GuideAction | nul
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const hasPro = useAppStore(selectHasProAccess);
   const hasChatModel = useAppStore(s => Boolean(s.activeModelId));
+  const hasImageModel = useAppStore(s => s.downloadedImageModels.length > 0);
+  const hasVideoModel = useAppStore(s => s.downloadedVideoModels.length > 0);
+  const remoteMedia = useRemoteServerStore(s => s.activeRemoteMediaServerIds);
   const getPro = useGetPro();
   const { openSync } = useOpenSync();
   const openTools = useOpenProTools();
@@ -62,6 +67,17 @@ export function useGuideAction(): (topic: MobileGuideTopic) => GuideAction | nul
         // A chat needs a model; without one, Models is where the next step is.
         if (hasChatModel) navigation.navigate('Chat', {});
         else navigation.navigate('Main', { screen: 'ModelsTab' } as never);
+        return;
+      case 'images':
+        // Pictures need an image model; without one, the Image models are the next step.
+        if (hasImageModel || remoteMedia.image) navigation.navigate('Chat', { mode: 'image' });
+        else navigation.navigate('Main', { screen: 'ModelsTab', params: { initialTab: 'image' } } as never);
+        return;
+      case 'video':
+        // With any model the chat opens: its video switch offers a video model, or the computer, as
+        // this phone allows. With none, the Video models are the next step.
+        if (hasVideoModel || remoteMedia.video || hasChatModel) navigation.navigate('Chat', { mode: 'video' });
+        else navigation.navigate('Main', { screen: 'ModelsTab', params: { initialTab: 'video' } } as never);
         return;
       case 'projects':
         navigation.navigate('Main', { screen: 'ProjectsTab' } as never);

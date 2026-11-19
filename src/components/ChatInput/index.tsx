@@ -48,6 +48,9 @@ interface ChatInputProps {
   bottomInset?: number;
   imageModelLoaded?: boolean;
   onImageModeChange?: (mode: ImageModeState) => void;
+  /** Opened to make pictures or clips: the composer turns that mode on once, through the same checks as
+   *  its own switch (no model, no Pro and too little memory each get their usual next step). */
+  startMode?: 'image' | 'video';
   /** Video is Pro. Called instead of turning video on when Pro is not active. */
   onVideoUpgrade?: () => void;
   /** Opens the screen where a computer is paired. Offered when no video model is reachable. */
@@ -172,6 +175,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   bottomInset = 0,
   imageModelLoaded = false,
   onImageModeChange,
+  startMode,
   onVideoUpgrade,
   onFindComputer,
   onGetVideoModel,
@@ -454,6 +458,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setImageMode(newMode);
     onImageModeChange?.(newMode);
   };
+
+  // Turn the start mode on once per value; the switches are read through a ref so the latest checks run.
+  const modeSwitches = useRef({ image: handleImageModeToggle, video: handleVideoModeToggle });
+  modeSwitches.current = { image: handleImageModeToggle, video: handleVideoModeToggle };
+  const startedMode = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!startMode || startedMode.current === startMode) return;
+    startedMode.current = startMode;
+    if (startMode === 'video') modeSwitches.current.video();
+    // The image switch cycles auto → on → off: from auto, one press turns it on.
+    else modeSwitches.current.image();
+  }, [startMode]);
 
   const handleVisionPress = () => {
     if (!supportsVision) {

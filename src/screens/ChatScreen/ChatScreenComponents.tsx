@@ -82,6 +82,28 @@ export const STARTER_PROMPTS = [
   'Write a short, kind thank-you note',
 ] as const;
 
+/** What an empty chat suggests: questions, pictures (image mode on) or clips (video mode on). */
+export type StarterMode = 'chat' | 'image' | 'video';
+
+export const starterMode = (mode: string): StarterMode =>
+  mode === 'force' ? 'image' : mode === 'video' ? 'video' : 'chat';
+
+const STARTERS: Record<StarterMode, { title: string; hint?: string; icon: string; prompts: readonly string[] }> = {
+  chat: { title: "What's on your mind?", icon: 'message-square', prompts: STARTER_PROMPTS },
+  image: {
+    title: 'What should it draw?',
+    hint: 'Describe a picture, or tap one to try. Pick a style below.',
+    icon: 'image',
+    prompts: ['A lighthouse at dusk, waves below', 'A cozy reading nook on a rainy day', 'A red fox in a snowy forest'],
+  },
+  video: {
+    title: 'What should it film?',
+    hint: 'Describe a scene, or tap one to try. Ask for a film for a longer story.',
+    icon: 'film',
+    prompts: ['A fox walking through fresh snow', 'Rain on a neon street at night', 'Waves on a quiet beach at sunrise'],
+  },
+};
+
 export const ChatHeader: React.FC<{
   styles: StylesType;
   colors: ColorsType;
@@ -177,32 +199,37 @@ export const EmptyChat: React.FC<{
   isRemote?: boolean;
   /** Sends a starter prompt through the same path as the composer. */
   onStarter?: (prompt: string) => void;
-}> = ({ styles, colors, activeModel, activeModelName, activeProject, setShowProjectSelector, isRemote, onStarter }) => (
-  <View style={styles.emptyChat}>
+  /** What the composer is making; its starters match. */
+  mode?: StarterMode;
+}> = ({ styles, colors, activeModel, activeModelName, activeProject, setShowProjectSelector, isRemote, onStarter, mode = 'chat' }) => {
+  const starters = STARTERS[mode];
+  return (
+  <View style={styles.emptyChat} testID={`empty-chat-${mode}`}>
     <AnimatedEntry index={0} staggerMs={60}>
       <View style={styles.emptyChatIconContainer}>
-        <Icon name="message-square" size={32} color={colors.textMuted} />
+        <Icon name={starters.icon} size={32} color={colors.textMuted} />
       </View>
     </AnimatedEntry>
     <AnimatedEntry index={1} staggerMs={60}>
-      <Text style={styles.emptyChatTitle}>What's on your mind?</Text>
+      <Text style={styles.emptyChatTitle}>{starters.title}</Text>
     </AnimatedEntry>
     <AnimatedEntry index={2} staggerMs={60}>
       <Text style={styles.emptyChatText} testID="empty-chat-hint">
         {/* With no model chosen yet, no name: never "Unknown". */}
-        {activeModelName || activeModel?.name
-          ? `Ask anything. ${activeModelName || activeModel?.name} answers.`
-          : 'Ask anything.'}
+        {starters.hint ??
+          (activeModelName || activeModel?.name
+            ? `Ask anything. ${activeModelName || activeModel?.name} answers.`
+            : 'Ask anything.')}
       </Text>
     </AnimatedEntry>
     {onStarter && (
       <AnimatedEntry index={3} staggerMs={60}>
         {/* A new person sees what they can ask: one tap sends it. */}
         <View style={styles.starterList} testID="chat-starters">
-          {STARTER_PROMPTS.map((prompt, index) => (
+          {starters.prompts.map((prompt, index) => (
             <TouchableOpacity
               key={prompt}
-              style={[styles.starterChip, index === STARTER_PROMPTS.length - 1 && styles.starterChipLast]}
+              style={[styles.starterChip, index === starters.prompts.length - 1 && styles.starterChipLast]}
               onPress={() => onStarter(prompt)}
               accessibilityRole="button"
               accessibilityLabel={prompt}
@@ -229,7 +256,8 @@ export const EmptyChat: React.FC<{
       </Text>
     </AnimatedEntry>
   </View>
-);
+  );
+};
 
 export const ImageProgressIndicator: React.FC<{
   styles: StylesType;

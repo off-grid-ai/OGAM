@@ -388,6 +388,8 @@ export const useChatScreen = () => {
   resumePendingRef.current = chatActions.resumePendingMessage;
 
   return {
+    /** Pictures or clips this chat was opened to make, if any. */
+    startMode: route.params?.mode,
     isModelLoading,
     loadingModel,
     supportsVision,
