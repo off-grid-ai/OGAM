@@ -19,7 +19,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { createStyles } from './SettingsScreen.styles';
 import { SettingsAppearanceRow } from './SettingsAppearanceRow';
-import { activeLocale } from '@offgrid/i18n';
+import { activeLocale, t } from '@offgrid/i18n';
 import { SettingsCommunitySections } from './SettingsCommunitySections';
 import { SettingsAnalyticsSection } from './SettingsAnalyticsSection';
 import { AnimatedEntry } from '../components/AnimatedEntry';
@@ -205,14 +205,14 @@ export const SettingsScreen: React.FC = () => {
               {
                 icon: 'star',
                 title: 'What you use',
-                desc: 'What leads Home and model setup',
+                desc: t('What leads Home and model setup'),
                 screen: 'WhatYouUse' as const,
                 testID: 'open-what-you-use',
               },
               {
                 icon: 'sliders',
                 title: 'Model settings',
-                desc: 'Instructions, replies, and speed',
+                desc: t('Instructions, replies, and speed'),
                 screen: 'ModelSettings' as const,
                 testID: 'open-model-settings',
               },
@@ -221,14 +221,14 @@ export const SettingsScreen: React.FC = () => {
                 icon: 'search',
                 title: 'Document search',
                 // What it does for you; the model's name is one tap in, on its own screen.
-                desc: 'How chats find the right part of a file',
+                desc: t('How chats find the right part of a file'),
                 screen: 'SearchModel' as const,
                 testID: 'open-search-model',
               },
               {
                 icon: 'wifi',
                 title: 'Remote servers',
-                desc: 'Your computer, Ollama or LM Studio',
+                desc: t('Your computer, Ollama or LM Studio'),
                 screen: 'RemoteServers' as const,
               },
               ...(hasSync
@@ -237,8 +237,8 @@ export const SettingsScreen: React.FC = () => {
                       icon: 'refresh-cw',
                       title: isSyncUnlocked ? 'Sync' : 'Sync with Pro',
                       desc: isSyncUnlocked
-                        ? 'Chats and files on all your devices'
-                        : 'Chats and files on all your devices, with Pro',
+                        ? t('Chats and files on all your devices')
+                        : t('Chats and files on all your devices, with Pro'),
                       screen: 'Sync' as const,
                       testID: 'open-sync-settings',
                     },
@@ -248,25 +248,25 @@ export const SettingsScreen: React.FC = () => {
               {
                 icon: 'lock',
                 title: 'Security',
-                desc: 'Passphrase and app lock',
+                desc: t('Passphrase and app lock'),
                 screen: 'SecuritySettings' as const,
               },
               {
                 icon: 'smartphone',
                 title: 'Device information',
-                desc: 'Hardware and compatibility',
+                desc: t('Hardware and compatibility'),
                 screen: 'DeviceInfo' as const,
               },
               {
                 icon: 'hard-drive',
                 title: 'Storage',
-                desc: 'Models and data usage',
+                desc: t('Models and data usage'),
                 screen: 'StorageSettings' as const,
               },
               {
                 icon: 'cpu',
                 title: 'Engine updates',
-                desc: 'What runs your models',
+                desc: t('What runs your models'),
                 screen: 'EngineUpdates' as const,
                 testID: 'open-engine-updates',
               },

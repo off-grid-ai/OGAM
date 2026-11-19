@@ -1,3 +1,4 @@
+import { t } from '@offgrid/i18n';
 export {
   MODEL_RECOMMENDATIONS,
   RECOMMENDED_MODELS,
@@ -162,13 +163,15 @@ export interface OnboardingIntro {
 }
 
 // The one page about Off Grid AI before "What do you want to do?". What it does for you is shown by
-// the picks that follow, so this page says only what it is.
-export const ONBOARDING_INTRO: OnboardingIntro = {
-  keyword: 'YOURS',
-  title: 'Your AI.\nNo Strings Attached.',
-  description:
+// the picks that follow, so this page says only what it is. Built when shown, so it reads in the app
+// language (text in code reaches a catalog through t()).
+export const onboardingIntro = (): OnboardingIntro => ({
+  keyword: t('YOURS'),
+  title: t('Your AI.\nNo Strings Attached.'),
+  description: t(
     'No subscriptions, no sign-ups, no company reading your chats. An AI that lives on your device and answers to no one else.',
-};
+  ),
+});
 
 // Fonts, type, spacing, radius and the living field come from @offgrid/design (the one token source).
 import { FONTS, TYPOGRAPHY, SPACING, RADIUS, LIVING_FIELD, ALIVE } from '@offgrid/design';

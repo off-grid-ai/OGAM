@@ -107,6 +107,15 @@ describe('picking a language', () => {
     expect(useLocaleStore.getState().picked).toBeNull();
   });
 
+  it('the first page reads in the picked language', () => {
+    // Hand test 2026-11-19: the button turned Spanish and the page about Off Grid AI stayed English.
+    applyAppLanguage('es');
+    const { view } = mount();
+    expect(view.getByText('TUYA')).toBeTruthy();
+    expect(view.getByText('Tu IA.\nSin ataduras.')).toBeTruthy();
+    expect(view.queryByText('YOURS')).toBeNull();
+  });
+
   it('Back returns to where the list was opened', () => {
     const { view, route } = mount();
     fireEvent.press(view.getByTestId('onboarding-language'));

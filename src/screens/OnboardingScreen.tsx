@@ -16,7 +16,7 @@ import { Button } from '../components';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import {
-  ONBOARDING_INTRO,
+  onboardingIntro,
   type OnboardingIntro,
   SPACING,
   TYPOGRAPHY,
@@ -165,7 +165,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
           </TouchableOpacity>
         </View>
         <IntroContent
-          item={ONBOARDING_INTRO}
+          item={onboardingIntro()}
           styles={styles}
           accentColor={colors.primary}
         />

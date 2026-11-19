@@ -14,7 +14,7 @@ import { NavigationContainer, createNavigationContainerRef } from '@react-naviga
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { OnboardingScreen } from '../../../src/screens/OnboardingScreen';
 import { useAppStore } from '../../../src/stores/appStore';
-import { ONBOARDING_INTRO } from '../../../src/constants';
+import { onboardingIntro } from '../../../src/constants';
 
 const Stack = createNativeStackNavigator();
 const GroupsStub = () => <Text>What do you want to do?</Text>;
@@ -41,9 +41,9 @@ describe('OnboardingScreen', () => {
     const { view } = mount();
 
     expect(view.getByTestId('onboarding-intro')).toBeTruthy();
-    expect(view.getByText(ONBOARDING_INTRO.keyword)).toBeTruthy();
-    expect(view.getByText(ONBOARDING_INTRO.title)).toBeTruthy();
-    expect(view.getByText(ONBOARDING_INTRO.description)).toBeTruthy();
+    expect(view.getByText(onboardingIntro().keyword)).toBeTruthy();
+    expect(view.getByText(onboardingIntro().title)).toBeTruthy();
+    expect(view.getByText(onboardingIntro().description)).toBeTruthy();
     expect(view.getByText('Get Started')).toBeTruthy();
     expect(view.queryByText('Next')).toBeNull();
     expect(view.queryByText('Skip')).toBeNull();

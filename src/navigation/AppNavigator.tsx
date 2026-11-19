@@ -1,3 +1,4 @@
+import { t } from '@offgrid/i18n';
 import { OnboardingGroupsScreen } from '../screens/OnboardingPicks/OnboardingGroupsScreen';
 import { OnboardingFeaturesScreen } from '../screens/OnboardingPicks/OnboardingFeaturesScreen';
 import { OnboardingGuideScreen } from '../screens/OnboardingPicks/OnboardingGuideScreen';
@@ -165,7 +166,7 @@ const MainTabs: React.FC = () => {
         <Tab.Screen
           name="HomeTab"
           component={HomeScreen}
-          options={{ tabBarLabel: 'Home', tabBarButtonTestID: 'home-tab' }}
+          options={{ tabBarLabel: t('Home'), tabBarButtonTestID: 'home-tab' }}
           listeners={() => ({
             tabPress: () => { triggerHaptic('selection'); },
           })}
@@ -173,7 +174,7 @@ const MainTabs: React.FC = () => {
         <Tab.Screen
           name="ChatsTab"
           component={ChatsListScreen}
-          options={{ tabBarLabel: 'Chats', tabBarButtonTestID: 'chats-tab' }}
+          options={{ tabBarLabel: t('Chats'), tabBarButtonTestID: 'chats-tab' }}
           listeners={() => ({
             tabPress: () => { triggerHaptic('selection'); },
           })}
@@ -181,7 +182,7 @@ const MainTabs: React.FC = () => {
         <Tab.Screen
           name="ProjectsTab"
           component={ProjectsScreen}
-          options={{ tabBarLabel: 'Projects', tabBarButtonTestID: 'projects-tab' }}
+          options={{ tabBarLabel: t('Projects'), tabBarButtonTestID: 'projects-tab' }}
           listeners={() => ({
             tabPress: () => { triggerHaptic('selection'); },
           })}
@@ -189,7 +190,7 @@ const MainTabs: React.FC = () => {
         <Tab.Screen
           name="ModelsTab"
           component={ModelsScreen}
-          options={{ tabBarLabel: 'Models', tabBarButtonTestID: 'models-tab' }}
+          options={{ tabBarLabel: t('Models'), tabBarButtonTestID: 'models-tab' }}
           listeners={() => ({
             tabPress: () => { triggerHaptic('selection'); },
           })}
@@ -197,7 +198,7 @@ const MainTabs: React.FC = () => {
         <Tab.Screen
           name="ProTab"
           component={ProTabScreen}
-          options={{ tabBarLabel: 'Pro', tabBarButtonTestID: 'pro-tab' }}
+          options={{ tabBarLabel: t('Pro'), tabBarButtonTestID: 'pro-tab' }}
           listeners={() => ({
             tabPress: () => { triggerHaptic('selection'); },
           })}
@@ -205,7 +206,7 @@ const MainTabs: React.FC = () => {
         <Tab.Screen
           name="SettingsTab"
           component={SettingsScreen}
-          options={{ tabBarLabel: 'Settings', tabBarButtonTestID: 'settings-tab' }}
+          options={{ tabBarLabel: t('Settings'), tabBarButtonTestID: 'settings-tab' }}
           listeners={() => ({
             tabPress: () => { triggerHaptic('selection'); },
           })}
