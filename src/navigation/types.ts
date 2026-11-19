@@ -9,6 +9,7 @@ export type RootStackParamList = {
   AutoSetup: undefined;
   AdvancedSetup: undefined;
   AnalyticsInfo: undefined;
+  Language: undefined;
   Main: NavigatorScreenParams<MainTabParamList> | undefined;
   // Former ChatsStack
   /** `mode` opens a new chat already making pictures or clips (a pick from onboarding, Video Studio). */
