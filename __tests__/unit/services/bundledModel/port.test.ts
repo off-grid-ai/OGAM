@@ -28,6 +28,7 @@ describe('bundledModelPort', () => {
       removeListeners: jest.fn(),
     };
     const port = loadPort('android', native);
+    expect(port.canMoveFiles).toBe(true);
     const names = ['chat_model'] as const;
     expect(await port.getPacks(names)).toEqual({ chat_model: state });
     expect(await port.fetch(names)).toEqual({ chat_model: state });
@@ -43,8 +44,14 @@ describe('bundledModelPort', () => {
     expect(seen).toEqual([state]);
   });
 
-  it('with no native module (iOS until its pack lands) no pack ever comes', async () => {
+  it('on iOS the native module answers, and pack files are copied, not moved', () => {
+    const port = loadPort('ios', { getPacks: jest.fn(), fetch: jest.fn(), removePack: jest.fn(), addListener: jest.fn(), removeListeners: jest.fn() });
+    expect(port.canMoveFiles).toBe(false);
+  });
+
+  it('with no native module no pack ever comes', async () => {
     const port = loadPort('ios');
+    expect(port.canMoveFiles).toBe(false);
     expect(await port.getPacks(['chat_model'])).toEqual({
       chat_model: { name: 'chat_model', status: 'not_installed', bytesDownloaded: 0, totalBytes: 0, errorCode: 0, assetsPath: null },
     });

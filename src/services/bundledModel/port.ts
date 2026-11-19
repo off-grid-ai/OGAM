@@ -25,6 +25,9 @@ export interface PackState {
 }
 
 export interface BundledModelPort {
+  /** Android's pack files are ours to move (a rename). iOS keeps them in system-managed storage, so the
+   *  app copies them out and then lets the system remove the pack. */
+  canMoveFiles: boolean;
   getPacks(names: readonly string[]): Promise<Record<string, PackState>>;
   fetch(names: readonly string[]): Promise<Record<string, PackState>>;
   removePack(name: string): Promise<boolean>;
@@ -39,21 +42,23 @@ function absent(names: readonly string[]): Record<string, PackState> {
   }]));
 }
 
-/** No pack system on this platform yet (iOS before its asset pack lands): nothing ever arrives. */
+/** No pack system on this platform: nothing ever arrives. */
 const noPacks: BundledModelPort = {
+  canMoveFiles: false,
   getPacks: async names => absent(names),
   fetch: async names => absent(names),
   removePack: async () => false,
   onPack: () => () => {},
 };
 
-function nativePort(native: {
+function nativePort(canMoveFiles: boolean, native: {
   getPacks(names: string[]): Promise<Record<string, PackState>>;
   fetch(names: string[]): Promise<Record<string, PackState>>;
   removePack(name: string): Promise<boolean>;
 }): BundledModelPort {
   const emitter = new NativeEventEmitter(native as never);
   return {
+    canMoveFiles,
     getPacks: names => native.getPacks([...names]),
     fetch: names => native.fetch([...names]),
     removePack: name => native.removePack(name),
@@ -64,5 +69,8 @@ function nativePort(native: {
   };
 }
 
-export const bundledModelPort: BundledModelPort =
-  Platform.OS === 'android' && NativeModules.BundledModel ? nativePort(NativeModules.BundledModel) : noPacks;
+/** Android (Play AI packs) and iOS 26+ (Apple-hosted asset packs) answer from native; iOS 17-25 has the
+ *  module too and answers "not_installed". Anything else has no packs. */
+export const bundledModelPort: BundledModelPort = NativeModules.BundledModel
+  ? nativePort(Platform.OS === 'android', NativeModules.BundledModel)
+  : noPacks;

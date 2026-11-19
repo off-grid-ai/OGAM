@@ -40,6 +40,7 @@
 		116F00012F49000100C11A00 /* StreamingHashModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 116F00032F49000100C11A00 /* StreamingHashModule.m */; };
 		116F00022F49000100C11A00 /* StreamingHashModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116F00042F49000100C11A00 /* StreamingHashModule.swift */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		1E6D87A794EAC55D367A5CEE /* BundledModelModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21D8F1806D17F57FF05D712B /* BundledModelModule.swift */; };
 		3D7B94A7348783D1DE952D66 /* ImproveShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1EEF614BDEED275300A3DD6D /* ImproveShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		553E18B7CCC207C0885499E4 /* libPods-OffgridMobileTests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D1B1541769AADA563D6CC44E /* libPods-OffgridMobileTests.a */; };
 		5C1B00012F44000100C11A00 /* ScribeEntryModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 5C1B00032F44000100C11A00 /* ScribeEntryModule.m */; };
@@ -51,6 +52,7 @@
 		97DD2D1E2098E2A67897A8BD /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 89A9465C6CE2C9FA4CF5E01B /* Foundation.framework */; };
 		A084C602C3B4A415DC74D43F /* libPods-OffgridMobile.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3A3BA1A946E10FA48AA4C0EB /* libPods-OffgridMobile.a */; };
 		AABB000100000000000001AA /* OffgridMobileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB000200000000000002AA /* OffgridMobileTests.swift */; };
+		EB41087B1C40046EAC95BB6F /* BundledModelModule.m in Sources */ = {isa = PBXBuildFile; fileRef = B8E8AC374FAA1BD8E46EE112 /* BundledModelModule.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -123,6 +125,7 @@
 		16E1E3F243F209A852249C0E /* ShareViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		1E81136746EFB32307BF8F4D /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		1EEF614BDEED275300A3DD6D /* ImproveShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ImproveShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		21D8F1806D17F57FF05D712B /* BundledModelModule.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BundledModelModule.swift; sourceTree = "<group>"; };
 		2BD3167161334CCC189096E3 /* Pods-OffgridMobile.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OffgridMobile.debug.xcconfig"; path = "Target Support Files/Pods-OffgridMobile/Pods-OffgridMobile.debug.xcconfig"; sourceTree = "<group>"; };
 		37BD4C6C3858A907C678B5B4 /* Pods-OffgridMobile.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OffgridMobile.release.xcconfig"; path = "Target Support Files/Pods-OffgridMobile/Pods-OffgridMobile.release.xcconfig"; sourceTree = "<group>"; };
 		3A3BA1A946E10FA48AA4C0EB /* libPods-OffgridMobile.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-OffgridMobile.a"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -133,6 +136,7 @@
 		89A9465C6CE2C9FA4CF5E01B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		AABB000200000000000002AA /* OffgridMobileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OffgridMobileTests.swift; sourceTree = "<group>"; };
 		AABB000400000000000004AA /* OffgridMobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OffgridMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B8E8AC374FAA1BD8E46EE112 /* BundledModelModule.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = BundledModelModule.m; sourceTree = "<group>"; };
 		B9DE36A1FFE10AF8CD81DBD2 /* Pods-OffgridMobileTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OffgridMobileTests.release.xcconfig"; path = "Target Support Files/Pods-OffgridMobileTests/Pods-OffgridMobileTests.release.xcconfig"; sourceTree = "<group>"; };
 		D0917E571600B3FFEDA59EF7 /* Pods-OffgridMobileTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OffgridMobileTests.debug.xcconfig"; path = "Target Support Files/Pods-OffgridMobileTests/Pods-OffgridMobileTests.debug.xcconfig"; sourceTree = "<group>"; };
 		D1B1541769AADA563D6CC44E /* libPods-OffgridMobileTests.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-OffgridMobileTests.a"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -207,6 +211,8 @@
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
 				04B9D63E2F38E71E00F1A435 /* Images.xcassets */,
 				0A7B3D052F3A0B1200CC5FA1 /* all-MiniLM-L6-v2-Q8_0.gguf */,
+				21D8F1806D17F57FF05D712B /* BundledModelModule.swift */,
+				B8E8AC374FAA1BD8E46EE112 /* BundledModelModule.m */,
 			);
 			name = OffgridMobile;
 			sourceTree = "<group>";
@@ -556,6 +562,8 @@
 				0F4D00012F47000100C11A00 /* SyncDirectorySourceModule.m in Sources */,
 				0F4D00022F47000100C11A00 /* SyncDirectorySourceModule.swift in Sources */,
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
+				1E6D87A794EAC55D367A5CEE /* BundledModelModule.swift in Sources */,
+				EB41087B1C40046EAC95BB6F /* BundledModelModule.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

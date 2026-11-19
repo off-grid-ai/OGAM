@@ -5,8 +5,8 @@
  * While the packs download, the model shows as one download row, the same row the regular downloader
  * would publish (same model key). So the chat opens at once with the model on its way
  * (arrivingChatModel), onboarding sees a chat model coming, and the regular downloader's duplicate guard
- * starts no second copy. When the packs arrive, their files move into the models folder (a rename on the
- * same disk, no copy) and the model registers and is chosen exactly as a finished download is
+ * starts no second copy. When the packs arrive, their files come into the models folder (a rename on
+ * Android; a copy out of the system's storage on iOS) and the model registers and is chosen exactly as a finished download is
  * (startModelDownload). If the packs stop, Retry runs the regular download: that path stays the fallback
  * everywhere.
  */
@@ -118,10 +118,11 @@ function showRow(status: 'running' | 'waiting_for_network' | 'failed', bytes: nu
   }
 }
 
-async function moveInto(dir: string, from: string, name: string): Promise<string> {
+async function bringInto(port: BundledModelPort, dir: string, from: string, name: string): Promise<string> {
   const to = `${dir}/${name}`;
   if (await RNFS.exists(to)) await RNFS.unlink(to);
-  await RNFS.moveFile(from, to);
+  if (port.canMoveFiles) await RNFS.moveFile(from, to);
+  else await RNFS.copyFile(from, to);
   return to;
 }
 
@@ -129,8 +130,8 @@ async function adopt(port: BundledModelPort, paths: Record<string, string>): Pro
   await modelManager.initialize();
   const dir = modelManager.getModelsDirectory();
   const { weights, mmproj, modelId } = BUNDLED_MODEL;
-  const weightsPath = await moveInto(dir, `${paths[weights.pack]}/${weights.name}`, weights.name);
-  const mmProjPath = await moveInto(dir, `${paths[mmproj.pack]}/${mmproj.name}`, LOCAL_MMPROJ);
+  const weightsPath = await bringInto(port, dir, `${paths[weights.pack]}/${weights.name}`, weights.name);
+  const mmProjPath = await bringInto(port, dir, `${paths[mmproj.pack]}/${mmproj.name}`, LOCAL_MMPROJ);
   const model: DownloadedModel = await buildDownloadedModel({
     modelId, file: bundledModelFile(), resolvedLocalPath: weightsPath, mmProjPath,
   });

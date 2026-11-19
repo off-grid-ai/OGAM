@@ -33,6 +33,7 @@ function fakePlay(initial: Record<string, PackState>): FakePlay {
   const listeners = new Set<(s: PackState) => void>();
   const removed: string[] = [];
   return {
+    canMoveFiles: true,
     removed,
     getPacks: async names => Object.fromEntries(names.map(n => [n, initial[n]])),
     fetch: async names => Object.fromEntries(names.map(n => [n, initial[n]])),
@@ -147,6 +148,14 @@ describe('startBundledModel', () => {
   it('with no port given it asks the platform, which on this test platform has no packs', async () => {
     await expect(svc.startBundledModel()).resolves.toBeUndefined();
     expect(downloads().downloads[KEY]).toBeUndefined();
+  });
+
+  it('on iOS the files are copied out of the system storage, then the pack is removed', async () => {
+    landPacks();
+    const play = { ...fakePlay({ chat_model: pack('chat_model', 'completed'), chat_mmproj: pack('chat_mmproj', 'completed') }), canMoveFiles: false };
+    await svc.startBundledModel(play);
+    expect(stores().useAppStore.getState().downloadedModels.find(m => m.id === KEY)?.fileSize).toBe(WEIGHTS);
+    expect(await device.fs.exists(`${device.modelsDir}/LFM3-VL-2B-Q4_K_M.gguf`)).toBe(true);
   });
 
   it('keeps the chat model you already chose', async () => {
