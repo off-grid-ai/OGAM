@@ -124,7 +124,9 @@ def bundled_model_profiles(strict: true)
     # Registering alone signs nothing, so the runner holds no certificate to check the profile against.
     path = get_provisioning_profile(api_key: key, app_identifier: id, platform: "ios", skip_install: false,
                                     skip_certificate_verification: !strict)
-    profile = Plist.parse_xml(`security cms -D -i #{path.shellescape}`)
+    # The plist sits as plain text inside the signed profile; `security cms` needs a keychain the register job has not.
+    profile = Plist.parse_xml(File.binread(path)[/<\?xml.*<\/plist>/m].to_s)
+    UI.user_error!("Could not read the profile #{path}") unless profile
     groups = Array(profile.dig("Entitlements", "com.apple.security.application-groups"))
     unless groups.include?(group)
       UI.important("The profile for #{id} has no App Group #{group} yet.") unless strict
