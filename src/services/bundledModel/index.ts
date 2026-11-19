@@ -25,8 +25,6 @@ import { BUNDLED_MODEL, BUNDLED_PACKS, bundledModelFile } from './model';
 import { bundledModelPort, type BundledModelPort, type PackState } from './port';
 import { bundledModelState, type BundledModelState } from './rule';
 
-export { BUNDLED_MODEL, bundledModelFile } from './model';
-export { bundledModelState } from './rule';
 
 const SIZES = { [BUNDLED_MODEL.weights.pack]: BUNDLED_MODEL.weights.sizeBytes, [BUNDLED_MODEL.mmproj.pack]: BUNDLED_MODEL.mmproj.sizeBytes };
 const MODEL_KEY = makeModelKey(BUNDLED_MODEL.modelId, BUNDLED_MODEL.weights.name);
@@ -44,7 +42,7 @@ export function startBundledModel(port: BundledModelPort = bundledModelPort): Pr
   return running;
 }
 
-/** For tests: forget this launch's run. */
+/** @public For tests: forget this launch's run. */
 export function resetBundledModelForTests(): void {
   running = null;
 }

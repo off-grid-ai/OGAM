@@ -2,7 +2,7 @@ import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
 
 /** Where one pack is on its way to the phone. The same contract on every platform; a platform with no
  *  pack system answers "not_installed" for every pack. */
-export type PackStatus =
+type PackStatus =
   | 'not_installed'
   | 'unknown'
   | 'pending'

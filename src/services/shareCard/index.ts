@@ -12,7 +12,7 @@ import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
 
 /** Mac's words (2026-11-19). */
 export const SHARE_MARK = 'Made offline on my phone · Off Grid AI';
-export const SHARE_LINK = 'https://getoffgridai.co/download';
+const SHARE_LINK = 'https://getoffgridai.co/download';
 
 /** The text beside the shared picture: the mark, then the plain link. */
 export function shareText(): string {

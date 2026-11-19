@@ -9,6 +9,8 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { installModelManagerDevice, type ModelManagerDevice } from '../../../harness/modelManagerDevice';
 import type { BundledModelPort, PackState } from '../../../../src/services/bundledModel/port';
+import { BUNDLED_MODEL, bundledModelFile } from '../../../../src/services/bundledModel/model';
+import { bundledModelState } from '../../../../src/services/bundledModel/rule';
 
 const KEY = 'LiquidAI/LFM3-VL-2B-GGUF/LFM3-VL-2B-Q4_K_M.gguf';
 const WEIGHTS = 1099627808;
@@ -64,19 +66,19 @@ beforeEach(async () => {
 describe('bundled model descriptor', () => {
   it('is the catalog row the Android build fetches (one source for file, URL and hash)', () => {
     const catalog = JSON.parse(readFileSync(join(__dirname, '../../../../catalog/models.json'), 'utf8'));
-    const entry = catalog.sections.models.find((m: { id: string }) => m.id === svc.BUNDLED_MODEL.modelId);
-    const { weights, mmproj } = svc.BUNDLED_MODEL;
+    const entry = catalog.sections.models.find((m: { id: string }) => m.id === BUNDLED_MODEL.modelId);
+    const { weights, mmproj } = BUNDLED_MODEL;
     expect(entry.files).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: weights.name, url: weights.url, sizeBytes: weights.sizeBytes, sha256: weights.sha256, role: 'primary' }),
       expect.objectContaining({ name: mmproj.name, url: mmproj.url, sizeBytes: mmproj.sizeBytes, sha256: mmproj.sha256, role: 'mmproj' }),
     ]));
-    expect(entry.quant).toBe(svc.BUNDLED_MODEL.quantization);
+    expect(entry.quant).toBe(BUNDLED_MODEL.quantization);
     // Play's per-pack cap is 1.5 GB: each file fits its own pack.
     expect(Math.max(weights.sizeBytes, mmproj.sizeBytes)).toBeLessThan(1.5e9);
   });
 
   it('as a download request carries the projector, so the fallback fetches the whole model', () => {
-    expect(svc.bundledModelFile()).toEqual(expect.objectContaining({
+    expect(bundledModelFile()).toEqual(expect.objectContaining({
       name: 'LFM3-VL-2B-Q4_K_M.gguf', size: WEIGHTS,
       mmProjFile: expect.objectContaining({ name: 'mmproj-LFM3-VL-2B-F16.gguf', size: MMPROJ }),
     }));
@@ -86,11 +88,11 @@ describe('bundled model descriptor', () => {
 describe('bundledModelState', () => {
   const names = ['chat_model', 'chat_mmproj'];
   const sizes = { chat_model: WEIGHTS, chat_mmproj: MMPROJ };
-  const state = (a: PackState, b: PackState) => svc.bundledModelState({ chat_model: a, chat_mmproj: b }, names, sizes);
+  const state = (a: PackState, b: PackState) => bundledModelState({ chat_model: a, chat_mmproj: b }, names, sizes);
 
   it('no pack known to Play (sideloaded build) is absent: the regular download serves', () => {
     expect(state(pack('chat_model', 'not_installed'), pack('chat_mmproj', 'not_installed'))).toEqual({ kind: 'absent' });
-    expect(svc.bundledModelState({}, names, sizes)).toEqual({ kind: 'absent' });
+    expect(bundledModelState({}, names, sizes)).toEqual({ kind: 'absent' });
     expect(state(pack('chat_model', 'unknown'), pack('chat_mmproj', 'downloading'))).toEqual({ kind: 'absent' });
   });
 
@@ -209,7 +211,7 @@ describe('startBundledModel', () => {
 
   it('a regular download of the model already running stays the row to follow', async () => {
     const { startModelDownload } = require('../../../../src/services/startModelDownload');
-    await startModelDownload(svc.BUNDLED_MODEL.modelId, svc.bundledModelFile(), { autoSelectIfEmpty: true });
+    await startModelDownload(BUNDLED_MODEL.modelId, bundledModelFile(), { autoSelectIfEmpty: true });
     await device.settle();
     const before = downloads().downloads[KEY].downloadId;
     const play = fakePlay({ chat_model: pack('chat_model', 'downloading'), chat_mmproj: pack('chat_mmproj', 'downloading') });

@@ -192,7 +192,7 @@ export const ChatHeader: React.FC<{
 );
 
 /** What an empty chat says while its first model downloads. */
-export function arrivingHint(model: ArrivingChatModel): string {
+function arrivingHint(model: ArrivingChatModel): string {
   return model.failed
     ? `${model.name} stopped downloading.`
     : `${model.name} is downloading: ${Math.round(model.progress * 100)}%. Ask now. It answers when it is ready.`;
