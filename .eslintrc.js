@@ -8,6 +8,12 @@ const BARE_SEARCH_FIELD = {
   message: 'A search above a list is ListSearchBar (src/components/ListSearchBar): it carries the header surface and edge, so rows never scroll under a bare field.',
 };
 
+const SWIPE_ROW = {
+  name: 'react-native-gesture-handler/Swipeable',
+  allowTypeImports: true,
+  message: 'A row you swipe to delete is SwipeToDelete (src/components/SwipeToDelete): one trash button, aligned to the row and inset from the edge.',
+};
+
 module.exports = {
   root: true,
   extends: [
@@ -97,12 +103,16 @@ module.exports = {
     // A search that stays put above a list is the shared ListSearchBar: a bare SearchField has no
     // surface or edge, so rows scroll up to it and are cut with no separation (DESIGN_PHILOSOPHY,
     // Mobile components). Only a field that scrolls with its content may use SearchField itself.
-    'no-restricted-imports': ['error', { paths: [TOUCHABLE_IMPORTS], patterns: [BARE_SEARCH_FIELD] }],
+    'no-restricted-imports': ['error', { paths: [TOUCHABLE_IMPORTS, SWIPE_ROW], patterns: [BARE_SEARCH_FIELD] }],
   },
   overrides: [
     {
       files: ['src/components/Touchable.tsx'],
       rules: { 'no-restricted-imports': 'off' },
+    },
+    {
+      files: ['src/components/SwipeToDelete.tsx'],
+      rules: { 'no-restricted-imports': ['error', { paths: [TOUCHABLE_IMPORTS], patterns: [BARE_SEARCH_FIELD] }] },
     },
     {
       // The bar itself, and fields that sit inside their own scroll view (they scroll away with it).
@@ -112,7 +122,7 @@ module.exports = {
         'src/screens/ModelsScreen/TranscriptionModelsTab.tsx',
         '**/audio/ui/VoiceModelSearch.tsx', // pro/: globs here resolve from pro's own config
       ],
-      rules: { 'no-restricted-imports': ['error', { paths: [TOUCHABLE_IMPORTS] }] },
+      rules: { 'no-restricted-imports': ['error', { paths: [TOUCHABLE_IMPORTS, SWIPE_ROW] }] },
     },
     {
       files: ['scripts/physical-sync/**/*.mjs'],

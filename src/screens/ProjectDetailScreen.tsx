@@ -6,7 +6,7 @@ import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { AliveScreen } from '../components/AliveScreen';
 import { useNavigation, useRoute, RouteProp, useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import { SwipeToDelete } from '../components/SwipeToDelete';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../components/Button';
 import {
@@ -117,26 +117,11 @@ export const ProjectDetailScreen: React.FC = () => {
 
   const formatDate = (dateString: string): string => formatWhen(dateString);
 
-  const renderChatRightActions = (conversation: Conversation) => (
-    <TouchableOpacity
-      style={styles.deleteAction}
-      accessibilityRole="button"
-      accessibilityLabel={`Delete ${conversation.title}`}
-      onPress={() => handleDeleteChat(conversation)}
-    >
-      <Icon name="trash-2" size={16} color={colors.error} />
-    </TouchableOpacity>
-  );
-
   const renderChat = ({ item }: { item: Conversation }) => {
     const preview = previewLine(item.messages);
 
     return (
-      <Swipeable
-        renderRightActions={() => renderChatRightActions(item)}
-        overshootRight={false}
-        containerStyle={styles.swipeableContainer}
-      >
+      <SwipeToDelete onDelete={() => handleDeleteChat(item)} label={item.title}>
         <TouchableOpacity
           style={styles.chatItem}
           onPress={() => handleChatPress(item)}
@@ -156,7 +141,7 @@ export const ProjectDetailScreen: React.FC = () => {
             </Text>
           </View>
         </TouchableOpacity>
-      </Swipeable>
+      </SwipeToDelete>
     );
   };
 

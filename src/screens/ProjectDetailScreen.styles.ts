@@ -9,7 +9,6 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flex: 1,
     backgroundColor: colors.background,
   },
-  swipeableContainer: { overflow: 'visible' as const },
   header: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -259,15 +258,6 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.body,
     color: colors.primary,
     fontWeight: '400' as const,
-  },
-  deleteAction: {
-    backgroundColor: colors.errorBackground,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    width: 50,
-    borderRadius: 12,
-    marginBottom: SPACING.sm,
-    marginLeft: 10,
   },
   kbIndexing: {
     flexDirection: 'row' as const,
