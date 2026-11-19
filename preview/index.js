@@ -1,11 +1,13 @@
 // The translation preview's entry: the app's screens in a browser, in the language the translate editor
 // (or ?lang=) asks for. See preview/metro.preview.config.js.
 //
-//   index.html?lang=de       the app in German, from catalogs/de/{common,mobile}.json beside the page
+//   index.html?lang=de             the app in German, from catalogs/de/{common,mobile}.json beside the page
+//   index.html?route=onboarding    first run (otherwise: onboarding done, one model, Pro on)
 //
 // The editor (the parent frame) sends { type: 'offgrid-i18n', locale, strings } as a person types; the app
 // remounts with the new text.
 import './web-shims'; // first: App starts listeners as it loads
+import './demo-state'; // before App: the saved state the app starts from
 import React, { useEffect, useState } from 'react';
 import { AppRegistry } from 'react-native';
 import { setCatalog } from '@offgrid/i18n';
