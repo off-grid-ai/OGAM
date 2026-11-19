@@ -101,6 +101,10 @@ const config = {
       if (i18nRuntime && usesI18nRuntime(context.originModulePath)) {
         return { type: 'sourceFile', filePath: i18nRuntime };
       }
+      // The translated catalogs (src/i18n/appLanguage.ts): '@offgrid/i18n' itself maps to one file below.
+      if (moduleName.startsWith('@offgrid/i18n/catalogs/')) {
+        return { type: 'sourceFile', filePath: path.resolve(i18nPackagePath, moduleName.slice('@offgrid/i18n/'.length)) };
+      }
       return context.resolveRequest(context, moduleName, platform);
     },
     extraNodeModules: {

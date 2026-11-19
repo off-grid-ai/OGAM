@@ -57,6 +57,8 @@ module.exports = {
     // so its `react/jsx-runtime` must be this app's React.
     '^react/jsx-runtime$': '<rootDir>/node_modules/react/jsx-runtime.js',
     '^react/jsx-dev-runtime$': '<rootDir>/node_modules/react/jsx-dev-runtime.js',
+    // Mirrors metro.config.js: the translated catalogs beside the i18n package.
+    '^@offgrid/i18n/catalogs/(.*)$': '<rootDir>/../shared/packages/i18n/catalogs/$1',
     '^@/(.*)$': '<rootDir>/src/$1',
     // Mirrors the metro alias so tests can import pro modules that reference core.
     '^@offgrid/core/(.*)$': '<rootDir>/src/$1',

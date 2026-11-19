@@ -10,7 +10,8 @@ import { Pressable } from './src/components/Touchable';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, type NavigationState } from '@react-navigation/native';
+import { useAppLanguage } from './src/i18n/appLanguage';
 import { openPendingImprove, startScribeEntry } from './src/services/scribeEntry';
 import { startProCheckoutReturn } from './src/services/proCheckout';
 import { AliveProvider } from './src/components/AliveProvider';
@@ -145,6 +146,10 @@ function saveChatStateOnBackground(): void {
 }
 
 function App() {
+  // The app language, set before any screen renders. A change remounts the screens under its key (the
+  // React Compiler memoizes JSX, so a redraw alone would keep the old text) and reopens the same route.
+  const language = useAppLanguage();
+  const navigationState = useRef<NavigationState | undefined>(undefined);
   useEffect(() => () => {
     stopStartupProbe?.();
     stopStartupProbe = null;
@@ -489,15 +494,18 @@ function App() {
         {/* The alive layer hears every touch and scroll on the UI thread so the living field answers. */}
         <AliveProvider>
         <SystemBars style={isDark ? 'light' : 'dark'} />
+        <React.Fragment key={language.code}>
         {AppRoot ? <AppRoot /> : null}
         <NavigationContainer
           ref={appNavigationRef}
+          initialState={navigationState.current}
           onReady={() => {
             applyPendingProRedirect();
             openPendingImprove().catch(() => undefined);
             trackScreen(appNavigationRef.getCurrentRoute()?.name);
           }}
-          onStateChange={() => {
+          onStateChange={state => {
+            navigationState.current = state;
             applyPendingProRedirect();
             trackScreen(appNavigationRef.getCurrentRoute()?.name);
           }}
@@ -534,6 +542,7 @@ function App() {
           <AppNavigator />
         </NavigationContainer>
         <AnalyticsConsentPrompt />
+        </React.Fragment>
         {__DEV__ && showSyncStatusBar ? <DevSyncStrip /> : null}
         </AliveProvider>
       </SafeAreaProvider>
