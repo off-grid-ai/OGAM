@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
 import { View, Text, Image, Linking } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
+import Icon from 'react-native-vector-icons/Feather';
+import { activeLocale, t } from '@offgrid/i18n';
 import ReanimatedAnimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -148,6 +150,20 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
   return (
     <AliveScreen style={styles.container} edges={['top', 'bottom']}>
       <View testID="onboarding-screen" style={styles.container}>
+        {/* The language, set to the phone's; one tap opens the same list as Settings → Language. */}
+        <View style={styles.languageBar}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Language')}
+            style={styles.languageChip}
+            testID="onboarding-language"
+            accessibilityRole="button"
+            accessibilityLabel={t('Language: {0}', activeLocale().name)}
+          >
+            <Icon name="globe" size={14} color={colors.textSecondary} />
+            <Text style={styles.languageText} translate="no">{activeLocale().name}</Text>
+            <Icon name="chevron-down" size={14} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
         <IntroContent
           item={ONBOARDING_INTRO}
           styles={styles}
@@ -222,6 +238,23 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     textAlign: 'left' as const,
     lineHeight: 22,
   },
+  languageBar: {
+    flexDirection: 'row' as const,
+    justifyContent: 'flex-end' as const,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.md,
+  },
+  languageChip: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  languageText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
   footer: {
     paddingHorizontal: SPACING.xl,
     paddingBottom: SPACING.xl,
