@@ -16,7 +16,7 @@ interface ListSearchBarProps {
   /** testID of the bar itself (the field takes `testID`). */
   barTestID?: string;
   style?: StyleProp<ViewStyle>;
-  /** Controls inside the field, after its text, e.g. the Models tabs' sort and filter toggles. */
+  /** Controls after the field on the same row, e.g. the Models tabs' sort and filter toggles. */
   children?: ReactNode;
   /** A line inside the bar, under the field, that stays put with it, e.g. a count and a bulk action. */
   below?: ReactNode;
@@ -30,8 +30,14 @@ interface ListSearchBarProps {
  */
 export const ListSearchBar: React.FC<ListSearchBarProps> = ({ style, children, below, barTestID, ...field }) => {
   const { colors, shadows } = useTheme();
-  // The list's own controls sit inside the field, so search and its sort and filter are one sheet.
-  const fieldRow = <SearchField {...field} trailing={children} />;
+  const fieldRow = children ? (
+    <View style={rowStyle}>
+      <SearchField {...field} style={fieldInRow} />
+      {children}
+    </View>
+  ) : (
+    <SearchField {...field} />
+  );
   return (
     <View style={[barStyle, headerSurface(colors, shadows), style]} testID={barTestID}>
       {fieldRow}
@@ -42,8 +48,10 @@ export const ListSearchBar: React.FC<ListSearchBarProps> = ({ style, children, b
 
 const barStyle: ViewStyle = {
   paddingHorizontal: SPACING.xl,
-  paddingTop: SPACING.sm,
+  paddingTop: SPACING.md,
   paddingBottom: SPACING.sm,
   zIndex: 1,
 };
 
+const rowStyle: ViewStyle = { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm };
+const fieldInRow: ViewStyle = { flex: 1 };

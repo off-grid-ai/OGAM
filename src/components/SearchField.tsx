@@ -1,11 +1,11 @@
-import React, { useState, type ReactNode } from 'react';
+import React, { useState } from 'react';
 import { View, TextInput, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { TouchableOpacity } from './Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { cardLift } from '../theme/surface';
+import { cardFill } from '../theme/surface';
 
 export interface SearchFieldProps {
   value: string;
@@ -16,8 +16,6 @@ export interface SearchFieldProps {
   onSubmitEditing?: () => void;
   testID?: string;
   style?: StyleProp<ViewStyle>;
-  /** Controls inside the field, after a hairline: the list's own sort, filter and import. */
-  trailing?: ReactNode;
 }
 
 /**
@@ -27,7 +25,7 @@ export interface SearchFieldProps {
 // A 44 pt frame around the 16 pt clear glyph, pulled back so the field keeps its height.
 const CLEAR_FRAME = { width: 44, height: 44, margin: -14, alignItems: 'center' as const, justifyContent: 'center' as const };
 
-export const SearchField: React.FC<SearchFieldProps> = ({ value, onChangeText, placeholder, clearLabel = 'Clear search', onSubmitEditing, testID, style, trailing }) => {
+export const SearchField: React.FC<SearchFieldProps> = ({ value, onChangeText, placeholder, clearLabel = 'Clear search', onSubmitEditing, testID, style }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const [focused, setFocused] = useState(false);
@@ -58,12 +56,6 @@ export const SearchField: React.FC<SearchFieldProps> = ({ value, onChangeText, p
           <Icon name="x" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       ) : null}
-      {trailing ? (
-        <>
-          <View style={styles.divider} />
-          <View style={styles.trailing}>{trailing}</View>
-        </>
-      ) : null}
     </View>
   );
 };
@@ -74,17 +66,14 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     gap: SPACING.sm,
     paddingHorizontal: SPACING.md,
-    minHeight: 48,
+    minHeight: 44,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderLight,
-    backgroundColor: colors.surface,
-    // A sheet laid on the bar, as cards are on the page: the field is the thing you act on, so it
-    // lifts instead of lying flat beside loose icons (Mac, 2026-11-19: "feels flat ... misplaced").
-    boxShadow: cardLift(colors),
+    // Glass, as the rows below it: the field sits on the screen's field, not raised above it (Mac,
+    // 2026-11-19: a raised white sheet with the controls inside it was "not looking very natural").
+    backgroundColor: cardFill(colors),
   },
-  divider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch' as const, marginVertical: SPACING.sm, backgroundColor: colors.borderLight },
-  trailing: { flexDirection: 'row' as const, alignItems: 'center' as const, marginRight: -SPACING.sm },
   // Focus draws light to the field: an emerald edge and a soft ring (the composer's focus).
   rowFocused: {
     borderColor: colors.heroBorder,
