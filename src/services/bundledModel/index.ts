@@ -15,12 +15,11 @@ import { useAppStore } from '../../stores';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { makeModelKey } from '../../utils/modelKey';
 import logger from '../../utils/logger';
-import { activeModelService } from '../activeModelService';
 import { modelManager } from '../modelManager';
 import { mmProjLocalName } from '../modelManager/download';
 import { buildDownloadedModel, persistDownloadedModel } from '../modelManager/storage';
 import { rememberStart } from '../queuedStarts';
-import { startModelDownload } from '../startModelDownload';
+import { selectArrivedChatModel, startModelDownload } from '../startModelDownload';
 import type { DownloadedModel } from '../../types';
 import { BUNDLED_MODEL, BUNDLED_PACKS, bundledModelFile } from './model';
 import { bundledModelPort, type BundledModelPort, type PackState } from './port';
@@ -137,12 +136,7 @@ async function adopt(port: BundledModelPort, paths: Record<string, string>): Pro
   });
   await persistDownloadedModel(model, dir);
   useAppStore.getState().addDownloadedModel(model);
-  // Chosen as a finished download is: only when no chat model is chosen, your last pick first.
-  const app = useAppStore.getState();
-  if (app.activeModelId === null) {
-    const selected = app.downloadedModels.find(item => item.id === app.lastTextModelId) ?? model;
-    activeModelService.selectTextModel(selected.id);
-  }
+  selectArrivedChatModel(model);
   const row = useDownloadStore.getState().downloads[MODEL_KEY];
   if (row?.downloadId === DOWNLOAD_ID) useDownloadStore.getState().remove(MODEL_KEY);
   await Promise.all(BUNDLED_PACKS.map(name => port.removePack(name)));
