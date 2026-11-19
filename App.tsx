@@ -32,6 +32,7 @@ import { hydrateDownloadStore } from './src/services/downloadHydration';
 import { initModelCatalog } from './src/stores/modelCatalogStore';
 import { initActiveDownloadPersistence } from './src/services/activeDownloadPersistence';
 import { restoreQueuedDownloads } from './src/services/restoreQueuedDownloads';
+import { startBundledModel } from './src/services/bundledModel';
 import { startLoadPolicySync } from './src/services/loadPolicySync';
 import { startNetworkReconnectWatcher, stopNetworkReconnectWatcher } from './src/services/networkReconnect';
 import { registerCoreDownloadProviders } from './src/services/modelDownloadService/registerProviders';
@@ -288,6 +289,11 @@ function App() {
       await restoreQueuedDownloads().catch((error) => {
         logger.error('[App] Failed to restore queued downloads during startup:', error);
       });
+
+      // The chat model that ships with the app (Play AI packs): adopt it if it has arrived, or show it
+      // on its way as a download row. After hydrate, so it dedupes against a regular download of it.
+      // Not awaited: it follows the packs until they land.
+      startBundledModel();
 
       // Reconcile image model directories that finished extracting on disk but whose AsyncStorage
       // registration was lost to an app kill. Reads the (just-hydrated) download store, so it lives
