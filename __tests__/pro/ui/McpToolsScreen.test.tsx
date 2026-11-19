@@ -247,7 +247,7 @@ const seed = (opts: {
     expect(queryByText('Create')).toBeNull();
 
     // The clear button appears and resets.
-    fireEvent.press(getByLabelText('Clear search'));
+    fireEvent.press(getByLabelText('Clear tool search'));
     expect(getByText('Create')).toBeTruthy();
   });
 
@@ -281,6 +281,6 @@ const seed = (opts: {
   it('does not render the clear button while the query is empty', () => {
     seed({ serverId: 'srv-1', serverTools: { 'srv-1': [tool('lookup')] } });
     const { queryByLabelText } = render(withNavigatorRoutes(<McpToolsScreen />, { params: routeParams, openedFrom: 'Previous' }));
-    expect(queryByLabelText('Clear search')).toBeNull();
+    expect(queryByLabelText('Clear tool search')).toBeNull();
   });
 });

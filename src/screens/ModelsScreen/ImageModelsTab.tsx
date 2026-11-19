@@ -7,7 +7,7 @@ import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 import { determineCredibility } from '@offgrid/models';
 import { ModelCard } from '../../components';
 import { GROUPED_CARD_ROW, ListGroup } from '../../components/ListGroup';
-import { SearchField } from '../../components/SearchField';
+import { ListSearchBar } from '../../components/ListSearchBar';
 import { useTheme, useThemedStyles } from '../../theme';
 import { HFImageModel, getVariantLabel } from '../../services/huggingFaceModelBrowser';
 import { ImageModelRecommendation } from '../../types';
@@ -307,14 +307,12 @@ export const ImageModelsTab: React.FC<Props> = ({
 
   return (
     <View style={styles.imageTabContent}>
-      <View style={styles.imageModelsSection}>
-        <View style={[styles.searchContainer, styles.searchContainerNoPadding]}>
-          <SearchField
-            style={styles.searchField}
+        <ListSearchBar
             placeholder="Search models"
+            clearLabel="Clear model search"
             value={imageSearchQuery}
             onChangeText={setImageSearchQuery}
-          />
+          >
           <TouchableOpacity
             style={[styles.recToggle, showRecommendedOnly && styles.recToggleActive]}
             onPress={() => {
@@ -334,8 +332,7 @@ export const ImageModelsTab: React.FC<Props> = ({
             <Icon name="sliders" size={14} color={(imageFiltersVisible || hasActiveImageFilters) ? colors.primary : colors.textMuted} />
             {hasActiveImageFilters && <View style={styles.filterDot} />}
           </TouchableOpacity>
-        </View>
-      </View>
+        </ListSearchBar>
 
       <ImageModelsScrollContent
         showRecHint={showRecHint}

@@ -1,5 +1,4 @@
 import { cardSurface } from '../../theme/surface';
-import { StyleSheet } from 'react-native';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { createImageModelsStyles } from './imageStyles';
@@ -7,7 +6,6 @@ import { createImageModelsStyles } from './imageStyles';
 const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   flex1: { flex: 1 },
   backButton: { padding: 4, marginRight: 8 },
-  searchContainerNoPadding: { paddingHorizontal: 0 },
   container: { flex: 1, backgroundColor: colors.background },
   // 44 pt frames (they were 28), pulled back so the header keeps its height.
   downloadManagerButton: {
@@ -32,30 +30,6 @@ const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   downloadBadgeText: { ...TYPOGRAPHY.label, color: colors.text },
   imageTabContent: { flex: 1 },
-  searchContainer: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    paddingHorizontal: SPACING.xl,
-    paddingBottom: 16,
-    gap: 8,
-  },
-  // The Text tab's search row stays put with a shadow along its bottom edge; the list scrolls under it.
-  // It stays put above the list, over the living field: no slab, no shadow edge across the screen.
-  searchContainerRaised: {
-    zIndex: 1,
-  },
-  searchField: { flex: 1 },
-  searchInput: {
-    ...TYPOGRAPHY.body,
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: colors.text,
-  },
   // Glass like every card.
   importProgressCard: {
     ...cardSurface(colors),

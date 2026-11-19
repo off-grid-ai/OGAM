@@ -1,3 +1,13 @@
+const TOUCHABLE_IMPORTS = {
+  name: 'react-native',
+  importNames: ['TouchableOpacity', 'Pressable', 'Switch'],
+  message: 'Import TouchableOpacity, Pressable and Switch from src/components/Touchable (@offgrid/core/components/Touchable in pro): they count the tap.',
+};
+const BARE_SEARCH_FIELD = {
+  group: ['**/SearchField'],
+  message: 'A search above a list is ListSearchBar (src/components/ListSearchBar): it carries the header surface and edge, so rows never scroll under a bare field.',
+};
+
 module.exports = {
   root: true,
   extends: [
@@ -84,23 +94,25 @@ module.exports = {
     ],
     // Every tap is counted by testID (docs/ANALYTICS.md, session_summary.actions) through the app's own
     // touchables. Importing react-native's directly would leave that button uncounted.
-    'no-restricted-imports': [
-      'error',
-      {
-        paths: [
-          {
-            name: 'react-native',
-            importNames: ['TouchableOpacity', 'Pressable', 'Switch'],
-            message: 'Import TouchableOpacity, Pressable and Switch from src/components/Touchable (@offgrid/core/components/Touchable in pro): they count the tap.',
-          },
-        ],
-      },
-    ],
+    // A search that stays put above a list is the shared ListSearchBar: a bare SearchField has no
+    // surface or edge, so rows scroll up to it and are cut with no separation (DESIGN_PHILOSOPHY,
+    // Mobile components). Only a field that scrolls with its content may use SearchField itself.
+    'no-restricted-imports': ['error', { paths: [TOUCHABLE_IMPORTS], patterns: [BARE_SEARCH_FIELD] }],
   },
   overrides: [
     {
       files: ['src/components/Touchable.tsx'],
       rules: { 'no-restricted-imports': 'off' },
+    },
+    {
+      // The bar itself, and fields that sit inside their own scroll view (they scroll away with it).
+      files: [
+        'src/components/ListSearchBar.tsx',
+        'src/screens/ModelsScreen/EmbeddingModelsTab.tsx',
+        'src/screens/ModelsScreen/TranscriptionModelsTab.tsx',
+        '**/audio/ui/VoiceModelSearch.tsx', // pro/: globs here resolve from pro's own config
+      ],
+      rules: { 'no-restricted-imports': ['error', { paths: [TOUCHABLE_IMPORTS] }] },
     },
     {
       files: ['scripts/physical-sync/**/*.mjs'],

@@ -4,7 +4,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { View, Text, FlatList, RefreshControl, Platform, type StyleProp, type ViewStyle } from 'react-native';
 import { GROUPED_CARD_ROW, ListGroupSeparator, listGroupRowEnds } from '../../components/ListGroup';
-import { SearchField } from '../../components/SearchField';
+import { ListSearchBar } from '../../components/ListSearchBar';
 import { TouchableOpacity } from '../../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import { LoadingDots } from '../../components/LoadingDots';
@@ -502,15 +502,15 @@ export const TextModelsTab: React.FC<Props> = (props) => {
 
   return (
     <>
-      <View style={[styles.searchContainer, styles.searchContainerRaised]} testID="text-model-search-row">
-        <SearchField
-          style={styles.searchField}
-          placeholder="Search models"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onSubmitEditing={handleSearch}
-          testID="search-input"
-        />
+      <ListSearchBar
+        placeholder="Search models"
+        clearLabel="Clear model search"
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        onSubmitEditing={handleSearch}
+        testID="search-input"
+        barTestID="text-model-search-row"
+      >
         <TouchableOpacity
           style={[styles.filterToggle, sortToggleActive && styles.filterToggleActive]}
           onPress={() => toggleFilterDimension('sort')}
@@ -547,7 +547,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
             <Icon name="upload" size={14} color={colors.textMuted} />
           </TouchableOpacity>
         )}
-      </View>
+      </ListSearchBar>
 
       {filterState.expandedDimension === 'sort' && <SortPanel filterState={filterState} setSortOption={setSortOption} styles={styles} colors={colors} />}
 
