@@ -12,6 +12,7 @@
  */
 import { AlertState, showAlert, hideAlert } from '../utils/alertState';
 import { isOverridableMemoryError } from '../utils/modelLoadErrors';
+import { noteTurnNotGood } from '../utils/sharePrompt';
 
 /** Safe message extraction — a thrown value isn't guaranteed to be an Error, and
  *  `(error as Error).message` renders "undefined" for a string/other throw. */
@@ -34,6 +35,8 @@ export function memoryRefusalAlert(
   },
 ): AlertState {
   const { smaller } = actions;
+  // A refused load is a turn that did not work: the rating ask never follows it.
+  noteTurnNotGood();
   // Load Anyway can still run the phone out of memory; the sheet says so in one line.
   return showAlert('Insufficient Memory', `${detail}\n\nLoad Anyway may close the app if memory runs out.`, [
     ...(smaller ? [{ text: smaller.label, style: 'primary' as const, onPress: smaller.onPress }] : []),
@@ -89,6 +92,7 @@ export async function loadModelWithOverride(
         );
         return;
       }
+      noteTurnNotGood();
       deps.setAlertState(showAlert('Error', `Failed to load model: ${errorMessage(error)}`));
       deps.onError?.(error instanceof Error ? error : new Error(errorMessage(error)));
     } finally {

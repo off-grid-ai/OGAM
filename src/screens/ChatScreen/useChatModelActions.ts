@@ -13,6 +13,7 @@ import { ModelReadyOutcome, reasonFromLoadError } from './modelReadiness';
 import { isOverridableMemoryError } from '../../services/modelLoadErrors';
 import { loadModelWithOverride, memoryRefusalAlert } from '../../services/loadModelWithOverride';
 import { smallerModelAction } from '../../services/smallerModelOffer';
+import { noteTurnNotGood } from '../../utils/sharePrompt';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
 
@@ -235,6 +236,7 @@ export async function initiateModelLoad(
         }));
         return { ok: false, reason: 'insufficient-memory', detail, alerted: true };
       }
+      noteTurnNotGood();
       deps.setAlertState(showAlert('Error', `Failed to load model: ${detail}`));
     }
     return { ok: false, reason: reasonFromLoadError(error), detail, alerted: !alreadyLoading };

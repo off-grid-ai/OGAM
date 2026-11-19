@@ -7,8 +7,8 @@
  * - sharePrompt pub/sub (emit/subscribe lifecycle)
  * - shouldShowSharePrompt trigger logic at correct milestones
  *
- * Verifies that the share prompt is emitted at the right times (the 2nd generation, at most once
- * per session) and not emitted on failed/aborted generations.
+ * Verifies that the share prompt is emitted at the right times (the 3rd good reply in a row, at most
+ * once per session) and never after a failed, stopped or refused turn.
  *
  * Real: generationService, imageGenerationService, llmService, activeModelService, the residency
  * manager, sharePrompt, the stores. Faked, because they are the phone: llama.rn and the
@@ -62,25 +62,46 @@ describe('text generation triggers share prompt', () => {
     expect(shareListener).not.toHaveBeenCalled();
   });
 
-  it('emits the share prompt on the 2nd text generation (after delay)', async () => {
+  it('emits the share prompt on the 3rd good reply in a row (after delay)', async () => {
     await runTextGeneration();
+    await runTextGeneration();
+    await wait(1600);
+    expect(shareListener).not.toHaveBeenCalled();
     await runTextGeneration();
     expect(shareListener).not.toHaveBeenCalled();
     await wait(1600);
     expect(shareListener).toHaveBeenCalledWith('text');
-    expect(appState().textGenerationCount).toBe(2);
+    expect(appState().textGenerationCount).toBe(3);
+  });
+
+  it('never follows a failed reply: the run of good replies starts again', async () => {
+    await runTextGeneration();
+    await runTextGeneration();
+    device.boundary.llama!.scriptCompletion({ throwMessage: 'Generation failed' });
+    await expect(
+      device.generationService.generateResponse(device.conversationId, device.ask('Hi')),
+    ).rejects.toThrow('Generation failed');
+    await runTextGeneration();
+    await runTextGeneration();
+    await wait(1600);
+    expect(shareListener).not.toHaveBeenCalled();
+    await runTextGeneration();
+    await wait(1600);
+    expect(shareListener).toHaveBeenCalledWith('text');
   });
 
   it('emits AT MOST ONCE per session across many generations (no 2/10/20 re-show)', async () => {
     // Second generation triggers it once; later generations in the SAME session must
     // NOT re-show it (the old cadence re-showed at 10, 20, …).
     await runTextGeneration();
-    await runTextGeneration(); // count → 2, fires
+    await runTextGeneration();
+    await runTextGeneration(); // the 3rd good one, fires
     await wait(1600);
     expect(shareListener).toHaveBeenCalledTimes(1);
 
-    await runTextGeneration(); // → 3, same session
-    await runTextGeneration(); // → 4, same session
+    await runTextGeneration(); // same session
+    await runTextGeneration(); // same session
+    await runTextGeneration(); // same session
     await wait(1600);
     expect(shareListener).toHaveBeenCalledTimes(1); // still exactly once
   });
@@ -120,7 +141,7 @@ describe('stopped generation with content triggers share prompt', () => {
     await device.generationService.stopGeneration();
 
     expect(appState().textGenerationCount).toBe(1);
-    // First generation doesn't trigger share prompt (skipped until 2nd)
+    // A stopped reply counts as a reply, never toward the rating ask.
     await wait(1600);
     expect(shareListener).not.toHaveBeenCalled();
   });
@@ -152,7 +173,7 @@ describe('image generation triggers share prompt', () => {
     expect(appState().imageGenerationCount).toBe(1);
   });
 
-  it('does not emit share prompt on first image generation (delayed to 2nd)', async () => {
+  it('does not emit share prompt on first image generation (waits for the 3rd good one)', async () => {
     await setupImageModel();
     await imageGenerationService.generateImage({ prompt: 'sunset' });
 
@@ -161,22 +182,34 @@ describe('image generation triggers share prompt', () => {
     expect(shareListener).not.toHaveBeenCalled();
   });
 
-  it('emits share prompt on 2nd image generation (after delay)', async () => {
+  it('emits share prompt on the 3rd good image in a row (after delay)', async () => {
     await setupImageModel();
     await imageGenerationService.generateImage({ prompt: 'sunset' });
-
+    await imageGenerationService.generateImage({ prompt: 'sunset' });
     await imageGenerationService.generateImage({ prompt: 'sunset' });
     expect(shareListener).not.toHaveBeenCalled();
     await wait(2100);
     expect(shareListener).toHaveBeenCalledWith('image');
-    expect(appState().imageGenerationCount).toBe(2);
+    expect(appState().imageGenerationCount).toBe(3);
+  });
+
+  it('never follows a failed image: the run of good ones starts again', async () => {
+    await setupImageModel();
+    await imageGenerationService.generateImage({ prompt: 'sunset' });
+    await imageGenerationService.generateImage({ prompt: 'sunset' });
+    diffusion().generateImage.mockRejectedValueOnce(new Error('GPU error'));
+    await imageGenerationService.generateImage({ prompt: 'sunset' });
+    await imageGenerationService.generateImage({ prompt: 'sunset' });
+    await wait(2100);
+    expect(shareListener).not.toHaveBeenCalled();
   });
 
   it('emits AT MOST ONCE per session across image generations (no 20th re-show)', async () => {
     await setupImageModel();
     await imageGenerationService.generateImage({ prompt: 'sunset' });
 
-    await imageGenerationService.generateImage({ prompt: 'sunset' }); // → 2, fires
+    await imageGenerationService.generateImage({ prompt: 'sunset' });
+    await imageGenerationService.generateImage({ prompt: 'sunset' }); // the 3rd good one, fires
     await wait(2100);
     expect(shareListener).toHaveBeenCalledTimes(1);
 

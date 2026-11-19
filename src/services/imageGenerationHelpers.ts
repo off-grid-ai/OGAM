@@ -42,11 +42,10 @@ export function reportEnhancementSkipped(reason: string): void {
 
 export function scheduleImageSharePrompt(): void {
   const appStore = useAppStore.getState();
-  const count = appStore.incrementImageGenerationCount();
+  appStore.incrementImageGenerationCount();
   const delayMs = 2000;
   maybeScheduleSharePrompt({
     variant: 'image',
-    count,
     hasEngaged: appStore.hasEngagedSharePrompt,
     delayMs,
   });

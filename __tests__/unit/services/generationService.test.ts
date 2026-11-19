@@ -216,13 +216,16 @@ describe('the share prompt after a reply', () => {
     return variants;
   };
 
-  it('asks once, for text, from the second reply of a session', async () => {
+  it('asks once, for text, from the third good reply in a row of a session', async () => {
     d = await launchGeneration();
     const variants = heard();
-    d.boundary.llama!.scriptCompletions([{ text: 'One' }, { text: 'Two' }]);
+    d.boundary.llama!.scriptCompletions([{ text: 'One' }, { text: 'Two' }, { text: 'Three' }]);
 
     await d.generationService.generateResponse(d.conversationId, d.ask('Hi'));
     await d.generationService.generateResponse(d.conversationId, d.ask('Again'));
+    await tick(1700);
+    expect(variants).toEqual([]);
+    await d.generationService.generateResponse(d.conversationId, d.ask('Once more'));
     expect(variants).toEqual([]);
     await until(() => variants.length > 0, 'the share prompt', 2500);
 
