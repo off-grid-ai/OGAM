@@ -136,26 +136,27 @@ describe('ShareCardHost', () => {
 });
 
 describe('Share as card in the message menu', () => {
-  beforeEach(() => { jest.useFakeTimers(); });
-  afterEach(() => { jest.useRealTimers(); });
-
   it('an assistant reply offers it, and it shares that reply as a card; Copy stays', async () => {
-    const spy = jest.spyOn(shareCard, 'shareReplyCard').mockResolvedValue();
-    const view = render(<ChatMessage message={createAssistantMessage('A clear answer.')} />);
+    const view = render(<><ShareCardHost /><ChatMessage message={createAssistantMessage('A clear answer.')} /></>);
     fireEvent(view.getByTestId('assistant-message'), 'longPress');
     expect(view.getByTestId('action-copy')).toBeTruthy();
     fireEvent.press(view.getByTestId('action-share-card'));
-    act(() => { jest.advanceTimersByTime(400); });
-    expect(spy).toHaveBeenCalledWith('A clear answer.');
+    await waitFor(() => expect(view.getByTestId('share-card-reply', { includeHiddenElements: true })).toHaveTextContent('A clear answer.'));
+    await drawn(view);
+    await waitFor(() => expect(Share.share).toHaveBeenCalledWith({
+      url: expect.stringMatching(/\/share-cards\/off-grid-ai-\d+\.png$/),
+      message: shareCard.shareText(),
+    }));
   });
 
   it('a failed card says so, and points at Copy', async () => {
-    jest.spyOn(shareCard, 'shareReplyCard').mockRejectedValue(new Error('x'));
-    const view = render(<ChatMessage message={createAssistantMessage('Answer.')} />);
+    mockCapture.mockRejectedValueOnce(new Error('no surface'));
+    const view = render(<><ShareCardHost /><ChatMessage message={createAssistantMessage('Answer.')} /></>);
     fireEvent(view.getByTestId('assistant-message'), 'longPress');
     fireEvent.press(view.getByTestId('action-share-card'));
-    await act(async () => { jest.advanceTimersByTime(400); });
-    expect(view.getByText('The card could not be made. Copy still works.')).toBeTruthy();
+    await drawn(view);
+    await waitFor(() => expect(view.getByText('The card could not be made. Copy still works.')).toBeTruthy());
+    expect(Share.share).not.toHaveBeenCalled();
   });
 
   it('your own message does not offer it', () => {
