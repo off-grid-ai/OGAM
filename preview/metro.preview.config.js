@@ -54,6 +54,9 @@ const appResolve = appConfig.resolver.resolveRequest;
 module.exports = {
   ...appConfig,
   projectRoot: root,
+  // Pictures load from assets/ beside the page, so the preview works at any address (the editor serves
+  // it under /apps/mobile/).
+  transformer: { ...appConfig.transformer, publicPath: 'assets' },
   resolver: {
     ...appConfig.resolver,
     platforms: ['web', 'ios', 'android', 'native'],
