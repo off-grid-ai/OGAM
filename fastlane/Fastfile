@@ -464,6 +464,7 @@ platform :ios do
       precheck_include_in_app_purchases: false,
       skip_screenshots: true,
       skip_metadata: false,
+      metadata_path: "fastlane/metadata/ios",
       force: true
     )
     UI.success("Uploaded to App Store (not submitted - submit in App Store Connect)")
@@ -477,6 +478,7 @@ platform :ios do
       skip_binary_upload: true,
       skip_screenshots: true,
       skip_metadata: false,
+      metadata_path: "fastlane/metadata/ios",
       force: true
     )
     UI.success("Pushed App Store metadata")
@@ -497,6 +499,7 @@ platform :ios do
       precheck_include_in_app_purchases: false,
       skip_screenshots: true,
       skip_metadata: false,
+      metadata_path: "fastlane/metadata/ios",
       force: true
     )
     # deliver selects build_number only inside its submit-for-review step, so with
