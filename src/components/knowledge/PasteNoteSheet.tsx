@@ -156,7 +156,7 @@ export const PasteNoteSheet: React.FC<PasteNoteSheetProps> = ({
         ) : null}
         <Button
           title="Save to Files"
-          variant="primary"
+          variant="hero"
           loading={saving}
           disabled={!text.trim()}
           onPress={() => save()}

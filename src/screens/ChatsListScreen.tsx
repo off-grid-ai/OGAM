@@ -364,7 +364,7 @@ export const ChatsListScreen: React.FC = () => {
               ) : null}
               <Button
                 title="New"
-                variant="primary"
+                variant="hero"
                 size="small"
                 onPress={handleNewChat}
                 icon={<Icon name="plus" size={16} color={colors.primary} />}

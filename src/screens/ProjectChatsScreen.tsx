@@ -288,7 +288,7 @@ export const ProjectChatsScreen: React.FC = () => {
           {hasModels && (
             <Button
               title="New chat"
-              variant="primary"
+              variant="hero"
               size="medium"
               onPress={handleNewChat}
             />

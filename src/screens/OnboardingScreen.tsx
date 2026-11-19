@@ -157,7 +157,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
         <View style={styles.footer}>
           <Button
             title="Get Started"
-            variant="tint"
+            variant="hero"
             onPress={getStarted}
             size="large"
             style={styles.nextButton}

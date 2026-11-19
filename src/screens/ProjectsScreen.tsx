@@ -205,7 +205,7 @@ export const ProjectsScreen: React.FC = () => {
               title="New project"
               variant="hero"
               size="small"
-              icon={<Icon name="plus" size={16} color={colors.onHero} />}
+              icon={<Icon name="plus" size={16} color={colors.primary} />}
               onPress={handleNewProject}
               testID="new-project-empty-button"
             />

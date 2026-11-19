@@ -323,7 +323,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                   title="New chat"
                   variant="hero"
                   size="small"
-                  icon={<Icon name="plus" size={16} color={colors.onHero} />}
+                  icon={<Icon name="plus" size={16} color={colors.primary} />}
                   onPress={startNewChat}
                   style={styles.newChatButton}
                   testID="new-chat-button"

@@ -237,7 +237,7 @@ export const ProDetailScreen: React.FC = () => {
             {/* CTAs — shared Button (outline). Buy is primary, verify is secondary. */}
             <Button
               title={pricing.cta}
-              variant="primary"
+              variant="hero"
               size="large"
               onPress={openPayPage}
               loading={opening}

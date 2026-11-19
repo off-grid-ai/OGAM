@@ -78,8 +78,8 @@ export const OnboardingGroupsScreen: React.FC<Props> = ({ navigation }) => {
         />
         <Button
           title="Continue"
-          // The screen's one main action: an emerald wash, not the quiet slab or a solid block.
-          variant="tint"
+          // The screen's one main action: the emerald wash (hero), not the quiet slab.
+          variant="hero"
           disabled={picks.groups.length === 0}
           onPress={() => {
             setPicks(picks);

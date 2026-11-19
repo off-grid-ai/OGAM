@@ -162,14 +162,15 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     flex: 0,
     alignSelf: 'stretch' as const,
   },
-  // The answer an alert leads with is the one main action: the same deep emerald with white text as the
-  // Button's hero (Restore read dark-on-bright beside Unlock and New login).
+  // The answer an alert leads with is the one main action: the same emerald wash and emerald text as the
+  // Button's hero.
   primaryButton: {
-    backgroundColor: colors.heroFill,
-    borderColor: colors.heroBorder,
+    backgroundColor: `${colors.primary}1A`,
+    borderColor: `${colors.primary}59`,
   },
   primaryButtonText: {
-    color: colors.onHero,
+    color: colors.primary,
+    fontWeight: '500' as const,
   },
   destructiveButton: {
     borderColor: colors.error,

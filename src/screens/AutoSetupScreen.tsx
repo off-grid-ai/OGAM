@@ -325,6 +325,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
                   )}
                   {isComplete ? (
                     <Button
+                      variant="hero"
                       title="Continue"
                       onPress={() => {
                         session.complete();
@@ -346,7 +347,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
                       }}
                       loading={starting}
                       disabled={selectedItems.length === 0}
-                      variant="tint"
+                      variant="hero"
                       testID="auto-setup-download"
                     />
                   )}

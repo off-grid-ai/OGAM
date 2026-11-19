@@ -160,6 +160,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
             />
 
             <Button
+              variant="hero"
               title={isVerifying ? 'Verifying...' : 'Unlock'}
               onPress={handleUnlock}
               disabled={isVerifying || !passphrase.trim()}

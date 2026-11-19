@@ -108,7 +108,7 @@ export const NameSheet: React.FC<NameSheetProps> = ({
         <View style={styles.actions}>
           <Button
             title={saving ? 'Saving...' : saveLabel}
-            variant="primary"
+            variant="hero"
             size="small"
             loading={saving}
             disabled={!draft.trim()}

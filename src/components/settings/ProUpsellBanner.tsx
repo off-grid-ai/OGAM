@@ -71,7 +71,7 @@ export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
           </TouchableOpacity>
         </View>
 
-        <Button title={pricing.cta} variant="primary" size="small" onPress={onGetPro} style={styles.cta} />
+        <Button title={pricing.cta} variant="hero" size="small" onPress={onGetPro} style={styles.cta} />
 
         <AnimatedPressable
           style={[styles.linkRow, styles.desktopLink]}
