@@ -88,6 +88,7 @@ export const ModelSettingsScreen: React.FC = () => {
       <ScreenHeader
         title="Model settings"
         onBack={() => navigation.goBack()}
+        barBelow
         right={
           // In the header, away from the foot of the page where a tab bar sits on other screens.
           <Button

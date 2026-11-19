@@ -153,6 +153,7 @@ export const ProjectsScreen: React.FC = () => {
       <ScreenHeader
         title="Projects"
         variant="tab"
+        barBelow={projects.length > 0}
         right={
           <Button
             title="New"

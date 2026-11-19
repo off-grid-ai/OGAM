@@ -317,6 +317,7 @@ export const ChatsListScreen: React.FC = () => {
       <ScreenHeader
         title="Chats"
         variant="tab"
+        barBelow={sortedConversations.length > 0 || hasComputer}
         right={
           selecting ? (
             <Button

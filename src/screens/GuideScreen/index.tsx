@@ -95,6 +95,7 @@ export const GuideScreen: React.FC = () => {
         <ScreenHeader
           title="What it does for you"
           onBack={() => navigation.goBack()}
+          barBelow
           right={tab === 'ask' && asked ? (
             <TouchableOpacity
               onPress={() => {

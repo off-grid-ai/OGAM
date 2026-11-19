@@ -134,6 +134,7 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({
           <ScreenHeader
             title="Models"
             variant="tab"
+            barBelow
             right={
               <View style={headerStyles.actions}>
                 <TouchableOpacity

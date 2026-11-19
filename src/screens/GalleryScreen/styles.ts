@@ -24,9 +24,9 @@ const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
     ...headerSurface(colors, shadows),
+    // The tabs under it are the same bar: they carry the edge.
+    boxShadow: 'none',
     zIndex: 1,
   },
   // 44 pt frames pulled back, so the header keeps its height (Back was 32, Select 36).
