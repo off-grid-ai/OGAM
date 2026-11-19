@@ -19,6 +19,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { createStyles } from './SettingsScreen.styles';
 import { SettingsAppearanceRow } from './SettingsAppearanceRow';
+import { activeLocale } from '@offgrid/i18n';
 import { SettingsCommunitySections } from './SettingsCommunitySections';
 import { SettingsAnalyticsSection } from './SettingsAnalyticsSection';
 import { AnimatedEntry } from '../components/AnimatedEntry';
@@ -193,6 +194,14 @@ export const SettingsScreen: React.FC = () => {
               onSelect={setThemeMode}
             />
             {[
+              {
+                icon: 'globe',
+                title: 'Language',
+                // The language in use, in its own name: "Deutsch".
+                desc: activeLocale().name,
+                screen: 'Language' as const,
+                testID: 'open-language',
+              },
               {
                 icon: 'star',
                 title: 'What you use',

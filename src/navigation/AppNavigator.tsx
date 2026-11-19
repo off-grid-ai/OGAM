@@ -50,6 +50,7 @@ import {
   GuideScreen,
   GuideTopicScreen,
   AnalyticsInfoScreen,
+  LanguageScreen,
   ToolsScreen,
 } from '../screens';
 import {
@@ -281,6 +282,7 @@ export const AppNavigator: React.FC = () => {
         <RootStack.Screen name="Guide" component={GuideScreen} />
         <RootStack.Screen name="GuideTopic" component={GuideTopicScreen} />
         <RootStack.Screen name="AnalyticsInfo" component={AnalyticsInfoScreen} />
+        <RootStack.Screen name="Language" component={LanguageScreen} />
         <RootStack.Screen name="Tools" component={ToolsScreen} />
         <RootStack.Screen
           name="DownloadManager"
