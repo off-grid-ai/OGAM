@@ -1,0 +1,13 @@
+// The bundled chat model's vision projector, in its own AI pack: the weights and the projector together
+// (1.48 GB) are too close to Play's 1.5 GB per-pack cap. See ../bundled-model.gradle.
+apply plugin: "com.android.ai-pack"
+
+ext.bundledModelFile = "mmproj-LFM3-VL-2B-F16.gguf"
+apply from: "../bundled-model.gradle"
+
+aiPack {
+    packName = "chat_mmproj"
+    dynamicDelivery {
+        deliveryType = "fast-follow"
+    }
+}
