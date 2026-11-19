@@ -12,6 +12,7 @@ import { modelDisplayName, splitGgufModelName } from '@offgrid/models';
 import type { DownloadEntry, DownloadStatus } from '../utils/downloadStatus';
 import { useDownloadStore } from '../stores/downloadStore';
 import { useAppStore } from '../stores/appStore';
+import { activeModelService } from './activeModelService';
 import { isClassifierModel } from './classifierModel';
 import { modelDownloadService } from './modelDownloadService';
 import { uniformDownloadId } from './modelDownloadService/uniformId';
@@ -76,6 +77,22 @@ export function useArrivingChatModel(): ArrivingChatModel | null {
     () => arrivingChatModel(downloads, activeModelId, classifierModelId),
     [downloads, activeModelId, classifierModelId],
   );
+}
+
+/**
+ * A chat model is already on hand: chosen, on the phone, or on its way (a bundled model pack, or a
+ * download started earlier). With none chosen, the one on the phone is chosen: the last pick when it
+ * is still here, else the first chat model. Setup's Start chatting then opens the chat for it, rather
+ * than download a second model.
+ */
+export function takeChatModelOnHand(): boolean {
+  const app = useAppStore.getState();
+  if (app.activeModelId !== null || currentArrivingChatModel()) return true;
+  const chatModels = app.downloadedModels.filter(model => !isClassifierModel(model.id, app.settings.classifierModelId));
+  const model = chatModels.find(item => item.id === app.lastTextModelId) ?? chatModels[0];
+  if (!model) return false;
+  activeModelService.selectTextModel(model.id);
+  return true;
 }
 
 /** Start a stopped download of the chat model on its way again. */

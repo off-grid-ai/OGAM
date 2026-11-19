@@ -82,15 +82,51 @@ describe('the queue while the model is on its way', () => {
     ({ id: 'q1', conversationId: 'c1', text: 'hello', messageText: 'hello', ...over });
 
   it('says what the message waits for, or that the download stopped', () => {
-    expect(waitingLabel(arriving)).toBe('Sends when Qwen 3.5 0.8B is ready · 42%');
+    expect(waitingLabel(arriving)).toBe('42% · sends when Qwen 3.5 0.8B is ready');
     expect(waitingLabel({ ...arriving, failed: true })).toBe('Qwen 3.5 0.8B stopped downloading');
   });
 
   it('shows the wait only in the chat whose messages wait for the model', () => {
     const view = chatQueueView([queued({ waitsForModel: true })], undefined, 'c1', arriving);
-    expect(view.waiting).toEqual({ label: 'Sends when Qwen 3.5 0.8B is ready · 42%', failed: false });
+    expect(view.waiting).toEqual({ label: '42% · sends when Qwen 3.5 0.8B is ready', failed: false });
     expect(chatQueueView([queued({})], undefined, 'c1', arriving).waiting).toBeUndefined();
     expect(chatQueueView([queued({ waitsForModel: true })], undefined, 'other', arriving).waiting).toBeUndefined();
     expect(chatQueueView([queued({ waitsForModel: true })], undefined, null, arriving).items).toEqual([]);
+  });
+});
+
+describe('takeChatModelOnHand', () => {
+  const { takeChatModelOnHand } = require('../../../src/services/arrivingChatModel');
+  const { useAppStore } = require('../../../src/stores/appStore');
+  const { useDownloadStore } = require('../../../src/stores/downloadStore');
+  const { createDownloadedModel } = require('../../utils/factories');
+  beforeEach(() => {
+    useDownloadStore.setState({ downloads: {} });
+    useAppStore.setState({ activeModelId: null, lastTextModelId: null, downloadedModels: [] });
+  });
+
+  it('is nothing when no chat model is chosen, on the phone or on its way', () => {
+    useAppStore.setState({ downloadedModels: [createDownloadedModel({ id: 'own/classifier' })] });
+    useAppStore.getState().updateSettings({ classifierModelId: 'own/classifier' });
+    expect(takeChatModelOnHand()).toBe(false);
+    expect(useAppStore.getState().activeModelId).toBeNull();
+  });
+
+  it('chooses the last pick on the phone before any other chat model', () => {
+    useAppStore.setState({
+      lastTextModelId: 'last',
+      downloadedModels: [createDownloadedModel({ id: 'first' }), createDownloadedModel({ id: 'last' })],
+    });
+    expect(takeChatModelOnHand()).toBe(true);
+    expect(useAppStore.getState().activeModelId).toBe('last');
+  });
+
+  it('counts a chosen model or one on its way, and chooses nothing then', () => {
+    useAppStore.setState({ activeModelId: 'chosen' });
+    expect(takeChatModelOnHand()).toBe(true);
+    useAppStore.setState({ activeModelId: null });
+    useDownloadStore.setState({ downloads: byKey(entry({})) });
+    expect(takeChatModelOnHand()).toBe(true);
+    expect(useAppStore.getState().activeModelId).toBeNull();
   });
 });

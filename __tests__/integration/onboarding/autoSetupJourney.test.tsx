@@ -15,6 +15,8 @@ import type {
 } from '../../../src/services/modelDownloadService/types';
 import { uniformDownloadId } from '../../../src/services/modelDownloadService/uniformId';
 import { useAppStore } from '../../../src/stores';
+import { useDownloadStore } from '../../../src/stores/downloadStore';
+import { createDownloadedModel } from '../../utils/factories';
 
 const MB = 1024 * 1024;
 // The size the fake listing gives a repo follows its parameter count, read from the repo name
@@ -207,6 +209,9 @@ describe('Auto Setup release journey', () => {
       speechDownloads.remove(),
     ]);
     unregister.forEach(dispose => dispose());
+    // A chat model left on the phone or on its way would make the next Start chatting skip its download.
+    useDownloadStore.setState({ downloads: {} });
+    useAppStore.setState({ downloadedModels: [] });
   });
 
   it('selects a device-fit plan, starts all model downloads, and activates it', async () => {
@@ -293,6 +298,42 @@ describe('Auto Setup release journey', () => {
     await waitFor(() =>
       expect(useAppStore.getState().activeModelId).toContain('unsloth/Qwen3.5-0.8B-GGUF'),
     );
+  });
+
+  it('opens the chat for a chat model already on its way, and downloads no second one', async () => {
+    // A bundled model pack, or a download started earlier: that one is the chat model.
+    useDownloadStore.getState().add({
+      modelKey: 'LiquidAI/LFM3-VL-2B-GGUF/LFM3-VL-2B-Q4_K_M.gguf',
+      downloadId: 'bundled-pack:lfm3',
+      modelId: 'LiquidAI/LFM3-VL-2B-GGUF',
+      fileName: 'LFM3-VL-2B-Q4_K_M.gguf',
+      quantization: 'Q4_K_M',
+      modelType: 'text',
+      status: 'running',
+      bytesDownloaded: 0,
+      totalBytes: 1,
+      combinedTotalBytes: 1,
+      progress: 0.3,
+      createdAt: 1,
+    } as never);
+    const ui = render(<AutoSetupScreen navigation={navigation} sessionFactory={sessionFactory} />);
+    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-start-chatting')));
+
+    await waitFor(() => expect(navigation.reset).toHaveBeenCalledWith({
+      index: 1,
+      routes: [{ name: 'Main' }, { name: 'Chat', params: {} }],
+    }));
+    expect(await modelDownloadService.list()).toEqual([]);
+  });
+
+  it('chooses a chat model already on the phone and opens the chat, with no download', async () => {
+    useAppStore.setState({ downloadedModels: [createDownloadedModel({ id: 'on-phone', name: 'On Phone' })], activeModelId: null });
+    const ui = render(<AutoSetupScreen navigation={navigation} sessionFactory={sessionFactory} />);
+    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-start-chatting')));
+
+    await waitFor(() => expect(navigation.reset).toHaveBeenCalled());
+    expect(useAppStore.getState().activeModelId).toBe('on-phone');
+    expect(await modelDownloadService.list()).toEqual([]);
   });
 
   it('stays on setup with Try Again when Start chatting cannot start the download', async () => {

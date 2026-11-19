@@ -30,6 +30,7 @@ import { useRemoteServerStore } from '../stores/remoteServerStore';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { useGetPro } from '../hooks/useGetPro';
+import { takeChatModelOnHand } from '../services/arrivingChatModel';
 
 const productionSessionFactory = (): AutoSetupSession =>
   createAutoSetupSession();
@@ -136,6 +137,12 @@ export const AutoSetupScreen: React.FC<Props> = ({
   // Start Quick start's downloads, then open a chat at once: the model answers when it arrives.
   const startChatting = async () => {
     markConsentAsked();
+    // A chat model already on hand (on the phone, or on its way: a bundled model pack, a download
+    // started earlier) is the chat model: open the chat for it rather than download a second one.
+    if (takeChatModelOnHand()) {
+      navigation.reset({ index: 1, routes: [{ name: 'Main' }, { name: 'Chat', params: {} }] });
+      return;
+    }
     setStartingChat(true);
     try {
       await session.startInBackground();
