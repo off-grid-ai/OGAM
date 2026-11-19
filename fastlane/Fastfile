@@ -112,10 +112,10 @@ def bundled_model_profiles(strict: true)
   app_id = "ai.offgridmobile"
   ext_id = "ai.offgridmobile.BundledModel"
   group = "group.ai.offgridmobile"
-  Spaceship::ConnectAPI::BundleId.find(identifier: ext_id) ||
+  Spaceship::ConnectAPI::BundleId.find(ext_id) ||
     Spaceship::ConnectAPI::BundleId.create(name: "Off Grid AI model download", platform: "IOS", identifier: ext_id)
   [app_id, ext_id].each do |id|
-    bundle = Spaceship::ConnectAPI::BundleId.find(identifier: id)
+    bundle = Spaceship::ConnectAPI::BundleId.find(id)
     next if bundle.get_capabilities.any? { |c| c.capability_type == "APP_GROUPS" }
     bundle.create_capability(Spaceship::ConnectAPI::BundleIdCapability::Type::APP_GROUPS)
     UI.message("Turned on App Groups for #{id}")
