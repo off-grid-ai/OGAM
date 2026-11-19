@@ -50,6 +50,7 @@ class MainApplication : Application(), ReactApplication {
           add(SyncDownloadsPackage())
           add(BlobChannelPackage())
           add(EnginePackPackage())
+          add(ai.offgridmobile.bundledmodel.BundledModelPackage())
         },
       // A fatal JS error still crashes the app, as React Native's default does, but with its JS
       // stack as frames so Play Console can show and group it.
