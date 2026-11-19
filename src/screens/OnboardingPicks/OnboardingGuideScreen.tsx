@@ -80,7 +80,8 @@ export const OnboardingGuideScreen: React.FC<Props> = ({ navigation }) => {
       <View style={styles.footer}>
         <Button
           title="Set up my models"
-          variant="primary"
+          // The screen's one main action: an emerald wash, not the quiet slab or a solid block.
+          variant="tint"
           onPress={() => finishPicks(navigation, picks)}
           style={styles.footerMain}
           testID="onboarding-finish"

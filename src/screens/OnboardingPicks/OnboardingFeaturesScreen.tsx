@@ -108,7 +108,8 @@ export const OnboardingFeaturesScreen: React.FC<Props> = ({ navigation }) => {
         />
         <Button
           title="Show me how it works"
-          variant="primary"
+          // The screen's one main action: an emerald wash, not the quiet slab or a solid block.
+          variant="tint"
           disabled={picks.parts.length === 0}
           onPress={() => navigation.push('OnboardingGuide')}
           style={styles.footerMain}

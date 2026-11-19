@@ -346,6 +346,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
                       }}
                       loading={starting}
                       disabled={selectedItems.length === 0}
+                      variant="tint"
                       testID="auto-setup-download"
                     />
                   )}
