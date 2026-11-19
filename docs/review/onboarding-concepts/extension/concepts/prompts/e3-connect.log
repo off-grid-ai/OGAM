@@ -1,0 +1,1394 @@
+OpenAI Codex v0.169.0
+--------
+workdir: /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 01a1f289-62f6-7d73-a52a-fd4cdd7e0182
+--------
+user
+STYLE (match the attached reference screenshots of the real Off Grid AI desktop onboarding exactly; they are the design source):
+- Dark theme. Near-black background with a faint fine dot lattice and one soft, diffuse emerald glow near the top. As in the references.
+- Geist sans: titles light and large; body regular. Geist Mono for small uppercase muted labels (like "OFF GRID AI · SETUP").
+- Tiles, rows and cards are translucent dark glass with hairline borders and rounded corners, as in the references. A picked tile has an emerald hairline edge and a small emerald check dot at its top right.
+- One accent colour: emerald (#34D399), used only for picked states, the one primary button, the active progress segment and small icons where the references use it. Everything else neutral greys. Small "PRO" labels are muted grey mono text, never coloured.
+- Footer as in the references: a thin bottom bar with a muted line on the left, a short segmented progress line in the centre with a tiny mono step name under it, and the buttons on the right (quiet text buttons, then the emerald primary button).
+- Thin line icons (Phosphor style). No emojis, no colour-coded badges, no traffic lights, no 3D, no illustrations, no browser window chrome, no device frame.
+- Flat screenshot filling the whole canvas edge to edge.
+- Every quoted string must appear exactly as written, legible and not clipped. Add no other copy, no watermark.
+OUTPUT: use your built-in image generation. Save the image in the current directory with the file name given below. Then save the exact final prompt you used to prompts/<same name>.txt. Check the text in the image against the quoted strings; regenerate once if any string is wrong.
+File name: e3-connect.png. Landscape, exactly 1536 x 1024. References: refs/desktop-setup.jpg and refs/desktop-groups.jpg for style.
+Screen: the extension's welcome page, step 3 of 5, "Connect to your computer". Centred column like the reference setup page.
+Mono label "OFF GRID AI · IN YOUR BROWSER". Title "Connect to your computer". Muted line "Off Grid AI is running on this computer. Pair once, and your picks work here."
+A glass card: small mono label "CHECK THESE WORDS". Six words in one row of quiet glass pills: "maple" "river" "stone" "lamp" "cedar" "north". Under them, muted text "Off Grid AI on your computer shows the same six words. Choose Pair there." Under that, a small spinner and muted text "Waiting for your computer".
+Below the card, a muted line with a lock icon: "Pages you ask about go to your computer, never to a cloud."
+Footer: 5-segment progress, segment 3 active, mono step name "CONNECT". Right: text button "Back". No primary button on this step while waiting.
+
+hook: UserPromptSubmit
+hook: UserPromptSubmit Completed
+codex
+I will use the imagegen and offgrid-ui skills to match the reference images. I will save the image and the final prompt, then check the image text.
+exec
+/bin/zsh -lc "pwd && rg --files -g 'rules.md' -g 'ENGINEERING_CONTRACT.md' -g 'desktop-setup.jpg' -g 'desktop-groups.jpg' -g '"'!node_modules'"' -g '"'!generated'"'" in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+ succeeded in 0ms:
+/Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+refs/desktop-setup.jpg
+refs/desktop-groups.jpg
+
+exec
+/bin/zsh -lc 'cat rules.md ../.codex/ENGINEERING_CONTRACT.md' in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+exec
+/bin/zsh -lc 'cat /Users/user/.codex/skills/.system/imagegen/SKILL.md' in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+ exited 1 in 0ms:
+cat: rules.md: No such file or directory
+cat: ../.codex/ENGINEERING_CONTRACT.md: No such file or directory
+
+ succeeded in 0ms:
+---
+name: "imagegen"
+description: "Generate or edit raster images when the task benefits from AI-created bitmap visuals such as photos, illustrations, textures, sprites, mockups, or transparent-background cutouts. Use when Codex should create a brand-new image, transform an existing image, or derive visual variants from references, and the output should be a bitmap asset rather than repo-native code or vector. Do not use when the task is better handled by editing existing SVG/vector/code-native assets, extending an established icon or logo system, or building the visual directly in HTML/CSS/canvas."
+---
+
+# Image Generation Skill
+
+Generates or edits images for the current project (for example website assets, game assets, UI mockups, product mockups, wireframes, logo design, photorealistic images, or infographics).
+
+## Top-level modes and rules
+
+This skill has exactly two top-level modes:
+
+- **Default built-in tool mode (preferred):** built-in `image_gen` tool for image generation, editing, and transparent-image requests. Does not require `OPENAI_API_KEY`.
+- **Fallback CLI mode:** `scripts/image_gen.py` CLI. Use when the user explicitly asks for or confirms the CLI/API/model path. Requires `OPENAI_API_KEY`.
+
+Within CLI fallback, the CLI exposes three subcommands:
+
+- `generate`
+- `edit`
+- `generate-batch`
+
+Rules:
+- Use the built-in `image_gen` tool by default for normal image generation and editing requests.
+- Do not switch to CLI fallback for ordinary quality, size, or file-path control.
+- For transparent images, ask built-in `image_gen` for a transparent background and preserve the generated alpha.
+- Never silently switch from built-in `image_gen` or CLI `gpt-image-2` to CLI `gpt-image-1.5`; ask the user first unless they explicitly requested `gpt-image-1.5`.
+- The word `batch` by itself does not mean CLI fallback. If the user asks for many assets or says to batch-generate assets without explicitly asking for CLI/API/model controls, stay on the built-in path and issue one built-in call per requested asset or variant.
+- If the built-in tool fails or is unavailable, tell the user the CLI fallback exists and that it requires `OPENAI_API_KEY`. Proceed only if the user explicitly asks for that fallback.
+- If the user explicitly asks for CLI mode, use the bundled `scripts/image_gen.py` workflow. Do not create one-off SDK runners.
+- Never modify `scripts/image_gen.py`. If something is missing, ask the user before doing anything else.
+
+Built-in save-path policy:
+- In built-in tool mode, Codex saves generated images under `$CODEX_HOME/*` by default.
+- Do not describe or rely on OS temp as the default built-in destination.
+- Do not describe or rely on a destination-path argument (if any) on the built-in `image_gen` tool. If a specific location is needed, generate first and then move or copy the selected output from `$CODEX_HOME/generated_images/...`.
+- Save-path precedence in built-in mode:
+  1. If the user names a destination, move or copy the selected output there.
+  2. If the image is meant for the current project, move or copy the final selected image into the workspace before finishing.
+  3. If the image is only for preview or brainstorming, render it inline; the underlying file can remain at the default `$CODEX_HOME/*` path.
+- Never leave a project-referenced asset only at the default `$CODEX_HOME/*` path.
+- Do not overwrite an existing asset unless the user explicitly asked for replacement; otherwise create a sibling versioned filename such as `hero-v2.png` or `item-icon-edited.png`.
+
+Shared prompt guidance for both modes lives in `references/prompting.md` and `references/sample-prompts.md`.
+
+Fallback-only docs/resources for CLI mode:
+- `references/cli.md`
+- `references/image-api.md`
+- `references/codex-network.md`
+- `scripts/image_gen.py`
+
+## When to use
+- Generate a new image (concept art, product shot, cover, website hero)
+- Generate a new image using one or more reference images for style, composition, or mood
+- Edit an existing image (inpainting, lighting or weather transformations, background replacement, object removal, compositing, transparent background)
+- Produce many assets or variants for one task
+
+## When not to use
+- Extending or matching an existing SVG/vector icon set, logo system, or illustration library inside the repo
+- Creating simple shapes, diagrams, wireframes, or icons that are better produced directly in SVG, HTML/CSS, or canvas
+- Making a small project-local asset edit when the source file already exists in an editable native format
+- Any task where the user clearly wants deterministic code-native output instead of a generated bitmap
+
+## Decision tree
+
+Think about two separate questions:
+
+1. **Intent:** is this a new image or an edit of an existing image?
+2. **Execution strategy:** is this one asset or many assets/variants?
+
+Intent:
+- If the user wants to modify an existing image while preserving parts of it, treat the request as **edit**.
+- If the user provides images only as references for style, composition, mood, or subject guidance, treat the request as **generate**.
+- If the user provides no images, treat the request as **generate**.
+
+Built-in edit semantics:
+- Built-in edit mode is for images already visible in the conversation context, such as attached images or images generated earlier in the thread.
+- If the user wants to edit a local image file with the built-in tool, first load it with built-in `view_image` tool so the image is visible in the conversation context, then proceed with the built-in edit flow.
+- Do not promise arbitrary filesystem-path editing through the built-in tool.
+- If a local file still needs direct file-path control, masks, or other explicit CLI-only parameters, use the explicit CLI fallback only when the user asks for it.
+- For edits, preserve invariants aggressively and save non-destructively by default.
+
+Execution strategy:
+- In the built-in default path, produce many assets or variants by issuing one `image_gen` call per requested asset or variant.
+- In the CLI fallback path, use the CLI `generate-batch` subcommand only when the user explicitly chose CLI mode and needs many prompts/assets.
+- For many distinct assets, do not use `n` as a substitute for separate prompts. `n` is for variants of one prompt; distinct assets need distinct built-in calls or distinct CLI `generate-batch` jobs.
+
+Assume the user wants a new image unless they clearly ask to change an existing one.
+
+## Workflow
+1. Decide the top-level mode: built-in by default, including transparent-output requests; fallback CLI only if explicitly requested or confirmed.
+2. Decide the intent: `generate` or `edit`.
+3. Decide whether the output is preview-only or meant to be consumed by the current project.
+4. Decide the execution strategy: single asset vs repeated built-in calls vs CLI `generate-batch`.
+5. Collect inputs up front: prompt(s), exact text (verbatim), constraints/avoid list, and any input images.
+6. For every input image, label its role explicitly:
+   - reference image
+   - edit target
+   - supporting insert/style/compositing input
+7. If the edit target is only on the local filesystem and you are staying on the built-in path, inspect it with `view_image` first so the image is available in conversation context.
+8. If the user asked for a photo, illustration, sprite, product image, banner, or other explicitly raster-style asset, use `image_gen` rather than substituting SVG/HTML/CSS placeholders. If the request is for an icon, logo, or UI graphic that should match existing repo-native SVG/vector/code assets, prefer editing those directly instead.
+9. Augment the prompt based on specificity:
+   - If the user's prompt is already specific and detailed, normalize it into a clear spec without adding creative requirements.
+   - If the user's prompt is generic, add tasteful augmentation only when it materially improves output quality.
+10. Use the built-in `image_gen` tool by default.
+11. For transparent-output requests, ask built-in `image_gen` for a transparent background and preserve the generated alpha channel.
+12. Inspect outputs and validate: subject, style, composition, text accuracy, and invariants/avoid items.
+13. Iterate with a single targeted change, then re-check.
+14. For preview-only work, render the image inline; the underlying file may remain at the default `$CODEX_HOME/generated_images/...` path.
+15. For project-bound work, move or copy the selected artifact into the workspace and update any consuming code or references. Never leave a project-referenced asset only at the default `$CODEX_HOME/generated_images/...` path.
+16. For batches or multi-asset requests, persist every requested deliverable final in the workspace unless the user explicitly asked to keep outputs preview-only. Discarded variants do not need to be kept unless requested.
+17. If the user explicitly chooses or confirms the CLI fallback, then use the fallback-only docs for model, quality, size, `input_fidelity`, masks, output format, output paths, and network setup.
+18. Always report the final saved path(s) for any workspace-bound asset(s), plus the final prompt or prompt set and whether the built-in tool or fallback CLI mode was used.
+
+## Transparent image requests
+
+Ask built-in `image_gen` for a genuinely transparent background and preserve its alpha.
+
+## Prompt augmentation
+
+Reformat user prompts into a structured, production-oriented spec. Make the user's goal clearer and more actionable, but do not blindly add detail.
+
+Treat this as prompt-shaping guidance, not a closed schema. Use only the lines that help, and add a short extra labeled line when it materially improves clarity.
+
+### Specificity policy
+
+Use the user's prompt specificity to decide how much augmentation is appropriate:
+
+- If the prompt is already specific and detailed, preserve that specificity and only normalize/structure it.
+- If the prompt is generic, you may add tasteful augmentation when it will materially improve the result.
+
+Allowed augmentations:
+- composition or framing hints
+- polish level or intended-use hints
+- practical layout guidance
+- reasonable scene concreteness that supports the stated request
+
+Not allowed augmentations:
+- extra characters or objects that are not implied by the request
+- brand names, slogans, palettes, or narrative beats that are not implied
+- arbitrary side-specific placement unless the surrounding layout supports it
+
+## Use-case taxonomy (exact slugs)
+
+Classify each request into one of these buckets and keep the slug consistent across prompts and references.
+
+Generate:
+- photorealistic-natural — candid/editorial lifestyle scenes with real texture and natural lighting.
+- product-mockup — product/packaging shots, catalog imagery, merch concepts.
+- ui-mockup — app/web interface mockups and wireframes; specify the desired fidelity.
+- infographic-diagram — diagrams/infographics with structured layout and text.
+- scientific-educational — classroom explainers, scientific diagrams, and learning visuals with required labels and accuracy constraints.
+- ads-marketing — campaign concepts and ad creatives with audience, brand position, scene, and exact tagline/copy.
+- productivity-visual — slide, chart, workflow, and data-heavy business visuals.
+- logo-brand — logo/mark exploration, vector-friendly.
+- illustration-story — comics, children’s book art, narrative scenes.
+- stylized-concept — style-driven concept art, 3D/stylized renders.
+- historical-scene — period-accurate/world-knowledge scenes.
+
+Edit:
+- text-localization — translate/replace in-image text, preserve layout.
+- identity-preserve — try-on, person-in-scene; lock face/body/pose.
+- precise-object-edit — remove/replace a specific element (including interior swaps).
+- lighting-weather — time-of-day/season/atmosphere changes only.
+- background-extraction — transparent background / clean cutout. Ask built-in `image_gen` for actual transparency.
+- style-transfer — apply reference style while changing subject/scene.
+- compositing — multi-image insert/merge with matched lighting/perspective.
+- sketch-to-render — drawing/line art to photoreal render.
+
+## Shared prompt schema
+
+Use the following labeled spec as shared prompt scaffolding for both top-level modes:
+
+```text
+Use case: <taxonomy slug>
+Asset type: <where the asset will be used>
+Primary request: <user's main prompt>
+Input images: <Image 1: role; Image 2: role> (optional)
+Scene/backdrop: <environment>
+Subject: <main subject>
+Style/medium: <photo/illustration/3D/etc>
+Composition/framing: <wide/close/top-down; placement>
+Lighting/mood: <lighting + mood>
+Color palette: <palette notes>
+Materials/textures: <surface details>
+Text (verbatim): "<exact text>"
+Constraints: <must keep/must avoid>
+Avoid: <negative constraints>
+```
+
+Notes:
+- `Asset type` and `Input images` are prompt scaffolding, not dedicated CLI flags.
+- `Scene/backdrop` refers to the visual setting. It is not the same as the fallback CLI `background` parameter, which controls output transparency behavior.
+- Fallback-only execution notes such as `Quality:`, `Input fidelity:`, masks, output format, and output paths belong in the CLI path only. Do not treat them as built-in `image_gen` tool arguments.
+
+Augmentation rules:
+- Keep it short.
+- Add only the details needed to improve the prompt materially.
+- For edits, explicitly list invariants (`change only X; keep Y unchanged`).
+- If any critical detail is missing and blocks success, ask a question; otherwise proceed.
+
+## Examples
+
+### Generation example (hero image)
+```text
+Use case: product-mockup
+Asset type: landing page hero
+Primary request: a minimal hero image of a ceramic coffee mug
+Style/medium: clean product photography
+Composition/framing: wide composition with usable negative space for page copy if needed
+Lighting/mood: soft studio lighting
+Constraints: no logos, no text, no watermark
+```
+
+### Edit example (invariants)
+```text
+Use case: precise-object-edit
+Asset type: product photo background replacement
+Primary request: replace only the background with a warm sunset gradient
+Constraints: change only the background; keep the product and its edges unchanged; no text; no watermark
+```
+
+## Prompting best practices
+- Structure prompt as scene/backdrop -> subject -> details -> constraints.
+- Include intended use (ad, UI mock, infographic) to set the mode and polish level.
+- Use camera/composition language for photorealism.
+- Only use SVG/vector stand-ins when the user explicitly asked for vector output or a non-image placeholder.
+- Quote exact text and specify typography + placement.
+- For tricky words, spell them letter-by-letter and require verbatim rendering.
+- For multi-image inputs, reference images by index and describe how they should be used.
+- For edits, repeat invariants every iteration to reduce drift.
+- Iterate with single-change follow-ups.
+- If the prompt is generic, add only the extra detail that will materially help.
+- If the prompt is already detailed, normalize it instead of expanding it.
+- For CLI fallback only, see `references/cli.md` and `references/image-api.md` for model, `quality`, `input_fidelity`, masks, output format, and output-path guidance.
+- For transparent images, ask built-in `image_gen` for actual transparency and preserve its alpha.
+
+More principles shared by both modes: `references/prompting.md`.
+Copy/paste specs shared by both modes: `references/sample-prompts.md`.
+
+## Guidance by asset type
+Asset-type templates (website assets, game assets, wireframes, logo) are consolidated in `references/sample-prompts.md`.
+
+## gpt-image-2 guidance for CLI fallback
+
+The fallback CLI defaults to `gpt-image-2`.
+
+- Use `gpt-image-2` for new CLI/API workflows unless the user confirms a different model.
+- CLI `gpt-image-2` does not support `background=transparent`; ask before using `gpt-image-1.5` unless the user explicitly requested that model.
+- `gpt-image-2` always uses high fidelity for image inputs; do not set `input_fidelity` with this model.
+- `gpt-image-2` supports `quality` values `low`, `medium`, `high`, and `auto`.
+- Use `quality low` for fast drafts, thumbnails, and quick iterations. Use `medium`, `high`, or `auto` for final assets, dense text, diagrams, identity-sensitive edits, or high-resolution outputs.
+- Square images are typically fastest to generate. Use `1024x1024` for fast square drafts.
+- If the user asks for 4K-style output, use `3840x2160` for landscape or `2160x3840` for portrait.
+- `gpt-image-2` size may be `auto` or `WIDTHxHEIGHT` if all constraints hold: max edge `<= 3840px`, both edges multiples of `16px`, long-to-short ratio `<= 3:1`, total pixels between `655,360` and `8,294,400`.
+
+Popular `gpt-image-2` sizes:
+- `1024x1024` square
+- `1536x1024` landscape
+- `1024x1536` portrait
+- `2048x2048` 2K square
+- `2048x1152` 2K landscape
+- `3840x2160` 4K landscape
+- `2160x3840` 4K portrait
+- `auto`
+
+## Fallback CLI mode only
+
+### Temp and output conventions
+These conventions apply only to the CLI fallback. They do not describe built-in `image_gen` output behavior.
+- Use `tmp/imagegen/` for intermediate files (for example JSONL batches); delete them when done.
+- Write final artifacts under `output/imagegen/`.
+- Use `--out` or `--out-dir` to control output paths; keep filenames stable and descriptive.
+
+### Dependencies
+Prefer `uv` for dependency management in this repo.
+
+Required Python package:
+```bash
+uv pip install openai
+```
+
+Optional for image inspection and downscaling:
+```bash
+uv pip install pillow
+```
+
+Portability note:
+- If you are using the installed skill outside this repo, install dependencies into that environment with its package manager.
+- In uv-managed environments, `uv pip install ...` remains the preferred path.
+
+### Environment
+- `OPENAI_API_KEY` must be set for live API calls.
+- Do not ask the user for `OPENAI_API_KEY` when using the built-in `image_gen` tool.
+- Never ask the user to paste the full key in chat. Ask them to set it locally and confirm when ready.
+
+If the key is missing, give the user these steps:
+1. Create an API key in the OpenAI platform UI: https://platform.openai.com/api-keys
+2. Set `OPENAI_API_KEY` as an environment variable in their system.
+3. Offer to guide them through setting the environment variable for their OS/shell if needed.
+
+If installation is not possible in this environment, tell the user which dependency is missing and how to install it into their active environment.
+
+### Script-mode notes
+- CLI commands + examples: `references/cli.md`
+- API parameter quick reference: `references/image-api.md`
+- Network approvals / sandbox settings for CLI mode: `references/codex-network.md`
+
+## Reference map
+- `references/prompting.md`: shared prompting principles for both modes.
+- `references/sample-prompts.md`: shared copy/paste prompt recipes for both modes.
+- `references/cli.md`: fallback-only CLI usage via `scripts/image_gen.py`.
+- `references/image-api.md`: fallback-only API/CLI parameter reference.
+- `references/codex-network.md`: fallback-only network/sandbox troubleshooting for CLI mode.
+- `scripts/image_gen.py`: fallback-only CLI implementation. Use only when the user explicitly chooses or confirms CLI mode.
+
+exec
+/bin/zsh -lc 'cat /Users/user/.codex/skills/offgrid-ui/SKILL.md' in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+ succeeded in 0ms:
+---
+name: offgrid-ui
+description: Select, design, implement, or review UI for Off Grid products using the canonical sibling brand guidance and `wednesday-solutions/component-library-animations`. Use for any UI/UX, IA, layout, navigation, interaction, loading, empty/error state, visual styling, or frontend component change. Enforce reuse or extension of a library primitive instead of inventing a standalone local component.
+---
+
+# Off Grid UI
+
+Build each UI change from the shared visual system. Treat brand guidance and the component library
+as source code dependencies, not inspiration.
+
+## Resolve the sources
+
+1. Resolve the product repository root and read its `AGENTS.md` completely.
+2. Resolve the sibling `brand` repository. Read `DESIGN_PHILOSOPHY.md` completely for every UI
+   task. Read `README.md` and `brand_tone_voice.md` when changing visible copy; read the other copy
+   guides only when the task needs them.
+3. Resolve the checkout whose `origin` is
+   `https://github.com/wednesday-solutions/component-library-animations.git`. Prefer the current
+   sibling checkout; otherwise use `/Users/user/wednesday/component-library-animations`. Fetch
+   `origin` before selection when network access is allowed, and record the inspected commit.
+4. Run `node scripts/inventory-ui-sources.mjs --product <repo-root> --summary` from this skill
+   directory. Narrow with `--family <name>` or `--behavior <term>` before opening relevant source;
+   use `--output <path>` only when a durable full inventory is needed.
+
+Stop and report the missing source if either the brand canon or component library cannot be read.
+Do not silently replace them with remembered conventions.
+
+## Select before implementing
+
+1. Name the user job, host surface, interaction state, data density, and the existing local owner.
+2. Search the complete inventory by behavior, not only by the requested visual name. Inspect the
+   source of every plausible primitive, including its dependency, keyboard, focus, ARIA, responsive,
+   animation, and `prefers-reduced-motion` behavior.
+3. Shortlist the best two to four candidates. Score them against:
+   - functional fit and complete state coverage;
+   - quiet, dense, brutalist/terminal composition;
+   - Menlo typography, Off Grid tokens, and emerald-only accent;
+   - accessibility and reduced motion;
+   - Next.js/client-boundary and bundle cost;
+   - maintainability and removal of the superseded local primitive.
+4. Reject decorative landing-page effects for operator-console surfaces: gradients, 3D treatments,
+   ornamental motion, heavy shadows, color-coded meaning, and empty spectacle conflict with the
+   brand even when the library contains them.
+5. Record the selected primitive and why it beats the alternatives before editing.
+
+## Reuse or extend
+
+- The current `component-library-animations` main branch may still be a Vite catalogue of hard-coded
+  previews rather than a consumable package. Treat catalogue entries as concepts until their source
+  exposes real props, tests, accessibility, reduced motion, correct dependencies, and a Next-safe
+  package export. Never weaken an existing product implementation by importing a preview.
+- Import the selected primitive through a stable package/export boundary. Do not paste or fork its
+  source into the product repository.
+- If the library is not consumable as a package, first add the required export/build boundary to the
+  library, then consume it as a dependency.
+- This restriction applies to reusable visual and interaction primitives. Product/domain components
+  still own business data, routes, actions, and feature composition, but must compose their visual
+  controls from the library.
+- A product-specific wrapper is allowed only as a thin semantic adapter over a named library
+  primitive. It may supply product data, tokens, labels, or composition; it must not recreate the
+  primitive's visuals or interaction state.
+- If no primitive can be adapted, add the reusable primitive to the component library first, with
+  its tests and catalogue entry, then consume it. A standalone custom product component is not an
+  acceptable fallback.
+- Use `@offgrid/design` tokens. Do not hardcode brand colors, spacing, typography, or motion values.
+- Finish the migration: replace usages, remove the superseded local implementation, and remove dead
+  styles/exports. One visual behavior has one owner.
+
+## Verify the whole state space
+
+Apply the repository's hygiene and test standards. At minimum verify:
+
+- unit behavior for the shared primitive or adapter;
+- real integration/navigation behavior in the host product;
+- keyboard order, focus visibility, ARIA semantics, contrast, and reduced motion;
+- loading, empty, error, populated, disabled, hover/focus, and destructive states that apply;
+- light and dark themes at narrow and wide target viewports;
+- no clipping, horizontal page overflow, duplicate controls, or wasted desktop real estate;
+- typecheck, tests, coverage, production build, dependency and duplication gates;
+- rendered screenshots after fonts, data, and animation settle.
+
+End with evidence: brand constraints applied, library commit, candidates considered, selected
+primitive, extension seam if any, local component removed, gates run, and live verification state.
+
+exec
+/bin/zsh -lc 'cat /Users/user/wednesday/off-grid-ai/mobile/rules.md /Users/user/wednesday/off-grid-ai/.codex/ENGINEERING_CONTRACT.md' in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+ succeeded in 0ms:
+# Off Grid Mobile
+
+Follow [the workspace engineering contract](../.codex/ENGINEERING_CONTRACT.md). It takes priority over these repo notes. Keep each change in the smallest existing owner.
+
+- Paid feature code belongs in the private `pro/` submodule. Core uses the existing registration seams. Commit Pro changes in its own repo.
+- For UI work, follow `../brand/DESIGN_PHILOSOPHY.md` (the one design philosophy for every Off Grid surface; its Mobile profile owns mobile mechanics) and use `@offgrid/design` tokens. For customer-facing copy, read `docs/brand_tone_voice.md`.
+- Keep capture opt-in with a visible recording indicator. Do not publish private device data.
+- During device checks, do not enter credentials or passcodes. Open private content only when the changed journey requires it.
+- Verify the changed journey on the affected device. For a change that affects both platforms, check iOS and Android before claiming both work.
+- Debug builds use `ai.offgridmobile.dev`. Read the in-app Debug Logs or the dev-only `offgrid-debug.log` in the app container when diagnosing device behavior.
+- If asked to push, use a branch and PR; do not push directly to `main`.
+
+<!-- BEGIN GENERATED: shared/CLAUDE.md#debugging-source-of-truth -->
+> **Generated from `shared/CLAUDE.md` - do not edit this section here.**
+> Run `node scripts/mirror-doctrine.mjs` in `shared/` after changing the canonical copy.
+> `--check` fails the build when a mirror drifts, so these cannot silently disagree.
+
+## Debugging — reason from first principles
+
+Read the observed behavior and the owning code. Use logs or a live reproduction when needed. Fix the reported cause without assuming that every bug needs a new source of truth or abstraction.
+<!-- END GENERATED: shared/CLAUDE.md#debugging-source-of-truth -->
+- Do not refactor, redesign, reorganize, rename, consolidate, or clean up unrelated code.
+- Prefer additive changes. Preserve existing behavior, architecture, ownership, interfaces, data, and compatibility.
+- Apply SOLID, DRY, SSOT, SRP, and Clean Architecture only to changed code. Never use them to justify refactoring.
+- Ask before introducing new abstractions, state owners, schemas, protocols, persistence, or migrations.
+- Do not create Git worktrees unless the user explicitly requests them.
+- Use the smallest focused verification that fits the change, subject to the rule above. Do not run end-to-end tests unless the user explicitly requests them.
+- For a long-running or large verification, use a synthetic profile that reproduces the same behavior in less time. Keep the relevant file, state, and failure conditions faithful to the real case.
+- Never use mocks, spies, direct state mutation, or implementation-detail assertions.
+- Use contract-faithful fakes only for uncontrollable external boundaries.
+- Report which focused verification was completed and any verification that remains.
+
+exec
+/bin/zsh -lc 'git rev-parse --show-toplevel; ls -la' in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+exec
+/bin/zsh -lc 'cat /Users/user/wednesday/off-grid-ai/brand/DESIGN_PHILOSOPHY.md; git -C /Users/user/wednesday/component-library-animations rev-parse HEAD' in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+ succeeded in 0ms:
+/Users/user/wednesday/off-grid-ai/mobile
+total 0
+drwxr-xr-x   4 user  staff  128 Nov 19 12:09 .
+drwxr-xr-x   6 user  staff  192 Nov 19 12:09 ..
+drwxr-xr-x  24 user  staff  768 Nov 19 12:10 prompts
+drwxr-xr-x   8 user  staff  256 Nov 19 12:09 refs
+
+ succeeded in 0ms:
+# Off Grid — Design Philosophy (shared source of truth)
+
+This is the **canonical, cross-platform design philosophy** for Off Grid. Every surface — Off
+Grid Desktop, Off Grid Mobile, the Console, the website, and every landing page — inherits from
+here. When a platform doc and this doc disagree on a shared principle, this doc wins; platform
+docs own only the platform-specific mechanics (component libraries, token accessors, layout
+density) and link back here.
+
+Read this before designing or reviewing any Off Grid surface. It pairs with the copy guides in
+this folder (`README.md`, `brand_tone_voice.md`) — the look and the words carry the same
+disposition: give the user something clean and honest, show the mechanism, never decorate to
+impress.
+
+---
+
+## The disposition
+
+The interface is quiet on purpose. It is private, on-device, and fast — and it should feel that
+way: calm, dense, immediate. Nothing shouts. The product earns trust by being clear and by
+getting out of the way, not by ornament. Restraint and motion do the work that gradients and
+color usually do elsewhere. Let the content — the memory, the AI response, the captured moment —
+be the thing that shines.
+
+**Silence, clarity, and function over form.**
+
+---
+
+## Shared principles (binding on every platform)
+
+### 1. Minimal, functional, alive
+Minimal and functional. Every element earns its place; remove before adding. Quiet does not mean
+flat: the surface responds to the person using it, through the shared `@offgrid/ui` alive layer
+(pointer light, press waves, staggered entrances, a living background). No decorative tiles, no
+3D effects, no emojis in the UI, no gradients beyond the brand's emerald light.
+
+### 2. Type: a lean sans, with mono for detail
+- **Geist** (sans) for reading text, controls and titles.
+- **Geist Mono** for small uppercase labels, indices, numbers, timestamps, keys and code.
+
+These two families only. Weights stay light to regular (300–500). Titles are large, light and
+slightly tightened. Hierarchy comes from size, weight, tone and spacing, not from colour. The
+fonts are the pinned `@fontsource-variable/geist` and `@fontsource-variable/geist-mono` packages.
+
+### 3. Accent: emerald, and only emerald
+- Dark mode: `#34D399`
+- Light mode: `#059669`
+
+The single accent color. Used sparingly — active states, focus, the one important action on a
+screen. Everything else is a monochrome hierarchy. Do not introduce a second accent; do not
+color-code information (use position, size, and weight instead). Semantic colors (error/red)
+exist only for their exact purpose.
+
+### 4. Base and depth: black / white, neutral grays, layers of light
+Dark mode background is pure-ish black (`#0A0A0A`); light mode is clean white (`#FFFFFF`).
+Build depth with layers of light, not heavy boxes. A living background (a faint dot lattice and a
+slow breathing emerald light) sits behind translucent surfaces with hairline edges and a faint top
+highlight. Popups and dialogs are glass: blurred, lifted, with the page receding behind them.
+Shadows are soft and wide, never hard or dark-edged. Primary actions carry a soft emerald halo.
+High contrast in both themes.
+
+### 5. Tokens, not magic numbers
+All color, spacing, and typography come from **`@offgrid/design`** (and each platform's token
+layer that maps to it). No hardcoded hex, no magic numbers in component styles. Components
+inherit the brand and flip light/dark automatically through the token mapping — never hardcode a
+color that a token already expresses.
+
+### 6. Visual hierarchy through size and weight, not color
+Primary → secondary → tertiary is expressed by typographic scale and spacing. Labels are quiet
+uppercase "whispers" in muted tone; metadata is small and muted. Give content breathing room at
+the top level and tighten within components. Respect information density where it serves scanning.
+
+An icon goes with what it describes. In a row whose lines can wrap or grow (a device with its
+status and errors, a file with its details), an icon that says what the thing is (a phone, a
+computer, a file type) is part of its name: it sits on the name's line, centred on that line,
+and never floats down the middle of the row. An icon that speaks for the whole row (a state, a
+chevron, a toggle, a settings row's icon in a list of fixed-height rows) centres on the row. A
+status dot goes with its word: it sits on that word's first line, never centred on a status that
+wraps. Icons and dots that stack share one column, so the text beside them starts on one edge.
+Before you place an icon, ask which of these it is.
+
+### 7. Motion clarifies, never decorates
+- Animate **only** `transform` and `opacity`. Never layout-thrashing properties.
+- Timings: micro 100–150ms · hover/spring 200–300ms · reveal 300–500ms.
+- Always honor `prefers-reduced-motion`.
+- Stream anything that takes time; never a frozen wall — use skeletons/shimmer/progress.
+- Functional animation only. If it doesn't clarify state or guide attention, cut it.
+
+### 8. Sensible defaults, no needless modes
+Nothing should require configuration before it works. Infer intent; tuck advanced controls away
+until wanted. Accessible by default: `aria-label` on icon buttons, `alt` on images, ≥4.5:1
+contrast, touch targets ≥44px.
+
+### 9. Use the space of the host surface
+Do not make one platform imitate another. Desktop uses its wide canvas for responsive grids,
+master-detail views, tables, and side panels. Mobile uses a focused vertical flow and progressive
+disclosure. In both cases, avoid purposeless empty space and horizontal page overflow.
+
+### 10. Every action answers at once: pressed, working, done
+Every tap, click, key or gesture gets visible feedback within one frame (about 100ms), on the
+thing the person touched. Then:
+- **Pressed:** the control shows it was hit (pressed state, ripple, highlight) immediately.
+- **Working:** if the result is not instant, the control shows it is working (its own spinner,
+  shimmer or progress) until the result lands. The person's choice shows as chosen right away;
+  the app never waits for the work to finish before showing what was picked.
+- **Done:** the result appears, and the control settles in its new state (tick, new value,
+  toast for an effect elsewhere).
+Never a silent gap where nothing seems to happen and then the change jumps in. (Mobile, Nov 2026:
+choosing Group by Project in the Chats view menu showed nothing for about 7 seconds, then the
+tick moved.)
+
+### Anti-patterns (avoid everywhere)
+Colorful gradients or hard, dark shadows · multiple accent colors · thick borders and heavy
+boxes · decorative animation · any type family beyond Geist and Geist Mono · 3D effects ·
+color-coded information · flat dead surfaces with no response · purposeless empty space ·
+cluttered layouts.
+
+---
+
+## Desktop profile
+
+Desktop is a wide, mouse-driven, keyboard-driven, multi-window surface.
+
+- Fill the canvas with responsive multi-column grids, dense tables, master-detail views, and side
+  panels. Do not center a phone-width column on a wide window. Keep controls near their content.
+- Use tight 4/8/12px spacing inside dense groups and clearer separation between groups. Keep
+  headers, filters, tabs, and column labels visible while their body scrolls.
+- Treat hover and keyboard input as first-class states. Reveal secondary actions on hover and
+  provide shortcuts for repeated navigation and submission.
+- Use the shared `SidePanel` for settings, editors, previews, and multi-step details. It must close
+  by Escape, outside click, and its close control. Reserve a centered dialog for a short blocking
+  confirmation.
+- Desktop typography roles are: title 18px; body and subtitle 14px; description 12px; metadata and
+  labels 10–11px. Labels are uppercase, muted, and tracked.
+- In Tailwind, use `font-sans` for text and `font-mono` only for labels, numbers and code,
+  8-12px radius, neutral surface and border tokens, and the emerald token for active, focus, and
+  primary-action states. Use `@phosphor-icons/react` for icons.
+- Interactive controls transition in 100–150ms and use a small pressed scale. Panels and dialogs
+  use opacity plus scale or slide over 120–200ms. Keep exit animation and reduced-motion behavior.
+- Radix dialogs are centered with the CSS `translate` property. Their keyframes may animate only
+  `transform: scale()` and opacity; adding a transform translation causes the dialog to jump.
+
+## Mobile profile
+
+Mobile is a touch-driven, narrow surface. Use a clear vertical flow, compact groups, and progressive
+disclosure. Touch targets are at least 44px.
+
+### Mobile tokens
+
+- Access colors and shadows through `useTheme()` and styles through `useThemedStyles()`.
+- Use `TYPOGRAPHY`, `SPACING`, and `FONTS` from `src/constants`; never hardcode their values in a
+  component.
+- The spacing scale is 4, 8, 12, 16, 24, and 32px (`xs` through `xxl`). Standard screen padding is
+  24px, card padding is 16px, and normal control or list spacing is 8–12px.
+- Surface tokens are `background`, `surface`, and `surfaceLight`. Text tokens are `text`,
+  `textSecondary`, and `textMuted`. Use `borderFocus` for focus and `error` only for errors.
+
+### Mobile typography hierarchy
+
+| Role | Token | Size | Weight | Use |
+| --- | --- | ---: | ---: | --- |
+| Display | `TYPOGRAPHY.display` | 22px | 200 | Large numeric values |
+| Title | `TYPOGRAPHY.h2` | 16px | 400 | One screen title |
+| Body | `TYPOGRAPHY.body` | 14px | 400 | Messages, inputs, buttons, and primary content |
+| Subtitle | `TYPOGRAPHY.h3` | 13px | 400 | Sections, cards, and modal titles |
+| Description | `TYPOGRAPHY.bodySmall` | 13px | 400 | Help and explanatory text |
+| Metadata | `TYPOGRAPHY.meta` / `label` | 9–10px | 300–400 | Timestamps, metrics, and uppercase labels |
+
+`h1` is reserved for rare hero text and is not a normal screen title. Hierarchy comes from size,
+weight, and tone. Metadata must remain quiet.
+
+### Mobile components
+
+- Top-level tabs use the shared `ScreenHeader` with 12px horizontal and 8px vertical padding.
+  Pushed screens use 16px horizontal and 12px vertical padding, a back control, a title, and an
+  optional trailing action. Headers use the surface token, a subtle divider, the theme's `edge`
+  shadow, and a stable stacking level, and their surface runs up under the status bar, so a list
+  scrolls under a real bar. A search field right under the header shares that surface and
+  shadow: on mobile it is always the shared `ListSearchBar` (lint refuses a bare `SearchField`
+  above a list). Any bar that stays put while content scrolls (search, tabs, chips, a count line)
+  is part of that surface. Review it scrolled, with rows under the bar, never only at rest. Onboarding, lock, and model-download screens may use full-screen layouts.
+- Buttons and inputs use an 8px radius, token spacing, and clear focus, pressed, disabled, loading,
+  and error states. Cards use `surface`, a subtle border, and at most a small theme shadow.
+- Use `react-native-vector-icons`; Feather is the default. Do not use emojis as interface icons.
+- Empty states contain one direct message and, when useful, one clear action.
+- Consistent rhythm: rows in one list share one height, and a missing subtitle keeps its line.
+- Say it with less: meta sits on one line, as icons with accessible names, with detail one tap
+  away. One mark per meaning; never two checks on one row.
+- Show what the person acts on (how many, when last used), not internal values or bare dates.
+- One home per setting: other surfaces link to it. Many groups become tabs, not stacked accordions.
+- A live status (connected, checking, failing) may carry a small green, amber or red dot, always
+  beside its word. Colour helps a glance down a list; the word still carries the meaning.
+- Cards and list groups are glass: the living field shows through them. Never trade the glass for
+  an opaque fill to hide the dots; it reads flat. Sheets and inputs may stay solid.
+- What you add shows where it goes: an attached photo or file sits inside the composer, on the
+  same glass, never as a separate white or boxed tile. Remove is a quiet ×, never red.
+- Controls on one surface are one kind: same size, same tint, and only the main action is
+  filled. A placeholder fits on one line.
+
+## Component ownership
+
+Use `@offgrid/design` for tokens and `@offgrid/ui` (`off-grid-ai/ui-library`) for reusable visual
+and interaction primitives, including the alive layer (`AliveProvider`, `LivingField`, `alive.css`).
+Its `docs/direction/DESIGN_PHILOSOPHY.md` carries the same direction in more detail. Search the existing product components before adding anything.
+Extend a shared primitive when the concept is the same; do not fork a local visual copy.
+
+Console, website, and landing pages inherit the shared principles directly.
+
+---
+
+**Remember:** the UI should feel like the product — private, quiet, fast. Let the AI's
+capabilities and the user's content speak, not the interface.
+dc9c6c512dd477d1585040f4457c3661e2915417
+
+exec
+/bin/zsh -lc 'cat /Users/user/wednesday/off-grid-ai/mobile/AGENTS.md; cat /Users/user/wednesday/off-grid-ai/brand/README.md /Users/user/wednesday/off-grid-ai/brand/brand_tone_voice.md' in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+ succeeded in 0ms:
+# Mobile instructions
+
+Read [rules.md](./rules.md) and [the workspace engineering contract](../.codex/ENGINEERING_CONTRACT.md).
+# Off Grid — copy references
+
+Canonical references for writing any Off Grid copy (website, app strings, marketing, outreach). Read these before writing.
+
+## The rule that overrides everything
+
+**Write about outcomes, not functionality. Lead with the outcome. Speak directly to the end customer.**
+
+- Say what the customer *gets* (the result in their life/work), not what the feature *does*.
+  - Not: "On-device llama.cpp inference with grammar-constrained output."
+  - Yes: "Your notes, chats, and screen stay on your Mac — nobody else can read them, ever."
+- Open with the outcome/benefit, then support it with the mechanism as proof.
+- Address the reader as "you." Every sentence earns its place by moving them toward a decision (Bly/Ogilvy: copy is salesmanship in print).
+
+## The references
+
+- **`copywriting-rulebook.md`** — the full doctrine (Robert W. Bly *The Copywriter's Handbook* + David Ogilvy *Ogilvy on Advertising*), applied to selling professional services. Positioning, USP, features→benefits, headline discipline, "sell the outcome." The source of truth for *how* to structure persuasive copy.
+- **`brand_tone_voice.md`** — Off Grid brand voice (proof-first, privacy-as-mechanism, no em dashes/curly quotes/exclamation marks, banned words, no AI-slop phrasing). The source of truth for *how it should sound*.
+- **`write-as-mac-SKILL.md`** — the "write as Mac" persona skill (Mohammed Ali Chherawalla): peer-exchange posture, sentence mechanics, anti-AI-slop audit. Use when drafting outreach/posts/emails sent or published as Mac.
+- **`DESIGN_PHILOSOPHY.md`** — the shared, canonical Off Grid **design** philosophy (the look, not the words): minimal and alive, Geist with Geist Mono for detail, emerald accent as the light source, layered depth, tokens in `@offgrid/design`, visual hierarchy and motion. The source of truth for *how it should look*; links out to per-platform specifics (mobile, desktop). Read before designing or reviewing any UI surface.
+
+## How to use
+
+1. Decide the single outcome the reader should feel/get.
+2. Lead with that outcome, in the customer's own language.
+3. Structure per `copywriting-rulebook.md`; voice per `brand_tone_voice.md`; if it's Mac's outreach, per `write-as-mac-SKILL.md`.
+4. Cut any sentence that describes functionality without tying it to an outcome.
+# Off Grid -- Brand Voice & Tone
+
+---
+
+## In One Sentence
+
+Off Grid sounds like someone who built this because they genuinely believe you deserve better -- handing you something for free, no strings, no data harvested, no angle. Here, take this. You're better off with it.
+
+---
+
+## The Core Disposition
+
+Off Grid isn't a product trying to win a market. It's a thing built for the right reasons, handed over to people who deserve it.
+
+The voice carries that. It doesn't sell. It gives. It doesn't ask you to trust it -- it shows you the mechanism and lets you verify. It doesn't talk about privacy as a feature -- it talks about it as something that was taken from you that you can have back.
+
+Think: a friend who spent a year building something in their spare time because they were fed up with the alternative, and now they're just happy to share it. No pitch. No upsell. "Here, this is for you. It does what it says. Go use it."
+
+That's the energy in every word Off Grid writes.
+
+---
+
+## Voice Attributes
+
+### 1. Generous, not transactional
+
+Off Grid asks nothing from you. No account. No API key. No data. The voice reflects this -- it gives without expecting anything back. It doesn't ask you to share, subscribe, follow, or review. It just hands you the thing.
+
+This means copy never implies a trade. No "get access to," no "unlock," no implied paywall. The frame is always: here's what you have.
+
+```
+"Download it. Run it offline. That's it. No account, no API key, nothing we're holding back."
+"Sign up to access the full model library."  [Wrong -- we don't do this]
+```
+
+### 2. Proof-first, not promise-first
+
+Every claim has a fact behind it. Never say "fast" when you can say "15-30 tok/s on flagship devices." Never say "private" when you can say "the model runs in your phone's RAM, inference happens on your CPU and GPU, your prompt is not sent anywhere."
+
+Specificity is how you earn trust without asking for it.
+
+```
+"Phi-3 Mini runs at ~28 tok/s on a Snapdragon 8 Gen 3. Llama 3.1 8B runs at ~12 tok/s on the same chip."
+"On-device. Offline. Your chats and files never leave your phone. Not a marketing claim: airplane mode works."
+```
+
+```
+"Blazing fast AI right on your device."  [Vague, promotional, earns nothing]
+```
+
+### 3. Privacy as a right being returned, not a feature being sold
+
+You've been using AI that logs everything. Your prompts. The time. Your account. Stored indefinitely, used to train models, subject to law enforcement requests. That data is yours and it's been taken.
+
+Off Grid gives it back. The voice names this plainly, without drama. Not "we value your privacy" -- that's what every company that sells your data says. Instead: here's what actually happens when you use this, mechanically, in plain language. You can verify it yourself.
+
+Don't moralize. Don't editorialize. State the fact and let it land.
+
+```
+"When you run a query on ChatGPT, it's logged on a server. Your prompt, the time, your account. With Off Grid, the model runs in your phone's memory. Your prompt is not sent anywhere. Ever."
+```
+
+```
+"In a world where Big Tech is harvesting your data..."  [Preachy -- the user already knows]
+"We take your privacy seriously."  [What every surveillance product says]
+```
+
+### 4. Respect the person reading
+
+The Off Grid user chose this deliberately. They know what an LLM is. They've heard of Ollama. They opted out of the default. Don't explain concepts they already understand. Don't justify privacy as a value -- they already hold it.
+
+Give them exactly what they need to act, nothing more.
+
+```
+"Tap Download. The GGUF lands in app storage. First load takes 5-15 seconds -- the model is being mapped into RAM."
+```
+
+```
+"So what is a GGUF file? Great question! It's a quantized model format that allows..."  [Condescending, they don't need this]
+```
+
+### 5. Specific, not vague
+
+No fuzzy qualifiers. If the answer depends on the device, name the device. If it depends on quantization, name the quantization. "It depends" is only acceptable followed immediately by the variables.
+
+```
+"Llama 3.1 8B Q4_K_M needs ~5.5GB RAM. iPhone 15 Pro has 8GB -- runs fine. iPhone 12 has 4GB -- use Phi-3 Mini instead."
+```
+
+```
+"Performance may vary depending on your device and model choice."  [Useless, tells them nothing]
+```
+
+### 6. No angle, no ask
+
+Off Grid has no ulterior motive and the voice reflects that. No dark patterns, no nudges toward premium, no FOMO. When something is free it's just free. When something doesn't work on a device, say so clearly instead of softening it to protect a conversion.
+
+The reader should always feel like Off Grid is on their side, not managing them.
+
+```
+"Your phone has 4GB RAM. Llama 3.1 8B won't run well on it. Phi-3 Mini or Llama 3.2 3B will."
+"For the best experience, consider upgrading to a device with more RAM."  [Wrong -- just tell them the truth]
+```
+
+---
+
+## The Emotional Arc
+
+Every piece of Off Grid content follows the same arc:
+
+**Recognition -> Return -> Freedom**
+
+1. **Recognition**: Name what's been happening. "Every query you've sent to a cloud AI has been logged, stored, and used."
+2. **Return**: Show what's being given back. "With Off Grid, the model runs on your phone. Your chats never leave it."
+3. **Freedom**: Hand them the capability without condition. "Go offline. It still works. It's yours."
+
+This isn't about doubt and resolution like a pricing tool. It's about something that was taken being handed back. The tone is quiet, clear, and generous -- not triumphant or righteous.
+
+---
+
+## Tone Shifts
+
+The voice stays constant. The tone shifts by context.
+
+### Landing Page / Website
+**Tone: Quiet generosity**
+
+Short sentences. State what it does, then prove it. The reader should feel like they found something real -- not a product launch, a thing that actually works.
+
+```
+"Chat. Generate images. Use tools. See. Listen.
+All on your phone. All offline. Your chats and files never leave your device.
+
+No account. No API key. No subscription. Download and go."
+```
+
+### In-Product / UI Copy
+**Tone: Terminal precision**
+
+Minimal words. Labels are short and uppercase. Explanations appear on demand, never cluttering the primary view. The interface should feel like the answer is already there.
+
+```
+Label: "ACTIVE MODEL"
+Value: "Llama 3.2 3B"
+Detail: "12.4 tok/s -- Q4_K_M -- 2.1GB"
+Status: "READY"
+```
+
+### Guides / Docs
+**Tone: Direct handoff**
+
+The reader has the app open. Get them to the thing. State requirements before steps. One action per step.
+
+```
+"Step 1 -- Download Off Grid
+iOS: requires iPhone 12 or newer, 4GB RAM.
+Android: requires Android 10+, 4GB RAM."
+```
+
+### Onboarding
+**Tone: Here, take this**
+
+First launch. One job: first inference. Don't introduce features -- show one path, make it obvious.
+
+```
+"Pick a model. Download it. Load it. Type something.
+That's all there is."
+```
+
+### Error States / Empty States
+**Tone: Honest and useful**
+
+Say what happened. Say what to do. Never blame the user. Never be vague.
+
+```
+"Not enough free RAM to load this model (~5.5GB needed). Close background apps and try again -- or switch to Phi-3 Mini at 2GB."
+"Error loading model. Please try again."  [Useless]
+
+"No models downloaded yet. Phi-3 Mini is a good start -- 2GB, runs on any modern phone, no account needed."
+"No models found."  [Incomplete]
+```
+
+---
+
+## Language Rules
+
+### Always
+- Use "you/your" -- the user has this, it belongs to them
+- State device requirements before recommending a model
+- Use present tense ("the model runs in RAM") not future ("the model will run")
+- File sizes always with units: 2.1GB, not "2.1"
+- Speeds always with units: 12 tok/s
+
+### Never
+- Exclamation marks in product copy
+- "Unlock," "supercharge," "game-changing," "revolutionary," "next-generation," "cutting-edge"
+- Implying anything is held back or gated
+- Privacy framed as a selling point -- frame it as a mechanism or a right
+- Em dashes or double hyphens -- single hyphens only
+- Curly quotes or special unicode characters
+- "Genuinely," "honestly," "straightforward"
+- Only use characters available on a standard keyboard
+
+### How we talk about analytics
+
+Don't. Marketing copy never mentions analytics, telemetry or tracking, not even to say it is opt-in. The privacy policy and the app's Settings > Analytics cover it.
+
+- The promise: "Your chats and files never leave your device." Or: "We never see your prompts, replies or files."
+- Inside the apps, the term is "anonymous stats": counts of what was used and how fast models ran. Never "usage data", which sounds like we see what you do.
+- Never write "no telemetry," "no analytics," "zero data," "nothing leaves your device," or "never phones home." Name what the claim covers: your chats, your files, your prompts.
+
+### How we talk about AI video
+
+Video Studio is part of Off Grid AI Pro. Say where the work happens. Marketing copy and images don't mention an AI label.
+
+- Consent: show only people who agreed to it. Never suggest a use that fakes a real person, deceives, or shows a minor.
+- Local: "Your character photos never leave your devices." Name the three ways it runs: on your phone, on your computer, or your phone using your own computer.
+- Never write "undetectable," "indistinguishable from real," "anyone you want," or "deepfake" as a benefit.
+
+### Never (AI slop - flags as machine-generated)
+Single words to cut on sight:
+- "delve" / "delves into"
+- "crucial" / "pivotal" / "vital"
+- "meticulous" / "intricate"
+- "tapestry" / "testament" / "landscape"
+- "underscore" / "underscores"
+- "bolstered" / "garnered"
+- "enduring" / "vibrant" / "rich" (as vague intensifiers)
+- "align with" / "resonate with"
+- "foster" / "cultivate"
+- "showcase" / "highlight" (as verbs in prose)
+- "enhance" / "enhancing"
+- "leverage" (use "use")
+- "robust" (use a specific number instead)
+- "comprehensive" (say what it actually covers)
+- "valuable insights" (say what the insight is)
+- "dive in" / "let's explore" / "in this guide we'll"
+- "seamlessly"
+- "empower" / "empowers"
+
+Structural habits to kill:
+- Rule of three -- two items or four, never exactly three adjectives in a row
+- "Not just X, but Y" constructions
+- "It's not X, it's Y" constructions
+- Throat-clearing openers ("Great question," "Absolutely," "Certainly")
+- Conclusion summaries that restate what was just said
+- Bolding random phrases mid-paragraph for "emphasis"
+- Every section getting a bold header when prose would do
+- Lists of exactly three bullet points as a default
+
+Phrases that read as AI-generated:
+- "serves as" (say "is")
+- "stands as" (say "is")
+- "represents a" (say "is")
+- "marks a turning point"
+- "is a testament to"
+- "plays a crucial/pivotal/vital role"
+- "it is worth noting that"
+- "it goes without saying"
+- "at the end of the day"
+- "in today's landscape"
+- "in the ever-evolving"
+- "moving forward" / "going forward"
+
+---
+
+## Technical Terminology
+
+Use precise names. Not marketing language.
+
+| Term | How Off Grid uses it |
+|---|---|
+| GGUF | "The model format -- download and load directly" |
+| Quantization | "Q4_K_M is the balance point: smaller file, minimal quality loss" |
+| Tokens per second | "28 tok/s -- the speed you'll feel in conversation" |
+| NPU / Neural Engine | "Hardware-accelerated inference -- faster and cooler than CPU-only" |
+| Core ML | "iOS model format -- needed for NPU acceleration on iPhone" |
+| Ollama / LM Studio | "Run bigger models from your desktop, over LAN" |
+| Q-levels | "Q2_K: smallest, most degraded. Q8_0: near-lossless, largest." |
+
+Name models precisely. Include size and quantization when recommending.
+
+```
+"Llama 3.2 3B Q4_K_M -- ~2GB, 18 tok/s on iPhone 15 Pro"
+"Phi-4 Mini -- runs on any modern phone, 4GB RAM minimum"
+"Stable Diffusion 1.5 -- on-device image gen, 5-10s on Snapdragon NPU"
+```
+
+---
+
+## Content Structure
+
+### The Off Grid Guide Format
+
+**1. One sentence on what this gets you**
+What the user can do when they're done.
+
+**2. Requirements upfront**
+Device, OS version, RAM, storage. Before any steps, not buried at the end.
+
+**3. Numbered steps, one action each**
+Don't combine download + load into one step. One action per line.
+
+**4. What success looks like**
+Tell them exactly what they'll see. "You'll see READY under the model name."
+
+**5. One or two next steps** (optional)
+Not a feature tour -- just the obvious next thing.
+
+### Example Headlines
+
+```
+"Run your first local AI model in 5 minutes"
+"Which model should you use? Here's how to decide."
+"Stable Diffusion on Android -- on-device image generation, no cloud."
+"Llama 3.1 8B vs Phi-4 Mini -- when to use which."
+"How to connect Off Grid to your Ollama server at home."
+"iPhone 15 Pro vs iPhone 12 -- what on-device AI actually looks like."
+```
+
+### Headlines That Would Be Wrong
+
+```
+"Unlock the power of private AI"  [implies something held back]
+"Why Off Grid is the best AI app in 2026"  [no proof, wrong energy]
+"10 reasons to switch from ChatGPT"  [listicle, promotional]
+"The Ultimate Guide to On-Device AI"  [generic filler]
+"AI has never been this private"  [unverifiable]
+```
+
+---
+
+## Microcopy Patterns
+
+### Buttons
+```
+Primary: "Download"
+Secondary: "Load Model"
+Tertiary: "View Details"
+Destructive: "Delete"
+```
+
+### Model States
+```
+Not downloaded: "2.1GB -- tap to download"
+Downloading: "Downloading... 847MB / 2.1GB"
+Downloaded, not loaded: "READY TO LOAD"
+Loaded: "ACTIVE -- 12.4 tok/s"
+Loading: "Loading into RAM..."
+```
+
+### Reassurance Lines
+```
+"No account. No API key. No internet after setup."
+"Works in airplane mode."
+"Nothing you type leaves your phone."
+```
+
+### Empty States
+```
+No models: "Nothing downloaded yet. Phi-3 Mini is 2GB and runs on any modern phone -- good place to start."
+No conversations: "No conversations yet. Load a model and start one."
+No search results: "Nothing matches that filter. Try broadening it."
+```
+
+### Error States
+```
+Insufficient RAM: "Not enough free RAM (~5.5GB needed). Close background apps, or try a smaller model -- Phi-3 Mini runs in 2GB."
+Download failed: "Download interrupted. Check your connection and try again."
+Load failed: "Load failed -- the file may be corrupted. Delete it and re-download."
+```
+
+### Success States
+```
+"ACTIVE -- 12.4 tok/s"
+"Download complete. Tap Load."
+"Generated in 6.2s"
+```
+
+---
+
+## Brand Taglines
+
+Primary: **"Private AI. No cloud. No compromise."**
+
+Alternatives:
+- "Run AI on your phone. Your chats never leave it."
+- "The Swiss Army Knife of On-Device AI."
+- "AI that stays on your device."
+- "No cloud. No account. No compromise."
+- "Yours. Offline. Always."
+
+---
+
+## Quality Checklist
+
+Before publishing any Off Grid content:
+
+- [ ] Does it feel like something being given, not sold?
+- [ ] Are privacy claims stated as mechanisms ("the model runs in RAM"), not promises ("we value your privacy")?
+- [ ] Does every performance claim include a number and a device?
+- [ ] Are device requirements stated before steps?
+- [ ] Does it follow the recognition -> return -> freedom arc?
+- [ ] Is every "it depends" followed immediately by what it depends on?
+- [ ] Can the reader do the thing without googling anything?
+- [ ] Does it sound like someone who built this because they wanted to, not to sell it?
+- [ ] Are there zero exclamation marks in product copy?
+- [ ] Does every sentence pass the "would a human actually write this" test?
+- [ ] Are there zero instances of: delve, crucial, pivotal, tapestry, testament, underscore, bolstered, garnered, meticulous, vibrant, landscape, foster, cultivate, leverage, robust, comprehensive, seamlessly, empower?
+- [ ] Are there zero "not just X but Y" constructions?
+- [ ] Are there zero "serves as" / "stands as" / "represents a" substitutions for "is"?
+- [ ] Does it avoid restating the conclusion at the end?
+- [ ] Is nothing implied to be locked, premium, or held back?
+
+---
+
+*"Here. It's yours. It runs on your phone and nowhere else."*
+
+exec
+/bin/zsh -lc 'ls -l prompts/e3-connect*; cat /Users/user/.codex/skills/.system/imagegen/references/prompting.md' in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+ succeeded in 0ms:
+-rw-r--r--  1 user  staff    995 Nov 19 12:10 prompts/e3-connect.brief
+-rw-r--r--  1 user  staff   2709 Nov 19 12:10 prompts/e3-connect.in
+-rw-r--r--  1 user  staff  45715 Nov 19 12:11 prompts/e3-connect.log
+# Prompting best practices
+
+These prompting principles are shared by both top-level modes of the skill:
+- built-in `image_gen` tool (default)
+- explicit `scripts/image_gen.py` CLI fallback
+
+This file is about prompt structure, specificity, and iteration. Fallback-only execution controls such as `quality`, `input_fidelity`, masks, output format, and output paths live in the fallback docs.
+
+## Contents
+- [Structure](#structure)
+- [Specificity policy](#specificity-policy)
+- [Allowed and disallowed augmentation](#allowed-and-disallowed-augmentation)
+- [Composition and layout](#composition-and-layout)
+- [Constraints and invariants](#constraints-and-invariants)
+- [Text in images](#text-in-images)
+- [Input images and references](#input-images-and-references)
+- [Iterate deliberately](#iterate-deliberately)
+- [Transparent images](#transparent-images)
+- [Fallback-only execution controls](#fallback-only-execution-controls)
+- [Use-case tips](#use-case-tips)
+- [Where to find copy/paste recipes](#where-to-find-copypaste-recipes)
+
+## Structure
+- Use a consistent order: scene/backdrop -> subject -> key details -> constraints -> output intent.
+- Include intended use (ad, UI mock, infographic) to set the level of polish.
+- For complex requests, use short labeled lines instead of one long paragraph.
+
+## Specificity policy
+- If the user prompt is already specific and detailed, normalize it into a clean spec without adding creative requirements.
+- If the prompt is generic, you may add tasteful detail when it materially improves the output.
+- Treat examples in `sample-prompts.md` as fully-authored recipes, not as the default amount of augmentation to add to every request.
+- For photorealism, include `photorealistic` directly when that is the goal, plus concrete real-world texture such as pores, wrinkles, fabric wear, material grain, or imperfect everyday detail.
+
+## Allowed and disallowed augmentation
+
+Allowed augmentation for generic prompts:
+- composition and framing cues
+- intended-use or polish-level hints
+- practical layout guidance
+- reasonable scene concreteness that supports the request
+
+Do not add:
+- extra characters, props, or objects that are not implied
+- brand palettes, slogans, or story beats that are not implied
+- arbitrary side-specific placement unless the surrounding layout supports it
+
+## Composition and layout
+- Specify framing and viewpoint (close-up, wide, top-down) and placement only when it materially helps.
+- Call out negative space if the asset clearly needs room for UI or copy.
+- Avoid making left/right layout decisions unless the user or surrounding layout supports them.
+- For people, describe body framing, scale, gaze, and object interactions when they matter (`full body visible`, `looking down at the book`, `hands naturally gripping the handlebars`).
+
+## Constraints and invariants
+- State what must not change (`keep background unchanged`).
+- For edits, say `change only X; keep Y unchanged` and repeat invariants on every iteration to reduce drift.
+
+## Text in images
+- Put literal text in quotes or ALL CAPS and specify typography (font style, size, color, placement).
+- Spell uncommon words letter-by-letter if accuracy matters.
+- For in-image copy, require verbatim rendering and no extra characters.
+- In CLI fallback mode, use `medium` or `high` quality for small text, dense infographics, data-heavy slides, multi-font layouts, legends, axes, and footnotes.
+
+## Input images and references
+- Do not assume that every provided image is an edit target.
+- Label each image by index and role (`Image 1: edit target`, `Image 2: style reference`).
+- If the user provides images for style, composition, or mood guidance and does not ask to modify them, treat the request as generation with references.
+- If the user asks to preserve an existing image while changing specific parts, treat the request as an edit.
+- For compositing, describe how the images interact (`place the subject from Image 2 into Image 1`).
+
+## Iterate deliberately
+- Start with a clean base prompt, then make small single-change edits.
+- Re-specify critical constraints when you iterate.
+- Prefer one targeted follow-up at a time over rewriting the whole prompt.
+
+## Transparent images
+- Ask built-in `image_gen` for a genuinely transparent background and preserve its alpha.
+
+## Fallback-only execution controls
+- `quality`, `input_fidelity`, explicit masks, output format, and output paths are fallback-only execution controls.
+- Do not assume they are built-in `image_gen` tool arguments.
+- If the user explicitly chooses CLI fallback, see `references/cli.md` and `references/image-api.md` for those controls.
+- In CLI fallback mode, `gpt-image-2` is the default. It supports `quality=low|medium|high|auto`; use `low` for fast drafts and thumbnails, and move to `medium`, `high`, or `auto` for final assets.
+- `gpt-image-2` always uses high fidelity for image inputs, so do not set `input_fidelity` with that model.
+- CLI `gpt-image-2` does not support `background=transparent`; ask before using `gpt-image-1.5` unless the user explicitly requested that model.
+- If the user asks for 4K-style output with `gpt-image-2`, use `3840x2160` for landscape or `2160x3840` for portrait.
+
+## Use-case tips
+Generate:
+- photorealistic-natural: Prompt as if a real photo is captured in the moment; use photography language (lens, lighting, framing); call for real texture; avoid over-stylized polish unless requested.
+- product-mockup: Describe the product/packaging and materials; ensure clean silhouette and label clarity; if in-image text is needed, require verbatim rendering and specify typography.
+- ui-mockup: Describe the target fidelity first (shippable mockup or low-fi wireframe), then focus on layout, hierarchy, and practical UI elements; avoid concept-art language.
+- infographic-diagram: Define the audience and layout flow; label parts explicitly; require verbatim text; prefer higher quality in CLI mode for dense labels.
+- logo-brand: Keep it simple and scalable; ask for a strong silhouette and balanced negative space; avoid decorative flourishes unless requested.
+- ads-marketing: Write like a creative brief; include brand positioning, audience, desired vibe, scene, and exact tagline if text must appear.
+- productivity-visual: Name the exact artifact (slide, chart, workflow diagram), define the canvas and hierarchy, provide real labels/data, and ask for readable typography and polished spacing.
+- scientific-educational: Define audience, lesson objective, required labels, scientific constraints, arrows, and scan-friendly whitespace.
+- illustration-story: Define panels or scene beats; keep each action concrete.
+- stylized-concept: Specify style cues, material finish, and rendering approach (3D, painterly, clay) without inventing new story elements.
+- historical-scene: State the location/date and required period accuracy; constrain clothing, props, and environment to match the era.
+
+Edit:
+- text-localization: Change only the text; preserve layout, typography, spacing, and hierarchy; no extra words or reflow unless needed.
+- identity-preserve: Lock identity (face, body, pose, hair, expression); change only the specified elements; match lighting and shadows.
+- precise-object-edit: Specify exactly what to remove/replace; preserve surrounding texture and lighting; keep everything else unchanged.
+- lighting-weather: Change only environmental conditions (light, shadows, atmosphere, precipitation); keep geometry, framing, and subject identity.
+- background-extraction: Request a clean cutout on a genuinely transparent background; preserve fine edges and label text; no halos or restyling.
+- style-transfer: Specify style cues to preserve (palette, texture, brushwork) and what must change; add `no extra elements` to prevent drift.
+- compositing: Reference inputs by index; specify what moves where; match lighting, perspective, and scale; keep the base framing unchanged.
+- sketch-to-render: Preserve layout, proportions, and perspective; choose materials and lighting that support the supplied sketch without adding new elements.
+
+## Where to find copy/paste recipes
+For copy/paste prompt specs (examples only), see `references/sample-prompts.md`. This file focuses on principles, specificity, and iteration patterns.
+
+exec
+/bin/zsh -lc 'node scripts/inventory-ui-sources.mjs --product /Users/user/wednesday/off-grid-ai/mobile --summary' in /Users/user/.codex/skills/offgrid-ui
+ succeeded in 140ms:
+{
+  "product": {
+    "path": "/Users/user/wednesday/off-grid-ai/mobile",
+    "commit": "f0e1d398bd948abbefdcbf29b0054e89c316fe37"
+  },
+  "brand": {
+    "path": "/Users/user/wednesday/off-grid-ai/brand",
+    "docs": [
+      "DESIGN_PHILOSOPHY.md",
+      "README.md",
+      "brand_tone_voice.md",
+      "copywriting-rulebook.md",
+      "linkedin-banners/2026-08-04-clean/README.md",
+      "linkedin-banners/2026-08-04-ogac-video/README.md",
+      "linkedin-banners/2026-08-04-ogac/README.md",
+      "linkedin-banners/2026-08-04/README.md",
+      "linkedin-banners/2026-08-05-ogac-generated/README.md",
+      "linkedin-banners/2026-08-05-ogac-readable/README.md",
+      "write-as-mac-SKILL.md"
+    ]
+  },
+  "library": {
+    "path": "/Users/user/wednesday/component-library-animations",
+    "remote": "git@github.com:wednesday-solutions/component-library-animations.git",
+    "commit": "dc9c6c512dd477d1585040f4457c3661e2915417",
+    "componentCount": 399,
+    "familyCounts": {
+      "abui": 15,
+      "aceternity": 89,
+      "animate-ui": 56,
+      "components": 2,
+      "cult-ui": 47,
+      "eldora-ui": 48,
+      "magic-ui": 68,
+      "motion-primitives": 32,
+      "shadcn-ui": 42
+    },
+    "factCounts": {
+      "acceptsProps": 8,
+      "clientDirective": 1,
+      "usesReactState": 90,
+      "hasAriaOrRole": 5,
+      "honorsReducedMotion": 1,
+      "hasInfiniteAnimation": 91,
+      "animatesLayout": 18,
+      "usesRandom": 30,
+      "usesGradient": 106,
+      "usesHeavyShadow": 73,
+      "usesPillRadius": 139,
+      "catalogueOnly": 391
+    }
+  },
+  "productLocalComponentCount": 113
+}
+
+codex
+Both reference files are available. I will use their dark glass style and fine dot pattern, with a centred column and only “Back” in the footer.
+exec
+/bin/zsh -lc 'cp /Users/user/.codex/generated_images/01a1f289-62f6-7d73-a52a-fd4cdd7e0182/exec-262c5469-8999-429e-b8fc-f9679332e9cd.png e3-connect.png' in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+ succeeded in 0ms:
+apply patch
+patch: completed
+/Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts/prompts/e3-connect.txt
+diff --git a/docs/review/onboarding-concepts/extension/concepts/prompts/e3-connect.txt b/docs/review/onboarding-concepts/extension/concepts/prompts/e3-connect.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..0caaa0023cfaccddf9f893de563ac382b3c4b617
+--- /dev/null
++++ b/docs/review/onboarding-concepts/extension/concepts/prompts/e3-connect.txt
+@@ -0,0 +1,20 @@
++Use case: ui-mockup.
++Create a precise, finished screenshot of the Off Grid AI browser extension welcome page, step 3 of 5. Output a flat, edge-to-edge PNG, landscape, exactly 1536 x 1024 pixels.
++
++STYLE SOURCE: Match the two reference screenshots shown in this conversation, desktop-setup.jpg and desktop-groups.jpg, exactly in visual language: near-black background, faint fine regular dot lattice visible through quiet translucent dark glass, hairline neutral borders, rounded corners, and a single very soft diffuse emerald glow near the top. Geist sans for all reading text and controls; large light-weight title; Geist Mono for small uppercase tracked muted labels. Neutral white and gray type. Emerald #34D399 is the sole accent, used sparingly in the active progress segment. The glass card and pills are neutral, with no picked states. Thin Phosphor-style line lock icon and a small neutral spinner. No illustration, emoji, 3D, traffic lights, coloured badges, browser chrome, device frame, watermark, or additional copy.
++
++LAYOUT: A centred column about 800px wide, left-aligned internally, in the upper-middle of the canvas, like the reference setup page. Clear hierarchy with restrained spacing. Put the eyebrow around y=160, title below it, then the muted introductory line. A single glass pairing card below the introduction. Inside the card: small mono label, six equal quiet glass pills in one horizontal row, the instruction beneath, and a small spinner next to the waiting status. Below the card, show the thin lock icon followed by the muted privacy sentence. Keep all text sharp, fully legible, and unclipped.
++
++Exact text, in order, with no quotation marks rendered:
++Eyebrow: "OFF GRID AI · IN YOUR BROWSER"
++Large light title: "Connect to your computer"
++Muted introduction: "Off Grid AI is running on this computer. Pair once, and your picks work here."
++Card mono label: "CHECK THESE WORDS"
++Six separate pills, left to right, each with exactly one lowercase word: "maple" "river" "stone" "lamp" "cedar" "north"
++Muted instruction below pills: "Off Grid AI on your computer shows the same six words. Choose Pair there."
++Muted status beside small spinner: "Waiting for your computer"
++Muted privacy line beneath the card beside a thin lock icon: "Pages you ask about go to your computer, never to a cloud."
++
++FOOTER: A thin full-width dark bottom bar with a fine top border, matching desktop-groups.jpg. Centre a short horizontal progress line of exactly five separate rounded segments. Segment 3 is active emerald, segments 1 and 2 are muted neutral gray, segments 4 and 5 are darker gray. Tiny muted mono step name below the segments: "CONNECT". At the far right place the quiet text button "Back". No primary button while waiting. No other footer copy, no numbers, no extra controls.
++
++Every specified string must appear exactly once and exactly as written, with correct spelling, punctuation, capitalization, and the centred dot in the eyebrow. Render only the supplied text. Preserve generous margins and the quiet proportions of the references.
+
+exec
+/bin/zsh -lc 'sips -g pixelWidth -g pixelHeight e3-connect.png; ls -l e3-connect.png prompts/e3-connect.txt' in /Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts
+ succeeded in 13ms:
+/Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts/e3-connect.png
+  pixelWidth: 1536
+  pixelHeight: 1024
+-rw-r--r--  1 user  staff  1479928 Nov 19 12:12 e3-connect.png
+-rw-r--r--  1 user  staff     3063 Nov 19 12:12 prompts/e3-connect.txt
+
+codex
+Saved [e3-connect.png](/Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts/e3-connect.png) with built-in image generation and the [exact prompt](/Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts/prompts/e3-connect.txt).
+
+Confirmed 1536 × 1024 pixels. All required text is correct and fully visible.
+tokens used
+37,807
+Saved [e3-connect.png](/Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts/e3-connect.png) with built-in image generation and the [exact prompt](/Users/user/wednesday/off-grid-ai/mobile/docs/review/onboarding-concepts/extension/concepts/prompts/e3-connect.txt).
+
+Confirmed 1536 × 1024 pixels. All required text is correct and fully visible.

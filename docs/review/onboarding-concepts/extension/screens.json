@@ -1,10 +1,132 @@
 [
- {"id": "first-open", "name": "First open of the side panel", "group": "Extension onboarding", "step": "welcome",
+ {
+  "id": "first-open",
+  "name": "First open of the side panel",
+  "group": "Extension onboarding",
+  "step": "groups",
   "what": "Today: nothing opens on install. The first open of the side panel is Settings with \"Not paired\" and \"Pair with desktop\". It never says what the extension does, what you can pick, or that it needs Off Grid AI on your computer with Pro.",
-  "file": "screens/v/first-open-0.jpg",
-  "versions": [{"v": 0, "label": "Before: on main", "at": "2026-11-19T07:00:00Z", "file": "screens/v/first-open-0.jpg"}]},
- {"id": "no-desktop", "name": "No desktop running", "group": "Extension onboarding",
+  "file": "concepts/e1-what.jpg",
+  "versions": [
+   {
+    "v": 0,
+    "label": "Before: on main",
+    "at": "2026-11-19T07:00:00Z",
+    "file": "screens/v/first-open-0.jpg"
+   },
+   {
+    "v": 1,
+    "label": "Concept: welcome tab",
+    "at": "2026-11-19T07:20:00Z",
+    "file": "concepts/e1-what.jpg",
+    "what": "Concept (Codex, planning only): a welcome tab opens once on install and starts on What do you want to do?, the same shared groups as desktop and mobile, filtered to what runs in the browser."
+   }
+  ]
+ },
+ {
+  "id": "which",
+  "name": "Which ones?",
+  "group": "Extension onboarding",
+  "step": "details",
+  "what": "Concept: the picks that run in the browser, each marked Pro (call ext-tier).",
+  "file": "concepts/e2-which.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Concept",
+    "at": "2026-11-19T07:20:00Z",
+    "file": "concepts/e2-which.jpg",
+    "what": "Concept: the picks that run in the browser, each marked Pro (call ext-tier)."
+   }
+  ]
+ },
+ {
+  "id": "connect",
+  "name": "Connect to your computer",
+  "group": "Extension onboarding",
+  "step": "connect",
+  "what": "Concept: pair once with the six words; the existing PairingCard, in consumer words.",
+  "file": "concepts/e3-connect.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Concept",
+    "at": "2026-11-19T07:20:00Z",
+    "file": "concepts/e3-connect.jpg",
+    "what": "Concept: pair once with the six words; the existing PairingCard, in consumer words."
+   }
+  ]
+ },
+ {
+  "id": "no-desktop",
+  "name": "No desktop running",
+  "group": "Extension onboarding",
   "what": "Today, with no desktop app found: \"Start Off Grid AI Desktop\" and a technical address. No link to get the app if you do not have it.",
-  "file": "screens/v/no-desktop-0.jpg",
-  "versions": [{"v": 0, "label": "Before: on main", "at": "2026-11-19T07:00:00Z", "file": "screens/v/no-desktop-0.jpg"}]}
+  "file": "concepts/e3b-get-app.jpg",
+  "versions": [
+   {
+    "v": 0,
+    "label": "Before: on main",
+    "at": "2026-11-19T07:00:00Z",
+    "file": "screens/v/no-desktop-0.jpg"
+   },
+   {
+    "v": 1,
+    "label": "Concept: get the app",
+    "at": "2026-11-19T07:20:00Z",
+    "file": "concepts/e3b-get-app.jpg",
+    "what": "Concept: with no computer app found, a way to get it, and a way to look again. The address moves under Settings."
+   }
+  ]
+ },
+ {
+  "id": "allow",
+  "name": "Allow what your picks need",
+  "group": "Extension onboarding",
+  "step": "allow",
+  "what": "Concept: site access asked once, only for what was picked, one line each with why.",
+  "file": "concepts/e4-allow.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Concept",
+    "at": "2026-11-19T07:20:00Z",
+    "file": "concepts/e4-allow.jpg",
+    "what": "Concept: site access asked once, only for what was picked, one line each with why."
+   }
+  ]
+ },
+ {
+  "id": "how",
+  "name": "How it works",
+  "group": "Extension onboarding",
+  "step": "guide",
+  "what": "Concept: where each pick shows in the browser, with Try it on this page; ends on Open the side panel.",
+  "file": "concepts/e5-how.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Concept",
+    "at": "2026-11-19T07:20:00Z",
+    "file": "concepts/e5-how.jpg",
+    "what": "Concept: where each pick shows in the browser, with Try it on this page; ends on Open the side panel."
+   }
+  ]
+ },
+ {
+  "id": "panel-ready",
+  "name": "Side panel, after the first run",
+  "group": "Extension onboarding",
+  "step": "home",
+  "what": "Concept: the side panel opens on your picks as starters.",
+  "file": "concepts/e6-panel.jpg",
+  "versions": [
+   {
+    "v": 1,
+    "label": "Concept",
+    "at": "2026-11-19T07:20:00Z",
+    "file": "concepts/e6-panel.jpg",
+    "what": "Concept: the side panel opens on your picks as starters."
+   }
+  ]
+ }
 ]

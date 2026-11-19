@@ -1,0 +1,7 @@
+File name: e6-panel.png. Portrait, exactly 1024 x 1536. References: refs/extension-panel.jpg (the real side panel: its header with the history icon, "Off Grid AI", a status pill and icon buttons, and its composer box at the bottom; copy that layout) and refs/desktop-groups.jpg (dark style).
+Screen: the browser extension's side panel, dark theme, right after the first run. Header: history icon, "Off Grid AI", a quiet pill with a small emerald dot and "Connected", then icon buttons (cube, pen, key, gear, close) as in the reference.
+Middle, near the bottom above the composer: small mono label "YOUR PICKS", then a glass list of three rows, each a line icon and text with a small arrow at the right:
+"Summarize this page"
+"Explain the part I selected"
+"Fix the text I'm writing"
+Composer at the bottom as in the reference: placeholder "Ask anything", a plus button at left, a round send button at right.

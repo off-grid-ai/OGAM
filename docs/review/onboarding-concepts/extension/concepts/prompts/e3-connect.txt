@@ -1,0 +1,20 @@
+Use case: ui-mockup.
+Create a precise, finished screenshot of the Off Grid AI browser extension welcome page, step 3 of 5. Output a flat, edge-to-edge PNG, landscape, exactly 1536 x 1024 pixels.
+
+STYLE SOURCE: Match the two reference screenshots shown in this conversation, desktop-setup.jpg and desktop-groups.jpg, exactly in visual language: near-black background, faint fine regular dot lattice visible through quiet translucent dark glass, hairline neutral borders, rounded corners, and a single very soft diffuse emerald glow near the top. Geist sans for all reading text and controls; large light-weight title; Geist Mono for small uppercase tracked muted labels. Neutral white and gray type. Emerald #34D399 is the sole accent, used sparingly in the active progress segment. The glass card and pills are neutral, with no picked states. Thin Phosphor-style line lock icon and a small neutral spinner. No illustration, emoji, 3D, traffic lights, coloured badges, browser chrome, device frame, watermark, or additional copy.
+
+LAYOUT: A centred column about 800px wide, left-aligned internally, in the upper-middle of the canvas, like the reference setup page. Clear hierarchy with restrained spacing. Put the eyebrow around y=160, title below it, then the muted introductory line. A single glass pairing card below the introduction. Inside the card: small mono label, six equal quiet glass pills in one horizontal row, the instruction beneath, and a small spinner next to the waiting status. Below the card, show the thin lock icon followed by the muted privacy sentence. Keep all text sharp, fully legible, and unclipped.
+
+Exact text, in order, with no quotation marks rendered:
+Eyebrow: "OFF GRID AI · IN YOUR BROWSER"
+Large light title: "Connect to your computer"
+Muted introduction: "Off Grid AI is running on this computer. Pair once, and your picks work here."
+Card mono label: "CHECK THESE WORDS"
+Six separate pills, left to right, each with exactly one lowercase word: "maple" "river" "stone" "lamp" "cedar" "north"
+Muted instruction below pills: "Off Grid AI on your computer shows the same six words. Choose Pair there."
+Muted status beside small spinner: "Waiting for your computer"
+Muted privacy line beneath the card beside a thin lock icon: "Pages you ask about go to your computer, never to a cloud."
+
+FOOTER: A thin full-width dark bottom bar with a fine top border, matching desktop-groups.jpg. Centre a short horizontal progress line of exactly five separate rounded segments. Segment 3 is active emerald, segments 1 and 2 are muted neutral gray, segments 4 and 5 are darker gray. Tiny muted mono step name below the segments: "CONNECT". At the far right place the quiet text button "Back". No primary button while waiting. No other footer copy, no numbers, no extra controls.
+
+Every specified string must appear exactly once and exactly as written, with correct spelling, punctuation, capitalization, and the centred dot in the eyebrow. Render only the supplied text. Preserve generous margins and the quiet proportions of the references.

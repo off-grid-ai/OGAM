@@ -1,0 +1,16 @@
+STYLE (match the attached reference screenshots of the real Off Grid AI desktop onboarding exactly; they are the design source):
+- Dark theme. Near-black background with a faint fine dot lattice and one soft, diffuse emerald glow near the top. As in the references.
+- Geist sans: titles light and large; body regular. Geist Mono for small uppercase muted labels (like "OFF GRID AI · SETUP").
+- Tiles, rows and cards are translucent dark glass with hairline borders and rounded corners, as in the references. A picked tile has an emerald hairline edge and a small emerald check dot at its top right.
+- One accent colour: emerald (#34D399), used only for picked states, the one primary button, the active progress segment and small icons where the references use it. Everything else neutral greys. Small "PRO" labels are muted grey mono text, never coloured.
+- Footer as in the references: a thin bottom bar with a muted line on the left, a short segmented progress line in the centre with a tiny mono step name under it, and the buttons on the right (quiet text buttons, then the emerald primary button).
+- Thin line icons (Phosphor style). No emojis, no colour-coded badges, no traffic lights, no 3D, no illustrations, no browser window chrome, no device frame.
+- Flat screenshot filling the whole canvas edge to edge.
+- Every quoted string must appear exactly as written, legible and not clipped. Add no other copy, no watermark.
+OUTPUT: use your built-in image generation. Save the image in the current directory with the file name given below. Then save the exact final prompt you used to prompts/<same name>.txt. Check the text in the image against the quoted strings; regenerate once if any string is wrong.
+File name: e3-connect.png. Landscape, exactly 1536 x 1024. References: refs/desktop-setup.jpg and refs/desktop-groups.jpg for style.
+Screen: the extension's welcome page, step 3 of 5, "Connect to your computer". Centred column like the reference setup page.
+Mono label "OFF GRID AI · IN YOUR BROWSER". Title "Connect to your computer". Muted line "Off Grid AI is running on this computer. Pair once, and your picks work here."
+A glass card: small mono label "CHECK THESE WORDS". Six words in one row of quiet glass pills: "maple" "river" "stone" "lamp" "cedar" "north". Under them, muted text "Off Grid AI on your computer shows the same six words. Choose Pair there." Under that, a small spinner and muted text "Waiting for your computer".
+Below the card, a muted line with a lock icon: "Pages you ask about go to your computer, never to a cloud."
+Footer: 5-segment progress, segment 3 active, mono step name "CONNECT". Right: text button "Back". No primary button on this step while waiting.

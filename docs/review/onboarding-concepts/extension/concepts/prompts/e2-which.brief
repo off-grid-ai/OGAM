@@ -1,0 +1,6 @@
+File name: e2-which.png. Landscape, exactly 1536 x 1024. References: refs/desktop-details.jpg (copy its layout closely).
+Screen: the extension's welcome page, step 2 of 5, "Which ones?". Top left mono label "OFF GRID AI · IN YOUR BROWSER". Title "Which ones?". Muted line "We only set up what you pick. Change it any time."
+Two columns, each headed by a small mono label, with rows (line icon, name, muted description, a small muted "PRO" label at the right, and a pick circle; picked rows have the emerald check):
+Column "CHAT AND ASK": "Chat" — "Ask about the page you're on" (picked); "Ask about a photo" — "Ask about a screenshot of this tab"; "Web search and tools" — "Fresh answers from the web".
+Column "WRITE": "Fix and rewrite" — "Grammar and tone in any text box" (picked); "Dictation" — "Talk instead of typing".
+Footer: left muted line "Works with Off Grid AI on your computer. Nothing goes to a cloud." Centre: 5-segment progress, segment 2 active, mono step name "WHICH ONES". Right: text button "Back", then the emerald primary button "Continue".

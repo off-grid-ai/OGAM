@@ -1,0 +1,20 @@
+STYLE (match the attached reference screenshots of the real Off Grid AI desktop onboarding exactly; they are the design source):
+- Dark theme. Near-black background with a faint fine dot lattice and one soft, diffuse emerald glow near the top. As in the references.
+- Geist sans: titles light and large; body regular. Geist Mono for small uppercase muted labels (like "OFF GRID AI · SETUP").
+- Tiles, rows and cards are translucent dark glass with hairline borders and rounded corners, as in the references. A picked tile has an emerald hairline edge and a small emerald check dot at its top right.
+- One accent colour: emerald (#34D399), used only for picked states, the one primary button, the active progress segment and small icons where the references use it. Everything else neutral greys. Small "PRO" labels are muted grey mono text, never coloured.
+- Footer as in the references: a thin bottom bar with a muted line on the left, a short segmented progress line in the centre with a tiny mono step name under it, and the buttons on the right (quiet text buttons, then the emerald primary button).
+- Thin line icons (Phosphor style). No emojis, no colour-coded badges, no traffic lights, no 3D, no illustrations, no browser window chrome, no device frame.
+- Flat screenshot filling the whole canvas edge to edge.
+- Every quoted string must appear exactly as written, legible and not clipped. Add no other copy, no watermark.
+OUTPUT: use your built-in image generation. Save the image in the current directory with the file name given below. Then save the exact final prompt you used to prompts/<same name>.txt. Check the text in the image against the quoted strings; regenerate once if any string is wrong.
+File name: e1-what.png. Landscape, exactly 1536 x 1024. References: refs/desktop-groups.jpg (copy its layout closely).
+Screen: the Off Grid AI browser extension's welcome page, opened in a browser tab right after install. Step 1 of 5.
+Top left mono label "OFF GRID AI · IN YOUR BROWSER". Title "What do you want to do?". Muted line under it "Pick any. Next you choose the details."
+A grid of five tiles (three in the first row, two in the second), each with a line icon at top left, a name and a muted one-line description at the bottom:
+1 "Chat and ask" — "Questions about any page or photo" (picked)
+2 "Create" — "Pictures from a sentence"
+3 "Write" — "Fix, rewrite and dictate in any text box" (picked)
+4 "Get work done" — "It does the clicking, with your approval"
+5 "Private and connected" — "Passwords and sync"
+Footer: left muted line "Works with Off Grid AI on your computer. Nothing goes to a cloud." Centre: 5-segment progress, segment 1 active, mono step name "WHAT YOU WANT". Right: text button "Skip, set it up" and the emerald primary button "Continue".
