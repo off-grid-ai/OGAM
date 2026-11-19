@@ -2,7 +2,9 @@ import { CATALOG, isLoadableOnDevice, pickModelsForDevice, PHONE_FIT_BUDGET, typ
 import { textModelBudget } from './memoryBudget';
 import { registerBundledCatalog, withRemoteCatalog } from '../stores/modelCatalogStore';
 import { engineLlamaBuild, engineLoadsCatalogModel } from './llamaEngineSupport';
-import type { ModelFile, ModelInfo } from '../types';
+import type { DownloadedModel, ModelFile, ModelInfo } from '../types';
+import { isClassifierModel } from './classifierModel';
+import { isSuspiciousRecoveredTextModel } from '../utils/modelSelectorFilters';
 
 /** A catalog model this phone may offer: not replaced by a newer one, and loadable by its engine. */
 function isOfferable(entry: Pick<ModelEntry, 'supersededBy' | 'minLlamaBuild'>): boolean {
@@ -151,4 +153,32 @@ function pickChat(downloads: ReturnType<typeof chatDownloads>, ramGB: number): D
     minLlamaBuild: d.entry.minLlamaBuild,
   }), ramGB, textModelBudget(ramGB))
     .map(({ slot, item }) => ({ slot, ...item }));
+}
+
+/** The way forward when memory refuses a chat model: a smaller one on the phone, or the starter. */
+export type SmallerChatModel =
+  | { kind: 'use'; model: DownloadedModel }
+  | { kind: 'download'; pick: DevicePick };
+
+/**
+ * A smaller chat model for one that memory refused: the biggest chat model already on the phone
+ * that is smaller than it, else the starter pick if it is smaller and not yet here. Null when none is
+ * smaller. About one phone user in seven had a chat model refused (PostHog, 2026-11-19), and the
+ * only ways forward were Load Anyway or the full model list.
+ */
+export function smallerChatModel(
+  refused: Pick<DownloadedModel, 'id' | 'fileSize'>,
+  downloaded: readonly DownloadedModel[],
+  ramGB: number,
+  opts: { classifierModelId?: string | null; catalog?: readonly ModelEntry[] } = {},
+): SmallerChatModel | null {
+  const onPhone = downloaded
+    .filter(model => model.id !== refused.id && model.fileSize > 0 && model.fileSize < refused.fileSize
+      && !isClassifierModel(model.id, opts.classifierModelId) && !isSuspiciousRecoveredTextModel(model))
+    .sort((a, b) => b.fileSize - a.fileSize)[0];
+  if (onPhone) return { kind: 'use', model: onPhone };
+  const starter = starterPick(ramGB, opts.catalog);
+  if (!starter || starter.sizeBytes >= refused.fileSize) return null;
+  if (downloaded.some(model => model.fileName === starter.file.name)) return null;
+  return { kind: 'download', pick: starter };
 }

@@ -12,6 +12,7 @@ import logger from '../../utils/logger';
 import { ModelReadyOutcome, reasonFromLoadError } from './modelReadiness';
 import { isOverridableMemoryError } from '../../services/modelLoadErrors';
 import { loadModelWithOverride, memoryRefusalAlert } from '../../services/loadModelWithOverride';
+import { smallerModelAction } from '../../services/smallerModelOffer';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
 
@@ -110,6 +111,60 @@ async function doLoadTextModel(deps: ModelActionDeps, opts?: { override?: boolea
   }
 }
 
+interface SmallerModelDeps {
+  setAlertState: (alert: AlertState) => void;
+  setIsModelLoading: (loading: boolean) => void;
+  setLoadingModel: (model: DownloadedModel | null) => void;
+  setShowModelSelector: (show: boolean) => void;
+}
+
+/**
+ * Load the chat model chosen in place of one memory refused, then send the waiting turn. Another
+ * refusal shows the same sheet again, with a still smaller model when there is one.
+ */
+function loadChosenSmallerModel(
+  deps: SmallerModelDeps,
+  onLoaded?: () => void,
+): void {
+  const modelId = activeModelService.selectedTextModelId();
+  if (!modelId) return;
+  const model = useAppStore.getState().downloadedModels.find(m => m.id === modelId) ?? null;
+  loadModelWithOverride(opts => activeModelService.loadTextModel(modelId, undefined, opts), {
+    setAlertState: deps.setAlertState,
+    onAttemptStart: () => {
+      deps.setLoadingModel(model);
+      deps.setIsModelLoading(true);
+    },
+    onAttemptEnd: () => {
+      deps.setIsModelLoading(false);
+      deps.setLoadingModel(null);
+    },
+    onSuccess: () => onLoaded?.(),
+    onChooseModel: () => {
+      deps.setAlertState(hideAlert());
+      activeModelService.keepLoadedTextModelSelected();
+      deps.setShowModelSelector(true);
+    },
+    smaller: () => smallerOffer(deps, modelId, onLoaded),
+  }).catch(e => logger.error('[ModelLoad] smaller model load failed:', e));
+}
+
+/** The memory sheet's smaller-model button for `refusedId`: it closes the sheet, then acts. */
+function smallerOffer(
+  deps: SmallerModelDeps,
+  refusedId: string,
+  onLoaded?: () => void,
+): { label: string; onPress: () => void } | undefined {
+  const action = smallerModelAction(refusedId, () => loadChosenSmallerModel(deps, onLoaded));
+  return action && {
+    label: action.label,
+    onPress: () => {
+      deps.setAlertState(hideAlert());
+      action.onPress();
+    },
+  };
+}
+
 export async function initiateModelLoad(
   deps: ModelActionDeps,
   alreadyLoading: boolean,
@@ -155,6 +210,7 @@ export async function initiateModelLoad(
       // dead-end "Failed to load model" the user can only dismiss.
       if (isOverridableMemoryError(error)) {
         deps.setAlertState(memoryRefusalAlert(detail, {
+          smaller: smallerOffer(deps, activeModelId, onLoadedResume),
           onCancel: () => {
             deps.setAlertState(hideAlert());
             activeModelService.keepLoadedTextModelSelected();
@@ -238,6 +294,8 @@ export async function ensureTextModelForChatFn(deps: {
         activeModelService.keepLoadedTextModelSelected();
         deps.setShowModelSelector(true);
       },
+      // Or take the smaller model in one tap: it loads, then the waiting turn goes.
+      smaller: () => smallerOffer(deps, modelId, deps.resumePendingMessage),
     },
   );
   retrying = true;
