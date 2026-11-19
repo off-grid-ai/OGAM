@@ -19,19 +19,19 @@ describe('happy — image lightbox (tap a generated image → viewer + controls)
     await h.generateImageViaUI({ prompt: 'a fox in the snow' });
 
     // The viewer is not open yet — no Save/Close controls on screen.
-    expect(h.view!.queryByText('Close')).toBeNull();
+    expect(h.view!.queryByLabelText('Close')).toBeNull();
 
     // Tap the generated image (real onPress → handleImagePress → viewer opens).
     h.rtl.fireEvent.press(h.view!.getByTestId('generated-image'));
 
     // The fullscreen viewer is open with both controls.
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText('Save')).not.toBeNull(); });
-    expect(h.view!.queryByText('Close')).not.toBeNull();
+    await h.rtl.waitFor(() => { expect(h.view!.queryByLabelText('Save')).not.toBeNull(); });
+    expect(h.view!.queryByLabelText('Close')).not.toBeNull();
 
     // Close dismisses the viewer.
-    h.rtl.fireEvent.press(h.view!.getByText('Close'));
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText('Save')).toBeNull(); });
-    expect(h.view!.queryByText('Close')).toBeNull();
+    h.rtl.fireEvent.press(h.view!.getByLabelText('Close'));
+    await h.rtl.waitFor(() => { expect(h.view!.queryByLabelText('Save')).toBeNull(); });
+    expect(h.view!.queryByLabelText('Close')).toBeNull();
   });
 
   it('Save in the viewer writes the image to the gallery and confirms', async () => {
@@ -39,10 +39,10 @@ describe('happy — image lightbox (tap a generated image → viewer + controls)
     await h.generateImageViaUI({ prompt: 'a fox in the snow' });
 
     h.rtl.fireEvent.press(h.view!.getByTestId('generated-image'));
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText('Save')).not.toBeNull(); });
+    await h.rtl.waitFor(() => { expect(h.view!.queryByLabelText('Save')).not.toBeNull(); });
 
     // Save runs the real RNFS copy (memfs) and the user sees the confirmation alert.
-    h.rtl.fireEvent.press(h.view!.getByText('Save'));
+    h.rtl.fireEvent.press(h.view!.getByLabelText('Save'));
     await h.rtl.waitFor(() => { expect(h.view!.queryByText('Image Saved')).not.toBeNull(); });
 
     // The image really landed on disk in the gallery folder.
@@ -60,12 +60,12 @@ describe('happy — image lightbox (tap a generated image → viewer + controls)
     await h.generateImageViaUI({ prompt: 'a fox in the snow' });
 
     h.rtl.fireEvent.press(h.view!.getByTestId('generated-image'));
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText('Share')).not.toBeNull(); });
+    await h.rtl.waitFor(() => { expect(h.view!.queryByLabelText('Share')).not.toBeNull(); });
     h.rtl.fireEvent.press(h.view!.getByTestId('image-viewer-share'));
 
     await h.rtl.waitFor(() => { expect(share).toHaveBeenCalledTimes(1); });
     expect(share.mock.calls[0][0]).toMatch(/\.png$/);
-    expect(h.view!.queryByText('Close')).toBeNull();
+    expect(h.view!.queryByLabelText('Close')).toBeNull();
     share.mockRestore();
   });
 
@@ -75,7 +75,7 @@ describe('happy — image lightbox (tap a generated image → viewer + controls)
     await h.generateImageViaUI({ prompt: 'a fox in the snow' });
 
     h.rtl.fireEvent.press(h.view!.getByTestId('generated-image'));
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText('Share')).not.toBeNull(); });
+    await h.rtl.waitFor(() => { expect(h.view!.queryByLabelText('Share')).not.toBeNull(); });
     h.rtl.fireEvent.press(h.view!.getByTestId('image-viewer-share'));
 
     await h.rtl.waitFor(() => { expect(h.view!.queryByText('Could not share')).not.toBeNull(); });

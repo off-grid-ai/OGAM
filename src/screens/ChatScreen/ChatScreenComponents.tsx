@@ -8,11 +8,12 @@ import {
 import { TouchableOpacity } from '../../components/Touchable';
 import { LoadingDots } from '../../components/LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ModelSelectorModal } from '../../components';
 import { HeaderStatusFill } from '../../components/ScreenHeader';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
 import { createStyles } from './styles';
+import { SPACING } from '../../constants';
 import { useTheme } from '../../theme';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import type { ArrivingChatModel } from '../../services/arrivingChatModel';
@@ -357,41 +358,59 @@ export const ImageViewerModal: React.FC<{
   /** Video is Pro: "Animate this photo" fills this slot. */
   AnimateAction?: React.ComponentType<any>;
   conversationId?: string | null;
-}> = ({ styles, colors, viewerImageUri, onClose, onSave, onShare, AnimateAction, conversationId }) => (
-  <Modal visible={!!viewerImageUri} transparent animationType="fade" onRequestClose={onClose}>
-    <View style={styles.imageViewerContainer}>
-      <TouchableOpacity style={styles.imageViewerBackdrop} activeOpacity={1} onPress={onClose} />
-      {viewerImageUri && (
-        <View style={styles.imageViewerContent}>
-          <Image source={{ uri: viewerImageUri }} style={styles.fullscreenImage} resizeMode="contain" />
-          <View style={styles.imageViewerActions}>
-            {AnimateAction && (
-              <AnimateAction
-                imagePath={viewerImageUri}
-                conversationId={conversationId}
-                onStarted={onClose}
-                buttonStyle={styles.imageViewerButton}
-                textStyle={styles.imageViewerButtonText}
-                iconColor={colors.text}
-              />
-            )}
-            {onShare && (
-              <TouchableOpacity style={styles.imageViewerButton} onPress={onShare} testID="image-viewer-share">
-                <Icon name="share" size={24} color={colors.text} />
-                <Text style={styles.imageViewerButtonText}>Share</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.imageViewerButton} onPress={onSave}>
-              <Icon name="download" size={24} color={colors.text} />
-              <Text style={styles.imageViewerButtonText}>Save</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.imageViewerButton} onPress={onClose}>
+}> = ({ styles, colors, viewerImageUri, onClose, onSave, onShare, AnimateAction, conversationId }) => {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={!!viewerImageUri} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.imageViewerContainer}>
+        <TouchableOpacity style={styles.imageViewerBackdrop} activeOpacity={1} onPress={onClose} />
+        {viewerImageUri && (
+          <View style={styles.imageViewerContent}>
+            <Image source={{ uri: viewerImageUri }} style={styles.fullscreenImage} resizeMode="contain" />
+            <TouchableOpacity
+              style={[styles.imageViewerClose, { top: insets.top + SPACING.md }]}
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              testID="image-viewer-close"
+            >
               <Icon name="x" size={24} color={colors.text} />
-              <Text style={styles.imageViewerButtonText}>Close</Text>
             </TouchableOpacity>
+            <View style={[styles.imageViewerActions, { bottom: insets.bottom + SPACING.xl }]}>
+              {AnimateAction && (
+                <AnimateAction
+                  imagePath={viewerImageUri}
+                  conversationId={conversationId}
+                  onStarted={onClose}
+                  buttonStyle={styles.imageViewerButton}
+                  textStyle={styles.imageViewerButtonText}
+                  iconColor={colors.text}
+                />
+              )}
+              {onShare && (
+                <TouchableOpacity
+                  style={styles.imageViewerButton}
+                  onPress={onShare}
+                  accessibilityRole="button"
+                  accessibilityLabel="Share"
+                  testID="image-viewer-share"
+                >
+                  <Icon name="share" size={24} color={colors.text} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.imageViewerButton}
+                onPress={onSave}
+                accessibilityRole="button"
+                accessibilityLabel="Save"
+                testID="image-viewer-save"
+              >
+                <Icon name="download" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      )}
-    </View>
-  </Modal>
-);
+        )}
+      </View>
+    </Modal>
+  );
+};

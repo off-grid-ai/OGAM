@@ -27,13 +27,13 @@ describe('T057 (rendered) — tapping a pre-send image thumbnail opens a preview
     const thumb = await h.rtl.waitFor(() => h.view!.getByTestId(/^attachment-image-/));
 
     // Precondition: no fullscreen viewer open yet (so "Close appears" is a real observed transition).
-    expect(h.view!.queryByText('Close')).toBeNull();
+    expect(h.view!.queryByLabelText('Close')).toBeNull();
 
     // Real gesture: tap the thumbnail.
     h.rtl.fireEvent.press(thumb);
 
     // SPEC: a fullscreen preview of the image opens (the app's image viewer, with a Close control — same as
     // tapping a generated image, T068). RED on HEAD: the thumbnail has no onPress, so nothing opens.
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText('Close')).not.toBeNull(); }, { timeout: 3000 });
+    await h.rtl.waitFor(() => { expect(h.view!.queryByLabelText('Close')).not.toBeNull(); }, { timeout: 3000 });
   });
 });

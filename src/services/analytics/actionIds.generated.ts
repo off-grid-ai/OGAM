@@ -245,6 +245,8 @@ export const FIXED_ACTION_IDS: readonly string[] = [
   "image-size",
   "image-steps",
   "image-threads",
+  "image-viewer-close",
+  "image-viewer-save",
   "image-viewer-share",
   "import-local-model",
   "improve-action",
