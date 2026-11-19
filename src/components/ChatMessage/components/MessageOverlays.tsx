@@ -22,6 +22,7 @@ interface MessageOverlaysProps {
   alertState: AlertState;
   onCloseActionMenu: () => void;
   onCopy: () => void;
+  onShareCard?: () => void;
   onEdit: () => void;
   onRetry: () => void;
   onGenerateImage: () => void;
@@ -34,7 +35,7 @@ interface MessageOverlaysProps {
 export const MessageOverlays: React.FC<MessageOverlaysProps> = ({
   message, styles, colors, showActionMenu, isEditing, isUser,
   canEdit, canRetry, canGenerateImage, canSpeak, displayContent,
-  alertState, onCloseActionMenu, onCopy, onEdit,
+  alertState, onCloseActionMenu, onCopy, onShareCard, onEdit,
   onRetry, onGenerateImage, onSpeak, onSaveEdit, onCancelEdit, onCloseAlert,
 }) => (
   <>
@@ -48,6 +49,7 @@ export const MessageOverlays: React.FC<MessageOverlaysProps> = ({
       canSpeak={canSpeak}
       styles={styles}
       onCopy={onCopy}
+      onShareCard={onShareCard}
       onEdit={onEdit}
       onRetry={onRetry}
       onGenerateImage={onGenerateImage}
