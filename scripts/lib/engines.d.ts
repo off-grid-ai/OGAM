@@ -74,6 +74,8 @@ export interface BumpPr {
 }
 export function bumpMergeDecision(pr: BumpPr, sha: string): { action: 'merge' | 'skip' | 'refuse'; reason?: string };
 export const VIDEO_RUNTIME_CHECKS: string[];
+/** Desktop's llama.cpp pin beside the @ogai/llama.rn build, flagged when they drift apart. */
+export function llamaDriftLine(desktopRef: string | null | undefined, llamaRnVersion: string | null | undefined): string;
 export function videoRuntimeMoved(path: string): boolean;
 export const RELEASE_WORKFLOWS: string[];
 export function unfinishedRuns<T extends { status: string }>(runs: T[]): T[];
