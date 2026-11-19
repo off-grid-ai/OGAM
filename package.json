@@ -20,7 +20,7 @@
     "postinstall": "patch-package",
     "depcruise": "depcruise src --config .dependency-cruiser.js",
     "knip": "knip",
-    "build:preview": "react-native bundle --config preview/metro.preview.config.js --platform web --dev true --minify false --entry-file preview/index.js --bundle-output preview/dist/index.bundle.js --assets-dest preview/dist && cp preview/index.html preview/dist/ && rm -rf preview/dist/catalogs && cp -R node_modules/@offgrid/i18n/catalogs preview/dist/catalogs",
+    "build:preview": "react-native bundle --config preview/metro.preview.config.js --platform web --dev true --minify false --entry-file preview/index.js --bundle-output preview/dist/index.bundle.js --assets-dest preview/dist && cp preview/index.html preview/dist/ && rm -rf preview/dist/catalogs && cp -R node_modules/@offgrid/i18n/catalogs preview/dist/catalogs && mkdir -p preview/dist/fonts && cp assets/fonts/geist/*.ttf node_modules/react-native-vector-icons/Fonts/Feather.ttf node_modules/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf node_modules/react-native-vector-icons/Fonts/MaterialIcons.ttf preview/dist/fonts/",
     "e2e:wda": "node scripts/ios/launch-wda.mjs",
     "e2e:device": "node --test __tests__/device/*.e2e.mjs",
     "e2e:coverage": "node scripts/e2e/collect-coverage.mjs",
