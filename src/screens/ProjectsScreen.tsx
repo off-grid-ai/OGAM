@@ -166,10 +166,6 @@ export const ProjectsScreen: React.FC = () => {
         }
       />
 
-      <Text style={styles.subtitle}>
-        Projects group related chats with shared context and instructions.
-      </Text>
-
       {projects.length === 0 ? (
         <View style={styles.emptyState}>
           <AnimatedEntry index={0} staggerMs={60} trigger={focusTrigger}>
@@ -204,7 +200,6 @@ export const ProjectsScreen: React.FC = () => {
             placeholder="Search projects"
             clearLabel="Clear project search"
             testID="project-search-input"
-            style={styles.searchBar}
           />
           <FlatList
             {...SCROLL_DEPTH_PROPS}
@@ -232,24 +227,9 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     flex: 1,
     backgroundColor: colors.background,
   },
-  // Part of the header bar between the title and the search: the bar's background, stacked over the
-  // header's shadow, so the screen shows one bar with one shadow under the search.
-  subtitle: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.textSecondary,
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.xs,
-    backgroundColor: colors.background,
-    zIndex: 1,
-  },
   list: {
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.sm,
-  },
-  // The subtitle sits above the search bar, so the bar needs less space on top than on Chats.
-  searchBar: {
-    paddingTop: SPACING.sm,
   },
   noMatches: {
     ...TYPOGRAPHY.bodySmall,
