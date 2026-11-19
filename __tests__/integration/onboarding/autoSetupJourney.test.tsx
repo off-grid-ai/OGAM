@@ -215,14 +215,15 @@ describe('Auto Setup release journey', () => {
   });
 
   it('selects a device-fit plan, starts all model downloads, and activates it', async () => {
+    // Opened from the app (Choose models): the plans show at once and the download finishes here.
+    const fromApp = { ...navigation, canGoBack: () => true };
     const ui = render(
       <AutoSetupScreen
-        navigation={navigation}
+        navigation={fromApp}
         sessionFactory={sessionFactory}
       />,
     );
-    // First launch leads with Start chatting; the plans are behind Choose another.
-    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-choose-another')));
+    expect(ui.queryByTestId('auto-setup-back-to-quick-start')).toBeNull();
     await waitFor(() =>
       expect(ui.getByTestId('auto-setup-plan-balanced')).toBeTruthy(),
     );
@@ -258,7 +259,42 @@ describe('Auto Setup release journey', () => {
       'unsloth/Qwen3.5-9B-GGUF',
     );
     expect(useAppStore.getState().activeImageModelId).toBe('image-extreme');
-    expect(navigation.replace).toHaveBeenCalledWith('Main');
+    expect(navigation.goBack).toHaveBeenCalled();
+  });
+
+  it('first launch: Choose another has a way back to Start chatting', async () => {
+    const ui = render(<AutoSetupScreen navigation={navigation} sessionFactory={sessionFactory} />);
+    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-choose-another')));
+    await waitFor(() => expect(ui.getByTestId('auto-setup-plan-lean')).toBeTruthy());
+    expect(ui.queryByTestId('auto-setup-start-chatting')).toBeNull();
+
+    fireEvent.press(ui.getByTestId('auto-setup-back-to-quick-start'));
+
+    expect(ui.getByTestId('auto-setup-start-chatting')).toBeTruthy();
+    expect(ui.queryByTestId('auto-setup-plan-lean')).toBeNull();
+    expect(await modelDownloadService.list()).toEqual([]);
+  });
+
+  it('first launch: a download from the plans opens the chat at once, with the plan picked', async () => {
+    // iPhone hand test 2026-11-19: a plan download kept the person on setup, away from the chat.
+    textDownloads.completeOnStart = false;
+    const ui = render(<AutoSetupScreen navigation={navigation} sessionFactory={sessionFactory} />);
+    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-choose-another')));
+    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-plan-heading-balanced')));
+    expect(ui.getByText('MiniCPM5 2B')).toBeTruthy();
+
+    fireEvent.press(ui.getByTestId('auto-setup-download'));
+
+    await waitFor(() =>
+      expect(navigation.reset).toHaveBeenCalledWith({
+        index: 1,
+        routes: [{ name: 'Main' }, { name: 'Chat', params: {} }],
+      }),
+    );
+    const downloads = await modelDownloadService.list();
+    expect(downloads.map(d => [d.modelType, d.status])).toEqual([['text', 'downloading']]);
+    expect(downloads[0].name).not.toBe('Qwen3.5-0.8B-Q4_K_M.gguf');
+    expect(downloads[0].name).toMatch(/MiniCPM/i);
   });
 
   it('Start chatting downloads Quick start and opens a chat at once', async () => {

@@ -86,9 +86,9 @@ export interface AutoSetupSession {
   selectTier(tier: AutoSetupTier): void;
   toggleKind(kind: AutoSetupModelKind): void;
   start(): Promise<void>;
-  /** Start Quick start's downloads and let them finish after the screen is gone: what they bring is
-   *  chosen when it arrives, as Continue would. */
-  startInBackground(): Promise<void>;
+  /** Start a plan's downloads (Quick start unless another is named) and let them finish after the
+   *  screen is gone: what they bring is chosen when it arrives, as Continue would. */
+  startInBackground(tier?: AutoSetupTier): Promise<void>;
   cancel(): Promise<void>;
   complete(): void;
   dispose(): void;
@@ -578,9 +578,9 @@ export function createAutoSetupSession(
       publish({ selectedKinds, outcomes: {}, error: null, phase: 'ready' });
     },
     start,
-    async startInBackground() {
-      if (state.selectedTier !== 'lean' && state.plans.some(plan => plan.tier === 'lean')) {
-        publish({ selectedTier: 'lean', outcomes: {}, error: null });
+    async startInBackground(tier = 'lean') {
+      if (state.selectedTier !== tier && state.plans.some(plan => plan.tier === tier)) {
+        publish({ selectedTier: tier, outcomes: {}, error: null });
       }
       await start();
       if (state.phase === 'downloading') handedOff = true;

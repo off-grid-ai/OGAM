@@ -134,18 +134,20 @@ export const AutoSetupScreen: React.FC<Props> = ({
       && autoSetupItemNeedsAction(item, snapshot.installedIds)
       && !snapshot.installedIds.includes(autoSetupDownloadId(item)))
     .reduce((total, item) => total + item.sizeBytes, 0);
-  // Start Quick start's downloads, then open a chat at once: the model answers when it arrives.
-  const startChatting = async () => {
+  // Start a plan's downloads, then open a chat at once: the model answers when it arrives. Start
+  // chatting takes Quick start; on first launch a download from the plans takes the plan picked.
+  const startChatting = async (tier?: AutoSetupTier) => {
     markConsentAsked();
     // A chat model already on hand (on the phone, or on its way: a bundled model pack, a download
     // started earlier) is the chat model: open the chat for it rather than download a second one.
-    if (takeChatModelOnHand()) {
+    // A plan picked by name is downloaded as asked.
+    if (!tier && takeChatModelOnHand()) {
       navigation.reset({ index: 1, routes: [{ name: 'Main' }, { name: 'Chat', params: {} }] });
       return;
     }
     setStartingChat(true);
     try {
-      await session.startInBackground();
+      await session.startInBackground(tier);
     } finally {
       setStartingChat(false);
     }
@@ -179,6 +181,18 @@ export const AutoSetupScreen: React.FC<Props> = ({
       >
         {showPlans ? (
           <>
+            {/* First launch: the plans are one tap from Start chatting, and one tap back to it. */}
+            {!openedFromApp && (
+              <Button
+                title="Back to Start chatting"
+                variant="ghost"
+                size="small"
+                style={styles.backToQuickStart}
+                onPress={() => setShowPlans(false)}
+                disabled={starting || startingChat}
+                testID="auto-setup-back-to-quick-start"
+              />
+            )}
             <Text style={styles.title}>Choose model downloads.</Text>
             <Text style={styles.secondary}>
               Installed models add no download size.
@@ -412,9 +426,15 @@ export const AutoSetupScreen: React.FC<Props> = ({
                       }
                       onPress={() => {
                         markConsentAsked();
+                        // First launch: the chat opens now, as with Start chatting, and the plan's
+                        // models finish in the background. From the app, the plan downloads here.
+                        if (!openedFromApp && snapshot.phase !== 'failed' && selectedBytes > 0 && snapshot.selectedTier) {
+                          startChatting(snapshot.selectedTier).catch(() => undefined);
+                          return;
+                        }
                         session.start().catch(() => undefined);
                       }}
-                      loading={starting}
+                      loading={starting || startingChat}
                       disabled={selectedItems.length === 0}
                       variant="hero"
                       testID="auto-setup-download"
@@ -515,6 +535,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   title: { ...TYPOGRAPHY.h2, color: colors.text, textAlign: 'left' as const },
   hero: { gap: SPACING.md },
+  backToQuickStart: { alignSelf: 'flex-start' as const, paddingHorizontal: 0 },
   secondary: { ...TYPOGRAPHY.body, color: colors.textSecondary, textAlign: 'left' as const },
   planGrid: { gap: SPACING.sm },
   planCard: {

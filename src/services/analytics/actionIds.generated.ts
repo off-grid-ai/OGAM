@@ -47,6 +47,7 @@ export const FIXED_ACTION_IDS: readonly string[] = [
   "auto-detect-method-pattern",
   "auto-discover-toggle",
   "auto-setup-advanced",
+  "auto-setup-back-to-quick-start",
   "auto-setup-cancel",
   "auto-setup-choose-another",
   "auto-setup-continue",
