@@ -94,9 +94,12 @@ class BundledModelModule: RCTEventEmitter {
   /// The folder of an arrived pack: where its first file lives (files sit at the pack's root).
   @available(iOS 26, *)
   private static func folder(of name: String) -> String? {
-    guard AssetPackManager.shared.assetPackIsAvailableLocally(withID: name) else { return nil }
+    // url(for:) answers only for a file in a pack that is on the phone (an iOS 26.0 API; the
+    // availability check is 26.4).
     let file = name == "chat_mmproj" ? "mmproj-LFM3-VL-2B-F16.gguf" : "LFM3-VL-2B-Q4_K_M.gguf"
-    return (try? AssetPackManager.shared.url(for: FilePath(file)))?.deletingLastPathComponent().path
+    guard let url = try? AssetPackManager.shared.url(for: FilePath(file)),
+          FileManager.default.fileExists(atPath: url.path) else { return nil }
+    return url.deletingLastPathComponent().path
   }
 
   @available(iOS 26, *)
