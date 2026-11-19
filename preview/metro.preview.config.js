@@ -6,6 +6,12 @@ const appConfig = require('../metro.config.js');
 
 const root = path.resolve(__dirname, '..');
 const stub = path.resolve(__dirname, 'native-stub.js');
+// Holds a Pro licence, so the Pro screens show in a release build (see keychain.js).
+const keychain = path.resolve(__dirname, 'keychain.js');
+// The licence server client, always offline (see keygen-offline.js).
+const keygenOffline = path.resolve(__dirname, 'keygen-offline.js');
+// The browser's <video>, so guide clips play (see video.js).
+const video = path.resolve(__dirname, 'video.js');
 
 // Libraries with no web build. Anything else that ships a web build (React Native Web, Navigation,
 // Reanimated, Gesture Handler, Safe Area, Screens, SVG, Async Storage) runs as it is.
@@ -20,9 +26,7 @@ const NATIVE_ONLY = [
   'react-native-blob-util',
   'react-native-zip-archive',
   'react-native-device-info',
-  'react-native-keychain',
   'react-native-audio-api',
-  'react-native-video',
   'react-native-video-player',
   'react-native-vision-camera',
   'react-native-webview',
@@ -58,8 +62,22 @@ module.exports = {
       const context = { ...appContext, preferNativePlatform: false };
       if (moduleName === 'react-native')
         return context.resolveRequest(context, 'react-native-web', platform);
+      if (moduleName === 'react-native-keychain')
+        return { type: 'sourceFile', filePath: keychain };
+      if (moduleName === 'react-native-video')
+        return { type: 'sourceFile', filePath: video };
+      if (/(^|\/)keygenClient$/.test(moduleName))
+        return { type: 'sourceFile', filePath: keygenOffline };
       if (isNativeOnly(moduleName))
         return { type: 'sourceFile', filePath: stub };
+      // Images: require('x.png') registers with React Native's asset registry. React Native Web reads
+      // its own, so point the registry there and the pictures draw.
+      if (moduleName.endsWith('Libraries/Image/AssetRegistry'))
+        return context.resolveRequest(
+          context,
+          'react-native-web/dist/cjs/modules/AssetRegistry',
+          platform,
+        );
       // React Native internals (Libraries/..., codegen native components) have no web build.
       if (moduleName.startsWith('react-native/'))
         return { type: 'sourceFile', filePath: stub };

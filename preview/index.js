@@ -2,7 +2,7 @@
 // (or ?lang=) asks for. See preview/metro.preview.config.js.
 //
 //   index.html?lang=de             the app in German, from catalogs/de/{common,mobile}.json beside the page
-//   index.html?route=onboarding    first run (otherwise: onboarding done, one model, Pro on)
+//   index.html?route=onboarding    first run (otherwise: onboarding done, one model, Pro on: keychain.js)
 //
 // The editor (the parent frame) sends { type: 'offgrid-i18n', locale, strings } as a person types; the app
 // remounts with the new text.

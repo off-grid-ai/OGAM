@@ -1,5 +1,5 @@
 // The translation preview opens the app as a person who finished onboarding and has one model, so the main
-// screens (and, in this dev build, Pro) are there to translate. ?route=onboarding shows first run instead.
+// screens are there to translate. ?route=onboarding shows first run instead.
 //
 // It writes that person's saved state where the app reads it on a phone (AsyncStorage, which is
 // localStorage on the web), before the app loads. The app then starts from it through its own hydrate.
