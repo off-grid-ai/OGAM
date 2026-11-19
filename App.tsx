@@ -33,6 +33,7 @@ import { initModelCatalog } from './src/stores/modelCatalogStore';
 import { initActiveDownloadPersistence } from './src/services/activeDownloadPersistence';
 import { restoreQueuedDownloads } from './src/services/restoreQueuedDownloads';
 import { startBundledModel } from './src/services/bundledModel';
+import { ShareCardHost } from './src/components/ShareCard/ShareCardHost';
 import { startLoadPolicySync } from './src/services/loadPolicySync';
 import { startNetworkReconnectWatcher, stopNetworkReconnectWatcher } from './src/services/networkReconnect';
 import { registerCoreDownloadProviders } from './src/services/modelDownloadService/registerProviders';
@@ -540,6 +541,7 @@ function App() {
           <AppNavigator />
         </NavigationContainer>
         <AnalyticsConsentPrompt />
+        <ShareCardHost />
         {__DEV__ && showSyncStatusBar ? <DevSyncStrip /> : null}
         </AliveProvider>
       </SafeAreaProvider>
