@@ -218,6 +218,9 @@ export function createAutoSetupSession(
   let disposed = false;
   let operation = 0;
   let refreshInFlight = false;
+  // A change that lands while a read is in flight asks for one more read, so the last change
+  // (a zip finishing its extraction) is never dropped.
+  let refreshAgain = false;
   let state: AutoSetupSnapshot = {
     phase: 'loading_catalog',
     plans: [],
@@ -264,9 +267,14 @@ export function createAutoSetupSession(
   };
 
   const refreshDownloads = async (): Promise<void> => {
-    if (disposed || refreshInFlight || activeIds.size === 0) return;
+    if (disposed || activeIds.size === 0) return;
+    if (refreshInFlight) {
+      refreshAgain = true;
+      return;
+    }
     const token = operation;
     refreshInFlight = true;
+    refreshAgain = false;
     try {
       const listed = await downloads.list();
       if (disposed || token !== operation) return;
@@ -302,6 +310,7 @@ export function createAutoSetupSession(
     } finally {
       refreshInFlight = false;
     }
+    if (refreshAgain) await refreshDownloads();
   };
 
   const unsubscribeDownloads = downloads.subscribe(() => {

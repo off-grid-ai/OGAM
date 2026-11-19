@@ -313,6 +313,49 @@ describe('Auto Setup release journey', () => {
     });
   });
 
+  it('finishes when the last download ends while setup is still reading the one before', async () => {
+    // Android 2026-11-19: an image zip finished extracting while setup was still listing the
+    // 98% update; that last change was dropped, so setup sat at 98% with the model installed.
+    textDownloads.completeOnStart = false;
+    let holdList: Promise<void> | null = null;
+    let listStarted: () => void = () => undefined;
+    const slowList: AutoSetupDownloadBoundaries = {
+      ...downloadBoundaries,
+      list: async () => {
+        const listed = await modelDownloadService.list();
+        if (holdList) {
+          listStarted();
+          await holdList;
+        }
+        return listed;
+      },
+    };
+    const ui = render(
+      <AutoSetupScreen
+        navigation={navigation}
+        sessionFactory={() =>
+          createAutoSetupSession({ catalog: catalogBoundaries, downloads: slowList })
+        }
+      />,
+    );
+    await waitFor(() => expect(ui.getByTestId('auto-setup-download')).toBeTruthy());
+    fireEvent.press(ui.getByTestId('auto-setup-download'));
+    await waitFor(async () =>
+      expect((await modelDownloadService.list()).map(d => d.status)).toEqual(['downloading']),
+    );
+
+    let release: () => void = () => undefined;
+    holdList = new Promise(resolve => { release = resolve; });
+    const started = new Promise<void>(resolve => { listStarted = resolve; });
+    textDownloads.setProgress(0.98);
+    await started;
+    holdList = null;
+    textDownloads.complete();
+    release();
+
+    await waitFor(() => expect(ui.getByTestId('auto-setup-continue')).toBeTruthy());
+  });
+
   it('keeps central download records alive after setup unmounts', async () => {
     textDownloads.completeOnStart = false;
     imageDownloads.completeOnStart = false;
