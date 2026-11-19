@@ -17,12 +17,12 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 const HEADER_FILL = 'transparent';
 
 /**
- * The header bar's surface: the shared top fill and a soft edge shadow where content scrolls under
- * it. Every screen's own header bar uses this too.
+ * The header bar's surface: the shared top fill and no shadow, so the bars and the page read as one
+ * continuous field (Mac, 2026-11-19: "we don't want any white of sorts"). Every screen's own header
+ * bar uses this too.
  */
-export const headerSurface = (_colors: ThemeColors, shadows: ThemeShadows) => ({
+export const headerSurface = (_colors: ThemeColors, _shadows: ThemeShadows) => ({
   backgroundColor: HEADER_FILL,
-  ...shadows.edge,
 });
 
 /** Runs a header bar's background up under the status bar, so the two read as one surface. */
