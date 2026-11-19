@@ -10,7 +10,6 @@ const BARE_SEARCH_FIELD = {
 
 const SWIPE_ROW = {
   name: 'react-native-gesture-handler/Swipeable',
-  allowTypeImports: true,
   message: 'A row you swipe to delete is SwipeToDelete (src/components/SwipeToDelete): one trash button, aligned to the row and inset from the edge.',
 };
 

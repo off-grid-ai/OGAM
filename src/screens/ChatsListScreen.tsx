@@ -6,8 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import type Swipeable from 'react-native-gesture-handler/Swipeable';
-import { SwipeToDelete } from '../components/SwipeToDelete';
+import { SwipeToDelete, type SwipeRowHandle } from '../components/SwipeToDelete';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../components/Button';
 import { ModelSelectorModal } from '../components';
@@ -172,8 +171,8 @@ export const ChatsListScreen: React.FC = () => {
   // when, as in ChatGPT, Claude and Gemini (Mac, 2026-11-07: the card list read like settings).
 
   // One row open at a time, and an open row closes on a tap elsewhere or a scroll.
-  const openRow = useRef<Swipeable | null>(null);
-  const rowRefs = useRef(new Map<string, Swipeable | null>());
+  const openRow = useRef<SwipeRowHandle | null>(null);
+  const rowRefs = useRef(new Map<string, SwipeRowHandle | null>());
   const closeOpenRow = () => {
     openRow.current?.close();
     openRow.current = null;

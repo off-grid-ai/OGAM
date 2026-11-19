@@ -6,6 +6,9 @@ import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors } from '../theme';
 import { RADIUS, SPACING } from '../constants';
 
+/** The open/close handle of a row (a list closes the open row before another opens). */
+export type SwipeRowHandle = Swipeable;
+
 /**
  * A row you swipe left to delete: the one owner of that gesture and its trash button.
  *
