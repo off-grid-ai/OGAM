@@ -22,7 +22,8 @@
     "android": "screens/v/slides-2-android.jpg"
    }
   ],
-  "checks": "OGAM \u00b7 CI not run"
+  "checks": "OGAM \u00b7 CI not run",
+  "step": "welcome"
  },
  {
   "id": "groups",
@@ -47,7 +48,8 @@
     "android": "screens/v/groups-2-android.jpg"
    }
   ],
-  "checks": "OGAM \u00b7 CI not run"
+  "checks": "OGAM \u00b7 CI not run",
+  "step": "groups"
  },
  {
   "id": "features",
@@ -72,7 +74,8 @@
     "android": "screens/v/features-2-android.jpg"
    }
   ],
-  "checks": "OGAM \u00b7 CI not run"
+  "checks": "OGAM \u00b7 CI not run",
+  "step": "details"
  },
  {
   "id": "guide",
@@ -97,7 +100,8 @@
     "android": "screens/v/guide-2-android.jpg"
    }
   ],
-  "checks": "OGAM \u00b7 CI not run"
+  "checks": "OGAM \u00b7 CI not run",
+  "step": "guide"
  },
  {
   "id": "guide-topic",
@@ -154,7 +158,8 @@
     "android": "screens/v/setup-2-android.jpg"
    }
   ],
-  "checks": "OGAM \u00b7 CI not run"
+  "checks": "OGAM \u00b7 CI not run",
+  "step": "setup"
  },
  {
   "id": "home",
@@ -179,7 +184,8 @@
     "android": "screens/v/home-2-android.jpg"
    }
   ],
-  "checks": "OGAM \u00b7 CI not run"
+  "checks": "OGAM \u00b7 CI not run",
+  "step": "home"
  },
  {
   "id": "what-you-use",
@@ -197,7 +203,8 @@
    }
   ],
   "clip": "screens/v/what-you-use-1.mp4",
-  "checks": "OGAM \u00b7 CI not run"
+  "checks": "OGAM \u00b7 CI not run",
+  "step": "what-you-use"
  },
  {
   "id": "home-updated",
