@@ -121,7 +121,9 @@ def bundled_model_profiles(strict: true)
     UI.message("Turned on App Groups for #{id}")
   end
   { app_id => "OFFGRID_PROFILE_NAME", ext_id => "OFFGRID_BUNDLED_MODEL_PROFILE_NAME" }.each do |id, env|
-    path = get_provisioning_profile(api_key: key, app_identifier: id, platform: "ios", skip_install: false)
+    # Registering alone signs nothing, so the runner holds no certificate to check the profile against.
+    path = get_provisioning_profile(api_key: key, app_identifier: id, platform: "ios", skip_install: false,
+                                    skip_certificate_verification: !strict)
     profile = Plist.parse_xml(`security cms -D -i #{path.shellescape}`)
     groups = Array(profile.dig("Entitlements", "com.apple.security.application-groups"))
     unless groups.include?(group)
