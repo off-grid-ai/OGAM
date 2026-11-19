@@ -29,12 +29,21 @@ import {
 } from '../utils/messageContent';
 import {
   callsWithinToolBudget,
+  estimateTextTokens,
   finalResponseFromToolResults,
   normalizeMaxToolCalls,
+  parseLenientJson,
+  parseToolArguments,
+  promptBreakdown,
+  repeatedToolCallDecision,
+  repeatedToolCallFinalAnswerInstruction,
+  toolArgumentsDecision,
+  toolCallKey,
   toolLimitFinalAnswerInstruction,
   toolPromptChars,
   toolResultCharBudget,
 } from '@offgrid/models';
+import type { ToolCallRecord } from '@offgrid/models';
 const currentMaxToolSteps = (): number => {
   const configured = useAppStore.getState().settings.maxToolCalls;
   return normalizeMaxToolCalls(configured);
@@ -70,11 +79,15 @@ function parseXmlStyleToolCall(
 }
 
 function parseToolCallBody(body: string, idSuffix: number): ToolCall | null {
-  const makeCall = (name: string, args: any): ToolCall => ({
-    id: `text-tc-${Date.now()}-${idSuffix}`,
-    name,
-    arguments: normalizeToolArgs(args),
-  });
+  const makeCall = (name: string, args: any): ToolCall => {
+    const parsed = toolArgs(args);
+    return {
+      id: `text-tc-${Date.now()}-${idSuffix}`,
+      name,
+      arguments: parsed.args,
+      ...(parsed.error ? { argumentsError: parsed.error } : {}),
+    };
+  };
 
   // Standard JSON: {"name": "tool", "arguments": {...}}
   try {
@@ -111,45 +124,28 @@ function parseToolCallBody(body: string, idSuffix: number): ToolCall | null {
 
   return parseXmlStyleToolCall(body, idSuffix);
 }
-function fixUnquotedKeys(json: string): string {
-  return json.replace(/([{,]\s*)([a-zA-Z_]\w*)(\s*):/g, '$1"$2"$3:');
-}
-
 /**
  * Parse JSON, recovering from the unquoted object keys small models routinely
  * emit ({expression: "2+2"}). The single lenient-parse used by EVERY tool-call
  * body path so the standard and Gemma parsers can't drift (they did: the Gemma
- * path recovered via fixUnquotedKeys while the standard path used a raw
- * JSON.parse and silently dropped the call — Q2). Throws if both attempts fail,
- * so callers keep their existing try/catch fall-through.
+ * path recovered unquoted keys while the standard path used a raw
+ * JSON.parse and silently dropped the call — Q2). Shared with desktop
+ * (@offgrid/models). Throws if both attempts fail, so the format detectors keep
+ * their try/catch fall-through to the next call format.
  */
 function parseJsonLenient(s: string): any {
-  try {
-    return JSON.parse(s);
-  } catch {
-    return JSON.parse(fixUnquotedKeys(s));
-  }
+  return parseLenientJson(s);
 }
 
 /**
- * Normalize a tool call's `arguments` to an object. Small models sometimes emit
+ * A tool call's `arguments` as an object. Small models sometimes emit
  * arguments as a STRINGIFIED JSON object ("{...}") rather than an object (Q3);
- * forwarding that string verbatim gives the tool undefined params. Parse a
- * JSON-object string to an object; pass a real object through; anything else → {}.
+ * forwarding that string verbatim gives the tool undefined params. A JSON-object
+ * string is parsed; a real object passes through; anything unreadable is
+ * reported in `error` (never a silent {}), so the loop asks the model to repair it.
  */
-function normalizeToolArgs(args: any): Record<string, any> {
-  if (typeof args === 'string') {
-    const s = args.trim();
-    if (s.startsWith('{')) {
-      try {
-        return parseJsonLenient(s);
-      } catch {
-        /* not JSON → no usable params */
-      }
-    }
-    return {};
-  }
-  return args && typeof args === 'object' ? args : {};
+function toolArgs(args: any): { args: Record<string, any>; error?: string } {
+  return parseToolArguments(args);
 }
 
 function parseGemmaColonArgs(
@@ -184,6 +180,7 @@ function parseGemmaToolCallBody(raw: string, toolCalls: ToolCall[]): void {
   const name = nameMatch[1];
   const rest = raw.slice(nameMatch[0].length).trim();
   let args: Record<string, any> = {};
+  let argumentsError: string | undefined;
 
   const argsStr =
     /^\((\{[\s\S]*\})\)$/.exec(rest)?.[1] ??
@@ -193,12 +190,14 @@ function parseGemmaToolCallBody(raw: string, toolCalls: ToolCall[]): void {
     try {
       args = parseJsonLenient(argsStr);
     } catch {
-      /* fall through */
+      argumentsError = 'the arguments are not valid JSON';
     }
   } else if (rest.startsWith(':')) {
     args = parseGemmaColonArgs(name, rest.slice(1));
   }
-  args = normalizeToolArgs(args);
+  const parsedArgs = toolArgs(args);
+  args = parsedArgs.args;
+  argumentsError ??= parsedArgs.error;
 
   if (name === 'web_search' && !args.query && args.queries) {
     args = {
@@ -210,6 +209,7 @@ function parseGemmaToolCallBody(raw: string, toolCalls: ToolCall[]): void {
     id: `gemma-tc-${Date.now()}-${toolCalls.length}`,
     name,
     arguments: args,
+    ...(argumentsError ? { argumentsError } : {}),
   });
 }
 
@@ -400,6 +400,75 @@ async function executeToolCallSafely(
   }
 }
 
+/** What one response's calls have done so far: for repeat detection and argument repairs. */
+interface ToolCallGuard {
+  records: ToolCallRecord[];
+  /** Calls per tool whose arguments failed the schema check. */
+  invalidArguments: Map<string, number>;
+}
+
+function newToolCallGuard(): ToolCallGuard {
+  return { records: [], invalidArguments: new Map() };
+}
+
+type ScreenedToolCall =
+  | { action: 'run'; key: string }
+  | { action: 'note'; content: string }
+  | { action: 'stop'; content: string; instruction: string };
+
+/**
+ * Check one call before it runs, with the same shared rules as desktop: arguments must match the
+ * tool's schema (one repair turn naming the bad field, then tool use ends with an answer), and a
+ * call identical to the one just before it is not run again. Converted arguments are written back.
+ */
+function screenToolCall(
+  tc: ToolCall,
+  tools: readonly unknown[],
+  guard: ToolCallGuard,
+): ScreenedToolCall {
+  const checked = toolArgumentsDecision({
+    name: tc.name,
+    args: tc.arguments,
+    ...(tc.argumentsError ? { parseError: tc.argumentsError } : {}),
+    tools,
+    invalidSoFar: guard.invalidArguments.get(tc.name) ?? 0,
+  });
+  if (checked.action === 'stop') {
+    return { action: 'stop', content: checked.message, instruction: checked.instruction };
+  }
+  if (checked.action === 'repair') {
+    guard.invalidArguments.set(tc.name, (guard.invalidArguments.get(tc.name) ?? 0) + 1);
+    guard.records.push({ key: toolCallKey(tc.name, tc.arguments), outcome: 'failed' });
+    return { action: 'note', content: checked.message };
+  }
+  tc.arguments = checked.args;
+  const key = toolCallKey(tc.name, tc.arguments);
+  const repeat = repeatedToolCallDecision(guard.records, tc.name, key);
+  if (repeat.action === 'stop') {
+    return {
+      action: 'stop',
+      content: 'Not run: tool use has ended because the same call kept repeating.',
+      instruction: repeatedToolCallFinalAnswerInstruction(tc.name),
+    };
+  }
+  if (repeat.action === 'skip') {
+    guard.records.push({ key, outcome: 'repeated' });
+    return { action: 'note', content: repeat.note };
+  }
+  return { action: 'run', key };
+}
+
+function toolNoteMessage(tc: ToolCall, content: string): Message {
+  return {
+    id: `tool-result-${Date.now()}-${tc.id || tc.name}`,
+    role: 'tool',
+    content,
+    timestamp: Date.now(),
+    toolCallId: tc.id,
+    toolName: tc.name,
+  };
+}
+
 async function executeToolCalls(
   ctx: ToolLoopContext,
   input: {
@@ -407,9 +476,10 @@ async function executeToolCalls(
     loopMessages: Message[];
     tools: readonly unknown[];
     successfulResults: string[];
+    guard: ToolCallGuard;
   },
-): Promise<number> {
-  const { toolCalls, loopMessages, tools, successfulResults } = input;
+): Promise<{ executed: number; stopInstruction?: string }> {
+  const { toolCalls, loopMessages, tools, successfulResults, guard } = input;
   const chatStore = useChatStore.getState();
   let executed = 0;
   for (const tc of toolCalls) {
@@ -424,7 +494,28 @@ async function executeToolCalls(
       const fallbackQuery = getLastUserQuery(loopMessages);
       if (fallbackQuery) {
         tc.arguments = { ...tc.arguments, query: fallbackQuery };
+        // The person's question stands in for unreadable arguments, as it always has.
+        delete tc.argumentsError;
       }
+    }
+    const screened = screenToolCall(tc, tools, guard);
+    if (screened.action === 'stop') {
+      for (const unrun of toolCalls.slice(toolCalls.indexOf(tc))) {
+        const note = toolNoteMessage(
+          unrun,
+          unrun === tc ? screened.content : 'Not run: tool use has ended for this response.',
+        );
+        loopMessages.push(note);
+        chatStore.addMessage(ctx.conversationId, note);
+      }
+      return { executed, stopInstruction: screened.instruction };
+    }
+    if (screened.action === 'note') {
+      const note = toolNoteMessage(tc, screened.content);
+      loopMessages.push(note);
+      chatStore.addMessage(ctx.conversationId, note);
+      executed += 1;
+      continue;
     }
     tc.context = {
       conversationId: ctx.conversationId,
@@ -433,6 +524,10 @@ async function executeToolCalls(
     ctx.callbacks?.onToolCallStart?.(tc.name, tc.arguments);
     const result = await executeToolCallSafely(tc, ctx.enabledToolIds, ctx.assistantEnabled);
     ctx.callbacks?.onToolCallComplete?.(tc.name, result);
+    guard.records.push({
+      key: screened.key,
+      outcome: result.status === 'error' ? 'failed' : 'completed',
+    });
     const settings = useAppStore.getState().settings;
     const resultBudget = toolResultCharBudget({
       contextLength: activeContextTokens(),
@@ -456,7 +551,7 @@ async function executeToolCalls(
     chatStore.addMessage(ctx.conversationId, toolResultMsg);
     executed += 1;
   }
-  return executed;
+  return { executed };
 }
 const MAX_LLM_RETRIES = 4;
 const RETRY_BACKOFF_MS = 1000;
@@ -722,6 +817,8 @@ function buildLiteRTToolCallHandler(
   // Per-turn counter: this closure is rebuilt once per generation, so it resets each new
   // message and the native loop reuses it for every tool call within the turn.
   let toolCallCount = 0;
+  const guard = newToolCallGuard();
+  let endedInstruction: string | undefined;
   const promptMessages: unknown[] = [...initialMessages];
   return async (
     name: string,
@@ -733,12 +830,20 @@ function buildLiteRTToolCallHandler(
       if (outcome) outcome.limitReached = true;
       return finalAnswerInstruction;
     }
-    ctx.callbacks?.onToolCallStart?.(name, args as Record<string, any>);
+    // Tool use already ended for a repeated or invalid call: keep telling the model to answer.
+    if (endedInstruction) return endedInstruction;
     const toolCall: ToolCall = {
       id: `native-tc-${Date.now()}`,
       name,
       arguments: args as Record<string, any>,
     };
+    const screened = screenToolCall(toolCall, tools, guard);
+    if (screened.action === 'stop') {
+      endedInstruction = screened.instruction;
+      return `${screened.content}\n\n${screened.instruction}`;
+    }
+    if (screened.action === 'note') return screened.content;
+    ctx.callbacks?.onToolCallStart?.(name, toolCall.arguments);
     toolCall.context = {
       conversationId: ctx.conversationId,
       ...(ctx.projectId ? { projectId: ctx.projectId } : {}),
@@ -750,6 +855,10 @@ function buildLiteRTToolCallHandler(
     // mistake it for a successful answer.
     const result = await executeToolCallSafely(toolCall, ctx.enabledToolIds, ctx.assistantEnabled);
     ctx.callbacks?.onToolCallComplete?.(name, result);
+    guard.records.push({
+      key: screened.key,
+      outcome: result.status === 'error' ? 'failed' : 'completed',
+    });
     const settings = useAppStore.getState().settings;
     const resultBudget = toolResultCharBudget({
       contextLength: activeContextTokens(),
@@ -967,6 +1076,8 @@ function augmentSystemPromptForTools(
   messages: Message[],
   enabledToolIds: string[] = [],
   nativeToolCalling = false,
+  /** Collects each addition's text by source, for the prompt breakdown. */
+  hints: Record<string, string> = {},
 ): Message[] {
   const sysIdx = messages.findIndex(m => m.role === 'system');
   if (sysIdx === -1) {
@@ -984,21 +1095,24 @@ function augmentSystemPromptForTools(
   // is already given the tools structurally; adding the text hint makes it emit a hybrid
   // format that neither llama.cpp nor our parsers recognise — breaking BOTH MCP and
   // built-in tool calls. So skip the hint whenever native tool calling is available.
-  const extHints = nativeToolCalling
-    ? ''
+  const extHintParts = nativeToolCalling
+    ? []
     : getToolExtensions()
-        .map(e => e.getSystemPromptHint())
-        .filter(Boolean)
-        .join('');
+        .map(e => ({ id: e.id, text: e.getSystemPromptHint() }))
+        .filter(hint => !!hint.text);
+  const extHints = extHintParts.map(hint => hint.text).join('');
+  for (const hint of extHintParts) hints[hint.id] = (hints[hint.id] ?? '') + hint.text;
   // Snapshot the current time ONCE so the system-prompt date and the exact-time note
   // can never disagree across a midnight/second rollover (both read the same snapshot).
   const parts = nowParts();
   // System prompt gets only the STABLE date (changes once a day) + tool guidance, so the
   // system+tools prefix stays cacheable turn-to-turn.
+  const dateContext = buildDateContext(parts);
+  hints.toolGuidance = TOOL_BEHAVIOR_GUIDANCE;
+  hints.date = dateContext;
   const updatedSys = {
     ...sys,
-    content:
-      existing + TOOL_BEHAVIOR_GUIDANCE + buildDateContext(parts) + extHints,
+    content: existing + TOOL_BEHAVIOR_GUIDANCE + dateContext + extHints,
   };
   const out = [
     ...messages.slice(0, sysIdx),
@@ -1016,9 +1130,11 @@ function augmentSystemPromptForTools(
   if (precise) {
     for (let i = out.length - 1; i >= 0; i--) {
       if (out[i].role === 'user' && typeof out[i].content === 'string') {
+        const exactTime = buildExactTimeNote(parts);
+        hints.exactTime = exactTime;
         out[i] = {
           ...out[i],
-          content: (out[i].content as string) + buildExactTimeNote(parts),
+          content: (out[i].content as string) + exactTime,
         };
         exactTimeAppended = true;
         break;
@@ -1033,6 +1149,63 @@ function augmentSystemPromptForTools(
       `dateInSystem=true exactTimeOnLatestUser=${exactTimeAppended}`,
   );
   return out;
+}
+
+const DOCUMENT_BLOCK = /<documents>[\s\S]*?<\/documents>|<passages>[\s\S]*?<\/passages>/g;
+
+const messageText = (message: Message | undefined): string =>
+  typeof message?.content === 'string' ? message.content : '';
+
+function documentTokens(text: string): number {
+  return (text.match(DOCUMENT_BLOCK) ?? []).reduce(
+    (sum, block) => sum + estimateTextTokens(block),
+    0,
+  );
+}
+
+/**
+ * Where one model request's prompt goes, in estimated tokens (shared PromptBreakdown, as desktop
+ * logs it). Documents are found by the shared <documents>/<passages> blocks wherever they sit.
+ */
+function loopPromptBreakdown(
+  messages: Message[],
+  tools: readonly unknown[],
+  hintTexts: Record<string, string>,
+) {
+  const systemText = messages
+    .filter(message => message.role === 'system')
+    .map(messageText)
+    .join('\n');
+  let questionAt = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') {
+      questionAt = i;
+      break;
+    }
+  }
+  const hints: Record<string, number> = {};
+  for (const [source, text] of Object.entries(hintTexts)) hints[source] = estimateTextTokens(text);
+  const systemHintTokens = Object.entries(hints)
+    .filter(([source]) => source !== 'exactTime')
+    .reduce((sum, [, tokens]) => sum + tokens, 0);
+  const systemDocuments = documentTokens(systemText);
+  const questionText = messageText(messages[questionAt]);
+  const questionDocuments = documentTokens(questionText);
+  const conversation = messages.filter(message => message.role !== 'system');
+  const questionIndex = questionAt < 0 ? -1 : conversation.indexOf(messages[questionAt]);
+  const tokensOf = (list: Message[]): number =>
+    list.reduce((sum, message) => sum + estimateTextTokens(messageText(message)), 0);
+  return promptBreakdown({
+    systemBase: estimateTextTokens(systemText) - systemHintTokens - systemDocuments,
+    hints,
+    tools: tools.length ? estimateTextTokens(JSON.stringify(tools)) : 0,
+    toolCount: tools.length,
+    history: tokensOf(conversation.slice(0, Math.max(0, questionIndex))),
+    documents: systemDocuments + questionDocuments,
+    question:
+      estimateTextTokens(questionText) - questionDocuments - (hints.exactTime ?? 0),
+    toolResults: tokensOf(questionIndex < 0 ? conversation : conversation.slice(questionIndex + 1)),
+  });
 }
 
 interface CallLLMOptions {
@@ -1085,14 +1258,21 @@ async function callLLMWithRetry(
         !finalAnswerOnly && (tools.length > 0 || extCount > 0)
       } liteRT=${isLiteRTActive()} useRemote=${useRemote} nativeToolCalling=${nativeToolCalling}`,
   );
+  const hintTexts: Record<string, string> = {};
   const augmentedMessages =
     !finalAnswerOnly && (tools.length > 0 || extCount > 0)
       ? augmentSystemPromptForTools(
           messages,
           ctx?.enabledToolIds,
           nativeToolCalling,
+          hintTexts,
         )
       : messages;
+  logger.log(
+    `[ToolLoop] prompt breakdown ${JSON.stringify(
+      loopPromptBreakdown(augmentedMessages, tools, hintTexts),
+    )}`,
+  );
 
   if (isLiteRTActive() && conversationId) {
     return callLiteRTForLoop(conversationId, augmentedMessages, {
@@ -1223,6 +1403,8 @@ async function emitToolLimitFinalAnswer(
   completed: {
     messages?: Message[];
     results?: string[];
+    /** Why tool use ended, when it was not the call limit (a repeated or invalid call). */
+    instruction?: string;
   } = {},
 ): Promise<ToolLoopOutcome> {
   if (ctx.isAborted()) return { interrupted: true };
@@ -1238,7 +1420,7 @@ async function emitToolLimitFinalAnswer(
     {
       id: `tool-limit-final-${Date.now()}`,
       role: 'system',
-      content: toolLimitFinalAnswerInstruction(maximum),
+      content: completed.instruction ?? toolLimitFinalAnswerInstruction(maximum),
       timestamp: Date.now(),
     },
     ...loopMessages.filter(message => message.role !== 'system'),
@@ -1418,6 +1600,8 @@ export async function runToolLoop(
 
   const loopMessages = [...ctx.messages];
   const maxToolSteps = currentMaxToolSteps();
+  // Every call this response made, declined or asked to repair, across rounds.
+  const guard = newToolCallGuard();
   let totalToolCalls = 0;
   let compactionRetries = 0;
   const state: ToolLoopState = {
@@ -1636,15 +1820,23 @@ export async function runToolLoop(
     });
     chatStore.addMessage(ctx.conversationId, assistantMsg);
 
-    totalToolCalls += await executeToolCalls(ctx, {
+    const executedRound = await executeToolCalls(ctx, {
       toolCalls: cappedToolCalls,
       loopMessages,
       tools: effectiveSchemas,
       successfulResults: state.successfulToolResults,
+      guard,
     });
+    totalToolCalls += executedRound.executed;
 
     if (ctx.isAborted()) {
       return { interrupted: true };
+    }
+
+    if (executedRound.stopInstruction) {
+      return emitToolLimitFinalAnswer(ctx, state, loopMessages, maxToolSteps, {
+        instruction: executedRound.stopInstruction,
+      });
     }
 
     if (totalToolCalls >= maxToolSteps) {
