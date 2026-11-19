@@ -1,7 +1,7 @@
 /**
  * HAPPY-PATH (UI, BEHAVIORAL) — the image lightbox on the REAL ChatScreen. The user generates an image
  * (force image-mode + real send), TAPS the generated image in the chat, and the fullscreen viewer opens with
- * its Save / Close controls. Tapping Save runs the real save flow (RNFS copy on memfs) and the user sees the
+ * its Share / Save / Close controls. Tapping Save runs the real save flow (RNFS copy on memfs) and the user sees the
  * "Image Saved" confirmation; tapping Close dismisses the viewer.
  *
  * Real ChatScreen + real useChatScreen (handleImagePress/handleSaveImage) + real imageGenerationService +
@@ -50,5 +50,35 @@ describe('happy — image lightbox (tap a generated image → viewer + controls)
     const dir = `${RNFS.DocumentDirectoryPath}/OffgridMobile_Images`;
     const files = await RNFS.readDir(dir);
     expect(files.length).toBeGreaterThan(0);
+  });
+
+  it('Share in the viewer closes it and shares that image with the mark', async () => {
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' });
+    // The harness loads a fresh module registry; take the share service the screen uses.
+    const shareCard = require('../../../src/services/shareCard');
+    const share = jest.spyOn(shareCard, 'shareMarkedImage').mockResolvedValue(undefined);
+    await h.generateImageViaUI({ prompt: 'a fox in the snow' });
+
+    h.rtl.fireEvent.press(h.view!.getByTestId('generated-image'));
+    await h.rtl.waitFor(() => { expect(h.view!.queryByText('Share')).not.toBeNull(); });
+    h.rtl.fireEvent.press(h.view!.getByTestId('image-viewer-share'));
+
+    await h.rtl.waitFor(() => { expect(share).toHaveBeenCalledTimes(1); });
+    expect(share.mock.calls[0][0]).toMatch(/\.png$/);
+    expect(h.view!.queryByText('Close')).toBeNull();
+    share.mockRestore();
+  });
+
+  it('a share that cannot be made says so, and Save still works', async () => {
+    // No ShareCardHost is mounted here, so the real share service cannot draw the card.
+    const h = await setupChatScreen({ navigation: 'real', engine: 'litert', platform: 'ios' });
+    await h.generateImageViaUI({ prompt: 'a fox in the snow' });
+
+    h.rtl.fireEvent.press(h.view!.getByTestId('generated-image'));
+    await h.rtl.waitFor(() => { expect(h.view!.queryByText('Share')).not.toBeNull(); });
+    h.rtl.fireEvent.press(h.view!.getByTestId('image-viewer-share'));
+
+    await h.rtl.waitFor(() => { expect(h.view!.queryByText('Could not share')).not.toBeNull(); });
+    expect(h.view!.queryByText('The image could not be shared. Save still works.')).not.toBeNull();
   });
 });

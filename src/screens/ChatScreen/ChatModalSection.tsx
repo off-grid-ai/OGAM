@@ -44,6 +44,7 @@ type ChatModalSectionProps = {
   viewerImageUri: string | null;
   setViewerImageUri: (v: string | null) => void;
   handleSaveImage: () => void;
+  handleShareImage?: () => void;
   isRemote?: boolean;
 };
 
@@ -77,6 +78,7 @@ export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
   viewerImageUri,
   setViewerImageUri,
   handleSaveImage,
+  handleShareImage,
   isRemote,
 }) => {
   const AnimateAction = useSlot(SLOTS.imageAnimateAction);
@@ -126,6 +128,7 @@ export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
       viewerImageUri={viewerImageUri}
       onClose={() => setViewerImageUri(null)}
       onSave={handleSaveImage}
+      onShare={handleShareImage}
       AnimateAction={AnimateAction}
       conversationId={activeConversationId}
     />

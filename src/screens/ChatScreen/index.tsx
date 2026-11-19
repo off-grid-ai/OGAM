@@ -422,6 +422,7 @@ export const ChatScreen: React.FC = () => {
           viewerImageUri={chat.viewerImageUri}
           setViewerImageUri={chat.setViewerImageUri}
           handleSaveImage={chat.handleSaveImage}
+          handleShareImage={chat.handleShareImage}
           isRemote={chat.activeModelInfo?.isRemote}
         />
       </KeyboardAvoidingView>

@@ -1,5 +1,6 @@
 import { Dispatch, MutableRefObject, SetStateAction, useCallback } from 'react';
-import { AlertState } from '../../components';
+import { AlertState, showAlert } from '../../components';
+import { shareMarkedImage } from '../../services/shareCard';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import { useAppStore, useChatStore } from '../../stores';
 import {
@@ -266,6 +267,16 @@ export function useChatScreenActions({
       setViewerImageUri(null);
       setTimeout(() => {
         saveImageToGallery(uri, setAlertState).catch(() => {});
+      }, VIEWER_FADE_OUT_MS);
+    },
+    handleShareImage: () => {
+      const uri = viewerImageUri;
+      setViewerImageUri(null);
+      setTimeout(() => {
+        if (!uri) return;
+        shareMarkedImage(uri).catch(() => {
+          setAlertState(showAlert('Could not share', 'The image could not be shared. Save still works.'));
+        });
       }, VIEWER_FADE_OUT_MS);
     },
   };

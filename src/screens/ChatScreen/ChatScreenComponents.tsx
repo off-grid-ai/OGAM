@@ -352,10 +352,12 @@ export const ImageViewerModal: React.FC<{
   viewerImageUri: string | null;
   onClose: () => void;
   onSave: () => void;
+  /** Shares the picture with the Off Grid AI mark through the system share sheet. */
+  onShare?: () => void;
   /** Video is Pro: "Animate this photo" fills this slot. */
   AnimateAction?: React.ComponentType<any>;
   conversationId?: string | null;
-}> = ({ styles, colors, viewerImageUri, onClose, onSave, AnimateAction, conversationId }) => (
+}> = ({ styles, colors, viewerImageUri, onClose, onSave, onShare, AnimateAction, conversationId }) => (
   <Modal visible={!!viewerImageUri} transparent animationType="fade" onRequestClose={onClose}>
     <View style={styles.imageViewerContainer}>
       <TouchableOpacity style={styles.imageViewerBackdrop} activeOpacity={1} onPress={onClose} />
@@ -372,6 +374,12 @@ export const ImageViewerModal: React.FC<{
                 textStyle={styles.imageViewerButtonText}
                 iconColor={colors.text}
               />
+            )}
+            {onShare && (
+              <TouchableOpacity style={styles.imageViewerButton} onPress={onShare} testID="image-viewer-share">
+                <Icon name="share" size={24} color={colors.text} />
+                <Text style={styles.imageViewerButtonText}>Share</Text>
+              </TouchableOpacity>
             )}
             <TouchableOpacity style={styles.imageViewerButton} onPress={onSave}>
               <Icon name="download" size={24} color={colors.text} />
