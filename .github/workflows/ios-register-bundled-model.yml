@@ -25,6 +25,7 @@ jobs:
       - name: Set up Ruby (fastlane)
         uses: ruby/setup-ruby@v1
         with:
+          ruby-version: '3.3'
           bundler-cache: true
       - name: Register the App ID and App Groups, report the profiles
         env:
