@@ -36,7 +36,9 @@ function Preview() {
     if (lang) loadCatalog(lang).then(strings => apply(lang, strings));
     const onMessage = event => {
       const data = event.data;
+      // The editor serves this preview from its own address, so only that origin may send a catalog.
       if (
+        event.origin === window.location.origin &&
         event.source === window.parent &&
         data &&
         data.type === 'offgrid-i18n'
@@ -46,7 +48,7 @@ function Preview() {
     window.addEventListener('message', onMessage);
     window.parent.postMessage(
       { type: 'offgrid-i18n:ready', app: 'mobile' },
-      '*',
+      window.location.origin,
     );
     return () => window.removeEventListener('message', onMessage);
   }, []);
