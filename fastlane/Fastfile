@@ -105,7 +105,7 @@ end
 # One step stays in the developer portal, because Apple's API cannot do it: create the App Group
 # group.ai.offgridmobile and tick it on both App IDs. Until then the profiles lack the group and this
 # stops with that instruction.
-def bundled_model_profiles
+def bundled_model_profiles(strict: true)
   key = asc_api_key
   UI.user_error!("The bundled model's signing needs ASC_KEY_ID, ASC_ISSUER_ID and ASC_API_KEY_P8") unless key
   Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.from(hash: key)
@@ -125,6 +125,8 @@ def bundled_model_profiles
     profile = Plist.parse_xml(`security cms -D -i #{path.shellescape}`)
     groups = Array(profile.dig("Entitlements", "com.apple.security.application-groups"))
     unless groups.include?(group)
+      UI.important("The profile for #{id} has no App Group #{group} yet.") unless strict
+      next unless strict
       UI.user_error!("The profile for #{id} has no App Group #{group}. In the developer portal, create the " \
                      "group #{group} and tick it on #{app_id} and #{ext_id}, then run the release again.")
     end
@@ -518,6 +520,11 @@ platform :ios do
       force: true
     )
     UI.success("Uploaded to App Store (not submitted - submit in App Store Connect)")
+  end
+
+  desc "Register the bundled model's extension App ID and App Groups, and report both profiles (no build, no upload)"
+  lane :register_bundled_model do
+    bundled_model_profiles(strict: false)
   end
 
   desc "Upload the bundled chat model's asset packs (build/asset-packs/*.aar) to App Store Connect"
