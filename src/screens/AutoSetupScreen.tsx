@@ -72,6 +72,9 @@ export const AutoSetupScreen: React.FC<Props> = ({
   const [expandedTier, setExpandedTier] = useState<AutoSetupTier | null>(
     () => session.snapshot().selectedTier,
   );
+  // First launch leads with one action: chat now on Quick start. The plans are one tap away.
+  const [showPlans, setShowPlans] = useState(openedFromApp);
+  const [startingChat, setStartingChat] = useState(false);
 
   useEffect(() => {
     session.load().catch(() => undefined);
@@ -122,6 +125,28 @@ export const AutoSetupScreen: React.FC<Props> = ({
           (sum, outcome) => sum + (outcome?.progress ?? 0),
           0,
         ) / selectedOutcomes.length;
+  const quickStart = snapshot.plans.find(plan => plan.tier === 'lean');
+  const quickStartChat = quickStart?.items[0];
+  // What else the person picked (pictures, voice) comes with Quick start, after the chat model.
+  const quickStartExtraBytes = [...(quickStart?.items ?? []), ...(quickStart?.embedding ? [quickStart.embedding] : [])]
+    .filter(item => item.kind !== 'text' && snapshot.selectedKinds.includes(item.kind)
+      && autoSetupItemNeedsAction(item, snapshot.installedIds)
+      && !snapshot.installedIds.includes(autoSetupDownloadId(item)))
+    .reduce((total, item) => total + item.sizeBytes, 0);
+  // Start Quick start's downloads, then open a chat at once: the model answers when it arrives.
+  const startChatting = async () => {
+    markConsentAsked();
+    setStartingChat(true);
+    try {
+      await session.startInBackground();
+    } finally {
+      setStartingChat(false);
+    }
+    const phase = session.snapshot().phase;
+    if (phase === 'failed') return;
+    if (phase === 'completed') session.complete();
+    navigation.reset({ index: 1, routes: [{ name: 'Main' }, { name: 'Chat', params: {} }] });
+  };
   const isComplete = snapshot.phase === 'completed';
   const starting = snapshot.phase === 'downloading';
 
@@ -145,10 +170,45 @@ export const AutoSetupScreen: React.FC<Props> = ({
         contentContainerStyle={styles.content}
         testID="auto-setup-screen"
       >
-        <Text style={styles.title}>Choose model downloads.</Text>
-        <Text style={styles.secondary}>
-          Installed models add no download size.
-        </Text>
+        {showPlans ? (
+          <>
+            <Text style={styles.title}>Choose model downloads.</Text>
+            <Text style={styles.secondary}>
+              Installed models add no download size.
+            </Text>
+          </>
+        ) : (
+          <View style={styles.hero} testID="auto-setup-quick-start">
+            <Text style={styles.title}>Chat with your own AI.</Text>
+            <Text style={styles.secondary}>
+              {quickStartChat
+                ? `${quickStartChat.name} · ${formatBytes(quickStartChat.sizeBytes)}. Ask now. It answers as soon as it is on your phone.`
+                : 'Ask now. It answers as soon as it is on your phone.'}
+            </Text>
+            {quickStartExtraBytes > 0 && (
+              <Text style={styles.secondary} testID="auto-setup-extras">
+                {`Your other picks (${formatBytes(quickStartExtraBytes)}) download in the background.`}
+              </Text>
+            )}
+            <Text style={styles.secondary}>It runs on this phone. Your chats never leave it.</Text>
+            <Button
+              title="Start chatting"
+              variant="hero"
+              onPress={() => { startChatting().catch(() => undefined); }}
+              loading={startingChat}
+              disabled={!quickStartChat || startingChat}
+              testID="auto-setup-start-chatting"
+            />
+            <Button
+              title="Choose another"
+              variant="ghost"
+              style={styles.textAction}
+              onPress={() => setShowPlans(true)}
+              disabled={startingChat}
+              testID="auto-setup-choose-another"
+            />
+          </View>
+        )}
 
         {snapshot.error && (
           <Card style={styles.errorCard}>
@@ -156,7 +216,9 @@ export const AutoSetupScreen: React.FC<Props> = ({
             <Button
               title="Try Again"
               onPress={() => {
-                if (snapshot.plans.length)
+                if (snapshot.plans.length && !showPlans)
+                  startChatting().catch(() => undefined);
+                else if (snapshot.plans.length)
                   session.start().catch(() => undefined);
                 else session.load().catch(() => undefined);
               }}
@@ -199,7 +261,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
           </Text>
         </View>
 
-        <View style={styles.planGrid}>
+        {showPlans && <View style={styles.planGrid}>
           {snapshot.plans.map(plan => (
             <Card
               key={plan.tier}
@@ -363,7 +425,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
               )}
             </Card>
           ))}
-        </View>
+        </View>}
 
         {VoiceIndicator ? (
           <VoiceIndicator
@@ -445,6 +507,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     padding: SPACING.xl,
   },
   title: { ...TYPOGRAPHY.h2, color: colors.text, textAlign: 'left' as const },
+  hero: { gap: SPACING.md },
   secondary: { ...TYPOGRAPHY.body, color: colors.textSecondary, textAlign: 'left' as const },
   planGrid: { gap: SPACING.sm },
   planCard: {
