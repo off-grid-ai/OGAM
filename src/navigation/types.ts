@@ -54,7 +54,7 @@ export type RootStackParamList = {
 };
 
 /** What a new chat starts making: pictures or clips. */
-export type ChatStartMode = 'image' | 'video';
+type ChatStartMode = 'image' | 'video';
 
 // Tab navigator — simple, no sub-stacks
 export type MainTabParamList = {
