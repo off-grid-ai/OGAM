@@ -3,7 +3,7 @@
  * Pure rules over the download store's entries; the rendered journey is in
  * __tests__/integration/chat/firstModelArriving.rendered.test.tsx.
  */
-import { arrivingChatModel, waitingMessagesStep } from '../../../src/services/arrivingChatModel';
+import { arrivingChatModel, chatModelOnHand, waitingMessagesStep } from '../../../src/services/arrivingChatModel';
 import { chatQueueView, waitingLabel } from '../../../src/screens/ChatScreen/chatQueueView';
 import type { DownloadEntry } from '../../../src/utils/downloadStatus';
 import type { QueuedMessage } from '../../../src/services/generationService';
@@ -128,5 +128,29 @@ describe('takeChatModelOnHand', () => {
     useDownloadStore.setState({ downloads: byKey(entry({})) });
     expect(takeChatModelOnHand()).toBe(true);
     expect(useAppStore.getState().activeModelId).toBeNull();
+  });
+});
+
+describe('chatModelOnHand', () => {
+  const { createDownloadedModel } = require('../../utils/factories');
+  const app = (over: object = {}) => ({ activeModelId: null, downloadedModels: [], lastTextModelId: null, ...over });
+
+  it('is the chosen model first, by name, and a chosen one the list does not hold has no name', () => {
+    const own = createDownloadedModel({ id: 'own', name: 'Own' });
+    expect(chatModelOnHand(byKey(entry({})), app({ activeModelId: 'own', downloadedModels: [own] }))).toEqual({ name: 'Own', arriving: false });
+    expect(chatModelOnHand({}, app({ activeModelId: 'remote' }))).toEqual({ name: null, arriving: false });
+  });
+
+  it('then the one on its way, then the one on the phone setup would choose', () => {
+    const first = createDownloadedModel({ id: 'first', name: 'First' });
+    const last = createDownloadedModel({ id: 'last', name: 'Last' });
+    expect(chatModelOnHand(byKey(entry({})), app({ downloadedModels: [first] }))).toEqual({ name: 'Qwen 3.5 0.8B', arriving: true });
+    expect(chatModelOnHand({}, app({ downloadedModels: [first, last], lastTextModelId: 'last' }))).toEqual({ name: 'Last', arriving: false });
+    expect(chatModelOnHand({}, app({ downloadedModels: [first, last] }))).toEqual({ name: 'First', arriving: false });
+  });
+
+  it('is nothing with no chat model, the intent classifier aside', () => {
+    const classifier = createDownloadedModel({ id: 'own/classifier', name: 'Classifier' });
+    expect(chatModelOnHand({}, app({ downloadedModels: [classifier], classifierModelId: 'own/classifier' }))).toBeNull();
   });
 });

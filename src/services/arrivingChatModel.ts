@@ -9,6 +9,7 @@
  */
 import { useMemo } from 'react';
 import { modelDisplayName, splitGgufModelName } from '@offgrid/models';
+import type { DownloadedModel } from '../types';
 import type { DownloadEntry, DownloadStatus } from '../utils/downloadStatus';
 import { useDownloadStore } from '../stores/downloadStore';
 import { useAppStore } from '../stores/appStore';
@@ -79,6 +80,57 @@ export function useArrivingChatModel(): ArrivingChatModel | null {
   );
 }
 
+/** What a person has as a chat model before setup downloads one. */
+export interface ChatModelOnHand {
+  /** The name a person knows it by; null for a chosen model this list does not hold. */
+  name: string | null;
+  /** On its way (a bundled model pack, a download started earlier) rather than on the phone. */
+  arriving: boolean;
+}
+
+interface OnHandState {
+  activeModelId: string | null;
+  downloadedModels: readonly DownloadedModel[];
+  lastTextModelId: string | null;
+  classifierModelId?: string | null;
+}
+
+/** The chat model on the phone that is chosen when none is: the last pick if still here, else the first. */
+function chatModelToChoose(app: OnHandState): DownloadedModel | undefined {
+  const chatModels = app.downloadedModels.filter(model => !isClassifierModel(model.id, app.classifierModelId));
+  return chatModels.find(item => item.id === app.lastTextModelId) ?? chatModels[0];
+}
+
+/**
+ * The rule: the chat model already on hand, chosen, on its way or on the phone, in that order. Null
+ * when there is none, so setup offers a download. It chooses nothing (takeChatModelOnHand does).
+ */
+export function chatModelOnHand(
+  downloads: Readonly<Record<string, DownloadEntry>>,
+  app: OnHandState,
+): ChatModelOnHand | null {
+  if (app.activeModelId !== null) {
+    return { name: app.downloadedModels.find(model => model.id === app.activeModelId)?.name ?? null, arriving: false };
+  }
+  const arriving = arrivingChatModel(downloads, null, app.classifierModelId);
+  if (arriving) return { name: arriving.name, arriving: true };
+  const model = chatModelToChoose(app);
+  return model ? { name: model.name, arriving: false } : null;
+}
+
+/** The chat model on hand, live. */
+export function useChatModelOnHand(): ChatModelOnHand | null {
+  const downloads = useDownloadStore(s => s.downloads);
+  const activeModelId = useAppStore(s => s.activeModelId);
+  const downloadedModels = useAppStore(s => s.downloadedModels);
+  const lastTextModelId = useAppStore(s => s.lastTextModelId);
+  const classifierModelId = useAppStore(s => s.settings.classifierModelId);
+  return useMemo(
+    () => chatModelOnHand(downloads, { activeModelId, downloadedModels, lastTextModelId, classifierModelId }),
+    [downloads, activeModelId, downloadedModels, lastTextModelId, classifierModelId],
+  );
+}
+
 /**
  * A chat model is already on hand: chosen, on the phone, or on its way (a bundled model pack, or a
  * download started earlier). With none chosen, the one on the phone is chosen: the last pick when it
@@ -88,8 +140,7 @@ export function useArrivingChatModel(): ArrivingChatModel | null {
 export function takeChatModelOnHand(): boolean {
   const app = useAppStore.getState();
   if (app.activeModelId !== null || currentArrivingChatModel()) return true;
-  const chatModels = app.downloadedModels.filter(model => !isClassifierModel(model.id, app.settings.classifierModelId));
-  const model = chatModels.find(item => item.id === app.lastTextModelId) ?? chatModels[0];
+  const model = chatModelToChoose({ ...app, classifierModelId: app.settings.classifierModelId });
   if (!model) return false;
   activeModelService.selectTextModel(model.id);
   return true;

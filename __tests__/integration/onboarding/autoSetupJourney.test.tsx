@@ -353,7 +353,11 @@ describe('Auto Setup release journey', () => {
       createdAt: 1,
     } as never);
     const ui = render(<AutoSetupScreen navigation={navigation} sessionFactory={sessionFactory} />);
-    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-start-chatting')));
+    // The line names the model coming, not Quick start's, and offers no download size.
+    await waitFor(() => expect(ui.getByText('LFM3 VL 2B is on its way to this phone. Ask now. It answers as soon as it arrives.')).toBeTruthy());
+    expect(ui.queryByText(/Qwen 3\.5 0\.8B/)).toBeNull();
+    expect(ui.queryByText(/MB/)).toBeNull();
+    fireEvent.press(ui.getByTestId('auto-setup-start-chatting'));
 
     await waitFor(() => expect(navigation.reset).toHaveBeenCalledWith({
       index: 1,
@@ -365,7 +369,9 @@ describe('Auto Setup release journey', () => {
   it('chooses a chat model already on the phone and opens the chat, with no download', async () => {
     useAppStore.setState({ downloadedModels: [createDownloadedModel({ id: 'on-phone', name: 'On Phone' })], activeModelId: null });
     const ui = render(<AutoSetupScreen navigation={navigation} sessionFactory={sessionFactory} />);
-    fireEvent.press(await waitFor(() => ui.getByTestId('auto-setup-start-chatting')));
+    await waitFor(() => expect(ui.getByText('On Phone is ready on this phone. Ask now.')).toBeTruthy());
+    expect(ui.queryByText(/Qwen 3\.5 0\.8B/)).toBeNull();
+    fireEvent.press(ui.getByTestId('auto-setup-start-chatting'));
 
     await waitFor(() => expect(navigation.reset).toHaveBeenCalled());
     expect(useAppStore.getState().activeModelId).toBe('on-phone');

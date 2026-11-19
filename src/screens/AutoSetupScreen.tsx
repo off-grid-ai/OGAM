@@ -30,7 +30,8 @@ import { useRemoteServerStore } from '../stores/remoteServerStore';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { useGetPro } from '../hooks/useGetPro';
-import { takeChatModelOnHand } from '../services/arrivingChatModel';
+import { takeChatModelOnHand, useChatModelOnHand } from '../services/arrivingChatModel';
+import { t } from '@offgrid/i18n';
 
 const productionSessionFactory = (): AutoSetupSession =>
   createAutoSetupSession();
@@ -134,6 +135,17 @@ export const AutoSetupScreen: React.FC<Props> = ({
       && autoSetupItemNeedsAction(item, snapshot.installedIds)
       && !snapshot.installedIds.includes(autoSetupDownloadId(item)))
     .reduce((total, item) => total + item.sizeBytes, 0);
+  // Start chatting uses a chat model already on hand rather than download Quick start's, so the line
+  // names the model the person gets.
+  const onHand = useChatModelOnHand();
+  const heroLine = onHand?.name
+    ? onHand.arriving
+      ? t('{0} is on its way to this phone. Ask now. It answers as soon as it arrives.', onHand.name)
+      : t('{0} is ready on this phone. Ask now.', onHand.name)
+    : [
+        quickStartChat && `${quickStartChat.name} · ${formatBytes(quickStartChat.sizeBytes)}.`,
+        t('Ask now. It answers as soon as it is on your phone.'),
+      ].filter(Boolean).join(' ');
   // Start a plan's downloads, then open a chat at once: the model answers when it arrives. Start
   // chatting takes Quick start; on first launch a download from the plans takes the plan picked.
   const startChatting = async (tier?: AutoSetupTier) => {
@@ -202,9 +214,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
           <View style={styles.hero} testID="auto-setup-quick-start">
             <Text style={styles.title}>Chat with your own AI.</Text>
             <Text style={styles.secondary}>
-              {quickStartChat
-                ? `${quickStartChat.name} · ${formatBytes(quickStartChat.sizeBytes)}. Ask now. It answers as soon as it is on your phone.`
-                : 'Ask now. It answers as soon as it is on your phone.'}
+              {heroLine}
             </Text>
             {quickStartExtraBytes > 0 && (
               <Text style={styles.secondary} testID="auto-setup-extras">
