@@ -70,7 +70,7 @@ maybe('ProToolsSettingsSection', () => {
   it('shows the empty-state description when there are no servers', () => {
     setState([]);
     const { getByText } = render(withNavigatorRoutes(<ProToolsSettingsSection />, { destinations: ['McpServers'] }));
-    expect(getByText('Pro tools')).toBeTruthy();
+    expect(getByText('Connectors')).toBeTruthy();
     expect(getByText('Email, calendar and MCP servers')).toBeTruthy();
   });
 
@@ -101,7 +101,7 @@ maybe('ProToolsSettingsSection', () => {
     setState([server('a')], { a: 'connected' });
     const { getByText, queryByTestId, getByTestId } = render(withNavigatorRoutes(<ProToolsSettingsSection />, { destinations: ['McpServers'] }));
     expect(queryByTestId('route-McpServers')).toBeNull();
-    fireEvent.press(getByText('Pro tools'));
+    fireEvent.press(getByText('Connectors'));
     expect(getByTestId('route-McpServers')).toBeTruthy();
   });
 

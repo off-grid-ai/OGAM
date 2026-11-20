@@ -1096,7 +1096,7 @@ describe('Pro mobile saved-device management journey', () => {
     await syncService.stop();
     const restarting = syncService.start();
     await waitFor(() =>
-      expect(ui!.getByText('Sync devices')).toBeTruthy(),
+      expect(ui!.getByLabelText('Open Sync')).toBeTruthy(),
     );
     expect(ui.getByText('Clipboard')).toBeTruthy();
     expect(ui.queryByText('Set up Sync')).toBeNull();
@@ -1261,7 +1261,7 @@ describe('Pro mobile saved-device management journey', () => {
     await waitFor(() =>
       expect(ui!.getByText('Pairing cancelled')).toBeTruthy(),
     );
-    expect(ui.getByText('Pairing was cancelled.')).toBeTruthy();
+    expect(ui.getByText('Pairing was cancelled. Start it again when you are ready.')).toBeTruthy();
     retryPairing(ui, TYPED_PAIRING_CODE);
     await waitFor(() => expect(passphraseResolvers).toHaveLength(2));
     await waitFor(() =>
@@ -1270,7 +1270,7 @@ describe('Pro mobile saved-device management journey', () => {
     passphraseResolvers[1](WRONG_TYPED_PAIRING_CODE);
 
     await waitFor(() => expect(ui!.getByText('Pairing failed')).toBeTruthy());
-    expect(ui.getByText('The pairing codes did not match.')).toBeTruthy();
+    expect(ui.getByText('The codes did not match. Scan or type the code again.')).toBeTruthy();
     expect(ui.getByTestId('retry-pairing-attempt')).toBeTruthy();
     expect(
       useSyncStore
@@ -1287,7 +1287,7 @@ describe('Pro mobile saved-device management journey', () => {
     passphraseResolvers[2](TYPED_PAIRING_CODE);
 
     await waitFor(() => expect(ui!.getByText('Pairing failed')).toBeTruthy());
-    expect(ui.getByText('The pairing could not be saved.')).toBeTruthy();
+    expect(ui.getByText('The pairing could not be saved. Try again.')).toBeTruthy();
     expect(remote.engine.isPaired(mobile.id)).toBe(false);
     expect(
       useSyncStore
@@ -1364,7 +1364,7 @@ describe('Pro mobile saved-device management journey', () => {
 
     await waitFor(() => expect(ui!.getByText('Pairing failed')).toBeTruthy());
     expect(
-      ui.getByText('The device registry needs reconciliation before pairing can continue.'),
+      ui.getByText('Your device list needs a refresh first. Open the licensed device while online, then try again.'),
     ).toBeTruthy();
     expect(remote.engine.isPaired(PHONE_FINGERPRINT)).toBe(false);
   });

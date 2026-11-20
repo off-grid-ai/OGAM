@@ -45,9 +45,9 @@ it('a Mac card opens the Desktop page with the carousel\'s utm; a phone Pro card
     'https://getoffgridai.co/boost?utm_source=off-grid-mobile-app&utm_medium=boost-home&utm_campaign=in-app',
   );
 
-  // Without Pro, the Video card explains Video Studio first; nothing opens outside the app.
+  // Without Pro, the Video card explains Video first (its one name); nothing opens outside the app.
   rtl.fireEvent.press(view.getByTestId('feature-showcase-video'));
   await view.findByTestId('guide-topic-screen');
-  expect(view.getByText('Video Studio')).toBeTruthy();
+  expect(view.getByText('One sentence becomes a short clip.')).toBeTruthy();
   expect(opened).toHaveLength(2);
 });
