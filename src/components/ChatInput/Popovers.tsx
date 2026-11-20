@@ -86,6 +86,8 @@ interface QuickSettingsPopoverProps {
   supportsToolCalling: boolean;
   enabledToolCount: number;
   onToolsPress?: () => void;
+  /** Tools tapped on a model that cannot use them: the composer says so, with Choose model. */
+  onToolsUnsupported?: () => void;
   mcpToolCount?: number;
   onMcpPress?: () => void;
 }
@@ -126,6 +128,7 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
   supportsToolCalling,
   enabledToolCount,
   onToolsPress,
+  onToolsUnsupported,
   mcpToolCount = 0,
   onMcpPress,
 }) => {
@@ -263,7 +266,8 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
                 onPress={() => {
                   triggerHaptic('impactLight');
                   onClose();
-                  if (supportsToolCalling) { onToolsPress?.(); }
+                  if (supportsToolCalling) onToolsPress?.();
+                  else onToolsUnsupported?.();
                 }}
               >
                 <Icon name="tool" size={16} color={toolIconColor} />

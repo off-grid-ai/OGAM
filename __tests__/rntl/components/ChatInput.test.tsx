@@ -500,7 +500,7 @@ describe('ChatInput', () => {
       expect(onImageModeChange).toHaveBeenCalledWith('auto');
     });
 
-    it('shows alert when toggling without image model loaded', () => {
+    it('says an image model is needed when toggling without one', () => {
       const { getByTestId, getByText } = render(
         <ChatInput {...defaultProps} imageModelLoaded={false} />
       );
@@ -508,7 +508,7 @@ describe('ChatInput', () => {
       openQuickSettings({ getByTestId });
       fireEvent.press(getByTestId('quick-image-mode'));
 
-      expect(getByText('No Image Model')).toBeTruthy();
+      expect(getByText('Needs an image model.')).toBeTruthy();
     });
 
     it('cycles through auto -> force -> disabled -> auto', () => {
@@ -562,14 +562,14 @@ describe('ChatInput', () => {
       expect(getByTestId('attach-button')).toBeTruthy();
     });
 
-    it('shows alert when pressing photo without vision support', () => {
+    it('says a seeing model is needed when pressing photo without vision support', () => {
       const result = render(
         <ChatInput {...defaultProps} supportsVision={false} />
       );
 
       pressAttachPhoto(result);
 
-      expect(result.getByText('Vision Not Supported')).toBeTruthy();
+      expect(result.getByText('Needs a model that can see pictures.')).toBeTruthy();
     });
 
     it('a model that sees photos offers Take photo, Choose photo and Document, and no second menu', () => {
@@ -599,7 +599,7 @@ describe('ChatInput', () => {
 
       fireEvent.press(result.getByTestId('attach-photo'));
 
-      expect(result.getByText('Vision Not Supported')).toBeTruthy();
+      expect(result.getByText('Needs a model that can see pictures.')).toBeTruthy();
       expect(result.queryByTestId('attachments-container')).toBeNull();
     });
 
@@ -668,7 +668,7 @@ describe('ChatInput', () => {
         expect(shown().options).toEqual(['Photo', 'Document', 'Cancel']);
         expect(shown().cancelButtonIndex).toBe(2);
         await act(async () => { tapRow('Photo'); });
-        expect(result.getByText('Vision Not Supported')).toBeTruthy();
+        expect(result.getByText('Needs a model that can see pictures.')).toBeTruthy();
         expect(result.queryByTestId('attachments-container')).toBeNull();
       });
 
@@ -1120,14 +1120,14 @@ describe('ChatInput', () => {
   });
 
   describe('image mode toggle without loaded model', () => {
-    it('shows alert when toggling image mode via quick settings without model', () => {
+    it('says an image model is needed when toggling image mode via quick settings without one', () => {
       const result = render(
         <ChatInput {...defaultProps} imageModelLoaded={false} />
       );
 
       pressImageModeToggle(result);
 
-      expect(result.getByText('No Image Model')).toBeTruthy();
+      expect(result.getByText('Needs an image model.')).toBeTruthy();
     });
 
     it('selects the first downloaded image model and cycles mode when one is available', () => {
@@ -1148,7 +1148,7 @@ describe('ChatInput', () => {
       pressImageModeToggle(result);
 
       expect(useAppStore.getState().activeImageModelId).toBe(imageModel.id);
-      expect(result.queryByText('No Image Model')).toBeNull();
+      expect(result.queryByText('Needs an image model.')).toBeNull();
       expect(onImageModeChange).toHaveBeenCalledWith('force');
     });
   });

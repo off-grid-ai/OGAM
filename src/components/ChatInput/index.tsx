@@ -20,6 +20,10 @@ import { buildVoiceNoteHandlers } from './voiceNoteSend';
 import { QuickSettingsPopover, AttachPickerPopover, type AttachChoice } from './Popovers';
 import { useKeyboardAwarePopover } from './useKeyboardAwarePopover';
 import { useAppStore } from '../../stores';
+import { modelReadiness, permissionReadiness, type Readiness } from '@offgrid/features';
+import { ReadinessLine } from '../ReadinessLine';
+import { useReadinessAction } from '../../hooks/useReadinessAction';
+import { useMicPermissionDenied } from '../../hooks/useMicPermissionDenied';
 import { useRemoteServerStore } from '../../stores/remoteServerStore';
 import { remoteServerCapabilities } from '../../types/remoteServer';
 import { useUiModeStore } from '../../stores';
@@ -83,6 +87,12 @@ interface ChatInputProps {
   onAssistantEnableTools?: () => boolean;
   assistantSelected?: boolean;
   onAssistantSelectedChange?: (selected: boolean) => void;
+  /** Can the chat answer: no model, or its computer is asleep. Shown above the field with its step. */
+  readiness?: Readiness;
+  /** Try the asleep computer again. */
+  onReadinessRetry?: () => void;
+  /** Opens the model picker (the step for a model that cannot see pictures or use tools). */
+  onChooseModel?: () => void;
 }
 
 const IMAGE_MODE_CYCLE: ImageModeState[] = ['auto', 'force', 'disabled'];
@@ -198,6 +208,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onAssistantEnableTools,
   assistantSelected,
   onAssistantSelectedChange,
+  readiness,
+  onReadinessRetry,
+  onChooseModel,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -238,6 +251,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
   const [voiceInteractionMode, setVoiceInteractionMode] = useState<VoiceRecordInteractionMode>('idle');
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
+  // What the person just tried and could not do (camera off, no image model, a model that cannot see
+  // pictures or use tools): one line above the field with the step, until they act or it is fixed.
+  const [blocked, setBlocked] = useState<Readiness | null>(null);
+  useEffect(() => setBlocked(null), [supportsVision, supportsToolCalling, imageModelLoaded]);
+  const micDenied = useMicPermissionDenied();
+  const runReadiness = useReadinessAction({
+    onChooseModel,
+    onRetry: onReadinessRetry,
+    onAllowed: granted => {
+      if (granted) setBlocked(null);
+    },
+  });
+  const shownReadiness =
+    (readiness && !readiness.ready ? readiness : null) ??
+    blocked ??
+    // A refused microphone is a choice the person made: the crossed-out mic says why, and how to undo it.
+    (micDenied ? permissionReadiness('microphone', 'blocked') : null);
   const quickSettings = useKeyboardAwarePopover();
   const attachPicker = useKeyboardAwarePopover();
   const voicePicker = useKeyboardAwarePopover();
@@ -261,7 +291,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, []);
 
-  const { attachments, removeAttachment, clearAttachments, handlePickImage, pickFromCamera, pickFromLibrary, handlePickDocument, addAudioAttachment } = useAttachments(setAlertState);
+  const { attachments, removeAttachment, clearAttachments, handlePickImage, pickFromCamera, pickFromLibrary, handlePickDocument, addAudioAttachment } = useAttachments(setAlertState, setBlocked);
   attachmentsRef.current = attachments;
   const interfaceMode = useUiModeStore((s) => s.interfaceMode);
   const isAudioMode = interfaceMode === 'audio';
@@ -371,7 +401,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!imageModelLoaded) {
       const { downloadedImageModels, setActiveImageModelId } = useAppStore.getState();
       if (downloadedImageModels.length === 0) {
-        setAlertState(showAlert('No Image Model', 'Download an image generation model from the Models screen to enable this feature.', [{ text: 'OK' }]));
+        setBlocked(modelReadiness({ need: 'image', ready: false }));
         quickSettings.hide();
         return;
       }
@@ -473,7 +503,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleVisionPress = () => {
     if (!supportsVision) {
-      setAlertState(buildNoVisionAlert({ isRemote, needsRepair: visionNeedsRepair, onRepairVision, dismiss: () => setAlertState(hideAlert()) }));
+      // A vision model missing its file is repaired in Downloads; any other model is swapped for one that sees.
+      if (visionNeedsRepair && !isRemote)
+        setAlertState(buildNoVisionAlert({ isRemote, needsRepair: true, onRepairVision, dismiss: () => setAlertState(hideAlert()) }));
+      else
+        setBlocked(modelReadiness({
+          need: 'vision',
+          ready: false,
+          canChoose: !!onChooseModel && useAppStore.getState().downloadedModels.some(m => (m.engine === 'litert' ? m.liteRTVision : m.isVisionModel)),
+        }));
       return;
     }
     handlePickImage();
@@ -680,6 +718,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   return (
     <View style={styles.container}>
       <View style={styles.aboveComposer}>
+        {shownReadiness ? (
+          <ReadinessLine
+            readiness={shownReadiness}
+            onAction={action => {
+              if (action.kind !== 'retry' && action.kind !== 'allow') setBlocked(null);
+              runReadiness(action);
+            }}
+            testID="composer-readiness"
+          />
+        ) : null}
         <QueueRow queue={queue} actions={queueActions} />
         {transcriptionNotice ? (
           <Text style={styles.transcriptionNotice} testID="transcription-notice">
@@ -802,6 +850,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         supportsToolCalling={supportsToolCalling}
         enabledToolCount={enabledToolCount}
         onToolsPress={onToolsPress}
+        onToolsUnsupported={() => setBlocked(modelReadiness({ need: 'tools', ready: false, canChoose: !!onChooseModel }))}
         mcpToolCount={mcpToolCount}
         onMcpPress={onMcpPress}
       />

@@ -77,7 +77,7 @@ describe('model sheet: switching back to the loaded model', () => {
     await h.attachImageViaUI();
     await h.send('What is in this photo?', { text: 'A cat on a sofa.' });
     await rtl.waitFor(() => expect(view().queryByText('A cat on a sofa.')).not.toBeNull(), { timeout: 8000 });
-    expect(view().queryByText('Vision Not Supported')).toBeNull();
+    expect(view().queryByText('Needs a model that can see pictures.')).toBeNull();
     expect(view().queryByText('Vision File Missing')).toBeNull();
   }, 45000);
 });
