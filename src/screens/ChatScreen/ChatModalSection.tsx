@@ -111,6 +111,11 @@ export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
       onUnloadModel={handleUnloadModel}
       isLoading={isModelLoading}
       onAddServer={() => navigation.navigate('RemoteServers')}
+      onBrowseModels={tab => {
+        // The picker's empty tabs and its footer lead to Models, on the tab that was open.
+        setShowModelSelector(false);
+        navigation.navigate('Main', { screen: 'ModelsTab', params: { initialTab: tab === 'search' ? 'text' : tab } });
+      }}
     />
     <GenerationSettingsModal
       visible={showSettingsPanel}

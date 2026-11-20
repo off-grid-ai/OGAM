@@ -1,3 +1,6 @@
+import { ReadinessCard } from '../components/ReadinessLine';
+import { useReadinessAction } from '../hooks/useReadinessAction';
+import { useTextModelReadiness } from '../hooks/useTextModelReadiness';
 import React, { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { View, Text, SectionList } from 'react-native';
 import { TouchableOpacity } from '../components/Touchable';
@@ -376,11 +379,11 @@ export const ChatsListScreen: React.FC = () => {
             <Text style={styles.emptyTitle}>No chats yet</Text>
           </AnimatedEntry>
           <AnimatedEntry index={2} staggerMs={60} trigger={focusTrigger}>
-            <Text style={styles.emptyText}>
-              {hasModels
-                ? 'Start a new conversation to begin chatting with your local AI.'
-                : 'Download a model from the Models tab to start chatting.'}
-            </Text>
+            {hasModels ? (
+              <Text style={styles.emptyText}>Start a new conversation to begin chatting with your local AI.</Text>
+            ) : (
+              <ChatsReadiness onChooseModel={handleNewChat} />
+            )}
           </AnimatedEntry>
           {hasModels && (
             <AnimatedListItem index={3} staggerMs={60} trigger={focusTrigger} hapticType="impactLight" style={styles.emptyButton} onPress={handleNewChat}>
@@ -617,3 +620,10 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.primary,
   },
 });
+
+/** No model to chat with, or its computer is asleep: the line and its step, in place of a sentence. */
+const ChatsReadiness: React.FC<{ onChooseModel: () => void }> = ({ onChooseModel }) => {
+  const { readiness, retry } = useTextModelReadiness();
+  const onAction = useReadinessAction({ onChooseModel, onRetry: retry });
+  return <ReadinessCard readiness={readiness} onAction={onAction} testID="chats-readiness" />;
+};

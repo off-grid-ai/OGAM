@@ -1,3 +1,6 @@
+import { modelReadiness } from '@offgrid/features';
+import { ReadinessLine } from '../components/ReadinessLine';
+import { useReadinessAction } from '../hooks/useReadinessAction';
 import { deleteChatImages, imagesNotDeletedAlert } from '../services/chatImageCleanup';
 import React, { useMemo, useState } from 'react';
 import { View, Text, FlatList } from 'react-native';
@@ -68,6 +71,8 @@ export const ProjectDetailScreen: React.FC = () => {
     setActiveConversation(conversation.id);
     navigation.navigate('Chat', { conversationId: conversation.id });
   };
+
+  const runReadiness = useReadinessAction();
 
   const handleNewChat = () => {
     if (hasVideoModel && downloadedModels.length === 0) {
@@ -251,7 +256,11 @@ export const ProjectDetailScreen: React.FC = () => {
       <SectionLabel title={`Chats · ${projectChats.length}`} style={styles.chatsLabel} testID="project-chats-count" />
       {projectChats.length === 0 ? (
         // Under its label, right below the card: centred in the page it floated 330 pt away (hand test 74).
-        <Text style={styles.emptyChatsText}>Start a chat. It follows this project's instructions.</Text>
+        hasModels ? (
+          <Text style={styles.emptyChatsText}>Start a chat. It follows this project's instructions.</Text>
+        ) : (
+          <ReadinessLine readiness={modelReadiness({ need: 'chat', ready: false })} onAction={runReadiness} style={styles.readinessLine} testID="project-readiness" />
+        )
       ) : (
         <>
           <FlatList

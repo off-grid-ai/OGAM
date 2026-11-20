@@ -1,3 +1,6 @@
+import { t } from '@offgrid/i18n';
+import { modelReadiness } from '@offgrid/features';
+import { readinessAlert } from './readinessAlert';
 import { videoSeam } from '../../bootstrap/videoSeam';
 import { mediaStyle } from '@offgrid/models';
 import { adoptDraftStyles, chatStyleId } from '../../stores/mediaStyleStore';
@@ -181,15 +184,17 @@ function blockedImageForNonVisionModel(
     localModelAcceptsImages(deps.activeModel)
   )
     return false;
-  const repair = needsVisionRepair(deps.activeModel);
-  deps.setAlertState(
-    showAlert(
-      repair ? 'Vision File Missing' : 'Vision Not Supported',
-      repair
-        ? 'This model supports vision, but its vision file has not been installed.\n\nOpen Downloads and tap the wrench next to the model to download it.'
-        : 'This model does not support image input.\n\nSwitch to a vision-capable model to send images.',
-    ),
-  );
+  if (needsVisionRepair(deps.activeModel)) {
+    deps.setAlertState(
+      showAlert(
+        t('Vision File Missing'),
+        t('This model supports vision, but its vision file has not been installed.\n\nOpen Downloads and tap the wrench next to the model to download it.'),
+      ),
+    );
+    return true;
+  }
+  // Same line and step as the composer: the picture needs a model that can see.
+  deps.setAlertState(readinessAlert(modelReadiness({ need: 'vision', ready: false }), deps.navigation));
   return true;
 }
 /** The model said the request did not fit its context window. */
@@ -1183,9 +1188,7 @@ export async function handleSendFn(
     return;
   }
   if (!deps.hasActiveModel) {
-    deps.setAlertState(
-      showAlert('No Model Selected', 'Please select a model first.'),
-    );
+    deps.setAlertState(readinessAlert(modelReadiness({ need: 'chat', ready: false }), deps.navigation));
     return;
   }
   // Vision gate (shared with resend): never send an image to a model that can't do vision.

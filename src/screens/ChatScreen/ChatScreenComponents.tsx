@@ -1,3 +1,7 @@
+import { modelReadiness } from '@offgrid/features';
+import { ReadinessCard } from '../../components/ReadinessLine';
+import { useReadinessAction } from '../../hooks/useReadinessAction';
+import { useTextModelReadiness } from '../../hooks/useTextModelReadiness';
 import React from 'react';
 import {
   View,
@@ -56,16 +60,7 @@ export const NoModelScreen: React.FC<{
         <Icon name="cpu" size={32} color={colors.textMuted} />
       </View>
       <Text style={styles.noModelTitle}>No Model Selected</Text>
-      <Text style={styles.noModelText}>
-        {hasAvailableModels
-          ? 'Select a text or image model to get started.'
-          : 'Download a text or image model from the Models tab to get started.'}
-      </Text>
-      {hasAvailableModels && (
-        <TouchableOpacity style={styles.selectModelButton} onPress={() => setShowModelSelector(true)}>
-          <Text style={styles.selectModelButtonText}>Select Model</Text>
-        </TouchableOpacity>
-      )}
+      <NoModelReadiness hasAvailableModels={hasAvailableModels} onChooseModel={() => setShowModelSelector(true)} />
     </View>
     <ModelSelectorModal
       visible={showModelSelector}
@@ -76,6 +71,18 @@ export const NoModelScreen: React.FC<{
     />
   </SafeAreaView>
 );
+
+/** Why the chat cannot start, and the one step: choose a model here, get one, or wake the computer. */
+const NoModelReadiness: React.FC<{ hasAvailableModels: boolean; onChooseModel: () => void }> = ({
+  hasAvailableModels,
+  onChooseModel,
+}) => {
+  const { readiness, retry } = useTextModelReadiness();
+  const onAction = useReadinessAction({ onChooseModel, onRetry: retry });
+  // An image model alone can start a picture chat: offer to choose it, as before.
+  const shown = hasAvailableModels && !readiness.also ? modelReadiness({ need: 'chat', ready: false, canChoose: true }) : readiness;
+  return <ReadinessCard readiness={shown} onAction={onAction} testID="no-model-readiness" />;
+};
 
 /** What a new person can ask straight away: everyday, answered well by a small on-device model. */
 export const STARTER_PROMPTS = [

@@ -1,3 +1,4 @@
+import { useTextModelReadiness } from '../../hooks/useTextModelReadiness';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
@@ -226,6 +227,11 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   }, [chat.activeConversationId]);
   const interfaceMode = useUiModeStore(s => s.interfaceMode);
   const tabNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  // The chat cannot answer: no model, or the computer it ran on is asleep. Said above the field.
+  const textReadiness = useTextModelReadiness();
+  const composerDisabled = !chat.hasActiveModel && !chat.arrivingTextModel;
+  const showTextReadiness =
+    !textReadiness.readiness.ready && (composerDisabled || textReadiness.offline);
   const getPro = useGetPro();
   const toolCountHintDismissed = useAppStore(state => state.toolCountHintDismissed);
   // Subscribe to Pro activation so this re-renders the moment a license is
@@ -256,7 +262,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   // how many of them are on and fold MCP in — this is the "Pro Tools" badge.
   const searchableKnowledge = useHasSearchableKnowledge(chat.activeConversation);
   const proToolIds = getToolExtensions().flatMap(e =>
-    (e.getToolDefinitions?.() ?? []).map(t => t.id),
+    (e.getToolDefinitions?.() ?? []).map(tool => tool.id),
   );
   const proToolsActiveCount = proToolIds.filter(id =>
     chat.enabledTools.includes(id),
@@ -265,7 +271,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   // The free Tools page lists only the tools offered now, so its badge counts just those
   // (pro email/calendar ids are surfaced under Pro Tools instead, not double-counted; the video
   // tool counts only while Pro video is on).
-  const freeToolIds = new Set(offeredTools().map(t => t.id));
+  const freeToolIds = new Set(offeredTools().map(tool => tool.id));
   // The same rule the turn sends by: knowledge search counts only when there is something to search.
   const freeToolsCount = toolsForTurn(chat.enabledTools, searchableKnowledge).filter(id =>
     freeToolIds.has(id),
@@ -591,6 +597,9 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
             getPro('chat-assistant');
           }}
           onAssistantSetupSync={() => tabNav.navigate('Sync')}
+          readiness={showTextReadiness ? textReadiness.readiness : undefined}
+          onReadinessRetry={textReadiness.retry}
+          onChooseModel={() => chat.setShowModelSelector(true)}
           onFindComputer={() => tabNav.navigate('RemoteServers')}
           onGetVideoModel={() => tabNav.navigate('Main', { screen: 'ModelsTab', params: { initialTab: 'video' } })}
           onVideoUpgrade={() => {

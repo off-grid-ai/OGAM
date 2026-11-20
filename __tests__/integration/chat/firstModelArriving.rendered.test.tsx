@@ -60,7 +60,7 @@ describe('the first chat model on its way', () => {
 
     // BEFORE the fix: "No Model Selected". Now: the chat, with the model's progress and a live composer.
     await h.rtl.waitFor(() => expect(view.getByTestId('empty-chat-hint').props.children).toMatch(/downloading: 40%/));
-    expect(view.queryByText('No Model Selected')).toBeNull();
+    expect(view.queryByText('Needs a chat model.')).toBeNull();
 
     h.boundary.llama!.scriptCompletion({ text: 'Hello from the phone.' });
     await h.tapSend('hello');

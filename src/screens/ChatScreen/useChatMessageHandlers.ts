@@ -1,3 +1,5 @@
+import { modelReadiness } from '@offgrid/features';
+import { readinessAlert } from './readinessAlert';
 import { Dispatch, SetStateAction } from 'react';
 import { showAlert, AlertState } from '../../components';
 import { Message } from '../../types';
@@ -101,7 +103,7 @@ export async function handleRetryMessageFn(
   logger.log(`[RESEND-SM] retry msg role=${message.role} id=${message.id} hasActiveModel=${p.hasActiveModel} conv=${p.activeConversationId} totalMsgs=${msgs.length}`);
   // No model loaded (e.g. user ejected all models): tell them, don't silently
   // no-op. Mirrors the send path's "No Model Selected" alert (handleSendFn).
-  if (!p.hasActiveModel) { logger.log('[RESEND-SM] retry BAIL: no active model'); genDeps.setAlertState(showAlert('No Model Selected', 'Please select a model first.')); return; }
+  if (!p.hasActiveModel) { logger.log('[RESEND-SM] retry BAIL: no active model'); genDeps.setAlertState(readinessAlert(modelReadiness({ need: 'chat', ready: false }), genDeps.navigation)); return; }
   if (!p.activeConversationId) { logger.log('[RESEND-SM] retry BAIL: no conv'); return; }
   // Stop can end the chat session before the native video worker exits.
   // Reject retry before deleting replies or starting another frontend session.
@@ -151,7 +153,7 @@ export async function handleEditMessageFn(genDeps: GenerationDeps, p: EditParams
     return;
   }
   // Same as retry: no model loaded → alert instead of a silent no-op.
-  if (!p.hasActiveModel) { genDeps.setAlertState(showAlert('No Model Selected', 'Please select a model first.')); return; }
+  if (!p.hasActiveModel) { genDeps.setAlertState(readinessAlert(modelReadiness({ need: 'chat', ready: false }), genDeps.navigation)); return; }
   // Same as resend: a synced reply is a live preview until its op lands, so clear it before regenerating.
   supersedeSyncedReplies(p.activeConversationId);
   // Preserve the turn's modality across an edit: an edited image prompt re-runs the image pipeline,

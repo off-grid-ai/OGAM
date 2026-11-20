@@ -116,10 +116,12 @@ describe('batch2 retry — retry orchestration on the Chat screen', () => {
     const turnsBefore = h.boundary.llama!.calls.completion.length;
 
     await h.openActionMenu('user', 'dots');
+    // The composer already says it; the retry adds the alert with the same line and its step.
+    const shown = () => h.view!.queryAllByText('Needs a chat model.').length;
+    const before = shown();
     h.rtl.fireEvent.press(h.view!.getByTestId('action-retry'));
 
-    await h.rtl.waitFor(() => expect(h.view!.getByText('No Model Selected')).toBeTruthy());
-    expect(h.view!.getByText('Please select a model first.')).toBeTruthy();
+    await h.rtl.waitFor(() => expect(shown()).toBe(before + 1));
     expect(h.boundary.llama!.calls.completion.length).toBe(turnsBefore);
   });
 });

@@ -52,23 +52,23 @@ function mount(hasAvailableModels: boolean) {
 }
 
 describe('NoModelScreen', () => {
-  it('with models on the phone, asks to select one; Select Model opens the model sheet', async () => {
+  it('with models on the phone, says a chat model is needed; Choose model opens the model sheet', async () => {
     const { view } = mount(true);
 
-    expect(view.getByText('No Model Selected')).toBeTruthy();
-    expect(view.getByText('Select a text or image model to get started.')).toBeTruthy();
+    expect(view.getByText('Needs a chat model.')).toBeTruthy();
     expect(view.queryByText('TEXT MODEL')).toBeNull();
 
-    fireEvent.press(view.getByText('Select Model'));
+    fireEvent.press(view.getByText('Choose model'));
 
     await waitFor(() => expect(view.getByText('TEXT MODEL')).toBeTruthy());
   });
 
-  it('with no models, says to download one and offers no Select Model', () => {
+  it('with no models, says a chat model is needed and offers Get a model, not Choose model', () => {
     const { view } = mount(false);
 
-    expect(view.getByText('Download a text or image model from the Models tab to get started.')).toBeTruthy();
-    expect(view.queryByText('Select Model')).toBeNull();
+    expect(view.getByText('Needs a chat model.')).toBeTruthy();
+    expect(view.getByText('Get a model')).toBeTruthy();
+    expect(view.queryByText('Choose model')).toBeNull();
   });
 
   it('Back returns to the chat list', async () => {
