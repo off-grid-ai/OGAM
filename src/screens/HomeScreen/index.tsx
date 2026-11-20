@@ -1,4 +1,5 @@
 import { videoModelDisplayName } from '../../utils/modelHelpers';
+import { useOpenScribe } from '../../hooks/useOpenScribe';
 import { useAppStore } from '../../stores/appStore';
 import React, { useCallback, useEffect } from 'react';
 import { View, Text, Image, Linking } from 'react-native';
@@ -190,6 +191,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   // The offer is one of Home's cards: counted shown with Home, like the Models card with Models.
   // Counted from a small child that reads focus, so a tab switch does not re-render all of Home.
   // The top of Home: everything it does, free and Pro, what this person has not tried first.
+  const openScribe = useOpenScribe();
   const openBoost = useOpenBoost('home', useCallback(
     () => setAlertState(showAlert("You're offline", 'Connect to the internet to see the offer.')),
     [setAlertState],
@@ -211,7 +213,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       sync: openSync,
       tools: openProTools,
       notes: () => navigation.navigate('Notes' as never),
-      improve: () => navigation.navigate('Notes' as never),
+      improve: openScribe,
       vault: () => navigation.navigate('Vault' as never),
       pro: () => getPro('home-showcase'),
       explain: topicId => navigation.navigate('GuideTopic', { id: topicId }),

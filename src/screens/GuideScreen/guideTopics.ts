@@ -28,7 +28,9 @@ export type GuideOpen =
   | 'vault'
   | 'sync'
   | 'clipboard'
-  | 'tools';
+  | 'tools'
+  /** Scribe, with a sentence to fix. */
+  | 'improve';
 
 export interface MobileGuideTopic extends GuideTopicFacts {
   group: string;
@@ -128,7 +130,7 @@ const OPEN: Record<string, GuideOpen> = {
   'phone-documents': 'projects',
   'phone-models': 'models',
   'phone-notes': 'notes',
-  'phone-improve': 'notes',
+  'phone-improve': 'improve',
   'phone-vault': 'vault',
   'phone-clipboard': 'clipboard',
   'phone-sync': 'sync',

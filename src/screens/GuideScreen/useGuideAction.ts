@@ -2,6 +2,7 @@
  * The one action under a guide topic: open it on this phone, get Pro for it, or get it where it
  * lives (the desktop app, the browser extension). A topic with nowhere to go has no button.
  */
+import { useOpenScribe } from '../../hooks/useOpenScribe';
 import { Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -33,9 +34,10 @@ const OPEN_LABEL: Record<GuideOpen, string> = {
   models: 'Open Models',
   notes: 'Open Notes',
   vault: 'Open Vault',
-  sync: 'Open Devices',
+  sync: 'Open Sync',
   clipboard: 'Open Clipboard',
-  tools: 'Open Tools',
+  tools: 'Open Connectors',
+  improve: 'Try Scribe',
 };
 
 /** Pro screens: they exist on this phone only when Pro registered them. */
@@ -55,6 +57,7 @@ export function useGuideAction(): (topic: MobileGuideTopic) => GuideAction | nul
   const getPro = useGetPro();
   const { openSync } = useOpenSync();
   const openTools = useOpenProTools();
+  const openScribe = useOpenScribe();
   const registered: Record<string, boolean> = {
     Notes: useHasRegisteredScreen('Notes'),
     Vault: useHasRegisteredScreen('Vault'),
@@ -90,6 +93,9 @@ export function useGuideAction(): (topic: MobileGuideTopic) => GuideAction | nul
         return;
       case 'tools':
         openTools();
+        return;
+      case 'improve':
+        openScribe();
         return;
       default: {
         const screen = PRO_SCREEN[open];

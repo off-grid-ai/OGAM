@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { FEATURE_NAMES } from '@offgrid/features';
 import {
   View,
   Text,
@@ -52,7 +53,7 @@ const PILLARS = [
   },
   {
     icon: 'refresh-cw',
-    title: 'Live sync across your devices',
+    title: FEATURE_NAMES.sync,
     desc: 'Your chats, projects, files, models, and copied text stay current over your own network, never a cloud relay.',
   },
   {

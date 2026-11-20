@@ -1,4 +1,5 @@
 import React from 'react';
+import { FEATURE_NAMES } from '@offgrid/features';
 import { View, Text, StyleSheet, Modal, TouchableWithoutFeedback, Dimensions } from 'react-native';
 import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
@@ -286,7 +287,7 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
               >
                 <Icon name="package" size={16} color={colors.textSecondary} />
                 <Text style={[popoverStyles.rowLabel, { color: colors.text }]}>
-                  Pro tools
+                  {FEATURE_NAMES.connectors}
                 </Text>
                 {mcpToolCount > 0 && (
                   <QuickBadge tone="count" label={mcpToolCount} />
