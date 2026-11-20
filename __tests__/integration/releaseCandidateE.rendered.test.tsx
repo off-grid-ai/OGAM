@@ -282,13 +282,16 @@ it('M14: Android remembers a refused mic request after a fresh launch and clears
   expect(next.view.queryByTestId('voice-record-button')).toBeNull();
   next.rtl.fireEvent.press(next.view.getByTestId('voice-record-button-mic-denied'));
   expect(await next.view.findByText('Microphone Access Is Off')).toBeTruthy();
-  next.rtl.fireEvent.press(next.view.getByText('Open Settings'));
+  // The composer line says it too; this presses the alert's button.
+  expect(next.view.getByText('Microphone access is off.')).toBeTruthy();
+  next.rtl.fireEvent.press(next.rtl.within(next.view.getByTestId('app-alert')).getByText('Open Settings'));
   next.boundary.setMicPermission('Granted');
   await next.rtl.act(async () => {
     next.boundary.emitAppStateChange('background');
     next.boundary.emitAppStateChange('active');
   });
   expect(await next.view.findByTestId('voice-record-button')).toBeTruthy();
+  expect(next.view.queryByText('Microphone access is off.')).toBeNull();
   next.view.unmount();
 
   const granted = await launch({ preserveStorage: true, mic: 'Undetermined' });

@@ -37,7 +37,7 @@ describe('a chat opened to make pictures', () => {
 
     await h.openScreen('Chat', { mode: 'image' });
 
-    await h.rtl.waitFor(() => expect(view.getByText('No Image Model')).toBeTruthy());
+    await h.rtl.waitFor(() => expect(view.getByText('Needs an image model.')).toBeTruthy());
     expect(view.queryByPlaceholderText('Describe a picture')).toBeNull();
     expect(view.queryByTestId('empty-chat-image')).toBeNull();
     expect(view.queryByTestId('style-row')).toBeNull();
