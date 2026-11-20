@@ -1,3 +1,4 @@
+import { t } from '@offgrid/i18n';
 /**
  * Remote Servers
  *
@@ -5,6 +6,8 @@
  * or an Ollama / LM Studio server on the same network.
  */
 
+import { wifiReadiness } from '@offgrid/features';
+import { isOnLocalNetwork } from '../utils/network';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { AppSwitch } from '../components/AppSwitch';
 import {
@@ -130,6 +133,11 @@ export const RemoteServersScreen: React.FC = () => {
             ? 'Scan stopped. No new servers found.'
             : `Scan stopped. Added ${newServers.length} server${newServers.length > 1 ? 's' : ''}.`,
         );
+        return;
+      }
+      if (newServers.length === 0 && !(await isOnLocalNetwork())) {
+        // Nothing answers off Wi-Fi: name the cause, not the ports.
+        setScanNote(t(wifiReadiness(false).line));
         return;
       }
       if (newServers.length === 0) {
