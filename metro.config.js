@@ -43,6 +43,8 @@ const notesEditorPackagePath = path.resolve(sharedRoot, 'packages/notes-editor')
 const i18nPackagePath = path.resolve(sharedRoot, 'packages/i18n');
 // @offgrid/features: the one feature list (onboarding groups and parts, tiers, model kinds).
 const featuresPackagePath = path.resolve(sharedRoot, 'packages/features');
+// @offgrid/failures: why something failed, as one plain line and one next step (every product).
+const failuresPackagePath = path.resolve(sharedRoot, 'packages/failures');
 const i18nJsxRuntimes = {
   'react/jsx-runtime': path.resolve(i18nPackagePath, 'dist/jsx-runtime.cjs'),
   'react/jsx-dev-runtime': path.resolve(i18nPackagePath, 'dist/jsx-dev-runtime.cjs'),
@@ -85,6 +87,7 @@ const config = {
     designPackagePath,
     i18nPackagePath,
     featuresPackagePath,
+    failuresPackagePath,
     sharedNodeModulesPath,
     ...linkedNodeModulesPaths,
   ],
@@ -126,6 +129,7 @@ const config = {
       '@offgrid/design': path.resolve(designPackagePath, 'dist/index.js'),
       '@offgrid/i18n': path.resolve(i18nPackagePath, 'dist/index.cjs'),
       '@offgrid/features': path.resolve(featuresPackagePath, 'dist/index.js'),
+      '@offgrid/failures': path.resolve(failuresPackagePath, 'dist/index.js'),
       // @offgrid/sync owns this dependency in its package manifest. Metro still needs the
       // out-of-root file dependency mapped to a watched, built CommonJS entry.
       '@offgrid/automation': path.resolve(automationPackagePath, 'dist/index.js'),

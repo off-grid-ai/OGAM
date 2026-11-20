@@ -1,3 +1,4 @@
+import { taskReferenceFromResult, visibleToolText } from '@offgrid/failures';
 import { parseModelOutput } from '../../utils/messageContent';
 import type { Message } from '../../types';
 import type { ParsedContent } from './types';
@@ -59,8 +60,11 @@ function parseMessageData(message: Message): MessageData {
   // so the answer can never carry raw tool-call/control markup (the leak class). This maps its
   // result onto the legacy ParsedContent shape existing renderers consume.
   const parsed = parseModelOutput(message.content, message.reasoningContent);
+  // A task started from chat saves its launch note (written for the model) as the reply. A person
+  // reads the outcome ("Task started."); the reference stays in the stored message for the task row.
+  const answer = taskReferenceFromResult(parsed.answer) ? visibleToolText(parsed.answer) : parsed.answer;
   return {
-    displayContent: parsed.answer,
-    parsedContent: { thinking: parsed.reasoning, response: parsed.answer, isThinkingComplete: message.isStreaming ? parsed.isReasoningComplete : true, thinkingLabel: parsed.reasoningLabel },
+    displayContent: answer,
+    parsedContent: { thinking: parsed.reasoning, response: answer, isThinkingComplete: message.isStreaming ? parsed.isReasoningComplete : true, thinkingLabel: parsed.reasoningLabel },
   };
 }

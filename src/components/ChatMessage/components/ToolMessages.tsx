@@ -10,6 +10,7 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import { TouchableOpacity } from '../../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
+import { visibleToolText } from '@offgrid/failures';
 import { parseSearchBlock } from '@offgrid/rag/documents';
 import { useTheme } from '../../../theme';
 import { useAccordionExpanded, useAccordionStore } from '../../../stores';
@@ -134,7 +135,8 @@ type SearchHit = { title?: unknown; url?: unknown; excerpts?: unknown; snippet?:
  */
 export function readableToolResult(content: string): string {
   const trimmed = content.trim();
-  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return content;
+  // Task launch notes are written for the model ("… Do not call web_use again"): show the outcome.
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return visibleToolText(content);
   let data: unknown;
   try {
     data = JSON.parse(trimmed);
