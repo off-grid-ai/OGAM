@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useNavigation } from '@react-navigation/native';
+import { useAppNavigate } from '../navigation/useAppNavigate';
 import type { ModelKind, ReadinessAction } from '@offgrid/features';
 import { allowPermission, openAppSettings } from '../services/osPermissions';
 
@@ -23,13 +23,13 @@ export function useReadinessAction(handlers: {
   /** Called after Allow, with whether the permission is now on. */
   onAllowed?: (granted: boolean) => void;
 } = {}): (action: ReadinessAction) => void {
-  const navigation = useNavigation<any>();
+  const navigate = useAppNavigate();
   const { onChooseModel, onRetry, onAllowed } = handlers;
   return useCallback(
     (action: ReadinessAction) => {
       switch (action.kind) {
         case 'get-model':
-          navigation.navigate('Main', { screen: 'ModelsTab', params: { initialTab: MODELS_TAB[action.tab] } });
+          navigate('Main', { screen: 'ModelsTab', params: { initialTab: MODELS_TAB[action.tab] } });
           return;
         case 'choose-model':
           onChooseModel?.();
@@ -44,6 +44,6 @@ export function useReadinessAction(handlers: {
           openAppSettings();
       }
     },
-    [navigation, onChooseModel, onRetry, onAllowed],
+    [navigate, onChooseModel, onRetry, onAllowed],
   );
 }
