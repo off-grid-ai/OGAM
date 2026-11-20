@@ -205,8 +205,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       showBoost: homeBoostShown,
     },
     {
-      image: () => (downloadedImageModels.length > 0 ? startNewChat() : presentModelSheet('image')),
-      video: () => ((modelCounts.video ?? 0) > 0 ? startNewChat() : presentModelSheet('video')),
+      // A picture or a clip: the chat opens in that mode (it picks the model), as the guide does. A plain
+      // New chat did nothing once the models were ejected, and opened a text chat when it worked.
+      image: () => (downloadedImageModels.length > 0 ? navigation.navigate('Chat', { mode: 'image' }) : presentModelSheet('image')),
+      video: () => ((modelCounts.video ?? 0) > 0 ? navigation.navigate('Chat', { mode: 'video' }) : presentModelSheet('video')),
       voice: () => presentModelSheet('voice'),
       speech: () => presentModelSheet('speech'),
       documents: () => navigation.navigate('Main', { screen: 'ProjectsTab' }),

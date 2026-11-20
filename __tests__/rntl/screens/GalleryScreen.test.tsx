@@ -135,7 +135,9 @@ describe('GalleryScreen', () => {
   it('shows empty state when no images', async () => {
     const { view } = await openGallery();
     expect(view.getByText('No generated images yet')).toBeTruthy();
-    expect(view.getByText('Generate images from any chat conversation.')).toBeTruthy();
+    // No image model on the phone: the empty state says so and offers the way to get one.
+    expect(view.getByText('Needs an image model.')).toBeTruthy();
+    expect(view.getByText('Get a model')).toBeTruthy();
   });
 
   it('Back returns to the screen the Gallery was opened from', async () => {
